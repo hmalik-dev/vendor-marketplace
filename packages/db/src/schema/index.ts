@@ -2,6 +2,7 @@ export * from './enums.js';
 export * from './users.js';
 export * from './vendor-profiles.js';
 export * from './categories.js';
+export * from './tags.js';
 export * from './portfolio-items.js';
 export * from './service-packages.js';
 export * from './availability.js';

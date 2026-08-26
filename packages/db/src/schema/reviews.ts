@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
@@ -36,6 +37,8 @@ export const reviews = pgTable(
     rating: integer('rating').notNull(),
     title: varchar('title', { length: 200 }),
     content: text('content').notNull(),
+    /** Vendor-to-customer reviews are visible to other vendors when true. */
+    isPublic: boolean('is_public').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

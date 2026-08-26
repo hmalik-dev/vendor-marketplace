@@ -1,14 +1,17 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  decimal,
   index,
+  integer,
   pgTable,
   timestamp,
   uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { userRoleEnum } from './enums.js';
+import { MAX_CUSTOMER_BIO_LENGTH } from '@vendorhub/shared';
+import { budgetTierEnum, userRoleEnum } from './enums.js';
 
 export const users = pgTable(
   'users',
@@ -26,6 +29,26 @@ export const users = pgTable(
     avatarUrl: varchar('avatar_url', { length: 500 }),
     /** Stripe Customer used when the user pays for a booking. */
     stripeCustomerId: varchar('stripe_customer_id', { length: 255 }),
+    /** Short customer intro shown to vendors, e.g. "Planning my wedding!". */
+    bio: varchar('bio', { length: MAX_CUSTOMER_BIO_LENGTH }),
+    city: varchar('city', { length: 100 }),
+    state: varchar('state', { length: 100 }),
+    /** Self-reported spending band; helps vendors self-select. */
+    budgetTier: budgetTierEnum('budget_tier'),
+    typicalGuestCountMin: integer('typical_guest_count_min'),
+    typicalGuestCountMax: integer('typical_guest_count_max'),
+    /** Derived from vendor-to-customer reviews; never written by an endpoint. */
+    avgCustomerRating: decimal('avg_customer_rating', { precision: 3, scale: 2 })
+      .notNull()
+      .default('0'),
+    /** Derived from vendor-to-customer reviews; never written by an endpoint. */
+    customerReviewCount: integer('customer_review_count').notNull().default(0),
+    /** Derived from bookings; never written by an endpoint. */
+    totalBookingsCount: integer('total_bookings_count').notNull().default(0),
+    /** Derived from bookings; never written by an endpoint. */
+    completedBookingsCount: integer('completed_bookings_count').notNull().default(0),
+    /** Derived from bookings; never written by an endpoint. */
+    cancelledBookingsCount: integer('cancelled_bookings_count').notNull().default(0),
     /** Admin-set; blocks all API access (ticket #15). */
     isBanned: boolean('is_banned').notNull().default(false),
     bannedAt: timestamp('banned_at', { withTimezone: true }),

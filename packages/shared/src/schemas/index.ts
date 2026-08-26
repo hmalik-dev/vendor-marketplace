@@ -3,17 +3,22 @@ import {
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
+  BUDGET_TIERS,
   DEFAULT_PAGE_SIZE,
   ERROR_CODES,
   MAX_ADDRESS_LENGTH,
+  MAX_ADMIN_NOTE_LENGTH,
   MAX_BUSINESS_NAME_LENGTH,
   MAX_CAPTION_LENGTH,
+  MAX_CUSTOMER_BIO_LENGTH,
   MAX_EMAIL_LENGTH,
+  MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
   MAX_PAGE_SIZE,
   MAX_PHONE_LENGTH,
   MAX_SLUG_LENGTH,
+  MAX_TAGS_PER_CATEGORY,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
   MESSAGE_MAX_LENGTH,
@@ -25,6 +30,8 @@ import {
   REVIEW_RATING_MAX,
   REVIEW_RATING_MIN,
   REVIEW_TYPES,
+  TAG_CATEGORIES,
+  TAG_SUGGESTION_STATUSES,
   USER_ROLES,
   VENDOR_SETTABLE_AVAILABILITY_STATUSES,
   VENDOR_SORT_OPTIONS,
@@ -76,6 +83,9 @@ export const vendorSettableAvailabilityStatusSchema = z.enum(VENDOR_SETTABLE_AVA
 export const bookingRequestStatusSchema = z.enum(BOOKING_REQUEST_STATUSES);
 export const bookingStatusSchema = z.enum(BOOKING_STATUSES);
 export const reviewTypeSchema = z.enum(REVIEW_TYPES);
+export const budgetTierSchema = z.enum(BUDGET_TIERS);
+export const tagCategorySchema = z.enum(TAG_CATEGORIES);
+export const tagSuggestionStatusSchema = z.enum(TAG_SUGGESTION_STATUSES);
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export const vendorSortOptionSchema = z.enum(VENDOR_SORT_OPTIONS);
 
@@ -91,6 +101,18 @@ export const userSchema = z.object({
   phone: phoneSchema.nullable(),
   avatarUrl: urlSchema.nullable(),
   stripeCustomerId: z.string().max(255).nullable(),
+  bio: z.string().max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
+  city: z.string().max(MAX_NAME_LENGTH).nullable(),
+  state: z.string().max(MAX_NAME_LENGTH).nullable(),
+  budgetTier: budgetTierSchema.nullable(),
+  typicalGuestCountMin: z.int().nullable(),
+  typicalGuestCountMax: z.int().nullable(),
+  /** Derived from vendor-to-customer reviews; never written by an endpoint. */
+  avgCustomerRating: z.number().min(0).max(REVIEW_RATING_MAX),
+  customerReviewCount: z.int().min(0),
+  totalBookingsCount: z.int().min(0),
+  completedBookingsCount: z.int().min(0),
+  cancelledBookingsCount: z.int().min(0),
   isBanned: z.boolean(),
   bannedAt: z.date().nullable(),
   createdAt: z.date(),
@@ -107,17 +129,40 @@ export const publicUserSchema = userSchema.pick({
 });
 export type PublicUser = z.infer<typeof publicUserSchema>;
 
+/**
+ * Self-service profile edits. Derived stats (`avgCustomerRating`, the booking
+ * counters) and identity/ban fields are deliberately absent — they are only
+ * ever written by their owning service.
+ */
 export const updateUserSchema = z
   .object({
     firstName: trimmedString(MAX_NAME_LENGTH),
     lastName: trimmedString(MAX_NAME_LENGTH),
     phone: phoneSchema.nullable(),
     avatarUrl: urlSchema.nullable(),
+    bio: z.string().trim().max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
+    city: z.string().trim().max(MAX_NAME_LENGTH).nullable(),
+    state: z.string().trim().max(MAX_NAME_LENGTH).nullable(),
+    budgetTier: budgetTierSchema.nullable(),
+    typicalGuestCountMin: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
+    typicalGuestCountMax: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
     message: 'Provide at least one field to update',
-  });
+  })
+  .refine(
+    (value) =>
+      value.typicalGuestCountMin === null ||
+      value.typicalGuestCountMin === undefined ||
+      value.typicalGuestCountMax === null ||
+      value.typicalGuestCountMax === undefined ||
+      value.typicalGuestCountMin <= value.typicalGuestCountMax,
+    {
+      message: 'Minimum guest count must not exceed maximum guest count',
+      path: ['typicalGuestCountMin'],
+    },
+  );
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 // --- Categories ------------------------------------------------------------
@@ -216,7 +261,7 @@ export const createServicePackageSchema = z.object({
   priceCents: priceCentsSchema,
   priceType: priceTypeSchema.default('fixed'),
   durationHours: z.number().min(0.5).max(999.9).optional(),
-  maxGuests: z.int().min(1).max(100_000).optional(),
+  maxGuests: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
   inclusions: z.array(trimmedString(200)).max(20).default([]),
   displayOrder: z.int().min(0).optional(),
 });
@@ -310,7 +355,7 @@ export const createBookingRequestSchema = z
     eventDate: calendarDateSchema,
     eventType: z.string().trim().max(MAX_BUSINESS_NAME_LENGTH).optional(),
     eventLocation: z.string().trim().max(MAX_ADDRESS_LENGTH).optional(),
-    guestCount: z.int().min(1).max(100_000).optional(),
+    guestCount: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
     customDetails: z.string().trim().min(10).max(5_000).optional(),
   })
   .refine((value) => value.packageId !== undefined || value.customDetails !== undefined, {
@@ -392,6 +437,8 @@ export const reviewSchema = z.object({
   rating: z.int().min(REVIEW_RATING_MIN).max(REVIEW_RATING_MAX),
   title: z.string().max(MAX_TITLE_LENGTH).nullable(),
   content: z.string(),
+  /** Vendor-to-customer reviews are visible to other vendors when true. */
+  isPublic: z.boolean(),
   createdAt: z.date(),
 });
 export type Review = z.infer<typeof reviewSchema>;
@@ -402,6 +449,50 @@ export const createReviewSchema = z.object({
   content: trimmedString(REVIEW_CONTENT_MAX_LENGTH, REVIEW_CONTENT_MIN_LENGTH),
 });
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
+
+// --- Tags ------------------------------------------------------------------
+
+export const tagSchema = z.object({
+  id: uuidSchema,
+  name: trimmedString(MAX_NAME_LENGTH),
+  slug: slugSchema,
+  category: tagCategorySchema,
+  displayOrder: z.int(),
+  isActive: z.boolean(),
+  createdAt: z.date(),
+});
+export type Tag = z.infer<typeof tagSchema>;
+
+export const tagSuggestionSchema = z.object({
+  id: uuidSchema,
+  /** The user who submitted the suggestion. */
+  vendorId: uuidSchema,
+  suggestedName: trimmedString(MAX_NAME_LENGTH),
+  category: tagCategorySchema,
+  status: tagSuggestionStatusSchema,
+  /** Set when approved and linked to a new or existing tag. */
+  resolvedTagId: uuidSchema.nullable(),
+  adminNote: z.string().max(MAX_ADMIN_NOTE_LENGTH).nullable(),
+  createdAt: z.date(),
+  resolvedAt: z.date().nullable(),
+});
+export type TagSuggestion = z.infer<typeof tagSuggestionSchema>;
+
+export const createTagSuggestionSchema = z.object({
+  suggestedName: trimmedString(MAX_NAME_LENGTH, 2),
+  category: tagCategorySchema,
+});
+export type CreateTagSuggestionInput = z.infer<typeof createTagSuggestionSchema>;
+
+/**
+ * A vendor's full tag selection, applied as one replace operation. The
+ * per-category ceiling is enforced by the service, which resolves each id to
+ * its category.
+ */
+export const setVendorTagsSchema = z.object({
+  tagIds: z.array(uuidSchema).max(TAG_CATEGORIES.length * MAX_TAGS_PER_CATEGORY),
+});
+export type SetVendorTagsInput = z.infer<typeof setVendorTagsSchema>;
 
 // --- Notifications ---------------------------------------------------------
 

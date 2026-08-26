@@ -40,6 +40,17 @@ export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 export const REVIEW_TYPES = ['customer_to_vendor', 'vendor_to_customer'] as const;
 export type ReviewType = (typeof REVIEW_TYPES)[number];
 
+/** Self-reported spending band on a customer profile; helps vendors self-select. */
+export const BUDGET_TIERS = ['budget', 'mid_range', 'premium', 'luxury'] as const;
+export type BudgetTier = (typeof BUDGET_TIERS)[number];
+
+/** The three groups a vendor tag belongs to, rendered as sections in the picker. */
+export const TAG_CATEGORIES = ['language', 'cultural', 'religious_dietary'] as const;
+export type TagCategory = (typeof TAG_CATEGORIES)[number];
+
+export const TAG_SUGGESTION_STATUSES = ['pending', 'approved', 'rejected'] as const;
+export type TagSuggestionStatus = (typeof TAG_SUGGESTION_STATUSES)[number];
+
 export const NOTIFICATION_TYPES = [
   'new_request',
   'request_quoted',
@@ -152,6 +163,151 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
 
 export const CATEGORY_SLUGS = CATEGORY_SEEDS.map((category) => category.slug);
 
+// --- Tag seed data ---------------------------------------------------------
+
+export interface TagSeed {
+  readonly name: string;
+  /**
+   * Globally unique and category-prefixed. Names are only unique *within* a
+   * category — "Korean" and "Japanese" are both a language and a culture — so
+   * the prefix is what keeps the slug (used for dedup and search filters)
+   * collision-free across the three groups.
+   */
+  readonly slug: string;
+  readonly category: TagCategory;
+  /** Ordering within the tag's own category group. */
+  readonly displayOrder: number;
+}
+
+export const TAG_SEEDS: readonly TagSeed[] = [
+  { name: 'English', slug: 'language-english', category: 'language', displayOrder: 1 },
+  { name: 'Spanish', slug: 'language-spanish', category: 'language', displayOrder: 2 },
+  { name: 'French', slug: 'language-french', category: 'language', displayOrder: 3 },
+  { name: 'Portuguese', slug: 'language-portuguese', category: 'language', displayOrder: 4 },
+  { name: 'Mandarin', slug: 'language-mandarin', category: 'language', displayOrder: 5 },
+  { name: 'Cantonese', slug: 'language-cantonese', category: 'language', displayOrder: 6 },
+  { name: 'Hindi', slug: 'language-hindi', category: 'language', displayOrder: 7 },
+  { name: 'Urdu', slug: 'language-urdu', category: 'language', displayOrder: 8 },
+  { name: 'Punjabi', slug: 'language-punjabi', category: 'language', displayOrder: 9 },
+  { name: 'Arabic', slug: 'language-arabic', category: 'language', displayOrder: 10 },
+  { name: 'Korean', slug: 'language-korean', category: 'language', displayOrder: 11 },
+  { name: 'Japanese', slug: 'language-japanese', category: 'language', displayOrder: 12 },
+  { name: 'Tagalog', slug: 'language-tagalog', category: 'language', displayOrder: 13 },
+  { name: 'Vietnamese', slug: 'language-vietnamese', category: 'language', displayOrder: 14 },
+  { name: 'Italian', slug: 'language-italian', category: 'language', displayOrder: 15 },
+  { name: 'German', slug: 'language-german', category: 'language', displayOrder: 16 },
+  { name: 'Russian', slug: 'language-russian', category: 'language', displayOrder: 17 },
+  { name: 'Polish', slug: 'language-polish', category: 'language', displayOrder: 18 },
+  { name: 'Turkish', slug: 'language-turkish', category: 'language', displayOrder: 19 },
+  { name: 'Swahili', slug: 'language-swahili', category: 'language', displayOrder: 20 },
+  { name: 'Yoruba', slug: 'language-yoruba', category: 'language', displayOrder: 21 },
+  {
+    name: 'Haitian Creole',
+    slug: 'language-haitian-creole',
+    category: 'language',
+    displayOrder: 22,
+  },
+  {
+    name: 'ASL/Sign Language',
+    slug: 'language-asl-sign-language',
+    category: 'language',
+    displayOrder: 23,
+  },
+  { name: 'South Asian', slug: 'cultural-south-asian', category: 'cultural', displayOrder: 1 },
+  { name: 'East Asian', slug: 'cultural-east-asian', category: 'cultural', displayOrder: 2 },
+  {
+    name: 'Southeast Asian',
+    slug: 'cultural-southeast-asian',
+    category: 'cultural',
+    displayOrder: 3,
+  },
+  {
+    name: 'Middle Eastern',
+    slug: 'cultural-middle-eastern',
+    category: 'cultural',
+    displayOrder: 4,
+  },
+  { name: 'West African', slug: 'cultural-west-african', category: 'cultural', displayOrder: 5 },
+  { name: 'East African', slug: 'cultural-east-african', category: 'cultural', displayOrder: 6 },
+  { name: 'Caribbean', slug: 'cultural-caribbean', category: 'cultural', displayOrder: 7 },
+  {
+    name: 'Latin American',
+    slug: 'cultural-latin-american',
+    category: 'cultural',
+    displayOrder: 8,
+  },
+  { name: 'Mediterranean', slug: 'cultural-mediterranean', category: 'cultural', displayOrder: 9 },
+  {
+    name: 'Eastern European',
+    slug: 'cultural-eastern-european',
+    category: 'cultural',
+    displayOrder: 10,
+  },
+  { name: 'Jewish', slug: 'cultural-jewish', category: 'cultural', displayOrder: 11 },
+  { name: 'Filipino', slug: 'cultural-filipino', category: 'cultural', displayOrder: 12 },
+  { name: 'Korean', slug: 'cultural-korean', category: 'cultural', displayOrder: 13 },
+  { name: 'Japanese', slug: 'cultural-japanese', category: 'cultural', displayOrder: 14 },
+  { name: 'Chinese', slug: 'cultural-chinese', category: 'cultural', displayOrder: 15 },
+  { name: 'Polynesian', slug: 'cultural-polynesian', category: 'cultural', displayOrder: 16 },
+  {
+    name: 'Muslim',
+    slug: 'religious-dietary-muslim',
+    category: 'religious_dietary',
+    displayOrder: 1,
+  },
+  {
+    name: 'Halal',
+    slug: 'religious-dietary-halal',
+    category: 'religious_dietary',
+    displayOrder: 2,
+  },
+  {
+    name: 'Kosher',
+    slug: 'religious-dietary-kosher',
+    category: 'religious_dietary',
+    displayOrder: 3,
+  },
+  {
+    name: 'Hindu',
+    slug: 'religious-dietary-hindu',
+    category: 'religious_dietary',
+    displayOrder: 4,
+  },
+  { name: 'Sikh', slug: 'religious-dietary-sikh', category: 'religious_dietary', displayOrder: 5 },
+  {
+    name: 'Buddhist',
+    slug: 'religious-dietary-buddhist',
+    category: 'religious_dietary',
+    displayOrder: 6,
+  },
+  {
+    name: 'Christian',
+    slug: 'religious-dietary-christian',
+    category: 'religious_dietary',
+    displayOrder: 7,
+  },
+  {
+    name: 'Non-denominational',
+    slug: 'religious-dietary-non-denominational',
+    category: 'religious_dietary',
+    displayOrder: 8,
+  },
+  {
+    name: 'Vegan',
+    slug: 'religious-dietary-vegan',
+    category: 'religious_dietary',
+    displayOrder: 9,
+  },
+  {
+    name: 'Vegetarian',
+    slug: 'religious-dietary-vegetarian',
+    category: 'religious_dietary',
+    displayOrder: 10,
+  },
+];
+
+export const TAG_SLUGS = TAG_SEEDS.map((tag) => tag.slug);
+
 // --- Business rules --------------------------------------------------------
 
 /** Minimum booking amount ($25) — keeps margin positive after Stripe fees. */
@@ -176,6 +332,18 @@ export const LATE_CANCELLATION_REFUND_RATE = 0.5;
 export const AVAILABILITY_MONTHS_AHEAD = 12;
 
 export const MESSAGE_MAX_LENGTH = 5_000;
+
+/** Largest guest count accepted anywhere a party size is captured. */
+export const MAX_GUEST_COUNT = 100_000;
+
+/** Short customer intro shown to vendors, e.g. "Planning my wedding!". */
+export const MAX_CUSTOMER_BIO_LENGTH = 300;
+
+/** A vendor may claim at most this many tags from any one tag category. */
+export const MAX_TAGS_PER_CATEGORY = 5;
+
+/** Admin rejection reason or merge note on a tag suggestion. */
+export const MAX_ADMIN_NOTE_LENGTH = 500;
 
 export const REVIEW_CONTENT_MIN_LENGTH = 10;
 export const REVIEW_CONTENT_MAX_LENGTH = 2_000;

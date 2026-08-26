@@ -7,18 +7,24 @@ import {
   createBookingRequestSchema,
   createReviewSchema,
   createServicePackageSchema,
+  createTagSuggestionSchema,
   createVendorProfileSchema,
   paginatedSchema,
   sendMessageSchema,
+  setVendorTagsSchema,
+  tagSchema,
   updateUserSchema,
   userSchema,
   vendorSearchQuerySchema,
 } from './index.js';
 import {
   ERROR_CODES,
+  MAX_CUSTOMER_BIO_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
+  MAX_TAGS_PER_CATEGORY,
   MESSAGE_MAX_LENGTH,
   MIN_BOOKING_AMOUNT_CENTS,
+  TAG_CATEGORIES,
 } from '../constants/index.js';
 
 const UUID = '11111111-1111-4111-8111-111111111111';
@@ -34,6 +40,17 @@ describe('userSchema', () => {
     phone: null,
     avatarUrl: null,
     stripeCustomerId: null,
+    bio: null,
+    city: null,
+    state: null,
+    budgetTier: null,
+    typicalGuestCountMin: null,
+    typicalGuestCountMax: null,
+    avgCustomerRating: 0,
+    customerReviewCount: 0,
+    totalBookingsCount: 0,
+    completedBookingsCount: 0,
+    cancelledBookingsCount: 0,
     isBanned: false,
     bannedAt: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -51,6 +68,34 @@ describe('userSchema', () => {
   it('rejects a malformed email', () => {
     expect(userSchema.safeParse({ ...valid, email: 'not-an-email' }).success).toBe(false);
   });
+
+  it('accepts a filled-in customer profile', () => {
+    const parsed = userSchema.parse({
+      ...valid,
+      bio: 'Planning my wedding!',
+      city: 'Austin',
+      state: 'TX',
+      budgetTier: 'mid_range',
+      typicalGuestCountMin: 50,
+      typicalGuestCountMax: 150,
+      avgCustomerRating: 4.5,
+      customerReviewCount: 2,
+      totalBookingsCount: 3,
+      completedBookingsCount: 2,
+      cancelledBookingsCount: 1,
+    });
+    expect(parsed.budgetTier).toBe('mid_range');
+    expect(parsed.avgCustomerRating).toBe(4.5);
+    expect(parsed.completedBookingsCount).toBe(2);
+  });
+
+  it('rejects an unknown budget tier', () => {
+    expect(userSchema.safeParse({ ...valid, budgetTier: 'champagne' }).success).toBe(false);
+  });
+
+  it('rejects a negative derived booking counter', () => {
+    expect(userSchema.safeParse({ ...valid, completedBookingsCount: -1 }).success).toBe(false);
+  });
 });
 
 describe('updateUserSchema', () => {
@@ -64,6 +109,105 @@ describe('updateUserSchema', () => {
 
   it('rejects an empty payload so a no-op update cannot reach the DAO', () => {
     expect(updateUserSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('accepts a customer profile edit', () => {
+    expect(updateUserSchema.parse({ budgetTier: 'luxury', city: '  Austin  ', bio: 'Hi' })).toEqual(
+      { budgetTier: 'luxury', city: 'Austin', bio: 'Hi' },
+    );
+  });
+
+  it('allows clearing an optional profile field with null', () => {
+    expect(updateUserSchema.parse({ budgetTier: null })).toEqual({ budgetTier: null });
+  });
+
+  it('rejects a bio past the length ceiling', () => {
+    const result = updateUserSchema.safeParse({ bio: 'x'.repeat(MAX_CUSTOMER_BIO_LENGTH + 1) });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a guest count range whose minimum exceeds its maximum', () => {
+    const result = updateUserSchema.safeParse({
+      typicalGuestCountMin: 200,
+      typicalGuestCountMax: 100,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an equal guest count minimum and maximum', () => {
+    expect(
+      updateUserSchema.parse({ typicalGuestCountMin: 100, typicalGuestCountMax: 100 }),
+    ).toEqual({ typicalGuestCountMin: 100, typicalGuestCountMax: 100 });
+  });
+
+  it('accepts a lone guest count bound', () => {
+    expect(updateUserSchema.safeParse({ typicalGuestCountMin: 200 }).success).toBe(true);
+  });
+
+  it('rejects a derived stat submitted as a profile edit', () => {
+    expect(updateUserSchema.parse({ bio: 'Hi', customerReviewCount: 99 })).toEqual({ bio: 'Hi' });
+  });
+});
+
+describe('tagSchema', () => {
+  const valid = {
+    id: UUID,
+    name: 'South Asian',
+    slug: 'cultural-south-asian',
+    category: 'cultural',
+    displayOrder: 1,
+    isActive: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  it('accepts a well-formed tag row', () => {
+    expect(tagSchema.parse(valid)).toMatchObject({ slug: 'cultural-south-asian' });
+  });
+
+  it('rejects a tag category outside the shared set', () => {
+    expect(tagSchema.safeParse({ ...valid, category: 'dietary' }).success).toBe(false);
+  });
+
+  it('rejects a slug that is not URL-safe', () => {
+    expect(tagSchema.safeParse({ ...valid, slug: 'South Asian' }).success).toBe(false);
+  });
+});
+
+describe('createTagSuggestionSchema', () => {
+  it('trims the suggested name before validating', () => {
+    expect(
+      createTagSuggestionSchema.parse({ suggestedName: '  Amharic  ', category: 'language' }),
+    ).toEqual({ suggestedName: 'Amharic', category: 'language' });
+  });
+
+  it('rejects a whitespace-only suggestion', () => {
+    expect(
+      createTagSuggestionSchema.safeParse({ suggestedName: '   ', category: 'language' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an unknown category', () => {
+    expect(
+      createTagSuggestionSchema.safeParse({ suggestedName: 'Amharic', category: 'other' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('setVendorTagsSchema', () => {
+  it('accepts an empty selection so a vendor can clear every tag', () => {
+    expect(setVendorTagsSchema.parse({ tagIds: [] })).toEqual({ tagIds: [] });
+  });
+
+  it('rejects more tags than every category combined allows', () => {
+    const tooMany = Array.from(
+      { length: TAG_CATEGORIES.length * MAX_TAGS_PER_CATEGORY + 1 },
+      () => UUID,
+    );
+    expect(setVendorTagsSchema.safeParse({ tagIds: tooMany }).success).toBe(false);
+  });
+
+  it('rejects a non-uuid tag id', () => {
+    expect(setVendorTagsSchema.safeParse({ tagIds: ['not-a-uuid'] }).success).toBe(false);
   });
 });
 

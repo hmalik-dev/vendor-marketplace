@@ -3,16 +3,24 @@ import {
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
+  BUDGET_TIERS,
   PRICE_TYPES,
   REVIEW_TYPES,
+  TAG_CATEGORIES,
+  TAG_SUGGESTION_STATUSES,
   USER_ROLES,
   type AvailabilityStatus,
   type BookingRequestStatus,
   type BookingStatus,
   type Booking as BookingModel,
+  type BudgetTier,
   type Category as CategoryModel,
   type PriceType,
+  type Review as ReviewModel,
   type ReviewType,
+  type Tag as TagModel,
+  type TagCategory,
+  type TagSuggestion as TagSuggestionModel,
   type User as UserModel,
   type UserRole,
   type VendorProfile as VendorProfileModel,
@@ -21,12 +29,18 @@ import {
   availabilityStatusEnum,
   bookingRequestStatusEnum,
   bookingStatusEnum,
+  budgetTierEnum,
   priceTypeEnum,
   reviewTypeEnum,
+  tagCategoryEnum,
+  tagSuggestionStatusEnum,
   userRoleEnum,
   type AvailabilityRow,
   type BookingRow,
   type CategoryRow,
+  type ReviewRow,
+  type TagRow,
+  type TagSuggestionRow,
   type UserRow,
   type VendorProfileRow,
 } from './index.js';
@@ -44,6 +58,9 @@ describe('Drizzle <-> Zod enum parity', () => {
     expect(bookingRequestStatusEnum.enumValues).toEqual([...BOOKING_REQUEST_STATUSES]);
     expect(bookingStatusEnum.enumValues).toEqual([...BOOKING_STATUSES]);
     expect(reviewTypeEnum.enumValues).toEqual([...REVIEW_TYPES]);
+    expect(budgetTierEnum.enumValues).toEqual([...BUDGET_TIERS]);
+    expect(tagCategoryEnum.enumValues).toEqual([...TAG_CATEGORIES]);
+    expect(tagSuggestionStatusEnum.enumValues).toEqual([...TAG_SUGGESTION_STATUSES]);
   });
 
   it('infers the same enum unions in both layers', () => {
@@ -53,6 +70,12 @@ describe('Drizzle <-> Zod enum parity', () => {
     expectTypeOf<PriceType>().toEqualTypeOf<'fixed' | 'starting_at' | 'hourly'>();
     expectTypeOf<ReviewType>().toEqualTypeOf<'customer_to_vendor' | 'vendor_to_customer'>();
     expectTypeOf<BookingRequestStatus>().not.toBeNever();
+
+    // `budget_tier` and the tag category are nullable/non-nullable in opposite
+    // places, so compare against the enum union rather than the column type.
+    expectTypeOf<NonNullable<UserRow['budgetTier']>>().toEqualTypeOf<BudgetTier>();
+    expectTypeOf<TagRow['category']>().toEqualTypeOf<TagCategory>();
+    expectTypeOf<TagSuggestionRow['status']>().toEqualTypeOf<TagSuggestionModel['status']>();
   });
 });
 
@@ -94,6 +117,27 @@ describe('Drizzle <-> Zod column parity', () => {
     // and parsed to a number at the DAO boundary.
     expectTypeOf<VendorProfileRow['avgRating']>().toEqualTypeOf<string>();
     expectTypeOf<VendorProfileModel['avgRating']>().toEqualTypeOf<number>();
+    expectTypeOf<UserRow['avgCustomerRating']>().toEqualTypeOf<string>();
+    expectTypeOf<UserModel['avgCustomerRating']>().toEqualTypeOf<number>();
+
+    // Customer profile fields and derived counters.
+    expectTypeOf<UserRow['bio']>().toEqualTypeOf<UserModel['bio']>();
+    expectTypeOf<UserRow['budgetTier']>().toEqualTypeOf<UserModel['budgetTier']>();
+    expectTypeOf<UserRow['typicalGuestCountMin']>().toEqualTypeOf<
+      UserModel['typicalGuestCountMin']
+    >();
+    expectTypeOf<UserRow['completedBookingsCount']>().toEqualTypeOf<
+      UserModel['completedBookingsCount']
+    >();
+
+    expectTypeOf<ReviewRow['isPublic']>().toEqualTypeOf<ReviewModel['isPublic']>();
+
+    expectTypeOf<TagRow['displayOrder']>().toEqualTypeOf<TagModel['displayOrder']>();
+    expectTypeOf<TagRow['isActive']>().toEqualTypeOf<TagModel['isActive']>();
+    expectTypeOf<TagSuggestionRow['resolvedTagId']>().toEqualTypeOf<
+      TagSuggestionModel['resolvedTagId']
+    >();
+    expectTypeOf<TagSuggestionRow['adminNote']>().toEqualTypeOf<TagSuggestionModel['adminNote']>();
 
     expect(true).toBe(true);
   });
