@@ -115,6 +115,8 @@ export const userSchema = z.object({
   cancelledBookingsCount: z.int().min(0),
   isBanned: z.boolean(),
   bannedAt: z.date().nullable(),
+  /** Set when Clerk reports the identity was deleted; the row is retired, not removed. */
+  deletedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

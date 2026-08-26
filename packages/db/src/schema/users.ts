@@ -52,6 +52,11 @@ export const users = pgTable(
     /** Admin-set; blocks all API access (ticket #15). */
     isBanned: boolean('is_banned').notNull().default(false),
     bannedAt: timestamp('banned_at', { withTimezone: true }),
+    /**
+     * Set when Clerk reports the identity was deleted. Bookings, reviews, and
+     * messages reference this row, so it is retired rather than removed.
+     */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

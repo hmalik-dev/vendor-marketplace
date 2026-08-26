@@ -27,3 +27,14 @@ dist/
 
 # Test coverage
 coverage/
+
+# Playwright MCP scratch output
+.playwright-mcp/
+
+# Tool-managed skill packs installed into the repo (see skills-lock.json)
+.claude/skills/
+.agents/skills/
+skills-lock.json
+
+# Local design scratch, not a build input
+/vendorhub-header.png

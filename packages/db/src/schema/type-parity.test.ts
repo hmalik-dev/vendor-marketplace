@@ -86,6 +86,7 @@ describe('Drizzle <-> Zod column parity', () => {
     expectTypeOf<UserRow['phone']>().toEqualTypeOf<UserModel['phone']>();
     expectTypeOf<UserRow['isBanned']>().toEqualTypeOf<UserModel['isBanned']>();
     expectTypeOf<UserRow['bannedAt']>().toEqualTypeOf<UserModel['bannedAt']>();
+    expectTypeOf<UserRow['deletedAt']>().toEqualTypeOf<UserModel['deletedAt']>();
     expectTypeOf<UserRow['createdAt']>().toEqualTypeOf<UserModel['createdAt']>();
 
     expectTypeOf<VendorProfileRow['isPublished']>().toEqualTypeOf<

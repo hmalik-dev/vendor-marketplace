@@ -53,6 +53,7 @@ describe('userSchema', () => {
     cancelledBookingsCount: 0,
     isBanned: false,
     bannedAt: null,
+    deletedAt: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
@@ -95,6 +96,12 @@ describe('userSchema', () => {
 
   it('rejects a negative derived booking counter', () => {
     expect(userSchema.safeParse({ ...valid, completedBookingsCount: -1 }).success).toBe(false);
+  });
+
+  it('accepts a row retired after its Clerk identity was deleted', () => {
+    const deletedAt = new Date('2026-02-01T00:00:00.000Z');
+
+    expect(userSchema.parse({ ...valid, deletedAt }).deletedAt).toEqual(deletedAt);
   });
 });
 

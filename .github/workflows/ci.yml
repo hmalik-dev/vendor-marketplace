@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  # The suites boot an in-process Postgres (PGlite); no service container is
+  # needed, but the db package still validates that a URL is configured.
+  DATABASE_URL: postgresql://vendorhub:vendorhub_ci@localhost:5432/vendorhub
+  # `next build` instantiates ClerkProvider, which refuses to load without a
+  # syntactically valid publishable key. These are placeholders, not secrets:
+  # CI never reaches Clerk's servers.
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA
+  CLERK_SECRET_KEY: sk_test_ci_placeholder
+  CLERK_WEBHOOK_SECRET: whsec_ci_placeholder
+  NEXT_PUBLIC_API_URL: http://localhost:4000
+
+jobs:
+  verify:
+    name: Typecheck, lint, build, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Cache turbo build outputs
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm format:check
+
+      - run: pnpm typecheck
+
+      - run: pnpm lint
+
+      - run: pnpm build
+
+      - run: pnpm test

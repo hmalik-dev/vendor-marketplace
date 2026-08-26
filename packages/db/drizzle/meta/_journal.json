@@ -15,6 +15,13 @@
       "when": 1787752795087,
       "tag": "0001_sour_slapstick",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787755967546,
+      "tag": "0002_flippant_unicorn",
+      "breakpoints": true
     }
   ]
 }

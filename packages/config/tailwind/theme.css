@@ -2,23 +2,87 @@
  * Shared Tailwind CSS 4 theme for VendorHub.
  * Tailwind 4 is CSS-first: apps import this file after `@import 'tailwindcss'`
  * so every surface inherits the same design tokens.
- * Consumed by `apps/web` from ticket #2 onward.
+ *
+ * Source of truth: ~/.claude/plans/vendor-marketplace-design-system.md
+ * "The Curated Introduction" — warm terracotta action colour grounded by deep
+ * sage, on warm cream rather than stark white.
  */
 
 @theme {
-  --color-brand-50: oklch(0.971 0.014 343.2);
-  --color-brand-100: oklch(0.948 0.028 342.3);
-  --color-brand-200: oklch(0.899 0.061 343.2);
-  --color-brand-300: oklch(0.823 0.108 346);
-  --color-brand-400: oklch(0.718 0.163 349.8);
-  --color-brand-500: oklch(0.656 0.198 354.3);
-  --color-brand-600: oklch(0.592 0.203 357.1);
-  --color-brand-700: oklch(0.525 0.185 358.5);
-  --color-brand-800: oklch(0.459 0.155 359.4);
-  --color-brand-900: oklch(0.408 0.131 0.4);
+  /* --- Primary: Terracotta --- */
+  --color-primary-50: #fef3ee;
+  --color-primary-100: #fce4d6;
+  --color-primary-200: #f9c5a8;
+  --color-primary-300: #f4a070;
+  --color-primary-400: #ee7b3f;
+  --color-primary-500: #e05e20;
+  --color-primary-600: #c44a16;
+  --color-primary-700: #a33814;
+  --color-primary-800: #832e17;
+  --color-primary-900: #6b2816;
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  /* --- Secondary: Sage --- */
+  --color-sage-50: #f2f5f0;
+  --color-sage-100: #e1e8dc;
+  --color-sage-200: #c4d1ba;
+  --color-sage-300: #9fb38f;
+  --color-sage-400: #7a9468;
+  --color-sage-500: #5e7a4e;
+  --color-sage-600: #49613d;
+  --color-sage-700: #3a4d33;
+  --color-sage-800: #313f2c;
+  --color-sage-900: #2a3526;
 
-  --radius-card: 0.75rem;
+  /* --- Accent: Gold --- */
+  --color-gold-100: #fbf3e0;
+  --color-gold-200: #f5e2b8;
+  --color-gold-300: #eece84;
+  --color-gold-400: #d4a853;
+  --color-gold-500: #c49530;
+  --color-gold-600: #a57a1e;
+
+  /* --- Neutrals: Warm Stone (deliberately shadows Tailwind's cool `stone`) --- */
+  --color-stone-0: #ffffff;
+  --color-stone-50: #faf7f2;
+  --color-stone-100: #f0ebe3;
+  --color-stone-150: #e8e2d8;
+  --color-stone-200: #e2dcd2;
+  --color-stone-300: #c9c1b5;
+  --color-stone-400: #a89e90;
+  --color-stone-500: #8b8178;
+  --color-stone-600: #6e655c;
+  --color-stone-700: #524b44;
+  --color-stone-800: #3a3530;
+  --color-stone-900: #2c2825;
+
+  /* --- Semantic --- */
+  --color-success: #5e7a4e;
+  --color-warning: #d4a853;
+  --color-error: #c4453d;
+  --color-error-light: #fef2f1;
+  --color-info: #4a7fa5;
+  --color-info-light: #eff6fb;
+
+  /*
+   * Font stacks. The `--font-*-face` variables are emitted by `next/font` in
+   * the consuming app. The fallback must live *inside* var() — an undefined
+   * custom property invalidates the entire declaration, dropping the stack to
+   * the browser default rather than to the next family listed.
+   */
+  --font-sans: var(--font-body-face, 'Albert Sans'), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face, 'Fraunces'), ui-serif, Georgia, serif;
+  --font-mono: var(--font-mono-face, 'JetBrains Mono'), ui-monospace, monospace;
+
+  /* --- Border radius: varied on purpose, not 8px everywhere --- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* --- Shadows: warm-tinted, never pure black --- */
+  --shadow-sm: 0 1px 2px rgba(44, 40, 37, 0.04);
+  --shadow-md: 0 2px 8px rgba(44, 40, 37, 0.06), 0 1px 2px rgba(44, 40, 37, 0.04);
+  --shadow-lg: 0 4px 16px rgba(44, 40, 37, 0.08), 0 2px 4px rgba(44, 40, 37, 0.04);
+  --shadow-xl: 0 8px 32px rgba(44, 40, 37, 0.1), 0 4px 8px rgba(44, 40, 37, 0.04);
+  --shadow-hover: 0 8px 24px rgba(44, 40, 37, 0.12);
 }
