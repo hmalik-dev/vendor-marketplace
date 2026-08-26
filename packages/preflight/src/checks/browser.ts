@@ -5,7 +5,19 @@ import { parse } from 'dotenv';
 import { type Check, type CheckResult, fail, pass } from '../types.js';
 
 export const E2E_ENV_FILE = '.env.e2e.local';
-export const E2E_KEYS = ['E2E_TEST_EMAIL', 'E2E_TEST_PASSWORD'] as const;
+
+/**
+ * One reusable account per role, so a Playwright pass can sign in as either
+ * side of the marketplace without inventing a throwaway account per run. The
+ * two sides see genuinely different surfaces — a vendor is redirected off `/`,
+ * a customer is not — so one shared account cannot cover a ticket's flows.
+ */
+export const E2E_ACCOUNTS = [
+  { role: 'customer', emailKey: 'E2E_CUSTOMER_EMAIL', passwordKey: 'E2E_CUSTOMER_PASSWORD' },
+  { role: 'vendor', emailKey: 'E2E_VENDOR_EMAIL', passwordKey: 'E2E_VENDOR_PASSWORD' },
+] as const;
+
+export const E2E_KEYS = E2E_ACCOUNTS.flatMap((account) => [account.emailKey, account.passwordKey]);
 
 /** Where Playwright caches its browser builds, per platform. */
 export function browsersPath(env: NodeJS.ProcessEnv = process.env): string {
@@ -43,7 +55,7 @@ export function evaluateBrowsers(env: NodeJS.ProcessEnv): CheckResult {
 }
 
 export function evaluateE2eCredentials(repoRoot: string): CheckResult {
-  const name = 'End-to-end test account configured';
+  const name = 'End-to-end test accounts configured';
   const file = path.join(repoRoot, E2E_ENV_FILE);
 
   if (!existsSync(file)) {
@@ -51,7 +63,7 @@ export function evaluateE2eCredentials(repoRoot: string): CheckResult {
       'e2e',
       name,
       `${E2E_ENV_FILE} is absent`,
-      `Create ${E2E_ENV_FILE} with ${E2E_KEYS.join(' and ')} — it is gitignored and must stay so`,
+      `Create ${E2E_ENV_FILE} with ${E2E_KEYS.join(', ')} — it is gitignored and must stay so`,
     );
   }
 
@@ -67,7 +79,9 @@ export function evaluateE2eCredentials(repoRoot: string): CheckResult {
     );
   }
 
-  return pass('e2e', name, `${E2E_ENV_FILE} supplies ${E2E_KEYS.join(' and ')}`);
+  const roles = E2E_ACCOUNTS.map((account) => account.role).join(' and ');
+
+  return pass('e2e', name, `${E2E_ENV_FILE} supplies a ${roles} account`);
 }
 
 export const browserCheck: Check = {

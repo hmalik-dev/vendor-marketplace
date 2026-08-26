@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Show } from '@clerk/nextjs';
 import { CATEGORY_SEEDS, LANDING_CATEGORY_COUNT } from '@vendorhub/shared';
 import { CategoryIconBadge } from '@/components/category-icon';
 import { Button } from '@/components/ui/button';
@@ -32,12 +33,26 @@ export default async function HomePage(): Promise<React.ReactElement> {
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button variant="cta" size="cta" asChild>
-              <Link href="/sign-up">Get started</Link>
-            </Button>
-            <Button variant="outline" size="cta" asChild>
-              <Link href="/sign-in">Sign in</Link>
-            </Button>
+            {/*
+              A signed-in customer is already past the funnel — offering them
+              "Get started" again is noise, and the footer hides the same pair.
+              Vendors never reach this page at all; the guard sends them to
+              their dashboard.
+            */}
+            <Show when="signed-out">
+              <Button variant="cta" size="cta" asChild>
+                <Link href="/sign-up">Get started</Link>
+              </Button>
+              <Button variant="outline" size="cta" asChild>
+                <Link href="/sign-in">Sign in</Link>
+              </Button>
+            </Show>
+
+            <Show when="signed-in">
+              <Button variant="cta" size="cta" asChild>
+                <Link href="/dashboard">Go to your dashboard</Link>
+              </Button>
+            </Show>
           </div>
         </div>
       </section>

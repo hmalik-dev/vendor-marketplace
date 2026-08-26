@@ -1,8 +1,18 @@
+import type { ReactNode } from 'react';
 import { CATEGORY_SEEDS, LANDING_CATEGORY_COUNT } from '@vendorhub/shared';
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+type AuthState = 'signed-in' | 'signed-out';
+
+let authState: AuthState = 'signed-out';
 
 const redirectVendorToDashboard = vi.fn<() => Promise<void>>();
+
+vi.mock('@clerk/nextjs', () => ({
+  Show: ({ when, children }: { when: AuthState; children: ReactNode }) =>
+    when === authState ? children : null,
+}));
 
 vi.mock('@/lib/current-user', () => ({
   redirectVendorToDashboard: () => redirectVendorToDashboard(),
@@ -11,9 +21,38 @@ vi.mock('@/lib/current-user', () => ({
 const { default: HomePage } = await import('./page');
 
 describe('HomePage', () => {
+  beforeEach(() => {
+    authState = 'signed-out';
+  });
+
   afterEach(() => {
     cleanup();
     redirectVendorToDashboard.mockReset();
+  });
+
+  it('offers the sign-up and sign-in CTAs to a visitor with no session', async () => {
+    redirectVendorToDashboard.mockResolvedValue(undefined);
+
+    render(await HomePage());
+
+    expect(screen.getByRole('link', { name: 'Get started' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeDefined();
+    expect(screen.queryByRole('link', { name: 'Go to your dashboard' })).toBeNull();
+  });
+
+  it('replaces the hero CTAs with a dashboard link once signed in', async () => {
+    // The footer hides the same pair; a page that disagrees with itself is a bug.
+    authState = 'signed-in';
+    redirectVendorToDashboard.mockResolvedValue(undefined);
+
+    render(await HomePage());
+
+    expect(screen.queryByRole('link', { name: 'Get started' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Go to your dashboard' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/dashboard',
+    );
   });
 
   it('renders the browse surface for visitors the vendor guard lets through', async () => {
