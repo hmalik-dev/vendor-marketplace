@@ -3,6 +3,7 @@ import path from 'node:path';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { createDatabase } from '../client.js';
 import { loadEnv } from '../load-env.js';
+import { resolveMigrationUrl } from '../migration-url.js';
 
 const MIGRATIONS_FOLDER = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -17,14 +18,7 @@ const MIGRATIONS_FOLDER = path.resolve(
 async function main(): Promise<void> {
   loadEnv();
 
-  // Migrations use the direct connection where one is configured — DDL through
-  // a transaction-mode pooler is the classic Neon migration failure.
-  const { db, client } = createDatabase({
-    max: 1,
-    ...(process.env.DATABASE_URL_UNPOOLED
-      ? { connectionString: process.env.DATABASE_URL_UNPOOLED }
-      : {}),
-  });
+  const { db, client } = createDatabase({ max: 1, connectionString: resolveMigrationUrl() });
 
   try {
     await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });

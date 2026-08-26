@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { ApiEnv } from '../config/env.js';
 
 /** Object namespaces the API writes into, kept to a closed set. */
@@ -15,6 +15,13 @@ const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 export interface ObjectStorage {
   /** Stores `body` and returns the public URL it is served from. */
   put(key: string, body: Buffer, contentType: string): Promise<string>;
+  /**
+   * Resolves when the configured bucket is reachable and rejects otherwise.
+   * Used by the readiness probe, which has to fail on a missing bucket and not
+   * just on an unreachable endpoint — credentials that authenticate against a
+   * bucket that no longer exists still break every upload.
+   */
+  checkAvailable(): Promise<void>;
 }
 
 /**
@@ -64,6 +71,10 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
       );
 
       return publicUrlFor(env.S3_PUBLIC_URL, key);
+    },
+
+    async checkAvailable() {
+      await client.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET }));
     },
   };
 }

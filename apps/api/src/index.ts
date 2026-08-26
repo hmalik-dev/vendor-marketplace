@@ -14,15 +14,35 @@ async function main(): Promise<void> {
 
   const app = await buildServer({ env, db, storage: createS3Storage(env) });
 
+  /*
+   * A deploy stops the old container by sending SIGTERM and waiting. Closing
+   * Fastify first lets in-flight requests finish and stops new ones being
+   * accepted, so a rollout drains instead of dropping responses; the database
+   * pool is released afterwards, once nothing can still be querying it.
+   */
+  let shuttingDown = false;
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+    // A platform that escalates SIGTERM to SIGKILL often sends the first signal
+    // more than once; re-entering would close a closing server.
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
     app.log.info({ signal }, 'Shutting down');
-    await app.close();
-    await client.end();
-    process.exit(0);
+
+    try {
+      await app.close();
+      await client.end();
+      process.exit(0);
+    } catch (error) {
+      app.log.error({ err: error }, 'Shutdown did not complete cleanly');
+      process.exit(1);
+    }
   };
 
-  process.on('SIGINT', (signal) => void shutdown(signal));
-  process.on('SIGTERM', (signal) => void shutdown(signal));
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => void shutdown(signal));
+  }
 
   await app.listen({ port: env.PORT, host: env.HOST });
 }

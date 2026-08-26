@@ -79,4 +79,39 @@ pnpm test       # Vitest across the workspace
 The database suite runs against an in-process PostgreSQL (PGlite), so
 `pnpm test` needs no running database.
 
+## Running the API in a container
+
+`apps/api/Dockerfile` builds the deployable API image. The build context is the
+repository root, because a pnpm workspace cannot be installed from one package's
+directory:
+
+```bash
+docker build -f apps/api/Dockerfile -t vendorhub-api .
+docker run --rm -p 4000:4000 --env-file .env -e HOST=0.0.0.0 vendorhub-api
+```
+
+The image installs and builds only the `@vendorhub/api` subgraph, then ships a
+`pnpm deploy --prod` tree, so it carries neither devDependencies nor the rest of
+the monorepo. It runs as the unprivileged `node` user and closes Fastify on
+`SIGTERM`, so a rollout drains in-flight requests.
+
+Two probes are exposed for the hosting platform, and `railway.json` points at
+them:
+
+- `GET /health` — liveness. Answers `200` from the event loop alone, with no
+  I/O: a restart is the only response to a failed liveness probe, and a restart
+  cannot fix a dependency outage.
+- `GET /ready` — readiness. Round-trips the database and the object storage
+  bucket and reports each separately, answering `503` when either is down so the
+  platform withholds traffic instead of routing it into failures.
+
+Both are unauthenticated and exempt from rate limiting.
+
+Migrations run as a release step rather than at boot, over the direct
+(unpooled) connection:
+
+```bash
+node node_modules/@vendorhub/db/dist/scripts/migrate.js
+```
+
 See `CLAUDE.md` for architecture conventions and the full command reference.

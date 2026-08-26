@@ -26,18 +26,19 @@ commit SHA in Notes when marking Done.
 
 Run from the repository root; Turborepo fans each task out across packages.
 
-| Task           | Command                                        |
-| -------------- | ---------------------------------------------- |
-| Install        | `pnpm install`                                 |
-| Build all      | `pnpm build`                                   |
-| Typecheck all  | `pnpm typecheck`                               |
-| Lint all       | `pnpm lint`                                    |
-| Test all       | `pnpm test`                                    |
-| Format         | `pnpm format` (check with `pnpm format:check`) |
-| Preflight gate | `pnpm preflight --ticket <n>`                  |
-| Regenerate env | `pnpm env:example`                             |
-| Dev servers    | `pnpm dev`                                     |
-| Single package | `pnpm --filter @vendorhub/db <script>`         |
+| Task            | Command                                                                             |
+| --------------- | ----------------------------------------------------------------------------------- |
+| Install         | `pnpm install`                                                                      |
+| Build all       | `pnpm build`                                                                        |
+| Typecheck all   | `pnpm typecheck`                                                                    |
+| Lint all        | `pnpm lint`                                                                         |
+| Test all        | `pnpm test`                                                                         |
+| Format          | `pnpm format` (check with `pnpm format:check`)                                      |
+| Preflight gate  | `pnpm preflight --ticket <n>`                                                       |
+| Regenerate env  | `pnpm env:example`                                                                  |
+| Dev servers     | `pnpm dev`                                                                          |
+| Build API image | `docker build -f apps/api/Dockerfile -t vendorhub-api .` (context is the repo root) |
+| Single package  | `pnpm --filter @vendorhub/db <script>`                                              |
 
 Database:
 

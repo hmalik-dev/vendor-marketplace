@@ -22,15 +22,30 @@ describe('rate limiting', () => {
     const headers = { 'x-forwarded-for': '203.0.113.10' };
 
     const allowed = await Promise.all([
-      harness.app.inject({ method: 'GET', url: '/health', headers }),
-      harness.app.inject({ method: 'GET', url: '/health', headers }),
+      harness.app.inject({ method: 'GET', url: '/categories', headers }),
+      harness.app.inject({ method: 'GET', url: '/categories', headers }),
     ]);
     expect(allowed.map((response) => response.statusCode)).toEqual([200, 200]);
 
-    const blocked = await harness.app.inject({ method: 'GET', url: '/health', headers });
+    const blocked = await harness.app.inject({ method: 'GET', url: '/categories', headers });
 
     expect(blocked.statusCode).toBe(429);
     expect(blocked.json()).toMatchObject({ statusCode: 429, error: 'RATE_LIMITED' });
+  });
+
+  /*
+   * The platform calls the probes far more often than any human calls the API.
+   * Counting them against the limit means the limiter eventually answers the
+   * probe with a 429, the platform reads that as unhealthy, and the service
+   * takes itself down with nothing else wrong.
+   */
+  it.each(['/health', '/ready'])('never rate limits %s', async (url) => {
+    const headers = { 'x-forwarded-for': '203.0.113.20' };
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await harness.app.inject({ method: 'GET', url, headers });
+      expect(response.statusCode).toBe(200);
+    }
   });
 });
 

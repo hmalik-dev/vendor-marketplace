@@ -45,6 +45,8 @@ export interface TestHarness {
   clerkUsers: Map<string, ClerkUserSnapshot>;
   /** Signatures the fake svix verifier accepts; anything else is rejected. */
   validWebhookSignatures: Set<string>;
+  /** Simulates the storage bucket going away, for the readiness probe. */
+  setStorageAvailable: (available: boolean) => void;
   close: () => Promise<void>;
 }
 
@@ -65,10 +67,17 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
   const validWebhookSignatures = new Set<string>(['valid-signature']);
   const storedObjects: RecordedObject[] = [];
 
+  let storageAvailable = true;
+
   const storage: ObjectStorage = {
     put: async (key, body, contentType) => {
       storedObjects.push({ key, body, contentType });
       return publicUrlFor(TEST_ENV.S3_PUBLIC_URL, key);
+    },
+    checkAvailable: async () => {
+      if (!storageAvailable) {
+        throw new Error('Test storage bucket is unavailable');
+      }
     },
   };
 
@@ -109,6 +118,9 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
     storedObjects,
     clerkUsers,
     validWebhookSignatures,
+    setStorageAvailable: (available) => {
+      storageAvailable = available;
+    },
     close: async () => {
       await app.close();
       await database.close();

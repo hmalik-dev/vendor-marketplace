@@ -1,0 +1,20 @@
+# Named `Dockerfile.dockerignore`, not `.dockerignore`: BuildKit looks for a
+# per-Dockerfile ignore file beside the Dockerfile and otherwise falls back to
+# one at the context root — a `.dockerignore` sitting here is silently ignored,
+# and the whole repository, `node_modules` included, ends up in the context.
+#
+# The context is the repository root, so these paths are repo-relative. Keeping
+# build output and secrets out of it is what makes the manifest-first COPY
+# ordering actually cache.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+.git
+.github
+.env
+.env.*
+!.env.example
+**/coverage
+**/*.log
+**/.DS_Store
