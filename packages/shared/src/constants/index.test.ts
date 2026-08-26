@@ -43,7 +43,7 @@ describe('enum constants', () => {
 
   it('exposes exactly the budget tiers and tag enums the data model defines', () => {
     expect(BUDGET_TIERS).toEqual(['budget', 'mid_range', 'premium', 'luxury']);
-    expect(TAG_CATEGORIES).toEqual(['language', 'cultural', 'religious_dietary']);
+    expect(TAG_CATEGORIES).toEqual(['language', 'cultural', 'dietary']);
     expect(TAG_SUGGESTION_STATUSES).toEqual(['pending', 'approved', 'rejected']);
   });
 
@@ -100,7 +100,7 @@ describe('TAG_SEEDS', () => {
     expect([...seeded].sort()).toEqual([...TAG_CATEGORIES].sort());
   });
 
-  it('covers the launch language, cultural, and religious/dietary lists', () => {
+  it('covers the launch language, cultural, and dietary lists', () => {
     const byCategory = (category: string) =>
       TAG_SEEDS.filter((tag) => tag.category === category).map((tag) => tag.name);
 
@@ -111,8 +111,8 @@ describe('TAG_SEEDS', () => {
     expect(byCategory('cultural')).toHaveLength(16);
     expect(byCategory('cultural')).toContain('South Asian');
 
-    expect(byCategory('religious_dietary')).toHaveLength(10);
-    expect(byCategory('religious_dietary')).toContain('Non-denominational');
+    expect(byCategory('dietary')).toHaveLength(4);
+    expect(byCategory('dietary')).toContain('Halal');
   });
 
   it('gives every tag a globally unique slug', () => {

@@ -13,8 +13,11 @@ import {
   sendMessageSchema,
   setVendorTagsSchema,
   tagSchema,
+  tagSuggestionResponseSchema,
+  uploadedImageSchema,
   updateUserSchema,
   userSchema,
+  vendorProfileDetailSchema,
   vendorSearchQuerySchema,
 } from './index.js';
 import {
@@ -24,6 +27,7 @@ import {
   MAX_TAGS_PER_CATEGORY,
   MESSAGE_MAX_LENGTH,
   MIN_BOOKING_AMOUNT_CENTS,
+  RESPONSE_TIME_HOURS_OPTIONS,
   TAG_CATEGORIES,
 } from '../constants/index.js';
 
@@ -191,7 +195,7 @@ describe('tagSchema', () => {
   });
 
   it('rejects a tag category outside the shared set', () => {
-    expect(tagSchema.safeParse({ ...valid, category: 'dietary' }).success).toBe(false);
+    expect(tagSchema.safeParse({ ...valid, category: 'religious_dietary' }).success).toBe(false);
   });
 
   it('rejects a slug that is not URL-safe', () => {
@@ -497,5 +501,136 @@ describe('paginatedSchema', () => {
   it('rejects a page number below 1', () => {
     const schema = paginatedSchema(z.object({ id: z.string() }));
     expect(schema.safeParse({ items: [], total: 0, page: 0, pageSize: 20 }).success).toBe(false);
+  });
+});
+
+describe('createVendorProfileSchema responseTimeHours', () => {
+  const base = {
+    businessName: 'Sunlit Studio',
+    categoryIds: [UUID],
+    city: 'Austin',
+    state: 'TX',
+  };
+
+  it('accepts every offered response window', () => {
+    for (const hours of RESPONSE_TIME_HOURS_OPTIONS) {
+      const parsed = createVendorProfileSchema.parse({ ...base, responseTimeHours: hours });
+      expect(parsed.responseTimeHours).toBe(hours);
+    }
+  });
+
+  it('rejects a response window outside the offered set', () => {
+    expect(
+      createVendorProfileSchema.safeParse({ ...base, responseTimeHours: 3 }).success,
+    ).toBe(false);
+  });
+});
+
+describe('tagSuggestionResponseSchema', () => {
+  const tag = {
+    id: UUID,
+    name: 'Amharic',
+    slug: 'language-amharic',
+    category: 'language',
+    displayOrder: 1,
+    isActive: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  it('carries the matched tag on an `exists` outcome', () => {
+    const parsed = tagSuggestionResponseSchema.parse({ status: 'exists', tag });
+    expect(parsed.status).toBe('exists');
+    expect(parsed).toMatchObject({ tag: { slug: 'language-amharic' } });
+  });
+
+  it('accepts a bare `already_suggested` outcome', () => {
+    expect(tagSuggestionResponseSchema.parse({ status: 'already_suggested' })).toEqual({
+      status: 'already_suggested',
+    });
+  });
+
+  it('carries the new row id on a `submitted` outcome', () => {
+    const parsed = tagSuggestionResponseSchema.parse({ status: 'submitted', suggestionId: UUID });
+    expect(parsed).toEqual({ status: 'submitted', suggestionId: UUID });
+  });
+
+  it('rejects an `exists` outcome with no tag attached', () => {
+    expect(tagSuggestionResponseSchema.safeParse({ status: 'exists' }).success).toBe(false);
+  });
+
+  it('rejects an unknown outcome', () => {
+    expect(tagSuggestionResponseSchema.safeParse({ status: 'merged' }).success).toBe(false);
+  });
+});
+
+describe('uploadedImageSchema', () => {
+  it('requires both processed variants to be absolute URLs', () => {
+    const parsed = uploadedImageSchema.parse({
+      imageUrl: 'https://cdn.example.com/a.webp',
+      thumbnailUrl: 'https://cdn.example.com/a-thumb.webp',
+    });
+    expect(parsed.thumbnailUrl).toBe('https://cdn.example.com/a-thumb.webp');
+  });
+
+  it('rejects a relative image path', () => {
+    expect(
+      uploadedImageSchema.safeParse({ imageUrl: '/a.webp', thumbnailUrl: '/a-thumb.webp' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('vendorProfileDetailSchema', () => {
+  const row = {
+    id: UUID,
+    userId: UUID,
+    businessName: 'Sunlit Studio',
+    slug: 'sunlit-studio',
+    bio: null,
+    profileImageUrl: null,
+    coverImageUrl: null,
+    address: null,
+    city: 'Austin',
+    state: 'TX',
+    latitude: null,
+    longitude: null,
+    serviceRadiusKm: 50,
+    responseTimeHours: 24,
+    stripeAccountId: null,
+    stripeOnboarded: false,
+    isPublished: false,
+    isDeleted: false,
+    avgRating: 0,
+    reviewCount: 0,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  it('carries the selections the edit form has to prefill', () => {
+    const parsed = vendorProfileDetailSchema.parse({
+      ...row,
+      categoryIds: [UUID],
+      publishBlockers: [],
+      tags: [
+        {
+          id: UUID,
+          name: 'Spanish',
+          slug: 'language-spanish',
+          category: 'language',
+          displayOrder: 2,
+          isActive: true,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+    });
+
+    expect(parsed.categoryIds).toEqual([UUID]);
+    expect(parsed.tags).toHaveLength(1);
+    expect(parsed.tags[0]?.name).toBe('Spanish');
+  });
+
+  it('rejects a detail payload missing its tag list', () => {
+    expect(
+      vendorProfileDetailSchema.safeParse({ ...row, categoryIds: [], publishBlockers: [] }).success,
+    ).toBe(false);
   });
 });

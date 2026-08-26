@@ -45,7 +45,7 @@ export const BUDGET_TIERS = ['budget', 'mid_range', 'premium', 'luxury'] as cons
 export type BudgetTier = (typeof BUDGET_TIERS)[number];
 
 /** The three groups a vendor tag belongs to, rendered as sections in the picker. */
-export const TAG_CATEGORIES = ['language', 'cultural', 'religious_dietary'] as const;
+export const TAG_CATEGORIES = ['language', 'cultural', 'dietary'] as const;
 export type TagCategory = (typeof TAG_CATEGORIES)[number];
 
 export const TAG_SUGGESTION_STATUSES = ['pending', 'approved', 'rejected'] as const;
@@ -249,61 +249,10 @@ export const TAG_SEEDS: readonly TagSeed[] = [
   { name: 'Japanese', slug: 'cultural-japanese', category: 'cultural', displayOrder: 14 },
   { name: 'Chinese', slug: 'cultural-chinese', category: 'cultural', displayOrder: 15 },
   { name: 'Polynesian', slug: 'cultural-polynesian', category: 'cultural', displayOrder: 16 },
-  {
-    name: 'Muslim',
-    slug: 'religious-dietary-muslim',
-    category: 'religious_dietary',
-    displayOrder: 1,
-  },
-  {
-    name: 'Halal',
-    slug: 'religious-dietary-halal',
-    category: 'religious_dietary',
-    displayOrder: 2,
-  },
-  {
-    name: 'Kosher',
-    slug: 'religious-dietary-kosher',
-    category: 'religious_dietary',
-    displayOrder: 3,
-  },
-  {
-    name: 'Hindu',
-    slug: 'religious-dietary-hindu',
-    category: 'religious_dietary',
-    displayOrder: 4,
-  },
-  { name: 'Sikh', slug: 'religious-dietary-sikh', category: 'religious_dietary', displayOrder: 5 },
-  {
-    name: 'Buddhist',
-    slug: 'religious-dietary-buddhist',
-    category: 'religious_dietary',
-    displayOrder: 6,
-  },
-  {
-    name: 'Christian',
-    slug: 'religious-dietary-christian',
-    category: 'religious_dietary',
-    displayOrder: 7,
-  },
-  {
-    name: 'Non-denominational',
-    slug: 'religious-dietary-non-denominational',
-    category: 'religious_dietary',
-    displayOrder: 8,
-  },
-  {
-    name: 'Vegan',
-    slug: 'religious-dietary-vegan',
-    category: 'religious_dietary',
-    displayOrder: 9,
-  },
-  {
-    name: 'Vegetarian',
-    slug: 'religious-dietary-vegetarian',
-    category: 'religious_dietary',
-    displayOrder: 10,
-  },
+  { name: 'Halal', slug: 'dietary-halal', category: 'dietary', displayOrder: 1 },
+  { name: 'Kosher', slug: 'dietary-kosher', category: 'dietary', displayOrder: 2 },
+  { name: 'Vegan', slug: 'dietary-vegan', category: 'dietary', displayOrder: 3 },
+  { name: 'Vegetarian', slug: 'dietary-vegetarian', category: 'dietary', displayOrder: 4 },
 ];
 
 export const TAG_SLUGS = TAG_SEEDS.map((tag) => tag.slug);
@@ -338,6 +287,13 @@ export const MAX_GUEST_COUNT = 100_000;
 
 /** Short customer intro shown to vendors, e.g. "Planning my wedding!". */
 export const MAX_CUSTOMER_BIO_LENGTH = 300;
+
+/**
+ * Response windows a vendor may advertise, in hours. A closed set rather than
+ * a free number so search (ticket #6) can filter on it without normalising
+ * arbitrary values.
+ */
+export const RESPONSE_TIME_HOURS_OPTIONS = [1, 4, 24, 48] as const;
 
 /** A vendor may claim at most this many tags from any one tag category. */
 export const MAX_TAGS_PER_CATEGORY = 5;

@@ -12,6 +12,11 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    setupFiles: ["./vitest.setup.ts"],
+    // jsdom plus the Radix/cmdk mount work is slow, and `turbo run test` runs
+    // every package's suite at once — the 5s default fails on load, not logic.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     include: ["src/**/*.test.{ts,tsx}"],
   },
 });

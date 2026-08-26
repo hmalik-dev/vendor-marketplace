@@ -12,9 +12,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1118.0",
     "@clerk/backend": "3.16.12",
     "@fastify/cors": "11.3.0",
     "@fastify/helmet": "13.1.1",
+    "@fastify/multipart": "^10.1.1",
     "@fastify/rate-limit": "11.2.0",
     "@vendorhub/db": "workspace:*",
     "@vendorhub/shared": "workspace:*",
@@ -22,6 +24,7 @@
     "fastify": "5.12.1",
     "fastify-plugin": "6.0.0",
     "fastify-type-provider-zod": "7.0.0",
+    "sharp": "^0.35.4",
     "svix": "2.1.0",
     "zod": "4.4.3"
   },

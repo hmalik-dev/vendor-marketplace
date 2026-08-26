@@ -29,6 +29,7 @@ import {
   REVIEW_CONTENT_MIN_LENGTH,
   REVIEW_RATING_MAX,
   REVIEW_RATING_MIN,
+  RESPONSE_TIME_HOURS_OPTIONS,
   REVIEW_TYPES,
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
@@ -215,17 +216,32 @@ export const vendorProfileSchema = z.object({
 export type VendorProfile = z.infer<typeof vendorProfileSchema>;
 
 export const createVendorProfileSchema = z.object({
-  businessName: trimmedString(MAX_BUSINESS_NAME_LENGTH, 2),
+  /*
+   * The required fields carry their own messages: they are the ones a vendor
+   * can actually leave blank, and Zod's default "Invalid input" gives no clue
+   * which field the form is complaining about.
+   */
+  businessName: z
+    .string()
+    .trim()
+    .min(2, 'Enter your business name')
+    .max(MAX_BUSINESS_NAME_LENGTH),
   /** Optional — the service generates one from the business name when omitted. */
   slug: slugSchema.optional(),
   categoryIds: z.array(uuidSchema).min(1, 'Select at least one category').max(5),
-  city: trimmedString(MAX_NAME_LENGTH),
-  state: trimmedString(MAX_NAME_LENGTH),
+  city: z.string().trim().min(1, 'Enter the city you serve').max(MAX_NAME_LENGTH),
+  state: z.string().trim().min(1, 'Choose the state you serve').max(MAX_NAME_LENGTH),
   bio: z.string().trim().max(5_000).optional(),
   address: z.string().trim().max(MAX_ADDRESS_LENGTH).optional(),
   latitude: latitudeSchema.optional(),
   longitude: longitudeSchema.optional(),
   serviceRadiusKm: z.int().min(1).max(500).optional(),
+  responseTimeHours: z
+    .int()
+    .refine((hours) => (RESPONSE_TIME_HOURS_OPTIONS as readonly number[]).includes(hours), {
+      message: 'Choose one of the offered response windows',
+    })
+    .optional(),
   profileImageUrl: urlSchema.optional(),
   coverImageUrl: urlSchema.optional(),
 });
@@ -243,6 +259,15 @@ export const updateVendorProfileSchema = createVendorProfileSchema
     message: 'Provide at least one field to update',
   });
 export type UpdateVendorProfileInput = z.infer<typeof updateVendorProfileSchema>;
+
+// --- Uploads ---------------------------------------------------------------
+
+/** What `POST /upload/image` returns once the processed variants are stored. */
+export const uploadedImageSchema = z.object({
+  imageUrl: urlSchema,
+  thumbnailUrl: urlSchema,
+});
+export type UploadedImage = z.infer<typeof uploadedImageSchema>;
 
 // --- Service packages ------------------------------------------------------
 
@@ -493,6 +518,19 @@ export const createTagSuggestionSchema = z.object({
 export type CreateTagSuggestionInput = z.infer<typeof createTagSuggestionSchema>;
 
 /**
+ * The three outcomes of `POST /tags/suggest`. Server-side dedup is the
+ * authoritative layer: `exists` hands back the tag the client should select
+ * instead, `already_suggested` means someone got there first, and `submitted`
+ * is the only case that creates a row for admin review.
+ */
+export const tagSuggestionResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('exists'), tag: tagSchema }),
+  z.object({ status: z.literal('already_suggested') }),
+  z.object({ status: z.literal('submitted'), suggestionId: uuidSchema }),
+]);
+export type TagSuggestionResponse = z.infer<typeof tagSuggestionResponseSchema>;
+
+/**
  * A vendor's full tag selection, applied as one replace operation. The
  * per-category ceiling is enforced by the service, which resolves each id to
  * its category.
@@ -501,6 +539,24 @@ export const setVendorTagsSchema = z.object({
   tagIds: z.array(uuidSchema).max(TAG_CATEGORIES.length * MAX_TAGS_PER_CATEGORY),
 });
 export type SetVendorTagsInput = z.infer<typeof setVendorTagsSchema>;
+
+/**
+ * What the vendor's own profile endpoints return: the row plus the two
+ * many-to-many selections the edit form has to prefill, plus the outstanding
+ * publish prerequisites the dashboard renders. Tags are returned whole rather
+ * than as ids so the form can render pills without a second lookup against the
+ * full tag list.
+ */
+export const vendorProfileDetailSchema = vendorProfileSchema.extend({
+  categoryIds: z.array(uuidSchema),
+  tags: z.array(tagSchema),
+  /**
+   * Human-readable prerequisites still standing between this profile and a
+   * public listing. Empty means the publish toggle is safe to turn on.
+   */
+  publishBlockers: z.array(z.string()),
+});
+export type VendorProfileDetail = z.infer<typeof vendorProfileDetailSchema>;
 
 // --- Notifications ---------------------------------------------------------
 

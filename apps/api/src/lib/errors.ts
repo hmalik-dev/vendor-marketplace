@@ -32,6 +32,10 @@ export function notFound(message = 'Resource not found'): AppError {
   return new AppError(404, ERROR_CODES.NOT_FOUND, message);
 }
 
+export function conflict(message: string, details?: unknown): AppError {
+  return new AppError(409, ERROR_CODES.CONFLICT, message, details);
+}
+
 export function validationFailed(message: string, details?: unknown): AppError {
   return new AppError(400, ERROR_CODES.VALIDATION_ERROR, message, details);
 }

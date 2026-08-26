@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
@@ -7,13 +8,20 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import { MAX_UPLOAD_BYTES } from '@vendorhub/shared';
 import { allowedOrigins, type ApiEnv } from './config/env.js';
 import type { AppDatabase } from './lib/database.js';
+import type { ObjectStorage } from './lib/storage.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
+import { storagePlugin } from './plugins/storage.js';
+import { categoryRoutes } from './modules/categories/categories.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { tagRoutes } from './modules/tags/tags.routes.js';
+import { uploadRoutes } from './modules/uploads/uploads.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
+import { vendorRoutes } from './modules/vendors/vendors.routes.js';
 import {
   clerkWebhookRoutes,
   type ClerkWebhookRoutesOptions,
@@ -29,6 +37,8 @@ const ALLOWED_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] as con
 export interface BuildServerOptions {
   env: ApiEnv;
   db: AppDatabase;
+  /** Object storage for uploads; the suites pass an in-memory recorder. */
+  storage: ObjectStorage;
   /** Alternate log destination; the suites use it to assert on redaction. */
   loggerStream?: NodeJS.WritableStream;
   /** Test seams; production wiring uses the real Clerk and svix clients. */
@@ -37,7 +47,7 @@ export interface BuildServerOptions {
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
-  const { env, db } = options;
+  const { env, db, storage } = options;
 
   const app = Fastify({
     logger: {
@@ -59,15 +69,23 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     methods: [...ALLOWED_METHODS],
   });
   await app.register(rateLimit, { max: env.RATE_LIMIT_MAX, timeWindow: '1 minute' });
+  // The per-file ceiling is also enforced when the part is buffered, so an
+  // oversized upload is refused rather than read into memory in full.
+  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
 
   await app.register(databasePlugin, { db });
+  await app.register(storagePlugin, { storage });
   await app.register(clerkAuthPlugin, {
     secretKey: env.CLERK_SECRET_KEY,
     ...options.auth,
   });
 
   await app.register(healthRoutes);
+  await app.register(categoryRoutes);
+  await app.register(tagRoutes);
   await app.register(userRoutes);
+  await app.register(vendorRoutes);
+  await app.register(uploadRoutes);
   await app.register(clerkWebhookRoutes, {
     signingSecret: env.CLERK_WEBHOOK_SECRET,
     ...options.webhooks,

@@ -17,6 +17,25 @@ const envSchema = z.object({
   WEB_URL: z.string().min(1).default('http://localhost:3000'),
   /** Requests per minute, per IP, before the limiter replies 429. */
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(120),
+  /**
+   * Object storage. Cloudflare R2 in production, the MinIO service from
+   * docker-compose.yml locally — both speak the S3 API, so only these values
+   * differ between the two.
+   */
+  S3_ENDPOINT: z.string().min(1),
+  S3_ACCESS_KEY_ID: z.string().min(1),
+  S3_SECRET_ACCESS_KEY: z.string().min(1),
+  S3_BUCKET: z.string().min(1),
+  /** Public base URL objects are served from, with no trailing slash. */
+  S3_PUBLIC_URL: z
+    .string()
+    .min(1)
+    .transform((value) => value.replace(/\/+$/, '')),
+  /** R2 and MinIO both address buckets by path rather than by subdomain. */
+  S3_FORCE_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
 });
 
 export type ApiEnv = z.infer<typeof envSchema>;

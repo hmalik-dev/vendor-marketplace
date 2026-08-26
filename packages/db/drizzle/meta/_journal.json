@@ -22,6 +22,13 @@
       "when": 1787755967546,
       "tag": "0002_flippant_unicorn",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787759828321,
+      "tag": "0003_rename_tag_category_dietary",
+      "breakpoints": true
     }
   ]
 }

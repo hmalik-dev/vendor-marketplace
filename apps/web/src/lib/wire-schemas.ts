@@ -1,4 +1,4 @@
-import { userSchema } from '@vendorhub/shared';
+import { categorySchema, tagSchema, userSchema, vendorProfileDetailSchema } from '@vendorhub/shared';
 import { z } from 'zod';
 
 /**
@@ -15,3 +15,19 @@ export const wireUserSchema = userSchema.extend({
 });
 
 export type WireUser = z.infer<typeof wireUserSchema>;
+
+export const wireTagSchema = tagSchema.extend({ createdAt: z.coerce.date() });
+export type WireTag = z.infer<typeof wireTagSchema>;
+
+export const wireTagListSchema = z.array(wireTagSchema);
+
+/** Categories carry no timestamps, so the domain schema needs no coercion. */
+export const wireCategoryListSchema = z.array(categorySchema);
+
+export const wireVendorProfileSchema = vendorProfileDetailSchema.extend({
+  tags: z.array(wireTagSchema),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export type WireVendorProfile = z.infer<typeof wireVendorProfileSchema>;

@@ -5,6 +5,11 @@ const REQUIRED: NodeJS.ProcessEnv = {
   DATABASE_URL: 'postgres://localhost:5432/vendorhub',
   CLERK_SECRET_KEY: 'sk_test_key',
   CLERK_WEBHOOK_SECRET: 'whsec_key',
+  S3_ENDPOINT: 'http://localhost:9000',
+  S3_ACCESS_KEY_ID: 'vendorhub',
+  S3_SECRET_ACCESS_KEY: 'vendorhub_dev',
+  S3_BUCKET: 'vendorhub',
+  S3_PUBLIC_URL: 'http://localhost:9000/vendorhub',
 };
 
 describe('parseEnv', () => {
@@ -33,6 +38,7 @@ describe('parseEnv', () => {
       expect(message).toContain('DATABASE_URL');
       expect(message).toContain('CLERK_SECRET_KEY');
       expect(message).toContain('CLERK_WEBHOOK_SECRET');
+      expect(message).toContain('S3_BUCKET');
     }
   });
 
@@ -55,5 +61,21 @@ describe('allowedOrigins', () => {
     const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://vendorhub.app,' });
 
     expect(allowedOrigins(env)).toEqual(['https://vendorhub.app']);
+  });
+});
+
+describe('parseEnv storage configuration', () => {
+  it('strips trailing slashes from the public object URL', () => {
+    const env = parseEnv({ ...REQUIRED, S3_PUBLIC_URL: 'http://localhost:9000/vendorhub//' });
+
+    expect(env.S3_PUBLIC_URL).toBe('http://localhost:9000/vendorhub');
+  });
+
+  it('defaults to path-style bucket addressing', () => {
+    expect(parseEnv(REQUIRED).S3_FORCE_PATH_STYLE).toBe(true);
+  });
+
+  it('reads path-style addressing off as a string', () => {
+    expect(parseEnv({ ...REQUIRED, S3_FORCE_PATH_STYLE: 'false' }).S3_FORCE_PATH_STYLE).toBe(false);
   });
 });

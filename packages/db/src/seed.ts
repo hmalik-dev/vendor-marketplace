@@ -57,8 +57,8 @@ export async function seedCategories<
 }
 
 /**
- * Inserts the launch tags (languages, cultural specialties, religious/dietary
- * specialties). Idempotent on the unique `slug` index in the same way as
+ * Inserts the launch tags (languages, cultural specialties, dietary
+ * preferences). Idempotent on the unique `slug` index in the same way as
  * `seedCategories`, so edits to `TAG_SEEDS` propagate without orphaning the
  * `vendor_tags` rows that point at existing tag ids.
  */

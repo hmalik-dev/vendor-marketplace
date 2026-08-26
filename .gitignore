@@ -38,3 +38,6 @@ skills-lock.json
 
 # Local design scratch, not a build input
 /vendorhub-header.png
+
+# Local state written by the Neon CLI/integration
+.neon

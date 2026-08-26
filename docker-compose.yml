@@ -17,5 +17,43 @@ services:
       timeout: 5s
       retries: 10
 
+  # Cloudflare R2 speaks the S3 API, so local development points the same
+  # client at MinIO. Nothing in `apps/api` knows the difference — only the
+  # `S3_*` variables change between here and production.
+  storage:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: vendorhub-storage
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: vendorhub
+      MINIO_ROOT_PASSWORD: vendorhub_dev
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - vendorhub-storage:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'mc ready local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Creates the uploads bucket and makes object reads public, matching how the
+  # production R2 bucket is served through its public domain.
+  storage-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    container_name: vendorhub-storage-init
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://storage:9000 vendorhub vendorhub_dev &&
+      mc mb --ignore-existing local/vendorhub &&
+      mc anonymous set download local/vendorhub
+      "
+
 volumes:
   vendorhub-pgdata:
+  vendorhub-storage:

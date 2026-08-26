@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Albert_Sans, Fraunces, JetBrains_Mono } from 'next/font/google';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
 /** Warm organic serif — headlines, vendor business names, editorial moments. */
@@ -47,6 +48,7 @@ export default function RootLayout({
           <SiteHeader />
           <main className="flex-1">{children}</main>
           <SiteFooter />
+          <Toaster richColors position="top-center" />
         </ClerkProvider>
       </body>
     </html>
