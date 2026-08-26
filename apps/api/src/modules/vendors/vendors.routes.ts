@@ -2,7 +2,7 @@ import {
   createVendorProfileSchema,
   updateVendorProfileSchema,
   vendorProfileDetailSchema,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole } from '../../lib/guards.js';
 import { requireRole } from '../../lib/guards.js';

@@ -1,5 +1,5 @@
 {
-  "name": "@vendorhub/shared",
+  "name": "@vendor-marketplace/shared",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -29,7 +29,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@vendorhub/config": "workspace:*",
+    "@vendor-marketplace/config": "workspace:*",
     "@types/node": "24.13.3",
     "eslint": "10.9.1",
     "typescript": "5.9.3",

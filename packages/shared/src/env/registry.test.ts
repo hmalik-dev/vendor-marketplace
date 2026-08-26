@@ -148,7 +148,7 @@ describe('ENV_REGISTRY integrity', () => {
 
     expect(from).toBeDefined();
     expect(from?.shape).toBeUndefined();
-    expect(exampleValue(from!)).toBe('noreply@vendorhub.com');
+    expect(exampleValue(from!)).toBe('noreply@venmatch.com');
   });
 
   it('keeps the end-to-end credentials out of the .env contract', () => {

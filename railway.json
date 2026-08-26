@@ -6,7 +6,7 @@
   },
   "deploy": {
     "startCommand": "node dist/index.js",
-    "preDeployCommand": "node node_modules/@vendorhub/db/dist/scripts/migrate.js",
+    "preDeployCommand": "node node_modules/@vendor-marketplace/db/dist/scripts/migrate.js",
     "healthcheckPath": "/ready",
     "healthcheckTimeout": 10,
     "restartPolicyType": "ON_FAILURE",

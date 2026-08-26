@@ -1,4 +1,4 @@
-import type { Category } from '@vendorhub/shared';
+import type { Category } from '@vendor-marketplace/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';

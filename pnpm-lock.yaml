@@ -38,10 +38,10 @@ importers:
       '@fastify/rate-limit':
         specifier: 11.2.0
         version: 11.2.0
-      '@vendorhub/db':
+      '@vendor-marketplace/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@vendorhub/shared':
+      '@vendor-marketplace/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       drizzle-orm:
@@ -72,7 +72,7 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      '@vendorhub/config':
+      '@vendor-marketplace/config':
         specifier: workspace:*
         version: link:../../packages/config
       dotenv:
@@ -102,7 +102,7 @@ importers:
       '@clerk/ui':
         specifier: ^1.30.8
         version: 1.30.8(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@types/react@19.2.18)(bs58@6.0.0)(bufferutil@4.1.0)(react-dom@19.2.8(react@19.2.8))(react-native@0.87.0(@babel/core@7.29.7)(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.8)(utf-8-validate@6.0.6))(react@19.2.8)(typescript@5.9.3)(utf-8-validate@6.0.6)
-      '@vendorhub/shared':
+      '@vendor-marketplace/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       class-variance-authority:
@@ -172,7 +172,7 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.2.5(@types/react@19.2.18)
-      '@vendorhub/config':
+      '@vendor-marketplace/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@vitejs/plugin-react':
@@ -221,7 +221,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@vendorhub/shared':
+      '@vendor-marketplace/shared':
         specifier: workspace:*
         version: link:../shared
       dotenv:
@@ -240,7 +240,7 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      '@vendorhub/config':
+      '@vendor-marketplace/config':
         specifier: workspace:*
         version: link:../config
       drizzle-kit:
@@ -264,7 +264,7 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1118.0
         version: 3.1118.0
-      '@vendorhub/shared':
+      '@vendor-marketplace/shared':
         specifier: workspace:*
         version: link:../shared
       dotenv:
@@ -277,7 +277,7 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      '@vendorhub/config':
+      '@vendor-marketplace/config':
         specifier: workspace:*
         version: link:../config
       eslint:
@@ -302,7 +302,7 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      '@vendorhub/config':
+      '@vendor-marketplace/config':
         specifier: workspace:*
         version: link:../config
       eslint:

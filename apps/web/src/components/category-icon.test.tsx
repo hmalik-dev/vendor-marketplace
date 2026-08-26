@@ -1,4 +1,4 @@
-import { CATEGORY_SEEDS } from '@vendorhub/shared';
+import { CATEGORY_SEEDS } from '@vendor-marketplace/shared';
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { CategoryIcon, CategoryIconBadge, iconComponentFor } from './category-icon';

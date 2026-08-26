@@ -11,7 +11,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { REVIEW_RATING_MAX, REVIEW_RATING_MIN } from '@vendorhub/shared';
+import { REVIEW_RATING_MAX, REVIEW_RATING_MIN } from '@vendor-marketplace/shared';
 import { bookings } from './bookings.js';
 import { reviewTypeEnum } from './enums.js';
 import { users } from './users.js';

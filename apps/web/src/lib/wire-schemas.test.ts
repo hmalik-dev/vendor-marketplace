@@ -100,7 +100,7 @@ describe('wireVendorProfileSchema', () => {
     slug: 'sunlit-studio',
     bio: 'Documentary wedding photography.',
     profileImageUrl: null,
-    coverImageUrl: 'http://localhost:9000/vendorhub/vendor-cover/abc.webp',
+    coverImageUrl: 'http://localhost:9000/vendor-marketplace-uploads/vendor-cover/abc.webp',
     address: null,
     city: 'Austin',
     state: 'Texas',
@@ -134,9 +134,7 @@ describe('wireVendorProfileSchema', () => {
       publishBlockers: ['Write a short bio so customers know what you do'],
     });
 
-    expect(parsed.publishBlockers).toEqual([
-      'Write a short bio so customers know what you do',
-    ]);
+    expect(parsed.publishBlockers).toEqual(['Write a short bio so customers know what you do']);
   });
 
   it('rejects a profile response with no publish prerequisites field', () => {

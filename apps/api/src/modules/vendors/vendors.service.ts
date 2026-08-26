@@ -4,8 +4,8 @@ import {
   type Tag,
   type UpdateVendorProfileInput,
   type VendorProfileDetail,
-} from '@vendorhub/shared';
-import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendorhub/db/schema';
+} from '@vendor-marketplace/shared';
+import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
 import {
@@ -249,12 +249,17 @@ export async function updateVendorProfile(
   }
 
   const categoryIds =
-    input.categoryIds === undefined ? undefined : await assertCategoriesSelectable(db, input.categoryIds);
+    input.categoryIds === undefined
+      ? undefined
+      : await assertCategoriesSelectable(db, input.categoryIds);
 
   if (input.isPublished !== undefined) {
     if (input.isPublished) {
       const effectiveCategories = categoryIds ?? (await findVendorCategoryIds(db, existing.id));
-      const blockers = publishBlockers({ ...existing, ...patch } as VendorProfileRow, effectiveCategories);
+      const blockers = publishBlockers(
+        { ...existing, ...patch } as VendorProfileRow,
+        effectiveCategories,
+      );
 
       if (blockers.length > 0) {
         throw validationFailed('Complete your profile before publishing it.', { blockers });

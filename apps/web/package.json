@@ -1,5 +1,5 @@
 {
-  "name": "@vendorhub/web",
+  "name": "@vendor-marketplace/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,7 +13,7 @@
   "dependencies": {
     "@clerk/nextjs": "^7.8.2",
     "@clerk/ui": "^1.30.8",
-    "@vendorhub/shared": "workspace:*",
+    "@vendor-marketplace/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -38,7 +38,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vendorhub/config": "workspace:*",
+    "@vendor-marketplace/config": "workspace:*",
     "@vitejs/plugin-react": "^6.1.0",
     "dotenv": "17.4.2",
     "eslint": "^9",

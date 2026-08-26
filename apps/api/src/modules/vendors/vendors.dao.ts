@@ -8,7 +8,7 @@ import {
   type NewVendorProfileRow,
   type TagRow,
   type VendorProfileRow,
-} from '@vendorhub/db/schema';
+} from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 
 /** A soft-deleted profile is invisible to every read path. */

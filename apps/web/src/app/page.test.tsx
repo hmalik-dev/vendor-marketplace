@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CATEGORY_SEEDS, LANDING_CATEGORY_COUNT } from '@vendorhub/shared';
+import { CATEGORY_SEEDS, LANDING_CATEGORY_COUNT } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

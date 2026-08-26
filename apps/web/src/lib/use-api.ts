@@ -6,7 +6,7 @@ import {
   ERROR_CODES,
   uploadedImageSchema,
   type UploadedImage,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import { useCallback } from 'react';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
 
@@ -55,12 +55,15 @@ export function useImageUpload(): ImageUploader {
       const body = new FormData();
       body.append('file', file);
 
-      const response = await fetch(`${BASE_URL}/upload/image?prefix=${encodeURIComponent(prefix)}`, {
-        method: 'POST',
-        headers: token ? { authorization: `Bearer ${token}` } : {},
-        body,
-        ...(signal ? { signal } : {}),
-      });
+      const response = await fetch(
+        `${BASE_URL}/upload/image?prefix=${encodeURIComponent(prefix)}`,
+        {
+          method: 'POST',
+          headers: token ? { authorization: `Bearer ${token}` } : {},
+          body,
+          ...(signal ? { signal } : {}),
+        },
+      );
 
       let payload: unknown = null;
       try {

@@ -1,5 +1,5 @@
 {
-  "name": "@vendorhub/config",
+  "name": "@vendor-marketplace/config",
   "version": "0.1.0",
   "private": true,
   "type": "module",

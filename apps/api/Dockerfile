@@ -3,7 +3,7 @@
 # Build context is the repository root, not `apps/api` — a pnpm workspace
 # cannot be installed from one package's directory:
 #
-#   docker build -f apps/api/Dockerfile -t vendorhub-api .
+#   docker build -f apps/api/Dockerfile -t vendor-marketplace-api .
 #
 # The ignore list is `Dockerfile.dockerignore` beside this file; see the note
 # at the top of it.
@@ -32,19 +32,19 @@ COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
 COPY packages/preflight/package.json packages/preflight/
 COPY packages/shared/package.json packages/shared/
-RUN pnpm install --frozen-lockfile --filter @vendorhub/api...
+RUN pnpm install --frozen-lockfile --filter @vendor-marketplace/api...
 
 COPY . .
-# `build` declares `dependsOn: ["^build"]`, so @vendorhub/shared and
-# @vendorhub/db are compiled first. The pruned tree resolves both from their
+# `build` declares `dependsOn: ["^build"]`, so @vendor-marketplace/shared and
+# @vendor-marketplace/db are compiled first. The pruned tree resolves both from their
 # `dist/`, so skipping this produces an image that builds and then crashes on
 # a missing module at start.
-RUN pnpm turbo run build --filter=@vendorhub/api
+RUN pnpm turbo run build --filter=@vendor-marketplace/api
 
 # `--legacy` because this workspace does not set `inject-workspace-packages`.
 # `--prod` drops devDependencies; `files: ["dist"]` in the manifest keeps the
 # sources, configs, and test setup out of the image.
-RUN pnpm deploy --legacy --prod --filter=@vendorhub/api /app
+RUN pnpm deploy --legacy --prod --filter=@vendor-marketplace/api /app
 
 FROM base AS runtime
 ENV NODE_ENV=production

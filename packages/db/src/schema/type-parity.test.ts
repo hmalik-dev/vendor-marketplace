@@ -24,7 +24,7 @@ import {
   type User as UserModel,
   type UserRole,
   type VendorProfile as VendorProfileModel,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import {
   availabilityStatusEnum,
   bookingRequestStatusEnum,

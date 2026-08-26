@@ -1,8 +1,13 @@
-import { categorySchema, tagSchema, userSchema, vendorProfileDetailSchema } from '@vendorhub/shared';
+import {
+  categorySchema,
+  tagSchema,
+  userSchema,
+  vendorProfileDetailSchema,
+} from '@vendor-marketplace/shared';
 import { z } from 'zod';
 
 /**
- * The domain schemas in `@vendorhub/shared` model timestamps as `Date`, which
+ * The domain schemas in `@vendor-marketplace/shared` model timestamps as `Date`, which
  * is what the database layer holds. JSON has no date type, so responses carry
  * ISO strings — these wire variants coerce them back at the client boundary
  * without forking the rest of the shape.

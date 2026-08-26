@@ -1,6 +1,6 @@
-# @vendorhub/api
+# @vendor-marketplace/api
 
-The VendorHub backend: Fastify 5 with the Zod type provider, Drizzle ORM, and
+The Vendor Marketplace backend: Fastify 5 with the Zod type provider, Drizzle ORM, and
 Clerk session verification.
 
 ## Running it
@@ -9,7 +9,7 @@ From the repository root:
 
 ```bash
 pnpm dev                      # every app and package
-pnpm --filter @vendorhub/api dev   # just this one
+pnpm --filter @vendor-marketplace/api dev   # just this one
 ```
 
 Configuration is validated once at boot by `src/config/env.ts`; a missing or
@@ -34,7 +34,7 @@ client-visible message; anything else is logged and answered with an opaque
 
 ## Tests
 
-`pnpm --filter @vendorhub/api test` boots an in-process Postgres (PGlite),
+`pnpm --filter @vendor-marketplace/api test` boots an in-process Postgres (PGlite),
 applies the real migrations, and drives the real Fastify instance. Only two
 network boundaries are faked: Clerk token verification and svix webhook
 signature verification.

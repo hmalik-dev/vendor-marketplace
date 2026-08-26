@@ -1,5 +1,5 @@
-import { seedReferenceData } from '@vendorhub/db';
-import { createTestDatabase, type TestDatabase } from '@vendorhub/db/testing';
+import { seedReferenceData } from '@vendor-marketplace/db';
+import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';

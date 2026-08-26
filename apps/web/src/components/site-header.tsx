@@ -17,7 +17,7 @@ export function SiteHeader(): React.ReactElement {
           href="/"
           className="font-display text-xl font-semibold tracking-tight text-stone-800 transition-opacity hover:opacity-80"
         >
-          VendorHub
+          VenMatch
         </Link>
 
         <div className="flex items-center gap-2">

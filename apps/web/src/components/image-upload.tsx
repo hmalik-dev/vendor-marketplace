@@ -1,6 +1,6 @@
 'use client';
 
-import { ACCEPTED_IMAGE_MIME_TYPES, MAX_UPLOAD_BYTES } from '@vendorhub/shared';
+import { ACCEPTED_IMAGE_MIME_TYPES, MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
 import { ImagePlus, Loader2 } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';

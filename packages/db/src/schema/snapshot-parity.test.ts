@@ -11,7 +11,7 @@ import {
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
   USER_ROLES,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 
 const DRIZZLE_DIR = path.resolve(

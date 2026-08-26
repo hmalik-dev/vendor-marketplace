@@ -7,7 +7,8 @@ import { evaluateBranchSafety, hostOf, resolveBranch } from './database.js';
 
 const NEON_URL =
   'postgresql://owner:secret@ep-lucky-cherry-1234-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require';
-const LOCAL_URL = 'postgresql://vendorhub:vendorhub_dev@localhost:5432/vendorhub';
+const LOCAL_URL =
+  'postgresql://vendor_marketplace:vendor_marketplace_dev@localhost:5432/vendor_marketplace';
 
 function contextWith(
   env: NodeJS.ProcessEnv,

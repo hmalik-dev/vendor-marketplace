@@ -3,7 +3,7 @@ import {
   CATEGORY_SLUG_SUCCESSORS,
   CATEGORY_SLUGS,
   TAG_SEEDS,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import { eq, inArray, not, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';

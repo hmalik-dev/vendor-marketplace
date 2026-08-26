@@ -4,7 +4,7 @@ import {
   requiresExplicitValue,
   shapeFor,
   variablesFor,
-} from '@vendorhub/shared/env';
+} from '@vendor-marketplace/shared/env';
 import { ENV_FILES } from '../context.js';
 import { type Check, type CheckContext, type CheckResult, fail, pass } from '../types.js';
 

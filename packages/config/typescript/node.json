@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "VendorHub Node",
+  "display": "Vendor Marketplace Node",
   "extends": "./base.json",
   "compilerOptions": {
     "lib": ["ES2022"],

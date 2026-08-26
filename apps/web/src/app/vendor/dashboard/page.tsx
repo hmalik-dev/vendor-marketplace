@@ -9,7 +9,7 @@ import { requireRole } from '@/lib/current-user';
 import { cn } from '@/lib/utils';
 import { getOwnVendorProfile } from '@/lib/vendor-data';
 
-export const metadata: Metadata = { title: 'Your business · VendorHub' };
+export const metadata: Metadata = { title: 'Your business · VenMatch' };
 
 const PROFILE_EDIT_PATH = '/vendor/profile/edit';
 
@@ -70,9 +70,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
             </p>
           </div>
           <Button asChild variant="cta" size="cta">
-            <Link href={PROFILE_EDIT_PATH}>
-              {isComplete ? 'Edit profile' : 'Complete profile'}
-            </Link>
+            <Link href={PROFILE_EDIT_PATH}>{isComplete ? 'Edit profile' : 'Complete profile'}</Link>
           </Button>
         </div>
 

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { DashboardShell } from '@/components/dashboard-shell';
 import { requireRole } from '@/lib/current-user';
 
-export const metadata: Metadata = { title: 'Your events · VendorHub' };
+export const metadata: Metadata = { title: 'Your events · VenMatch' };
 
 const SECTIONS = [
   {

@@ -1,5 +1,10 @@
-import { USER_ROLES, type UpdateUserInput, type User, type UserRole } from '@vendorhub/shared';
-import type { NewUserRow, UserRow } from '@vendorhub/db/schema';
+import {
+  USER_ROLES,
+  type UpdateUserInput,
+  type User,
+  type UserRole,
+} from '@vendor-marketplace/shared';
+import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
 import {

@@ -4,7 +4,7 @@ import {
   createTagSuggestionSchema,
   tagSuggestionResponseSchema,
   type TagCategory,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';

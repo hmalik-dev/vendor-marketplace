@@ -1,6 +1,6 @@
 /**
  * Single source of truth for every domain enum, business rule, and seed list.
- * The Drizzle schema in `@vendorhub/db` and the Zod schemas in `../schemas`
+ * The Drizzle schema in `@vendor-marketplace/db` and the Zod schemas in `../schemas`
  * both derive from these arrays so the database, the API contract, and the
  * frontend can never drift apart.
  */

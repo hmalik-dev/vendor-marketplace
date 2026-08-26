@@ -1,4 +1,4 @@
-import type { Capability } from '@vendorhub/shared/env';
+import type { Capability } from '@vendor-marketplace/shared/env';
 import { CHECKS } from './checks/index.js';
 import { loadContext } from './context.js';
 import type { CheckResult, Target } from './types.js';

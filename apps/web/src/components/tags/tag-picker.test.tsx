@@ -1,4 +1,4 @@
-import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendorhub/shared';
+import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -114,8 +114,9 @@ describe('TagPicker', () => {
     const atLimit = LANGUAGES.slice(0, MAX_TAGS_PER_CATEGORY).map((languageTag) => languageTag.id);
     renderPicker(atLimit);
 
-    expect(screen.getByText(`${MAX_TAGS_PER_CATEGORY} of ${MAX_TAGS_PER_CATEGORY} (limit reached)`))
-      .toBeDefined();
+    expect(
+      screen.getByText(`${MAX_TAGS_PER_CATEGORY} of ${MAX_TAGS_PER_CATEGORY} (limit reached)`),
+    ).toBeDefined();
 
     await user.click(screen.getByRole('combobox', { name: 'Choose languages spoken' }));
     const remaining = await screen.findByRole('option', { name: /Arabic/ });

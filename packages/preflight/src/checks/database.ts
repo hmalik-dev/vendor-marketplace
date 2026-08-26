@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import postgres from 'postgres';
-import { CATEGORY_SEEDS, TAG_SEEDS } from '@vendorhub/shared';
+import { CATEGORY_SEEDS, TAG_SEEDS } from '@vendor-marketplace/shared';
 import { type Check, type CheckContext, type CheckResult, fail, pass } from '../types.js';
 
 const CONNECT_TIMEOUT_SECONDS = 10;

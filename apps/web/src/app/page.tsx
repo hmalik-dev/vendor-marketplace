@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Show } from '@clerk/nextjs';
-import { CATEGORY_SEEDS, LANDING_CATEGORY_COUNT } from '@vendorhub/shared';
+import { CATEGORY_SEEDS, LANDING_CATEGORY_COUNT } from '@vendor-marketplace/shared';
 import { CategoryIconBadge } from '@/components/category-icon';
 import { Button } from '@/components/ui/button';
 import { redirectVendorToDashboard } from '@/lib/current-user';

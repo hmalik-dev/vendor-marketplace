@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { BUDGET_TIERS, CATEGORY_SEEDS, TAG_CATEGORIES, USER_ROLES } from '@vendorhub/shared';
+import {
+  BUDGET_TIERS,
+  CATEGORY_SEEDS,
+  TAG_CATEGORIES,
+  USER_ROLES,
+} from '@vendor-marketplace/shared';
 import { eq, sql } from 'drizzle-orm';
 import { createTestDatabase, type TestDatabase } from '../testing/test-db.js';
 import { categories, tagSuggestions, tags, users, vendorProfiles, vendorTags } from './index.js';

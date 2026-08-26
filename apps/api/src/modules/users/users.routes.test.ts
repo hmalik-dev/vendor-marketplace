@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { users } from '@vendorhub/db/schema';
+import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 

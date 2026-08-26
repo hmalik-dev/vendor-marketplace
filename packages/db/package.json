@@ -1,5 +1,5 @@
 {
-  "name": "@vendorhub/db",
+  "name": "@vendor-marketplace/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -35,7 +35,7 @@
     "studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@vendorhub/shared": "workspace:*",
+    "@vendor-marketplace/shared": "workspace:*",
     "dotenv": "17.4.2",
     "drizzle-orm": "0.45.2",
     "postgres": "3.4.9"
@@ -43,7 +43,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.7",
     "@types/node": "24.13.3",
-    "@vendorhub/config": "workspace:*",
+    "@vendor-marketplace/config": "workspace:*",
     "drizzle-kit": "0.31.10",
     "eslint": "10.9.1",
     "tsx": "4.23.12",

@@ -1,4 +1,4 @@
-import { CAPABILITIES, CAPABILITY_LABELS, type Capability } from '@vendorhub/shared/env';
+import { CAPABILITIES, CAPABILITY_LABELS, type Capability } from '@vendor-marketplace/shared/env';
 import type { CheckResult } from './types.js';
 
 const PASS = '✓';

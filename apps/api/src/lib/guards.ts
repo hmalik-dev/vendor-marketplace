@@ -1,5 +1,5 @@
 import type { preHandlerAsyncHookHandler } from 'fastify';
-import type { UserRole } from '@vendorhub/shared';
+import type { UserRole } from '@vendor-marketplace/shared';
 import { forbidden, unauthorized } from './errors.js';
 import type { AuthenticatedUser } from '../plugins/clerk-auth.js';
 

@@ -1,4 +1,4 @@
-import { apiErrorSchema, ERROR_CODES, type ErrorCode } from '@vendorhub/shared';
+import { apiErrorSchema, ERROR_CODES, type ErrorCode } from '@vendor-marketplace/shared';
 import type { z } from 'zod';
 
 /**

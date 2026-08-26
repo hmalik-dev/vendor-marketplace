@@ -3,7 +3,7 @@ import { VendorProfileForm } from '@/components/vendor-profile-form';
 import { requireRole } from '@/lib/current-user';
 import { getActiveTags, getCategories, getOwnVendorProfile } from '@/lib/vendor-data';
 
-export const metadata: Metadata = { title: 'Your business profile · VendorHub' };
+export const metadata: Metadata = { title: 'Your business profile · VenMatch' };
 
 /**
  * Both onboarding and later edits. A vendor with no profile yet gets the same

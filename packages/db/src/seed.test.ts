@@ -4,7 +4,7 @@ import {
   CATEGORY_SLUG_SUCCESSORS,
   TAG_CATEGORIES,
   TAG_SEEDS,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import { asc, eq } from 'drizzle-orm';
 import { categories, tags } from './schema/index.js';
 import { seedCategories, seedReferenceData, seedTags } from './seed.js';

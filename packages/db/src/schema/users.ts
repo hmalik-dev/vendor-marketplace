@@ -10,7 +10,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { MAX_CUSTOMER_BIO_LENGTH } from '@vendorhub/shared';
+import { MAX_CUSTOMER_BIO_LENGTH } from '@vendor-marketplace/shared';
 import { budgetTierEnum, userRoleEnum } from './enums.js';
 
 export const users = pgTable(

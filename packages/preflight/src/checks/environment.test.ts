@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { findVariable } from '@vendorhub/shared/env';
+import { findVariable } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
 import { loadContext } from '../context.js';
 import type { CheckContext, Target } from '../types.js';
@@ -87,7 +87,7 @@ describe('evaluateVariable', () => {
   it('accepts a real production value', () => {
     const result = evaluateVariable(
       API_URL,
-      contextWith({ API_URL: 'https://api.vendorhub.app' }, 'production'),
+      contextWith({ API_URL: 'https://api.venmatch.app' }, 'production'),
     );
 
     expect(result.ok).toBe(true);

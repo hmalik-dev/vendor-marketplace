@@ -6,8 +6,8 @@ import {
   users,
   vendorProfiles,
   vendorTags,
-} from '@vendorhub/db/schema';
-import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendorhub/shared';
+} from '@vendor-marketplace/db/schema';
+import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -103,7 +103,9 @@ describe('tag routes', () => {
 
     it('covers all three picker sections', async () => {
       const response = await harness.app.inject({ method: 'GET', url: '/tags' });
-      const seen = new Set<string>(response.json().map((tag: { category: string }) => tag.category));
+      const seen = new Set<string>(
+        response.json().map((tag: { category: string }) => tag.category),
+      );
 
       expect([...seen].sort()).toEqual(['cultural', 'dietary', 'language']);
     });

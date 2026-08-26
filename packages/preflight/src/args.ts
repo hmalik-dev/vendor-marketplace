@@ -2,7 +2,7 @@ import {
   BASELINE_CAPABILITIES,
   type Capability,
   capabilitiesForTicket,
-} from '@vendorhub/shared/env';
+} from '@vendor-marketplace/shared/env';
 import type { Target } from './types.js';
 
 export interface ParsedArgs {

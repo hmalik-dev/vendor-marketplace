@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin';
 import { createClerkClient, verifyToken } from '@clerk/backend';
-import type { UserRole } from '@vendorhub/shared';
+import type { UserRole } from '@vendor-marketplace/shared';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import { resolveUserByClerkId, type ClerkUserSnapshot } from '../modules/users/users.service.js';
 

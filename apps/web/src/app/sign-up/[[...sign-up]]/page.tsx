@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { SignUp } from '@clerk/nextjs';
-import type { UserRole } from '@vendorhub/shared';
+import type { UserRole } from '@vendor-marketplace/shared';
 import { Button } from '@/components/ui/button';
 
 type SignUpRole = Extract<UserRole, 'customer' | 'vendor'>;
@@ -54,7 +54,7 @@ export default function SignUpPage(): React.ReactElement {
       ) : (
         <>
           <p className="mt-3 text-center text-stone-600">
-            First, tell us which side of VendorHub you are on. This cannot be changed later.
+            First, tell us which side of VenMatch you are on. This cannot be changed later.
           </p>
 
           <ul className="mt-8 grid w-full gap-4 sm:grid-cols-2">

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { renderEnvExample, renderTurboJson } from '@vendorhub/shared/env';
+import { renderEnvExample, renderTurboJson } from '@vendor-marketplace/shared/env';
 import { REPO_ROOT } from './context.js';
 
 /**

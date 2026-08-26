@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'dotenv';
-import type { Capability } from '@vendorhub/shared/env';
+import type { Capability } from '@vendor-marketplace/shared/env';
 import type { CheckContext, Target } from './types.js';
 
 /** `packages/preflight/src` → repository root. */

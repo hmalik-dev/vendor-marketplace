@@ -3,7 +3,10 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const themeCss = readFileSync(require.resolve('@vendorhub/config/tailwind/theme.css'), 'utf8');
+const themeCss = readFileSync(
+  require.resolve('@vendor-marketplace/config/tailwind/theme.css'),
+  'utf8',
+);
 
 describe('shared theme tokens', () => {
   /*

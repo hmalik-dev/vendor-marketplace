@@ -1,4 +1,4 @@
-import type { UserRow } from '@vendorhub/db/schema';
+import type { UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { softDeleteUserByClerkId, updateUserByClerkId } from '../users/users.dao.js';
 import { syncUserFromClerk } from '../users/users.service.js';

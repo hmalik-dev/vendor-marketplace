@@ -1,5 +1,5 @@
 {
-  "name": "vendorhub",
+  "name": "vendor-marketplace",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.32.1",
@@ -8,8 +8,8 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "preflight": "turbo run build --filter=@vendorhub/shared && pnpm --filter @vendorhub/preflight run preflight",
-    "env:example": "turbo run build --filter=@vendorhub/shared && pnpm --filter @vendorhub/preflight run env:example",
+    "preflight": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run preflight",
+    "env:example": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run env:example",
     "start": "pnpm install && docker compose up -d && docker compose up -d --wait postgres storage && pnpm db:migrate && pnpm db:seed && pnpm dev",
     "dev": "turbo run dev",
     "test": "turbo run test",
@@ -17,10 +17,10 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml,css}\"",
-    "db:generate": "pnpm --filter @vendorhub/db generate",
-    "db:migrate": "pnpm --filter @vendorhub/db migrate",
-    "db:seed": "pnpm --filter @vendorhub/db seed",
-    "db:studio": "pnpm --filter @vendorhub/db studio"
+    "db:generate": "pnpm --filter @vendor-marketplace/db generate",
+    "db:migrate": "pnpm --filter @vendor-marketplace/db migrate",
+    "db:seed": "pnpm --filter @vendor-marketplace/db seed",
+    "db:studio": "pnpm --filter @vendor-marketplace/db studio"
   },
   "devDependencies": {
     "prettier": "3.9.6",

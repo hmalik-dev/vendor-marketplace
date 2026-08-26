@@ -1,4 +1,4 @@
-import { ACCEPTED_IMAGE_MIME_TYPES, MAX_UPLOAD_BYTES } from '@vendorhub/shared';
+import { ACCEPTED_IMAGE_MIME_TYPES, MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
 import sharp from 'sharp';
 import { validationFailed } from './errors.js';
 
@@ -58,7 +58,12 @@ export async function processUploadedImage(
     // the original buffer rather than sharing a pipeline.
     const image = await sharp(buffer)
       .rotate()
-      .resize({ width: MAIN_IMAGE_MAX_EDGE, height: MAIN_IMAGE_MAX_EDGE, fit: 'inside', withoutEnlargement: true })
+      .resize({
+        width: MAIN_IMAGE_MAX_EDGE,
+        height: MAIN_IMAGE_MAX_EDGE,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
       .webp({ quality: WEBP_QUALITY })
       .toBuffer();
 

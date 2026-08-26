@@ -1,4 +1,4 @@
-import { registrySchemaShape } from '@vendorhub/shared/env';
+import { registrySchemaShape } from '@vendor-marketplace/shared/env';
 import { z } from 'zod';
 
 /**

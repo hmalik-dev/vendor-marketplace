@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { COMPOSE_SERVICES, type Capability } from '@vendorhub/shared/env';
+import { COMPOSE_SERVICES, type Capability } from '@vendor-marketplace/shared/env';
 import { runCommand } from '../exec.js';
 import { type Check, type CheckContext, type CheckResult, fail, pass } from '../types.js';
 

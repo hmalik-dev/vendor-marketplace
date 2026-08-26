@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { categories, users, vendorCategories, vendorProfiles } from '@vendorhub/db/schema';
+import { categories, users, vendorCategories, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 

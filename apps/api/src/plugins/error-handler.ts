@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { ERROR_CODES, type ApiError } from '@vendorhub/shared';
+import { ERROR_CODES, type ApiError } from '@vendor-marketplace/shared';
 import {
   hasZodFastifySchemaValidationErrors,
   isResponseSerializationError,

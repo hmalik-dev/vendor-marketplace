@@ -1,4 +1,4 @@
-import type { Capability } from '@vendorhub/shared/env';
+import type { Capability } from '@vendor-marketplace/shared/env';
 
 export type Target = 'local' | 'production';
 

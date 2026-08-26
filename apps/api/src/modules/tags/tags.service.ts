@@ -3,8 +3,8 @@ import {
   type CreateTagSuggestionInput,
   type Tag,
   type TagSuggestionResponse,
-} from '@vendorhub/shared';
-import type { TagRow } from '@vendorhub/db/schema';
+} from '@vendor-marketplace/shared';
+import type { TagRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound, validationFailed } from '../../lib/errors.js';
 import { findVendorProfileByUserId } from '../vendors/vendors.dao.js';

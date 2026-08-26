@@ -1,6 +1,6 @@
-# @vendorhub/web
+# @vendor-marketplace/web
 
-The VendorHub frontend: Next.js 15 (App Router, React Server Components),
+The VenMatch frontend: Next.js 15 (App Router, React Server Components),
 Tailwind CSS 4, shadcn/ui, and Clerk for authentication.
 
 ## Running it
@@ -9,7 +9,7 @@ From the repository root:
 
 ```bash
 pnpm dev                      # every app and package
-pnpm --filter @vendorhub/web dev   # just this one
+pnpm --filter @vendor-marketplace/web dev   # just this one
 ```
 
 The app reads `NEXT_PUBLIC_API_URL` (browser) and `API_URL` (server) to reach

@@ -1,4 +1,4 @@
-# VendorHub
+# Vendor Marketplace
 
 A two-sided marketplace connecting customers with event service vendors —
 photographers, DJs, makeup artists, decorators, caterers, and florists.
@@ -23,7 +23,7 @@ pnpm start                    # install, start Docker, migrate, seed, run dev se
 `pnpm start` is idempotent, so it is also the right command after a `git pull`
 or whenever you just want the servers back. Web runs on
 http://localhost:3000, the API on http://localhost:4000, and the MinIO console
-on http://localhost:9001 (`vendorhub` / `vendorhub_dev`). Ctrl-C stops the dev
+on http://localhost:9001 (`vendor-marketplace` / `vendor_marketplace_dev`). Ctrl-C stops the dev
 servers; Docker keeps running until `docker compose down`.
 
 Individual steps are available as `pnpm install`, `docker compose up -d`,
@@ -86,11 +86,11 @@ repository root, because a pnpm workspace cannot be installed from one package's
 directory:
 
 ```bash
-docker build -f apps/api/Dockerfile -t vendorhub-api .
-docker run --rm -p 4000:4000 --env-file .env -e HOST=0.0.0.0 vendorhub-api
+docker build -f apps/api/Dockerfile -t vendor-marketplace-api .
+docker run --rm -p 4000:4000 --env-file .env -e HOST=0.0.0.0 vendor-marketplace-api
 ```
 
-The image installs and builds only the `@vendorhub/api` subgraph, then ships a
+The image installs and builds only the `@vendor-marketplace/api` subgraph, then ships a
 `pnpm deploy --prod` tree, so it carries neither devDependencies nor the rest of
 the monorepo. It runs as the unprivileged `node` user and closes Fastify on
 `SIGTERM`, so a rollout drains in-flight requests.
@@ -111,7 +111,7 @@ Migrations run as a release step rather than at boot, over the direct
 (unpooled) connection:
 
 ```bash
-node node_modules/@vendorhub/db/dist/scripts/migrate.js
+node node_modules/@vendor-marketplace/db/dist/scripts/migrate.js
 ```
 
 See `CLAUDE.md` for architecture conventions and the full command reference.

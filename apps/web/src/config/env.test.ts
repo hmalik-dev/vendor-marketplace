@@ -1,4 +1,4 @@
-import { registryKeys } from '@vendorhub/shared/env';
+import { registryKeys } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
 import { assertWebEnv, publicEnvKeys, requirePublicValue } from './env';
 

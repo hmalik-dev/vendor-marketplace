@@ -1,4 +1,4 @@
-import { CAPABILITIES, WEBHOOK_FORWARDERS } from '@vendorhub/shared/env';
+import { CAPABILITIES, WEBHOOK_FORWARDERS } from '@vendor-marketplace/shared/env';
 import { isInstalled } from '../exec.js';
 import { type Check, type CheckResult, fail, pass } from '../types.js';
 

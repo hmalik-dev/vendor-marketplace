@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import type { UserRole } from '@vendorhub/shared';
+import type { UserRole } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import { wireUserSchema, type WireUser } from './wire-schemas';
 

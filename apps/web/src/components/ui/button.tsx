@@ -10,7 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/80',
-        // VendorHub primary CTA per the design system: terracotta-400 resting,
+        // VenMatch primary CTA per the design system: terracotta-400 resting,
         // -500 on hover, -600 pressed, with a 200ms lift instead of a fade.
         cta: 'bg-primary-400 text-stone-0 shadow-sm duration-200 hover:scale-[1.02] hover:bg-primary-500 hover:shadow-md active:bg-primary-600',
         outline:

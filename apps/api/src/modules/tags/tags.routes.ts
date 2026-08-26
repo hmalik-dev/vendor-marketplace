@@ -3,7 +3,7 @@ import {
   setVendorTagsSchema,
   tagSchema,
   tagSuggestionResponseSchema,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRole } from '../../lib/guards.js';
@@ -47,7 +47,6 @@ export const tagRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: tagSuggestionResponseSchema },
       },
     },
-    async (request) =>
-      suggestTag(app.db, assertRole(request.auth, ['vendor']).id, request.body),
+    async (request) => suggestTag(app.db, assertRole(request.auth, ['vendor']).id, request.body),
   );
 };

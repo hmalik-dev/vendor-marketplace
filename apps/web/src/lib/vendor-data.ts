@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import type { Category } from '@vendorhub/shared';
+import type { Category } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import {
   wireCategoryListSchema,

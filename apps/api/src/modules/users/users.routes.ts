@@ -1,4 +1,4 @@
-import { updateUserSchema, userSchema } from '@vendorhub/shared';
+import { updateUserSchema, userSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { authenticated, requireAuth } from '../../lib/guards.js';
 import { getUserProfile, updateUserProfile } from './users.service.js';

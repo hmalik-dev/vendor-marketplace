@@ -1,5 +1,5 @@
 {
-  "extends": "@vendorhub/config/typescript/node.json",
+  "extends": "@vendor-marketplace/config/typescript/node.json",
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "dist",

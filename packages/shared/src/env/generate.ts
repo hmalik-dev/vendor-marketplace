@@ -2,7 +2,7 @@ import { CAPABILITIES, CAPABILITY_LABELS, variablesFor } from './capabilities.js
 import { ENV_REGISTRY, exampleValue } from './registry.js';
 
 const HEADER = `# ---------------------------------------------------------------------------
-# VendorHub environment variables.
+# Vendor Marketplace environment variables.
 #
 # GENERATED FROM packages/shared/src/env/registry.ts — DO NOT EDIT BY HAND.
 # Add or change a variable there, then run \`pnpm env:example\`.

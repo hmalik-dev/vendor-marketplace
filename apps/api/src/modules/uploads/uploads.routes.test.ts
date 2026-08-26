@@ -1,11 +1,11 @@
 import sharp from 'sharp';
-import { users } from '@vendorhub/db/schema';
+import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
-const BOUNDARY = '----vendorhubtestboundary';
+const BOUNDARY = '----vendormarketplacetestboundary';
 
 /** Builds a `multipart/form-data` body containing exactly one file part. */
 function multipartBody(filename: string, contentType: string, content: Buffer): Buffer {

@@ -5,9 +5,13 @@ node_modules/
 dist/
 
 # Environment variables
+# Ignore every .env variant, then re-admit the generated example. The
+# previous rules listed `.env.local` and `.env.*.local` only, so an ad-hoc
+# `.env.bak` or `.env.save` was stageable — a real secret one `git add -A`
+# away from history.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # Turborepo
 .turbo/
@@ -37,7 +41,7 @@ coverage/
 skills-lock.json
 
 # Local design scratch, not a build input
-/vendorhub-header.png
+/vendor-marketplace-header.png
 
 # Local state written by the Neon CLI/integration
 .neon

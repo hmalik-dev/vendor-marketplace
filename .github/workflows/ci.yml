@@ -14,7 +14,7 @@ env:
   TURBO_TELEMETRY_DISABLED: 1
   # The suites boot an in-process Postgres (PGlite); no service container is
   # needed, but the db package still validates that a URL is configured.
-  DATABASE_URL: postgresql://vendorhub:vendorhub_ci@localhost:5432/vendorhub
+  DATABASE_URL: postgresql://vendor_marketplace:vendor_marketplace_ci@localhost:5432/vendor_marketplace
   # `next build` instantiates ClerkProvider, which refuses to load without a
   # syntactically valid publishable key. These are placeholders, not secrets:
   # CI never reaches Clerk's servers.

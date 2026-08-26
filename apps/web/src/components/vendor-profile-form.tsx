@@ -9,7 +9,7 @@ import {
   RESPONSE_TIME_HOURS_OPTIONS,
   updateVendorProfileSchema,
   type Category,
-} from '@vendorhub/shared';
+} from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -353,7 +353,7 @@ export function VendorProfileForm({
                   className="mt-1.5"
                 />
                 <p className="mt-1 truncate text-xs text-stone-500">
-                  vendorhub.com/vendors/{slugPreview}
+                  venmatch.com/vendors/{slugPreview}
                 </p>
               </div>
 

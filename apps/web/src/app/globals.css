@@ -2,13 +2,13 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@clerk/ui/themes/shadcn.css';
-@import '@vendorhub/config/tailwind/theme.css';
+@import '@vendor-marketplace/config/tailwind/theme.css';
 
 @custom-variant dark (&:is(.dark *));
 
 /*
  * shadcn/ui addresses colour through semantic slots (`--primary`, `--muted`,
- * ...). Those slots are bound to the VendorHub palette below, so every shadcn
+ * ...). Those slots are bound to the VenMatch palette below, so every shadcn
  * component — and Clerk's shadcn theme — renders in brand without per-component
  * overrides. Radii, fonts, and shadows come from the shared theme import above.
  */

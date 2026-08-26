@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { SignIn } from '@clerk/nextjs';
 import { redirectIfSignedIn } from '@/lib/current-user';
 
-export const metadata: Metadata = { title: 'Sign in · VendorHub' };
+export const metadata: Metadata = { title: 'Sign in · VenMatch' };
 
 export default async function SignInPage(): Promise<React.ReactElement> {
   await redirectIfSignedIn();

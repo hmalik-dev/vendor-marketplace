@@ -8,7 +8,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
-import { MAX_UPLOAD_BYTES } from '@vendorhub/shared';
+import { MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
 import { allowedOrigins, type ApiEnv } from './config/env.js';
 import type { AppDatabase } from './lib/database.js';
 import type { ObjectStorage } from './lib/storage.js';

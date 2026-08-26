@@ -1,18 +1,19 @@
-import { findVariable, registryKeys } from '@vendorhub/shared/env';
+import { findVariable, registryKeys } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
 import { OVERRIDDEN_KEYS, allowedOrigins, parseEnv } from './env.js';
 
 // Shaped like real values, because the schema now enforces each row's shape —
 // `sk_test_key` is indistinguishable from a placeholder and is rejected.
 const REQUIRED: NodeJS.ProcessEnv = {
-  DATABASE_URL: 'postgresql://vendorhub:vendorhub_dev@localhost:5432/vendorhub',
+  DATABASE_URL:
+    'postgresql://vendor_marketplace:vendor_marketplace_dev@localhost:5432/vendor_marketplace',
   CLERK_SECRET_KEY: 'sk_test_51ABCdefGHIjklMNOpqr',
   CLERK_WEBHOOK_SECRET: 'whsec_MfKQ9r8sTuVwXyZ0123456789',
   S3_ENDPOINT: 'http://localhost:9000',
-  S3_ACCESS_KEY_ID: 'vendorhub',
-  S3_SECRET_ACCESS_KEY: 'vendorhub_dev',
-  S3_BUCKET: 'vendorhub',
-  S3_PUBLIC_URL: 'http://localhost:9000/vendorhub',
+  S3_ACCESS_KEY_ID: 'vendor-marketplace',
+  S3_SECRET_ACCESS_KEY: 'vendor_marketplace_dev',
+  S3_BUCKET: 'vendor-marketplace-uploads',
+  S3_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads',
 };
 
 describe('parseEnv', () => {
@@ -94,24 +95,27 @@ describe('allowedOrigins', () => {
   it('splits a comma-separated list and trims each entry', () => {
     const env = parseEnv({
       ...REQUIRED,
-      WEB_URL: 'http://localhost:3000, https://vendorhub.app ',
+      WEB_URL: 'http://localhost:3000, https://venmatch.app ',
     });
 
-    expect(allowedOrigins(env)).toEqual(['http://localhost:3000', 'https://vendorhub.app']);
+    expect(allowedOrigins(env)).toEqual(['http://localhost:3000', 'https://venmatch.app']);
   });
 
   it('drops empty segments from a trailing comma', () => {
-    const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://vendorhub.app,' });
+    const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://venmatch.app,' });
 
-    expect(allowedOrigins(env)).toEqual(['https://vendorhub.app']);
+    expect(allowedOrigins(env)).toEqual(['https://venmatch.app']);
   });
 });
 
 describe('parseEnv storage configuration', () => {
   it('strips trailing slashes from the public object URL', () => {
-    const env = parseEnv({ ...REQUIRED, S3_PUBLIC_URL: 'http://localhost:9000/vendorhub//' });
+    const env = parseEnv({
+      ...REQUIRED,
+      S3_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads//',
+    });
 
-    expect(env.S3_PUBLIC_URL).toBe('http://localhost:9000/vendorhub');
+    expect(env.S3_PUBLIC_URL).toBe('http://localhost:9000/vendor-marketplace-uploads');
   });
 
   it('defaults to path-style bucket addressing', () => {

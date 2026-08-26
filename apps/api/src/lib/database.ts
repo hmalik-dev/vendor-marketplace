@@ -1,5 +1,5 @@
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
-import type * as schema from '@vendorhub/db/schema';
+import type * as schema from '@vendor-marketplace/db/schema';
 
 /**
  * The database surface every DAO takes. Declared structurally rather than as

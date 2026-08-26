@@ -1,6 +1,6 @@
 'use client';
 
-import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendorhub/shared';
+import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendor-marketplace/shared';
 import { Check, ChevronsUpDown, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';

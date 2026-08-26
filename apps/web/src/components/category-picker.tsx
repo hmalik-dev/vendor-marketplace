@@ -1,6 +1,6 @@
 'use client';
 
-import type { Category } from '@vendorhub/shared';
+import type { Category } from '@vendor-marketplace/shared';
 import { toast } from 'sonner';
 import { CategoryIconBadge } from '@/components/category-icon';
 import { cn } from '@/lib/utils';

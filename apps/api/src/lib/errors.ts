@@ -1,4 +1,4 @@
-import { ERROR_CODES, type ErrorCode } from '@vendorhub/shared';
+import { ERROR_CODES, type ErrorCode } from '@vendor-marketplace/shared';
 
 /**
  * The only error class the API throws deliberately. The error handler plugin

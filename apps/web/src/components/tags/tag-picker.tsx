@@ -1,6 +1,6 @@
 'use client';
 
-import { MAX_TAGS_PER_CATEGORY, TAG_CATEGORIES } from '@vendorhub/shared';
+import { MAX_TAGS_PER_CATEGORY, TAG_CATEGORIES } from '@vendor-marketplace/shared';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import type { WireTag } from '@/lib/wire-schemas';

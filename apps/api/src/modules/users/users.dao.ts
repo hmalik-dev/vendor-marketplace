@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { users, type NewUserRow, type UserRow } from '@vendorhub/db/schema';
+import { users, type NewUserRow, type UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 
 /** Live users only — a Clerk-deleted identity must not resolve to a session. */

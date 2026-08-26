@@ -19,7 +19,7 @@ export function SiteFooter(): React.ReactElement {
   return (
     <footer className="mt-16 border-t border-stone-150 bg-stone-100">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <p className="font-display text-lg font-semibold text-stone-800">VendorHub</p>
+        <p className="font-display text-lg font-semibold text-stone-800">VenMatch</p>
 
         <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-2">
           <Link href={HOME_LINK.href} className={LINK_CLASS}>

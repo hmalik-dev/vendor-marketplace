@@ -29,7 +29,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'VendorHub',
+  title: 'VenMatch',
   description: 'Find and book photographers, DJs, caterers, and florists for your event.',
 };
 

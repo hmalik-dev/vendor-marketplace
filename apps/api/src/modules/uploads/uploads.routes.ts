@@ -1,4 +1,4 @@
-import { MAX_UPLOAD_BYTES, uploadedImageSchema } from '@vendorhub/shared';
+import { MAX_UPLOAD_BYTES, uploadedImageSchema } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { validationFailed } from '../../lib/errors.js';

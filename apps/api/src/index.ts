@@ -1,4 +1,4 @@
-import { createDatabase, loadEnv } from '@vendorhub/db';
+import { createDatabase, loadEnv } from '@vendor-marketplace/db';
 import { parseEnv } from './config/env.js';
 import { createS3Storage } from './lib/storage.js';
 import { buildServer } from './server.js';

@@ -1,4 +1,4 @@
-import type { TagCategory } from '@vendorhub/shared';
+import type { TagCategory } from '@vendor-marketplace/shared';
 
 /** Section heading for each tag category in the picker and on the profile. */
 export const TAG_CATEGORY_LABELS: Record<TagCategory, string> = {

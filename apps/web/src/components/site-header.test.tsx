@@ -26,7 +26,7 @@ describe('SiteHeader', () => {
   it('links the wordmark to the home page', () => {
     render(<SiteHeader />);
 
-    expect(screen.getByRole('link', { name: 'VendorHub' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: 'VenMatch' })).toHaveProperty(
       'href',
       'http://localhost:3000/',
     );

@@ -10,7 +10,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { MAX_ADMIN_NOTE_LENGTH } from '@vendorhub/shared';
+import { MAX_ADMIN_NOTE_LENGTH } from '@vendor-marketplace/shared';
 import { tagCategoryEnum, tagSuggestionStatusEnum } from './enums.js';
 import { users } from './users.js';
 import { vendorProfiles } from './vendor-profiles.js';

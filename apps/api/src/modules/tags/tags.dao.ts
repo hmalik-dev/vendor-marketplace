@@ -6,8 +6,8 @@ import {
   type NewTagSuggestionRow,
   type TagRow,
   type TagSuggestionRow,
-} from '@vendorhub/db/schema';
-import type { TagCategory } from '@vendorhub/shared';
+} from '@vendor-marketplace/db/schema';
+import type { TagCategory } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 export async function findActiveTags(db: AppDatabase): Promise<TagRow[]> {
