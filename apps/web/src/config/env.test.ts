@@ -9,8 +9,8 @@ const VALID: NodeJS.ProcessEnv = {
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_c3RpcnJpbmctZ2F6ZWxsZS0x',
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: '/sign-in',
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: '/sign-up',
-  NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: '/dashboard',
-  NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: '/dashboard',
+  NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: '/after-sign-in',
+  NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: '/after-sign-in',
 };
 
 /** `VALID` with the one defaulted key removed. */

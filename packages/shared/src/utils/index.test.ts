@@ -7,6 +7,8 @@ import {
   formatPrice,
   generateSlug,
   isFutureDate,
+  kmToMiles,
+  milesToKm,
   parseDateString,
   toDateString,
 } from './index.js';
@@ -127,5 +129,30 @@ describe('date helpers', () => {
 
   it('treats an unparseable date as not in the future', () => {
     expect(isFutureDate('nope', new Date('2026-07-04T12:00:00.000Z'))).toBe(false);
+  });
+});
+
+describe('kmToMiles and milesToKm', () => {
+  it('converts a service radius to miles for display', () => {
+    expect(kmToMiles(80)).toBe(50);
+    expect(kmToMiles(1.609344)).toBe(1);
+    expect(kmToMiles(50)).toBe(31);
+  });
+
+  it('converts a chosen mile radius back to stored kilometres', () => {
+    expect(milesToKm(50)).toBe(80);
+    expect(milesToKm(1)).toBe(2);
+    expect(milesToKm(30)).toBe(48);
+  });
+
+  it('keeps a round-trip within a mile of where it started', () => {
+    for (const miles of [5, 10, 25, 50, 75, 100, 125]) {
+      expect(kmToMiles(milesToKm(miles))).toBe(miles);
+    }
+  });
+
+  it('handles a zero radius without producing NaN', () => {
+    expect(kmToMiles(0)).toBe(0);
+    expect(milesToKm(0)).toBe(0);
   });
 });

@@ -3,9 +3,11 @@ import { ApiClientError } from '@/lib/api-client';
 import { DASHBOARD_PATH_BY_ROLE, getCurrentUser } from '@/lib/current-user';
 
 /**
- * Neutral landing spot after sign-in and sign-up. Clerk redirects here without
- * knowing the user's role, so the role is resolved from the local record and
- * the request is forwarded to the matching dashboard.
+ * "Take me to my dashboard" — the header's signed-in link, which cannot know
+ * the caller's role without a round trip of its own. The role is resolved from
+ * the local record and the request is forwarded to the matching dashboard.
+ * Where a user *starts* after authenticating is a different question, answered
+ * by `/after-sign-in`.
  *
  * This is a route handler rather than a page that calls `redirect()`. Clerk
  * lands here with a client-side navigation, and an RSC redirect that crosses

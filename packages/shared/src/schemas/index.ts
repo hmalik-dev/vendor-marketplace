@@ -11,6 +11,7 @@ import {
   MAX_BUSINESS_NAME_LENGTH,
   MAX_CAPTION_LENGTH,
   MAX_CUSTOMER_BIO_LENGTH,
+  MAX_VENDOR_BIO_LENGTH,
   MAX_EMAIL_LENGTH,
   MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
@@ -221,17 +222,17 @@ export const createVendorProfileSchema = z.object({
    * can actually leave blank, and Zod's default "Invalid input" gives no clue
    * which field the form is complaining about.
    */
-  businessName: z
-    .string()
-    .trim()
-    .min(2, 'Enter your business name')
-    .max(MAX_BUSINESS_NAME_LENGTH),
+  businessName: z.string().trim().min(2, 'Enter your business name').max(MAX_BUSINESS_NAME_LENGTH),
   /** Optional — the service generates one from the business name when omitted. */
   slug: slugSchema.optional(),
   categoryIds: z.array(uuidSchema).min(1, 'Select at least one category').max(5),
   city: z.string().trim().min(1, 'Enter the city you serve').max(MAX_NAME_LENGTH),
   state: z.string().trim().min(1, 'Choose the state you serve').max(MAX_NAME_LENGTH),
-  bio: z.string().trim().max(5_000).optional(),
+  bio: z
+    .string()
+    .trim()
+    .max(MAX_VENDOR_BIO_LENGTH, `Keep your bio under ${MAX_VENDOR_BIO_LENGTH} characters`)
+    .optional(),
   address: z.string().trim().max(MAX_ADDRESS_LENGTH).optional(),
   latitude: latitudeSchema.optional(),
   longitude: longitudeSchema.optional(),

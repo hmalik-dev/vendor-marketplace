@@ -33,7 +33,14 @@ export const vendorProfiles = pgTable(
     state: varchar('state', { length: 100 }),
     latitude: decimal('latitude', { precision: 10, scale: 8 }),
     longitude: decimal('longitude', { precision: 11, scale: 8 }),
+    /**
+     * The radius the vendor covers with no travel fee. Beyond it they either
+     * decline the booking or quote a fee, which is what
+     * `travelsBeyondRadius` records — a customer search for "vendors who cover
+     * my area at no extra cost" is exactly this radius.
+     */
     serviceRadiusKm: integer('service_radius_km').default(50),
+    travelsBeyondRadius: boolean('travels_beyond_radius').notNull().default(false),
     responseTimeHours: integer('response_time_hours'),
     /** Stripe Connect Express account (ticket #9). */
     stripeAccountId: varchar('stripe_account_id', { length: 255 }),

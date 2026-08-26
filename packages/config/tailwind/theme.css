@@ -79,10 +79,88 @@
   --radius-lg: 14px;
   --radius-xl: 20px;
 
+  /* --- Container ceilings (§4): one ceiling per surface class, not one for all --- */
+  --container-prose: 45rem; /* 720px  — long-form reading */
+  --container-form: 65rem; /* 1040px — two-column form pane */
+  --container-app: 90rem; /* 1440px — dashboards, detail views, checkout */
+  --container-wide: 105rem; /* 1680px — search, messaging, admin tables */
+
+  /* --- Chrome the full-height app shells are measured against (§9) --- */
+  --header-height: 4rem; /* 64px  — sticky site header */
+  --sidebar-width: 15rem; /* 240px — dashboard sidebar at >=1280 */
+  --sidebar-width-sm: 12.5rem; /* 200px — 1024-1279 */
+  --sidebar-width-icon: 4.5rem; /* 72px  — tablet icon rail */
+  --rail-width: 21.25rem; /* 340px — dashboard/context rails */
+  --rail-width-filter: 17.5rem; /* 280px — search filter rail */
+  --rail-width-booking: 23.75rem; /* 380px — vendor profile booking rail */
+  --rail-width-summary: 26.25rem; /* 420px — checkout order summary */
+  --section-nav-width: 12.5rem; /* 200px — sticky form section nav */
+
+  /* --- Density (§4): row heights by surface class --- */
+  --row-height: 3.5rem; /* 56px — app surfaces */
+  --row-height-dense: 2.75rem; /* 44px — admin tables, message list */
+
+  /* --- Motion (§6) --- */
+  --duration-fast: 150ms; /* hover, focus, colour change */
+  --duration-base: 200ms; /* buttons, cards, pills */
+  --duration-slow: 300ms; /* panels, drawers, sticky chrome */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* --- Layering: never a bare z-index in a component --- */
+  --z-sticky: 10; /* sticky submit bars, table header rows */
+  --z-header: 40; /* site header */
+  --z-drawer: 50; /* mobile drawers, bottom sheets */
+  --z-modal: 60; /* dialogs */
+  --z-toast: 70; /* toasts, above everything */
+
   /* --- Shadows: warm-tinted, never pure black --- */
   --shadow-sm: 0 1px 2px rgba(44, 40, 37, 0.04);
   --shadow-md: 0 2px 8px rgba(44, 40, 37, 0.06), 0 1px 2px rgba(44, 40, 37, 0.04);
   --shadow-lg: 0 4px 16px rgba(44, 40, 37, 0.08), 0 2px 4px rgba(44, 40, 37, 0.04);
   --shadow-xl: 0 8px 32px rgba(44, 40, 37, 0.1), 0 4px 8px rgba(44, 40, 37, 0.04);
   --shadow-hover: 0 8px 24px rgba(44, 40, 37, 0.12);
+}
+
+/*
+ * Shared utilities carrying the §4 layout laws. Defined once here so no surface
+ * re-derives them: a hand-rolled `h-[calc(100dvh-64px)]` is a second source of
+ * truth for the header height, and it drifts.
+ */
+
+/* Fills the viewport below the header; the page itself never scrolls. */
+@utility app-shell {
+  height: calc(100dvh - var(--header-height));
+  overflow: hidden;
+}
+
+/* A pane inside the shell that scrolls on its own. */
+@utility app-pane {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* "Forms are grids, not queues" — a field spans both columns with col-span-2. */
+@utility field-grid {
+  display: grid;
+  gap: 1.25rem 1.5rem; /* y 20px, x 24px */
+  grid-template-columns: 1fr;
+  @media (width >= 40rem) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*
+ * §3 gradient 1 of 4 — atmospheric depth behind the landing headline. Gradients
+ * are surgical here: §3 forbids them on cards, chrome, and every app surface,
+ * so this belongs to marketing surfaces only.
+ */
+@utility hero-gradient {
+  background-image: linear-gradient(
+    135deg,
+    var(--color-stone-50) 40%,
+    var(--color-primary-50) 70%,
+    var(--color-primary-100) 100%
+  );
 }

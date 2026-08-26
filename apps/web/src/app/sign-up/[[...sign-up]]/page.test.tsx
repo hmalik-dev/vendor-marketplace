@@ -70,7 +70,7 @@ describe('SignUpPage', () => {
     await user.click(within(customerCard!).getByRole('button', { name: 'Continue' }));
 
     expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ fallbackRedirectUrl: '/dashboard' }),
+      expect.objectContaining({ fallbackRedirectUrl: '/after-sign-in' }),
     );
   });
 

@@ -29,6 +29,13 @@
       "when": 1787759828321,
       "tag": "0003_rename_tag_category_dietary",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787776809846,
+      "tag": "0004_conscious_sinister_six",
+      "breakpoints": true
     }
   ]
 }

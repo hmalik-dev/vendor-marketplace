@@ -2,21 +2,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from './api-client';
 
 const getToken = vi.fn<() => Promise<string | null>>();
+let userId: string | null = null;
 const apiRequest = vi.fn();
 const redirect = vi.fn((path: string) => {
   // Next's redirect() never returns; throwing keeps callers from running on.
   throw new Error(`NEXT_REDIRECT:${path}`);
 });
 
-vi.mock('@clerk/nextjs/server', () => ({ auth: async () => ({ getToken }) }));
+vi.mock('@clerk/nextjs/server', () => ({ auth: async () => ({ getToken, userId }) }));
 vi.mock('next/navigation', () => ({ redirect: (path: string) => redirect(path) }));
 vi.mock('./api-client', async () => {
   const actual = await vi.importActual<typeof import('./api-client')>('./api-client');
   return { ...actual, apiRequest: (...args: unknown[]) => apiRequest(...args) };
 });
 
-const { DASHBOARD_PATH_BY_ROLE, getCurrentUser, requireCurrentUser, requireRole } =
-  await import('./current-user');
+const {
+  DASHBOARD_PATH_BY_ROLE,
+  getCurrentUser,
+  redirectIfSignedIn,
+  POST_SIGN_IN_PATH_BY_ROLE,
+  redirectVendorToDashboard,
+  requireCurrentUser,
+  requireRole,
+} = await import('./current-user');
 
 const CUSTOMER = { id: 'u1', firstName: 'Ada', role: 'customer' as const };
 const VENDOR = { id: 'u2', firstName: 'Grace', role: 'vendor' as const };
@@ -142,5 +150,91 @@ describe('requireRole', () => {
 
     await expect(requireRole('customer')).rejects.toThrow('NEXT_REDIRECT:/vendor/dashboard');
     expect(redirect).toHaveBeenCalledWith('/vendor/dashboard');
+  });
+});
+
+describe('redirectIfSignedIn', () => {
+  beforeEach(() => {
+    redirect.mockClear();
+  });
+
+  afterEach(() => {
+    userId = null;
+    vi.clearAllMocks();
+  });
+
+  it('lets a signed-out visitor stay on the authentication page', async () => {
+    userId = null;
+
+    await expect(redirectIfSignedIn()).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('sends an already-signed-in visitor to the role-resolving landing route', async () => {
+    userId = 'user_123';
+
+    await expect(redirectIfSignedIn()).rejects.toThrow('NEXT_REDIRECT:/after-sign-in');
+    expect(redirect).toHaveBeenCalledWith('/after-sign-in');
+  });
+});
+
+describe('redirectVendorToDashboard', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+    redirect.mockClear();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('leaves a signed-out visitor on the landing page', async () => {
+    getToken.mockResolvedValue(null);
+
+    await expect(redirectVendorToDashboard()).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('leaves a customer on the landing page, which is the browse surface', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(CUSTOMER);
+
+    await expect(redirectVendorToDashboard()).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('sends a vendor to the vendor dashboard instead', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(VENDOR);
+
+    await expect(redirectVendorToDashboard()).rejects.toThrow('NEXT_REDIRECT:/vendor/dashboard');
+    expect(redirect).toHaveBeenCalledWith('/vendor/dashboard');
+  });
+
+  it('sends a suspended account to the suspended page rather than a 500', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'FORBIDDEN', 'This account has been suspended'),
+    );
+
+    await expect(redirectVendorToDashboard()).rejects.toThrow('NEXT_REDIRECT:/suspended');
+    expect(redirect).toHaveBeenCalledWith('/suspended');
+  });
+});
+
+describe('POST_SIGN_IN_PATH_BY_ROLE', () => {
+  it('starts a vendor on their own dashboard', () => {
+    expect(POST_SIGN_IN_PATH_BY_ROLE.vendor).toBe(DASHBOARD_PATH_BY_ROLE.vendor);
+  });
+
+  it('starts a customer on the marketplace home, not a dashboard', () => {
+    // Browsing vendors is the customer's first move; the dashboard is not.
+    expect(POST_SIGN_IN_PATH_BY_ROLE.customer).toBe('/');
+    expect(POST_SIGN_IN_PATH_BY_ROLE.customer).not.toBe(DASHBOARD_PATH_BY_ROLE.customer);
+  });
+
+  it('covers every role so the lookup can never return undefined', () => {
+    expect(POST_SIGN_IN_PATH_BY_ROLE.admin).toBe('/');
   });
 });

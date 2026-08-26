@@ -88,80 +88,122 @@ export interface CategorySeed {
   readonly displayOrder: number;
 }
 
+/**
+ * Names are deliberately one word: the landing grid reads as a row of nouns,
+ * and the description underneath is what says which vendors sit inside. A
+ * two-word name is a sign the category is really two categories.
+ *
+ * `displayOrder` doubles as landing-page priority — `LANDING_CATEGORY_COUNT`
+ * cards are featured on `/`, so the first entries are the highest-intent ones.
+ */
 export const CATEGORY_SEEDS: readonly CategorySeed[] = [
   {
     name: 'Photography',
     slug: 'photography',
-    description: 'Photographers for weddings, portraits, and events.',
+    description: 'Portraits, candids, photo booths, and full-day coverage.',
     icon: 'camera',
     displayOrder: 1,
   },
   {
-    name: 'DJ/Music',
-    slug: 'dj-music',
-    description: 'DJs, bands, and live musicians to set the mood.',
+    name: 'Entertainment',
+    slug: 'entertainment',
+    description: 'DJs, live bands, musicians, MCs, dancers, and performers.',
     icon: 'music',
     displayOrder: 2,
   },
   {
-    name: 'Makeup/Beauty',
-    slug: 'makeup-beauty',
-    description: 'Makeup artists, hair stylists, and beauty professionals.',
-    icon: 'sparkles',
+    name: 'Catering',
+    slug: 'catering',
+    description: 'Caterers, private chefs, bartenders, and buffet service.',
+    icon: 'utensils',
     displayOrder: 3,
   },
   {
-    name: 'Decoration',
-    slug: 'decoration',
-    description: 'Decorators and stylists who transform your venue.',
-    icon: 'palette',
+    name: 'Venues',
+    slug: 'venues',
+    description: 'Halls, lofts, rooftops, gardens, and private dining rooms.',
+    icon: 'building-2',
     displayOrder: 4,
   },
   {
-    name: 'Catering',
-    slug: 'catering',
-    description: 'Caterers, chefs, and bar services for any guest count.',
-    icon: 'utensils',
+    name: 'Beauty',
+    slug: 'beauty',
+    description: 'Makeup artists, hair stylists, henna, and grooming.',
+    icon: 'sparkles',
     displayOrder: 5,
   },
   {
-    name: 'Floristry',
-    slug: 'floristry',
-    description: 'Florists for bouquets, centerpieces, and installations.',
-    icon: 'flower',
+    name: 'Carts',
+    slug: 'carts',
+    description: 'Coffee, ice cream, dessert, and cocktail carts.',
+    icon: 'ice-cream-cone',
     displayOrder: 6,
+  },
+  {
+    name: 'Florals',
+    slug: 'florals',
+    description: 'Bouquets, centerpieces, arches, and floral installations.',
+    icon: 'flower',
+    displayOrder: 7,
+  },
+  {
+    name: 'Decor',
+    slug: 'decor',
+    description: 'Backdrops, table styling, uplighting, and stage design.',
+    icon: 'palette',
+    displayOrder: 8,
   },
   {
     name: 'Videography',
     slug: 'videography',
-    description: 'Videographers and cinematographers for event films.',
+    description: 'Highlight films, ceremony coverage, and drone work.',
     icon: 'video',
-    displayOrder: 7,
-  },
-  {
-    name: 'Event Planning',
-    slug: 'event-planning',
-    description: 'Planners and coordinators who run the day for you.',
-    icon: 'clipboard-list',
-    displayOrder: 8,
-  },
-  {
-    name: 'Lighting',
-    slug: 'lighting',
-    description: 'Lighting designers for ambience, uplighting, and stages.',
-    icon: 'lightbulb',
     displayOrder: 9,
   },
   {
-    name: 'Rentals/Equipment',
-    slug: 'rentals-equipment',
+    name: 'Planning',
+    slug: 'planning',
+    description: 'Planners and day-of coordinators who run the event for you.',
+    icon: 'clipboard-list',
+    displayOrder: 10,
+  },
+  {
+    name: 'Rentals',
+    slug: 'rentals',
     description: 'Tents, tables, chairs, AV, and everything in between.',
     icon: 'package',
-    displayOrder: 10,
+    displayOrder: 11,
   },
 ];
 
+/**
+ * Slugs that no longer appear in `CATEGORY_SEEDS`, each mapped to the seeded
+ * slug that took over its vendors.
+ *
+ * `seedCategories` upserts on `slug`, so without this a renamed category would
+ * insert a *second* row and leave the original live with its vendors attached.
+ * A plain rename moves the slug onto the existing row, keeping its id and every
+ * `vendor_categories` link; a merge — `lighting` folding into `decor` — moves
+ * the links onto the surviving row instead.
+ */
+export const CATEGORY_SLUG_SUCCESSORS: Readonly<Record<string, string>> = {
+  'dj-music': 'entertainment',
+  'makeup-beauty': 'beauty',
+  decoration: 'decor',
+  floristry: 'florals',
+  'event-planning': 'planning',
+  'rentals-equipment': 'rentals',
+  lighting: 'decor',
+};
+
 export const CATEGORY_SLUGS = CATEGORY_SEEDS.map((category) => category.slug);
+
+/**
+ * How many categories the landing page features. The full taxonomy belongs on
+ * search (#6), where a category is a filter you can actually click; a landing
+ * grid of eleven inert cards is bloat, not browse.
+ */
+export const LANDING_CATEGORY_COUNT = 6;
 
 // --- Tag seed data ---------------------------------------------------------
 
@@ -249,10 +291,10 @@ export const TAG_SEEDS: readonly TagSeed[] = [
   { name: 'Japanese', slug: 'cultural-japanese', category: 'cultural', displayOrder: 14 },
   { name: 'Chinese', slug: 'cultural-chinese', category: 'cultural', displayOrder: 15 },
   { name: 'Polynesian', slug: 'cultural-polynesian', category: 'cultural', displayOrder: 16 },
-  { name: 'Halal', slug: 'dietary-halal', category: 'dietary', displayOrder: 1 },
-  { name: 'Kosher', slug: 'dietary-kosher', category: 'dietary', displayOrder: 2 },
-  { name: 'Vegan', slug: 'dietary-vegan', category: 'dietary', displayOrder: 3 },
-  { name: 'Vegetarian', slug: 'dietary-vegetarian', category: 'dietary', displayOrder: 4 },
+  { name: 'Vegan', slug: 'dietary-vegan', category: 'dietary', displayOrder: 1 },
+  { name: 'Vegetarian', slug: 'dietary-vegetarian', category: 'dietary', displayOrder: 2 },
+  { name: 'Halal', slug: 'dietary-halal', category: 'dietary', displayOrder: 3 },
+  { name: 'Kosher', slug: 'dietary-kosher', category: 'dietary', displayOrder: 4 },
 ];
 
 export const TAG_SLUGS = TAG_SEEDS.map((tag) => tag.slug);
@@ -287,6 +329,13 @@ export const MAX_GUEST_COUNT = 100_000;
 
 /** Short customer intro shown to vendors, e.g. "Planning my wedding!". */
 export const MAX_CUSTOMER_BIO_LENGTH = 300;
+
+/**
+ * A vendor bio is a pitch, not an essay — roughly two solid paragraphs. The
+ * column is `text`, so this ceiling exists to keep profiles scannable rather
+ * than to protect storage.
+ */
+export const MAX_VENDOR_BIO_LENGTH = 1_200;
 
 /**
  * Response windows a vendor may advertise, in hours. A closed set rather than

@@ -1,6 +1,6 @@
 {
-  "id": "9c05364d-3609-448b-a325-32a81955448b",
-  "prevId": "70569360-6812-42a5-988a-1c1df8a4a679",
+  "id": "5d680007-e04b-4c0d-85f9-6dde1184d874",
+  "prevId": "9c05364d-3609-448b-a325-32a81955448b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -182,9 +182,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "users_email_key": {
           "name": "users_email_key",
@@ -197,9 +197,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "users_role_idx": {
           "name": "users_role_idx",
@@ -212,9 +212,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -308,6 +308,13 @@
           "notNull": false,
           "default": 50
         },
+        "travels_beyond_radius": {
+          "name": "travels_beyond_radius",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "response_time_hours": {
           "name": "response_time_hours",
           "type": "integer",
@@ -382,9 +389,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "vendor_profiles_slug_key": {
           "name": "vendor_profiles_slug_key",
@@ -397,9 +404,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "vendor_profiles_published_idx": {
           "name": "vendor_profiles_published_idx",
@@ -418,9 +425,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "vendor_profiles_city_state_idx": {
           "name": "vendor_profiles_city_state_idx",
@@ -439,25 +446,25 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"vendor_profiles\".\"is_published\" = true AND \"vendor_profiles\".\"is_deleted\" = false",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "vendor_profiles_user_id_users_id_fk": {
           "name": "vendor_profiles_user_id_users_id_fk",
           "tableFrom": "vendor_profiles",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -528,9 +535,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "categories_slug_key": {
           "name": "categories_slug_key",
@@ -543,9 +550,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -584,37 +591,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "vendor_categories_vendor_id_vendor_profiles_id_fk": {
           "name": "vendor_categories_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "vendor_categories",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "vendor_categories_category_id_categories_id_fk": {
           "name": "vendor_categories_category_id_categories_id_fk",
           "tableFrom": "vendor_categories",
+          "tableTo": "categories",
           "columnsFrom": [
             "category_id"
           ],
-          "tableTo": "categories",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -713,9 +720,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tag_suggestions_vendor_id_idx": {
           "name": "tag_suggestions_vendor_id_idx",
@@ -728,37 +735,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "tag_suggestions_vendor_id_users_id_fk": {
           "name": "tag_suggestions_vendor_id_users_id_fk",
           "tableFrom": "tag_suggestions",
+          "tableTo": "users",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "tag_suggestions_resolved_tag_id_tags_id_fk": {
           "name": "tag_suggestions_resolved_tag_id_tags_id_fk",
           "tableFrom": "tag_suggestions",
+          "tableTo": "tags",
           "columnsFrom": [
             "resolved_tag_id"
           ],
-          "tableTo": "tags",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -831,9 +838,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tags_category_name_key": {
           "name": "tags_category_name_key",
@@ -852,9 +859,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "tags_category_display_order_idx": {
           "name": "tags_category_display_order_idx",
@@ -873,10 +880,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"tags\".\"is_active\" = true",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -915,37 +922,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "vendor_tags_vendor_id_vendor_profiles_id_fk": {
           "name": "vendor_tags_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "vendor_tags",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "vendor_tags_tag_id_tags_id_fk": {
           "name": "vendor_tags_tag_id_tags_id_fk",
           "tableFrom": "vendor_tags",
+          "tableTo": "tags",
           "columnsFrom": [
             "tag_id"
           ],
-          "tableTo": "tags",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -1030,24 +1037,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "portfolio_items_vendor_id_vendor_profiles_id_fk": {
           "name": "portfolio_items_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "portfolio_items",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1165,24 +1172,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "service_packages_vendor_id_vendor_profiles_id_fk": {
           "name": "service_packages_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "service_packages",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1247,24 +1254,24 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "availability_vendor_id_vendor_profiles_id_fk": {
           "name": "availability_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "availability",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1397,9 +1404,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "booking_requests_vendor_status_idx": {
           "name": "booking_requests_vendor_status_idx",
@@ -1418,9 +1425,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "booking_requests_expires_at_idx": {
           "name": "booking_requests_expires_at_idx",
@@ -1433,51 +1440,51 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"booking_requests\".\"status\" = 'pending'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "booking_requests_customer_id_users_id_fk": {
           "name": "booking_requests_customer_id_users_id_fk",
           "tableFrom": "booking_requests",
+          "tableTo": "users",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "booking_requests_vendor_id_vendor_profiles_id_fk": {
           "name": "booking_requests_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "booking_requests",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "booking_requests_package_id_service_packages_id_fk": {
           "name": "booking_requests_package_id_service_packages_id_fk",
           "tableFrom": "booking_requests",
+          "tableTo": "service_packages",
           "columnsFrom": [
             "package_id"
           ],
-          "tableTo": "service_packages",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1616,9 +1623,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "bookings_customer_idx": {
           "name": "bookings_customer_idx",
@@ -1631,9 +1638,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "bookings_vendor_idx": {
           "name": "bookings_vendor_idx",
@@ -1646,50 +1653,50 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "bookings_request_id_booking_requests_id_fk": {
           "name": "bookings_request_id_booking_requests_id_fk",
           "tableFrom": "bookings",
+          "tableTo": "booking_requests",
           "columnsFrom": [
             "request_id"
           ],
-          "tableTo": "booking_requests",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "bookings_customer_id_users_id_fk": {
           "name": "bookings_customer_id_users_id_fk",
           "tableFrom": "bookings",
+          "tableTo": "users",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "bookings_vendor_id_vendor_profiles_id_fk": {
           "name": "bookings_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "bookings",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1759,9 +1766,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "conversations_customer_idx": {
           "name": "conversations_customer_idx",
@@ -1780,9 +1787,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "conversations_vendor_idx": {
           "name": "conversations_vendor_idx",
@@ -1801,50 +1808,50 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "conversations_customer_id_users_id_fk": {
           "name": "conversations_customer_id_users_id_fk",
           "tableFrom": "conversations",
+          "tableTo": "users",
           "columnsFrom": [
             "customer_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "conversations_vendor_id_vendor_profiles_id_fk": {
           "name": "conversations_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "conversations",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "conversations_booking_request_id_booking_requests_id_fk": {
           "name": "conversations_booking_request_id_booking_requests_id_fk",
           "tableFrom": "conversations",
+          "tableTo": "booking_requests",
           "columnsFrom": [
             "booking_request_id"
           ],
-          "tableTo": "booking_requests",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1914,37 +1921,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "messages_conversation_id_conversations_id_fk": {
           "name": "messages_conversation_id_conversations_id_fk",
           "tableFrom": "messages",
+          "tableTo": "conversations",
           "columnsFrom": [
             "conversation_id"
           ],
-          "tableTo": "conversations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "messages_sender_id_users_id_fk": {
           "name": "messages_sender_id_users_id_fk",
           "tableFrom": "messages",
+          "tableTo": "users",
           "columnsFrom": [
             "sender_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2040,9 +2047,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "reviews_booking_idx": {
           "name": "reviews_booking_idx",
@@ -2055,9 +2062,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "reviews_vendor_public_idx": {
           "name": "reviews_vendor_public_idx",
@@ -2076,51 +2083,51 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"reviews\".\"type\" = 'customer_to_vendor'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
         "reviews_booking_id_bookings_id_fk": {
           "name": "reviews_booking_id_bookings_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "bookings",
           "columnsFrom": [
             "booking_id"
           ],
-          "tableTo": "bookings",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reviews_reviewer_id_users_id_fk": {
           "name": "reviews_reviewer_id_users_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "users",
           "columnsFrom": [
             "reviewer_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "reviews_vendor_id_vendor_profiles_id_fk": {
           "name": "reviews_vendor_id_vendor_profiles_id_fk",
           "tableFrom": "reviews",
+          "tableTo": "vendor_profiles",
           "columnsFrom": [
             "vendor_id"
           ],
-          "tableTo": "vendor_profiles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2213,24 +2220,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "notifications_user_id_users_id_fk": {
           "name": "notifications_user_id_users_id_fk",
           "tableFrom": "notifications",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2328,10 +2335,10 @@
     }
   },
   "schemas": {},
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

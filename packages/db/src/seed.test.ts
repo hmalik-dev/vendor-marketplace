@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CATEGORY_SEEDS, TAG_CATEGORIES, TAG_SEEDS } from '@vendorhub/shared';
+import {
+  CATEGORY_SEEDS,
+  CATEGORY_SLUG_SUCCESSORS,
+  TAG_CATEGORIES,
+  TAG_SEEDS,
+} from '@vendorhub/shared';
 import { asc, eq } from 'drizzle-orm';
 import { categories, tags } from './schema/index.js';
 import { seedCategories, seedReferenceData, seedTags } from './seed.js';
@@ -60,6 +65,106 @@ describe('seedCategories', () => {
     expect(row!.name).toBe(seed!.name);
     expect(row!.isActive).toBe(true);
     expect(row!.displayOrder).toBe(seed!.displayOrder);
+  });
+});
+
+describe('seedCategories — retired slugs', () => {
+  it('renames a retired category in place, keeping its id and its vendors', async () => {
+    await seedCategories(testDb.db);
+
+    const [entertainment] = await testDb.db
+      .select()
+      .from(categories)
+      .where(eq(categories.slug, 'entertainment'));
+    expect(entertainment).toBeDefined();
+
+    // Wind the row back to the slug the previous taxonomy shipped.
+    await testDb.db
+      .update(categories)
+      .set({ slug: 'dj-music', name: 'DJ/Music' })
+      .where(eq(categories.id, entertainment!.id));
+
+    await seedCategories(testDb.db);
+
+    const rows = await testDb.db.select().from(categories).where(eq(categories.slug, 'dj-music'));
+    expect(rows).toHaveLength(0);
+
+    const [renamed] = await testDb.db
+      .select()
+      .from(categories)
+      .where(eq(categories.slug, 'entertainment'));
+    expect(renamed).toBeDefined();
+    // Same row, so every vendor_categories link survived the rename.
+    expect(renamed!.id).toBe(entertainment!.id);
+    expect(renamed!.name).toBe('Entertainment');
+  });
+
+  it('merges a retired category into an existing successor and drops the old row', async () => {
+    await seedCategories(testDb.db);
+
+    const [decor] = await testDb.db.select().from(categories).where(eq(categories.slug, 'decor'));
+    expect(decor).toBeDefined();
+
+    // `lighting` was folded into `decor`, so both rows can exist side by side.
+    const [lighting] = await testDb.db
+      .insert(categories)
+      .values({
+        name: 'Lighting',
+        slug: 'lighting',
+        description: 'Retired category.',
+        icon: 'lightbulb',
+        displayOrder: 99,
+      })
+      .returning();
+    expect(lighting).toBeDefined();
+
+    await seedCategories(testDb.db);
+
+    const remaining = await testDb.db
+      .select()
+      .from(categories)
+      .where(eq(categories.slug, 'lighting'));
+    expect(remaining).toHaveLength(0);
+
+    const [survivor] = await testDb.db
+      .select()
+      .from(categories)
+      .where(eq(categories.slug, 'decor'));
+    expect(survivor).toBeDefined();
+    expect(survivor!.id).toBe(decor!.id);
+  });
+
+  it('deactivates a category the seeds no longer describe rather than deleting it', async () => {
+    await seedCategories(testDb.db);
+
+    await testDb.db.insert(categories).values({
+      name: 'Petting Zoos',
+      slug: 'petting-zoos',
+      description: 'Never launched.',
+      icon: 'shapes',
+      displayOrder: 98,
+    });
+
+    await seedCategories(testDb.db);
+
+    const [stale] = await testDb.db
+      .select()
+      .from(categories)
+      .where(eq(categories.slug, 'petting-zoos'));
+    // Still present: a hard delete would take its vendor_categories rows too.
+    expect(stale).toBeDefined();
+    expect(stale!.isActive).toBe(false);
+  });
+
+  it('leaves the seeded categories active while deactivating the stale one', async () => {
+    await seedCategories(testDb.db);
+
+    const rows = await testDb.db.select().from(categories);
+    const seeded = rows.filter((row) => CATEGORY_SEEDS.some((seed) => seed.slug === row.slug));
+
+    expect(seeded).toHaveLength(CATEGORY_SEEDS.length);
+    expect(seeded.every((row) => row.isActive)).toBe(true);
+    expect(Object.keys(CATEGORY_SLUG_SUCCESSORS)).not.toContain('photography');
   });
 });
 

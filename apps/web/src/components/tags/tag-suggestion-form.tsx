@@ -103,7 +103,7 @@ export function TagSuggestionForm({
         type="button"
         variant="link"
         size="sm"
-        className="h-11 px-0 text-stone-600 sm:h-7"
+        className="h-11 justify-self-start px-0 text-stone-600 sm:h-7"
         onClick={() => setIsOpen(true)}
       >
         Don&apos;t see yours?
@@ -118,7 +118,7 @@ export function TagSuggestionForm({
    * the field still behaves like one.
    */
   return (
-    <div className="mt-2 flex flex-wrap items-end gap-2">
+    <div className="flex flex-wrap items-end gap-2">
       <div className="min-w-0 flex-1">
         <Label htmlFor={inputId} className="text-xs text-stone-600">
           Suggest a {TAG_CATEGORY_NOUN[category]}

@@ -4,6 +4,9 @@ import {
   BOOKING_STATUSES,
   BUDGET_TIERS,
   CATEGORY_SEEDS,
+  CATEGORY_SLUG_SUCCESSORS,
+  CATEGORY_SLUGS,
+  LANDING_CATEGORY_COUNT,
   DEFAULT_PLATFORM_FEE_RATE,
   ERROR_CODES,
   MIN_BOOKING_AMOUNT_CENTS,
@@ -66,20 +69,57 @@ describe('enum constants', () => {
 });
 
 describe('CATEGORY_SEEDS', () => {
-  it('covers all ten launch categories', () => {
-    expect(CATEGORY_SEEDS).toHaveLength(10);
+  it('covers all eleven launch categories, in display order', () => {
+    expect(CATEGORY_SEEDS).toHaveLength(11);
     expect(CATEGORY_SEEDS.map((c) => c.name)).toEqual([
       'Photography',
-      'DJ/Music',
-      'Makeup/Beauty',
-      'Decoration',
+      'Entertainment',
       'Catering',
-      'Floristry',
+      'Venues',
+      'Beauty',
+      'Carts',
+      'Florals',
+      'Decor',
       'Videography',
-      'Event Planning',
-      'Lighting',
-      'Rentals/Equipment',
+      'Planning',
+      'Rentals',
     ]);
+  });
+
+  it('names every category in a single word, so the landing grid reads as nouns', () => {
+    for (const category of CATEGORY_SEEDS) {
+      expect(category.name, category.slug).toMatch(/^[A-Z][a-z]+$/);
+    }
+  });
+
+  it('says what sits inside each category in the description', () => {
+    for (const category of CATEGORY_SEEDS) {
+      expect(category.description.length, category.slug).toBeGreaterThan(20);
+      expect(category.description.endsWith('.'), category.slug).toBe(true);
+    }
+  });
+
+  it('numbers displayOrder 1..n in array order, since it drives landing priority', () => {
+    expect(CATEGORY_SEEDS.map((c) => c.displayOrder)).toEqual(
+      CATEGORY_SEEDS.map((_, index) => index + 1),
+    );
+  });
+
+  it('features the categories the landing page leads with, carts included', () => {
+    const featured = CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT).map((c) => c.name);
+
+    expect(featured).toEqual([
+      'Photography',
+      'Entertainment',
+      'Catering',
+      'Venues',
+      'Beauty',
+      'Carts',
+    ]);
+  });
+
+  it('features fewer categories than it seeds, so the landing grid stays a taste', () => {
+    expect(LANDING_CATEGORY_COUNT).toBeLessThan(CATEGORY_SEEDS.length);
   });
 
   it('gives every category a unique slug and a unique display order', () => {
@@ -112,7 +152,9 @@ describe('TAG_SEEDS', () => {
     expect(byCategory('cultural')).toContain('South Asian');
 
     expect(byCategory('dietary')).toHaveLength(4);
-    expect(byCategory('dietary')).toContain('Halal');
+    // Order matters: the picker renders by displayOrder, and the two
+    // preference-based options read first for most customers.
+    expect(byCategory('dietary')).toEqual(['Vegan', 'Vegetarian', 'Halal', 'Kosher']);
   });
 
   it('gives every tag a globally unique slug', () => {
@@ -163,5 +205,36 @@ describe('business constants', () => {
     const values = Object.values(ERROR_CODES);
     expect(new Set(values).size).toBe(values.length);
     expect(ERROR_CODES.NOT_FOUND).toBe('NOT_FOUND');
+  });
+});
+
+describe('CATEGORY_SLUG_SUCCESSORS', () => {
+  it('points every retired slug at a category that is actually seeded', () => {
+    for (const [retired, successor] of Object.entries(CATEGORY_SLUG_SUCCESSORS)) {
+      expect(CATEGORY_SLUGS, retired).toContain(successor);
+    }
+  });
+
+  it('never retires a slug that is still seeded, which would delete a live category', () => {
+    for (const retired of Object.keys(CATEGORY_SLUG_SUCCESSORS)) {
+      expect(CATEGORY_SLUGS, retired).not.toContain(retired);
+    }
+  });
+
+  it('carries a successor for every slug the previous taxonomy shipped', () => {
+    // Renamed rather than dropped: each of these still has vendors attached.
+    expect(Object.keys(CATEGORY_SLUG_SUCCESSORS).sort()).toEqual([
+      'decoration',
+      'dj-music',
+      'event-planning',
+      'floristry',
+      'lighting',
+      'makeup-beauty',
+      'rentals-equipment',
+    ]);
+  });
+
+  it('folds lighting into decor rather than leaving it standalone', () => {
+    expect(CATEGORY_SLUG_SUCCESSORS.lighting).toBe('decor');
   });
 });

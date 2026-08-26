@@ -21,23 +21,25 @@ export default async function VendorProfileEditPage(): Promise<React.ReactElemen
 
   const isNew = profile === null;
 
+  // An app surface, so the title is capped at `text-2xl`: a 60px headline here
+  // would spend the vertical budget on a word the vendor already knows.
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
-      <header className="max-w-2xl">
-        <p className="text-sm font-medium tracking-wide text-primary-600 uppercase">
+    <div className="mx-auto w-full max-w-form px-4 py-8 sm:px-6 lg:px-8 xl:px-10">
+      <header className="max-w-prose">
+        <p className="text-xs font-medium tracking-wide text-primary-600 uppercase">
           {isNew ? 'Get started' : 'Your business'}
         </p>
-        <h1 className="mt-2 font-display text-3xl font-semibold text-stone-800 sm:text-4xl">
+        <h1 className="mt-1 font-display text-2xl font-semibold text-stone-800">
           {isNew ? 'Set up your business profile' : 'Edit your business profile'}
         </h1>
-        <p className="mt-3 text-stone-600">
+        <p className="mt-1 text-sm text-stone-600">
           {isNew
             ? 'Tell customers who you are. You can change any of this later.'
             : 'Keep your details current so the right customers find you.'}
         </p>
       </header>
 
-      <div className="mt-8">
+      <div className="mt-6">
         <VendorProfileForm profile={profile} categories={categories} allTags={allTags} />
       </div>
     </div>

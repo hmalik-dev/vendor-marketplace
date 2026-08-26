@@ -15,11 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { WireTag } from '@/lib/wire-schemas';
-import {
-  TAG_CATEGORY_HINTS,
-  TAG_CATEGORY_LABELS,
-  TAG_PILL_CLASSES,
-} from './tag-display';
+import { TAG_CATEGORY_HINTS, TAG_CATEGORY_LABELS, TAG_PILL_CLASSES } from './tag-display';
 import { TagSuggestionForm } from './tag-suggestion-form';
 
 export interface TagCategorySectionProps {
@@ -55,15 +51,25 @@ export function TagCategorySection({
   const label = TAG_CATEGORY_LABELS[category];
 
   return (
-    <section className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <h3 className="text-sm font-medium text-stone-800">{label}</h3>
-        <p className="text-xs text-stone-500">
-          {selected.length} of {MAX_TAGS_PER_CATEGORY}
-          {atLimit ? ' (limit reached)' : ''}
-        </p>
+    /*
+     * Five explicit rows shared with the sibling sections via subgrid: the
+     * hints are different lengths, so a plain stack drops the middle column's
+     * trigger a line below its neighbours. Subgrid keeps every row — heading,
+     * hint, trigger, pills, suggestion — on one line across all three columns.
+     */
+    <section className="grid content-start gap-3 lg:row-span-4 lg:grid-rows-subgrid">
+      {/* Heading, count, and hint are one unit, so they bind tightly and the
+          12px rhythm below separates the three real controls. */}
+      <div>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <h3 className="text-sm font-medium text-stone-800">{label}</h3>
+          <p className="text-xs text-stone-500">
+            {selected.length} of {MAX_TAGS_PER_CATEGORY}
+            {atLimit ? ' (limit reached)' : ''}
+          </p>
+        </div>
+        <p className="mt-1 text-xs text-stone-500">{TAG_CATEGORY_HINTS[category]}</p>
       </div>
-      <p className="text-xs text-stone-500">{TAG_CATEGORY_HINTS[category]}</p>
 
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
@@ -113,31 +119,29 @@ export function TagCategorySection({
         </PopoverContent>
       </Popover>
 
-      {selected.length > 0 ? (
-        <ul className="flex flex-wrap gap-2 pt-1">
-          {selected.map((tag) => (
-            <li key={tag.id}>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full py-1 pr-1 pl-3 text-sm',
-                  TAG_PILL_CLASSES[category],
-                )}
+      <ul className="flex flex-wrap gap-2 empty:hidden lg:empty:block">
+        {selected.map((tag) => (
+          <li key={tag.id}>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full py-1 pr-1 pl-3 text-sm',
+                TAG_PILL_CLASSES[category],
+              )}
+            >
+              {tag.name}
+              <button
+                type="button"
+                onClick={() => onToggle(tag.id)}
+                disabled={disabled}
+                aria-label={`Remove ${tag.name}`}
+                className="relative inline-flex size-5 items-center justify-center rounded-full transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-stone-900/10 disabled:opacity-50 sm:after:hidden"
               >
-                {tag.name}
-                <button
-                  type="button"
-                  onClick={() => onToggle(tag.id)}
-                  disabled={disabled}
-                  aria-label={`Remove ${tag.name}`}
-                  className="relative inline-flex size-5 items-center justify-center rounded-full transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-stone-900/10 disabled:opacity-50 sm:after:hidden"
-                >
-                  <X aria-hidden="true" className="size-3.5" />
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+                <X aria-hidden="true" className="size-3.5" />
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
 
       <TagSuggestionForm
         category={category}

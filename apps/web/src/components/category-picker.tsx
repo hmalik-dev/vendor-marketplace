@@ -1,19 +1,8 @@
 'use client';
 
 import type { Category } from '@vendorhub/shared';
-import { Check, ChevronsUpDown, X } from 'lucide-react';
-import { useState } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CategoryIconBadge } from '@/components/category-icon';
 import { cn } from '@/lib/utils';
 
 /** Mirrors the ceiling `createVendorProfileSchema` enforces server-side. */
@@ -26,18 +15,22 @@ export interface CategoryPickerProps {
   disabled?: boolean;
 }
 
-/** Searchable multi-select for the services a vendor offers. */
+/**
+ * The services a vendor offers, as toggleable icon chips.
+ *
+ * A combobox would hide ten options behind a popover and render them as bare
+ * text. Category identity is visual everywhere else in the product, and this is
+ * where a vendor first meets it — so the marks are on the page, and choosing is
+ * one click rather than open-search-select-close.
+ */
 export function CategoryPicker({
   categories,
   selectedCategoryIds,
   onChange,
   disabled = false,
 }: CategoryPickerProps): React.ReactElement {
-  const [isOpen, setIsOpen] = useState(false);
-
   const selectedIds = new Set(selectedCategoryIds);
-  const selected = categories.filter((category) => selectedIds.has(category.id));
-  const atLimit = selected.length >= MAX_CATEGORIES;
+  const atLimit = selectedIds.size >= MAX_CATEGORIES;
 
   const toggle = (categoryId: string): void => {
     if (selectedIds.has(categoryId)) {
@@ -53,71 +46,36 @@ export function CategoryPicker({
 
   return (
     <div className="space-y-2">
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            role="combobox"
-            aria-expanded={isOpen}
-            aria-label="Choose your service categories"
-            disabled={disabled}
-            className="h-11 w-full justify-between font-normal sm:h-9"
-          >
-            {selected.length > 0 ? `${selected.length} selected` : 'Choose your categories'}
-            <ChevronsUpDown aria-hidden="true" className="opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Search categories…" />
-            <CommandList>
-              <CommandEmpty>No matching category.</CommandEmpty>
-              <CommandGroup>
-                {categories.map((category) => {
-                  const isSelected = selectedIds.has(category.id);
-                  return (
-                    <CommandItem
-                      key={category.id}
-                      value={category.name}
-                      disabled={!isSelected && atLimit}
-                      onSelect={() => toggle(category.id)}
-                    >
-                      <Check
-                        aria-hidden="true"
-                        className={cn('mr-2', isSelected ? 'opacity-100' : 'opacity-0')}
-                      />
-                      {category.name}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+      <ul className="flex flex-wrap gap-2">
+        {categories.map((category) => {
+          const isSelected = selectedIds.has(category.id);
 
-      {selected.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">
-          {selected.map((category) => (
+          return (
             <li key={category.id}>
-              <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 py-1 pr-1 pl-3 text-sm text-stone-800">
+              <button
+                type="button"
+                aria-pressed={isSelected}
+                disabled={disabled || (!isSelected && atLimit)}
+                onClick={() => toggle(category.id)}
+                className={cn(
+                  'inline-flex min-h-11 items-center gap-2 rounded-full border py-1.5 pr-4 pl-1.5 text-sm font-medium transition-colors duration-(--duration-fast) sm:min-h-0',
+                  'focus-visible:ring-2 focus-visible:ring-primary-100 focus-visible:outline-none',
+                  isSelected
+                    ? 'border-primary-400 bg-primary-50 text-stone-800'
+                    : 'border-stone-200 bg-stone-0 text-stone-700 hover:border-stone-300 hover:bg-stone-50',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+              >
+                <CategoryIconBadge icon={category.icon} />
                 {category.name}
-                <button
-                  type="button"
-                  onClick={() => toggle(category.id)}
-                  disabled={disabled}
-                  aria-label={`Remove ${category.name}`}
-                  className="relative inline-flex size-5 items-center justify-center rounded-full transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-stone-900/10 disabled:opacity-50 sm:after:hidden"
-                >
-                  <X aria-hidden="true" className="size-3.5" />
-                </button>
-              </span>
+              </button>
             </li>
-          ))}
-        </ul>
-      ) : null}
+          );
+        })}
+      </ul>
+      <p className="text-xs text-stone-500">
+        {selectedIds.size} of {MAX_CATEGORIES} chosen.
+      </p>
     </div>
   );
 }

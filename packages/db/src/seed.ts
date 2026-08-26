@@ -1,8 +1,13 @@
-import { CATEGORY_SEEDS, TAG_SEEDS } from '@vendorhub/shared';
-import { sql } from 'drizzle-orm';
+import {
+  CATEGORY_SEEDS,
+  CATEGORY_SLUG_SUCCESSORS,
+  CATEGORY_SLUGS,
+  TAG_SEEDS,
+} from '@vendorhub/shared';
+import { eq, inArray, not, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
-import { categories, tags } from './schema/index.js';
+import { categories, tags, vendorCategories } from './schema/index.js';
 
 export interface SeedResult {
   categoriesUpserted: number;
@@ -20,15 +25,81 @@ type AnyPgDatabase<
 > = PgDatabase<TQueryResult, TFullSchema, TSchema>;
 
 /**
+ * Folds every retired category slug into its successor before the upsert runs.
+ *
+ * A rename is applied to the row in place, so the category keeps its id and
+ * every `vendor_categories` link. A merge — where the successor already exists
+ * — copies the links across (ignoring vendors already in both) and drops the
+ * retired row. Runs in one transaction: a half-applied merge would strand
+ * vendors on a category the seeds no longer describe.
+ */
+async function applyCategorySuccessors<
+  TQueryResult extends PgQueryResultHKT,
+  TFullSchema extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+>(db: AnyPgDatabase<TQueryResult, TFullSchema, TSchema>): Promise<void> {
+  await db.transaction(async (tx) => {
+    for (const [retiredSlug, successorSlug] of Object.entries(CATEGORY_SLUG_SUCCESSORS)) {
+      const retired = await tx
+        .select({ id: categories.id })
+        .from(categories)
+        .where(eq(categories.slug, retiredSlug));
+      const retiredRow = retired?.[0];
+
+      if (!retiredRow) {
+        continue;
+      }
+
+      const successor = await tx
+        .select({ id: categories.id })
+        .from(categories)
+        .where(eq(categories.slug, successorSlug));
+      const successorRow = successor?.[0];
+
+      if (!successorRow) {
+        await tx
+          .update(categories)
+          .set({ slug: successorSlug })
+          .where(eq(categories.id, retiredRow.id));
+        continue;
+      }
+
+      const links = await tx
+        .select({ vendorId: vendorCategories.vendorId })
+        .from(vendorCategories)
+        .where(eq(vendorCategories.categoryId, retiredRow.id));
+
+      if (links.length > 0) {
+        // `onConflictDoNothing` covers the vendor already listed under both,
+        // which would otherwise collide on the composite primary key.
+        await tx
+          .insert(vendorCategories)
+          .values(links.map((link) => ({ vendorId: link.vendorId, categoryId: successorRow.id })))
+          .onConflictDoNothing();
+      }
+
+      // The retired row's own links go with it: `vendor_categories.category_id`
+      // cascades on delete.
+      await tx.delete(categories).where(eq(categories.id, retiredRow.id));
+    }
+  });
+}
+
+/**
  * Inserts the launch categories. Idempotent: re-running updates the existing
  * row in place on the unique `slug` index rather than inserting a duplicate,
- * so edits to `CATEGORY_SEEDS` propagate on the next run.
+ * so edits to `CATEGORY_SEEDS` propagate on the next run. Retired slugs are
+ * folded into their successors first, and any category the seeds no longer
+ * describe is deactivated rather than deleted — a hard delete would take its
+ * `vendor_categories` rows with it.
  */
 export async function seedCategories<
   TQueryResult extends PgQueryResultHKT,
   TFullSchema extends Record<string, unknown>,
   TSchema extends TablesRelationalConfig,
 >(db: AnyPgDatabase<TQueryResult, TFullSchema, TSchema>): Promise<number> {
+  await applyCategorySuccessors(db);
+
   const rows = CATEGORY_SEEDS.map((category) => ({
     name: category.name,
     slug: category.slug,
@@ -52,6 +123,11 @@ export async function seedCategories<
       },
     })
     .returning({ id: categories.id });
+
+  await db
+    .update(categories)
+    .set({ isActive: false })
+    .where(not(inArray(categories.slug, [...CATEGORY_SLUGS])));
 
   return inserted.length;
 }

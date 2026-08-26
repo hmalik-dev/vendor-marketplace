@@ -14,15 +14,18 @@ export interface ImageUploadProps {
   prefix: 'vendor-profile' | 'vendor-cover';
   value: string | null;
   onChange: (imageUrl: string) => void;
-  /** Tailwind aspect utility for the preview frame. */
+  /** Sizing utility for the preview frame. Height-based frames stop a wide
+   * drop zone growing taller as the pane widens. */
   aspectClassName?: string;
-  /** Renders the preview as a circle, for the profile photo. */
+  /** Renders the preview as a circle (96px, 160px from `sm`), for the profile photo. */
   rounded?: boolean;
+  /** The format hint. Off for the second of a pair, which would repeat it. */
+  showHint?: boolean;
   disabled?: boolean;
 }
 
 const ACCEPT = ACCEPTED_IMAGE_MIME_TYPES.join(',');
-const MAX_MB = Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024));
+export const MAX_UPLOAD_MB = Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024));
 
 /**
  * Click-or-drop upload for a single image. The file is validated here for a
@@ -36,6 +39,7 @@ export function ImageUpload({
   onChange,
   aspectClassName = 'aspect-[21/9]',
   rounded = false,
+  showHint = true,
   disabled = false,
 }: ImageUploadProps): React.ReactElement {
   const upload = useImageUpload();
@@ -54,7 +58,7 @@ export function ImageUpload({
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
-      toast.error(`That image is larger than the ${MAX_MB}MB limit.`);
+      toast.error(`That image is larger than the ${MAX_UPLOAD_MB}MB limit.`);
       return;
     }
 
@@ -99,7 +103,7 @@ export function ImageUpload({
         }}
         className={cn(
           'relative flex w-full items-center justify-center overflow-hidden border-2 border-dashed border-stone-200 bg-stone-50 transition-colors',
-          rounded ? 'size-30 rounded-full' : cn(aspectClassName, 'rounded-lg'),
+          rounded ? 'size-24 rounded-full sm:size-40' : cn(aspectClassName, 'rounded-lg'),
           isDragging && 'border-primary-400 bg-primary-50',
           isBusy && 'opacity-70',
         )}
@@ -113,7 +117,15 @@ export function ImageUpload({
         ) : (
           <span className="flex flex-col items-center gap-1 px-2 text-center text-xs text-stone-500">
             <ImagePlus aria-hidden="true" className="size-5" />
-            {rounded ? 'Add photo' : 'Drag an image here, or click to choose'}
+            {rounded ? (
+              'Add photo'
+            ) : (
+              <>
+                {/* The full invitation needs room; a narrow frame gets the short form. */}
+                <span className="hidden sm:inline">Drag an image here, or click to choose</span>
+                <span className="sm:hidden">Add cover</span>
+              </>
+            )}
           </span>
         )}
 
@@ -134,7 +146,9 @@ export function ImageUpload({
           className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
         />
       </div>
-      <p className="text-xs text-stone-500">JPEG, PNG, or WebP, up to {MAX_MB}MB.</p>
+      {showHint ? (
+        <p className="text-xs text-stone-500">JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB.</p>
+      ) : null}
     </div>
   );
 }

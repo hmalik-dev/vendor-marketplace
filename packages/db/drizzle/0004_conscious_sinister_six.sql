@@ -1,0 +1,1 @@
+ALTER TABLE "vendor_profiles" ADD COLUMN "travels_beyond_radius" boolean DEFAULT false NOT NULL;

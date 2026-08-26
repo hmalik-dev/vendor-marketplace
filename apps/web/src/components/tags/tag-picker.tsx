@@ -65,7 +65,11 @@ export function TagPicker({
   );
 
   return (
-    <div className="space-y-6">
+    /*
+     * The three groups are peers, so they sit on one row from `lg` up. Stacking
+     * them costs roughly a screen of height for no gain in comprehension.
+     */
+    <div className="grid gap-x-6 gap-y-6 lg:grid-cols-3 lg:grid-rows-[auto_auto_auto_auto]">
       {TAG_CATEGORIES.map((category) => (
         <TagCategorySection
           key={category}

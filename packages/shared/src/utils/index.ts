@@ -83,6 +83,25 @@ export function calculateFees(
  * as Postgres `DATE` values with no timezone conversion, so every conversion in
  * the codebase goes through UTC to avoid off-by-one-day drift.
  */
+/** Exact statute miles in a kilometre. */
+const KM_PER_MILE = 1.609344;
+
+/**
+ * Service areas are stored in kilometres and shown in miles, the same way money
+ * is stored in cents and shown in dollars — one canonical unit in the database,
+ * converted at the display boundary.
+ *
+ * Both directions round to a whole number, so a value that survives a
+ * round-trip through the UI lands back within a mile of where it started.
+ */
+export function kmToMiles(km: number): number {
+  return Math.round(km / KM_PER_MILE);
+}
+
+export function milesToKm(miles: number): number {
+  return Math.round(miles * KM_PER_MILE);
+}
+
 export function toDateString(date: Date): string {
   const isoDate = date.toISOString().slice(0, 10);
   return isoDate;

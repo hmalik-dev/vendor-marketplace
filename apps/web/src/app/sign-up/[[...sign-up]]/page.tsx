@@ -48,7 +48,7 @@ export default function SignUpPage(): React.ReactElement {
           </p>
 
           <div className="mt-8">
-            <SignUp unsafeMetadata={{ role: chosen.role }} fallbackRedirectUrl="/dashboard" />
+            <SignUp unsafeMetadata={{ role: chosen.role }} fallbackRedirectUrl="/after-sign-in" />
           </div>
         </>
       ) : (
