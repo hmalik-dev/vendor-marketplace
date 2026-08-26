@@ -1,10 +1,13 @@
+import { findVariable, registryKeys } from '@vendorhub/shared/env';
 import { describe, expect, it } from 'vitest';
-import { allowedOrigins, parseEnv } from './env.js';
+import { OVERRIDDEN_KEYS, allowedOrigins, parseEnv } from './env.js';
 
+// Shaped like real values, because the schema now enforces each row's shape —
+// `sk_test_key` is indistinguishable from a placeholder and is rejected.
 const REQUIRED: NodeJS.ProcessEnv = {
-  DATABASE_URL: 'postgres://localhost:5432/vendorhub',
-  CLERK_SECRET_KEY: 'sk_test_key',
-  CLERK_WEBHOOK_SECRET: 'whsec_key',
+  DATABASE_URL: 'postgresql://vendorhub:vendorhub_dev@localhost:5432/vendorhub',
+  CLERK_SECRET_KEY: 'sk_test_51ABCdefGHIjklMNOpqr',
+  CLERK_WEBHOOK_SECRET: 'whsec_MfKQ9r8sTuVwXyZ0123456789',
   S3_ENDPOINT: 'http://localhost:9000',
   S3_ACCESS_KEY_ID: 'vendorhub',
   S3_SECRET_ACCESS_KEY: 'vendorhub_dev',
@@ -38,12 +41,52 @@ describe('parseEnv', () => {
       expect(message).toContain('DATABASE_URL');
       expect(message).toContain('CLERK_SECRET_KEY');
       expect(message).toContain('CLERK_WEBHOOK_SECRET');
-      expect(message).toContain('S3_BUCKET');
+      expect(message).toContain('DATABASE_URL');
     }
   });
 
   it('rejects a port outside the valid range', () => {
     expect(() => parseEnv({ ...REQUIRED, PORT: '70000' })).toThrow(/PORT/);
+  });
+
+  it('rejects a Clerk key still left as its placeholder', () => {
+    // Presence alone used to pass here, which is how `sk_test_...` reached a
+    // running server and failed on the first authenticated request instead.
+    expect(() => parseEnv({ ...REQUIRED, CLERK_SECRET_KEY: 'sk_test_...' })).toThrow(
+      /CLERK_SECRET_KEY/,
+    );
+  });
+
+  it('points at preflight when something is wrong', () => {
+    expect(() => parseEnv({})).toThrow(/pnpm preflight/);
+  });
+
+  it('does not require a variable only the tooling reads', () => {
+    expect(() => parseEnv(REQUIRED)).not.toThrow();
+    expect(Object.keys(parseEnv(REQUIRED))).not.toContain('NEON_BRANCH');
+  });
+
+  it('does not require a capability the API has not wired up yet', () => {
+    expect(Object.keys(parseEnv(REQUIRED))).not.toContain('STRIPE_SECRET_KEY');
+  });
+});
+
+describe('registry derivation', () => {
+  it('reads exactly the keys the registry assigns to the API', () => {
+    const expected = registryKeys({
+      consumer: 'api',
+      capabilities: ['core', 'auth', 'storage'],
+    });
+
+    expect(Object.keys(parseEnv(REQUIRED)).sort()).toEqual([...expected].sort());
+  });
+
+  it('overrides only keys the registry actually declares', () => {
+    // An override for a key the registry does not carry would be a fifth
+    // hand-maintained copy of the variable list, which is what #17 removed.
+    for (const key of OVERRIDDEN_KEYS) {
+      expect(findVariable(key), key).toBeDefined();
+    }
   });
 });
 

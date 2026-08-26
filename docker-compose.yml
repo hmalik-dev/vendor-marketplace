@@ -1,3 +1,7 @@
+# Local development runs against a Neon `dev` branch, not this Postgres service
+# — see the README. The service is kept for fully offline work: point
+# DATABASE_URL at it and leave DATABASE_URL_UNPOOLED unset. MinIO below, by
+# contrast, is used on every run; it stands in for Cloudflare R2.
 services:
   postgres:
     image: postgres:16-alpine

@@ -17,7 +17,14 @@ const MIGRATIONS_FOLDER = path.resolve(
 async function main(): Promise<void> {
   loadEnv();
 
-  const { db, client } = createDatabase({ max: 1 });
+  // Migrations use the direct connection where one is configured — DDL through
+  // a transaction-mode pooler is the classic Neon migration failure.
+  const { db, client } = createDatabase({
+    max: 1,
+    ...(process.env.DATABASE_URL_UNPOOLED
+      ? { connectionString: process.env.DATABASE_URL_UNPOOLED }
+      : {}),
+  });
 
   try {
     await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });

@@ -23,9 +23,7 @@ export function createDatabase(options: CreateDatabaseOptions = {}): {
   const connectionString = options.connectionString ?? process.env.DATABASE_URL;
 
   if (!connectionString) {
-    throw new Error(
-      'DATABASE_URL is not set. Copy .env.example to .env at the repository root, then run `docker compose up -d`.',
-    );
+    throw new Error('DATABASE_URL is not set. Run `pnpm preflight` for the fix.');
   }
 
   const client = postgres(connectionString, { max: options.max ?? 10 });

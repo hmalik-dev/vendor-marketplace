@@ -8,6 +8,9 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "preflight": "turbo run build --filter=@vendorhub/shared && pnpm --filter @vendorhub/preflight run preflight",
+    "env:example": "turbo run build --filter=@vendorhub/shared && pnpm --filter @vendorhub/preflight run env:example",
+    "start": "pnpm install && docker compose up -d && docker compose up -d --wait postgres storage && pnpm db:migrate && pnpm db:seed && pnpm dev",
     "dev": "turbo run dev",
     "test": "turbo run test",
     "lint": "turbo run lint",

@@ -8,6 +8,20 @@ Two-sided marketplace connecting customers with event service vendors
 **Decisions:** `~/.claude/plans/vendor-marketplace-decisions.md`
 **Design system:** `~/.claude/plans/vendor-marketplace-design-system.md`
 
+## Ticket queue
+
+This project's queue is the **local markdown tracker** above, not Linear. This
+overrides the Linear-resolution step in `~/.claude/orchestration-policy.md`:
+`/next-ticket` and `/ticket` must **not** return `BLOCKED` for a missing
+`Linear project:` entry, and must not call the Linear MCP connector (it is
+unauthenticated here).
+
+Read eligibility, priority, and `Blocked By` from the tracker's Status Board
+table, apply the policy's queue order (highest priority; In Progress before
+ready; respect `Blocked By`), and write transitions back to that table
+(Backlog → In Progress → Done), filling the Branch column and recording the
+commit SHA in Notes when marking Done.
+
 ## Commands
 
 Run from the repository root; Turborepo fans each task out across packages.
@@ -20,18 +34,20 @@ Run from the repository root; Turborepo fans each task out across packages.
 | Lint all       | `pnpm lint`                                    |
 | Test all       | `pnpm test`                                    |
 | Format         | `pnpm format` (check with `pnpm format:check`) |
+| Preflight gate | `pnpm preflight --ticket <n>`                  |
+| Regenerate env | `pnpm env:example`                             |
 | Dev servers    | `pnpm dev`                                     |
 | Single package | `pnpm --filter @vendorhub/db <script>`         |
 
 Database:
 
-| Task                 | Command                                                     |
-| -------------------- | ----------------------------------------------------------- |
-| Start local Postgres | `docker compose up -d`                                      |
-| Generate a migration | `pnpm db:generate` (after editing `packages/db/src/schema`) |
-| Apply migrations     | `pnpm db:migrate`                                           |
-| Seed reference data  | `pnpm db:seed`                                              |
-| Browse data          | `pnpm db:studio`                                            |
+| Task                 | Command                                                        |
+| -------------------- | -------------------------------------------------------------- |
+| Start local services | `docker compose up -d` (MinIO; Postgres only for offline work) |
+| Generate a migration | `pnpm db:generate` (after editing `packages/db/src/schema`)    |
+| Apply migrations     | `pnpm db:migrate`                                              |
+| Seed reference data  | `pnpm db:seed`                                                 |
+| Browse data          | `pnpm db:studio`                                               |
 
 ## Layout
 
@@ -40,10 +56,14 @@ apps/
   web/        Next.js 15 (App Router, RSC) frontend      — port 3000
   api/        Fastify 5 backend                          — port 4000
 packages/
-  shared/     Zod schemas, inferred types, constants, utilities
+  shared/     Zod schemas, inferred types, constants, utilities, env registry
   db/         Drizzle schema, client, migrations, seed
+  preflight/  `pnpm preflight` — the pre-ticket environment gate
   config/     Shared TypeScript, ESLint, and Tailwind configs
 ```
+
+`packages/preflight` is a leaf: it depends on `packages/shared`, and nothing
+depends on it, so the one-way `apps → packages` direction still holds.
 
 **Dependency direction is one-way: `apps → packages`.** `packages/shared` never
 imports from `packages/db` or from an app. `packages/db` may import enums and
@@ -63,6 +83,19 @@ constants from `packages/shared`.
 - **Derived columns** (`vendor_profiles.avg_rating`, `review_count`) are
   recomputed from source rows, never incremented, and never writable by an
   endpoint.
+- **Environment variables live once**, in `packages/shared/src/env/registry.ts`.
+  `.env.example` and `turbo.json`'s `globalPassThroughEnv` are generated from it
+  by `pnpm env:example`; a test in `packages/shared` fails if either drifts.
+  `apps/api/src/config/env.ts` and `apps/web/src/config/env.ts` derive their Zod
+  schemas from the same rows, so presence, shape, and defaults cannot disagree.
+  Never add a variable to `.env.example` by hand.
+- **Every ticket declares its capabilities** (`core`, `auth`, `storage`,
+  `stripe`, `email`, `sentry`; `e2e` is implicit) in
+  `packages/shared/src/env/tickets.ts`. `pnpm preflight --ticket <n>` checks only
+  those, so a ticket that never touches Stripe is never blocked on Stripe keys.
+- **The application database is a Neon branch.** Local development must never
+  point at `production`; preflight refuses to start a ticket that does. The
+  Postgres service in `docker-compose.yml` exists only for offline work.
 - **Schema changes** are made in `packages/db/src/schema`, then committed with
   the migration generated by `pnpm db:generate`. Never hand-edit a file in
   `packages/db/drizzle/`.
