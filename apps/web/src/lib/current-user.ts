@@ -36,11 +36,25 @@ export async function getCurrentUser(): Promise<WireUser | null> {
 }
 
 /**
- * Loads the caller and sends them to sign-in if there is no usable session.
- * Role is read from the local database record, never from Clerk metadata.
+ * Loads the caller and sends them somewhere sensible when there is no usable
+ * session. Role is read from the local database record, never from Clerk
+ * metadata.
+ *
+ * A suspended account is a distinct case from a signed-out one: the API
+ * answers it with 403, and letting that error reach the render turns every
+ * protected page into a raw 500.
  */
 export async function requireCurrentUser(): Promise<WireUser> {
-  const user = await getCurrentUser();
+  let user: WireUser | null;
+
+  try {
+    user = await getCurrentUser();
+  } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 403) {
+      redirect('/suspended');
+    }
+    throw error;
+  }
 
   if (!user) {
     redirect('/sign-in');

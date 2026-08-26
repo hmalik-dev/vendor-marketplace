@@ -1,17 +1,17 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 
 /**
- * Everything behind a dashboard requires a session. Role separation is decided
- * one layer in, by the `/customer` and `/vendor` layouts, because it depends on
- * the local `users.role` column rather than on Clerk metadata.
+ * Attaches the Clerk session to every request. Route protection is deliberately
+ * *not* done here: Clerk deprecated path-matcher guards because a matcher can
+ * diverge from how Next.js actually routes a request and leave a protected
+ * resource reachable.
+ *
+ * Instead each protected resource checks for itself — the `/customer` and
+ * `/vendor` layouts call `requireRole`, and `/dashboard` resolves the caller
+ * before redirecting. Both read the local `users.role` column, which is the
+ * only trustworthy source anyway.
  */
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/customer(.*)', '/vendor(.*)']);
-
-export default clerkMiddleware(async (auth, request) => {
-  if (isProtectedRoute(request)) {
-    await auth.protect();
-  }
-});
+export default clerkMiddleware();
 
 export const config = {
   matcher: [

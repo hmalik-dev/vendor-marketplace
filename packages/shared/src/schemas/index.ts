@@ -96,8 +96,14 @@ export const userSchema = z.object({
   clerkUserId: z.string().min(1).max(255),
   email: emailSchema,
   role: userRoleSchema,
-  firstName: trimmedString(MAX_NAME_LENGTH),
-  lastName: trimmedString(MAX_NAME_LENGTH),
+  /*
+   * Empty until the user provides one. Clerk's email-and-password sign-up does
+   * not collect a name, so a freshly synced row genuinely has none — the read
+   * model has to be able to represent that. `updateUserSchema` still requires a
+   * non-empty name, so a name that has been set cannot be blanked out again.
+   */
+  firstName: trimmedString(MAX_NAME_LENGTH, 0),
+  lastName: trimmedString(MAX_NAME_LENGTH, 0),
   phone: phoneSchema.nullable(),
   avatarUrl: urlSchema.nullable(),
   stripeCustomerId: z.string().max(255).nullable(),

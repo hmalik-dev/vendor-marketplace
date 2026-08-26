@@ -93,6 +93,24 @@ describe('requireCurrentUser', () => {
     await expect(requireCurrentUser()).resolves.toEqual(VENDOR);
     expect(redirect).not.toHaveBeenCalled();
   });
+
+  it('sends a suspended account to its own page instead of crashing the render', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'FORBIDDEN', 'This account has been suspended'),
+    );
+
+    await expect(requireCurrentUser()).rejects.toThrow('NEXT_REDIRECT:/suspended');
+    expect(redirect).toHaveBeenCalledWith('/suspended');
+  });
+
+  it('still surfaces an unexpected API failure rather than swallowing it', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
+
+    await expect(requireCurrentUser()).rejects.toBeInstanceOf(ApiClientError);
+    expect(redirect).not.toHaveBeenCalled();
+  });
 });
 
 describe('requireRole', () => {

@@ -19,6 +19,13 @@ import {
   type ClerkWebhookRoutesOptions,
 } from './modules/webhooks/clerk.routes.js';
 
+/*
+ * @fastify/cors defaults to GET, HEAD, and POST only, which silently blocks
+ * every write the API serves once a real browser sends its preflight —
+ * `app.inject()` skips CORS, so this is invisible to the route suites.
+ */
+const ALLOWED_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+
 export interface BuildServerOptions {
   env: ApiEnv;
   db: AppDatabase;
@@ -46,7 +53,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
 
   await app.register(errorHandlerPlugin);
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, { origin: allowedOrigins(env), credentials: true });
+  await app.register(cors, {
+    origin: allowedOrigins(env),
+    credentials: true,
+    methods: [...ALLOWED_METHODS],
+  });
   await app.register(rateLimit, { max: env.RATE_LIMIT_MAX, timeWindow: '1 minute' });
 
   await app.register(databasePlugin, { db });

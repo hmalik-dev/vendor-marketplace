@@ -124,6 +124,63 @@ describe('/users/me', () => {
       expect(response.json().role).toBe('customer');
     });
 
+    it('serializes a Clerk identity that carries no name', async () => {
+      /*
+       * Clerk's email-and-password sign-up does not collect a name, so
+       * `first_name` arrives null and the lazily created row has none. The
+       * response schema has to tolerate that — it previously required a
+       * non-empty name and answered its own freshly created user with a 500.
+       */
+      harness.clerkUsers.set('user_nameless', {
+        clerkUserId: 'user_nameless',
+        email: 'nameless@example.com',
+        firstName: '',
+        lastName: '',
+        roleHint: 'vendor',
+        avatarUrl: null,
+      });
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/users/me',
+        headers: bearer('user_nameless'),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        email: 'nameless@example.com',
+        firstName: '',
+        lastName: '',
+        role: 'vendor',
+      });
+    });
+
+    it('lets a nameless user fill their name in afterwards', async () => {
+      harness.clerkUsers.set('user_nameless2', {
+        clerkUserId: 'user_nameless2',
+        email: 'nameless2@example.com',
+        firstName: '',
+        lastName: '',
+        roleHint: 'customer',
+        avatarUrl: null,
+      });
+      await harness.app.inject({
+        method: 'GET',
+        url: '/users/me',
+        headers: bearer('user_nameless2'),
+      });
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer('user_nameless2'),
+        payload: { firstName: 'Katherine', lastName: 'Johnson' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ firstName: 'Katherine', lastName: 'Johnson' });
+    });
+
     it('refuses a suspended account', async () => {
       await harness.app.inject({
         method: 'GET',

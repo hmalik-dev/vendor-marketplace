@@ -98,6 +98,21 @@ describe('userSchema', () => {
     expect(userSchema.safeParse({ ...valid, completedBookingsCount: -1 }).success).toBe(false);
   });
 
+  it('accepts a row whose name is not set yet', () => {
+    // Clerk's email-and-password sign-up collects no name, so the row the API
+    // lazily creates has none until the user fills their profile in.
+    const parsed = userSchema.parse({ ...valid, firstName: '', lastName: '' });
+
+    expect(parsed.firstName).toBe('');
+    expect(parsed.lastName).toBe('');
+  });
+
+  it('still rejects a name past the length ceiling', () => {
+    const tooLong = 'x'.repeat(101);
+
+    expect(userSchema.safeParse({ ...valid, firstName: tooLong }).success).toBe(false);
+  });
+
   it('accepts a row retired after its Clerk identity was deleted', () => {
     const deletedAt = new Date('2026-02-01T00:00:00.000Z');
 
@@ -112,6 +127,10 @@ describe('updateUserSchema', () => {
 
   it('rejects a whitespace-only name', () => {
     expect(updateUserSchema.safeParse({ firstName: '   ' }).success).toBe(false);
+  });
+
+  it('refuses to blank out a name that has already been set', () => {
+    expect(updateUserSchema.safeParse({ firstName: '' }).success).toBe(false);
   });
 
   it('rejects an empty payload so a no-op update cannot reach the DAO', () => {

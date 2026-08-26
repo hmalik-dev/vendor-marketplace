@@ -34,6 +34,67 @@ describe('rate limiting', () => {
   });
 });
 
+describe('CORS', () => {
+  let harness: TestHarness;
+
+  beforeAll(async () => {
+    harness = await createTestHarness();
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  async function preflight(method: string) {
+    return harness.app.inject({
+      method: 'OPTIONS',
+      url: '/users/me',
+      headers: {
+        origin: 'http://localhost:3000',
+        'access-control-request-method': method,
+        'access-control-request-headers': 'authorization,content-type',
+      },
+    });
+  }
+
+  it('lets the browser preflight a write, not just a read', async () => {
+    /*
+     * @fastify/cors defaults to GET, HEAD, and POST. Leaving that default in
+     * place made `PUT /users/me` unreachable from the frontend even though the
+     * route worked — `app.inject()` bypasses CORS, so only a browser saw it.
+     */
+    const response = await preflight('PUT');
+    const allowed = String(response.headers['access-control-allow-methods'] ?? '')
+      .split(',')
+      .map((method) => method.trim());
+
+    expect(response.statusCode).toBe(204);
+    expect(allowed).toContain('PUT');
+    expect(allowed).toContain('DELETE');
+    expect(allowed).toContain('PATCH');
+  });
+
+  it('echoes the configured origin and allows credentials', async () => {
+    const response = await preflight('GET');
+
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+  });
+
+  it('does not hand an allow-origin header to an unlisted origin', async () => {
+    const response = await harness.app.inject({
+      method: 'OPTIONS',
+      url: '/users/me',
+      headers: {
+        origin: 'https://evil.example.com',
+        'access-control-request-method': 'PUT',
+      },
+    });
+
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
 describe('log redaction', () => {
   const captured: string[] = [];
   let harness: TestHarness;
