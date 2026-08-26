@@ -1,0 +1,32 @@
+{
+  "name": "vendorhub",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml,css}\"",
+    "db:generate": "pnpm --filter @vendorhub/db generate",
+    "db:migrate": "pnpm --filter @vendorhub/db migrate",
+    "db:seed": "pnpm --filter @vendorhub/db seed",
+    "db:studio": "pnpm --filter @vendorhub/db studio"
+  },
+  "devDependencies": {
+    "prettier": "3.9.6",
+    "turbo": "2.10.12",
+    "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

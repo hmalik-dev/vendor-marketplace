@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vendorhub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vendorhub
+      POSTGRES_PASSWORD: vendorhub_dev
+      POSTGRES_DB: vendorhub
+    ports:
+      - '5432:5432'
+    volumes:
+      - vendorhub-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vendorhub -d vendorhub']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  vendorhub-pgdata:

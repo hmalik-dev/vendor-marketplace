@@ -1,0 +1,49 @@
+{
+  "name": "@vendorhub/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "drizzle"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx src/scripts/migrate.ts",
+    "seed": "tsx src/scripts/seed.ts",
+    "studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@vendorhub/shared": "workspace:*",
+    "drizzle-orm": "0.45.2",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.7",
+    "@types/node": "24.13.3",
+    "@vendorhub/config": "workspace:*",
+    "dotenv": "17.4.2",
+    "drizzle-kit": "0.31.10",
+    "eslint": "10.9.1",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

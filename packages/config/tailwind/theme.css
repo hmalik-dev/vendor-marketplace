@@ -1,0 +1,24 @@
+/*
+ * Shared Tailwind CSS 4 theme for VendorHub.
+ * Tailwind 4 is CSS-first: apps import this file after `@import 'tailwindcss'`
+ * so every surface inherits the same design tokens.
+ * Consumed by `apps/web` from ticket #2 onward.
+ */
+
+@theme {
+  --color-brand-50: oklch(0.971 0.014 343.2);
+  --color-brand-100: oklch(0.948 0.028 342.3);
+  --color-brand-200: oklch(0.899 0.061 343.2);
+  --color-brand-300: oklch(0.823 0.108 346);
+  --color-brand-400: oklch(0.718 0.163 349.8);
+  --color-brand-500: oklch(0.656 0.198 354.3);
+  --color-brand-600: oklch(0.592 0.203 357.1);
+  --color-brand-700: oklch(0.525 0.185 358.5);
+  --color-brand-800: oklch(0.459 0.155 359.4);
+  --color-brand-900: oklch(0.408 0.131 0.4);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+
+  --radius-card: 0.75rem;
+}
