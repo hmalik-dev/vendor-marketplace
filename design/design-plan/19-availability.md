@@ -22,6 +22,27 @@ weekday initials in 10px `stone-600`; day cells 12px, 7px vertical padding,
 
 Click toggles; click-and-drag selects a range. Today carries a `clay-400` ring.
 
+## The past is a record, not a setting
+
+The calendar's editable floor is **today**, not tomorrow. A vendor who wakes up
+ill blocks the day they are standing in; offering tomorrow while refusing today
+fails at the one moment the calendar matters most.
+
+Every date **before** today is read-only and keeps the status it actually had —
+`booked`, `blocked`, `available`, `pending`. A past cell is rendered on the inert
+token (`stone-500`, the one value allowed to fail AA, and a past date is exactly
+what it is reserved for) and names its status in its accessible name followed by
+"in the past". It is never blanked: the calendar is the record of what
+transpired, and rewriting it would lose the vendor's own history.
+
+A drag that starts before today is an ordinary gesture, so the past days in it
+are dropped silently and the rest of the range applies. The API drops them again
+on the way in — same rule, both sides — rather than failing the whole request.
+
+Both sides measure "today" from the **server's** calendar day, which is also the
+day this page builds its month window and its today-ring from, so the guard and
+the grid cannot disagree.
+
 ## Rail
 
 **Selected** — the range in Serif ("Jul 17 — 19"), what it currently is, then
@@ -38,6 +59,10 @@ and July are 80% booked across Austin. Yours are worth quoting high."). Real
 data or it doesn't ship.
 
 ## Acceptance
+
+- [ ] Today is editable; every earlier date is disabled
+- [ ] A past date shows the status it actually had, not an empty cell
+- [ ] A range drag spanning today keeps today and drops what precedes it
 
 - [ ] Three months visible at 1440 with no month navigation
 - [ ] Booked dates cannot be cleared from this screen

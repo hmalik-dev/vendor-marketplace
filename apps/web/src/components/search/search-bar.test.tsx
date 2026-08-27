@@ -1,6 +1,7 @@
 import type { Category } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchBar, type SearchBarValues } from './search-bar';
 
 const CATEGORIES: Category[] = [
@@ -17,12 +18,36 @@ const CATEGORIES: Category[] = [
 
 const EMPTY: SearchBarValues = { category: '', city: '', date: '' };
 
-function renderBar(value: SearchBarValues = EMPTY) {
-  return render(<SearchBar categories={CATEGORIES} value={value} onSubmit={vi.fn()} size="hero" />);
+function renderBar(value: SearchBarValues = EMPTY, onSubmit = vi.fn()) {
+  return {
+    onSubmit,
+    ...render(<SearchBar categories={CATEGORIES} value={value} onSubmit={onSubmit} size="hero" />),
+  };
 }
 
+/** The event-date field. It has no accessible name of its own in the frame. */
+function dateInput(container: HTMLElement): HTMLInputElement {
+  const input = container.querySelector<HTMLInputElement>('input[type="date"]');
+
+  if (!input) {
+    throw new Error('no date input');
+  }
+
+  return input;
+}
+
+const TODAY = '2026-06-14';
+
 describe('SearchBar', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Local noon, so the local day and the UTC day agree in any test runner
+    // timezone — the assertions are about past-vs-future, not about offsets.
+    vi.setSystemTime(new Date(2026, 5, 14, 12, 0, 0));
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
   });
 
@@ -53,5 +78,91 @@ describe('SearchBar', () => {
 
     // City is the only text box on the bar; vendor type is a select.
     expect(screen.getAllByRole('textbox')).toHaveLength(1);
+  });
+});
+
+/*
+ * Availability is only recorded forward, so a past event date asks about a day
+ * the calendar has nothing to say about. The rule is shown in the control
+ * rather than discovered on submit.
+ */
+describe('SearchBar — the event date cannot be in the past', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 5, 14, 12, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
+
+  it('floors the picker at today, so past days are unselectable', async () => {
+    const { container } = renderBar();
+
+    // The floor resolves after mount: "today" is the viewer's local day, and
+    // rendering it on the server would be a different one.
+    await vi.waitFor(() => {
+      expect(dateInput(container).min).toBe(TODAY);
+    });
+  });
+
+  it('lets today itself through — an event happening today is still bookable', async () => {
+    const user = userEvent.setup();
+    const { container, onSubmit } = renderBar({ ...EMPTY, date: TODAY });
+
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({ ...EMPTY, date: TODAY });
+    expect(dateInput(container).getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('holds back a search carrying a past date, and says why', async () => {
+    const user = userEvent.setup();
+    const { container, onSubmit } = renderBar({ ...EMPTY, date: '2026-06-13' });
+
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe(
+      'That date has already passed — pick today or a later date.',
+    );
+    expect(dateInput(container).getAttribute('aria-invalid')).toBe('true');
+  });
+
+  /* Nothing is silently corrected: the value stays put so it can be fixed. */
+  it('keeps the rejected date in the field rather than clearing it', async () => {
+    const user = userEvent.setup();
+    const { container } = renderBar({ ...EMPTY, date: '2026-06-13' });
+
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(dateInput(container).value).toBe('2026-06-13');
+  });
+
+  it('clears the complaint as soon as the date is changed', async () => {
+    const user = userEvent.setup();
+    const { container } = renderBar({ ...EMPTY, date: '2026-06-13' });
+
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    expect(screen.getByRole('alert')).toBeDefined();
+
+    await user.clear(dateInput(container));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  /*
+   * A tab left open across midnight has a stale floor, so the submitted value
+   * is judged against a fresh clock rather than against `min`.
+   */
+  it('re-checks against the clock at submit, not against the mounted floor', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderBar({ ...EMPTY, date: TODAY });
+
+    vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0));
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeDefined();
   });
 });

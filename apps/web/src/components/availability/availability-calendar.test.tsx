@@ -147,12 +147,45 @@ describe('AvailabilityCalendar', () => {
     expect(cell('2026-06-18')).toHaveProperty('disabled', false);
   });
 
-  it('locks dates in the past', () => {
+  /*
+   * A vendor who wakes up ill blocks *today*. Offering tomorrow while refusing
+   * the day they are standing in fails at the one moment the calendar matters
+   * most, so the floor is today rather than tomorrow.
+   */
+  it('leaves today editable', () => {
     renderCalendar();
 
-    const past = cell('2026-06-01');
-    expect(past).toHaveProperty('disabled', true);
-    expect(past.getAttribute('aria-label')).toContain('in the past');
+    const todayCell = cell(TODAY);
+    expect(todayCell).toHaveProperty('disabled', false);
+    expect(todayCell.getAttribute('aria-label')).not.toContain('in the past');
+  });
+
+  /*
+   * What has already happened is a record, not a setting: a past cell keeps the
+   * status it actually had and is read-only, rather than being blanked.
+   */
+  it('locks every date before today while keeping the status it had', () => {
+    const midMonth = '2026-06-15';
+    render(
+      <AvailabilityCalendar
+        initialEntries={[entry('2026-06-10', 'booked'), entry('2026-06-11', 'blocked')]}
+        today={midMonth}
+      />,
+    );
+
+    for (const [date, label] of [
+      ['2026-06-10', 'Booked — locked'],
+      ['2026-06-11', 'Blocked by you'],
+      ['2026-06-14', 'Available'],
+    ]) {
+      const past = cell(date);
+      expect(past, date).toHaveProperty('disabled', true);
+      expect(past.getAttribute('aria-label'), date).toContain('in the past');
+      // The historical status survives; the cell is read-only, not emptied.
+      expect(past.getAttribute('aria-label'), date).toContain(label);
+    }
+
+    expect(cell(midMonth)).toHaveProperty('disabled', false);
   });
 
   it('selects a single date and offers to block it', async () => {

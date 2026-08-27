@@ -207,13 +207,32 @@ describe('/vendor/availability', () => {
       expect(response.json().map((row: AvailabilityBody) => row.date)).toEqual([TOMORROW]);
     });
 
-    it('ignores today, which is not a future date', async () => {
+    /*
+     * A vendor who wakes up ill blocks *today*. Offering tomorrow while
+     * refusing the day they are standing in fails at the one moment the
+     * calendar matters most, so the floor is today rather than tomorrow.
+     */
+    it('blocks off today, which is not past', async () => {
       await createProfile(VENDOR, 'Sunlit Studio');
 
       const response = await put(VENDOR, [{ date: TODAY, status: 'blocked' }]);
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual([]);
+      expect(response.json().map((row: AvailabilityBody) => row.date)).toEqual([TODAY]);
+    });
+
+    /* What has already happened is a record, not a setting. */
+    it('drops every past date in a range while keeping today and after', async () => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+
+      const response = await put(VENDOR, [
+        { date: YESTERDAY, status: 'blocked' },
+        { date: TODAY, status: 'blocked' },
+        { date: TOMORROW, status: 'blocked' },
+      ]);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().map((row: AvailabilityBody) => row.date)).toEqual([TODAY, TOMORROW]);
     });
 
     it('refuses to change a date held by a confirmed booking', async () => {

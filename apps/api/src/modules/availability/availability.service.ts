@@ -1,6 +1,6 @@
 import {
   AVAILABILITY_MONTHS_AHEAD,
-  isFutureDate,
+  isPastDate,
   toDateString,
   type Availability,
   type AvailabilityBulkUpdateInput,
@@ -53,6 +53,15 @@ export async function listOwnAvailability(
  * request over it would lose the part the vendor meant. A date already held by
  * a confirmed booking is different — that is a real conflict the vendor has to
  * see, so it fails the request instead.
+ *
+ * **Today is not past.** A vendor blocking off the day they are standing in is
+ * the most time-critical edit the calendar supports, so the floor is today
+ * rather than tomorrow. What lies behind that floor is history — the status a
+ * date actually had — and is never rewritten from here.
+ *
+ * The floor is the server's UTC day, which is the same day the calendar page
+ * builds its window and its "today" ring from, so this guard and the client
+ * agree by construction and the client never sends a date this drops.
  */
 export async function setOwnAvailability(
   db: AppDatabase,
@@ -65,7 +74,7 @@ export async function setOwnAvailability(
   // Last entry wins, so a range drag that overlaps itself is not ambiguous.
   const byDate = new Map(
     input.entries
-      .filter((entry) => isFutureDate(entry.date, now))
+      .filter((entry) => !isPastDate(entry.date, toDateString(now)))
       .map((entry) => [entry.date, entry]),
   );
 

@@ -151,6 +151,40 @@ export function addDays(date: Date, days: number): Date {
 }
 
 /**
+ * The current calendar date **in the caller's own timezone**, as `YYYY-MM-DD`.
+ *
+ * Deliberately local rather than UTC. Everywhere else in the product a calendar
+ * date is a timezone-free string and `toDateString` reads it off the UTC clock,
+ * which is right for stored dates. "Today" is not one of those: it is the day on
+ * the person's own wall, and in UTC+13 or UTC-11 the UTC day is a different one.
+ * Using UTC here would grey out a customer's actual today, or leave yesterday
+ * selectable.
+ *
+ * Because of that, it is only ever meaningful on the client. The server has no
+ * way to know a visitor's day, so nothing server-side compares against it.
+ */
+export function todayDateString(now: Date = new Date()): string {
+  const year = String(now.getFullYear()).padStart(4, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * True when a calendar date falls before `today`. Today itself is not past —
+ * an event happening today is still bookable.
+ *
+ * Both arguments are `YYYY-MM-DD`, which sorts lexicographically in calendar
+ * order, so this compares strings and never builds a `Date`. A malformed value
+ * is not past; it is invalid, and that is a different answer with a different
+ * message.
+ */
+export function isPastDate(value: string, today: string): boolean {
+  return parseDateString(value) !== null && value < today;
+}
+
+/**
  * True when a calendar date falls strictly after the current UTC day. Today is
  * not a future date — bookings and availability edits require a later day.
  */

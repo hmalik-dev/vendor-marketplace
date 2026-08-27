@@ -32,6 +32,30 @@ Free-text search over **vendor names** exists as a separate, deliberately small
 affordance — a `clay-500` "Search by name" link beside the bar — for the one real
 case: someone was handed a business card or a referral. It is not on the main path.
 
+## The event date cannot be in the past
+
+Availability is only recorded forward, so a past event date asks about a day the
+calendar has nothing to say about — and answers it with an empty grid that reads
+as "no vendors here".
+
+The rule is shown in the control rather than discovered on submit: the date field
+carries a `min` of today, so the browser's own picker greys out every earlier
+day. **Today itself is valid** — an event happening today is still bookable.
+
+A date input can still be typed into, so a past value is caught on submit. The
+query is held back, the value stays put for the customer to fix, and the field
+says what is wrong in the product's voice: _"That date has already passed — pick
+today or a later date."_ Nothing is silently corrected; a search the customer did
+not ask for is worse than being told the date is wrong. The message is absolutely
+positioned, because the compact bar lives inside a 64px header and the hero bar
+sits above a fold budget.
+
+A `?date=` carried by a shared or bookmarked link is a different case — a link
+sent in March is opened in July. There the date is **dropped**, the rest of the
+query runs, and the results say so: the category and city are still a good
+question. Only the client can judge this, because "today" is the viewer's local
+day; the API validates the date's shape and nothing more.
+
 ## One control per value
 
 An earlier draft had category selectable in the header bar, a chip strip, _and_ a
@@ -112,6 +136,10 @@ availability chip, name at 19px.
 ids, not strings. Shareable, back button works, SWR revalidates.
 
 ## Acceptance
+
+- [ ] The date picker cannot select a day before today; today is selectable
+- [ ] A typed past date holds the search back and is explained, not silently cleared
+- [ ] A past `?date=` is dropped, the search still runs, and the customer is told
 
 - [ ] Three query inputs: vendor type, city, date — no more, no fewer
 - [ ] **Vendor type cannot hold an unrecognised value** — it resolves to a category id or stays empty

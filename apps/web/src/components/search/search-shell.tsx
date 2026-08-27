@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  isPastDate,
+  todayDateString,
   vendorNounFor,
   vendorSearchResultSchema,
   type Category,
@@ -110,6 +112,30 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
     return () => controller.abort();
   }, [query]);
 
+  /*
+   * A shared or bookmarked link can carry a date that has since passed —
+   * `?date=` is just a string in a URL, and a link sent in March is opened in
+   * July. Availability is only recorded forward, so such a query asks about a
+   * day the calendar has nothing to say about and answers it with an empty
+   * grid that looks like "no vendors".
+   *
+   * The date is dropped and the customer is told, rather than the search being
+   * refused: the category and city they asked for are still a good question.
+   * Only the client can judge this — "today" is the viewer's local day, which
+   * the server has no way to know, so the API validates the date's shape and
+   * nothing more.
+   */
+  const [droppedPastDate, setDroppedPastDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state.date !== '' && isPastDate(state.date, todayDateString())) {
+      setDroppedPastDate(state.date);
+      setState({ date: '' });
+    }
+    // `setState` is a fresh closure each render; the date is what this watches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.date]);
+
   const refineCount = activeRefineCount(state);
   const total = result?.total ?? 0;
   // "24 photographers in Austin" — the count is about the vendors, not about
@@ -200,6 +226,13 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         <p className="text-[12.5px] text-stone-600">
           Prices are what they charge — no quotes needed
         </p>
+
+        {droppedPastDate !== null ? (
+          <p role="status" className="w-full text-[12.5px] text-stone-700">
+            {AVAILABILITY_DATE_FORMATTER.format(new Date(`${droppedPastDate}T00:00:00Z`))} has
+            already passed, so the date was cleared — pick a new one to check availability.
+          </p>
+        ) : null}
       </div>
 
       <div className="app-pane px-5 pb-20 sm:px-6.5 lg:pb-4">

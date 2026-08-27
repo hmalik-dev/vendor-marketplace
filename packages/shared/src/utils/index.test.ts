@@ -7,10 +7,12 @@ import {
   formatPrice,
   generateSlug,
   isFutureDate,
+  isPastDate,
   kmToMiles,
   milesToKm,
   parseDateString,
   toDateString,
+  todayDateString,
 } from './index.js';
 
 describe('generateSlug', () => {
@@ -171,5 +173,62 @@ describe('kmToMiles and milesToKm', () => {
   it('handles a zero radius without producing NaN', () => {
     expect(kmToMiles(0)).toBe(0);
     expect(milesToKm(0)).toBe(0);
+  });
+});
+
+describe('todayDateString', () => {
+  /*
+   * Local, not UTC. A customer at 22:00 in UTC+13 is on a day the UTC clock has
+   * not reached; reading their "today" off UTC would grey out the date they are
+   * standing in. The fixture is built from local parts for that reason.
+   */
+  it('reads the day off the local clock, not the UTC one', () => {
+    const localNoon = new Date(2026, 5, 14, 12, 0, 0);
+
+    expect(todayDateString(localNoon)).toBe('2026-06-14');
+  });
+
+  it('pads a single-digit month and day', () => {
+    expect(todayDateString(new Date(2026, 0, 5, 9, 30))).toBe('2026-01-05');
+  });
+
+  it('stays on the local day at either end of it', () => {
+    expect(todayDateString(new Date(2026, 5, 14, 0, 0, 0))).toBe('2026-06-14');
+    expect(todayDateString(new Date(2026, 5, 14, 23, 59, 59))).toBe('2026-06-14');
+  });
+});
+
+describe('isPastDate', () => {
+  const TODAY = '2026-06-14';
+
+  it('calls an earlier calendar date past', () => {
+    expect(isPastDate('2026-06-13', TODAY)).toBe(true);
+    expect(isPastDate('2025-12-31', TODAY)).toBe(true);
+  });
+
+  /* An event happening today is still bookable, so today is not past. */
+  it('does not call today past', () => {
+    expect(isPastDate(TODAY, TODAY)).toBe(false);
+  });
+
+  it('does not call a later date past', () => {
+    expect(isPastDate('2026-06-15', TODAY)).toBe(false);
+    expect(isPastDate('2027-01-01', TODAY)).toBe(false);
+  });
+
+  /*
+   * Malformed input is invalid, not past — a different answer that earns a
+   * different message. `2026-02-30` would roll forward into March if it were
+   * parsed, so it must not be treated as a real date at all.
+   */
+  it('treats a malformed or impossible date as not past', () => {
+    for (const value of ['', 'yesterday', '14-06-2026', '2026-02-30', '2026-13-01']) {
+      expect(isPastDate(value, TODAY), value).toBe(false);
+    }
+  });
+
+  it('compares across year and month boundaries', () => {
+    expect(isPastDate('2026-05-31', '2026-06-01')).toBe(true);
+    expect(isPastDate('2026-06-01', '2026-05-31')).toBe(false);
   });
 });

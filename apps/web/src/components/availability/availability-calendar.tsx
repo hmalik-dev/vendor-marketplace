@@ -2,7 +2,7 @@
 
 import {
   AVAILABILITY_MONTHS_AHEAD,
-  isFutureDate,
+  isPastDate,
   LOCKED_AVAILABILITY_STATUSES,
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
@@ -143,7 +143,18 @@ export function AvailabilityCalendar({
   const selectedSet = useMemo(() => new Set(selection), [selection]);
 
   const statusOf = (date: string): AvailabilityStatus => statusByDate.get(date) ?? 'available';
-  const isEditable = (date: string): boolean => isFutureDate(date) && !LOCKED.has(statusOf(date));
+  /*
+   * Today is editable, the days before it are not. A vendor who wakes up ill
+   * blocks *today* — refusing that while offering tomorrow is the calendar
+   * failing at the one moment it matters most.
+   *
+   * What has already happened is history, not a setting: a past cell keeps the
+   * status it actually had — booked, blocked, available — and is rendered
+   * read-only rather than blanked, so the calendar stays a record of what
+   * transpired. See design/design-plan/19-availability.md.
+   */
+  const isEditable = (date: string): boolean =>
+    !isPastDate(date, today) && !LOCKED.has(statusOf(date));
 
   /*
    * A drag that ends outside the grid still has to end. Without this the
@@ -188,7 +199,7 @@ export function AvailabilityCalendar({
       }
       if (
         status === 'available' &&
-        isFutureDate(date) &&
+        !isPastDate(date, today) &&
         new Date(`${date}T00:00:00Z`).getUTCDay() === SATURDAY
       ) {
         openSaturdays += 1;
@@ -196,7 +207,7 @@ export function AvailabilityCalendar({
     }
 
     return { booked, blocked, openSaturdays };
-  }, [visibleMonths, statusByDate]);
+  }, [visibleMonths, statusByDate, today]);
 
   const extendTo = (date: string): void => {
     if (anchor === null) {
@@ -353,7 +364,7 @@ export function AvailabilityCalendar({
                         }
 
                         const status = statusOf(date);
-                        const isPast = !isFutureDate(date);
+                        const isPast = isPastDate(date, today);
                         const isToday = date === today;
                         const isSelected = selectedSet.has(date);
                         const locked = isPast || LOCKED.has(status);

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Category } from '@vendor-marketplace/shared';
+import { isPastDate, todayDateString, type Category } from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { CategorySelect } from './category-select';
@@ -42,12 +42,30 @@ export function SearchBar({
   className,
 }: SearchBarProps): React.ReactElement {
   const [draft, setDraft] = useState<SearchBarValues>(value);
+  const [pastDate, setPastDate] = useState(false);
   const fieldId = useId();
+
+  /*
+   * Today, for the date field's floor. Resolved after mount rather than during
+   * render because "today" is the viewer's local day: rendered on the server it
+   * would be the server's day, and across a date boundary the two disagree and
+   * React reports a hydration mismatch on the `min` attribute.
+   *
+   * It is only the picker's floor. Whether a *submitted* date is past is asked
+   * again at submit time against a fresh clock, so a tab left open across
+   * midnight cannot smuggle yesterday through.
+   */
+  const [today, setToday] = useState('');
+
+  useEffect(() => {
+    setToday(todayDateString());
+  }, []);
 
   // The URL is the source of truth: a back-navigation has to be reflected here,
   // not overwritten by a stale draft.
   useEffect(() => {
     setDraft(value);
+    setPastDate(false);
   }, [value]);
 
   const isHero = size === 'hero';
@@ -85,12 +103,35 @@ export function SearchBar({
   return (
     <form
       role="search"
+      /*
+        `min` on the date field makes the browser refuse the submit outright and
+        raise its own bubble — generic wording, browser-styled, and it fires
+        before any handler here, so the message below would never appear.
+        Validation is taken over rather than left to the platform: `min` keeps
+        doing the part it is good at, greying the past out of the picker, and
+        the check on submit says the rest in the product's own voice.
+      */
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
+
+        /*
+         * `min` greys the past out of the picker, but a date input can still be
+         * typed into, and a stale tab's floor can be yesterday's. Nothing is
+         * silently corrected — a search the customer didn't ask for is worse
+         * than being told the date is wrong — so the query is held back and the
+         * value stays put for them to fix.
+         */
+        if (isPastDate(draft.date, todayDateString())) {
+          setPastDate(true);
+          return;
+        }
+
+        setPastDate(false);
         onSubmit(draft);
       }}
       className={cn(
-        'flex bg-stone-0 max-sm:flex-col max-sm:items-stretch max-sm:rounded-2xl max-sm:px-4 max-sm:py-3 sm:flex-row sm:items-center sm:rounded-full',
+        'relative flex bg-stone-0 max-sm:flex-col max-sm:items-stretch max-sm:rounded-2xl max-sm:px-4 max-sm:py-3 sm:flex-row sm:items-center sm:rounded-full',
         /*
           The halo follows the pill because it is set on the pill. `:not(
           [type=submit])` keeps it off when the Search button is focused —
@@ -141,9 +182,19 @@ export function SearchBar({
           <input
             type="date"
             value={draft.date}
-            onChange={(event) =>
-              setDraft((previous) => ({ ...previous, date: event.target.value }))
-            }
+            /*
+              Past dates are unselectable, not merely rejected: `min` greys them
+              out in the browser's own calendar, so the rule is visible in the
+              control rather than discovered on submit. Empty until the client
+              knows its own day — see `today` above.
+            */
+            min={today || undefined}
+            aria-invalid={pastDate || undefined}
+            aria-describedby={pastDate ? `${fieldId}-date-error` : undefined}
+            onChange={(event) => {
+              setDraft((previous) => ({ ...previous, date: event.target.value }));
+              setPastDate(false);
+            }}
             className={cn(
               'peer w-full min-w-0 bg-transparent text-stone-900 outline-none',
               'focus-visible:ring-0 focus-visible:ring-offset-0',
@@ -164,6 +215,23 @@ export function SearchBar({
           ) : null}
         </span>
       </label>
+
+      {pastDate ? (
+        /*
+          Absolute, so showing it moves nothing: the compact bar lives inside a
+          header measured at exactly 64px, and on the hero a reflow would push
+          the category row past the 836px fold that `10-landing.md` requires.
+          It sits on its own surface because what is behind it is a photograph
+          on one screen and a result grid on the other.
+        */
+        <p
+          id={`${fieldId}-date-error`}
+          role="alert"
+          className="absolute top-full left-0 z-(--z-sticky) mt-2 rounded-lg bg-stone-0 px-3 py-2 text-sm text-stone-700 shadow-md max-sm:static max-sm:mt-3 max-sm:px-0 max-sm:shadow-none"
+        >
+          That date has already passed — pick today or a later date.
+        </p>
+      ) : null}
 
       <button
         type="submit"
