@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Unreferenced marketing imagery staged locally while the launch photography is
+# chosen. The app reads `public/stock`; anything under `public/marketing` would
+# be served publicly the moment it were committed, contact sheet included.
+public/marketing/
