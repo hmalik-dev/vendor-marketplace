@@ -60,7 +60,7 @@ into the portfolio.
 
 The fourth tile was **Replies**. It is gone, along with "Replies in ~2h" from the
 meta line and from the mobile profile: a median reply time needs message history
-the app doesn't have at launch, so a brand-new vendor's first enquiry would be
+the app doesn't have at launch, so a brand-new vendor's first inquiry would be
 measured against a number invented for them. Deferred — `98-post-mvp.md`.
 
 **Packages** — 2 columns. Each card: name (Serif), price (Serif, large),
@@ -111,5 +111,5 @@ and both CTAs, so the action is never off-screen.
 - "Similar vendors" strip at the bottom of the profile
 - Video in the portfolio lightbox
 - Vendor response to a review
-- Reply time returns as a fourth stat tile and a meta-line item, per vendor and only once that vendor has answered enough enquiries to have one — `98-post-mvp.md`
+- Reply time returns as a fourth stat tile and a meta-line item, per vendor and only once that vendor has answered enough inquiries to have one — `98-post-mvp.md`
 - Note: the vendor's own rating and review count **stay in MVP** — they're that vendor's facts, not platform marketing, and they're absent until earned rather than faked

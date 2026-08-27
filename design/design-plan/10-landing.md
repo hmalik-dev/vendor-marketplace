@@ -12,11 +12,11 @@ header 64px                                                    bg-stone-0
 ┌──────────────────────────────────────────────────────────────┐
 │ hero — gradient(155deg, stone-50 0%, #F7F0E8 52%, #F2E4D8)   │
 │ ┌────────────────── 56% ─────────────┬───── 44% ───────────┐ │
-│ │ badge · Now booking in Austin      │  photo cluster      │ │
+│ │ badge · 412 vendors in Austin      │  photo cluster      │ │
 │ │ H1 54px Instrument Serif           │  3 overlapping      │ │
 │ │ sub-line 16px stone-700 max-450    │  cards, rotated     │ │
-│ │ [ Vendor type ▾ | City | Date ]    │  −4° / +3° / +2°    │ │
-│ │ Or jump straight to · 4 pills      │  cards only         │ │
+│ │ [ search bar, rounded-full ]       │  −4° / +3° / +2°    │ │
+│ │ Popular: Florals · Taco carts ·    │  + floating vendor  │ │
 │ └────────────────────────────────────┴─────────────────────┘ │
 │ Browse by category — 6 cards across                          │
 └──────────────────────────────────────────────────────────────┘
@@ -37,22 +37,16 @@ promise meeting anyone — not meeting them is the point.
 ## Header
 
 Left: logo, then `Browse` · `How it works` · `For vendors`.
-Right: **List your services** (text) · 1px divider · **Sign in** (text) ·
-**Sign up** (ink pill).
+Right: **Sign in** (text) · **Sign up** (ink pill).
 
-Both account types are reachable from the first screen. The pill is the customer
-path because that's the volume; the vendor path is **named** rather than styled
-as a peer button — "List your services" says what it does, where a second pill
-would ask the visitor to pick a door before they know the building. Both land on
-`/sign-up`, whose role cards make the actual fork; the vendor link arrives with
-`?role=vendor` pre-selected. Full reasoning in `21-sign-up.md`.
-
-The former single **Join as a vendor** pill is gone: it offered the low-volume
-path as the page's only account action and left customers with nothing but
-"Sign in".
+**One sign-up control, not two.** Both account types are created on `/sign-up`,
+whose role cards are the fork — a separate vendor button in the header would
+duplicate that decision and make a visitor read two labels to find themselves.
+Vendors reach the same screen via `For vendors` in the nav, which deep-links with
+the role pre-selected. Full reasoning in `21-sign-up.md`.
 
 At 390 the header keeps a compact **Sign up** pill beside the hamburger — sign-up
-is too important to bury in a drawer. "List your services" drops out of the bar.
+is too important to bury in a drawer.
 
 ## Search bar — category-first
 
@@ -60,15 +54,11 @@ The hero's centrepiece. `bg-stone-0 rounded-full shadow-lg`, 7px padding with a
 24px left inset. Three segments divided by 1px × 32px `stone-300` rules, then a
 `clay-400` pill button:
 
-| Segment         | Flex | Label         | Control                                                    |
-| --------------- | ---- | ------------- | ---------------------------------------------------------- |
-| **Vendor type** | 1.3  | `Vendor type` | **Select** over the eleven categories, with a ▾ affordance |
-| **City**        | 1    | `City`        | Typeahead over live markets                                |
-| **Event date**  | 0.8  | `Event date`  | Date picker; "Add a date" in `stone-600` when empty        |
-
-Labels are exactly `Vendor type` / `City` / `Event date`. The former
-`What` / `Where` / `When` are gone — they described a text box, and the first
-field is no longer one.
+| Segment         | Flex | Control                                                    |
+| --------------- | ---- | ---------------------------------------------------------- |
+| **Vendor type** | 1.3  | **Select** over the eleven categories, with a ▾ affordance |
+| **City**        | 1    | Typeahead over live markets                                |
+| **Event date**  | 0.8  | Date picker; "Add a date" in `stone-600` when empty        |
 
 **The first field is a picker, not a text box.** A visitor knows they need a
 photographer in Austin on June 14 — they do not know a vendor's name, and asking
@@ -76,36 +66,31 @@ them to phrase a query invites "wedding photographer near me cheap" and a bad
 result set. Three enumerable values also make the query shareable and cacheable.
 Full reasoning in `11-search.md`.
 
-Below the bar: **"Or jump straight to"** with four category pills — Photography,
-Florals, Catering, Entertainment. `stone-0` fill, 1px `stone-300` border,
-`rounded-full`, 12.5px / 600 ink, 6px × 12px padding. They set `?category=` and
-go. This replaces the old "Popular: Florals · Taco carts · Live bands"
-underlined-link row, which pointed at free-text queries that no longer exist.
+Below the bar: **"Or jump straight to"** with four category pills — the direct
+path for someone who only knows the category. They set `?category=` and go.
 
 Values carry into `/search` as URL params.
 
 ## Photo cluster
 
 Three placeholder cards at 236×292 (−4°), 254×316 (+3°), 188×150 (+2°), shadows
-increasing with elevation. This is the proof that real vendors exist and it is
-what fills the width — it is not decoration, so it ships with real vendor work
-at launch.
+increasing with elevation. This is the proof that real vendors exist and it is what
+fills the width — not decoration, so it ships with real vendor work at launch.
 
 **No floating vendor chip in MVP.** An earlier version overlaid a card showing a
-named vendor with a rating and "replies in 2h". All three are history the app
-doesn't have on day one, and a fabricated one in the most prominent position on
-the site is the worst possible placeholder. Deferred — see `98-post-mvp.md`.
+named vendor with a rating and "replies in 2h". All three of those are history the
+app doesn't have on day one, and a fabricated one on the hero is the worst possible
+placeholder. Deferred — see `98-post-mvp.md`.
 
 ## Category row
 
 Six cards — the first six by `displayOrder`, which doubles as landing priority.
-The full eleven live on search, where a category is a value the select carries.
+The full eleven live on search, where a category is a filter you can click.
 
 Card: `bg-stone-0 rounded-xl p-3.5`; a 36px `clay-100` circle holding the
 category's lucide glyph in `clay-500`; name in Instrument Serif 17px; then a
 plain description of what the category covers in 11.5px `stone-600` — "Photo &
-film", "DJs, bands, hosts", "Food, bar, carts", "Halls & outdoor", "Bouquets &
-decor", "Hair & makeup".
+film", "DJs, bands, hosts", "Hair & makeup".
 
 **Not a vendor count and not a from-price.** Both are deferred (below).
 
@@ -132,8 +117,6 @@ The hero's photo cluster and the trust signals carry the proof instead. See
 
 - [ ] Search bar fully visible at 1440 × 900 without scrolling
 - [ ] Vendor type is a select over categories — no free-text query field on this page
-- [ ] Segment labels read exactly `Vendor type`, `City`, `Event date`
-- [ ] "Or jump straight to" + four category pills; no "Popular:" link row
 - [ ] Category row's top edge visible in the first 836px
 - [ ] Total document height ≤ 4 viewports
 - [ ] Hero is two columns at ≥1024; the cluster never stacks above that

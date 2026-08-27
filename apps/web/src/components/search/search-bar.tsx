@@ -57,8 +57,16 @@ export function SearchBar({
     isHero ? 'text-[10.5px]' : 'text-[9.5px]',
   );
   const fieldText = isHero ? 'text-md' : 'text-[13.5px]';
+  /*
+   * No focus ring on the field itself. The bar is one control visually — a
+   * single rounded-full pill with hairline dividers, per frame `01` — and a
+   * rectangular ring around one segment breaks out past the pill's edge and
+   * reads as a second, misaligned box. The ring lives on the bar instead, so
+   * it follows the pill's shape. See the form's `has-[:focus-visible]` below.
+   */
   const field = cn(
     'min-w-0 bg-transparent text-stone-900 outline-none placeholder:text-stone-600',
+    'focus-visible:ring-0 focus-visible:ring-offset-0',
     fieldText,
     isHero && 'mt-0.5',
   );
@@ -83,6 +91,12 @@ export function SearchBar({
       }}
       className={cn(
         'flex bg-stone-0 max-sm:flex-col max-sm:items-stretch max-sm:rounded-2xl max-sm:px-4 max-sm:py-3 sm:flex-row sm:items-center sm:rounded-full',
+        /*
+          The halo follows the pill because it is set on the pill. `:not(
+          [type=submit])` keeps it off when the Search button is focused —
+          that button is its own control and rings itself.
+        */
+        'transition-shadow duration-(--duration-fast) has-[:focus-visible:not([type=submit])]:ring-3 has-[:focus-visible:not([type=submit])]:ring-clay-400/20',
         isHero
           ? 'shadow-lg sm:py-1.75 sm:pr-1.75 sm:pl-6'
           : 'border border-stone-300 shadow-sm sm:py-1 sm:pr-1 sm:pl-4',
@@ -132,6 +146,7 @@ export function SearchBar({
             }
             className={cn(
               'peer w-full min-w-0 bg-transparent text-stone-900 outline-none',
+              'focus-visible:ring-0 focus-visible:ring-offset-0',
               fieldText,
               draft.date === '' && 'text-transparent focus:text-stone-600',
             )}
@@ -154,6 +169,9 @@ export function SearchBar({
         type="submit"
         className={cn(
           'shrink-0 rounded-full bg-clay-400 font-semibold text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 max-sm:mt-3 max-sm:w-full max-sm:py-2.75',
+          // Inside a white pill the shared 2px cream offset reads as a gap in
+          // the bar, so this ring sits directly on the button's edge.
+          'focus-visible:ring-offset-0',
           isHero
             ? 'sm:ml-2 sm:px-6 sm:py-2.75 sm:text-base'
             : 'sm:ml-1.5 sm:px-5 sm:py-2.5 sm:text-[12.5px]',

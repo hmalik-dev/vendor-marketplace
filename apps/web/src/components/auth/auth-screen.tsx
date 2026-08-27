@@ -2,8 +2,12 @@ import type { ReactNode } from 'react';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { StockPhoto } from '@/components/ui/stock-photo';
 
-/** Which side of the marketplace the marketing panel is speaking to. */
-export type AuthPanelRole = 'customer' | 'vendor';
+/**
+ * Which side of the marketplace the marketing panel is speaking to. `both` is
+ * the landing state — no role chosen yet, so the panel addresses both sides at
+ * once and labels which line belongs to whom.
+ */
+export type AuthPanelRole = 'both' | 'customer' | 'vendor';
 
 interface AuthPanel {
   /** The photograph behind the wash — the product's own content. */
@@ -19,6 +23,15 @@ interface AuthPanel {
   /** Tailwind class for that closing line — pale gold or pale sage on ink. */
   accentClass: string;
   body: string;
+  /**
+   * Present only on the `both` panel. Each guarantee is prefixed by the side it
+   * belongs to, which is what keeps a panel addressed to everyone from reading
+   * as addressed to no one — and doubles as a preview of the choice sitting
+   * right below it in the form column.
+   */
+  sideLabels?: readonly [string, string, string];
+  /** Tailwind text colour per side label, paired with `sideLabels`. */
+  sideLabelClasses?: readonly [string, string, string];
   /**
    * Mechanism, not metrics: a new marketplace has no vendor count, no "events
    * booked" and no average rating worth publishing, and the last thing a
@@ -42,8 +55,28 @@ interface AuthPanel {
  * See design/design-plan/21-sign-up.md.
  */
 const PANELS: Record<AuthPanelRole, AuthPanel> = {
-  customer: {
+  /*
+   * The default. It does not pick a side, so it says what the product is and
+   * then splits the promise explicitly — booking, vending, and the one line
+   * true of both. The wash goes neutral ink rather than clay or green, because
+   * tinting it either way would answer the question the form is still asking.
+   */
+  both: {
     photo: '/stock/auth.jpg',
+    wash: 'linear-gradient(200deg, rgba(35,32,28,.14) 0%, rgba(45,40,32,.62) 55%, rgba(30,28,24,.86) 100%)',
+    headline: ['Clear prices.', 'Open calendars.', 'No back-and-forth.'],
+    accentClass: 'text-gold-200',
+    body: 'Event vendors and the people who hire them — with the price and the date settled before anyone picks up the phone.',
+    guarantees: [
+      "See what a vendor charges and when they're free",
+      'Publish your prices and own your calendar',
+      'Payment held until the event is complete',
+    ],
+    sideLabels: ['Booking', 'Vending', 'Both'],
+    sideLabelClasses: ['text-gold-200', 'text-sage-200', 'text-stone-0/55'],
+  },
+  customer: {
+    photo: '/stock/auth-customer.jpg',
     wash: 'linear-gradient(200deg, rgba(35,32,28,.12) 0%, rgba(58,31,18,.62) 55%, rgba(35,32,28,.85) 100%)',
     // The premise is published pricing *and* published availability — both
     // halves. The word "transparent" never appears; the two lines demonstrate
@@ -58,11 +91,11 @@ const PANELS: Record<AuthPanelRole, AuthPanel> = {
     ],
   },
   vendor: {
-    photo: '/stock/dj.jpg',
+    photo: '/stock/auth-vendor.jpg',
     wash: 'linear-gradient(200deg, rgba(35,32,28,.12) 0%, rgba(40,48,34,.62) 55%, rgba(28,32,24,.86) 100%)',
     headline: ['Set your prices.', 'Set your dates.', 'Get booked.'],
     accentClass: 'text-sage-150',
-    body: 'Enquiries arrive already knowing what you charge and that your date is free — so you spend your evenings working, not writing quotes.',
+    body: 'Inquiries arrive already knowing what you charge and that your date is free — so you spend your evenings working, not writing quotes.',
     // The vendor's pain is unpaid quoting and calendar chaos, not price
     // discovery, so each line answers one of those. None of them claims volume
     // — that's a platform-scale promise the app cannot keep on day one.
@@ -80,9 +113,9 @@ export interface AuthScreenProps {
   /** The one line under it. */
   subhead: string;
   /**
-   * Which marketing panel to show beside the form. Defaults to the customer
-   * panel: it is the volume path, and it is what a visitor with no role yet —
-   * or anyone signing in, who already has one — should read.
+   * Which marketing panel to show beside the form. Defaults to `both`: nothing
+   * has been chosen yet, and a panel that picks a side before the visitor does
+   * is answering its own question.
    */
   panel?: AuthPanelRole;
   children: ReactNode;
@@ -98,10 +131,19 @@ export interface AuthScreenProps {
 export function AuthScreen({
   headline,
   subhead,
-  panel = 'customer',
+  panel = 'both',
   children,
 }: AuthScreenProps): React.ReactElement {
-  const { photo, wash, headline: proof, accentClass, body, guarantees } = PANELS[panel];
+  const {
+    photo,
+    wash,
+    headline: proof,
+    accentClass,
+    body,
+    guarantees,
+    sideLabels,
+    sideLabelClasses,
+  } = PANELS[panel];
 
   return (
     // The attribute is what globals.css keys the chrome-suppression rule off.
@@ -153,13 +195,34 @@ export function AuthScreen({
           </p>
           <p className="mt-3 max-w-100 text-md leading-relaxed text-stone-0/82">{body}</p>
 
-          <ul className="mt-6.5 flex max-w-100 flex-col gap-2.75 border-t border-stone-0/22 pt-5">
-            {guarantees.map((guarantee) => (
-              <li key={guarantee} className="flex items-start gap-2.5">
-                <span
-                  aria-hidden="true"
-                  className="mt-1.5 size-1.75 shrink-0 rounded-full bg-sage-200"
-                />
+          {/*
+            One list, two markers. A panel addressed to a single side leads each
+            line with a pale dot; the `both` panel replaces the dot with the
+            name of the side, because an unlabelled list of three mixed promises
+            reads as vague rather than as a split.
+          */}
+          <ul
+            className={`mt-6.5 flex flex-col border-t border-stone-0/22 pt-5 ${
+              sideLabels ? 'max-w-105 gap-3' : 'max-w-100 gap-2.75'
+            }`}
+          >
+            {guarantees.map((guarantee, index) => (
+              <li
+                key={guarantee}
+                className={`flex items-start ${sideLabels ? 'gap-2.75' : 'gap-2.5'}`}
+              >
+                {sideLabels ? (
+                  <span
+                    className={`w-16 flex-none pt-0.75 text-[9.5px] font-bold tracking-[.09em] uppercase ${sideLabelClasses?.[index] ?? ''}`}
+                  >
+                    {sideLabels[index]}
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="mt-1.5 size-1.75 shrink-0 rounded-full bg-sage-200"
+                  />
+                )}
                 <span className="text-[13.5px] leading-normal text-stone-0/90">{guarantee}</span>
               </li>
             ))}

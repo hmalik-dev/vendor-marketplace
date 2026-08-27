@@ -1,6 +1,7 @@
 # Revision brief — 2026-08-27
 
-The design project was revised. **Six frames changed; eight did not.** This file
+The design project was revised twice on this date. Changes 1–4 are the first
+pass; changes 5–7 are the second, which added frame `12b`. This file
 is the changelog of record: it names exactly what moved, so a ticket can be
 scoped against it without re-diffing the frames.
 
@@ -11,9 +12,9 @@ brief and a screen spec disagree, the screen spec is the newer of the two.
 
 | Frame                      | Changed                     | Spec file                     |
 | -------------------------- | --------------------------- | ----------------------------- |
-| `01 Landing`               | **yes**                     | `10-landing.md`               |
+| `01 Landing`               | **yes** (both passes)       | `10-landing.md`               |
 | `02 Search & browse`       | **yes**                     | `11-search.md`                |
-| `03 Vendor profile`        | **yes**                     | `12-vendor-profile.md`        |
+| `03 Vendor profile`        | **yes** (both passes)       | `12-vendor-profile.md`        |
 | `04 Booking request`       | no                          | `13-booking-request.md`       |
 | `05 Checkout`              | no                          | `14-checkout.md`              |
 | `06 Booking confirmed`     | no                          | `15-confirmed.md`             |
@@ -22,7 +23,8 @@ brief and a screen spec disagree, the screen spec is the newer of the two.
 | `09 Vendor profile editor` | no                          | `17-vendor-profile-editor.md` |
 | `10 Messaging`             | no                          | `18-messaging.md`             |
 | `11 Availability`          | no                          | `19-availability.md`          |
-| `12 Sign up`               | **yes** (copy only)         | `21-sign-up.md`               |
+| `12 Sign up`               | **yes** (both passes)       | `21-sign-up.md`               |
+| `12b Sign up — vendor`     | **new** (second pass)       | `21-sign-up.md`               |
 | `13 Admin`                 | no                          | `22-admin.md`                 |
 | `14 Adaptations`           | **yes** (follows the above) | `30-responsive.md`            |
 
@@ -101,6 +103,60 @@ Copy only. No layout, no styling changes.
 
 Never use the word "transparent"; demonstrate it instead.
 
+## Change 5 — Dual sign-up in the marketing header (frames `01`, `12`)
+
+Specs: `10-landing.md`, `21-sign-up.md`
+
+Both user types need accounts, and only the vendor path had a header CTA.
+
+- Header right side becomes **List your services** (plain text, `stone-700`) · 1px `stone-300` divider · **Sign in** (plain text) · **Sign up** (ink pill, `stone-900`, `rounded-full`).
+- Remove the old "Join as a vendor" pill. The pill is now the **customer** path because that is the volume path; the vendor path is a named text link so it is unambiguous which side you are joining.
+- **Sign up** → `/sign-up` with no role pre-selected. **List your services** → `/sign-up?role=vendor`.
+- On `/sign-up`, read `?role=` and pre-select the matching card. No param leaves both unselected. Do not remove the role cards — they remain the actual fork; the header must not duplicate that decision.
+- At 390, keep a compact **Sign up** pill in the bar beside the hamburger. Do not bury sign-up in the drawer.
+- Auth walls stay where they are: browsing, searching and viewing profiles are public. Gate exactly two actions — requesting a booking, and publishing a vendor profile.
+
+## Change 6 — Remove reply-time claims and the hero vendor chip (frames `01`, `03`)
+
+Specs: `10-landing.md`, `12-vendor-profile.md`, `98-post-mvp.md`
+
+Both need history the app does not have on day one.
+
+- **Delete the floating vendor chip** from the landing hero. The photo cluster carries the hero alone.
+- **Vendor profile:** remove "Replies in ~2h" from the meta line, leaving `★ 4.9 (127 reviews) · Austin, TX`. Do not substitute the category there — it is already the first chip in the row beneath, and one value gets one control. Remove the **Replies** stat tile; the grid goes four → three columns at `max-width: 520px`. Same on the mobile profile.
+- **Keep** the vendor's own reply metric on their private dashboard — their data about themselves, and it starts empty honestly. Its "keep it under 4h to stay ranked" line loses the ranking claim, because no such signal exists.
+
+## Change 7 — Role-aware sign-up panel (frames `12`, `12b`)
+
+Spec: `21-sign-up.md`
+
+The right panel pitched the customer regardless of the selected role. It now
+swaps with the role selection.
+
+**The form column is identical for both roles — email and password only. Do not
+add a business-name or any other profile field to the auth form.** That data
+belongs to the profile editor, which is the next step of the vendor flow.
+Coupling profile creation to identity creation breaks SSO sign-up (there is no
+field to attach it to), complicates the confirm-email round trip, and leaves a
+partially-created vendor with no clean state to resume from.
+
+The vendor flow is: **sign up (role + credentials) → profile editor (09/17) →
+publish checklist → live.**
+
+**Vendor panel** (`?role=vendor` or the vendor card selected, sage accent):
+
+- Headline, Serif 38px, three lines, last italic in `#D9E2C8`: `Set your prices.` / `Set your dates.` / `*Get booked.*`
+- Body: "Inquiries arrive already knowing what you charge and that your date is free — so you spend your evenings working, not writing quotes."
+- Three guarantees with pale-sage dots: You publish your own packages and prices · Your calendar decides which dates you're offered · Paid out after the event — no chasing invoices
+- Wash: `linear-gradient(200deg, rgba(35,32,28,.12), rgba(40,48,34,.62) 55%, rgba(28,32,24,.86))`
+- Selected vendor card: `bg-sage-50`, 2px `sage-400` border, `stone-0` glyph circle. The customer card keeps clay when it is the selected one.
+- Swapping is client-side — no page load, and the form column must not shift.
+
+**No fee language on the vendor panel** — no "no fees", no rate, no hint. Vendors
+pay something and the model is not decided; the panel describes the payment
+mechanism instead. The customer panel's "no service fee on top" is customer-side
+truth and must not be mirrored or negated onto the vendor side.
+
 ## Still correct, do not undo
 
 **No platform statistics on public pages** — no vendor counts, no "events
@@ -120,4 +176,9 @@ page, stop — see `98-post-mvp.md`.
 - [ ] 8 cards visible at 1440 × 900 with none sliced — assert each first- and second-row card's `getBoundingClientRect().bottom <= pane.bottom`
 - [ ] Vendor-profile cover is 150px and the 72px avatar is fully below it
 - [ ] Sign-up panel contains no numbers and matches the new three-line headline
+- [ ] Header shows both sign-up paths; `/sign-up?role=vendor` pre-selects the vendor card
+- [ ] Selecting each role swaps the panel copy, guarantees and accent colour
+- [ ] The sign-up form column is identical for both roles — email and password only, no profile fields
+- [ ] `grep -rn "no service fee\|no fees\|fee-free" apps/web/src` returns only customer-facing surfaces
+- [ ] `grep -rni "replies in\|reply time" apps/web/src` returns nothing outside the vendor's private dashboard
 - [ ] Every revised screen passes the five-axis parity gate in `04-laws.md`, **including the literal strings**

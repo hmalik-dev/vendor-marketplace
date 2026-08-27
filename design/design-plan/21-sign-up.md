@@ -6,32 +6,29 @@ made deliberately and visibly.
 ## Composition at 1440 — split screen
 
 Left half: the auth panel on `stone-50`, content capped at 460px. Right half:
-600px full-bleed photograph under a 200deg wash, with proof over it.
+600px full-bleed vendor photograph under a
+`linear-gradient(200deg, rgba(35,32,28,.12), rgba(58,31,18,.62) 55%, rgba(35,32,28,.85))`
+wash, with proof over it.
 
 A card floating in a field of cream wastes half the viewport. The marketing panel
 uses the width honestly and it's the last thing a hesitant sign-up sees.
 Below 1280 the panel drops and the auth column centres.
 
-## Two entry points, one screen
+## One door
 
-Both user types need an account — a customer to request or pay for a booking, a
-vendor to publish a profile — but they arrive from different places and in very
-different volumes.
+The marketing header carries **Sign in** and a single **Sign up** ink pill. No
+separate vendor CTA: the role cards on this screen are already the fork, so a
+second header button would be one control too many for one decision — and
+"Sign up" next to "List your services" makes a visitor read two things to work out
+which one is them.
 
-| Header control         | Style                                  | Goes to                              |
-| ---------------------- | -------------------------------------- | ------------------------------------ |
-| **Sign up**            | Ink pill, `stone-900` fill             | `/sign-up` with no role pre-selected |
-| **List your services** | Plain text link, left of a 1px divider | `/sign-up?role=vendor`               |
+`/sign-up` therefore opens with **no role pre-selected**, which is the screen's
+default state and the reason the panel has a third, neutral variant (below).
 
-The customer path gets the pill because it is the volume path. The vendor path is
-a **named** link — "List your services" says what it does, where "Sign up" beside
-it would be ambiguous about which side you're joining. Both land on this screen;
-**the role cards below are the real fork**, so the header never has to duplicate
-the decision. Arriving with `?role=vendor` pre-selects the vendor card, and the
-customer card stays one click away.
-
-"For vendors" in the main nav points at the landing page's vendor section, which
-has its own CTA into `/sign-up?role=vendor`. Two doors, same room.
+`?role=` still exists for deep links — "For vendors" in the main nav leads to the
+vendor marketing page, whose CTA goes to `/sign-up?role=vendor` and skips straight
+to the vendor state. It's an optimisation for traffic that has already self-identified,
+not a second front door.
 
 **Browsing needs no account.** Search, category pages and vendor profiles are all
 public — the landing page promises that, so the wall goes up at exactly two
@@ -47,17 +44,11 @@ This can't be changed later."
 **Role cards, side by side at every width above 640** — they're a comparison, and
 stacking turns a choice into a scroll.
 
-|              | Selected (customer) | Selected (vendor) | Unselected      |
-| ------------ | ------------------- | ----------------- | --------------- |
-| Background   | `clay-100`          | `sage-50`         | `stone-0`       |
-| Border       | 2px `clay-400`      | 2px `sage-400`    | 1px `stone-300` |
-| Glyph circle | `stone-0`           | `stone-0`         | `stone-150`     |
-| Glyph stroke | `clay-500`          | `sage-600`        | `stone-600`     |
-
-The selected card's accent matches the panel beside it — **clay for customer,
-sage for vendor**. Sage is the settled, working-side colour throughout the
-product, so the vendor path is coloured the same way the vendor's own surfaces
-are.
+|              | Selected       | Unselected      |
+| ------------ | -------------- | --------------- |
+| Background   | `clay-100`     | `stone-0`       |
+| Border       | 2px `clay-400` | 1px `stone-300` |
+| Glyph circle | `stone-0`      | `stone-150`     |
 
 "I'm planning an event — Find and book vendors near you." ·
 "I'm a vendor — List your services and take bookings."
@@ -67,66 +58,129 @@ and "Already with us? Sign in".
 
 The whole panel — role choice and form — must fit inside 836px without scrolling.
 
-## The marketing panel is role-aware
+## The marketing panel has three states
 
-Selecting a role swaps the right panel's headline, body, three guarantees and the
-wash behind them. **The form column does not change** — the choice is the only
-thing that moves the page.
+| State       | When                                                  | Panel                          |
+| ----------- | ----------------------------------------------------- | ------------------------------ |
+| **Default** | `/sign-up` with no role chosen                        | Neutral — speaks to both sides |
+| Customer    | "I'm planning an event" selected, or `?role=customer` | Clay                           |
+| Vendor      | "I'm a vendor" selected, or `?role=vendor`            | Sage                           |
+
+Since the header no longer pre-sorts anyone, the **default state is the common
+one** and it has real work to do: sell a two-sided marketplace to someone who
+hasn't said which side they're on. The **form column is identical in all three
+states** — email and password, nothing else. Only the panel changes.
+
+**No business name on this screen.** Auth collects credentials and a role, full
+stop. Business name, slug, categories and location are profile data, collected in
+the editor (`17-vendor-profile-editor.md`) which is the next step of the vendor
+flow. Putting a profile field in the auth form couples identity creation to
+profile creation — it breaks social/SSO sign-up, complicates the confirm-email
+round trip, and gives a partially-created vendor no clean state to resume from.
+
+The vendor flow is therefore: **sign up (role + credentials) → profile editor
+(screen 09/17) → publish checklist → live.** The editor already owns every field
+that isn't a credential.
 
 Same premise, inverted: a customer is promised they will **see** the price and the
 open dates; a vendor is promised they **set** them. That symmetry is the product,
 so both panels are built from it rather than each inventing its own angle.
 
-Default with no `?role=`: the customer panel, since that's the volume path.
-Arriving at `/sign-up?role=vendor` shows the vendor panel immediately.
-`/sign-in` always shows the customer panel — the signing-in visitor already has a
-role and the panel is not asking them to pick one.
+The selected role card also changes accent: **clay** for customer, **sage** for
+vendor, matching the gradient wash behind each panel. Sage is the settled,
+working-side colour throughout the product.
+
+## Default panel — both sides, labelled
+
+**"Clear prices. Open calendars. _No back-and-forth._"** (Serif 38px, last line
+italic in `#F3C98B`) · "Event vendors and the people who hire them — with the
+price and the date settled before anyone picks up the phone."
+
+Then three rows, each **prefixed with the side it belongs to** in a 9.5px uppercase
+label, 64px column:
+
+| Label   | Colour                  | Line                                            |
+| ------- | ----------------------- | ----------------------------------------------- |
+| BOOKING | `#F3C98B`               | See what a vendor charges and when they're free |
+| VENDING | `#C4D6A8`               | Publish your prices and own your calendar       |
+| BOTH    | `rgba(255,253,249,.55)` | Payment held until the event is complete        |
+
+**The labels are what make this work.** A neutral panel written as generic copy
+("connecting great events with great vendors") says nothing to either side — the
+usual failure of a shared default. Naming the audience per line keeps every claim
+concrete, silently tells the visitor there are two sides here, and previews the
+choice sitting immediately below it in the form. The third row earns its place by
+being the one promise that's identical for both.
+
+Wash is neutral warm-grey rather than clay or green, so the panel doesn't
+pre-suggest an answer: `linear-gradient(200deg, rgba(35,32,28,.14), rgba(45,40,32,.62) 55%, rgba(30,28,24,.86))`.
+
+### The form waits for a role
+
+In the default state both cards are unselected, **Create my account** renders
+disabled (`stone-200` fill, `stone-500` text) and a 11.5px `stone-600` line under
+it reads "Pick one above to continue". Email and password remain editable — typing
+first and choosing second is a normal order, and disabling the fields would punish
+it. Choosing a role enables the button and swaps the panel in one move.
 
 ## Customer panel — mechanism, not metrics
 
-Headline is three lines, Serif 38px, the last line italic in `gold-200`:
+**"See the price. See the open dates. _Then decide._"** (Serif 38px, the last line
+italic in `#F3C98B`) · then: "Every vendor publishes what they charge and when
+they're free — before you talk to anyone, and without asking for a quote."
 
-```
-See the price.
-See the open dates.
-*Then decide.*
-```
+The premise is that both things a customer normally has to chase — **what it
+costs and whether the date is free** — are published up front. That's the whole
+product, and it's a promise that's true on day one. Note the headline never uses
+the word "transparent"; it demonstrates it instead.
 
-Body, one line: "Every vendor publishes what they charge and when they're free —
-before you talk to anyone, and without asking for a quote."
-
-Then three guarantees with pale-sage dots above a hairline:
+Three guarantees with pale-sage dots above a hairline:
 
 - Live calendars — if a date shows open, it is
 - Payment held until the event is complete
 - Published prices, and no service fee on top
-
-Wash: `linear-gradient(200deg, rgba(35,32,28,.12), rgba(58,31,18,.62) 55%, rgba(35,32,28,.85))`.
-
-The premise is published pricing **and** published availability — both halves.
-Never use the word "transparent"; demonstrate it instead.
-
-The previous copy ("Prices on the label. Dates you can trust." / "Every review
-comes from a booking that actually happened…" / "Real availability, not a contact
-form" / "No service fee, ever") is superseded.
 
 **No counts, no ratings, no "events booked".** A new marketplace has none of
 those honestly, and a placeholder number here — the last thing a hesitant
 sign-up reads — is the worst possible place for one. Each of these three claims
 is true on day one and is a stronger promise than a small number.
 
+## Clerk
+
+`<ClerkProvider appearance={{ theme: shadcn }}>` inherits the slots already bound
+in `globals.css`. Override only where Clerk's defaults fight the layout:
+
+```ts
+appearance: { theme: shadcn, elements: { card: { boxShadow: 'none', border: 'none' } } }
+```
+
+Never hand-write brand hexes into a Clerk appearance object — that's a second
+source of truth and it drifts.
+
+## Acceptance
+
+- [ ] Role cards side by side, chosen role visible with a Change affordance after selection
+- [ ] Panel fits 836px with no scroll
+- [ ] Marketing panel contains no platform statistics
+- [ ] Headline conveys published pricing **and** published availability — both halves, not just price
+- [ ] Below 1280 the photo panel drops cleanly, no letterboxing
+- [ ] No param shows the **neutral** panel with both cards unselected and submit disabled
+- [ ] `?role=vendor` / `?role=customer` pre-select and show the matching panel immediately
+- [ ] Email and password stay editable in the default state; only submit is disabled
+- [ ] Header has one sign-up control, not two
+- [ ] Selecting a role swaps the panel without a page load; the form column doesn't jump
+- [ ] Selected card accent matches its panel — clay for customer, sage for vendor
+- [ ] **No fee claim anywhere on the vendor panel**, positive or negative
+- [ ] The form column is identical for both roles — email and password only
+- [ ] No profile fields on this screen; business name is collected in the profile editor
+- [ ] Reaching this screen from a blocked action preserves the intent and returns there after auth
+- [ ] Browsing, searching and viewing profiles never require an account
+
 ## Vendor panel
 
-Headline, Serif 38px, last line italic in `sage-150`:
-
-```
-Set your prices.
-Set your dates.
-*Get booked.*
-```
-
-Body: "Enquiries arrive already knowing what you charge and that your date is
-free — so you spend your evenings working, not writing quotes."
+**"Set your prices. Set your dates. _Get booked._"** (Serif 38px, last line italic
+in `#D9E2C8`) · "Inquiries arrive already knowing what you charge and that your
+date is free — so you spend your evenings working, not writing quotes."
 
 Three guarantees with pale-sage dots:
 
@@ -156,46 +210,6 @@ there. Do not mirror it, or its negation, onto the vendor side.
 When pricing is decided, the vendor panel gains a fourth line stating it plainly.
 Until then, silence beats a claim that has to be walked back. See `98-post-mvp.md`.
 
-## Clerk
-
-`<ClerkProvider appearance={{ theme: shadcn }}>` inherits the slots already bound
-in `globals.css`. Override only where Clerk's defaults fight the layout:
-
-```ts
-appearance: { theme: shadcn, elements: { card: { boxShadow: 'none', border: 'none' } } }
-```
-
-Never hand-write brand hexes into a Clerk appearance object — that's a second
-source of truth and it drifts.
-
-### The vendor's business-name field
-
-The frame draws **Business name** as the first field of the vendor form. Clerk's
-drop-in `<SignUp>` owns its own field set and takes no custom fields, so in MVP
-the business name is the first field of the storefront editor the vendor lands on
-immediately after sign-up (`17-vendor-profile-editor.md`) — it is collected once,
-in one place, one screen later.
-
-**Unblock:** a custom sign-up flow built on `useSignUp`, at which point the field
-moves into this form and nothing else about the screen changes. Until then the
-frame's vendor form is read as _identical to the customer form_ — that is the
-only place the implementation deviates from `12b`.
-
-## Acceptance
-
-- [ ] Role cards side by side, chosen role visible with a Change affordance after selection
-- [ ] Panel fits 836px with no scroll
-- [ ] Marketing panel contains no platform statistics
-- [ ] Customer headline is the three-line "See the price. / See the open dates. / _Then decide._"
-- [ ] Vendor headline is the three-line "Set your prices. / Set your dates. / _Get booked._"
-- [ ] The three guarantee lines on each panel match the frame word for word
-- [ ] `?role=vendor` pre-selects the vendor card and shows the vendor panel; no param shows the customer panel
-- [ ] Selecting a role swaps the panel without a page load; the form column doesn't jump
-- [ ] Selected card accent matches its panel — clay for customer, sage for vendor
-- [ ] **No fee claim anywhere on the vendor panel**, positive or negative
-- [ ] Below 1280 the photo panel drops cleanly, no letterboxing
-- [ ] Browsing, searching and viewing profiles never require an account
-
 ## Post-MVP
 
 The three guarantees give way to a stats band (vendors · average rating · median
@@ -205,4 +219,3 @@ visitor.
 
 - **Vendor pricing line** on the vendor panel once the model is decided — a plain statement of what a vendor pays, as a fourth guarantee.
 - Vendor-side proof once it exists: earnings ranges by category, time-to-first-booking. Both need real vendors.
-- The business-name field moves into the sign-up form behind a custom `useSignUp` flow.

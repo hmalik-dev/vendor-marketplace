@@ -68,7 +68,7 @@ claim walked back later costs more trust than saying nothing now.
 
 Median reply time ("Replies in ~2h", a "Replies" stat tile, "★ 4.9 · replies in
 2h" on the landing hero chip) requires message history that does not exist at
-launch. A brand-new vendor's first enquiry would be measured against a number
+launch. A brand-new vendor's first inquiry would be measured against a number
 invented for them.
 
 Removed from: the landing hero chip (chip deleted entirely), the vendor profile
@@ -79,7 +79,7 @@ themselves and it starts empty honestly. The dashboard's "keep it under 4h to st
 ranked" line implied a ranking signal that does not exist, so it is softened to a
 plain nudge — see the reply-time ranking entry below and `16-vendor-dashboard.md`.
 
-**Unblock:** ~10 answered enquiries for a given vendor. It then returns as a
+**Unblock:** ~10 answered inquiries for a given vendor. It then returns as a
 **per-vendor fact shown only for vendors who have one** — never as a platform
 average, and never as a default for a new profile.
 

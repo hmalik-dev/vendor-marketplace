@@ -22,7 +22,7 @@ const CARDS = [
       'top-17.5 left-47.5 h-79 w-63.5 rotate-[3deg] rounded-2xl shadow-[0_18px_46px_rgba(35,32,28,.2)]',
   },
   {
-    src: '/stock/dj.jpg',
+    src: '/stock/venue.jpg',
     sizes: '188px',
     /*
      * The smallest card is the one the composition can lose: below `lg` the
@@ -38,8 +38,14 @@ const CARDS = [
  * The proof that real vendors exist, and what fills the hero's right-hand 44%.
  *
  * The three cards carry licensed stock standing in for launch photography —
- * a tablescape, a couple's portrait and a dance floor, one per card, so the
- * stack shows three different kinds of vendor rather than three of the same.
+ * a tablescape, a couple's portrait and a lit reception hall, one per card, so
+ * the stack shows three different kinds of vendor rather than three of the same.
+ *
+ * The third card carries the stack's tonal weight. Its first two are pale — a
+ * cream tablescape and an overcast beach — so a third pale frame makes the
+ * cluster read as one blur rather than three cards, whatever the shadow does.
+ * It is warm amber rather than the near-black dance floor it replaced, which
+ * separated but fought the cream ground.
  *
  * Frame `01` floats a vendor chip over the stack reading "★ 4.9 · replies in
  * 2h". It is **deferred post-MVP**: reply time is the implied ranking mechanic

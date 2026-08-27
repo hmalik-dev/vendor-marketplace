@@ -200,8 +200,30 @@ body:has([data-auth-screen]) > footer {
   box-shadow: none;
 }
 
-/* The panel already sets the gutter; Clerk's own would inset the form twice. */
+/*
+ * The card box draws no surface here, so its radius and its clip have nothing
+ * left to do — but they still bite. `overflow: hidden` on a rounded box clips
+ * along the arc, and with Clerk's header hidden the first field label sits
+ * exactly in that top-left corner: "EMAIL" loses the stem of its E and renders
+ * as ".MAIL", and the email input loses the left of its border.
+ */
+[data-auth-screen] .cl-cardBox {
+  overflow: visible;
+  border-radius: 0;
+}
+
+/*
+ * The panel already sets the gutter; Clerk's own would inset the form twice.
+ *
+ * `margin-inline` matters as much as the padding: Clerk offsets the card by
+ * `-1px` to sit its 1px border over the card box's edge, and the rule above
+ * removes that border. Left uncorrected, the whole form — labels, inputs,
+ * button — sits 1px outside `.cl-cardBox`, which clips `overflow-x`. One pixel
+ * is enough to eat the left stem of a 10.5px uppercase label: "EMAIL" renders
+ * as ".MAIL", and every input loses the left edge of its border.
+ */
 [data-auth-screen] .cl-card {
+  margin-inline: 0;
   padding-inline: 0;
 }
 
@@ -217,4 +239,56 @@ body:has([data-auth-screen]) > footer {
 [data-auth-screen] .cl-formFieldInput {
   border-color: var(--color-stone-300);
   background: var(--color-stone-0);
+}
+
+/*
+ * Clerk's theme sizes its own controls; the frame sizes them like every other
+ * control in the product. These bring the auth form back onto the component
+ * vocabulary in `03-components.md` — 13.5px body text, 10px radius (from the
+ * `borderRadius` variable), and the input/button padding frame `12` draws.
+ */
+[data-auth-screen] .cl-formFieldInput,
+[data-auth-screen] .cl-formButtonPrimary {
+  padding: 0.625rem 0.8125rem;
+  font-size: var(--text-base);
+}
+
+[data-auth-screen] .cl-formButtonPrimary {
+  padding-inline: 1.25rem;
+  font-weight: 600;
+}
+
+/*
+ * The default sign-up state: no role chosen, so the submit renders disabled
+ * while the fields stay live. Clerk owns the button, so the treatment is
+ * applied here rather than by swapping the control out — see
+ * design/design-plan/21-sign-up.md. `pointer-events` stops the click; the
+ * capture-phase guard in `SignUpForm` stops the Enter key.
+ */
+[data-auth-screen] [data-role-pending] .cl-formButtonPrimary {
+  pointer-events: none;
+  border-color: transparent;
+  background: var(--color-stone-200);
+  color: var(--color-stone-500);
+}
+
+/*
+ * The field label is a micro-label, not body text — `.lbl` on the frame:
+ * 10.5px / 600 uppercase in `stone-600`, tracked out. Clerk ships it as 13px
+ * ink sentence case, which reads as a second heading above every input.
+ */
+[data-auth-screen] .cl-formFieldLabel {
+  font-size: 0.65625rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-stone-600);
+}
+
+/*
+ * Clerk's card keeps its block padding after its header is hidden, which
+ * pushes the form away from the role cards it belongs with.
+ */
+[data-auth-screen] .cl-card {
+  padding-block: 0;
 }

@@ -17,6 +17,16 @@ onboarding tour, not a wedding blog.
 - **Don't name the virtue, show it.** Not "full transparency" but "every vendor publishes what they charge and when they're free". Not "seamless" but "one request, one reply".
 - Never imply a scale the product doesn't have. No "join thousands of vendors", no "the #1 marketplace".
 
+## Spelling — US English
+
+The product's market is US cities, so every user-facing string is US English:
+**inquiry**, not _enquiry_; _canceled_, _color_, _favorite_.
+
+This one overrides the frames. Frame `12b` writes "Enquiries arrive already
+knowing what you charge…" and the implementation says **Inquiries**; the parity
+gate should read that as correct, not as drift. If a future import brings the
+British spelling back, change the string, not this rule.
+
 ## Voice examples
 
 | Context                 | Not this                                | This                                                                                                                            |

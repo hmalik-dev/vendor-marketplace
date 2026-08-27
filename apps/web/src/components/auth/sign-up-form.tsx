@@ -49,9 +49,9 @@ const ROLE_CHOICES: readonly RoleChoice[] = [
 
 export interface SignUpFormProps {
   /**
-   * Pre-selection from `?role=`, which the header's "List your services" link
-   * carries. `null` — the bare `/sign-up` — asks the question outright and
-   * shows the customer panel, since that is the volume path.
+   * Pre-selection from `?role=`, which "For vendors" in the nav carries.
+   * `null` — the bare `/sign-up` — asks the question outright and shows the
+   * both-sides panel, which picks no side before the visitor does.
    */
   initialRole: SignUpRole | null;
 }
@@ -72,12 +72,15 @@ export interface SignUpFormProps {
  */
 export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement {
   const [role, setRole] = useState<SignUpRole | null>(initialRole);
+  /* Set only when a submit was actually blocked, so the hint announces itself
+     to a screen reader at the moment it becomes the reason nothing happened. */
+  const [roleMissing, setRoleMissing] = useState(false);
 
   return (
     <AuthScreen
       headline="Let's get you set up"
       subhead="First — which one are you? This can't be changed later."
-      panel={role ?? 'customer'}
+      panel={role ?? 'both'}
     >
       <fieldset className="mb-5.5">
         <legend className="sr-only">Which one are you?</legend>
@@ -107,7 +110,10 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
                   name="role"
                   value={choice.role}
                   checked={isSelected}
-                  onChange={() => setRole(choice.role)}
+                  onChange={() => {
+                    setRole(choice.role);
+                    setRoleMissing(false);
+                  }}
                   className="sr-only"
                 />
 
@@ -139,11 +145,41 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
         </div>
       </fieldset>
 
-      {role ? (
-        <SignUp unsafeMetadata={{ role }} fallbackRedirectUrl="/after-sign-in" />
-      ) : (
-        <p className="text-center text-base text-stone-600">Pick one above to keep going.</p>
-      )}
+      {/*
+        Clerk's fields stay mounted and editable with no role chosen — typing
+        first and choosing second is a normal order, and disabling the inputs
+        would punish it. Only the submit is gated.
+
+        The gate is a capture-phase guard rather than a disabled button alone,
+        because Clerk's form submits on Enter as well as on click and the button
+        is Clerk's to render. A sign-up that got through with no role would
+        carry no `role` in `unsafeMetadata`, and the API narrows a missing role
+        to `customer` — putting a vendor on the wrong side of the product with
+        no way back, which is the exact thing the subhead promises can't be
+        changed later. `data-role-pending` is what globals.css keys the
+        disabled treatment off. See design/design-plan/21-sign-up.md.
+      */}
+      <div
+        data-role-pending={role === null ? '' : undefined}
+        onSubmitCapture={(event) => {
+          if (role === null) {
+            event.preventDefault();
+            event.stopPropagation();
+            setRoleMissing(true);
+          }
+        }}
+      >
+        <SignUp unsafeMetadata={role ? { role } : {}} fallbackRedirectUrl="/after-sign-in" />
+
+        {role === null ? (
+          <p
+            className="mt-1.5 text-center text-xs text-stone-600"
+            role={roleMissing ? 'alert' : undefined}
+          >
+            Pick one above to continue
+          </p>
+        ) : null}
+      </div>
     </AuthScreen>
   );
 }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 
 /**
  * The three links frame `01 Landing` draws beside the wordmark.
@@ -11,19 +12,17 @@ import { usePathname } from 'next/navigation';
  * it with Dashboard / Messages / Bookings. Rendering them everywhere would
  * contradict two frames to satisfy one, so the nav is scoped to `/`.
  *
- * "For vendors" points at the on-page section that speaks to vendors rather
- * than a vendor marketing page, because there is no such page in MVP and a nav
- * item that leads nowhere is worse than one that leads somewhere short.
+ * "For vendors" is the vendor door. The header carries a single **Sign up**
+ * pill for both account types, so this is where a vendor gets a path that
+ * names them — and it deep-links with the role pre-selected rather than
+ * scrolling to a section, because a visitor who clicks it has already decided
+ * which side they are on. See design/design-plan/21-sign-up.md.
  */
 const LINKS = [
   { label: 'Browse', href: '/search' },
   { label: 'How it works', href: '/#how-it-works' },
-  { label: 'For vendors', href: '/#for-vendors' },
+  { label: 'For vendors', href: '/sign-up?role=vendor' },
 ] as const;
-
-/** The frame's nav-link treatment, shared with the header's "Sign in". */
-export const MARKETING_LINK_CLASS =
-  'text-[13.5px] font-medium text-stone-700 transition-colors duration-(--duration-fast) hover:text-clay-600';
 
 export function MarketingNav(): React.ReactElement | null {
   const pathname = usePathname();

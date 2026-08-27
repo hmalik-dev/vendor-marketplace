@@ -33,12 +33,61 @@ describe('SignUpForm', () => {
     signUpProps.mockClear();
   });
 
-  it('asks for a role before rendering the Clerk form', () => {
+  /*
+   * Typing first and choosing second is a normal order, so the fields stay
+   * live with no role chosen — only the submit is gated.
+   * See design/design-plan/21-sign-up.md.
+   */
+  it('shows the form with no role chosen, and marks the submit pending', () => {
+    const { container } = render(<SignUpForm initialRole={null} />);
+
+    expect(screen.getByTestId('clerk-sign-up')).toBeDefined();
+    expect(screen.getByRole('radio', { name: new RegExp(CUSTOMER) })).toHaveProperty(
+      'checked',
+      false,
+    );
+    expect(screen.getByRole('radio', { name: new RegExp(VENDOR) })).toHaveProperty(
+      'checked',
+      false,
+    );
+    expect(container.querySelector('[data-role-pending]')).not.toBeNull();
+    expect(screen.getByText('Pick one above to continue')).toBeDefined();
+    // No role means no role claim travels to Clerk.
+    expect(signUpProps).toHaveBeenLastCalledWith(expect.objectContaining({ unsafeMetadata: {} }));
+  });
+
+  /*
+   * The API narrows a missing role to `customer`, so a sign-up that got through
+   * without one would put a vendor on the wrong side of the product with no way
+   * back — the exact thing the subhead says can't be changed later.
+   */
+  it('blocks submission until a role is chosen, then stops blocking', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<SignUpForm initialRole={null} />);
+
+    const gate = container.querySelector('[data-role-pending]');
+    const submitted = vi.fn();
+    gate?.addEventListener('submit', submitted);
+
+    const form = document.createElement('form');
+    gate?.appendChild(form);
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    expect(submitted).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
+    expect(container.querySelector('[data-role-pending]')).toBeNull();
+
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    expect(submitted).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the pending hint once a role is chosen', async () => {
+    const user = userEvent.setup();
     render(<SignUpForm initialRole={null} />);
 
-    expect(screen.queryByTestId('clerk-sign-up')).toBeNull();
-    expect(screen.getByRole('radio', { name: new RegExp(CUSTOMER) })).toBeDefined();
-    expect(screen.getByRole('radio', { name: new RegExp(VENDOR) })).toBeDefined();
+    await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
+
+    expect(screen.queryByText('Pick one above to continue')).toBeNull();
   });
 
   /*
@@ -129,12 +178,28 @@ describe('SignUpForm', () => {
   });
 
   /*
-   * The marketing panel is mechanism, not metrics: a placeholder number in
-   * front of a hesitant sign-up is the worst possible place for one.
-   * See design/design-plan/98-post-mvp.md.
+   * The default panel sells a two-sided marketplace to someone who has not said
+   * which side they are on, so each line names its audience. Generic copy for
+   * everyone says nothing to either.
    */
-  it('states the three customer guarantees and no platform statistics', () => {
+  it('labels each line of the default panel with the side it belongs to', () => {
     render(<SignUpForm initialRole={null} />);
+
+    for (const [label, line] of [
+      ['Booking', "See what a vendor charges and when they're free"],
+      ['Vending', 'Publish your prices and own your calendar'],
+      ['Both', 'Payment held until the event is complete'],
+    ]) {
+      expect(screen.getByText(label), label).toBeDefined();
+      expect(screen.getByText(line), line).toBeDefined();
+    }
+  });
+
+  it('states the three customer guarantees and no platform statistics', async () => {
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole={null} />);
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
 
     expect(screen.getByText('Live calendars — if a date shows open, it is')).toBeDefined();
     expect(screen.getByText('Payment held until the event is complete')).toBeDefined();
@@ -145,8 +210,23 @@ describe('SignUpForm', () => {
     expect(document.body.textContent).not.toMatch(/thousands|#1|trusted by/i);
   });
 
-  it('leads the marketing panel with the three-line headline, closing in italic', () => {
+  it('leads the default panel with its own three-line headline', () => {
     const { container } = render(<SignUpForm initialRole={null} />);
+
+    const headline = headlineStartingWith(container, 'Clear prices.');
+
+    expect(headline.textContent).toBe('Clear prices.Open calendars.No back-and-forth.');
+    const accent = headline.querySelector('span');
+    expect(accent?.textContent).toBe('No back-and-forth.');
+    expect(accent?.className).toContain('italic');
+    expect(accent?.className).toContain('text-gold-200');
+  });
+
+  it('leads the customer panel with the three-line headline, closing in italic', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<SignUpForm initialRole={null} />);
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
 
     const headline = headlineStartingWith(container, 'See the price.');
 
@@ -159,8 +239,11 @@ describe('SignUpForm', () => {
     expect(accent?.className).toContain('text-gold-200');
   });
 
-  it('demonstrates published pricing rather than calling it transparent', () => {
+  it('demonstrates published pricing rather than calling it transparent', async () => {
+    const user = userEvent.setup();
     render(<SignUpForm initialRole={null} />);
+
+    await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
 
     expect(
       screen.getByText(/Every vendor publishes what they charge and when they're free/),

@@ -62,11 +62,20 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
+      {/*
+        The group is the visual box, so the group takes the focus ring. Its
+        built-in rule keys off `data-slot="input-group-control"`, which this
+        input doesn't carry, so it is spelled out for `command-input` here.
+        Without it the input fell through to the global `:focus-visible` ring
+        and drew an offset rectangle *inside* the group — cutting across the
+        search icon in the addon and clipping against the popover's rounded
+        edge.
+      */}
+      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! has-[[data-slot=command-input]:focus-visible]:border-ring has-[[data-slot=command-input]:focus-visible]:ring-3 has-[[data-slot=command-input]:focus-visible]:ring-ring/50 *:data-[slot=input-group-addon]:pl-2!">
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
-            'w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
+            'w-full text-sm outline-hidden focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50',
             className,
           )}
           {...props}

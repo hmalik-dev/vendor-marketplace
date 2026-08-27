@@ -40,6 +40,25 @@ export const metadata: Metadata = {
   description: 'Find and book photographers, DJs, caterers, and florists for your event.',
 };
 
+/**
+ * The strings frame `12 Sign up` writes, where Clerk's defaults say something
+ * else. Scoped keys only: `signUp.start.*` cannot leak onto `/sign-in`.
+ *
+ * The submit button is deliberately absent. Clerk's `formButtonPrimary` is a
+ * single global key shared by every flow, so setting it to the frame's "Create
+ * my account" would also put that label on the sign-in form, where it is simply
+ * wrong. A wrong string on one screen is worse than a generic one on another —
+ * see the deviation note in design/design-plan/21-sign-up.md.
+ */
+const CLERK_COPY = {
+  formFieldLabel__emailAddress: 'Email',
+  signUp: {
+    start: {
+      actionText: 'Already with us?',
+    },
+  },
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -59,7 +78,10 @@ export default function RootLayout({
           against the same tokens. Never hand-write a brand hex into an
           appearance object: it becomes a second source of truth and it drifts.
         */}
-        <ClerkProvider appearance={{ theme: shadcn }}>
+        <ClerkProvider
+          appearance={{ theme: shadcn, variables: { borderRadius: 'var(--radius-lg)' } }}
+          localization={CLERK_COPY}
+        >
           {/*
             The adapter sits above the header, not inside the search page: on
             `/search` the query bar lives in the header and the results live in

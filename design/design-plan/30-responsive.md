@@ -31,16 +31,16 @@ they must not break, and they never dictate the desktop layout.
 
 ## Marketing header
 
-The header's account cluster degrades in one step, and the **Sign up** pill never
-degrades: it stays a pill at 390, beside the hamburger, because sign-up is too
-important to bury in a drawer.
+The header carries a single sign-up control, and it never degrades: the **Sign
+up** pill stays a pill at 390, beside the hamburger, because sign-up is too
+important to bury in a drawer. The vendor path travels with "For vendors" in the
+nav, so it degrades into the drawer with the rest of the nav.
 
-| Control                             | 1440 · 1280 · 1024               | 768 · 390                     |
-| ----------------------------------- | -------------------------------- | ----------------------------- |
-| Browse / How it works / For vendors | In the bar                       | Drawer                        |
-| **List your services**              | In the bar, before a 1px divider | Drawer                        |
-| **Sign in**                         | In the bar                       | Drawer                        |
-| **Sign up** (ink)                   | In the bar                       | **Stays in the bar**, compact |
+| Control                             | 1440 · 1280 · 1024 | 768 · 390                     |
+| ----------------------------------- | ------------------ | ----------------------------- |
+| Browse / How it works / For vendors | In the bar         | Drawer                        |
+| **Sign in**                         | In the bar         | Drawer                        |
+| **Sign up** (ink)                   | In the bar         | **Stays in the bar**, compact |
 
 ## Rules that survive every width
 

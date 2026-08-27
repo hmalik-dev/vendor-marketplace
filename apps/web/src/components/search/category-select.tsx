@@ -84,7 +84,10 @@ export function CategorySelect({
           aria-label="Vendor type"
           className={cn(
             'flex min-w-0 flex-col rounded-full text-left outline-none',
-            'focus-visible:ring-3 focus-visible:ring-clay-400/15',
+            // The bar draws the focus halo for every segment — a ring on this
+            // trigger alone would be a rounded box inside the pill. See the
+            // `has-[:focus-visible]` rule on the form in `search-bar.tsx`.
+            'focus-visible:ring-0 focus-visible:ring-offset-0',
             // Stacks to a full-width row below `sm`, with the bar itself.
             'max-sm:w-full max-sm:py-1.5',
             isHero ? 'sm:flex-[1.3]' : 'sm:flex-[1.15]',
@@ -123,7 +126,27 @@ export function CategorySelect({
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-70 p-0">
+      {/*
+        Always below, never flipped above the bar, and never wider than the
+        segment it belongs to.
+
+        `side="bottom"` with collisions off pins the direction: Radix flips to
+        `top` when the unconstrained list is taller than the space beneath, so
+        the picker would open upward on a short window or once the page has
+        scrolled — over the headline the visitor is reading. The height cap is
+        what makes that safe: the list scrolls inside the available space
+        instead of overflowing off-screen.
+
+        The width tracks the trigger so the panel sits under its own segment.
+        A fixed 280px panel starting at the segment's left edge ran under the
+        Search button and hid it. See design/design-plan/11-search.md.
+      */}
+      <PopoverContent
+        align="start"
+        side="bottom"
+        avoidCollisions={false}
+        className="w-(--radix-popover-trigger-width) max-h-(--radix-popover-content-available-height) min-w-56 overflow-hidden p-0"
+      >
         <Command
           // The list is short and already in seed order; cmdk's own fuzzy
           // ranking would reorder it and lose that.
