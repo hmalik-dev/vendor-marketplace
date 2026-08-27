@@ -48,6 +48,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # First, and on its own: a pre-commit hook can be skipped with
+      # `--no-verify`, so the same scan runs here over every tracked file. This
+      # is the copy that cannot be bypassed.
+      - name: Scan for committed credentials
+        run: pnpm secrets:scan:all
+
       - run: pnpm format:check
 
       - run: pnpm typecheck

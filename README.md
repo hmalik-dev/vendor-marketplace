@@ -79,6 +79,44 @@ pnpm test       # Vitest across the workspace
 The database suite runs against an in-process PostgreSQL (PGlite), so
 `pnpm test` needs no running database.
 
+## Credentials
+
+Three layers keep a credential out of the repository, in the order they fire:
+
+1. **`.gitignore`** ignores `.env.*` wholesale and re-admits only the generated
+   `.env.example`. It previously listed `.env`, `.env.local` and `.env.*.local`
+   by name, which left an ad-hoc `.env.bak` stageable.
+2. **A pre-commit hook** runs `pnpm secrets:scan` over the _staged blobs_ — not
+   the working tree, so staging a secret and then editing the file does not get
+   past it. It is installed by the root `prepare` script, so `pnpm install` is
+   all a fresh clone needs. Run it by hand any time.
+3. **CI** runs `pnpm secrets:scan:all` over every tracked file, before anything
+   else. A hook skipped with `--no-verify` still fails the pull request.
+
+The scan looks for provider token shapes (Stripe, Clerk, svix, Neon, AWS,
+GitHub, Slack, Google), private key blocks, npm auth tokens, database URLs
+carrying a password to a non-local host, and high-entropy values assigned to
+secret-named keys. It also refuses any `.env*` other than `.env.example`, plus
+`.pem`/`.key`/`.netrc`/`.pgpass` files.
+
+Findings print a truncated excerpt and a length, never the credential — they
+end up in CI logs.
+
+False positives have two escape hatches. For a one-off, mark the line:
+
+```ts
+const key = 'sk_test_...'; // secret-scan:allow
+```
+
+For a fixture the env-shape suites assert against, add the literal to
+`KNOWN_FIXTURES` in `packages/preflight/src/secrets/patterns.ts`, so the
+exceptions stay in one reviewable place. `secret-scan:allow-file` exempts a
+whole file and is reserved for suites that exist to hold credential shapes.
+
+**If the scan ever fires on a real value, rotate it.** A credential that reached
+a file you tried to commit should be treated as compromised, not as nearly
+leaked.
+
 ## Running the API in a container
 
 `apps/api/Dockerfile` builds the deployable API image. The build context is the

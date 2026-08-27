@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+#
+# Blocks a commit that would put a credential in the repository. Scans the
+# staged blobs, not the working tree, so editing a file after `git add` cannot
+# sneak a value past.
+#
+# Installed by the root `prepare` script, which points `core.hooksPath` here on
+# every `pnpm install`. To run it by hand: `pnpm secrets:scan`.
+set -e
+
+exec pnpm --silent secrets:scan

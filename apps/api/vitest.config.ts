@@ -9,13 +9,14 @@ export default defineConfig({
     hookTimeout: 60_000,
     /*
      * Every suite file boots its own PGlite, which is a WASM Postgres holding
-     * hundreds of megabytes. Vitest's default pool is one fork per core, and
-     * `turbo run test` runs the web suite alongside this one, so the default
-     * put seven of them plus jsdom on the machine at once — enough memory
-     * pressure that `createTestHarness` intermittently blew the 60s hook
-     * timeout, on a different file each run. Capping the pool trades a little
-     * wall-clock for a suite that does not fail on how busy the machine is.
+     * hundreds of megabytes. Vitest defaults to roughly one worker per core,
+     * and `turbo run test` runs the web suite alongside this one, so the
+     * default put seven of them plus jsdom on an eight-gigabyte machine at
+     * once — enough memory pressure that `createTestHarness` intermittently
+     * blew the 60s hook timeout, on a different file each run. Capping the
+     * pool trades a little wall-clock for a suite that does not fail on how
+     * busy the machine happens to be.
      */
-    poolOptions: { forks: { maxForks: 3 } },
+    maxWorkers: 3,
   },
 });

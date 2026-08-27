@@ -36,6 +36,7 @@ Run from the repository root; Turborepo fans each task out across packages.
 | Format          | `pnpm format` (check with `pnpm format:check`)                                               |
 | Preflight gate  | `pnpm preflight --ticket <n>`                                                                |
 | Regenerate env  | `pnpm env:example`                                                                           |
+| Secret scan     | `pnpm secrets:scan` (staged) · `pnpm secrets:scan:all` (whole tree)                          |
 | Dev servers     | `pnpm dev`                                                                                   |
 | Build API image | `docker build -f apps/api/Dockerfile -t vendor-marketplace-api .` (context is the repo root) |
 | Single package  | `pnpm --filter @vendor-marketplace/db <script>`                                              |
@@ -84,6 +85,12 @@ constants from `packages/shared`.
 - **Derived columns** (`vendor_profiles.avg_rating`, `review_count`) are
   recomputed from source rows, never incremented, and never writable by an
   endpoint.
+- **Credentials never reach git.** `.gitignore` covers `.env.*` and re-admits
+  only `.env.example`; a pre-commit hook scans the staged blobs; CI scans every
+  tracked file so `--no-verify` cannot bypass it. The rules, the fixture
+  allowlist, and the `secret-scan:allow` pragma live in
+  `packages/preflight/src/secrets/`. If the scan fires on a real value, rotate
+  it rather than only deleting it.
 - **Environment variables live once**, in `packages/shared/src/env/registry.ts`.
   `.env.example` and `turbo.json`'s `globalPassThroughEnv` are generated from it
   by `pnpm env:example`; a test in `packages/shared` fails if either drifts.

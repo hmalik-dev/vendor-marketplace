@@ -9,6 +9,8 @@
   "scripts": {
     "build": "turbo run build",
     "preflight": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run preflight",
+    "secrets:scan": "pnpm --filter @vendor-marketplace/preflight run secrets:scan",
+    "secrets:scan:all": "pnpm --filter @vendor-marketplace/preflight run secrets:scan -- --tracked",
     "env:example": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run env:example",
     "start": "pnpm install && docker compose up -d && docker compose up -d --wait postgres storage && pnpm db:migrate && pnpm db:seed && pnpm dev",
     "dev": "turbo run dev",
@@ -20,7 +22,8 @@
     "db:generate": "pnpm --filter @vendor-marketplace/db generate",
     "db:migrate": "pnpm --filter @vendor-marketplace/db migrate",
     "db:seed": "pnpm --filter @vendor-marketplace/db seed",
-    "db:studio": "pnpm --filter @vendor-marketplace/db studio"
+    "db:studio": "pnpm --filter @vendor-marketplace/db studio",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
     "prettier": "3.9.6",
