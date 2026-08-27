@@ -87,10 +87,24 @@ placeholder. Deferred — see `98-post-mvp.md`.
 Six cards — the first six by `displayOrder`, which doubles as landing priority.
 The full eleven live on search, where a category is a filter you can click.
 
-Card: `bg-stone-0 rounded-xl p-3.5`; a 36px `clay-100` circle holding the
-category's lucide glyph in `clay-500`; name in Instrument Serif 17px; then a
-plain description of what the category covers in 11.5px `stone-600` — "Photo &
-film", "DJs, bands, hosts", "Hair & makeup".
+Card: `bg-stone-0 rounded-xl overflow-hidden` — no padding on the card itself.
+A 94px cover photograph fills the top, edge to edge, under `object-fit:cover`;
+an inner `11px 13px 13px` block then holds the name in Instrument Serif 17px
+and a plain description of what the category covers in 11.5px `stone-600` —
+"Photo & film", "DJs, bands, hosts", "Hair & makeup".
+
+`overflow-hidden` on the card is what makes the radius clip the photograph.
+Without it the image corners escape the card.
+
+**These six photographs are the only imagery the platform owns.** Every
+vendor-side cover, portfolio item and avatar stays a labelled placeholder,
+because that photography arrives from the vendor at publish time. A surface
+that "fixes" a hatched vendor placeholder with stock art has broken this rule,
+not satisfied it.
+
+This replaced a 36px `clay-100` circle holding the lucide glyph. A photograph
+shows what a category is; a glyph only labels it — and the six categories are
+the one place the product can afford to show rather than tell.
 
 **Not a vendor count and not a from-price.** Both are deferred (below).
 
@@ -122,6 +136,8 @@ The hero's photo cluster and the trust signals carry the proof instead. See
 - [ ] Hero is two columns at ≥1024; the cluster never stacks above that
 - [ ] **No number on this page that isn't read from the database** — and in MVP that means no platform stats at all
 - [ ] Category cards describe the category; they do not count vendors
+- [ ] Every category card carries its photograph — no glyph circle remains
+- [ ] No vendor-side cover, portfolio item or avatar has been given stock art
 - [ ] Both sign-up paths present in the header, customer as the pill
 - [ ] No vendor chip, rating or reply-time claim anywhere on the page
 
