@@ -145,11 +145,11 @@ export function PackageManager({
 
   return (
     <>
-      <div className="grid min-h-0 gap-4 xl:h-full xl:grid-cols-[var(--rail-width-booking)_1fr] xl:gap-6">
+      <div className="grid min-h-0 gap-4 xl:h-full xl:grid-cols-[var(--rail-booking)_1fr] xl:gap-6">
         {/* The list keeps its own scroll so the editor beside it stays put. */}
         <div
           className={cn(
-            'min-h-0 flex-col rounded-lg border border-stone-150 bg-card shadow-sm xl:flex xl:overflow-hidden',
+            'min-h-0 flex-col rounded-lg border border-stone-300 bg-card shadow-sm xl:flex xl:overflow-hidden',
             selection !== null ? 'hidden xl:flex' : 'flex',
           )}
         >
@@ -174,7 +174,7 @@ export function PackageManager({
                   }}
                   className={cn(
                     'flex items-start gap-2 p-3 transition-colors duration-(--duration-fast)',
-                    isSelected ? 'bg-primary-50' : 'hover:bg-stone-50',
+                    isSelected ? 'bg-clay-100' : 'hover:bg-stone-50',
                     draggingId === servicePackage.id && 'opacity-50',
                   )}
                 >
@@ -194,7 +194,7 @@ export function PackageManager({
                     <span className="mt-0.5 block text-sm text-stone-600">
                       {priceLabel(servicePackage)}
                     </span>
-                    <span className="mt-0.5 block text-xs text-stone-500">
+                    <span className="mt-0.5 block text-xs text-stone-600">
                       {PRICE_TYPE_LABELS[servicePackage.priceType]}
                       {servicePackage.isActive ? '' : ' · Hidden from customers'}
                     </span>
@@ -242,7 +242,7 @@ export function PackageManager({
             <button
               type="button"
               onClick={() => setSelection(NEW_PACKAGE)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-4 text-sm font-medium text-stone-600 transition-colors duration-(--duration-fast) hover:border-primary-400 hover:bg-primary-50 hover:text-primary-600"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-4 text-sm font-medium text-stone-600 transition-colors duration-(--duration-fast) hover:border-clay-400 hover:bg-clay-100 hover:text-clay-600"
             >
               <Plus aria-hidden="true" className="size-4" />
               Add a package
@@ -252,7 +252,7 @@ export function PackageManager({
 
         <div
           className={cn(
-            'min-h-0 rounded-lg border border-stone-150 bg-card shadow-sm xl:overflow-hidden',
+            'min-h-0 rounded-lg border border-stone-300 bg-card shadow-sm xl:overflow-hidden',
             selection === null ? 'hidden xl:block' : 'block',
           )}
         >

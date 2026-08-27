@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
+import { pageTitle } from '@vendor-marketplace/shared';
 import { redirect } from 'next/navigation';
 import { PortfolioManager } from '@/components/portfolio/portfolio-manager';
 import { VendorSurface } from '@/components/vendor-surface';
 import { requireRole } from '@/lib/current-user';
 import { getOwnPortfolio, getOwnVendorProfile } from '@/lib/vendor-data';
 
-export const metadata: Metadata = { title: 'Portfolio · VenMatch' };
+export const metadata: Metadata = { title: pageTitle('Portfolio') };
 
 const PROFILE_EDIT_PATH = '/vendor/profile/edit';
 

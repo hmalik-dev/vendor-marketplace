@@ -35,15 +35,15 @@ export function VendorSurface({
       // shell owns the whole viewport, so the marketing footer below it would
       // push the page past its 1.0x scroll budget.
       data-app-shell={fills ? '' : undefined}
-      className={cn(
-        'flex w-full max-w-app flex-col px-4 py-6 sm:px-6 lg:px-8',
-        fills && 'lg:app-shell',
-      )}
+      className={cn('flex w-full flex-col px-4 py-6 sm:px-6 lg:px-8', fills && 'lg:app-shell')}
     >
       <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div className="max-w-prose">
-          <p className="text-xs font-medium tracking-wide text-primary-600 uppercase">{eyebrow}</p>
-          <h1 className="mt-1 font-display text-2xl font-semibold text-stone-800">{heading}</h1>
+          <p className="text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+            {eyebrow}
+          </p>
+          {/* App page titles cap at 26px — a display-lg heading in an app frame is a bug. */}
+          <h1 className="mt-1 font-display text-display-md text-stone-900">{heading}</h1>
           <p className="mt-1 text-sm text-stone-600">{description}</p>
         </div>
         {aside}

@@ -60,9 +60,26 @@ describe('price conversion', () => {
   });
 
   it('formats cents as USD', () => {
-    expect(formatPrice(2500)).toBe('$25.00');
-    expect(formatPrice(0)).toBe('$0.00');
     expect(formatPrice(123456)).toBe('$1,234.56');
+    expect(formatPrice(2501)).toBe('$25.01');
+    expect(formatPrice(1)).toBe('$0.01');
+  });
+
+  /*
+   * Vendor prices are almost always whole dollars, and a column of `$1,450.00`
+   * spends two characters per row saying nothing. See the display-boundary
+   * table in design/design-plan/01-foundations.md.
+   */
+  it('hides the cents when a price is a whole number of dollars', () => {
+    expect(formatPrice(2500)).toBe('$25');
+    expect(formatPrice(0)).toBe('$0');
+    expect(formatPrice(145000)).toBe('$1,450');
+    expect(formatPrice(240000)).toBe('$2,400');
+  });
+
+  it('groups thousands so a four-figure price is readable at a glance', () => {
+    expect(formatPrice(100000)).toBe('$1,000');
+    expect(formatPrice(999999)).toBe('$9,999.99');
   });
 });
 

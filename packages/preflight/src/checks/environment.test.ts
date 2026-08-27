@@ -87,7 +87,7 @@ describe('evaluateVariable', () => {
   it('accepts a real production value', () => {
     const result = evaluateVariable(
       API_URL,
-      contextWith({ API_URL: 'https://api.venmatch.app' }, 'production'),
+      contextWith({ API_URL: 'https://api.orla.app' }, 'production'),
     );
 
     expect(result.ok).toBe(true);

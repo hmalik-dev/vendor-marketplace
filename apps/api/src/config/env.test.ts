@@ -95,16 +95,16 @@ describe('allowedOrigins', () => {
   it('splits a comma-separated list and trims each entry', () => {
     const env = parseEnv({
       ...REQUIRED,
-      WEB_URL: 'http://localhost:3000, https://venmatch.app ',
+      WEB_URL: 'http://localhost:3000, https://orla.app ',
     });
 
-    expect(allowedOrigins(env)).toEqual(['http://localhost:3000', 'https://venmatch.app']);
+    expect(allowedOrigins(env)).toEqual(['http://localhost:3000', 'https://orla.app']);
   });
 
   it('drops empty segments from a trailing comma', () => {
-    const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://venmatch.app,' });
+    const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://orla.app,' });
 
-    expect(allowedOrigins(env)).toEqual(['https://venmatch.app']);
+    expect(allowedOrigins(env)).toEqual(['https://orla.app']);
   });
 });
 

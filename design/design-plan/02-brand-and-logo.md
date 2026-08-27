@@ -2,7 +2,8 @@
 
 ## The mark
 
-Two circles of equal diameter, overlapping by 45% of that diameter.
+Two circles of equal diameter. The right one is offset by 45% of that diameter,
+so they overlap by the remaining 55% and the whole mark spans 1.45 D.
 Left circle: solid clay fill. Right circle: ink stroke at 8% of diameter, no fill.
 
 It reads as **an introduction** — two parties meeting — which is the product in
@@ -12,7 +13,7 @@ the construction.
 
 ```
 diameter          D
-overlap           0.45 D  (left edge of right circle sits at 0.55 D)
+offset            0.45 D  (left edge of the right circle sits at 0.45 D)
 stroke            0.08 D
 total mark width  1.45 D
 wordmark gap      0.50 D from the right circle's right edge
@@ -30,7 +31,10 @@ wordmark size     1.60 D, Instrument Serif, ink
 | App icon (52px tile, r=12) | 24px      | 35px       | —        |
 | Favicon 32 / 16            | 16 / 14px | 23 / 20px  | —        |
 
-Below 16px the wordmark is dropped; the mark alone is the favicon.
+The favicon and the app icon ask for the mark alone (`variant="mark"`), where
+the wordmark would be illegible. That is the caller's choice, not an automatic
+size cutoff — the desktop header sets D=15 and still shows the wordmark, as
+frame `01 Landing` renders it.
 
 ## Colourways
 

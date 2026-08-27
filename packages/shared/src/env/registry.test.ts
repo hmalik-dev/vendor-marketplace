@@ -1,3 +1,4 @@
+import { BRAND_DOMAIN } from '../constants/brand.js';
 import { describe, expect, it } from 'vitest';
 import {
   CAPABILITIES,
@@ -148,7 +149,7 @@ describe('ENV_REGISTRY integrity', () => {
 
     expect(from).toBeDefined();
     expect(from?.shape).toBeUndefined();
-    expect(exampleValue(from!)).toBe('noreply@venmatch.com');
+    expect(exampleValue(from!)).toBe(`noreply@${BRAND_DOMAIN}`);
   });
 
   it('keeps the end-to-end credentials out of the .env contract', () => {

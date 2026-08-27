@@ -1,70 +1,61 @@
 /*
- * Shared Tailwind CSS 4 theme for Vendor Marketplace.
+ * Shared Tailwind CSS 4 theme for Vendor Marketplace — the Orla design tokens.
  * Tailwind 4 is CSS-first: apps import this file after `@import 'tailwindcss'`
  * so every surface inherits the same design tokens.
  *
- * Source of truth: design/design-plan/01-foundations.md (the Orla design plan).
+ * Source of truth: design/design-plan/01-foundations.md.
  *
- * NOTE: the ramps below are the pre-Orla palette (terracotta `primary-*`,
- * Fraunces/Albert Sans). Ticket #21 replaces them with the Orla tokens — clay
- * as a fill-only action colour, sage/gold/steel as signals, Instrument
- * Serif/Sans — and nothing here should be extended in the meantime.
+ * Colour is a signal, not decoration: clay means *you can act here*, sage means
+ * *settled*, gold means *waiting on someone*, steel means *information*.
  */
 
 @theme {
-  /* --- Primary: Terracotta --- */
-  --color-primary-50: #fef3ee;
-  --color-primary-100: #fce4d6;
-  --color-primary-200: #f9c5a8;
-  --color-primary-300: #f4a070;
-  --color-primary-400: #ee7b3f;
-  --color-primary-500: #e05e20;
-  --color-primary-600: #c44a16;
-  --color-primary-700: #a33814;
-  --color-primary-800: #832e17;
-  --color-primary-900: #6b2816;
+  /*
+   * Clay — the action colour, and a FILL ONLY. `clay-400` sits behind white
+   * text; clay as text on any cream ground is `clay-500`. That split is an
+   * accessibility rule, not a preference: `clay-400` on `stone-100` measures
+   * 4.32:1 and fails AA.
+   */
+  --color-clay-50: #fdf4ef;
+  --color-clay-100: #f7e7e0; /* tinted surfaces: active nav, selected states */
+  --color-clay-200: #efd8cc; /* borders on clay surfaces */
+  --color-clay-300: #dda98c;
+  --color-clay-400: #b4552f; /* PRIMARY FILL — buttons, sliders, selected days */
+  --color-clay-500: #a34a28; /* CLAY AS TEXT — links, ghost buttons, accents */
+  --color-clay-600: #8e3f20; /* text on clay-100 surfaces, pressed fill */
 
-  /* --- Secondary: Sage --- */
-  --color-sage-50: #f2f5f0;
-  --color-sage-100: #e1e8dc;
-  --color-sage-200: #c4d1ba;
-  --color-sage-300: #9fb38f;
-  --color-sage-400: #7a9468;
-  --color-sage-500: #5e7a4e;
-  --color-sage-600: #49613d;
-  --color-sage-700: #3a4d33;
-  --color-sage-800: #313f2c;
-  --color-sage-900: #2a3526;
+  /* Sage — settled, confirmed, complete. */
+  --color-sage-50: #edf0e9;
+  --color-sage-100: #e4e9de;
+  --color-sage-200: #a8c08e; /* pale sage — decorative dots on an ink ground */
+  --color-sage-400: #5e6b4f;
+  --color-sage-600: #4b5940; /* sage as text */
 
-  /* --- Accent: Gold --- */
-  --color-gold-100: #fbf3e0;
-  --color-gold-200: #f5e2b8;
-  --color-gold-300: #eece84;
-  --color-gold-400: #d4a853;
-  --color-gold-500: #c49530;
-  --color-gold-600: #a57a1e;
+  /* Gold — waiting on someone. */
+  --color-gold-50: #f5eedc;
+  --color-gold-400: #c99a2e;
+  --color-gold-600: #7a5a12; /* gold as text — #8A6716 measures 4.27:1 and fails */
 
-  /* --- Neutrals: Warm Stone (deliberately shadows Tailwind's cool `stone`) --- */
-  --color-stone-0: #ffffff;
-  --color-stone-50: #faf7f2;
-  --color-stone-100: #f0ebe3;
-  --color-stone-150: #e8e2d8;
-  --color-stone-200: #e2dcd2;
-  --color-stone-300: #c9c1b5;
-  --color-stone-400: #a89e90;
-  --color-stone-500: #8b8178;
-  --color-stone-600: #6e655c;
-  --color-stone-700: #524b44;
-  --color-stone-800: #3a3530;
-  --color-stone-900: #2c2825;
+  /* Steel — neutral information. */
+  --color-steel-50: #eef3fa;
+  --color-steel-600: #3d6a8c;
 
-  /* --- Semantic --- */
-  --color-success: #5e7a4e;
-  --color-warning: #d4a853;
-  --color-error: #c4453d;
-  --color-error-light: #fef2f1;
-  --color-info: #4a7fa5;
-  --color-info-light: #eff6fb;
+  /* Error. */
+  --color-error-50: #fbeeec;
+  --color-error-500: #b23a30;
+
+  /* Warm stone — the neutral ramp. Deliberately shadows Tailwind's cool `stone`. */
+  --color-stone-0: #fffdf9; /* cards, header, rails — never pure white */
+  --color-stone-50: #f8f5ef; /* page background */
+  --color-stone-100: #f4f0e8; /* table header, deeper panels */
+  --color-stone-150: #f1ece4; /* input fill, nested surfaces */
+  --color-stone-200: #efe9e0; /* hairline dividers inside cards */
+  --color-stone-300: #e4ddd1; /* borders */
+  --color-stone-400: #d5cec2; /* stronger borders, unchecked controls */
+  --color-stone-500: #c9c1b5; /* disabled text ONLY — fails AA by design */
+  --color-stone-600: #6b6459; /* MUTED TEXT — the minimum for any real label */
+  --color-stone-700: #4a443c; /* body text */
+  --color-stone-900: #23201c; /* headings, ink */
 
   /*
    * Font stacks. The `--font-*-face` variables are emitted by `next/font` in
@@ -72,63 +63,120 @@
    * custom property invalidates the entire declaration, dropping the stack to
    * the browser default rather than to the next family listed.
    */
-  --font-sans: var(--font-body-face, 'Albert Sans'), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-display-face, 'Fraunces'), ui-serif, Georgia, serif;
+  --font-display: var(--font-display-face, 'Instrument Serif'), ui-serif, Georgia, serif;
+  --font-sans: var(--font-body-face, 'Instrument Sans'), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-face, 'JetBrains Mono'), ui-monospace, monospace;
 
-  /* --- Border radius: varied on purpose, not 8px everywhere --- */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  /*
+   * Type scale. One scale, two densities: the same token carries a marketing
+   * and an app use (see the table in 01-foundations.md). The display steps are
+   * Instrument Serif; `display-lg` and above are marketing-only, and a
+   * `display-lg` heading inside an app frame is a bug.
+   */
+  --text-xs: 11px;
+  --text-xs--line-height: 1.4;
+  --text-sm: 12.5px;
+  --text-sm--line-height: 1.5;
+  --text-base: 13.5px;
+  --text-base--line-height: 1.6;
+  --text-md: 15px;
+  --text-md--line-height: 1.6;
+  --text-lg: 16px;
+  --text-lg--line-height: 1.6;
+  --text-display-sm: 21px;
+  --text-display-sm--line-height: 1.25;
+  --text-display-md: 26px;
+  --text-display-md--line-height: 1.2;
+  --text-display-lg: 34px;
+  --text-display-lg--line-height: 1.15;
+  --text-display-xl: 54px;
+  --text-display-xl--line-height: 1.08;
 
-  /* --- Container ceilings (§4): one ceiling per surface class, not one for all --- */
-  --container-prose: 45rem; /* 720px  — long-form reading */
-  --container-form: 65rem; /* 1040px — two-column form pane */
-  --container-app: 90rem; /* 1440px — dashboards, detail views, checkout */
-  --container-wide: 105rem; /* 1680px — search, messaging, admin tables */
+  /* Radius: five steps, varied on purpose, not 8px everywhere. */
+  --radius-sm: 6px; /* badges, category chips, small pills */
+  --radius-md: 8px; /* table controls, filter buttons */
+  --radius-lg: 10px; /* buttons, inputs */
+  --radius-xl: 14px; /* cards, panels, drop zones */
+  --radius-2xl: 18px; /* vendor cards, booking rail, modals */
 
-  /* --- Chrome the full-height app shells are measured against (§9) --- */
-  --header-height: 4rem; /* 64px  — sticky site header */
-  --sidebar-width: 15rem; /* 240px — dashboard sidebar at >=1280 */
-  --sidebar-width-sm: 12.5rem; /* 200px — 1024-1279 */
-  --sidebar-width-icon: 4.5rem; /* 72px  — tablet icon rail */
-  --rail-width: 21.25rem; /* 340px — dashboard/context rails */
-  --rail-width-filter: 17.5rem; /* 280px — search filter rail */
-  --rail-width-booking: 23.75rem; /* 380px — vendor profile booking rail */
-  --rail-width-summary: 26.25rem; /* 420px — checkout order summary */
-  --section-nav-width: 12.5rem; /* 200px — sticky form section nav */
+  /* Shadows: warm-tinted with the ink, never neutral grey, never black. */
+  --shadow-sm: 0 2px 10px rgba(35, 32, 28, 0.06);
+  --shadow-md: 0 4px 18px rgba(35, 32, 28, 0.09);
+  --shadow-lg: 0 8px 28px rgba(35, 32, 28, 0.1);
+  --shadow-xl: 0 12px 40px rgba(35, 40, 38, 0.2);
+  --shadow-hover: 0 8px 24px rgba(35, 32, 28, 0.12);
 
-  /* --- Density (§4): row heights by surface class --- */
+  /* Chrome the full-height app shells are measured against. */
+  --header-height: 4rem; /* 64px — 56px below 768 */
+  --sidebar-width: 15rem; /* 240px */
+  --sidebar-width-sm: 12.5rem; /* 200px — also the sticky form section nav */
+  --sidebar-width-icon: 4.5rem; /* 72px tablet icon rail */
+  --rail-width: 21.25rem; /* 340px — dashboard rails */
+  --rail-filter: 17.5rem; /* 280px — search filters */
+  --rail-booking: 23.75rem; /* 380px — vendor profile */
+  --rail-summary: 26.25rem; /* 420px — checkout */
+  --rail-context: 20rem; /* 320px — messaging booking context */
+  --list-pane: 18.75rem; /* 300px — conversation list */
+
+  /* Density: row heights by surface class. */
   --row-height: 3.5rem; /* 56px — app surfaces */
   --row-height-dense: 2.75rem; /* 44px — admin tables, message list */
 
-  /* --- Motion (§6) --- */
+  /* Motion. */
   --duration-fast: 150ms; /* hover, focus, colour change */
   --duration-base: 200ms; /* buttons, cards, pills */
   --duration-slow: 300ms; /* panels, drawers, sticky chrome */
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* --- Layering: never a bare z-index in a component --- */
+  /* Layering: never a bare z-index in a component. */
   --z-sticky: 10; /* sticky submit bars, table header rows */
   --z-header: 40; /* site header */
   --z-drawer: 50; /* mobile drawers, bottom sheets */
   --z-modal: 60; /* dialogs */
   --z-toast: 70; /* toasts, above everything */
 
-  /* --- Shadows: warm-tinted, never pure black --- */
-  --shadow-sm: 0 1px 2px rgba(44, 40, 37, 0.04);
-  --shadow-md: 0 2px 8px rgba(44, 40, 37, 0.06), 0 1px 2px rgba(44, 40, 37, 0.04);
-  --shadow-lg: 0 4px 16px rgba(44, 40, 37, 0.08), 0 2px 4px rgba(44, 40, 37, 0.04);
-  --shadow-xl: 0 8px 32px rgba(44, 40, 37, 0.1), 0 4px 8px rgba(44, 40, 37, 0.04);
-  --shadow-hover: 0 8px 24px rgba(44, 40, 37, 0.12);
+  /*
+   * Content loading. The shimmer sweeps stone-200 -> stone-150 -> stone-200,
+   * and the wordmark pulse is the page-level state.
+   */
+  --animate-wordmark-pulse: wordmark-pulse 2s ease-in-out infinite;
+
+  @keyframes shimmer {
+    0%,
+    100% {
+      background-color: var(--color-stone-200);
+    }
+    50% {
+      background-color: var(--color-stone-150);
+    }
+  }
+
+  @keyframes wordmark-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes skeleton-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 /*
- * Shared utilities carrying the §4 layout laws. Defined once here so no surface
- * re-derives them: a hand-rolled `h-[calc(100dvh-64px)]` is a second source of
- * truth for the header height, and it drifts.
+ * Shared utilities carrying the layout laws in design/design-plan/04-laws.md.
+ * Defined once here so no surface re-derives them: a hand-rolled
+ * `h-[calc(100dvh-64px)]` is a second source of truth for the header height,
+ * and it drifts.
  */
 
 /* Fills the viewport below the header; the page itself never scrolls. */
@@ -147,7 +195,7 @@
 /* "Forms are grids, not queues" — a field spans both columns with col-span-2. */
 @utility field-grid {
   display: grid;
-  gap: 1.25rem 1.5rem; /* y 20px, x 24px */
+  gap: 0.8125rem 1.25rem; /* y 13px, x 20px */
   grid-template-columns: 1fr;
   @media (width >= 40rem) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -155,15 +203,35 @@
 }
 
 /*
- * §3 gradient 1 of 4 — atmospheric depth behind the landing headline. Gradients
- * are surgical here: §3 forbids them on cards, chrome, and every app surface,
- * so this belongs to marketing surfaces only.
+ * Atmospheric depth behind the landing headline, per
+ * design/design-plan/10-landing.md. Gradients are surgical: forbidden on cards,
+ * chrome, and every app surface, so this belongs to marketing surfaces only.
  */
 @utility hero-gradient {
-  background-image: linear-gradient(
-    135deg,
-    var(--color-stone-50) 40%,
-    var(--color-primary-50) 70%,
-    var(--color-primary-100) 100%
-  );
+  background-image: linear-gradient(155deg, var(--color-stone-50) 0%, #f7f0e8 52%, #f2e4d8 100%);
+}
+
+/*
+ * Placeholder imagery until real photography exists. Never a hand-drawn
+ * illustration, never a stock-photo stand-in — a labelled swatch that reads as
+ * deliberately unfinished.
+ */
+@utility placeholder-hatch {
+  background-image: repeating-linear-gradient(135deg, #e6dfd3 0 9px, #efe9df 9px 18px);
+}
+
+/*
+ * A loading skeleton. The 200ms delay on both animations is the point: a load
+ * that resolves faster than that never paints a skeleton at all, so a quick
+ * response reads as instant rather than as a flash of grey.
+ */
+@utility skeleton-surface {
+  background-color: var(--color-stone-200);
+  animation:
+    skeleton-in 1ms linear 200ms both,
+    shimmer 1.5s ease-in-out 200ms infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: skeleton-in 1ms linear 200ms both;
+  }
 }

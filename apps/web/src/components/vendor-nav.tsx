@@ -36,7 +36,7 @@ export function VendorNav(): React.ReactElement {
   return (
     <nav
       aria-label="Vendor"
-      className="border-b border-stone-150 bg-card lg:border-r lg:border-b-0"
+      className="border-b border-stone-300 bg-stone-0 lg:border-r lg:border-b-0"
     >
       <ul className="flex gap-1 overflow-x-auto px-3 py-2 lg:sticky lg:top-(--header-height) lg:flex-col lg:h-[calc(100dvh-var(--header-height))] lg:overflow-visible lg:px-3 lg:py-6">
         {ITEMS.map((item) => {
@@ -51,10 +51,10 @@ export function VendorNav(): React.ReactElement {
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   // 44px tall below `lg`, where the input is a finger.
-                  'flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 text-sm whitespace-nowrap transition-colors duration-(--duration-fast) lg:min-h-0 lg:py-2',
+                  'flex min-h-11 items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-base font-medium whitespace-nowrap transition-colors duration-(--duration-fast) lg:min-h-0 lg:py-2.5',
                   isActive
-                    ? 'bg-primary-50 font-medium text-primary-600'
-                    : 'text-stone-600 hover:bg-stone-100 hover:text-stone-800',
+                    ? 'bg-clay-100 font-semibold text-clay-600 shadow-[inset_3px_0_0_var(--color-clay-400)]'
+                    : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900',
                 )}
               >
                 <Icon aria-hidden="true" className="size-4 shrink-0" />

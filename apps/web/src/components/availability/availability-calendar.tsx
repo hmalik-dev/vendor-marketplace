@@ -142,8 +142,8 @@ export function AvailabilityCalendar({
   const canPageForward = pageStart + MONTHS_PER_PAGE < allMonths.length;
 
   return (
-    <div className="grid min-h-0 gap-6 xl:h-full xl:grid-cols-[1fr_var(--rail-width-filter)]">
-      <section className="flex min-h-0 flex-col rounded-lg border border-stone-150 bg-card p-2 shadow-sm sm:p-5 xl:overflow-hidden">
+    <div className="grid min-h-0 gap-6 xl:h-full xl:grid-cols-[1fr_var(--rail-filter)]">
+      <section className="flex min-h-0 flex-col rounded-lg border border-stone-300 bg-card p-2 shadow-sm sm:p-5 xl:overflow-hidden">
         <div className="flex shrink-0 items-center justify-between gap-3">
           <Button
             type="button"
@@ -195,7 +195,7 @@ export function AvailabilityCalendar({
                         // Weekday initials repeat (S, T), so the index is the id.
                         key={`${weekday}-${index}`}
                         scope="col"
-                        className="pb-1 text-center text-xs font-medium text-stone-400"
+                        className="pb-1 text-center text-xs font-medium text-stone-600"
                       >
                         <span aria-hidden="true">{weekday}</span>
                       </th>
@@ -227,10 +227,13 @@ export function AvailabilityCalendar({
                               className={cn(
                                 'flex aspect-square w-full items-center justify-center rounded-md text-xs tabular-nums transition-colors duration-(--duration-fast)',
                                 isPast
-                                  ? 'cursor-not-allowed bg-stone-50 text-stone-300'
+                                  ? // stone-500 is the one token allowed to fail
+                                    // AA, and a past date is exactly the inert
+                                    // content it is reserved for.
+                                    'cursor-not-allowed bg-stone-50 text-stone-500'
                                   : STATUS_STYLES[status],
-                                isToday && 'ring-2 ring-primary-400',
-                                isSelected && 'ring-2 ring-primary-600 ring-offset-1',
+                                isToday && 'ring-2 ring-clay-400',
+                                isSelected && 'ring-2 ring-clay-400 ring-offset-1',
                               )}
                             >
                               {Number(date.slice(-2))}
@@ -249,7 +252,7 @@ export function AvailabilityCalendar({
 
       {/* The rail holds the legend and the actions, so neither scrolls away
           while the vendor works through a year of dates. */}
-      <aside className="min-h-0 rounded-lg border border-stone-150 bg-card p-4 shadow-sm sm:p-5 xl:sticky xl:top-0 xl:self-start">
+      <aside className="min-h-0 rounded-lg border border-stone-300 bg-card p-4 shadow-sm sm:p-5 xl:sticky xl:top-0 xl:self-start">
         <h2 className="font-display text-base font-semibold text-stone-800">Legend</h2>
         <ul className="mt-3 space-y-2">
           {(['available', 'blocked', 'booked'] as const).map((status) => (
@@ -274,7 +277,7 @@ export function AvailabilityCalendar({
         <div className="mt-3 space-y-2">
           <Button
             type="button"
-            variant="cta"
+            variant="primary"
             className="h-11 w-full lg:h-8"
             disabled={isSaving || selection.length === 0}
             onClick={() => void apply(selection, 'blocked')}
@@ -283,7 +286,7 @@ export function AvailabilityCalendar({
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             className="h-11 w-full lg:h-8"
             disabled={isSaving || selection.length === 0}
             onClick={() => void apply(selection, 'available')}
@@ -292,7 +295,7 @@ export function AvailabilityCalendar({
           </Button>
         </div>
 
-        <div className="mt-6 border-t border-stone-150 pt-4">
+        <div className="mt-6 border-t border-stone-300 pt-4">
           <p className="text-sm text-stone-600">
             {blockedCount === 0
               ? 'Nothing is blocked — customers can request any future date.'

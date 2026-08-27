@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
+import { BRAND_NAME, pageTitle } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
-export const metadata: Metadata = { title: 'Account suspended · VenMatch' };
+export const metadata: Metadata = { title: pageTitle('Account suspended') };
 
 /**
  * Where a suspended account lands. The API answers every request from a banned
@@ -18,9 +19,9 @@ export default function SuspendedPage(): React.ReactElement {
       </h1>
       <p className="mt-4 text-stone-600">
         You cannot book or list services while this account is suspended. If you think this is a
-        mistake, reply to any VenMatch email and our team will take another look.
+        mistake, reply to any {BRAND_NAME} email and our team will take another look.
       </p>
-      <Button variant="outline" size="cta" className="mt-8" asChild>
+      <Button variant="secondary" className="mt-8" asChild>
         <Link href="/">Back to home</Link>
       </Button>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  BRAND_DOMAIN,
   createVendorProfileSchema,
   generateSlug,
   kmToMiles,
@@ -281,11 +282,11 @@ export function VendorProfileForm({
   };
 
   return (
-    <div className="xl:grid xl:grid-cols-[var(--section-nav-width)_1fr] xl:items-start xl:gap-8">
+    <div className="xl:grid xl:grid-cols-[var(--sidebar-width-sm)_1fr] xl:items-start xl:gap-8">
       <FormSectionNav sections={sections} className="sticky top-24 hidden xl:block" />
 
       <form onSubmit={(event) => void save(event)} className="min-w-0">
-        <div className="divide-y divide-stone-150 rounded-lg border border-stone-150 bg-card shadow-sm">
+        <div className="divide-y divide-stone-150 rounded-lg border border-stone-300 bg-card shadow-sm">
           <section id={SECTION_IDS.business} className="scroll-mt-24 p-5 sm:p-6">
             <h2 className="font-display text-lg font-semibold text-stone-800">
               Business information
@@ -326,11 +327,11 @@ export function VendorProfileForm({
               </div>
             </div>
             {/* One hint for the pair — the same rule governs both uploads. */}
-            <p className="mt-2 text-xs text-stone-500">
+            <p className="mt-2 text-xs text-stone-600">
               JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB.
             </p>
 
-            <div className="field-grid mt-5 border-t border-stone-150 pt-5">
+            <div className="field-grid mt-5 border-t border-stone-300 pt-5">
               <div>
                 <Label htmlFor="businessName">Business name</Label>
                 <Input
@@ -352,8 +353,8 @@ export function VendorProfileForm({
                   placeholder={generateSlug(form.businessName || 'your-business')}
                   className="mt-1.5"
                 />
-                <p className="mt-1 truncate text-xs text-stone-500">
-                  venmatch.com/vendors/{slugPreview}
+                <p className="mt-1 truncate text-xs text-stone-600">
+                  {BRAND_DOMAIN}/vendors/{slugPreview}
                 </p>
               </div>
 
@@ -368,13 +369,13 @@ export function VendorProfileForm({
                   className="mt-1.5 min-h-[140px]"
                 />
                 <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
-                  <p className="text-stone-500">A couple of paragraphs is plenty.</p>
+                  <p className="text-stone-600">A couple of paragraphs is plenty.</p>
                   <p
                     // Warns before the cap rather than only on reaching it, so a
                     // vendor can finish the sentence instead of being cut off.
                     className={cn(
                       'shrink-0 tabular-nums',
-                      bioRemaining <= BIO_WARNING_THRESHOLD ? 'text-primary-600' : 'text-stone-400',
+                      bioRemaining <= BIO_WARNING_THRESHOLD ? 'text-clay-600' : 'text-stone-600',
                     )}
                   >
                     {form.bio.length} / {MAX_VENDOR_BIO_LENGTH}
@@ -462,9 +463,9 @@ export function VendorProfileForm({
                   step={SERVICE_RADIUS_STEP_MILES}
                   value={form.serviceRadiusMiles}
                   onChange={(event) => update('serviceRadiusMiles', Number(event.target.value))}
-                  className="mt-3 h-6 w-full accent-primary-400"
+                  className="mt-3 h-6 w-full accent-clay-400"
                 />
-                <p className="mt-1 text-xs text-stone-500">How far you will travel for an event.</p>
+                <p className="mt-1 text-xs text-stone-600">How far you will travel for an event.</p>
               </div>
 
               {/* One select does not deserve a card of its own. */}
@@ -489,7 +490,7 @@ export function VendorProfileForm({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-600">
                   How quickly customers can expect to hear back.
                 </p>
               </div>
@@ -517,7 +518,7 @@ export function VendorProfileForm({
          * the save state, and what is blocking publication stay reachable
          * without scrolling back down.
          */}
-        <div className="sticky bottom-0 z-(--z-sticky) mt-4 rounded-lg border border-stone-150 bg-stone-50/95 px-4 py-3 shadow-lg backdrop-blur sm:px-6">
+        <div className="sticky bottom-0 z-(--z-sticky) mt-4 rounded-lg border border-stone-300 bg-stone-0/95 px-4 py-3 shadow-lg backdrop-blur sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {isNew ? (
               <p className="text-sm text-stone-600">
@@ -546,10 +547,10 @@ export function VendorProfileForm({
             )}
 
             <div className="flex items-center gap-3">
-              <span aria-live="polite" className="text-sm text-stone-500">
+              <span aria-live="polite" className="text-sm text-stone-600">
                 {isSaving ? 'Saving…' : justSaved ? 'Saved' : isDirty ? 'Unsaved changes' : ''}
               </span>
-              <Button type="submit" variant="cta" size="cta" disabled={isSaving}>
+              <Button type="submit" variant="primary" disabled={isSaving}>
                 {isNew ? 'Create profile' : 'Save changes'}
               </Button>
             </div>

@@ -8,9 +8,12 @@
 
 /*
  * shadcn/ui addresses colour through semantic slots (`--primary`, `--muted`,
- * ...). Those slots are bound to the VenMatch palette below, so every shadcn
+ * ...). Those slots are bound to the shared palette below, so every shadcn
  * component — and Clerk's shadcn theme — renders in brand without per-component
  * overrides. Radii, fonts, and shadows come from the shared theme import above.
+ *
+ * `apps/web/src/app/theme-tokens.test.ts` asserts every binding, so a future
+ * refactor cannot silently unpick it.
  */
 @theme inline {
   --color-background: var(--background);
@@ -50,48 +53,49 @@
 :root {
   /* Cream, never stark white — the single biggest differentiator. */
   --background: var(--color-stone-50);
-  --foreground: var(--color-stone-800);
+  --foreground: var(--color-stone-900);
 
-  /* White cards lift off the cream page. */
+  /* Cards lift off the cream page on stone-0, which is still not pure white. */
   --card: var(--color-stone-0);
-  --card-foreground: var(--color-stone-800);
+  --card-foreground: var(--color-stone-900);
   --popover: var(--color-stone-0);
-  --popover-foreground: var(--color-stone-800);
+  --popover-foreground: var(--color-stone-900);
 
-  --primary: var(--color-primary-400);
+  /* Clay is a fill: white text on clay-400, never clay as the text colour. */
+  --primary: var(--color-clay-400);
   --primary-foreground: var(--color-stone-0);
 
-  --secondary: var(--color-stone-100);
-  --secondary-foreground: var(--color-stone-800);
+  --secondary: var(--color-stone-150);
+  --secondary-foreground: var(--color-stone-900);
 
-  --muted: var(--color-stone-100);
-  --muted-foreground: var(--color-stone-500);
+  --muted: var(--color-stone-150);
+  --muted-foreground: var(--color-stone-600);
 
   --accent: var(--color-sage-50);
-  --accent-foreground: var(--color-sage-700);
+  --accent-foreground: var(--color-sage-600);
 
-  --destructive: var(--color-error);
+  --destructive: var(--color-error-500);
 
-  --border: var(--color-stone-150);
-  --input: var(--color-stone-200);
-  --ring: var(--color-primary-400);
+  --border: var(--color-stone-300);
+  --input: var(--color-stone-300);
+  --ring: var(--color-clay-400);
 
-  --chart-1: var(--color-primary-400);
+  --chart-1: var(--color-clay-400);
   --chart-2: var(--color-sage-400);
   --chart-3: var(--color-gold-400);
-  --chart-4: var(--color-info);
+  --chart-4: var(--color-steel-600);
   --chart-5: var(--color-stone-400);
 
-  --radius: var(--radius-md);
+  --radius: var(--radius-lg);
 
   --sidebar: var(--color-stone-0);
-  --sidebar-foreground: var(--color-stone-800);
-  --sidebar-primary: var(--color-primary-400);
+  --sidebar-foreground: var(--color-stone-900);
+  --sidebar-primary: var(--color-clay-400);
   --sidebar-primary-foreground: var(--color-stone-0);
-  --sidebar-accent: var(--color-sage-50);
-  --sidebar-accent-foreground: var(--color-sage-700);
-  --sidebar-border: var(--color-stone-150);
-  --sidebar-ring: var(--color-primary-400);
+  --sidebar-accent: var(--color-clay-100);
+  --sidebar-accent-foreground: var(--color-clay-600);
+  --sidebar-border: var(--color-stone-300);
+  --sidebar-ring: var(--color-clay-400);
 }
 
 /*
@@ -111,9 +115,29 @@
   }
 }
 
+/*
+ * The authentication screens are full-bleed at every width: the split panel in
+ * design/design-plan/21-sign-up.md owns the whole viewport, and the frame draws
+ * no site chrome around it. Keyed off an attribute for the same reason the rule
+ * above is — threading a `showChrome` flag through every layout between the
+ * root and the page is worse than one rule that states the intent.
+ */
+body:has([data-auth-screen]) > header,
+body:has([data-auth-screen]) > footer {
+  display: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  /*
+   * The focus ring is the product's, not the browser's. Declared once here so
+   * no component has to remember it, and so a component that forgets still
+   * lands on clay rather than on Chrome's blue.
+   */
+  :focus-visible {
+    @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
   }
   body {
     @apply bg-background text-foreground;
@@ -126,4 +150,57 @@
   h3 {
     @apply font-display tracking-tight;
   }
+}
+
+/*
+ * Clerk's own chrome, corrected against the shared tokens rather than against
+ * hand-written hexes.
+ *
+ * Clerk renders into `cl-*` class hooks; its `appearance.elements` className
+ * overrides do not reach the `@clerk/ui` theme build, so the corrections live
+ * here. Everything below resolves to a token, so the palette still has exactly
+ * one source of truth.
+ */
+.cl-avatarBox,
+.cl-userButtonAvatarBox {
+  background: var(--color-clay-400);
+  color: var(--color-stone-0);
+}
+
+/*
+ * On the authentication screens the panel already draws the surface the form
+ * sits on, so Clerk's card would be a second card inside the first — and its
+ * header would repeat, in the body face, what the panel's Serif headline just
+ * said.
+ */
+[data-auth-screen] .cl-rootBox,
+[data-auth-screen] .cl-cardBox,
+[data-auth-screen] .cl-card,
+[data-auth-screen] .cl-main,
+[data-auth-screen] .cl-form,
+[data-auth-screen] .cl-footer {
+  width: 100%;
+  max-width: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* The panel already sets the gutter; Clerk's own would inset the form twice. */
+[data-auth-screen] .cl-card {
+  padding-inline: 0;
+}
+
+[data-auth-screen] .cl-header {
+  display: none;
+}
+
+/*
+ * On a cream panel the input fill goes stone-0, per the input spec in
+ * design/design-plan/03-components.md and the `.inp` override on frame
+ * `12 Sign up`.
+ */
+[data-auth-screen] .cl-formFieldInput {
+  border-color: var(--color-stone-300);
+  background: var(--color-stone-0);
 }

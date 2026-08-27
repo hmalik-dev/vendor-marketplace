@@ -20,7 +20,7 @@ export const TAG_CATEGORY_HINTS: Record<TagCategory, string> = {
  */
 export const TAG_PILL_CLASSES: Record<TagCategory, string> = {
   language: 'bg-info-light text-info',
-  cultural: 'bg-primary-50 text-primary-600',
+  cultural: 'bg-clay-100 text-clay-600',
   dietary: 'bg-sage-50 text-sage-600',
 };
 

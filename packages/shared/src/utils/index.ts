@@ -40,9 +40,28 @@ const USD_FORMATTER = new Intl.NumberFormat('en-US', {
   currency: 'USD',
 });
 
-/** Renders integer cents as a display price, e.g. `123456` -> `$1,234.56`. */
+/** Whole-dollar amounts drop the `.00` rather than padding it. */
+const USD_WHOLE_FORMATTER = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Renders integer cents as a display price: `123456` -> `$1,234.56`, but
+ * `145000` -> `$1,450`.
+ *
+ * Vendor prices are almost always whole dollars, and a column of `$1,450.00`
+ * spends two characters per row saying nothing. The cents appear exactly when
+ * they carry information — see the display-boundary table in
+ * design/design-plan/01-foundations.md.
+ */
 export function formatPrice(cents: number): string {
-  return USD_FORMATTER.format(centsToDollars(cents));
+  const rounded = Math.round(cents);
+  const dollars = centsToDollars(rounded);
+
+  return rounded % 100 === 0 ? USD_WHOLE_FORMATTER.format(dollars) : USD_FORMATTER.format(dollars);
 }
 
 export interface FeeBreakdown {

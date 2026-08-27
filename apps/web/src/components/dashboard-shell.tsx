@@ -32,11 +32,15 @@ export function DashboardShell({
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <header className="max-w-2xl">
-        <p className="text-sm font-medium tracking-wide text-primary-600 uppercase">{eyebrow}</p>
-        <h1 className="mt-2 font-display text-3xl font-semibold text-stone-800 sm:text-4xl">
-          {heading}
-        </h1>
-        <p className="mt-3 text-stone-600">{description}</p>
+        <p className="text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+          {eyebrow}
+        </p>
+        {/*
+          App page titles cap at display-md. A display-lg heading inside an app
+          frame is a bug — see design/design-plan/04-laws.md.
+        */}
+        <h1 className="mt-2 font-display text-display-md text-stone-900">{heading}</h1>
+        <p className="mt-3 text-base text-stone-700">{description}</p>
       </header>
 
       {children}
@@ -45,9 +49,9 @@ export function DashboardShell({
         {sections.map((section) => {
           const body = (
             <>
-              <h2 className="font-display text-lg font-semibold text-stone-800">{section.title}</h2>
-              <p className="mt-2 text-sm text-stone-600">{section.description}</p>
-              <p className="mt-4 text-xs font-medium tracking-wide text-primary-600 uppercase">
+              <h2 className="font-display text-display-sm text-stone-900">{section.title}</h2>
+              <p className="mt-2 text-base text-stone-700">{section.description}</p>
+              <p className="mt-4 text-[10.5px] font-semibold tracking-[.05em] text-clay-500 uppercase">
                 {section.href ? 'Open' : section.arrivesIn}
               </p>
             </>
@@ -58,14 +62,12 @@ export function DashboardShell({
               {section.href ? (
                 <Link
                   href={section.href}
-                  className="block h-full rounded-lg border border-stone-150 bg-card p-5 shadow-sm transition-colors duration-(--duration-fast) hover:border-primary-400 hover:bg-primary-50"
+                  className="block h-full rounded-xl bg-stone-0 p-5 shadow-sm transition-shadow duration-(--duration-base) hover:shadow-hover"
                 >
                   {body}
                 </Link>
               ) : (
-                <div className="h-full rounded-lg border border-stone-150 bg-card p-5 shadow-sm">
-                  {body}
-                </div>
+                <div className="h-full rounded-xl bg-stone-0 p-5 shadow-sm">{body}</div>
               )}
             </li>
           );

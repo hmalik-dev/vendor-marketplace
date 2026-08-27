@@ -51,7 +51,7 @@ describe('CategoryIconBadge', () => {
   it('puts the glyph in the primary circle the icon spec calls for', () => {
     const { container } = render(<CategoryIconBadge icon="music" />);
 
-    expect(container.firstElementChild?.className).toContain('bg-primary-100');
+    expect(container.firstElementChild?.className).toContain('bg-clay-100');
     expect(container.querySelector('svg')).not.toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BRAND_NAME } from '@vendor-marketplace/shared';
 
 type AuthState = 'signed-in' | 'signed-out';
 
@@ -26,7 +27,7 @@ describe('SiteHeader', () => {
   it('links the wordmark to the home page', () => {
     render(<SiteHeader />);
 
-    expect(screen.getByRole('link', { name: 'VenMatch' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: BRAND_NAME })).toHaveProperty(
       'href',
       'http://localhost:3000/',
     );
@@ -46,7 +47,7 @@ describe('SiteHeader', () => {
       'http://localhost:3000/sign-in',
     );
     // Sign-up must be a page, not a modal: it collects the role first.
-    expect(screen.getByRole('link', { name: 'Get started' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: 'Join as a vendor' })).toHaveProperty(
       'href',
       'http://localhost:3000/sign-up',
     );

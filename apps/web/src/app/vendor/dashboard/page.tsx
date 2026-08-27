@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageTitle } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CheckCircle2, Circle } from 'lucide-react';
@@ -9,7 +10,7 @@ import { requireRole } from '@/lib/current-user';
 import { cn } from '@/lib/utils';
 import { getOwnVendorProfile } from '@/lib/vendor-data';
 
-export const metadata: Metadata = { title: 'Your business · VenMatch' };
+export const metadata: Metadata = { title: pageTitle('Your business') };
 
 const PROFILE_EDIT_PATH = '/vendor/profile/edit';
 
@@ -74,7 +75,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
                   : 'Finish these steps to publish your profile.'}
             </p>
           </div>
-          <Button asChild variant="cta" size="cta">
+          <Button asChild variant="primary">
             <Link href={PROFILE_EDIT_PATH}>{isComplete ? 'Edit profile' : 'Complete profile'}</Link>
           </Button>
         </div>
@@ -83,7 +84,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
           <ul className="mt-4 space-y-2">
             {profile.publishBlockers.map((blocker) => (
               <li key={blocker} className="flex items-center gap-2 text-sm text-stone-700">
-                <Circle aria-hidden="true" className="size-4 shrink-0 text-stone-400" />
+                <Circle aria-hidden="true" className="size-4 shrink-0 text-stone-600" />
                 {blocker}
               </li>
             ))}

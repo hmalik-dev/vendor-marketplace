@@ -1,6 +1,6 @@
 # @vendor-marketplace/web
 
-The VenMatch frontend: Next.js 15 (App Router, React Server Components),
+The Orla frontend: Next.js 15 (App Router, React Server Components),
 Tailwind CSS 4, shadcn/ui, and Clerk for authentication.
 
 ## Running it

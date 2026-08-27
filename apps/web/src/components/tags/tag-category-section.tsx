@@ -63,19 +63,19 @@ export function TagCategorySection({
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-x-3">
           <h3 className="text-sm font-medium text-stone-800">{label}</h3>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-600">
             {selected.length} of {MAX_TAGS_PER_CATEGORY}
             {atLimit ? ' (limit reached)' : ''}
           </p>
         </div>
-        <p className="mt-1 text-xs text-stone-500">{TAG_CATEGORY_HINTS[category]}</p>
+        <p className="mt-1 text-xs text-stone-600">{TAG_CATEGORY_HINTS[category]}</p>
       </div>
 
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="lg"
             role="combobox"
             aria-expanded={isOpen}
@@ -108,7 +108,7 @@ export function TagCategorySection({
                       />
                       {tag.name}
                       {!isSelected && atLimit ? (
-                        <span className="ml-auto text-xs text-stone-400">(limit reached)</span>
+                        <span className="ml-auto text-xs text-stone-600">(limit reached)</span>
                       ) : null}
                     </CommandItem>
                   );

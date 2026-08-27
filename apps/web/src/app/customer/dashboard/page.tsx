@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
+import { pageTitle } from '@vendor-marketplace/shared';
 import { DashboardShell } from '@/components/dashboard-shell';
 import { requireRole } from '@/lib/current-user';
 
-export const metadata: Metadata = { title: 'Your events · VenMatch' };
+export const metadata: Metadata = { title: pageTitle('Your events') };
 
 const SECTIONS = [
   {

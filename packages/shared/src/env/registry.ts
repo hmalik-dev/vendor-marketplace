@@ -1,3 +1,4 @@
+import { BRAND_DOMAIN } from '../constants/brand.js';
 import type { Capability } from './capabilities.js';
 
 /** Where a value is read: the Node processes, or the browser bundle. */
@@ -487,7 +488,7 @@ export const ENV_REGISTRY = [
     audience: 'server',
     consumers: ['api'],
     environments: 'shared',
-    defaultValue: 'noreply@venmatch.com',
+    defaultValue: `noreply@${BRAND_DOMAIN}`,
     description: 'From address on every transactional email. Free-form; no shape is enforced.',
     setup: RESEND_SETUP,
   },

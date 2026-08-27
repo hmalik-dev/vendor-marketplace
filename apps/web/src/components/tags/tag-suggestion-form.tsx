@@ -101,7 +101,7 @@ export function TagSuggestionForm({
     return (
       <Button
         type="button"
-        variant="link"
+        variant="ghost"
         size="sm"
         className="h-11 justify-self-start px-0 text-stone-600 sm:h-7"
         onClick={() => setIsOpen(true)}

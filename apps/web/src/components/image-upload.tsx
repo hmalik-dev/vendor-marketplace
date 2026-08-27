@@ -104,7 +104,7 @@ export function ImageUpload({
         className={cn(
           'relative flex w-full items-center justify-center overflow-hidden border-2 border-dashed border-stone-200 bg-stone-50 transition-colors',
           rounded ? 'size-24 rounded-full sm:size-40' : cn(aspectClassName, 'rounded-lg'),
-          isDragging && 'border-primary-400 bg-primary-50',
+          isDragging && 'border-clay-400 bg-clay-100',
           isBusy && 'opacity-70',
         )}
       >
@@ -115,7 +115,7 @@ export function ImageUpload({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={value} alt="" className="size-full object-cover" />
         ) : (
-          <span className="flex flex-col items-center gap-1 px-2 text-center text-xs text-stone-500">
+          <span className="flex flex-col items-center gap-1 px-2 text-center text-xs text-stone-600">
             <ImagePlus aria-hidden="true" className="size-5" />
             {rounded ? (
               'Add photo'
@@ -147,7 +147,7 @@ export function ImageUpload({
         />
       </div>
       {showHint ? (
-        <p className="text-xs text-stone-500">JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB.</p>
+        <p className="text-xs text-stone-600">JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB.</p>
       ) : null}
     </div>
   );

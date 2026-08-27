@@ -182,7 +182,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
         }}
         className={cn(
           'rounded-lg border-2 border-dashed p-4 transition-colors duration-(--duration-fast)',
-          isDragging ? 'border-primary-400 bg-primary-50' : 'border-stone-200 bg-card',
+          isDragging ? 'border-clay-400 bg-clay-100' : 'border-stone-200 bg-card',
         )}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -198,7 +198,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
             ) : null}
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               className="h-11 lg:h-8"
               onClick={() => inputRef.current?.click()}
             >
@@ -223,7 +223,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
       </div>
 
       {items.length === 0 ? (
-        <p className="mt-6 rounded-lg border border-stone-150 bg-card px-6 py-12 text-center text-sm text-stone-600">
+        <p className="mt-6 rounded-lg border border-stone-300 bg-card px-6 py-12 text-center text-sm text-stone-600">
           No photos yet. Your gallery is what convinces a customer to send a request — eight to
           twelve of your best is plenty.
         </p>
@@ -245,7 +245,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
                 }
               }}
               className={cn(
-                'overflow-hidden rounded-lg border border-stone-150 bg-card shadow-sm',
+                'overflow-hidden rounded-lg border border-stone-300 bg-card shadow-sm',
                 draggingId === item.id && 'opacity-50',
               )}
             >

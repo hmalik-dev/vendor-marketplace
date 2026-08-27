@@ -59,9 +59,9 @@ export function CategoryPicker({
                 onClick={() => toggle(category.id)}
                 className={cn(
                   'inline-flex min-h-11 items-center gap-2 rounded-full border py-1.5 pr-4 pl-1.5 text-sm font-medium transition-colors duration-(--duration-fast) sm:min-h-0',
-                  'focus-visible:ring-2 focus-visible:ring-primary-100 focus-visible:outline-none',
+                  'focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:outline-none',
                   isSelected
-                    ? 'border-primary-400 bg-primary-50 text-stone-800'
+                    ? 'border-clay-400 bg-clay-100 text-stone-800'
                     : 'border-stone-200 bg-stone-0 text-stone-700 hover:border-stone-300 hover:bg-stone-50',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                 )}
@@ -73,7 +73,7 @@ export function CategoryPicker({
           );
         })}
       </ul>
-      <p className="text-xs text-stone-500">
+      <p className="text-xs text-stone-600">
         {selectedIds.size} of {MAX_CATEGORIES} chosen.
       </p>
     </div>

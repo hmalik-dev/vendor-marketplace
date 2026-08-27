@@ -63,7 +63,7 @@ export interface CategoryIconBadgeProps extends CategoryIconProps {
   size?: 'inline' | 'card';
 }
 
-/** The glyph in a `primary-100` circle, per the icon spec. */
+/** The glyph in a `clay-100` circle, per the icon spec. */
 export function CategoryIconBadge({
   icon,
   size = 'inline',
@@ -72,7 +72,7 @@ export function CategoryIconBadge({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-600',
+        'inline-flex shrink-0 items-center justify-center rounded-full bg-clay-100 text-clay-600',
         size === 'card' ? 'size-10' : 'size-7',
         className,
       )}

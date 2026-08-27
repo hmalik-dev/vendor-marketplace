@@ -223,7 +223,7 @@ export function PackageForm({
                 required
               />
             </InputGroup>
-            <p className="mt-1 text-xs text-stone-500">Between $25 and $100,000.</p>
+            <p className="mt-1 text-xs text-stone-600">Between $25 and $100,000.</p>
           </div>
 
           <div>
@@ -275,7 +275,7 @@ export function PackageForm({
 
           <fieldset className="sm:col-span-2">
             <legend className="text-sm font-medium text-stone-800">What&rsquo;s included</legend>
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs text-stone-600">
               One line per thing the customer gets. Up to {MAX_INCLUSIONS}.
             </p>
 
@@ -310,7 +310,7 @@ export function PackageForm({
 
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               className="mt-2 h-11 lg:h-7"
               disabled={form.inclusions.length >= MAX_INCLUSIONS}
@@ -325,7 +325,7 @@ export function PackageForm({
 
       <div
         className={cn(
-          'flex shrink-0 items-center justify-end gap-3 border-t border-stone-150 bg-stone-50/95 px-5 py-3 sm:px-6',
+          'flex shrink-0 items-center justify-end gap-3 border-t border-stone-300 bg-stone-50/95 px-5 py-3 sm:px-6',
         )}
       >
         <Button
@@ -337,7 +337,7 @@ export function PackageForm({
         >
           Cancel
         </Button>
-        <Button type="submit" variant="cta" disabled={isSaving}>
+        <Button type="submit" variant="primary" disabled={isSaving}>
           {isSaving ? 'Saving…' : isNew ? 'Add package' : 'Save package'}
         </Button>
       </div>

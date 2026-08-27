@@ -19,9 +19,9 @@ export default async function HomePage(): Promise<React.ReactElement> {
   return (
     <>
       {/* Full-bleed so the hero gradient runs edge to edge behind the headline. */}
-      <section className="hero-gradient border-b border-stone-150">
+      <section className="hero-gradient border-b border-stone-300">
         <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
-          <p className="text-sm font-medium tracking-wide text-primary-600 uppercase">
+          <p className="text-sm font-medium tracking-wide text-clay-600 uppercase">
             Event services marketplace
           </p>
           <h1 className="mt-3 max-w-3xl font-display text-4xl font-semibold text-balance text-stone-800 sm:text-5xl">
@@ -40,16 +40,16 @@ export default async function HomePage(): Promise<React.ReactElement> {
               their dashboard.
             */}
             <Show when="signed-out">
-              <Button variant="cta" size="cta" asChild>
+              <Button variant="primary" asChild>
                 <Link href="/sign-up">Get started</Link>
               </Button>
-              <Button variant="outline" size="cta" asChild>
+              <Button variant="secondary" asChild>
                 <Link href="/sign-in">Sign in</Link>
               </Button>
             </Show>
 
             <Show when="signed-in">
-              <Button variant="cta" size="cta" asChild>
+              <Button variant="primary" asChild>
                 <Link href="/dashboard">Go to your dashboard</Link>
               </Button>
             </Show>
@@ -70,7 +70,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
             {FEATURED_CATEGORIES.map((category) => (
               <li
                 key={category.slug}
-                className="flex items-start gap-4 rounded-xl border border-stone-150 bg-card p-5 shadow-sm transition-shadow duration-[--duration-base] hover:shadow-md"
+                className="flex items-start gap-4 rounded-xl border border-stone-300 bg-card p-5 shadow-sm transition-shadow duration-[--duration-base] hover:shadow-md"
               >
                 <CategoryIconBadge icon={category.icon} size="card" />
                 <div>

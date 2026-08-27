@@ -1,4 +1,4 @@
-import { toDateString } from '@vendor-marketplace/shared';
+import { toDateString, pageTitle } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AvailabilityCalendar } from '@/components/availability/availability-calendar';
@@ -6,7 +6,7 @@ import { VendorSurface } from '@/components/vendor-surface';
 import { requireRole } from '@/lib/current-user';
 import { getOwnAvailability, getOwnVendorProfile } from '@/lib/vendor-data';
 
-export const metadata: Metadata = { title: 'Availability · VenMatch' };
+export const metadata: Metadata = { title: pageTitle('Availability') };
 
 const PROFILE_EDIT_PATH = '/vendor/profile/edit';
 

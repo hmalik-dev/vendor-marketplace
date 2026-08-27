@@ -1,21 +1,27 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import { shadcn } from '@clerk/ui/themes';
 import type { Metadata } from 'next';
-import { Albert_Sans, Fraunces, JetBrains_Mono } from 'next/font/google';
+import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
+import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
-/** Warm organic serif — headlines, vendor business names, editorial moments. */
-const fraunces = Fraunces({
+/**
+ * Display — business names, page titles, prices, dates, empty-state headlines.
+ * Regular weight only; the family has one. Never set below 16px.
+ */
+const instrumentSerif = Instrument_Serif({
   variable: '--font-display-face',
+  weight: '400',
+  style: ['normal', 'italic'],
   subsets: ['latin'],
   display: 'swap',
 });
 
-/** Friendly geometric sans — body copy, navigation, form labels, buttons. */
-const albertSans = Albert_Sans({
+/** Body — everything else: copy, navigation, form labels, buttons. */
+const instrumentSans = Instrument_Sans({
   variable: '--font-body-face',
   subsets: ['latin'],
   display: 'swap',
@@ -29,7 +35,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'VenMatch',
+  title: BRAND_NAME,
   description: 'Find and book photographers, DJs, caterers, and florists for your event.',
 };
 
@@ -41,9 +47,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${albertSans.variable} ${jetBrainsMono.variable}`}
+      className={`${instrumentSerif.variable} ${instrumentSans.variable} ${jetBrainsMono.variable}`}
     >
       <body className="flex min-h-screen flex-col antialiased">
+        {/*
+          Clerk inherits the palette through the shadcn slots bound in
+          `globals.css`. Where its own chrome fights the layout — the auth
+          panel already draws the surface, and the panel's Serif headline
+          already says what Clerk's header repeats — it is corrected there too,
+          against the same tokens. Never hand-write a brand hex into an
+          appearance object: it becomes a second source of truth and it drifts.
+        */}
         <ClerkProvider appearance={{ theme: shadcn }}>
           <SiteHeader />
           <main className="flex-1">{children}</main>

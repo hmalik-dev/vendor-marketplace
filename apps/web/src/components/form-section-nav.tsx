@@ -72,7 +72,7 @@ export function FormSectionNav({ sections, className }: FormSectionNavProps): Re
                 className={cn(
                   'flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm transition-colors duration-(--duration-fast)',
                   isActive
-                    ? 'bg-primary-50 font-medium text-primary-600'
+                    ? 'bg-clay-100 font-medium text-clay-600'
                     : 'text-stone-600 hover:bg-stone-100 hover:text-stone-800',
                 )}
               >
@@ -89,7 +89,7 @@ export function FormSectionNav({ sections, className }: FormSectionNavProps): Re
         })}
       </ul>
 
-      <p className="mt-4 border-t border-stone-150 px-3 pt-4 text-xs text-stone-500">
+      <p className="mt-4 border-t border-stone-300 px-3 pt-4 text-xs text-stone-600">
         {remaining === 0
           ? 'Everything needed to publish is filled in.'
           : `${remaining} ${remaining === 1 ? 'section needs' : 'sections need'} attention before publishing.`}
