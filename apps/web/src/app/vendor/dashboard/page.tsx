@@ -30,15 +30,16 @@ const SECTIONS = [
     description: 'Block the dates you are away so requests only reach you when free.',
     href: '/vendor/availability',
   },
-  {
-    title: 'Getting paid',
-    description: 'Connect a Stripe account and receive payouts after each event.',
-    arrivesIn: 'Ticket #9',
-  },
 ] as const;
 
+/*
+ * "Getting paid" is absent until Stripe onboarding (#9) exists to link to. A
+ * card that opens nothing is furniture, and the ticket number that used to
+ * stand in for its destination was an internal note rendered to the vendor.
+ */
+
 export default async function VendorDashboardPage(): Promise<React.ReactElement> {
-  const user = await requireRole('vendor');
+  await requireRole('vendor');
   const profile = await getOwnVendorProfile();
 
   // A vendor with no profile has nothing to manage yet, so sign-up leads
@@ -52,7 +53,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
   return (
     <DashboardShell
       eyebrow="Vendor"
-      heading={`Welcome back, ${user.firstName || 'there'}`}
+      heading="Welcome back"
       description="Set up your business here, then start receiving booking requests."
       sections={SECTIONS}
     >

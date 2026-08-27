@@ -118,12 +118,20 @@ export function PackageForm({
   const fieldId = useId();
   const [form, setForm] = useState<FormState>(() => initialState(servicePackage));
   const [isSaving, setIsSaving] = useState(false);
+  /*
+   * The price band is checked here, not only at the server. `40-states.md`:
+   * validation errors belong on the field after a submit attempt, never in a
+   * toast and never while typing — so this is set on submit and cleared the
+   * moment the vendor edits the field.
+   */
+  const [priceError, setPriceError] = useState<string | null>(null);
 
   const isNew = servicePackage === null;
 
   // Selecting a different package replaces what the pane is editing.
   useEffect(() => {
     setForm(initialState(servicePackage));
+    setPriceError(null);
   }, [servicePackage]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
@@ -152,9 +160,26 @@ export function PackageForm({
     const parsed = schema.safeParse(payload);
 
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? 'Check the highlighted fields.');
+      const issues = parsed.error.issues;
+      const price = issues.find((issue) => issue.path[0] === 'priceCents');
+
+      setPriceError(price?.message ?? null);
+
+      /*
+       * A field that shows its own error does not also raise a toast. The
+       * toast is for what has no field to sit on — and if price was the only
+       * problem, there is nothing left to say twice.
+       */
+      const elsewhere = issues.find((issue) => issue.path[0] !== 'priceCents');
+
+      if (elsewhere) {
+        toast.error(elsewhere.message);
+      }
+
       return;
     }
+
+    setPriceError(null);
 
     setIsSaving(true);
     try {
@@ -217,13 +242,24 @@ export function PackageForm({
               <InputGroupInput
                 id={`${fieldId}-price`}
                 value={form.priceDollars}
-                onChange={(event) => update('priceDollars', event.target.value)}
+                onChange={(event) => {
+                  update('priceDollars', event.target.value);
+                  setPriceError(null);
+                }}
                 inputMode="decimal"
                 placeholder="1200"
                 required
+                aria-invalid={priceError !== null || undefined}
+                aria-describedby={priceError === null ? undefined : `${fieldId}-price-error`}
               />
             </InputGroup>
-            <p className="mt-1 text-xs text-stone-600">Between $25 and $100,000.</p>
+            {priceError === null ? (
+              <p className="mt-1 text-xs text-stone-600">Between $25 and $100,000.</p>
+            ) : (
+              <p id={`${fieldId}-price-error`} role="alert" className="mt-1 text-xs text-error-500">
+                {priceError}
+              </p>
+            )}
           </div>
 
           <div>

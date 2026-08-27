@@ -684,3 +684,53 @@ describe('vendorProfileDetailSchema', () => {
     ).toBe(false);
   });
 });
+
+/*
+ * The price band is stored in cents and spoken in dollars. These messages are
+ * shown to a vendor verbatim beside a helper line reading "Between $25 and
+ * $100,000", so quoting a bound as "2500 cents" contradicts the field's own
+ * copy — and the repo convention is that money crosses the display boundary
+ * through `formatPrice`.
+ */
+describe('priceCentsSchema messages', () => {
+  const message = (priceCents: number): string => {
+    const parsed = createServicePackageSchema.safeParse({
+      name: 'Half day',
+      description: 'Four hours of coverage and an online gallery.',
+      priceCents,
+      priceType: 'fixed',
+      inclusions: [],
+    });
+
+    if (parsed.success) {
+      throw new Error(`expected ${priceCents} to be rejected`);
+    }
+
+    const issue = parsed.error.issues.find((candidate) => candidate.path[0] === 'priceCents');
+
+    if (!issue) {
+      throw new Error('expected a priceCents issue');
+    }
+
+    return issue.message;
+  };
+
+  it('states the lower bound in dollars', () => {
+    expect(message(2_400)).toBe('Price must be at least $25');
+  });
+
+  it('states the upper bound in dollars', () => {
+    expect(message(10_000_100)).toBe('Price must be at most $100,000');
+  });
+
+  it('tells a vendor what to enter when the field is not a number', () => {
+    // The form hands `NaN` on for non-numeric text; Zod's stock "Invalid
+    // input" says nothing about how to fix it.
+    expect(message(Number.NaN)).toBe('Enter a price between $25 and $100,000');
+  });
+
+  it('never quotes a bound in cents', () => {
+    expect(message(2_400)).not.toMatch(/cents/i);
+    expect(message(10_000_100)).not.toMatch(/cents/i);
+  });
+});

@@ -265,6 +265,41 @@ body:has([data-auth-screen]) > footer {
  * design/design-plan/21-sign-up.md. `pointer-events` stops the click; the
  * capture-phase guard in `SignUpForm` stops the Enter key.
  */
+/*
+ * The "Pick one above to continue" hint explains the disabled Continue button,
+ * so `21-sign-up.md` puts it directly underneath. Clerk renders its footer —
+ * the "Already with us?" link, the divider and "Secured by Clerk" — after the
+ * form and inside its own boxes, which stranded the hint ~133px below the
+ * button.
+ *
+ * `.cl-rootBox` and `.cl-cardBox` are purely structural: transparent, no
+ * border, no shadow, no padding, no radius. Flattening them with
+ * `display: contents` lifts the card and the footer into the same flex column
+ * as the hint, where the three can be ordered explicitly. Nothing visual is
+ * lost because neither box draws anything.
+ */
+[data-auth-screen] [data-role-pending] {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-auth-screen] [data-role-pending] .cl-rootBox,
+[data-auth-screen] [data-role-pending] .cl-cardBox {
+  display: contents;
+}
+
+[data-auth-screen] [data-role-pending] .cl-card {
+  order: 1;
+}
+
+[data-auth-screen] [data-role-pending] [data-role-hint] {
+  order: 2;
+}
+
+[data-auth-screen] [data-role-pending] .cl-footer {
+  order: 3;
+}
+
 [data-auth-screen] [data-role-pending] .cl-formButtonPrimary {
   pointer-events: none;
   border-color: transparent;
@@ -291,4 +326,58 @@ body:has([data-auth-screen]) > footer {
  */
 [data-auth-screen] .cl-card {
   padding-block: 0;
+}
+
+/*
+ * Toasts — design/design-plan/03-components.md: bottom-right, a `stone-0`
+ * surface, `shadow-xl`, `rounded-xl`, and a 4px left accent carrying the type
+ * (sage success, steel info, gold warning, red error).
+ *
+ * Written against Sonner's own `[data-sonner-toast]` attributes rather than as
+ * utility classes on `toastOptions.classNames`: Sonner styles itself with
+ * attribute selectors and inline custom properties, which outrank a utility
+ * class, so classes there are silently ignored.
+ */
+[data-sonner-toast][data-sonner-toast][data-styled='true'] {
+  border: 1px solid var(--color-stone-200);
+  border-left: 4px solid var(--color-stone-300);
+  background: var(--color-stone-0);
+  color: var(--color-stone-900);
+  box-shadow: var(--shadow-xl);
+}
+
+[data-sonner-toast] [data-description] {
+  color: var(--color-stone-700);
+}
+
+[data-sonner-toast][data-sonner-toast][data-styled='true'][data-type='success'] {
+  border-left-color: var(--color-sage-600);
+}
+
+[data-sonner-toast][data-type='success'] [data-icon] {
+  color: var(--color-sage-600);
+}
+
+[data-sonner-toast][data-sonner-toast][data-styled='true'][data-type='info'] {
+  border-left-color: var(--color-steel-600);
+}
+
+[data-sonner-toast][data-type='info'] [data-icon] {
+  color: var(--color-steel-600);
+}
+
+[data-sonner-toast][data-sonner-toast][data-styled='true'][data-type='warning'] {
+  border-left-color: var(--color-gold-400);
+}
+
+[data-sonner-toast][data-type='warning'] [data-icon] {
+  color: var(--color-gold-600);
+}
+
+[data-sonner-toast][data-sonner-toast][data-styled='true'][data-type='error'] {
+  border-left-color: var(--color-error-500);
+}
+
+[data-sonner-toast][data-type='error'] [data-icon] {
+  color: var(--color-error-500);
 }

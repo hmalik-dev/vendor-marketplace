@@ -154,6 +154,7 @@ Shadows are warm-tinted with the ink, never neutral grey, never black.
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --z-sticky: 10;
   --z-header: 40;
+  --z-skip-link: 45; /* focused skip link — above the header, below the drawer */
   --z-drawer: 50;
   --z-modal: 60;
   --z-toast: 70;

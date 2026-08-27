@@ -134,6 +134,7 @@
   /* Layering: never a bare z-index in a component. */
   --z-sticky: 10; /* sticky submit bars, table header rows */
   --z-header: 40; /* site header */
+  --z-skip-link: 45; /* focused skip link — above the header, below the drawer */
   --z-drawer: 50; /* mobile drawers, bottom sheets */
   --z-modal: 60; /* dialogs */
   --z-toast: 70; /* toasts, above everything */

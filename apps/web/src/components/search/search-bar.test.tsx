@@ -25,7 +25,7 @@ function renderBar(value: SearchBarValues = EMPTY, onSubmit = vi.fn()) {
   };
 }
 
-/** The event-date field. It has no accessible name of its own in the frame. */
+/** The event-date field. Named "Event date" by the label that wraps it. */
 function dateInput(container: HTMLElement): HTMLInputElement {
   const input = container.querySelector<HTMLInputElement>('input[type="date"]');
 
@@ -164,5 +164,50 @@ describe('SearchBar — the event date cannot be in the past', () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toBeDefined();
+  });
+});
+
+/*
+ * The query bar carries the two primary conversion controls on the site, on
+ * both the landing hero and the search header. Each visible micro-label is a
+ * `<span>` inside the `<label>` that wraps its input, so the name comes from
+ * the wrapper rather than a `for` attribute — which is easy to break by
+ * lifting an input out of its label during a layout change. These assert the
+ * computed accessible name, which is the thing that actually has to hold.
+ */
+describe('SearchBar accessible names', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it.each(['hero', 'compact'] as const)('names every control in the %s bar', (size) => {
+    const { container } = render(
+      <SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size={size} />,
+    );
+
+    expect(screen.getByRole('textbox', { name: 'City' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Search' })).toBeDefined();
+    expect(screen.getByRole('button', { name: /vendor type/i })).toBeDefined();
+
+    /*
+     * The date input is asserted through its label rather than by role:
+     * Chromium exposes `input[type=date]` as a named `textbox`, jsdom gives it
+     * no role at all, so a role query here would test the test environment.
+     * The loop below is the check that transfers.
+     */
+    // Nothing focusable is left anonymous.
+    const controls = container.querySelectorAll('input, select, textarea');
+
+    expect(controls).toHaveLength(2);
+
+    for (const control of controls) {
+      const labels = Array.from((control as HTMLInputElement).labels ?? []);
+      const named =
+        control.getAttribute('aria-label') ??
+        control.getAttribute('aria-labelledby') ??
+        labels.map((label) => label.textContent ?? '').join('');
+
+      expect(named.trim()).not.toBe('');
+    }
   });
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { formatPrice } from '../utils/index.js';
 import {
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_STATUSES,
@@ -68,11 +69,24 @@ export const phoneSchema = z
 /** A non-empty string once surrounding whitespace is removed. */
 const trimmedString = (max: number, min = 1) => z.string().trim().min(min).max(max);
 
-/** Integer cents within the platform's $25–$100,000 price band. */
+/**
+ * Integer cents within the platform's $25–$100,000 price band.
+ *
+ * The band is stored in cents and spoken in dollars. These messages are shown
+ * to a vendor verbatim, beside a helper line that already reads "Between $25
+ * and $100,000" — quoting the bound in cents contradicts the field's own
+ * copy. Money crosses the display boundary through `formatPrice`, here as
+ * everywhere else.
+ */
 export const priceCentsSchema = z
-  .int()
-  .min(MIN_BOOKING_AMOUNT_CENTS, `Price must be at least ${MIN_BOOKING_AMOUNT_CENTS} cents`)
-  .max(MAX_PACKAGE_PRICE_CENTS, `Price must be at most ${MAX_PACKAGE_PRICE_CENTS} cents`);
+  .int(
+    // Reached when the field holds something non-numeric: the form converts
+    // dollars to cents and hands `NaN` on. Zod's default here is "Invalid
+    // input", which `40-states.md` forbids — every message says how to fix it.
+    `Enter a price between ${formatPrice(MIN_BOOKING_AMOUNT_CENTS)} and ${formatPrice(MAX_PACKAGE_PRICE_CENTS)}`,
+  )
+  .min(MIN_BOOKING_AMOUNT_CENTS, `Price must be at least ${formatPrice(MIN_BOOKING_AMOUNT_CENTS)}`)
+  .max(MAX_PACKAGE_PRICE_CENTS, `Price must be at most ${formatPrice(MAX_PACKAGE_PRICE_CENTS)}`);
 
 export const latitudeSchema = z.number().min(-90).max(90);
 export const longitudeSchema = z.number().min(-180).max(180);

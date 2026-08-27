@@ -3,8 +3,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DashboardShell } from './dashboard-shell';
 
 const SECTIONS = [
-  { title: 'Availability', description: 'Block the dates you are away.', arrivesIn: 'Ticket #5' },
-  { title: 'Getting paid', description: 'Connect a Stripe account.', arrivesIn: 'Ticket #9' },
+  {
+    title: 'Availability',
+    description: 'Block the dates you are away.',
+    href: '/vendor/availability',
+  },
+  {
+    title: 'Portfolio',
+    description: 'The work that proves you can do it.',
+    href: '/vendor/portfolio',
+  },
 ] as const;
 
 describe('DashboardShell', () => {
@@ -37,7 +45,32 @@ describe('DashboardShell', () => {
 
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(2);
     expect(screen.getByRole('heading', { level: 2, name: 'Availability' })).toBeDefined();
-    expect(screen.getByText('Ticket #9')).toBeDefined();
+  });
+
+  /*
+   * The shell used to accept a "ships in" string for a section with nowhere
+   * to go, and rendered it where "Open" sits — putting "Ticket #9" on the
+   * vendor's own dashboard. Every section is a link now, so there is no state
+   * in which an internal identifier can reach a user.
+   */
+  it('renders every section as a link to its surface', () => {
+    render(
+      <DashboardShell
+        eyebrow="Vendor"
+        heading="Welcome back"
+        description="Set up your business here."
+        sections={SECTIONS}
+      />,
+    );
+
+    const links = screen.getAllByRole('link');
+
+    expect(links).toHaveLength(2);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/vendor/availability',
+      '/vendor/portfolio',
+    ]);
+    expect(screen.getAllByText('Open')).toHaveLength(2);
   });
 
   it('renders children above the section grid', () => {

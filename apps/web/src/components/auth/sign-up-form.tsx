@@ -160,6 +160,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
         disabled treatment off. See design/design-plan/21-sign-up.md.
       */}
       <div
+        className="flex flex-col"
         data-role-pending={role === null ? '' : undefined}
         onSubmitCapture={(event) => {
           if (role === null) {
@@ -171,8 +172,17 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
       >
         <SignUp unsafeMetadata={role ? { role } : {}} fallbackRedirectUrl="/after-sign-in" />
 
+        {/*
+          The hint explains the disabled Continue button, so it belongs directly
+          beneath it — `21-sign-up.md`. Clerk owns the card, and its footer
+          ("Already with us?", "Secured by Clerk") renders after the form, which
+          left this 133px below the button it describes. `globals.css` flattens
+          Clerk's two structural boxes and orders these three by hand: form,
+          hint, footer.
+        */}
         {role === null ? (
           <p
+            data-role-hint=""
             className="mt-1.5 text-center text-xs text-stone-600"
             role={roleMissing ? 'alert' : undefined}
           >

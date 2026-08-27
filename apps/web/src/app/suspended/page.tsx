@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: pageTitle('Account suspended') };
 /**
  * Where a suspended account lands. The API answers every request from a banned
  * user with 403, and without somewhere to send them each protected page threw
- * that error straight into the render and produced a raw 500. Ticket #15 owns
+ * that error straight into the render and produced a raw 500. #15 owns
  * the admin tooling behind suspensions and can enrich this page then.
  */
 export default function SuspendedPage(): React.ReactElement {

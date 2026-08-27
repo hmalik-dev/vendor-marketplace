@@ -4,10 +4,11 @@ import type { ReactNode } from 'react';
 export interface DashboardSection {
   title: string;
   description: string;
-  /** Where the section lives, once the surface exists. */
-  href?: string;
-  /** Ticket that will replace the placeholder with the real surface. */
-  arrivesIn?: string;
+  /**
+   * Where the section leads. Required: a card that goes nowhere is not drawn.
+   * A dashboard is a set of doors, and a door that does not open is furniture.
+   */
+  href: string;
 }
 
 export interface DashboardShellProps {
@@ -19,8 +20,8 @@ export interface DashboardShellProps {
 }
 
 /**
- * The frame every dashboard page sits in. Ticket #2 delivers the shell and the
- * routing around it; each section below is filled in by the ticket named on it.
+ * The frame every dashboard page sits in. Every section is a link to a surface
+ * that exists; pages omit the rest rather than drawing a card that does nothing.
  */
 export function DashboardShell({
   eyebrow,
@@ -46,32 +47,20 @@ export function DashboardShell({
       {children}
 
       <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {sections.map((section) => {
-          const body = (
-            <>
+        {sections.map((section) => (
+          <li key={section.title}>
+            <Link
+              href={section.href}
+              className="block h-full rounded-xl bg-stone-0 p-5 shadow-sm transition-shadow duration-(--duration-base) hover:shadow-hover"
+            >
               <h2 className="font-display text-display-sm text-stone-900">{section.title}</h2>
               <p className="mt-2 text-base text-stone-700">{section.description}</p>
               <p className="mt-4 text-[10.5px] font-semibold tracking-[.05em] text-clay-500 uppercase">
-                {section.href ? 'Open' : section.arrivesIn}
+                Open
               </p>
-            </>
-          );
-
-          return (
-            <li key={section.title}>
-              {section.href ? (
-                <Link
-                  href={section.href}
-                  className="block h-full rounded-xl bg-stone-0 p-5 shadow-sm transition-shadow duration-(--duration-base) hover:shadow-hover"
-                >
-                  {body}
-                </Link>
-              ) : (
-                <div className="h-full rounded-xl bg-stone-0 p-5 shadow-sm">{body}</div>
-              )}
-            </li>
-          );
-        })}
+            </Link>
+          </li>
+        ))}
       </ul>
     </div>
   );

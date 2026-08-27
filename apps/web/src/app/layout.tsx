@@ -89,11 +89,31 @@ export default function RootLayout({
             URL cannot disagree; two copies of the adapter could.
           */}
           <NuqsAdapter>
+            {/*
+              First in the tab order, and the only thing before the header.
+              Off-screen until focused, then it lands on the cream surface at
+              the top-left rather than shifting the layout — `sr-only` alone
+              would keep it unreachable to a sighted keyboard user.
+            */}
+            <a
+              href="#main"
+              className="sr-only rounded-lg bg-stone-0 px-4 py-2 text-sm font-semibold text-stone-900 shadow-md focus-visible:not-sr-only focus-visible:absolute focus-visible:top-3 focus-visible:left-3 focus-visible:z-(--z-skip-link)"
+            >
+              Skip to content
+            </a>
             <SiteHeader />
-            <main className="flex-1">{children}</main>
+            <main id="main" tabIndex={-1} className="flex-1">
+              {children}
+            </main>
             <SiteFooter />
           </NuqsAdapter>
-          <Toaster richColors position="top-center" />
+          {/*
+            Bottom-right, 5s dismiss, per design/design-plan/03-components.md.
+            `richColors` is deliberately absent: it fills the whole toast with
+            a tint per type, where the spec puts the type in a 4px left accent
+            on a `stone-0` surface.
+          */}
+          <Toaster position="bottom-right" duration={5000} />
         </ClerkProvider>
       </body>
     </html>
