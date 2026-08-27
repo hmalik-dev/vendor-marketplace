@@ -22,6 +22,7 @@
     "db:generate": "pnpm --filter @vendor-marketplace/db generate",
     "db:migrate": "pnpm --filter @vendor-marketplace/db migrate",
     "db:seed": "pnpm --filter @vendor-marketplace/db seed",
+    "db:seed:marketing": "pnpm --filter @vendor-marketplace/db run seed:marketing",
     "db:studio": "pnpm --filter @vendor-marketplace/db studio",
     "prepare": "git config core.hooksPath .githooks || true"
   },

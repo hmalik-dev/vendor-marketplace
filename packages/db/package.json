@@ -32,6 +32,7 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/scripts/migrate.ts",
     "seed": "tsx src/scripts/seed.ts",
+    "seed:marketing": "tsx src/scripts/seed-marketing.ts",
     "studio": "drizzle-kit studio"
   },
   "dependencies": {
