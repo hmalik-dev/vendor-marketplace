@@ -1,23 +1,32 @@
 'use client';
 
-import { Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import type { Category } from '@vendor-marketplace/shared';
+import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { CategorySelect } from './category-select';
 
 /**
- * The three questions a customer actually arrives with: what, where, and when.
+ * The query, and the whole of it: **vendor type, city, event date**.
+ *
+ * Nobody arrives knowing a vendor's name — they arrive knowing what kind of
+ * vendor, where, and when. All three are constrained, so a search can only ever
+ * resolve to something the platform recognises. The free-text box that used to
+ * sit in the first segment is gone; name search is a separate, deliberately
+ * smaller affordance beside the bar (decision D6).
  *
  * Used compact in the search header and full-size on the landing hero, which is
  * why the segments and their flex weights live here rather than in either page.
  * See design/design-plan/11-search.md and `10-landing.md`.
  */
 export interface SearchBarValues {
-  q: string;
+  /** A category slug, or `''` for "any vendor type". Never free text. */
+  category: string;
   city: string;
   date: string;
 }
 
 export interface SearchBarProps {
+  categories: readonly Category[];
   value: SearchBarValues;
   onSubmit: (value: SearchBarValues) => void;
   /** `compact` is the header variant; `hero` is the landing one. */
@@ -26,24 +35,42 @@ export interface SearchBarProps {
 }
 
 export function SearchBar({
+  categories,
   value,
   onSubmit,
   size = 'compact',
   className,
 }: SearchBarProps): React.ReactElement {
   const [draft, setDraft] = useState<SearchBarValues>(value);
+  const fieldId = useId();
 
-  // The URL is the source of truth: a back-navigation or a pill removed from
-  // the rail has to be reflected here, not overwritten by a stale draft.
+  // The URL is the source of truth: a back-navigation has to be reflected here,
+  // not overwritten by a stale draft.
   useEffect(() => {
     setDraft(value);
   }, [value]);
 
   const isHero = size === 'hero';
+
+  const label = cn(
+    'font-semibold tracking-[.05em] text-stone-600 uppercase',
+    isHero ? 'text-[10.5px]' : 'text-[9.5px]',
+  );
   const field = cn(
     'min-w-0 bg-transparent text-stone-900 outline-none placeholder:text-stone-600',
-    isHero ? 'text-md' : 'text-base',
+    isHero ? 'mt-0.5 text-md' : 'text-[13.5px]',
   );
+  /*
+   * Below `sm` the three segments stack into a three-row card. They are the
+   * query, not a refinement, so they never collapse into the filter sheet — but
+   * three flex segments across 390px squeezes each to a few characters, which
+   * is worse than a taller control. See design/design-plan/30-responsive.md.
+   */
+  const divider = cn(
+    'shrink-0 bg-stone-200 max-sm:h-px max-sm:w-full sm:w-px sm:bg-stone-300',
+    isHero ? 'sm:h-8' : 'sm:h-6.5 sm:bg-stone-200',
+  );
+  const segment = 'flex min-w-0 flex-col max-sm:w-full max-sm:px-0 max-sm:py-1.5';
 
   return (
     <form
@@ -53,37 +80,39 @@ export function SearchBar({
         onSubmit(draft);
       }}
       className={cn(
-        'flex items-center rounded-full border border-stone-300',
-        isHero ? 'bg-stone-0 py-2 pr-2 pl-6 shadow-lg' : 'bg-stone-150 py-1.25 pr-1.25 pl-4.5',
+        'flex bg-stone-0 max-sm:flex-col max-sm:items-stretch max-sm:rounded-2xl max-sm:px-4 max-sm:py-3 sm:flex-row sm:items-center sm:rounded-full',
+        isHero
+          ? 'shadow-lg sm:py-1.75 sm:pr-1.75 sm:pl-6'
+          : 'border border-stone-300 shadow-sm sm:py-1 sm:pr-1 sm:pl-4',
         className,
       )}
     >
-      <label className="flex min-w-0 flex-[1.2] flex-col">
-        <span className="sr-only">What kind of vendor are you looking for?</span>
-        <input
-          value={draft.q}
-          onChange={(event) => setDraft((previous) => ({ ...previous, q: event.target.value }))}
-          placeholder="What kind of vendor are you looking for?"
-          className={field}
-        />
-      </label>
+      <CategorySelect
+        categories={categories}
+        value={draft.category}
+        onChange={(category) => setDraft((previous) => ({ ...previous, category }))}
+        size={size}
+        id={`${fieldId}-type`}
+      />
 
-      <span aria-hidden="true" className="h-5.5 w-px shrink-0 bg-stone-300" />
+      <span aria-hidden="true" className={divider} />
 
-      <label className="flex min-w-0 flex-[0.8] flex-col pl-3.5">
-        <span className="sr-only">Where</span>
+      <label className={cn(segment, isHero ? 'sm:flex-1 sm:pl-4.5' : 'sm:flex-[0.9] sm:pl-3.5')}>
+        <span className={label}>City</span>
         <input
           value={draft.city}
           onChange={(event) => setDraft((previous) => ({ ...previous, city: event.target.value }))}
-          placeholder="Where"
+          placeholder="Anywhere"
           className={field}
         />
       </label>
 
-      <span aria-hidden="true" className="h-5.5 w-px shrink-0 bg-stone-300" />
+      <span aria-hidden="true" className={divider} />
 
-      <label className="flex min-w-0 flex-[0.6] flex-col pl-3.5">
-        <span className="sr-only">Event date</span>
+      <label
+        className={cn(segment, isHero ? 'sm:flex-[0.8] sm:pl-4.5' : 'sm:flex-[0.85] sm:pl-3.5')}
+      >
+        <span className={label}>Event date</span>
         <input
           type="date"
           value={draft.date}
@@ -97,11 +126,12 @@ export function SearchBar({
       <button
         type="submit"
         className={cn(
-          'ml-2 flex shrink-0 items-center gap-1.5 rounded-full bg-clay-400 font-semibold text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500',
-          isHero ? 'px-6 py-2.5 text-base' : 'px-5 py-2 text-sm',
+          'shrink-0 rounded-full bg-clay-400 font-semibold text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 max-sm:mt-3 max-sm:w-full max-sm:py-2.75',
+          isHero
+            ? 'sm:ml-2 sm:px-6 sm:py-2.75 sm:text-base'
+            : 'sm:ml-1.5 sm:px-5 sm:py-2.5 sm:text-[12.5px]',
         )}
       >
-        <Search aria-hidden="true" className="size-3.5" />
         Search
       </button>
     </form>

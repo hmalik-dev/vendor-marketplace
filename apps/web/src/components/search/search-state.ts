@@ -15,13 +15,25 @@ import {
 } from 'nuqs';
 
 /**
- * Filter state lives in the URL, so a search is shareable and the back button
+ * Search state lives in the URL, so a search is shareable and the back button
  * works. `nuqs` keeps the params and the React state in one place; the defaults
- * here are what "no filter" looks like, and a param at its default is omitted
+ * here are what "no value" looks like, and a param at its default is omitted
  * from the URL rather than written out.
+ *
+ * Two kinds of value live here and they are not interchangeable:
+ *
+ * - **The query** — `category`, `city`, `date`. Three enumerable values owned
+ *   by the search bar. There is no free-text query on the main path; the
+ *   retired `q` param is gone (decision D6).
+ * - **Refinements** — price, rating, tags. Owned by the Refine bar.
+ *
+ * `name` is neither: it is the referral affordance behind "Search by name",
+ * matched against the business name alone.
+ *
+ * See design/design-plan/11-search.md.
  */
 export const searchParsers = {
-  q: parseAsString.withDefault(''),
+  name: parseAsString.withDefault(''),
   category: parseAsString.withDefault(''),
   city: parseAsString.withDefault(''),
   state: parseAsString.withDefault(''),
@@ -35,7 +47,7 @@ export const searchParsers = {
 } as const;
 
 export interface SearchState {
-  q: string;
+  name: string;
   category: string;
   city: string;
   state: string;
@@ -50,11 +62,15 @@ export interface SearchState {
 
 export type SearchPatch = Partial<SearchState>;
 
+/** The three values the search bar owns. Never rendered as Refine chips. */
+export type SearchQueryValues = Pick<SearchState, 'category' | 'city' | 'date'>;
+
 export interface UseSearchState {
   state: SearchState;
   /** Applies a patch. Any change but paging returns to page 1. */
   setState: (patch: SearchPatch) => void;
-  clearAll: () => void;
+  /** Clears the Refine bar only — the query stays, because it is the question. */
+  clearRefinements: () => void;
 }
 
 export function useSearchState(): UseSearchState {
@@ -71,15 +87,15 @@ export function useSearchState(): UseSearchState {
       const resetsPage = Object.keys(patch).some((key) => key !== 'page');
       void setQuery(resetsPage ? { ...patch, page: null } : patch);
     },
-    clearAll: () => {
+    /*
+     * "Clear" sits in the Refine bar and clears the Refine bar. Wiping the
+     * category and city too would throw away the question the results answer
+     * and drop the customer back to an unfiltered grid they never asked for.
+     */
+    clearRefinements: () => {
       void setQuery({
-        q: null,
-        category: null,
-        city: null,
-        state: null,
         minPriceCents: null,
         maxPriceCents: null,
-        date: null,
         minRating: null,
         tags: null,
         page: null,
@@ -92,7 +108,7 @@ export function useSearchState(): UseSearchState {
 export function toSearchQuery(state: SearchState): string {
   const params = new URLSearchParams();
 
-  if (state.q) params.set('q', state.q);
+  if (state.name) params.set('name', state.name);
   if (state.category) params.set('category', state.category);
   if (state.city) params.set('city', state.city);
   if (state.state) params.set('state', state.state);
@@ -110,16 +126,23 @@ export function toSearchQuery(state: SearchState): string {
   return params.toString();
 }
 
-/** How many filters are actually narrowing the results right now. */
-export function activeFilterCount(state: SearchState): number {
+/**
+ * How many Refine chips are narrowing the results right now — the number the
+ * mobile "Filters · N" trigger carries.
+ *
+ * The query (category, city, date) is deliberately excluded: it is shown by the
+ * search bar, which owns it. Counting it here would be a second representation
+ * of one state, and the date must never read as a filter at any width.
+ */
+export function activeRefineCount(state: SearchState): number {
   return [
-    state.q !== '',
-    state.category !== '',
-    state.city !== '',
-    state.state !== '',
     state.minPriceCents !== null || state.maxPriceCents !== null,
-    state.date !== '',
     state.minRating !== null,
     state.tags.length > 0,
   ].filter(Boolean).length;
+}
+
+/** Whether the customer has actually asked something yet. */
+export function hasQuery(state: SearchState): boolean {
+  return state.category !== '' || state.city !== '' || state.date !== '' || state.name !== '';
 }

@@ -15,22 +15,41 @@ export interface VendorCardProps {
   vendor: VendorCardData;
   /** The searched date, when there was one — it drives the availability chip. */
   searchedDate?: string;
+  /**
+   * `compact` is the search grid, where four cards across and two full rows
+   * have to fit above the fold; `featured` is the roomier landing variant.
+   * See design/design-plan/03-components.md.
+   */
+  density?: 'compact' | 'featured';
   className?: string;
 }
 
-const DATE_CHIP_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
+/*
+ * The compact card abbreviates the month so the chip never wraps at a quarter
+ * of the grid width; the featured card has the room to spell it out.
+ */
+const DATE_CHIP_FORMATTERS = {
+  featured: new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+  compact: new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+} as const;
 
 export function VendorCard({
   vendor,
   searchedDate,
+  density = 'featured',
   className,
 }: VendorCardProps): React.ReactElement {
   const location = [vendor.city, vendor.state].filter(Boolean).join(', ');
   const isReviewed = vendor.reviewCount > 0;
+  const isCompact = density === 'compact';
 
   return (
     <article
@@ -41,7 +60,7 @@ export function VendorCard({
       )}
     >
       <Link href={`/vendors/${vendor.slug}`} className="block">
-        <div className="relative aspect-[4/3] overflow-hidden">
+        <div className={cn('relative overflow-hidden', isCompact ? 'h-33' : 'aspect-[4/3]')}>
           {vendor.coverImageUrl ? (
             // A vendor's own photograph, from a bucket next/image is not
             // configured per-host for.
@@ -59,17 +78,22 @@ export function VendorCard({
           )}
         </div>
 
-        <div className="relative px-4 pt-3.5 pb-4">
+        <div className={cn('relative', isCompact ? 'px-3.5 pt-3 pb-3.5' : 'px-4 pt-3.5 pb-4')}>
           {/* Overlaps the seam by half its height, as the frame draws it. */}
-          <div className="absolute -top-[17px] left-4">
+          <div className={cn('absolute', isCompact ? '-top-4 left-3.5' : '-top-[17px] left-4')}>
             <Avatar name={vendor.businessName} src={vendor.profileImageUrl} size="sm" bordered />
           </div>
 
-          <h3 className="mt-3 font-display text-display-sm text-stone-900">
+          <h3
+            className={cn(
+              'font-display text-stone-900',
+              isCompact ? 'mt-2.75 text-[19px]' : 'mt-3 text-display-sm',
+            )}
+          >
             {vendor.businessName}
           </h3>
 
-          <p className="mt-0.5 text-sm text-stone-600">
+          <p className={cn('mt-0.5 text-stone-600', isCompact ? 'text-xs' : 'text-sm')}>
             {isReviewed ? (
               <>
                 <span aria-hidden="true">★ </span>
@@ -84,29 +108,58 @@ export function VendorCard({
             )}
           </p>
 
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {vendor.categories.slice(0, 1).map((category) => (
-              <span
-                key={category.id}
-                className="rounded-md bg-stone-150 px-2.5 py-1 text-xs font-semibold text-stone-700"
-              >
-                {category.name}
-              </span>
-            ))}
+          <div className={cn('flex flex-wrap', isCompact ? 'mt-2 gap-1.25' : 'mt-2.5 gap-1.5')}>
+            {/*
+              The compact card carries the availability chip alone. The search
+              grid has already been filtered to one vendor type, so a category
+              chip on every card restates the query instead of telling the
+              customer something — see design/design-plan/03-components.md.
+            */}
+            {isCompact
+              ? null
+              : vendor.categories.slice(0, 1).map((category) => (
+                  <span
+                    key={category.id}
+                    className="rounded-md bg-stone-150 px-2.5 py-1 text-xs font-semibold text-stone-700"
+                  >
+                    {category.name}
+                  </span>
+                ))}
             {vendor.availableOnDate && searchedDate ? (
-              <span className="rounded-md bg-sage-50 px-2.5 py-1 text-xs font-semibold text-sage-600">
-                Free {DATE_CHIP_FORMATTER.format(new Date(`${searchedDate}T00:00:00Z`))}
+              <span
+                className={cn(
+                  'font-semibold bg-sage-50 text-sage-600',
+                  isCompact
+                    ? 'rounded-[5px] px-2 py-0.75 text-[10.5px]'
+                    : 'rounded-md px-2.5 py-1 text-xs',
+                )}
+              >
+                Free {DATE_CHIP_FORMATTERS[density].format(new Date(`${searchedDate}T00:00:00Z`))}
               </span>
             ) : null}
           </div>
 
-          <div className="mt-3 flex items-baseline justify-between border-t border-stone-200 pt-2.75">
+          <div
+            className={cn(
+              'flex items-baseline justify-between border-t border-stone-200',
+              isCompact ? 'mt-2.5 pt-2.25' : 'mt-3 pt-2.75',
+            )}
+          >
             {vendor.startingPriceCents === null ? (
-              <span className="text-sm text-stone-600">Contact for pricing</span>
+              <span className={cn('text-stone-600', isCompact ? 'text-xs' : 'text-sm')}>
+                Contact for pricing
+              </span>
             ) : (
               <>
-                <span className="text-sm text-stone-600">From</span>
-                <span className="text-[18px] font-bold text-stone-900">
+                <span className={cn('text-stone-600', isCompact ? 'text-xs' : 'text-sm')}>
+                  From
+                </span>
+                <span
+                  className={cn(
+                    'font-bold text-stone-900',
+                    isCompact ? 'text-[17px]' : 'text-[18px]',
+                  )}
+                >
                   {formatPrice(vendor.startingPriceCents)}
                 </span>
               </>

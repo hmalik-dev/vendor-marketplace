@@ -7,6 +7,18 @@ export const TAG_CATEGORY_LABELS: Record<TagCategory, string> = {
   dietary: 'Dietary',
 };
 
+/**
+ * The same three groups as chips in the search Refine bar, where the row has to
+ * fit six controls plus Sort across 1440px. Frame `02` draws them as
+ * `Languages ▾` / `Cultural ▾` / `Dietary ▾` — the noun alone, since the chip's
+ * position in a filter bar already says it is a filter.
+ */
+export const TAG_CATEGORY_CHIP_LABELS: Record<TagCategory, string> = {
+  language: 'Languages',
+  cultural: 'Cultural',
+  dietary: 'Dietary',
+};
+
 /** The prompt under each section's selector, per design/design-plan/03-components.md. */
 export const TAG_CATEGORY_HINTS: Record<TagCategory, string> = {
   language: 'Languages you can work in.',

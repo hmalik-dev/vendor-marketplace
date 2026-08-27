@@ -199,6 +199,7 @@ describe('capabilitiesForTicket', () => {
     // both must start without Stripe, Resend or Sentry keys.
     expect(capabilitiesForTicket(23)).toEqual(['core', 'auth', 'storage', 'e2e']);
     expect(capabilitiesForTicket(24)).toEqual(['core', 'auth', 'e2e']);
+    expect(capabilitiesForTicket(25)).toEqual(['core', 'auth', 'e2e']);
   });
 
   it('fails loudly on an unknown ticket rather than checking nothing', () => {

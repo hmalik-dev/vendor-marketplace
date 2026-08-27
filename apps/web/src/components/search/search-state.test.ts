@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { activeFilterCount, toSearchQuery, type SearchState } from './search-state';
+import { activeRefineCount, toSearchQuery, hasQuery, type SearchState } from './search-state';
 
 const EMPTY: SearchState = {
-  q: '',
+  name: '',
   category: '',
   city: '',
   state: '',
@@ -23,16 +23,27 @@ describe('toSearchQuery', () => {
   });
 
   it('omits an empty filter rather than sending a blank value', () => {
-    const query = params({ ...EMPTY, city: '', q: '' });
+    const query = params({ ...EMPTY, city: '', name: '' });
 
     expect(query.has('city')).toBe(false);
-    expect(query.has('q')).toBe(false);
+    expect(query.has('name')).toBe(false);
   });
 
-  it('carries every filter the rail can set', () => {
+  /*
+   * The free-text `q` was removed from the contract by decision D6. The query
+   * is category + city + date; `name` is the separate referral affordance.
+   */
+  it('never sends the retired free-text q param', () => {
+    const query = params({ ...EMPTY, category: 'photography', name: 'June Harlow' });
+
+    expect(query.has('q')).toBe(false);
+    expect(query.get('name')).toBe('June Harlow');
+  });
+
+  it('carries every value the query bar and the Refine bar can set', () => {
     const query = params({
       ...EMPTY,
-      q: 'wedding',
+      name: 'June Harlow',
       category: 'photography',
       city: 'Austin',
       state: 'TX',
@@ -44,7 +55,7 @@ describe('toSearchQuery', () => {
       page: 3,
     });
 
-    expect(query.get('q')).toBe('wedding');
+    expect(query.get('name')).toBe('June Harlow');
     expect(query.get('category')).toBe('photography');
     expect(query.get('city')).toBe('Austin');
     expect(query.get('state')).toBe('TX');
@@ -73,30 +84,64 @@ describe('toSearchQuery', () => {
   it('keeps a zero minimum price, which is a real bound and not an absence', () => {
     expect(params({ ...EMPTY, minPriceCents: 0 }).get('minPriceCents')).toBe('0');
   });
+
+  it('sends a page size that fills two full rows of four', () => {
+    expect(params(EMPTY).get('pageSize')).toBe('20');
+  });
 });
 
-describe('activeFilterCount', () => {
-  it('counts nothing when no filter is narrowing the results', () => {
-    expect(activeFilterCount(EMPTY)).toBe(0);
+describe('activeRefineCount', () => {
+  it('counts nothing when no refinement is narrowing the results', () => {
+    expect(activeRefineCount(EMPTY)).toBe(0);
   });
 
   it('counts a price range once, however many ends are set', () => {
-    expect(activeFilterCount({ ...EMPTY, minPriceCents: 1000 })).toBe(1);
-    expect(activeFilterCount({ ...EMPTY, minPriceCents: 1000, maxPriceCents: 9000 })).toBe(1);
+    expect(activeRefineCount({ ...EMPTY, minPriceCents: 1000 })).toBe(1);
+    expect(activeRefineCount({ ...EMPTY, minPriceCents: 1000, maxPriceCents: 9000 })).toBe(1);
   });
 
   it('counts every tag group as one filter', () => {
-    expect(activeFilterCount({ ...EMPTY, tags: ['a', 'b', 'c'] })).toBe(1);
+    expect(activeRefineCount({ ...EMPTY, tags: ['a', 'b', 'c'] })).toBe(1);
   });
 
   /* Sort and page change what you see, not which vendors match. */
   it('ignores sort and paging', () => {
-    expect(activeFilterCount({ ...EMPTY, sort: 'rating', page: 4 })).toBe(0);
+    expect(activeRefineCount({ ...EMPTY, sort: 'rating', page: 4 })).toBe(0);
   });
 
-  it('adds up independent filters', () => {
+  /*
+   * The query is not a refinement. Category, city and date belong to the search
+   * bar, which owns them and shows them; counting them in the Refine total
+   * would be a second representation of one state, and the date must never
+   * appear as a filter chip at all.
+   */
+  it('never counts the query — category, city and date belong to the search bar', () => {
     expect(
-      activeFilterCount({ ...EMPTY, category: 'photography', city: 'Austin', date: '2026-06-14' }),
-    ).toBe(3);
+      activeRefineCount({ ...EMPTY, category: 'photography', city: 'Austin', date: '2026-06-14' }),
+    ).toBe(0);
+  });
+
+  it('never counts name search, which is neither query nor refinement', () => {
+    expect(activeRefineCount({ ...EMPTY, name: 'June Harlow' })).toBe(0);
+  });
+
+  it('adds up independent refinements', () => {
+    expect(activeRefineCount({ ...EMPTY, minRating: 4, tags: ['a'], minPriceCents: 1000 })).toBe(3);
+  });
+});
+
+describe('hasQuery', () => {
+  it('is false when the customer has asked nothing yet', () => {
+    expect(hasQuery(EMPTY)).toBe(false);
+  });
+
+  it('is true once any of the three query values is set', () => {
+    expect(hasQuery({ ...EMPTY, category: 'photography' })).toBe(true);
+    expect(hasQuery({ ...EMPTY, city: 'Austin' })).toBe(true);
+    expect(hasQuery({ ...EMPTY, date: '2026-06-14' })).toBe(true);
+  });
+
+  it('is true for a name search, which is also a question', () => {
+    expect(hasQuery({ ...EMPTY, name: 'June Harlow' })).toBe(true);
   });
 });

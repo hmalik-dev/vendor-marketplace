@@ -56,11 +56,15 @@ function filters(query: VendorSearchQuery, exceptCategory = false): SQL[] {
     conditions.push(visible);
   }
 
-  if (query.q) {
-    // Case-insensitive contains across the two fields a customer types into.
-    const pattern = `%${query.q.toLowerCase()}%`;
+  /*
+   * Name search is the referral affordance, not a general text query: it
+   * matches the business name and nothing else. Searching the bio too would
+   * quietly restore the free-text main path that decision D6 removed, and it
+   * would return vendors whose name the customer never typed.
+   */
+  if (query.name) {
     conditions.push(
-      sql`(lower(${vendorProfiles.businessName}) LIKE ${pattern} OR lower(coalesce(${vendorProfiles.bio}, '')) LIKE ${pattern})`,
+      sql`lower(${vendorProfiles.businessName}) LIKE ${`%${query.name.toLowerCase()}%`}`,
     );
   }
 

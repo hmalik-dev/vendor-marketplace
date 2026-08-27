@@ -498,6 +498,30 @@ describe('vendorSearchQuerySchema', () => {
   it('rejects an unknown sort option', () => {
     expect(vendorSearchQuerySchema.safeParse({ sort: 'cheapest' }).success).toBe(false);
   });
+
+  /*
+   * Search is category + city + date — three enumerable pickers. The free-text
+   * `q` that used to sit on the main path is gone; see decision D6. `name`
+   * replaces it as the deliberately-secondary referral affordance, and it is
+   * matched against the business name alone.
+   */
+  it('no longer accepts a free-text q on the main path', () => {
+    const parsed = vendorSearchQuerySchema.parse({ q: 'wedding photographer near me' });
+    expect(parsed).not.toHaveProperty('q');
+  });
+
+  it('accepts a trimmed name for the referral case', () => {
+    const parsed = vendorSearchQuerySchema.parse({ name: '  June Harlow  ' });
+    expect(parsed.name).toBe('June Harlow');
+  });
+
+  it('drops a name that is only whitespace rather than matching everything', () => {
+    expect(vendorSearchQuerySchema.parse({ name: '   ' }).name).toBeUndefined();
+  });
+
+  it('rejects a name longer than the column allows', () => {
+    expect(vendorSearchQuerySchema.safeParse({ name: 'a'.repeat(201) }).success).toBe(false);
+  });
 });
 
 describe('apiErrorSchema', () => {

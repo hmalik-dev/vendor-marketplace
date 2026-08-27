@@ -39,6 +39,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   22: ['auth'],
   23: ['auth', 'storage'],
   24: ['auth'],
+  25: ['auth'],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

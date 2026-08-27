@@ -3,10 +3,8 @@
 import {
   vendorNounFor,
   vendorSearchResultSchema,
-  VENDOR_SORT_OPTIONS,
   type Category,
   type VendorSearchResult,
-  type VendorSortOption,
 } from '@vendor-marketplace/shared';
 import { SlidersHorizontal, SearchX } from 'lucide-react';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -18,29 +16,25 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { VendorCardSkeleton } from '@/components/ui/skeleton';
 import { VendorCard } from '@/components/vendors/vendor-card';
+import { NameSearch } from './name-search';
+import { RefineBar } from './refine-bar';
 import { SearchBar } from './search-bar';
-import { SearchFilterRail } from './search-filter-rail';
-import {
-  activeFilterCount,
-  toSearchQuery,
-  useSearchState,
-  type SearchPatch,
-  type SearchState,
-} from './search-state';
+import { activeRefineCount, toSearchQuery, useSearchState, type SearchState } from './search-state';
 
-const SORT_LABELS: Record<VendorSortOption, string> = {
-  relevance: 'Most relevant',
-  rating: 'Top rated',
-  price_asc: 'Price: low to high',
-  price_desc: 'Price: high to low',
-  newest: 'Newest',
-};
+/**
+ * How many skeletons stand in for a loading grid — two full rows of four, the
+ * same number of cards the frame shows above the fold.
+ */
+const SKELETON_COUNT = 8;
 
-/** How many skeletons stand in for a loading grid. */
-const SKELETON_COUNT = 6;
+/** Four across at the reference viewport; the grid gains columns, not margins. */
+const GRID_COLUMNS =
+  'grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 min-[90rem]:grid-cols-4 min-[108rem]:grid-cols-5';
 
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
+/** "free on Sun, Jun 14" — the weekday is what makes a date legible at a glance. */
+const AVAILABILITY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
   day: 'numeric',
   timeZone: 'UTC',
 });
@@ -51,7 +45,7 @@ export interface SearchShellProps {
 }
 
 /**
- * The two filters most worth loosening, named explicitly rather than as a
+ * The two refinements most worth loosening, named explicitly rather than as a
  * generic "adjust your filters" — the point is to say which one is costing them
  * results. Ordered by how much each typically narrows a set.
  */
@@ -71,16 +65,19 @@ function loosenSuggestion(state: SearchState): string {
   if (state.tags.length > 0) {
     return 'try removing a tag';
   }
-  return 'try a different category or city';
+  if (state.name) {
+    return 'try checking the spelling, or search by vendor type instead';
+  }
+  return 'try a different vendor type or city';
 }
 
 function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElement {
-  const { state, setState, clearAll } = useSearchState();
+  const { state, setState, clearRefinements } = useSearchState();
   const [result, setResult] = useState<VendorSearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /** Below `lg` the rail is a sheet rather than a column beside the results. */
-  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  /** Below `lg` the Refine chips collapse into a sheet. The query never does. */
+  const [isRefineSheetOpen, setIsRefineSheetOpen] = useState(false);
 
   const query = toSearchQuery(state);
 
@@ -114,50 +111,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
     return () => controller.abort();
   }, [query]);
 
-  const selectedCategory = categories.find((category) => category.slug === state.category);
-  const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
-
-  /** Every narrowing filter, as a pill that removes itself. */
-  const activePills: Array<{ key: string; label: string; clear: SearchPatch }> = [];
-  if (state.q) {
-    activePills.push({ key: 'q', label: state.q, clear: { q: '' } });
-  }
-  if (selectedCategory) {
-    activePills.push({
-      key: 'category',
-      label: selectedCategory.name,
-      clear: { category: '' },
-    });
-  }
-  if (state.city) {
-    activePills.push({ key: 'city', label: state.city, clear: { city: '' } });
-  }
-  if (state.date) {
-    activePills.push({
-      key: 'date',
-      label: DATE_FORMATTER.format(new Date(`${state.date}T00:00:00Z`)),
-      clear: { date: '' },
-    });
-  }
-  if (state.minRating !== null) {
-    activePills.push({
-      key: 'rating',
-      label: `${state.minRating}★+`,
-      clear: { minRating: null },
-    });
-  }
-  for (const tagId of state.tags) {
-    const tag = tagsById.get(tagId);
-    if (tag) {
-      activePills.push({
-        key: tagId,
-        label: tag.name,
-        clear: { tags: state.tags.filter((id) => id !== tagId) },
-      });
-    }
-  }
-
-  const filterCount = activeFilterCount(state);
+  const refineCount = activeRefineCount(state);
   const total = result?.total ?? 0;
   // "24 photographers in Austin" — the count is about the vendors, not about
   // the category they sell under.
@@ -166,126 +120,143 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   }`;
 
   return (
-    <div data-app-shell className="flex w-full flex-col lg:app-shell lg:flex-row">
+    <div data-app-shell className="flex w-full min-w-0 flex-col lg:app-shell">
       {/*
-        The rail is never behind a button at desktop — filtering is the primary
-        activity there. Below `lg` there is no width for a permanent column, so
-        it becomes a sheet reached from the sticky bar at the foot of the
-        screen: the degradation table calls for that rather than for the rail
-        stacking on top of the results and pushing them off-screen.
+        The query restates itself above the results, so a customer can change
+        their mind without going back to the landing page. Name search sits
+        beside it as the smallest thing on the screen.
       */}
-      <div
-        className={cn(
-          'fixed inset-0 z-(--z-drawer) flex flex-col bg-stone-0 lg:static lg:z-auto lg:flex lg:bg-transparent',
-          !isFilterSheetOpen && 'hidden',
-        )}
-      >
-        <SearchFilterRail
-          state={state}
-          setState={setState}
-          clearAll={clearAll}
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-stone-200 px-5 py-3 sm:px-6.5">
+        <SearchBar
           categories={categories}
-          tags={tags}
-          facets={result?.facets.categories ?? []}
-          activePills={activePills}
-          onClose={() => setIsFilterSheetOpen(false)}
+          value={{ category: state.category, city: state.city, date: state.date }}
+          onSubmit={(next) => setState(next)}
+          className="w-full min-w-0 sm:flex-1 sm:max-w-140"
         />
+        <NameSearch value={state.name} onSubmit={(name) => setState({ name })} />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/*
+        One control per value: refinements only. Vendor type, city and date are
+        owned by the bar above and never appear here — the date not at any
+        width. Below `lg` the chips move into a sheet behind the sticky trigger.
+      */}
+      {/* Backdrop — bottom sheets on mobile, never a full-screen takeover. */}
+      {isRefineSheetOpen ? (
+        <button
+          type="button"
+          aria-label="Close filters"
+          onClick={() => setIsRefineSheetOpen(false)}
+          className="fixed inset-0 z-(--z-drawer) bg-stone-900/40 lg:hidden"
+        />
+      ) : null}
+
+      <div
+        className={cn(
+          'bg-stone-0',
+          'max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-(--z-drawer) max-lg:max-h-[85vh] max-lg:overflow-y-auto max-lg:rounded-t-2xl max-lg:px-4 max-lg:pt-2 max-lg:pb-4',
+          !isRefineSheetOpen && 'max-lg:hidden',
+        )}
+      >
+        {/* Drag handle — the affordance that says this panel came from below. */}
+        <div
+          aria-hidden="true"
+          className="mx-auto mb-3 h-1 w-9 rounded-full bg-stone-300 lg:hidden"
+        />
+
+        <RefineBar
+          state={state}
+          setState={setState}
+          clearRefinements={clearRefinements}
+          tags={tags}
+          facets={result?.facets.categories ?? []}
+          className="w-full max-lg:border-b-0 max-lg:px-0 max-lg:py-0"
+        />
+
+        <button
+          type="button"
+          onClick={() => setIsRefineSheetOpen(false)}
+          className="mt-4 min-h-11 w-full rounded-lg bg-stone-900 text-base font-semibold text-stone-50 lg:hidden"
+        >
+          Show {total} results
+        </button>
+      </div>
+
+      {/* Neither the query bar nor the Refine bar scrolls; only the grid does. */}
+      <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 sm:px-6.5">
+        <h1 className="font-display text-[22px] text-stone-900">
+          {isLoading && result === null ? 'Finding vendors…' : heading}
+          {state.date ? (
+            <span className="ml-2.5 font-sans text-[13px] text-stone-600">
+              free on {AVAILABILITY_DATE_FORMATTER.format(new Date(`${state.date}T00:00:00Z`))}
+            </span>
+          ) : null}
+        </h1>
+
         {/*
-          The bar restates the query the results answer, so a customer can
-          change their mind without going back to the landing page.
+          Not a statistic — a statement about how the marketplace works, which
+          is true on day one. See design/design-plan/98-post-mvp.md.
         */}
-        <div className="shrink-0 border-b border-stone-200 px-5 py-3 sm:px-8">
-          <SearchBar
-            value={{ q: state.q, city: state.city, date: state.date }}
-            onSubmit={(next) => setState(next)}
-            className="max-w-150"
+        <p className="text-[12.5px] text-stone-600">
+          Prices are what they charge — no quotes needed
+        </p>
+      </div>
+
+      <div className="app-pane px-5 pb-20 sm:px-6.5 lg:pb-4">
+        {error !== null ? (
+          <EmptyState icon={<SearchX />} headline="Something went wrong" description={error} />
+        ) : isLoading ? (
+          // Skeletons swap into the live grid; the bars stay put, and there is
+          // never a full-page spinner beside them.
+          <div className={GRID_COLUMNS}>
+            {Array.from({ length: SKELETON_COUNT }, (_unused, index) => (
+              <VendorCardSkeleton key={index} />
+            ))}
+          </div>
+        ) : total === 0 ? (
+          <EmptyState
+            icon={<SearchX />}
+            headline="No vendors match your search"
+            description={`Nothing here yet — ${loosenSuggestion(state)}.`}
+            action={
+              refineCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={clearRefinements}
+                  className="text-base font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
+                >
+                  Clear every refinement
+                </button>
+              ) : undefined
+            }
           />
-        </div>
+        ) : (
+          <div className={GRID_COLUMNS}>
+            {result?.items.map((vendor) => (
+              <VendorCard
+                key={vendor.id}
+                vendor={vendor}
+                density="compact"
+                {...(state.date ? { searchedDate: state.date } : {})}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
-        {/* Neither the header nor the rail scrolls; only the grid does. */}
-        <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-3 border-b border-stone-300 px-5 py-4 sm:px-8">
-          <h1 className="font-display text-[22px] text-stone-900">
-            {isLoading && result === null ? 'Finding vendors…' : heading}
-            {state.date ? (
-              <span className="ml-2.5 font-sans text-base text-stone-600">
-                available {DATE_FORMATTER.format(new Date(`${state.date}T00:00:00Z`))}
-              </span>
-            ) : null}
-          </h1>
-
-          <label className="flex items-center gap-2 text-sm text-stone-600">
-            Sort
-            <select
-              value={state.sort}
-              onChange={(event) => setState({ sort: event.target.value as VendorSortOption })}
-              className="rounded-md border border-stone-300 bg-stone-0 px-3 py-1.75 text-base font-semibold text-stone-900"
-            >
-              {VENDOR_SORT_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {SORT_LABELS[option]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="app-pane px-5 py-5 pb-20 sm:px-8 lg:pb-5">
-          {error !== null ? (
-            <EmptyState icon={<SearchX />} headline="Something went wrong" description={error} />
-          ) : isLoading ? (
-            // Skeletons swap into the live grid; the rail and header stay put,
-            // and there is never a full-page spinner beside them.
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 min-[100rem]:grid-cols-4">
-              {Array.from({ length: SKELETON_COUNT }, (_unused, index) => (
-                <VendorCardSkeleton key={index} />
-              ))}
-            </div>
-          ) : total === 0 ? (
-            <EmptyState
-              icon={<SearchX />}
-              headline="No vendors match your search"
-              description={`Nothing here yet — ${loosenSuggestion(state)}.`}
-              action={
-                activeFilterCount(state) > 0 ? (
-                  <button
-                    type="button"
-                    onClick={clearAll}
-                    className="text-base font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
-                  >
-                    Clear every filter
-                  </button>
-                ) : undefined
-              }
-            />
-          ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 min-[100rem]:grid-cols-4">
-              {result?.items.map((vendor) => (
-                <VendorCard
-                  key={vendor.id}
-                  vendor={vendor}
-                  {...(state.date ? { searchedDate: state.date } : {})}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* The primary action of this screen on a phone: change the filters. */}
-        <div className="fixed inset-x-0 bottom-0 z-(--z-sticky) flex items-center gap-3 border-t border-stone-300 bg-stone-0 px-5 py-3 lg:hidden">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="flex-1"
-            onClick={() => setIsFilterSheetOpen(true)}
-          >
-            <SlidersHorizontal aria-hidden="true" />
-            Filters{filterCount > 0 ? ` · ${filterCount}` : ''}
-          </Button>
-        </div>
+      {/* The primary action of this screen on a phone: refine. */}
+      <div className="fixed inset-x-0 bottom-0 z-(--z-sticky) flex items-center gap-3 border-t border-stone-300 bg-stone-0 px-5 py-3 lg:hidden">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          // Touch targets are ≥44px at 768 and 390 — see 30-responsive.md.
+          className="min-h-11 flex-1"
+          onClick={() => setIsRefineSheetOpen(true)}
+        >
+          <SlidersHorizontal aria-hidden="true" />
+          Filters{refineCount > 0 ? ` · ${refineCount}` : ''}
+        </Button>
       </div>
     </div>
   );

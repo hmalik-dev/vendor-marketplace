@@ -615,7 +615,23 @@ export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 
 export const vendorSearchQuerySchema = z
   .object({
-    q: z.string().trim().max(200).optional(),
+    /**
+     * Vendor-name search, for the referral case only: someone was handed a
+     * business card. It matches the business name and nothing else — see
+     * decision D6. The main path is `category` + `city` + `date`, three
+     * enumerable values, so there is no free-text query over profile copy.
+     */
+    name: z
+      .string()
+      .trim()
+      .max(MAX_BUSINESS_NAME_LENGTH)
+      .optional()
+      .transform((value) => (value === undefined || value === '' ? undefined : value)),
+    /**
+     * A category slug, never free text: the vendor-type picker resolves to one
+     * of the seeded categories or stays empty, so a search can only ever ask a
+     * question the platform can answer.
+     */
     category: slugSchema.optional(),
     city: z.string().trim().max(MAX_NAME_LENGTH).optional(),
     state: z.string().trim().max(MAX_NAME_LENGTH).optional(),

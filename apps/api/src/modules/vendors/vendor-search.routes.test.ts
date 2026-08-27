@@ -212,12 +212,44 @@ describe('GET /vendors', () => {
     expect(names((await search('?city=austin')).items)).toEqual(['Austin']);
   });
 
-  it('searches the business name and the bio', async () => {
+  /*
+   * Name search is the referral case only — someone was handed a business card.
+   * It is deliberately narrow: business name, nothing else. Matching the bio
+   * too would make it a general text query, which is the thing decision D6
+   * removed from the main path.
+   */
+  it('matches the business name case-insensitively and partially', async () => {
     await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
     await seedVendor({ user: 'user_b', businessName: 'Delaney Rowe' });
 
-    expect(names((await search('?q=kessler')).items)).toEqual(['Kessler & Co.']);
-    expect(names((await search('?q=delaney%20rowe%20does')).items)).toEqual(['Delaney Rowe']);
+    expect(names((await search('?name=kessler')).items)).toEqual(['Kessler & Co.']);
+    expect(names((await search('?name=ROWE')).items)).toEqual(['Delaney Rowe']);
+  });
+
+  it('does not match the bio — name search is the business name alone', async () => {
+    // seedVendor writes the bio as `<businessName> does good work.`, so "does"
+    // appears in every bio and in no business name.
+    await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
+    await seedVendor({ user: 'user_b', businessName: 'Delaney Rowe' });
+
+    expect((await search('?name=does')).items).toEqual([]);
+  });
+
+  it('returns everything for a name that is only whitespace', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
+    await seedVendor({ user: 'user_b', businessName: 'Delaney Rowe' });
+
+    expect(names((await search('?name=%20%20')).items)).toEqual(['Delaney Rowe', 'Kessler & Co.']);
+  });
+
+  it('ignores a free-text q rather than filtering on it', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
+    await seedVendor({ user: 'user_b', businessName: 'Delaney Rowe' });
+
+    // The old main-path query parameter. It is no longer part of the contract,
+    // so a stale bookmark carrying it returns the unfiltered set instead of an
+    // error or an empty grid.
+    expect((await search('?q=kessler')).items).toHaveLength(2);
   });
 
   /*
