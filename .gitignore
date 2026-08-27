@@ -45,3 +45,12 @@ skills-lock.json
 
 # Local state written by the Neon CLI/integration
 .neon
+
+# Film assets: licensed audio/video sources and renders. These are tens of MB
+# of binaries that git cannot diff, and the tracks are redownloadable from the
+# artist's library. The licence receipt is the exception and stays tracked —
+# it is the record of our right to use the music, and it is 4KB of text.
+# Note `/uploads/*`, not `/uploads/`: git does not descend into an ignored
+# directory, so a directory rule would make the negation below unreachable.
+/uploads/*
+!/uploads/soundtrack-license.md
