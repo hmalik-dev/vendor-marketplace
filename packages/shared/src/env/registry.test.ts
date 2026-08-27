@@ -200,6 +200,25 @@ describe('capabilitiesForTicket', () => {
     expect(capabilitiesForTicket(23)).toEqual(['core', 'auth', 'storage', 'e2e']);
     expect(capabilitiesForTicket(24)).toEqual(['core', 'auth', 'e2e']);
     expect(capabilitiesForTicket(25)).toEqual(['core', 'auth', 'e2e']);
+    expect(capabilitiesForTicket(26)).toEqual(['core', 'e2e']);
+    expect(capabilitiesForTicket(27)).toEqual(['core', 'auth', 'e2e']);
+    expect(capabilitiesForTicket(28)).toEqual(['core', 'e2e']);
+    expect(capabilitiesForTicket(29)).toEqual(['core', 'auth', 'storage', 'e2e']);
+    expect(capabilitiesForTicket(30)).toEqual(['core', 'e2e']);
+    expect(capabilitiesForTicket(31)).toEqual(['core', 'auth', 'e2e']);
+  });
+
+  // #26 and #27 sat on the status board for a day with no registry row, so
+  // `preflight --ticket 26` threw UnknownTicketError instead of gating the work.
+  // A ticket that cannot be preflighted cannot be started, so the board and the
+  // registry have to be checked against each other, not just each on its own.
+  it('registers a contiguous ticket range with no gaps', () => {
+    const numbers = Object.keys(TICKET_CAPABILITIES)
+      .map(Number)
+      .sort((a, b) => a - b);
+
+    expect(numbers[0]).toBe(0);
+    expect(numbers).toEqual(Array.from({ length: numbers.length }, (_value, index) => index));
   });
 
   it('fails loudly on an unknown ticket rather than checking nothing', () => {
