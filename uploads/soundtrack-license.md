@@ -2,23 +2,23 @@
 
 ## Chosen track
 
-| Field | Value |
-| --- | --- |
-| **Track title** | Home Was You |
-| **Artist** | Scott Buckley |
-| **Source URL** | https://www.scottbuckley.com.au/library/home-was-you/ |
-| **File downloaded** | https://www.scottbuckley.com.au/library/wp-content/uploads/2026/07/HomeWasYou.mp3 (MP3, 320 kbps, 4:29) | 
-| **Licence** | Creative Commons Attribution 4.0 International (CC BY 4.0) |
-| **Licence URL** | https://creativecommons.org/licenses/by/4.0/ |
+| Field                  | Value                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Track title**        | Home Was You                                                                                                   |
+| **Artist**             | Scott Buckley                                                                                                  |
+| **Source URL**         | https://www.scottbuckley.com.au/library/home-was-you/                                                          |
+| **File downloaded**    | https://www.scottbuckley.com.au/library/wp-content/uploads/2026/07/HomeWasYou.mp3 (MP3, 320 kbps, 4:29)        |
+| **Licence**            | Creative Commons Attribution 4.0 International (CC BY 4.0)                                                     |
+| **Licence URL**        | https://creativecommons.org/licenses/by/4.0/                                                                   |
 | **Licence terms page** | https://www.scottbuckley.com.au/library/using-this-music/ · https://www.scottbuckley.com.au/library/licensing/ |
-| **Date downloaded** | 2026-08-27 |
-| **Cost** | Free |
+| **Date downloaded**    | 2026-08-27                                                                                                     |
+| **Cost**               | Free                                                                                                           |
 
 ## Permissions verified
 
-- **Commercial use — YES.** Quoting the artist's terms page verbatim: *"Simply put – this means that the music in this library is FREE, even for commercial use, as long as attribution is given."*
-- **Paid advertising — YES, with attribution.** The licensing table lists "Web Advertising" and "Local TV/Radio Advertising" against the *CC-BY License (with credit)* column, footnoted: *"If you can find a way to credit me, then the CC-BY license still stands, and it's free."* The paid tiers ($40–$300 AUD/track) exist **only** to remove the attribution requirement, for placements that cannot carry a credit. See the caveat below.
-- **Use in an audiovisual work — YES, and required.** *"My music cannot be resold in isolation, or redistributed/reuploaded to music streaming platforms, and must be synchronised with other media (e.g. film)."* Scoring this film is exactly the permitted use.
+- **Commercial use — YES.** Quoting the artist's terms page verbatim: _"Simply put – this means that the music in this library is FREE, even for commercial use, as long as attribution is given."_
+- **Paid advertising — YES, with attribution.** The licensing table lists "Web Advertising" and "Local TV/Radio Advertising" against the _CC-BY License (with credit)_ column, footnoted: _"If you can find a way to credit me, then the CC-BY license still stands, and it's free."_ The paid tiers ($40–$300 AUD/track) exist **only** to remove the attribution requirement, for placements that cannot carry a credit. See the caveat below.
+- **Use in an audiovisual work — YES, and required.** _"My music cannot be resold in isolation, or redistributed/reuploaded to music streaming platforms, and must be synchronised with other media (e.g. film)."_ Scoring this film is exactly the permitted use.
 
 ## Required attribution string
 
@@ -41,10 +41,10 @@ CC BY 4.0 covers paid advertising **only where the credit line can be displayed*
 
 ## Runner-up tracks (also downloaded, same licence and terms)
 
-| Track | Source | Cut |
-| --- | --- | --- |
+| Track                      | Source                                              | Cut                                     |
+| -------------------------- | --------------------------------------------------- | --------------------------------------- |
 | Simplicity — Scott Buckley | https://www.scottbuckley.com.au/library/simplicity/ | `uploads/soundtrack-alt-simplicity.mp4` |
-| Felicity — Scott Buckley | https://www.scottbuckley.com.au/library/felicity/ | `uploads/soundtrack-alt-felicity.mp4` |
+| Felicity — Scott Buckley   | https://www.scottbuckley.com.au/library/felicity/   | `uploads/soundtrack-alt-felicity.mp4`   |
 
 Attribution strings, if either is used instead:
 
@@ -55,9 +55,9 @@ Felicity by Scott Buckley – released under CC-BY 4.0. www.scottbuckley.com.au
 
 ## Delivered files
 
-| File | What it is |
-| --- | --- |
-| `uploads/soundtrack.mp4` | The cut — *Home Was You*, 56.0 s, −16.3 LUFS, −1.7 dBTP, LRA 9.1 LU, AAC 192 kbps / 48 kHz, audio-only |
-| `uploads/soundtrack-source.mp3` | Untrimmed original of *Home Was You* (4:29) so the cut can be redone |
-| `uploads/soundtrack-alt-*.mp4` | The two runner-up cuts, identically processed |
-| `uploads/soundtrack-alt-*-source.mp3` | Their untrimmed originals |
+| File                                  | What it is                                                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `uploads/soundtrack.mp4`              | The cut — _Home Was You_, 56.0 s, −16.3 LUFS, −1.7 dBTP, LRA 9.1 LU, AAC 192 kbps / 48 kHz, audio-only |
+| `uploads/soundtrack-source.mp3`       | Untrimmed original of _Home Was You_ (4:29) so the cut can be redone                                   |
+| `uploads/soundtrack-alt-*.mp4`        | The two runner-up cuts, identically processed                                                          |
+| `uploads/soundtrack-alt-*-source.mp3` | Their untrimmed originals                                                                              |
