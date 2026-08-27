@@ -7,7 +7,7 @@ export const TAG_CATEGORY_LABELS: Record<TagCategory, string> = {
   dietary: 'Dietary',
 };
 
-/** The prompt under each section's selector, per the design system. */
+/** The prompt under each section's selector, per design/design-plan/03-components.md. */
 export const TAG_CATEGORY_HINTS: Record<TagCategory, string> = {
   language: 'Languages you can work in.',
   cultural: 'Traditions and celebrations you know well.',

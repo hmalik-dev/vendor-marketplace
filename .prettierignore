@@ -4,3 +4,9 @@ dist
 .turbo
 pnpm-lock.yaml
 packages/db/drizzle
+
+# Claude Design export artifacts — generated, and reformatting them breaks the
+# canvas format so a re-import no longer diffs cleanly. The spec beside them
+# (design/design-plan/*.md) is hand-maintained and IS formatted.
+design/*.dc.html
+design/support.js

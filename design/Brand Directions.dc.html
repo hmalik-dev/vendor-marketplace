@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#eceae4;font-family:'Instrument Sans',system-ui,sans-serif}
+a{color:inherit}
+.dv-turn{padding:44px 48px 40px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tid{font:600 10px 'JetBrains Mono',monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 'Instrument Sans',sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px 'JetBrains Mono',monospace;padding:3px 7px;background:rgba(0,0,0,.09);color:#1a1a1a;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.3 'Instrument Sans',sans-serif;color:rgba(0,0,0,.55)}
+.dv-card{max-width:100%;border:1px solid rgba(0,0,0,.1);border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.07);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}
+.dv-next{margin:26px 0 0;font:12px/1.6 'Instrument Sans',sans-serif;color:rgba(0,0,0,.5)}
+</style>
+</helmet>
+
+<section class="dv-turn" id="t5" style="background:#F8F5EF">
+<div class="dv-thd"><a class="dv-tid" href="#t5">5</a><span class="dv-tname">The mark is name-agnostic — same logo, five different names</span></div>
+<div style="max-width:840px;margin:-4px 0 24px;font:400 13.5px/1.7 'Instrument Sans',sans-serif;color:#4A443C">Nothing in the mark is a letterform. It's two circles of equal size, one clay fill and one ink outline, overlapping by 45% — <em>an introduction</em>, two parties meeting. It carries any wordmark set in Instrument Serif, and it works at 16px as a favicon. So the name can stay open as long as you need; picking it later changes one word, not the identity.</div>
+<div class="dv-opts" style="gap:18px">
+<div class="dv-opt" id="5a">
+<div class="dv-card" style="width:1240px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px;padding:0">
+<div style="display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid #EFE9E0">
+<div style="padding:30px 24px;border-right:1px solid #EFE9E0;display:flex;flex-direction:column;align-items:center;gap:8px"><div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:26px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:32px;color:#23201C">Orla</span></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">2 syllables</span></div>
+<div style="padding:30px 24px;border-right:1px solid #EFE9E0;display:flex;flex-direction:column;align-items:center;gap:8px"><div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:26px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:32px;color:#23201C">Junia</span></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">3 syllables</span></div>
+<div style="padding:30px 24px;border-right:1px solid #EFE9E0;display:flex;flex-direction:column;align-items:center;gap:8px"><div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:26px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:32px;color:#23201C">Wren</span></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">1 syllable</span></div>
+<div style="padding:30px 24px;border-right:1px solid #EFE9E0;display:flex;flex-direction:column;align-items:center;gap:8px"><div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:26px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:30px;color:#23201C">Pomona</span></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">Longest tested</span></div>
+<div style="padding:30px 24px;display:flex;flex-direction:column;align-items:center;gap:8px"><div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:26px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:31px;color:#23201C">Marlowe</span></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">Surname register</span></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr)">
+<div style="padding:24px;border-right:1px solid #EFE9E0">
+<div class="lbl" style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:16px">Mark alone — favicon &amp; app icon</div>
+<div style="display:flex;align-items:flex-end;gap:18px">
+<div style="width:52px;height:52px;border-radius:12px;background:#23201C;display:flex;align-items:center;justify-content:center"><div style="position:relative;width:32px;height:24px"><div style="position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:11px;top:0;width:24px;height:24px;border-radius:50%;border:1.6px solid #F8F5EF"></div></div></div>
+<div style="width:34px;height:34px;border-radius:8px;background:#F1ECE4;display:flex;align-items:center;justify-content:center"><div style="position:relative;width:21px;height:16px"><div style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:16px;height:16px;border-radius:50%;border:1.3px solid #23201C"></div></div></div>
+<div style="width:20px;height:20px;display:flex;align-items:center;justify-content:center"><div style="position:relative;width:19px;height:14px"><div style="position:absolute;left:0;top:0;width:14px;height:14px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:14px;height:14px;border-radius:50%;border:1.2px solid #23201C"></div></div></div>
+</div>
+</div>
+<div style="padding:24px;border-right:1px solid #EFE9E0">
+<div class="lbl" style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:16px">On dark</div>
+<div style="background:#23201C;border-radius:10px;padding:16px 18px;display:flex;align-items:center;gap:10px"><div style="position:relative;width:24px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.4px solid #F8F5EF"></div></div><span style="font-family:'Instrument Serif',serif;font-size:26px;color:#F8F5EF">Junia</span></div>
+</div>
+<div style="padding:24px;border-right:1px solid #EFE9E0">
+<div class="lbl" style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:16px">One colour</div>
+<div style="display:flex;gap:22px;align-items:center">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:17px"><div style="position:absolute;left:0;top:0;width:17px;height:17px;border-radius:50%;background:#23201C"></div><div style="position:absolute;left:7px;top:0;width:17px;height:17px;border-radius:50%;border:1.4px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:24px;color:#23201C">Junia</span></div>
+</div>
+<div style="font-size:11.5px;line-height:1.5;color:#6B6459;margin-top:11px">Fill goes ink; the outline stays. Survives fax, embroidery and a single-colour stamp.</div>
+</div>
+<div style="padding:24px">
+<div class="lbl" style="font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:16px">Construction</div>
+<div style="font-size:12px;line-height:1.75;color:#4A443C;font-family:'JetBrains Mono',monospace">two circles · Ø equal<br>overlap 45% of Ø<br>left: clay fill · right: 8% ink stroke<br>wordmark: Instrument Serif, gap = 0.5 Ø</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p class="dv-next">Try next: "lock the mark, name TBD" · "show it with [your name]" · "try a version where the circles are tangent, not overlapping"</p>
+</section>
+
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname">Locked on <a class="dv-oid" href="#1a">1a</a>. Three headlines for it — nothing else changed.</span></div>
+<div style="max-width:800px;margin:-4px 0 22px;font:400 13px/1.65 'Instrument Sans',sans-serif;color:#6B6459">You're right that "meet them" is wrong — the promise is that you <em>don't</em> have to. Each of these keeps the warmth in the noun (people, not listings) and puts the anti-back-and-forth in the verb. Your sub-line runs under all three.</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="4a">
+<div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a><span style="max-width:600px"><strong style="color:#23201C;font-weight:600">Warmest</strong> — leads with the people, ends on the friction removed.</span></div>
+<div class="dv-card" style="width:620px;background:linear-gradient(160deg,#F8F5EF 0%,#F6EFE6 60%,#F2E4D8 100%);border-color:#E4DDD1;border-radius:12px">
+<div style="padding:34px 34px 36px">
+<div style="display:inline-flex;align-items:center;gap:7px;background:rgba(180,85,47,.1);color:#8E3F20;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:600;margin-bottom:18px"><span style="width:5px;height:5px;border-radius:50%;background:#B4552F"></span>412 vendors in Austin</div>
+<div style="font-family:'Instrument Serif',serif;font-size:47px;line-height:1.03;letter-spacing:-.02em;color:#23201C">Find your people.<br><span style="font-style:italic;color:#A34A28">Skip the phone tag.</span></div>
+<div style="font-size:15px;line-height:1.6;color:#6B6459;max-width:430px;margin-top:14px">Compare real availability and pricing from vendors near you, send one request, and pay securely once the date is locked in.</div>
+<div style="display:flex;align-items:center;background:#FFFDF9;border-radius:999px;box-shadow:0 6px 24px rgba(35,32,28,.09);padding:6px 6px 6px 20px;margin-top:24px">
+<div style="flex:1.2"><div style="font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">What</div><div style="font-size:14px;color:#23201C">Wedding photographer</div></div>
+<div style="width:1px;height:30px;background:#E4DDD1"></div>
+<div style="flex:.9;padding-left:16px"><div style="font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">Where</div><div style="font-size:14px;color:#23201C">Austin, TX</div></div>
+<div style="background:#B4552F;color:#fff;font-size:13.5px;font-weight:600;padding:12px 24px;border-radius:999px">Search</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="4b">
+<div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a><span style="max-width:600px"><strong style="color:#23201C;font-weight:600">Most direct</strong> — names the thing every couple dreads by name.</span></div>
+<div class="dv-card" style="width:620px;background:linear-gradient(160deg,#F8F5EF 0%,#F6EFE6 60%,#F2E4D8 100%);border-color:#E4DDD1;border-radius:12px">
+<div style="padding:34px 34px 36px">
+<div style="display:inline-flex;align-items:center;gap:7px;background:rgba(180,85,47,.1);color:#8E3F20;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:600;margin-bottom:18px"><span style="width:5px;height:5px;border-radius:50%;background:#B4552F"></span>412 vendors in Austin</div>
+<div style="font-family:'Instrument Serif',serif;font-size:47px;line-height:1.03;letter-spacing:-.02em;color:#23201C">Book your vendors<br><span style="font-style:italic;color:#A34A28">without the back-and-forth.</span></div>
+<div style="font-size:15px;line-height:1.6;color:#6B6459;max-width:430px;margin-top:14px">Compare real availability and pricing from vendors near you, send one request, and pay securely once the date is locked in.</div>
+<div style="display:flex;align-items:center;background:#FFFDF9;border-radius:999px;box-shadow:0 6px 24px rgba(35,32,28,.09);padding:6px 6px 6px 20px;margin-top:24px">
+<div style="flex:1.2"><div style="font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">What</div><div style="font-size:14px;color:#23201C">Wedding photographer</div></div>
+<div style="width:1px;height:30px;background:#E4DDD1"></div>
+<div style="flex:.9;padding-left:16px"><div style="font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">Where</div><div style="font-size:14px;color:#23201C">Austin, TX</div></div>
+<div style="background:#B4552F;color:#fff;font-size:13.5px;font-weight:600;padding:12px 24px;border-radius:999px">Search</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="4c">
+<div class="dv-olabel"><a class="dv-oid" href="#4c">4c</a><span style="max-width:600px"><strong style="color:#23201C;font-weight:600">Most specific</strong> — the transparency promise stated as a fact, not a feeling.</span></div>
+<div class="dv-card" style="width:620px;background:linear-gradient(160deg,#F8F5EF 0%,#F6EFE6 60%,#F2E4D8 100%);border-color:#E4DDD1;border-radius:12px">
+<div style="padding:34px 34px 36px">
+<div style="display:inline-flex;align-items:center;gap:7px;background:rgba(180,85,47,.1);color:#8E3F20;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:600;margin-bottom:18px"><span style="width:5px;height:5px;border-radius:50%;background:#B4552F"></span>412 vendors in Austin</div>
+<div style="font-family:'Instrument Serif',serif;font-size:44px;line-height:1.05;letter-spacing:-.02em;color:#23201C">Their prices and dates,<br><span style="font-style:italic;color:#A34A28">before you say hello.</span></div>
+<div style="font-size:15px;line-height:1.6;color:#6B6459;max-width:430px;margin-top:14px">Compare real availability and pricing from vendors near you, send one request, and pay securely once the date is locked in.</div>
+<div style="display:flex;align-items:center;background:#FFFDF9;border-radius:999px;box-shadow:0 6px 24px rgba(35,32,28,.09);padding:6px 6px 6px 20px;margin-top:24px">
+<div style="flex:1.2"><div style="font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">What</div><div style="font-size:14px;color:#23201C">Wedding photographer</div></div>
+<div style="width:1px;height:30px;background:#E4DDD1"></div>
+<div style="flex:.9;padding-left:16px"><div style="font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">Where</div><div style="font-size:14px;color:#23201C">Austin, TX</div></div>
+<div style="background:#B4552F;color:#fff;font-size:13.5px;font-weight:600;padding:12px 24px;border-radius:999px">Search</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "<a class="dv-oid" href="#4b">4b</a>, build the twelve screens" · "<a class="dv-oid" href="#4a">4a</a> but swap 'phone tag' for something softer" · "keep 1a's original headline after all"</p>
+</section>
+
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Three variations inside <a class="dv-oid" href="#1a">1a</a>'s world — same cream, same clay, same warmth. Same new headline in all three, so composition is the only variable.</span></div>
+<div style="max-width:780px;margin:-4px 0 22px;font:400 13px/1.65 'Instrument Sans',sans-serif;color:#6B6459">Headline across all three: <strong style="font-weight:600;color:#23201C">"Meet them, see the price, book them."</strong> — warmth, transparency, and the end of the back-and-forth in three beats. Your sub-line carries the mechanics underneath it.</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3a">
+<div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a><span style="max-width:1150px"><strong style="color:#23201C;font-weight:600">Catalogue</strong> — ruled, squared, dense. Hairline rules instead of shadows, EB Garamond instead of Instrument Serif, monospace metadata. Warm on the surface, near-clinical underneath: the variation that scales best to the vendor inbox and admin tables.</span></div>
+<div class="dv-card" style="width:1240px;background:#FAF8F3;border-radius:4px">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:13px 34px;border-bottom:1px solid #23201C">
+<div style="display:flex;align-items:center;gap:28px">
+<div style="display:flex;align-items:center;gap:9px"><div style="width:15px;height:15px;background:#B4552F"></div><span style="font-family:'EB Garamond',serif;font-weight:600;font-size:22px;color:#23201C">Orla</span></div>
+<div style="display:flex;gap:20px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#6B6459"><span>Browse</span><span>Categories</span><span>For vendors</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:14px"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#6B6459">Sign in</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#FAF8F3;background:#23201C;padding:7px 13px">Join as a vendor</span></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 400px;border-bottom:1px solid #23201C">
+<div style="padding:36px 34px 30px;border-right:1px solid #DED7C9">
+<div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:18px">Austin, TX — 412 vendors listed</div>
+<div style="font-family:'EB Garamond',serif;font-size:58px;line-height:1.05;color:#23201C">Meet them, see the price,<br><span style="font-style:italic;color:#A34A28">book them.</span></div>
+<div style="font-size:15px;line-height:1.65;color:#6B6459;max-width:470px;margin-top:16px">Compare real availability and pricing from vendors near you, send one request, and pay securely once the date is locked in.</div>
+<div style="display:flex;border:1px solid #23201C;margin-top:24px;max-width:640px;background:#FFFDF9">
+<div style="flex:1.2;padding:12px 16px;border-right:1px solid #DED7C9"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459">What</div><div style="font-size:14px;color:#23201C;margin-top:3px">Wedding photographer</div></div>
+<div style="flex:1;padding:12px 16px;border-right:1px solid #DED7C9"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459">Where</div><div style="font-size:14px;color:#23201C;margin-top:3px">Austin, TX</div></div>
+<div style="flex:.8;padding:12px 16px;border-right:1px solid #DED7C9"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459">When</div><div style="font-size:14px;color:#6B6459;margin-top:3px">Any date</div></div>
+<div style="background:#B4552F;color:#FFFDF9;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;padding:0 24px">Search</div>
+</div>
+<div style="display:flex;margin-top:28px;border-top:1px solid #DED7C9">
+<div style="flex:1;padding:13px 16px 0 0;border-right:1px solid #DED7C9"><div style="font-family:'EB Garamond',serif;font-size:29px;color:#23201C">2,412</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-top:2px">Events booked</div></div>
+<div style="flex:1;padding:13px 16px 0;border-right:1px solid #DED7C9"><div style="font-family:'EB Garamond',serif;font-size:29px;color:#23201C">4.8</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-top:2px">Average rating</div></div>
+<div style="flex:1;padding:13px 0 0 16px"><div style="font-family:'EB Garamond',serif;font-size:29px;color:#23201C">2h</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-top:2px">Median reply</div></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column">
+<div style="flex:1;min-height:250px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:12px;border-bottom:1px solid #DED7C9"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6B6459">photographer / portrait</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr">
+<div style="height:132px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:10px;border-right:1px solid #DED7C9"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#6B6459">florals</span></div>
+<div style="height:132px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#6B6459">catering</span></div>
+</div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:290px 1fr;gap:34px;padding:26px 34px 32px">
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:11px">Vendor card</div>
+<div style="background:#FFFDF9;border:1px solid #DED7C9">
+<div style="height:152px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);border-bottom:1px solid #DED7C9;display:flex;align-items:flex-end;padding:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#6B6459">cover 4:3</span></div>
+<div style="padding:13px 15px 15px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:'EB Garamond',serif;font-size:21px;color:#23201C">Kessler &amp; Co.</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#23201C">4.9★</span></div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459;margin-top:7px">Photography · Austin TX · 127 reviews</div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;padding-top:10px;border-top:1px solid #EFE9E0"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">From</span><span style="font-family:'EB Garamond',serif;font-size:22px;color:#23201C">$1,450</span></div>
+</div>
+</div>
+</div>
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:11px">Components</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px">
+<span style="font-size:13px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:10px 20px">Request booking</span>
+<span style="font-size:13px;font-weight:600;color:#23201C;background:#FFFDF9;border:1px solid #23201C;padding:10px 20px">Send a message</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#A34A28;padding:10px 2px">View all →</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px">
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;border:1px solid #D8CDB2;background:#F5EEDC;color:#7A5A12;padding:4px 9px">Pending</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;border:1px solid #CBD5C2;background:#EDF0E9;color:#4B5940;padding:4px 9px">Confirmed</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;border:1px solid #E8C9B8;background:#F7E7E0;color:#8E3F20;padding:4px 9px">Needs you</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;border:1px solid #E0DACF;background:#EFEBE4;color:#6B6459;padding:4px 9px">Declined</span>
+</div>
+<div style="display:flex;gap:12px">
+<div style="flex:1"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:6px">Event date</div><div style="background:#FFFDF9;border:1px solid #DED7C9;padding:10px 13px;font-size:14px;color:#23201C">June 14, 2026</div></div>
+<div style="flex:1"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:6px">Guests</div><div style="background:#FFFDF9;border:1px solid #B4552F;box-shadow:0 0 0 3px rgba(180,85,47,.14);padding:10px 13px;font-size:14px;color:#23201C">120</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="3b">
+<div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a><span style="max-width:1150px"><strong style="color:#23201C;font-weight:600">Arcade</strong> — colour-forward and architectural. Clay becomes a surface, not just an accent; images sit in arches; DM Serif Display carries the headline. The most distinctive and the most brand-led — furthest from anything that reads as a template.</span></div>
+<div class="dv-card" style="width:1240px;background:#F6EDE3;border-radius:14px;border-color:#E6D6C4">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 36px">
+<div style="display:flex;align-items:center;gap:30px">
+<div style="display:flex;align-items:center;gap:10px"><div style="width:17px;height:22px;border-radius:9px 9px 0 0;background:#B4552F"></div><span style="font-family:'DM Serif Display',serif;font-size:25px;color:#3A1F12">Orla</span></div>
+<div style="display:flex;gap:22px;font-size:13.5px;font-weight:500;color:#6B4630"><span>Browse</span><span>How it works</span><span>For vendors</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:14px"><span style="font-size:13.5px;font-weight:500;color:#6B4630">Sign in</span><span style="font-size:13px;font-weight:600;color:#F6EDE3;background:#3A1F12;padding:10px 18px;border-radius:999px">Join as a vendor</span></div>
+</div>
+<div style="margin:6px 20px 20px;background:#B4552F;border-radius:22px;padding:44px 44px 0;position:relative;overflow:hidden">
+<div style="position:absolute;right:-70px;top:-70px;width:280px;height:280px;border-radius:50%;background:rgba(255,253,249,.07)"></div>
+<div style="display:grid;grid-template-columns:1fr 400px;gap:44px;align-items:end">
+<div style="padding-bottom:44px">
+<div style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,253,249,.16);color:#FFF3E9;padding:6px 13px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:22px"><span style="width:5px;height:5px;border-radius:50%;background:#F3C98B"></span>412 vendors in Austin</div>
+<div style="font-family:'DM Serif Display',serif;font-size:62px;line-height:1.03;color:#FFFDF9">Meet them, see the price,<br><span style="font-style:italic;color:#F3C98B">book them.</span></div>
+<div style="font-size:16px;line-height:1.65;color:rgba(255,253,249,.82);max-width:470px;margin-top:16px">Compare real availability and pricing from vendors near you, send one request, and pay securely once the date is locked in.</div>
+<div style="display:flex;align-items:center;background:#FFFDF9;border-radius:999px;padding:7px 7px 7px 24px;margin-top:28px;max-width:600px;box-shadow:0 10px 30px rgba(58,31,18,.18)">
+<div style="flex:1.2"><div style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6B4630">What</div><div style="font-size:14.5px;color:#3A1F12">Wedding photographer</div></div>
+<div style="width:1px;height:30px;background:#EFE1D3"></div>
+<div style="flex:1;padding-left:18px"><div style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6B4630">Where</div><div style="font-size:14.5px;color:#3A1F12">Austin, TX</div></div>
+<div style="width:1px;height:30px;background:#EFE1D3"></div>
+<div style="flex:.8;padding-left:18px"><div style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6B4630">When</div><div style="font-size:14.5px;color:#6B4630">Add a date</div></div>
+<div style="background:#3A1F12;color:#FFFDF9;font-size:14px;font-weight:600;padding:13px 28px;border-radius:999px">Search</div>
+</div>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-end">
+<div style="flex:1;height:250px;border-radius:110px 110px 14px 14px;background:repeating-linear-gradient(135deg,#E3D2C0 0 9px,#EDDECD 9px 18px);display:flex;align-items:flex-end;justify-content:center;padding:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#6B4630">florist</span></div>
+<div style="flex:1;height:320px;border-radius:110px 110px 14px 14px;background:repeating-linear-gradient(135deg,#E3D2C0 0 9px,#EDDECD 9px 18px);display:flex;align-items:flex-end;justify-content:center;padding:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#6B4630">photographer</span></div>
+</div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:290px 1fr;gap:34px;padding:6px 36px 34px">
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B4630;margin-bottom:11px">Vendor card</div>
+<div style="background:#FFFDF9;border-radius:18px;box-shadow:0 3px 14px rgba(58,31,18,.08);overflow:hidden">
+<div style="height:160px;margin:10px 10px 0;border-radius:74px 74px 10px 10px;background:repeating-linear-gradient(135deg,#E3D2C0 0 9px,#EDDECD 9px 18px);display:flex;align-items:flex-end;justify-content:center;padding:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#6B4630">cover</span></div>
+<div style="padding:13px 16px 16px">
+<div style="font-family:'DM Serif Display',serif;font-size:21px;color:#3A1F12">Kessler &amp; Co.</div>
+<div style="font-size:12.5px;color:#6B4630;margin-top:3px">★ <span style="color:#5C3B26;font-weight:600">4.9</span> (127) · Austin, TX</div>
+<div style="display:flex;gap:6px;margin-top:11px"><span style="font-size:11px;font-weight:600;background:#F6EDE3;color:#8A5A3C;padding:4px 10px;border-radius:999px">Photography</span><span style="font-size:11px;font-weight:600;background:#EDF0E9;color:#4B5940;padding:4px 10px;border-radius:999px">Wedding</span></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:1px solid #F2E6D9"><span style="font-size:12.5px;color:#6B4630">From</span><span style="font-family:'DM Serif Display',serif;font-size:22px;color:#3A1F12">$1,450</span></div>
+</div>
+</div>
+</div>
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B4630;margin-bottom:11px">Components</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px">
+<span style="font-size:13.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:11px 22px;border-radius:999px">Request booking</span>
+<span style="font-size:13.5px;font-weight:600;color:#3A1F12;background:#FFFDF9;border:1px solid #E6D6C4;padding:11px 22px;border-radius:999px">Send a message</span>
+<span style="font-size:13.5px;font-weight:600;color:#A34A28;padding:11px 8px">View all →</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+<span style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:#F5E7CE;color:#7A5A12;padding:5px 12px;border-radius:999px">Pending</span>
+<span style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:#5E6B4F;color:#F1F4EE;padding:5px 12px;border-radius:999px">Confirmed</span>
+<span style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:#B4552F;color:#FFF3E9;padding:5px 12px;border-radius:999px">Needs you</span>
+<span style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:#EDE2D6;color:#6B4630;padding:5px 12px;border-radius:999px">Declined</span>
+</div>
+<div style="display:flex;gap:12px">
+<div style="flex:1"><div style="font-size:11.5px;font-weight:600;color:#6B4630;margin-bottom:6px">Event date</div><div style="background:#FFFDF9;border:1px solid #E6D6C4;border-radius:12px;padding:11px 14px;font-size:14px;color:#3A1F12">June 14, 2026</div></div>
+<div style="flex:1"><div style="font-size:11.5px;font-weight:600;color:#6B4630;margin-bottom:6px">Guests</div><div style="background:#FFFDF9;border:1.5px solid #B4552F;box-shadow:0 0 0 3px rgba(180,85,47,.16);border-radius:12px;padding:11px 14px;font-size:14px;color:#3A1F12">120</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="3c">
+<div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a><span style="max-width:1150px"><strong style="color:#23201C;font-weight:600">Broadsheet</strong> — editorial and quiet. Asymmetric grid, oversized Newsreader italic, colour reduced almost to nothing so the photography carries the page. Closest in spirit to <a class="dv-oid" href="#1a">1a</a> but calmer and more grown-up.</span></div>
+<div class="dv-card" style="width:1240px;background:#F8F5EF;border-radius:8px">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:20px 44px 16px">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:19px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Newsreader',serif;font-weight:500;font-size:24px;color:#23201C">Orla</span></div>
+<div style="display:flex;gap:26px;font-size:13px;font-weight:500;color:#4A443C"><span>Browse</span><span>How it works</span><span>For vendors</span><span>Sign in</span><span style="color:#A34A28;font-weight:600">Join as a vendor</span></div>
+</div>
+<div style="border-top:1px solid #23201C;border-bottom:1px solid #E4DDD1;padding:0 44px"><div style="display:flex;justify-content:space-between;padding:7px 0;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459"><span>Austin, Texas</span><span>412 vendors · 11 categories</span><span>Median reply 2h</span><span>Payment held until the event</span></div></div>
+<div style="padding:46px 44px 34px">
+<div style="display:grid;grid-template-columns:1.15fr .85fr;gap:52px;align-items:start">
+<div>
+<div style="font-family:'Newsreader',serif;font-weight:400;font-size:66px;line-height:1.02;letter-spacing:-.015em;color:#23201C">Meet them,<br>see the price,<br><span style="font-style:italic;color:#A34A28">book them.</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:26px;padding-top:22px;border-top:1px solid #E4DDD1">
+<div style="font-size:15px;line-height:1.65;color:#5A544B">Compare real availability and pricing from vendors near you, send one request, and pay securely once the date is locked in.</div>
+<div style="font-family:'Newsreader',serif;font-style:italic;font-size:16px;line-height:1.55;color:#6B6459">No quote roulette. No phone tag. No "let me check and get back to you."</div>
+</div>
+<div style="display:flex;align-items:center;background:#FFFDF9;border:1px solid #DDD5C7;border-radius:8px;padding:6px 6px 6px 20px;margin-top:26px">
+<div style="flex:1.2"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459">What</div><div style="font-size:14.5px;color:#23201C;margin-top:1px">Wedding photographer</div></div>
+<div style="width:1px;height:30px;background:#EFE9E0"></div>
+<div style="flex:1;padding-left:18px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459">Where</div><div style="font-size:14.5px;color:#23201C;margin-top:1px">Austin, TX</div></div>
+<div style="width:1px;height:30px;background:#EFE9E0"></div>
+<div style="flex:.75;padding-left:18px"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459">When</div><div style="font-size:14.5px;color:#6B6459;margin-top:1px">Jun 14</div></div>
+<div style="background:#23201C;color:#F8F5EF;font-size:13.5px;font-weight:600;padding:12px 26px;border-radius:6px">Search</div>
+</div>
+</div>
+<div>
+<div style="height:340px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6B6459">photographer / full-bleed 3:4</span></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:9px;padding-top:8px;border-top:1px solid #E4DDD1"><span style="font-family:'Newsreader',serif;font-style:italic;font-size:14px;color:#5A544B">Maya Kessler, photographing in Austin since 2016</span><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6B6459">01 / 03</span></div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:40px;padding-top:22px;border-top:1px solid #23201C">
+<div><div style="font-family:'Newsreader',serif;font-size:15px;color:#23201C;margin-bottom:5px">Photography</div><div style="font-size:12.5px;line-height:1.5;color:#6B6459">64 vendors · from $850</div></div>
+<div><div style="font-family:'Newsreader',serif;font-size:15px;color:#23201C;margin-bottom:5px">Florals</div><div style="font-size:12.5px;line-height:1.5;color:#6B6459">38 vendors · from $420</div></div>
+<div><div style="font-family:'Newsreader',serif;font-size:15px;color:#23201C;margin-bottom:5px">Entertainment</div><div style="font-size:12.5px;line-height:1.5;color:#6B6459">51 vendors · from $600</div></div>
+<div><div style="font-family:'Newsreader',serif;font-size:15px;color:#23201C;margin-bottom:5px">Catering</div><div style="font-size:12.5px;line-height:1.5;color:#6B6459">47 vendors · from $28/head</div></div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:290px 1fr;gap:34px;padding:26px 44px 34px;border-top:1px solid #E4DDD1;background:#F4F0E8">
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:11px">Vendor card</div>
+<div style="background:#FFFDF9;border:1px solid #E4DDD1;border-radius:8px;overflow:hidden">
+<div style="height:158px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#6B6459">cover 4:3</span></div>
+<div style="padding:14px 16px 16px">
+<div style="font-family:'Newsreader',serif;font-size:21px;color:#23201C">Kessler &amp; Co.</div>
+<div style="font-size:12.5px;color:#6B6459;margin-top:4px">★ <span style="color:#4A443C;font-weight:600">4.9</span> (127) · Photography · Austin</div>
+<div style="font-family:'Newsreader',serif;font-style:italic;font-size:13.5px;line-height:1.5;color:#6B6459;margin-top:10px">"Quiet, documentary, never asks you to pose."</div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:13px;padding-top:11px;border-top:1px solid #EFE9E0"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">From</span><span style="font-family:'Newsreader',serif;font-size:22px;color:#23201C">$1,450</span></div>
+</div>
+</div>
+</div>
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:11px">Components</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px">
+<span style="font-size:13.5px;font-weight:600;color:#F8F5EF;background:#23201C;padding:11px 22px;border-radius:6px">Request booking</span>
+<span style="font-size:13.5px;font-weight:600;color:#23201C;background:#FFFDF9;border:1px solid #DDD5C7;padding:11px 22px;border-radius:6px">Send a message</span>
+<span style="font-size:13.5px;font-weight:600;color:#A34A28;text-decoration:underline;text-underline-offset:4px;padding:11px 6px">View all</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#7A5A12;border-bottom:2px solid #D9B646;padding:3px 2px">Pending</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#4B5940;border-bottom:2px solid #5E6B4F;padding:3px 2px;margin-left:10px">Confirmed</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#8E3F20;border-bottom:2px solid #B4552F;padding:3px 2px;margin-left:10px">Needs you</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459;border-bottom:2px solid #D5CEC2;padding:3px 2px;margin-left:10px">Declined</span>
+</div>
+<div style="display:flex;gap:12px">
+<div style="flex:1"><div style="font-size:11.5px;font-weight:600;color:#4A443C;margin-bottom:6px">Event date</div><div style="background:#FFFDF9;border:1px solid #DDD5C7;border-radius:6px;padding:11px 14px;font-size:14px;color:#23201C">June 14, 2026</div></div>
+<div style="flex:1"><div style="font-size:11.5px;font-weight:600;color:#4A443C;margin-bottom:6px">Guests</div><div style="background:#FFFDF9;border:1px solid #23201C;box-shadow:0 0 0 3px rgba(35,32,28,.09);border-radius:6px;padding:11px 14px;font-size:14px;color:#23201C">120</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "build everything in <a class="dv-oid" href="#3c">3c</a>" · "<a class="dv-oid" href="#3b">3b</a>'s hero with <a class="dv-oid" href="#3a">3a</a>'s app surfaces" · "keep <a class="dv-oid" href="#1a">1a</a>, I've seen enough" · "try the headline warmer still"</p>
+</section>
+
+<section class="dv-turn" id="t2" style="background:#F8F5EF">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Name candidates in the <a class="dv-oid" href="#1a">1a</a> Orla system — same mark, same type, same clay. Only the word changes.</span></div>
+<div style="max-width:820px;margin:0 0 26px;font:400 13.5px/1.65 'Instrument Sans',sans-serif;color:#6B6459">The register is <strong style="font-weight:600;color:#23201C">a person or a place you'd be introduced to</strong> — short, sayable on the phone, no "-ify", no "hub". I can't query a registrar from here, so each card carries a candidate .com plus a fallback that reads as intentional rather than second-choice. Names in this register almost always have a taken bare .com; a short prefix ("hey", "try", "get") or <em>.events</em> is normal and often better for a two-sided marketplace.</div>
+<div class="dv-opts" style="gap:20px">
+
+<div class="dv-opt" id="2a">
+<div class="dv-card" style="width:290px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px">
+<div style="padding:26px 22px 22px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:14px;align-items:flex-start;background:linear-gradient(160deg,#FFFDF9,#F9F2EA)">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:22px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.3px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:32px;line-height:1;color:#23201C">Orla</span></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">OR-la · 2 syllables</span>
+</div>
+<div style="padding:16px 22px 20px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px"><a class="dv-oid" href="#2a">2a</a><span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8E3F20">Incumbent</span></div>
+<div style="font-size:13px;line-height:1.6;color:#4A443C">Irish given name, "golden". Reads as a person the moment you hear it — which is the whole product thesis. Warmest of the set and the easiest to say out loud.</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#6B6459">orla.com <span style="color:#8E6A56">likely taken</span><br>hey<strong style="color:#23201C">orla</strong>.com<br><strong style="color:#23201C">orla</strong>.events</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2b">
+<div class="dv-card" style="width:290px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px">
+<div style="padding:26px 22px 22px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:14px;align-items:flex-start;background:linear-gradient(160deg,#FFFDF9,#F9F2EA)">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:22px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.3px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:32px;line-height:1;color:#23201C">Wren</span></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">REN · 1 syllable</span>
+</div>
+<div style="padding:16px 22px 20px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px"><a class="dv-oid" href="#2b">2b</a><span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#5E6B4F">Shortest</span></div>
+<div style="font-size:13px;line-height:1.6;color:#4A443C">A small bird and a common given name at once. One syllable, four letters, unmistakable in a logo. Plainspoken where Orla is lyrical.</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#6B6459">wren.com <span style="color:#8E6A56">taken</span><br>hire<strong style="color:#23201C">wren</strong>.com<br><strong style="color:#23201C">wren</strong>.events</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2c">
+<div class="dv-card" style="width:290px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px">
+<div style="padding:26px 22px 22px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:14px;align-items:flex-start;background:linear-gradient(160deg,#FFFDF9,#F9F2EA)">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:22px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.3px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:30px;line-height:1;color:#23201C">Marlowe</span></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">MAR-loh · 2 syllables</span>
+</div>
+<div style="padding:16px 22px 20px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px"><a class="dv-oid" href="#2c">2c</a><span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8E3F20">Most established</span></div>
+<div style="font-size:13px;line-height:1.6;color:#4A443C">A surname, so it borrows the authority of an old firm — "booked through Marlowe" sounds like it has been around. Ages well past the local market.</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#6B6459">marlowe.com <span style="color:#8E6A56">likely taken</span><br><strong style="color:#23201C">marlowe</strong>.co<br>book<strong style="color:#23201C">marlowe</strong>.com</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2d">
+<div class="dv-card" style="width:290px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px">
+<div style="padding:26px 22px 22px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:14px;align-items:flex-start;background:linear-gradient(160deg,#FFFDF9,#F9F2EA)">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:22px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.3px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:30px;line-height:1;color:#23201C">Halcyon</span></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">HAL-see-on · 3 syllables</span>
+</div>
+<div style="padding:16px 22px 20px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px"><a class="dv-oid" href="#2d">2d</a><span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#7A5A12">Most evocative</span></div>
+<div style="font-size:13px;line-height:1.6;color:#4A443C">"Halcyon days" — a stretch of calm and happiness. It names the feeling <em>after</em> the vendors are booked, which is what you're actually selling. Longest of the eight.</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#6B6459">halcyon.com <span style="color:#8E6A56">taken</span><br><strong style="color:#23201C">halcyon</strong>.events<br>get<strong style="color:#23201C">halcyon</strong>.com</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2e">
+<div class="dv-card" style="width:290px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px">
+<div style="padding:26px 22px 22px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:14px;align-items:flex-start;background:linear-gradient(160deg,#FFFDF9,#F9F2EA)">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:22px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.3px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:30px;line-height:1;color:#23201C">Pomona</span></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">po-MOH-na · 3 syllables</span>
+</div>
+<div style="padding:16px 22px 20px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px"><a class="dv-oid" href="#2e">2e</a><span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#5E6B4F">Most on-concept</span></div>
+<div style="font-size:13px;line-height:1.6;color:#4A443C">Roman goddess of orchards and abundance — a feast word that reads as a person and a place. Sits perfectly on the clay-and-moss palette.</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#6B6459">pomona.com <span style="color:#8E6A56">taken (city)</span><br><strong style="color:#23201C">pomona</strong>.events<br>hey<strong style="color:#23201C">pomona</strong>.com</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2f">
+<div class="dv-card" style="width:290px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px">
+<div style="padding:26px 22px 22px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:14px;align-items:flex-start;background:linear-gradient(160deg,#FFFDF9,#F9F2EA)">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:22px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.3px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:31px;line-height:1;color:#23201C">Vesper</span></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">VES-per · 2 syllables</span>
+</div>
+<div style="padding:16px 22px 20px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px"><a class="dv-oid" href="#2f">2f</a><span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#7A5A12">Most grown-up</span></div>
+<div style="font-size:13px;line-height:1.6;color:#4A443C">Evening, and the evening star. Nearly every event on this platform happens after dark. Skews cocktails-and-weddings, less so kids' birthdays.</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#6B6459">vesper.com <span style="color:#8E6A56">taken</span><br><strong style="color:#23201C">vesper</strong>.events<br><strong style="color:#23201C">vesper</strong>.co</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2g">
+<div class="dv-card" style="width:290px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px">
+<div style="padding:26px 22px 22px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:14px;align-items:flex-start;background:linear-gradient(160deg,#FFFDF9,#F9F2EA)">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:22px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.3px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:31px;line-height:1;color:#23201C">Junia</span></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">JOO-nee-a · 3 syllables</span>
+</div>
+<div style="padding:16px 22px 20px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px"><a class="dv-oid" href="#2g">2g</a><span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#5E6B4F">Best .com odds</span></div>
+<div style="font-size:13px;line-height:1.6;color:#4A443C">A real but uncommon given name, so it behaves like a coinage without sounding invented. June is peak event season — a quiet pun you never have to explain.</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#6B6459"><strong style="color:#23201C">junia</strong>.com <span style="color:#5E6B4F">worth checking</span><br><strong style="color:#23201C">junia</strong>.co<br>hey<strong style="color:#23201C">junia</strong>.com</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2h">
+<div class="dv-card" style="width:290px;background:#FFFDF9;border-color:#E4DDD1;border-radius:14px">
+<div style="padding:26px 22px 22px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:14px;align-items:flex-start;background:linear-gradient(160deg,#FFFDF9,#F9F2EA)">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:22px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.3px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:30px;line-height:1;color:#23201C">Rowan</span></div>
+<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#6B6459">ROH-an · 2 syllables</span>
+</div>
+<div style="padding:16px 22px 20px">
+<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px"><a class="dv-oid" href="#2h">2h</a><span style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8E3F20">Most neutral</span></div>
+<div style="font-size:13px;line-height:1.6;color:#4A443C">A tree and a unisex name. The least gendered and least niche of the eight — safest if you expect corporate events to be a real slice of the mix.</div>
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9;color:#6B6459">rowan.com <span style="color:#8E6A56">taken</span><br><strong style="color:#23201C">rowan</strong>.events<br>with<strong style="color:#23201C">rowan</strong>.com</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "go with <a class="dv-oid" href="#2g">2g</a> and build the screens" · "keep Orla, build everything" · "eight more like <a class="dv-oid" href="#2e">2e</a>" · "show me <a class="dv-oid" href="#2c">2c</a> on the landing hero before I decide"</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Three brand + visual directions — name, logo, palette, type, and the landing hero built in each</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Orla — editorial warmth. Closest to your current doc, but with real craft: an editorial serif instead of Fraunces, a deeper clay, and generous photo-forward composition.</div>
+<div class="dv-card" style="width:1240px;background:#F8F5EF">
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding:26px 34px;border-bottom:1px solid #E4DDD1">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="position:relative;width:26px;height:26px"><div style="position:absolute;left:0;top:2px;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:2px;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div>
+<div style="font-family:'Instrument Serif',serif;font-size:31px;line-height:1;color:#23201C;letter-spacing:-.01em">Orla</div>
+</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459">Warm · human · introduced, not listed</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid #E4DDD1">
+<div style="padding:24px 34px;border-right:1px solid #E4DDD1">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:14px">Logo</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:20px;height:16px"><div style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:16px;height:16px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:23px;color:#23201C">Orla</span></div>
+<div style="font-family:'Instrument Serif',serif;font-size:23px;color:#23201C">Orla<span style="color:#A34A28">.</span></div>
+<div style="display:inline-flex;align-items:center;gap:8px;align-self:flex-start;background:#23201C;padding:7px 13px;border-radius:999px"><div style="width:9px;height:9px;border-radius:50%;background:#B4552F"></div><span style="font-family:'Instrument Serif',serif;font-size:17px;color:#F8F5EF">Orla</span></div>
+</div>
+</div>
+<div style="padding:24px 34px;border-right:1px solid #E4DDD1">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:14px">Palette</div>
+<div style="display:flex;gap:7px;margin-bottom:12px">
+<div style="width:40px;height:40px;border-radius:6px;background:#B4552F"></div>
+<div style="width:40px;height:40px;border-radius:6px;background:#5E6B4F"></div>
+<div style="width:40px;height:40px;border-radius:6px;background:#C99A2E"></div>
+<div style="width:40px;height:40px;border-radius:6px;background:#23201C"></div>
+<div style="width:40px;height:40px;border-radius:6px;background:#F8F5EF;border:1px solid #E4DDD1"></div>
+</div>
+<div style="font-size:12px;line-height:1.55;color:#6B6459">Clay, moss, brass on paper. One accent does the work; moss is settled, brass is waiting.</div>
+</div>
+<div style="padding:24px 34px">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:12px">Type</div>
+<div style="font-family:'Instrument Serif',serif;font-size:29px;line-height:1.05;color:#23201C;margin-bottom:4px">Instrument Serif</div>
+<div style="font-size:11.5px;color:#6B6459;margin-bottom:12px">Display — names, headlines, dates</div>
+<div style="font-size:17px;font-weight:600;color:#23201C;margin-bottom:3px">Instrument Sans</div>
+<div style="font-size:11.5px;color:#6B6459">UI, body, everything dense</div>
+</div>
+</div>
+
+<div style="padding:0">
+<div style="background:linear-gradient(160deg,#F8F5EF 0%,#F6EFE6 60%,#F2E4D8 100%);padding:0 0 40px">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 44px">
+<div style="display:flex;align-items:center;gap:34px">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:19px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:22px;color:#23201C">Orla</span></div>
+<div style="display:flex;gap:22px;font-size:13.5px;font-weight:500;color:#4A443C"><span>Browse</span><span>How it works</span><span>For vendors</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:14px">
+<span style="font-size:13.5px;font-weight:500;color:#4A443C">Sign in</span>
+<span style="font-size:13px;font-weight:600;color:#F8F5EF;background:#23201C;padding:9px 17px;border-radius:999px">Join as a vendor</span>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:56% 44%;gap:0;align-items:center;padding:34px 44px 0">
+<div style="padding-right:40px">
+<div style="display:inline-flex;align-items:center;gap:7px;background:rgba(180,85,47,.1);color:#8E3F20;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:600;margin-bottom:20px"><span style="width:5px;height:5px;border-radius:50%;background:#B4552F"></span>412 vendors in Austin</div>
+<div style="font-family:'Instrument Serif',serif;font-size:58px;line-height:1.02;letter-spacing:-.02em;color:#23201C">Meet the people<br>behind your<br><span style="font-style:italic;color:#A34A28">best day yet.</span></div>
+<div style="font-size:16px;line-height:1.6;color:#6B6459;max-width:400px;margin-top:16px">Photographers, florists, DJs and caterers — with real prices, real reviews and a real person on the other end.</div>
+<div style="display:flex;align-items:center;background:#FFFDF9;border-radius:999px;box-shadow:0 6px 24px rgba(35,32,28,.09);padding:7px 7px 7px 22px;margin-top:26px;max-width:560px">
+<div style="flex:1.2"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">What</div><div style="font-size:14.5px;color:#23201C">Wedding photographer</div></div>
+<div style="width:1px;height:32px;background:#E4DDD1"></div>
+<div style="flex:1;padding-left:18px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">Where</div><div style="font-size:14.5px;color:#23201C">Austin, TX</div></div>
+<div style="width:1px;height:32px;background:#E4DDD1"></div>
+<div style="flex:.85;padding-left:18px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6B6459">When</div><div style="font-size:14.5px;color:#6B6459">Add a date</div></div>
+<div style="background:#B4552F;color:#fff;font-size:14px;font-weight:600;padding:13px 26px;border-radius:999px">Search</div>
+</div>
+<div style="display:flex;gap:8px;margin-top:18px;font-size:12.5px;color:#6B6459"><span style="color:#6B6459">Popular:</span><span style="text-decoration:underline;text-underline-offset:3px">Florals</span><span style="text-decoration:underline;text-underline-offset:3px">Taco carts</span><span style="text-decoration:underline;text-underline-offset:3px">Live bands</span></div>
+</div>
+<div style="position:relative;height:400px">
+<div style="position:absolute;left:14px;top:6px;width:230px;height:290px;border-radius:16px;transform:rotate(-4deg);box-shadow:0 14px 40px rgba(35,32,28,.16);background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6B6459">florist / tablescape</span></div>
+<div style="position:absolute;left:178px;top:78px;width:250px;height:314px;border-radius:16px;transform:rotate(3deg);box-shadow:0 18px 46px rgba(35,32,28,.2);background:repeating-linear-gradient(135deg,#E2DACD 0 9px,#EBE4D9 9px 18px);display:flex;align-items:flex-end;padding:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6B6459">photographer / portrait</span></div>
+<div style="position:absolute;left:2px;top:214px;width:186px;height:150px;border-radius:14px;transform:rotate(2deg);box-shadow:0 12px 32px rgba(35,32,28,.14);background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:11px"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6B6459">dj / dance floor</span></div>
+<div style="position:absolute;left:298px;top:20px;display:flex;align-items:center;gap:9px;background:#FFFDF9;border-radius:999px;padding:8px 14px 8px 8px;box-shadow:0 8px 24px rgba(35,32,28,.14)"><div style="width:28px;height:28px;border-radius:50%;background:#EADCCB;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#8E3F20">MK</div><div><div style="font-size:12px;font-weight:600;color:#23201C">Maya Kessler</div><div style="font-size:10.5px;color:#6B6459">★ 4.9 · replies in 2h</div></div></div>
+</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:300px 1fr;gap:34px;padding:30px 44px 34px;background:#F8F5EF;border-top:1px solid #E4DDD1">
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:12px">Vendor card</div>
+<div style="background:#FFFDF9;border-radius:18px;box-shadow:0 2px 10px rgba(35,32,28,.07);overflow:hidden">
+<div style="height:170px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6B6459">cover 4:3</span></div>
+<div style="padding:14px 16px 16px;position:relative">
+<div style="position:absolute;top:-18px;left:16px;width:36px;height:36px;border-radius:50%;background:#EADCCB;border:2px solid #FFFDF9;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:15px;color:#8E3F20">MK</div>
+<div style="margin-top:14px;font-family:'Instrument Serif',serif;font-size:21px;color:#23201C">Kessler & Co.</div>
+<div style="font-size:12.5px;color:#6B6459;margin-top:3px">★ <span style="color:#4A443C;font-weight:600">4.9</span> (127) · Austin, TX</div>
+<div style="display:flex;gap:6px;margin-top:11px"><span style="font-size:11px;font-weight:600;background:#F0EAE1;color:#6B6459;padding:4px 9px;border-radius:6px">Photography</span><span style="font-size:11px;font-weight:600;background:#F0EAE1;color:#6B6459;padding:4px 9px;border-radius:6px">Wedding</span></div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid #EFE9E0"><span style="font-size:12.5px;color:#6B6459">From</span><span style="font-size:19px;font-weight:700;color:#23201C">$1,450</span></div>
+</div>
+</div>
+</div>
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-bottom:12px">Components</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px">
+<span style="font-size:13.5px;font-weight:600;color:#fff;background:#B4552F;padding:11px 20px;border-radius:10px">Request booking</span>
+<span style="font-size:13.5px;font-weight:600;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;padding:11px 20px;border-radius:10px">Send a message</span>
+<span style="font-size:13.5px;font-weight:600;color:#A34A28;padding:11px 12px">View all →</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">
+<span style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:#F1EAD9;color:#7A5A12;padding:5px 11px;border-radius:999px">Pending</span>
+<span style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:#EDF0E9;color:#4B5940;padding:5px 11px;border-radius:999px">Confirmed</span>
+<span style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:#F7E7E0;color:#8E3F20;padding:5px 11px;border-radius:999px">Needs you</span>
+<span style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:#EFEBE4;color:#6B6459;padding:5px 11px;border-radius:999px">Declined</span>
+</div>
+<div style="display:flex;gap:12px">
+<div style="flex:1"><div style="font-size:11.5px;font-weight:600;color:#4A443C;margin-bottom:6px">Event date</div><div style="background:#F1ECE4;border:1px solid #E4DDD1;border-radius:10px;padding:11px 14px;font-size:14px;color:#23201C">June 14, 2026</div></div>
+<div style="flex:1"><div style="font-size:11.5px;font-weight:600;color:#4A443C;margin-bottom:6px">Guests</div><div style="background:#FFFDF9;border:1.5px solid #B4552F;box-shadow:0 0 0 3px rgba(180,85,47,.15);border-radius:10px;padding:11px 14px;font-size:14px;color:#23201C">120</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Fanfare — event-poster boldness. Near-black, one acid accent, huge type, hard edges, zero shadows. Reads like a design-forward event brand, not a marketplace template.</div>
+<div class="dv-card" style="width:1240px;background:#F2F0EA">
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding:26px 34px;border-bottom:1.5px solid #131311">
+<div style="display:flex;align-items:center;gap:13px">
+<div style="width:22px;height:22px;background:#131311;transform:rotate(45deg)"></div>
+<div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:28px;letter-spacing:-.035em;color:#131311;text-transform:uppercase">Fanfare</div>
+</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#55544D">Loud · confident · celebration with a twist</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1.5px solid #131311">
+<div style="padding:24px 34px;border-right:1.5px solid #131311">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#62615A;margin-bottom:16px">Logo</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:10px"><div style="width:15px;height:15px;background:#FF4A1C;transform:rotate(45deg)"></div><span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:21px;letter-spacing:-.035em;text-transform:uppercase;color:#131311">Fanfare</span></div>
+<div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:21px;letter-spacing:-.035em;text-transform:uppercase;color:#131311">Fan<span style="color:#FF4A1C">fare</span></div>
+<div style="align-self:flex-start;background:#131311;padding:8px 14px"><span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:17px;letter-spacing:.02em;text-transform:uppercase;color:#D6F24B">Fanfare</span></div>
+</div>
+</div>
+<div style="padding:24px 34px;border-right:1.5px solid #131311">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#62615A;margin-bottom:16px">Palette</div>
+<div style="display:flex;gap:0;margin-bottom:12px;border:1.5px solid #131311">
+<div style="width:44px;height:42px;background:#131311"></div>
+<div style="width:44px;height:42px;background:#FF4A1C"></div>
+<div style="width:44px;height:42px;background:#D6F24B"></div>
+<div style="width:44px;height:42px;background:#2B5F4B"></div>
+<div style="width:44px;height:42px;background:#F2F0EA"></div>
+</div>
+<div style="font-size:12px;line-height:1.55;color:#55544D">Ink and bone with one hot orange. Chartreuse only for confirmed. Nothing else gets colour.</div>
+</div>
+<div style="padding:24px 34px">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#62615A;margin-bottom:14px">Type</div>
+<div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:26px;letter-spacing:-.035em;text-transform:uppercase;color:#131311;line-height:1">Archivo Black</div>
+<div style="font-size:11.5px;color:#55544D;margin-bottom:12px">Display — set tight, set big, set caps</div>
+<div style="font-family:'Archivo',sans-serif;font-size:16px;font-weight:500;color:#131311">Archivo Regular / Medium</div>
+<div style="font-size:11.5px;color:#55544D">One family. Weight does the hierarchy.</div>
+</div>
+</div>
+
+<div style="background:#131311;padding:0 0 34px">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 40px;border-bottom:1px solid #2C2C28">
+<div style="display:flex;align-items:center;gap:32px">
+<div style="display:flex;align-items:center;gap:10px"><div style="width:14px;height:14px;background:#FF4A1C;transform:rotate(45deg)"></div><span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:19px;letter-spacing:-.035em;text-transform:uppercase;color:#F2F0EA">Fanfare</span></div>
+<div style="display:flex;gap:24px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9A988E"><span>Browse</span><span>Categories</span><span>For vendors</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:16px"><span style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9A988E">Sign in</span><span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#131311;background:#D6F24B;padding:10px 16px">List your service</span></div>
+</div>
+
+<div style="padding:44px 40px 0">
+<div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:96px;line-height:.88;letter-spacing:-.045em;text-transform:uppercase;color:#F2F0EA">Book the<br>people who<br><span style="color:#FF4A1C">make it a night.</span></div>
+<div style="display:grid;grid-template-columns:1fr 340px;gap:40px;align-items:end;margin-top:34px">
+<div>
+<div style="display:flex;border:1.5px solid #F2F0EA;background:#131311">
+<div style="flex:1.2;padding:15px 20px;border-right:1.5px solid #F2F0EA"><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#7E7C74">Service</div><div style="font-size:15px;font-weight:500;color:#F2F0EA;margin-top:3px">Live band</div></div>
+<div style="flex:1;padding:15px 20px;border-right:1.5px solid #F2F0EA"><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#7E7C74">City</div><div style="font-size:15px;font-weight:500;color:#F2F0EA;margin-top:3px">Austin, TX</div></div>
+<div style="flex:.9;padding:15px 20px;border-right:1.5px solid #F2F0EA"><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#7E7C74">Date</div><div style="font-size:15px;font-weight:500;color:#7E7C74;margin-top:3px">Any</div></div>
+<div style="background:#FF4A1C;display:flex;align-items:center;padding:0 34px;font-family:'Archivo',sans-serif;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:#131311">Search</div>
+</div>
+<div style="display:flex;gap:0;margin-top:26px;border-top:1px solid #2C2C28">
+<div style="flex:1;padding:18px 0;border-right:1px solid #2C2C28"><div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:34px;color:#F2F0EA;letter-spacing:-.03em">2,412</div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#7E7C74;margin-top:4px">Events booked</div></div>
+<div style="flex:1;padding:18px 0 18px 24px;border-right:1px solid #2C2C28"><div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:34px;color:#F2F0EA;letter-spacing:-.03em">4.8</div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#7E7C74;margin-top:4px">Avg rating</div></div>
+<div style="flex:1;padding:18px 0 18px 24px"><div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:34px;color:#F2F0EA;letter-spacing:-.03em">2h</div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#7E7C74;margin-top:4px">Median reply</div></div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div style="height:150px;background:repeating-linear-gradient(135deg,#26261F 0 9px,#2F2F27 9px 18px);display:flex;align-items:flex-end;padding:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7E7C74">band / stage</span></div>
+<div style="height:150px;background:repeating-linear-gradient(135deg,#26261F 0 9px,#2F2F27 9px 18px);display:flex;align-items:flex-end;padding:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7E7C74">catering</span></div>
+<div style="height:110px;background:repeating-linear-gradient(135deg,#26261F 0 9px,#2F2F27 9px 18px);display:flex;align-items:flex-end;padding:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7E7C74">florals</span></div>
+<div style="height:110px;background:#FF4A1C;display:flex;flex-direction:column;justify-content:flex-end;padding:12px"><span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:19px;line-height:1;letter-spacing:-.03em;text-transform:uppercase;color:#131311">11 categories</span><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#131311;margin-top:5px;opacity:.75">Browse all →</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:300px 1fr;gap:34px;padding:30px 34px 34px;border-top:1.5px solid #131311">
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#62615A;margin-bottom:12px">Vendor card</div>
+<div style="background:#F2F0EA;border:1.5px solid #131311">
+<div style="height:170px;background:repeating-linear-gradient(135deg,#DEDCD4 0 9px,#E7E5DD 9px 18px);border-bottom:1.5px solid #131311;display:flex;align-items:flex-end;padding:11px"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#62615A">cover 4:3</span></div>
+<div style="padding:14px 16px 16px">
+<div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:19px;letter-spacing:-.03em;text-transform:uppercase;color:#131311;line-height:1.05">The Hi-Fi<br>Collective</div><div style="font-size:12px;font-weight:700;color:#131311">★ 4.9</div></div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#55544D;margin-top:9px">Live music · Austin TX</div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:1.5px solid #131311"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#55544D">From</span><span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:21px;letter-spacing:-.03em;color:#131311">$2,200</span></div>
+</div>
+</div>
+</div>
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#62615A;margin-bottom:12px">Components</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px">
+<span style="font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#F2F0EA;background:#131311;padding:12px 22px">Request booking</span>
+<span style="font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#131311;border:1.5px solid #131311;padding:12px 22px">Send a message</span>
+<span style="font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#FF4A1C;padding:12px 4px">View all →</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">
+<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1.5px solid #131311;color:#131311;padding:4px 10px">Pending</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:#D6F24B;color:#131311;padding:5px 11px">Confirmed</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:#FF4A1C;color:#131311;padding:5px 11px">Needs you</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:#DEDCD4;color:#55544D;padding:5px 11px">Declined</span>
+</div>
+<div style="display:flex;gap:12px">
+<div style="flex:1"><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:#55544D;margin-bottom:6px">Event date</div><div style="border:1.5px solid #C9C7BE;background:#F2F0EA;padding:11px 14px;font-size:14px;color:#131311">June 14, 2026</div></div>
+<div style="flex:1"><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:#55544D;margin-bottom:6px">Guests</div><div style="border:1.5px solid #131311;box-shadow:3px 3px 0 #FF4A1C;background:#F2F0EA;padding:11px 14px;font-size:14px;color:#131311">120</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Sova — precision utility. Cool neutrals, hairline rules, dense grid, one deep-green accent. Optimised for the vendor working through a week of requests; the customer side inherits its calm.</div>
+<div class="dv-card" style="width:1240px;background:#FBFBFA">
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding:26px 34px;border-bottom:1px solid #E5E5E3">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:24px;height:24px;border-radius:50%;border:2.5px solid #17181A;position:relative"><div style="position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;background:#2F5D50;border-radius:0 0 3px 0"></div></div>
+<div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.03em;color:#17181A">Sova</div>
+</div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#63666A">Calm · precise · built for the working vendor</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid #E5E5E3">
+<div style="padding:24px 34px;border-right:1px solid #E5E5E3">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6D70;margin-bottom:16px">Logo</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:9px"><div style="width:17px;height:17px;border-radius:50%;border:2px solid #17181A;position:relative"><div style="position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;background:#2F5D50;border-radius:0 0 2px 0"></div></div><span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;letter-spacing:-.03em;color:#17181A">Sova</span></div>
+<div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;letter-spacing:-.03em;color:#17181A">sova<span style="color:#2F5D50">/</span></div>
+<div style="align-self:flex-start;width:34px;height:34px;border-radius:9px;background:#17181A;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;color:#FBFBFA">S</div>
+</div>
+</div>
+<div style="padding:24px 34px;border-right:1px solid #E5E5E3">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6D70;margin-bottom:16px">Palette</div>
+<div style="display:flex;gap:6px;margin-bottom:12px">
+<div style="width:40px;height:40px;border-radius:8px;background:#17181A"></div>
+<div style="width:40px;height:40px;border-radius:8px;background:#2F5D50"></div>
+<div style="width:40px;height:40px;border-radius:8px;background:#B4562C"></div>
+<div style="width:40px;height:40px;border-radius:8px;background:#F0F0EE"></div>
+<div style="width:40px;height:40px;border-radius:8px;background:#FBFBFA;border:1px solid #E5E5E3"></div>
+</div>
+<div style="font-size:12px;line-height:1.55;color:#6B6D70">Greyscale carries the interface. Green confirms, rust asks for you. Colour is a signal, never a surface.</div>
+</div>
+<div style="padding:24px 34px">
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6D70;margin-bottom:14px">Type</div>
+<div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:25px;letter-spacing:-.03em;color:#17181A;line-height:1.1">Space Grotesk</div>
+<div style="font-size:11.5px;color:#6B6D70;margin-bottom:12px">Headings, numbers, product voice</div>
+<div style="font-family:'Newsreader',serif;font-size:19px;color:#17181A">Newsreader</div>
+<div style="font-size:11.5px;color:#6B6D70">Editorial moments only — bios, reviews, quotes</div>
+</div>
+</div>
+
+<div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 32px;border-bottom:1px solid #E5E5E3;background:#fff">
+<div style="display:flex;align-items:center;gap:30px">
+<div style="display:flex;align-items:center;gap:8px"><div style="width:16px;height:16px;border-radius:50%;border:2px solid #17181A;position:relative"><div style="position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;background:#2F5D50;border-radius:0 0 2px 0"></div></div><span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:-.03em;color:#17181A">Sova</span></div>
+<div style="display:flex;gap:20px;font-size:13px;font-weight:500;color:#4A4C4F"><span>Browse</span><span>Categories</span><span>For vendors</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:12px"><span style="font-size:13px;font-weight:500;color:#4A4C4F">Sign in</span><span style="font-size:12.5px;font-weight:600;color:#fff;background:#17181A;padding:8px 15px;border-radius:7px">Get started</span></div>
+</div>
+
+<div style="padding:40px 32px 12px;background:#FBFBFA">
+<div style="display:grid;grid-template-columns:1fr 380px;gap:48px;align-items:start">
+<div>
+<div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:48px;line-height:1.06;letter-spacing:-.035em;color:#17181A">Every vendor for your event,<br>with the price on the label.</div>
+<div style="font-family:'Newsreader',serif;font-size:18px;line-height:1.55;color:#54565A;max-width:520px;margin-top:14px">No quote roulette. Packages, availability and verified reviews — visible before you talk to anyone.</div>
+<div style="display:flex;margin-top:26px;border:1px solid #D9D9D6;border-radius:10px;background:#fff;overflow:hidden;max-width:640px">
+<div style="flex:1.3;padding:11px 16px;border-right:1px solid #E5E5E3"><div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#63666A">Service</div><div style="font-size:14px;color:#17181A;margin-top:2px">Photographer</div></div>
+<div style="flex:1;padding:11px 16px;border-right:1px solid #E5E5E3"><div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#63666A">City</div><div style="font-size:14px;color:#17181A;margin-top:2px">Austin, TX</div></div>
+<div style="flex:1;padding:11px 16px;border-right:1px solid #E5E5E3"><div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#63666A">Date</div><div style="font-size:14px;color:#63666A;margin-top:2px">Jun 14</div></div>
+<div style="background:#17181A;color:#fff;font-size:13.5px;font-weight:600;display:flex;align-items:center;padding:0 26px">Search</div>
+</div>
+</div>
+<div style="border:1px solid #E5E5E3;border-radius:12px;background:#fff;overflow:hidden">
+<div style="padding:12px 16px;border-bottom:1px solid #E5E5E3;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#63666A">Live in Austin</span><span style="font-size:11px;color:#63666A">updated 2m ago</span></div>
+<div style="display:flex;align-items:center;gap:11px;padding:12px 16px;border-bottom:1px solid #F0F0EE"><div style="width:9px;height:9px;border-radius:50%;background:#2F5D50"></div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:#17181A">Kessler &amp; Co. confirmed a wedding</div><div style="font-size:11.5px;color:#63666A">Photography · $1,450</div></div></div>
+<div style="display:flex;align-items:center;gap:11px;padding:12px 16px;border-bottom:1px solid #F0F0EE"><div style="width:9px;height:9px;border-radius:50%;background:#B4562C"></div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:#17181A">3 new florists joined</div><div style="font-size:11.5px;color:#63666A">Florals · avg $680</div></div></div>
+<div style="display:flex;align-items:center;gap:11px;padding:12px 16px"><div style="width:9px;height:9px;border-radius:50%;background:#63666A"></div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:#17181A">Taco cart booked for Sat</div><div style="font-size:11.5px;color:#63666A">Carts · $540</div></div></div>
+</div>
+</div>
+
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:34px;padding-bottom:12px;border-bottom:1px solid #E5E5E3">
+<div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:17px;letter-spacing:-.02em;color:#17181A">Available on June 14 near you</div>
+<div style="font-size:12.5px;color:#6B6D70">142 results · sorted by rating</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:16px;padding-bottom:34px">
+<div style="border:1px solid #E5E5E3;border-radius:10px;background:#fff;overflow:hidden"><div style="height:104px;background:repeating-linear-gradient(135deg,#E9E9E6 0 9px,#F1F1EF 9px 18px);display:flex;align-items:flex-end;padding:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#63666A">cover</span></div><div style="padding:11px 12px 13px"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:#17181A">Kessler &amp; Co.</div><div style="font-size:11.5px;color:#63666A;margin-top:3px">★ 4.9 (127) · Photography</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:9px;border-top:1px solid #F0F0EE"><span style="font-size:11px;color:#63666A">from</span><span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:#17181A">$1,450</span></div></div></div>
+<div style="border:1px solid #E5E5E3;border-radius:10px;background:#fff;overflow:hidden"><div style="height:104px;background:repeating-linear-gradient(135deg,#E9E9E6 0 9px,#F1F1EF 9px 18px);display:flex;align-items:flex-end;padding:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#63666A">cover</span></div><div style="padding:11px 12px 13px"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:#17181A">Wildbloom</div><div style="font-size:11.5px;color:#63666A;margin-top:3px">★ 4.8 (64) · Florals</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:9px;border-top:1px solid #F0F0EE"><span style="font-size:11px;color:#63666A">from</span><span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:#17181A">$680</span></div></div></div>
+<div style="border:1px solid #E5E5E3;border-radius:10px;background:#fff;overflow:hidden"><div style="height:104px;background:repeating-linear-gradient(135deg,#E9E9E6 0 9px,#F1F1EF 9px 18px);display:flex;align-items:flex-end;padding:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#63666A">cover</span></div><div style="padding:11px 12px 13px"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:#17181A">The Hi-Fi Collective</div><div style="font-size:11.5px;color:#63666A;margin-top:3px">★ 4.9 (41) · Entertainment</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:9px;border-top:1px solid #F0F0EE"><span style="font-size:11px;color:#63666A">from</span><span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:#17181A">$2,200</span></div></div></div>
+<div style="border:1px solid #E5E5E3;border-radius:10px;background:#fff;overflow:hidden"><div style="height:104px;background:repeating-linear-gradient(135deg,#E9E9E6 0 9px,#F1F1EF 9px 18px);display:flex;align-items:flex-end;padding:9px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#63666A">cover</span></div><div style="padding:11px 12px 13px"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:#17181A">Casa Verde Catering</div><div style="font-size:11.5px;color:#63666A;margin-top:3px">★ 4.7 (88) · Catering</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:9px;border-top:1px solid #F0F0EE"><span style="font-size:11px;color:#63666A">from</span><span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:#17181A">$32/head</span></div></div></div>
+</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:300px 1fr;gap:34px;padding:28px 34px 34px;border-top:1px solid #E5E5E3;background:#F6F6F4">
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6D70;margin-bottom:12px">Request row (vendor inbox)</div>
+<div style="background:#fff;border:1px solid #E5E5E3;border-radius:10px;padding:13px 14px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:#17181A">Priya N.</span><span style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:#FAEEE7;color:#8E4322;padding:4px 8px;border-radius:5px">Needs you</span></div>
+<div style="font-size:12.5px;color:#6B6D70;margin-top:6px">Wedding · Jun 14 · 120 guests</div>
+<div style="display:flex;gap:8px;margin-top:12px"><span style="flex:1;text-align:center;font-size:12.5px;font-weight:600;color:#fff;background:#17181A;padding:8px;border-radius:7px">Send quote</span><span style="flex:1;text-align:center;font-size:12.5px;font-weight:600;color:#4A4C4F;border:1px solid #D9D9D6;padding:8px;border-radius:7px">Decline</span></div>
+</div>
+</div>
+<div>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#6B6D70;margin-bottom:12px">Components</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px">
+<span style="font-size:13px;font-weight:600;color:#fff;background:#17181A;padding:10px 18px;border-radius:8px">Request booking</span>
+<span style="font-size:13px;font-weight:600;color:#17181A;background:#fff;border:1px solid #D9D9D6;padding:10px 18px;border-radius:8px">Send a message</span>
+<span style="font-size:13px;font-weight:600;color:#2F5D50;padding:10px 4px">View all →</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">
+<span style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:#F2F1EC;color:#7A6A3E;padding:4px 9px;border-radius:5px">Pending</span>
+<span style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:#EAF1EE;color:#2F5D50;padding:4px 9px;border-radius:5px">Confirmed</span>
+<span style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:#FAEEE7;color:#8E4322;padding:4px 9px;border-radius:5px">Needs you</span>
+<span style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:#F0F0EE;color:#63666A;padding:4px 9px;border-radius:5px">Declined</span>
+</div>
+<div style="display:flex;gap:12px">
+<div style="flex:1"><div style="font-size:11.5px;font-weight:600;color:#4A4C4F;margin-bottom:6px">Event date</div><div style="background:#fff;border:1px solid #D9D9D6;border-radius:8px;padding:10px 13px;font-size:13.5px;color:#17181A">June 14, 2026</div></div>
+<div style="flex:1"><div style="font-size:11.5px;font-weight:600;color:#4A4C4F;margin-bottom:6px">Guests</div><div style="background:#fff;border:1px solid #17181A;box-shadow:0 0 0 3px rgba(23,24,26,.09);border-radius:8px;padding:10px 13px;font-size:13.5px;color:#17181A">120</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "build everything in <a class="dv-oid" href="#1c">1c</a>" · "<a class="dv-oid" href="#1a">1a</a>'s warmth with <a class="dv-oid" href="#1c">1c</a>'s density" · "keep <a class="dv-oid" href="#1b">1b</a> but tone the orange down" · "more name options for <a class="dv-oid" href="#1a">1a</a>"</p>
+</section>
+
+</x-dc>
+</body>
+</html>

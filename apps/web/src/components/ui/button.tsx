@@ -10,8 +10,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/80',
-        // VenMatch primary CTA per the design system: terracotta-400 resting,
-        // -500 on hover, -600 pressed, with a 200ms lift instead of a fade.
+        // Primary CTA. Ticket #21 moves this to the Orla clay ramp per
+        // design/design-plan/03-components.md — clay-400 resting, clay-500 on
+        // hover, clay-600 pressed, with a 200ms lift instead of a fade.
         cta: 'bg-primary-400 text-stone-0 shadow-sm duration-200 hover:scale-[1.02] hover:bg-primary-500 hover:shadow-md active:bg-primary-600',
         outline:
           'border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',

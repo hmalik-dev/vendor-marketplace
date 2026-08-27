@@ -90,7 +90,7 @@ describe('HomePage', () => {
 
     const { container } = render(await HomePage());
 
-    // The design system calls a category rendered without its icon a bug.
+    // design/design-plan/10-landing.md calls a category rendered without its icon a bug.
     expect(container.querySelectorAll('#categories-heading ~ ul svg')).toHaveLength(
       LANDING_CATEGORY_COUNT,
     );

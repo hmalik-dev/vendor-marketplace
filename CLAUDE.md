@@ -6,7 +6,9 @@ Two-sided marketplace connecting customers with event service vendors
 **Ticket tracker:** `~/.claude/plans/vendor-marketplace-tickets.md`
 **Plan:** `~/.claude/plans/vendor-marketplace-plan.md`
 **Decisions:** `~/.claude/plans/vendor-marketplace-decisions.md`
-**Design system:** `~/.claude/plans/vendor-marketplace-design-system.md`
+**Design:** `design/` — `design/design-plan/` is the implementation spec (tokens,
+brand, component vocabulary, layout laws, one file per screen, responsive, voice),
+and `design/Orla - Screens.dc.html` holds the thirteen 1440×900 reference frames
 
 ## Ticket queue
 
@@ -57,6 +59,8 @@ Database:
 apps/
   web/        Next.js 15 (App Router, RSC) frontend      — port 3000
   api/        Fastify 5 backend                          — port 4000
+design/       The Orla design contract — `design-plan/` is the spec, the
+              `.dc.html` files are the 1440x900 reference frames
 packages/
   shared/     Zod schemas, inferred types, constants, utilities, env registry
   db/         Drizzle schema, client, migrations, seed

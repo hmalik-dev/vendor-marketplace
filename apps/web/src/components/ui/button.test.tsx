@@ -25,7 +25,7 @@ describe('Button', () => {
     expect(button.className).toContain('bg-primary-400');
     expect(button.className).toContain('hover:bg-primary-500');
     expect(button.className).toContain('active:bg-primary-600');
-    // The design system calls for a 10px radius on buttons, not the base 14px.
+    // design/design-plan/01-foundations.md sets a 10px radius on buttons (--radius-lg).
     expect(button.className).toContain('rounded-md');
   });
 
