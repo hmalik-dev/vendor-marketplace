@@ -28,22 +28,26 @@
   --color-sage-50: #edf0e9;
   --color-sage-100: #e4e9de;
   --color-sage-150: #d9e2c8; /* pale sage — the italic accent on an ink ground */
+  --color-sage-300: #c9d3be; /* sage banner border */
   --color-sage-200: #a8c08e; /* pale sage — decorative dots on an ink ground */
   --color-sage-400: #5e6b4f;
   --color-sage-600: #4b5940; /* sage as text */
 
   /* Gold — waiting on someone. */
   --color-gold-50: #f5eedc;
+  --color-gold-300: #e8dbb8; /* gold banner border */
   --color-gold-200: #f3c98b; /* pale gold — the italic accent on an ink ground */
   --color-gold-400: #c99a2e;
   --color-gold-600: #7a5a12; /* gold as text — #8A6716 measures 4.27:1 and fails */
 
   /* Steel — neutral information. */
   --color-steel-50: #eef3fa;
+  --color-steel-200: #d3e0ee; /* steel banner border */
   --color-steel-600: #3d6a8c;
 
   /* Error. */
   --color-error-50: #fbeeec;
+  --color-error-200: #efcec9; /* red banner border */
   --color-error-500: #b23a30;
 
   /* Warm stone — the neutral ramp. Deliberately shadows Tailwind's cool `stone`. */

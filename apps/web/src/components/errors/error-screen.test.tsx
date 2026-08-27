@@ -1,0 +1,62 @@
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ErrorScreen } from './error-screen';
+
+describe('ErrorScreen', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  /*
+   * The two things a user needs from a server error and rarely gets:
+   * confirmation that no money moved, and a reference support can look up.
+   * `40-states.md` §1 questions 2 and 4.
+   */
+  it('states the money position even though the answer is nothing', () => {
+    render(<ErrorScreen digest="err_9F3K2QX7" reset={vi.fn()} />);
+
+    const banner = screen.getByRole('status');
+
+    expect(banner.textContent).toContain('No payment was taken and no booking was changed.');
+    // Settled, not failed: sage is the colour for a resolved money position.
+    expect(banner.getAttribute('data-status')).toBe('settled');
+  });
+
+  it('shows the digest, selectable, when there is one to quote', () => {
+    render(<ErrorScreen digest="err_9F3K2QX7" reset={vi.fn()} />);
+
+    const reference = screen.getByText('err_9F3K2QX7');
+
+    expect(reference.className).toContain('select-all');
+    expect(reference.className).toContain('font-mono');
+  });
+
+  /*
+   * A reference the support inbox cannot look up is worse than none, so the
+   * line is absent rather than filled with a decorative id.
+   */
+  it('omits the reference entirely when nothing was logged to match', () => {
+    render(<ErrorScreen reset={vi.fn()} />);
+
+    expect(screen.queryByText(/include this if you write to us/)).toBeNull();
+  });
+
+  it('retries the segment rather than reloading the document', async () => {
+    const reset = vi.fn();
+    render(<ErrorScreen digest="err_9F3K2QX7" reset={reset} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(reset).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the copy free of apology', () => {
+    render(<ErrorScreen digest="err_9F3K2QX7" reset={vi.fn()} />);
+
+    const text = document.body.textContent ?? '';
+
+    expect(text).not.toMatch(/oops/i);
+    expect(text).not.toContain('!');
+  });
+});

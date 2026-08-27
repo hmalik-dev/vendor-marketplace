@@ -32,10 +32,12 @@ Tailwind 4 is CSS-first; there is no palette in a JS config.
 
   /* Steel — neutral information */
   --color-steel-50: #eef3fa;
+  --color-steel-200: #d3e0ee; /* banner border */
   --color-steel-600: #3d6a8c;
 
   /* Error */
   --color-error-50: #fbeeec;
+  --color-error-200: #efcec9; /* banner border */
   --color-error-500: #b23a30;
 
   /* Warm stone — the neutral ramp */
