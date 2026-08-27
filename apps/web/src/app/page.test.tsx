@@ -1,10 +1,11 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ReactNode } from 'react';
 import {
   BRAND_NAME,
   CATEGORY_SEEDS,
   LANDING_CATEGORY_COUNT,
+  pageTitle,
   type Category,
   type VendorCard as VendorCardData,
 } from '@vendor-marketplace/shared';
@@ -41,7 +42,7 @@ vi.mock('@/components/landing/hero-search', () => ({
   HeroSearch: () => <div data-testid="hero-search" />,
 }));
 
-const { default: HomePage } = await import('./page');
+const { default: HomePage, metadata } = await import('./page');
 
 /** The taxonomy as the API returns it: every seed, with ids and `isActive`. */
 function apiCategories(): Category[] {
@@ -181,6 +182,49 @@ describe('HomePage', () => {
       expect(existsSync(join(directory, `${seed.slug}.jpg`)), `missing ${seed.slug}.jpg`).toBe(
         true,
       );
+    }
+  });
+
+  /*
+   * A browser tab truncates from the right at roughly fifteen characters, and
+   * a pinned tab shows nothing but the favicon. The landing used to spend 51
+   * on a sentence, so what a visitor actually read was the brand plus three
+   * words of it.
+   */
+  it('keeps the landing tab title short, and the sentence on the share card', () => {
+    const title = (metadata.title as { absolute: string }).absolute;
+
+    expect(title).toBe(`${BRAND_NAME} · Book event vendors`);
+    expect(title.length).toBeLessThan(30);
+
+    // The share card has room for the sentence, so it keeps it.
+    expect(metadata.openGraph?.title).toBe(
+      `${BRAND_NAME} — book event vendors without the back-and-forth`,
+    );
+  });
+
+  /*
+   * Every other page composes through `pageTitle`, which appends the brand and
+   * a separator — eight characters of the budget before the page has said
+   * anything of its own. This
+   * walks the real titles in the route tree so a new page cannot quietly ship
+   * one that truncates.
+   */
+  it('keeps every page title inside a tab', () => {
+    const directory = join(process.cwd(), 'src', 'app');
+    const sources = readdirSync(directory, { recursive: true, encoding: 'utf8' })
+      .filter((entry) => entry.endsWith('page.tsx') && !entry.endsWith('.test.tsx'))
+      .map((entry) => readFileSync(join(directory, entry), 'utf8'));
+
+    const titles = sources.flatMap((source) =>
+      Array.from(source.matchAll(/pageTitle\('([^']+)'\)/g), (match) => pageTitle(match[1])),
+    );
+
+    // If this finds nothing the test is asserting about an empty list.
+    expect(titles.length).toBeGreaterThan(5);
+
+    for (const title of titles) {
+      expect(title.length, title).toBeLessThan(30);
     }
   });
 

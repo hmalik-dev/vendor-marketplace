@@ -89,23 +89,35 @@ const DESCRIPTION = `Compare real availability and pricing from event vendors ne
 
 const CANONICAL_ORIGIN = `https://${BRAND_DOMAIN}`;
 
+/**
+ * The share-card headline. It has room for a sentence; a browser tab does not,
+ * which is why the two are different strings rather than one reused three
+ * times. Written once here for the same reason `brand.ts` holds the name once.
+ */
+const SOCIAL_TITLE = `${BRAND_NAME} — book event vendors without the back-and-forth`;
+
+/**
+ * The tab. Brand first, because a tab truncates from the right at roughly
+ * fifteen characters and a pinned tab shows the favicon alone — so the half
+ * that survives has to be the half that identifies the product.
+ */
+const TAB_TITLE = `${BRAND_NAME} · Book event vendors`;
+
 export const metadata: Metadata = {
   metadataBase: new URL(CANONICAL_ORIGIN),
-  title: {
-    absolute: `${BRAND_NAME} — book event vendors without the back-and-forth`,
-  },
+  title: { absolute: TAB_TITLE },
   description: DESCRIPTION,
   alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     siteName: BRAND_NAME,
     url: '/',
-    title: `${BRAND_NAME} — book event vendors without the back-and-forth`,
+    title: SOCIAL_TITLE,
     description: DESCRIPTION,
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${BRAND_NAME} — book event vendors without the back-and-forth`,
+    title: SOCIAL_TITLE,
     description: DESCRIPTION,
   },
 };
