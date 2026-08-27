@@ -2,6 +2,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { shadcn } from '@clerk/ui/themes';
 import type { Metadata } from 'next';
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
@@ -59,9 +60,17 @@ export default function RootLayout({
           appearance object: it becomes a second source of truth and it drifts.
         */}
         <ClerkProvider appearance={{ theme: shadcn }}>
-          <SiteHeader />
-          <main className="flex-1">{children}</main>
-          <SiteFooter />
+          {/*
+            The adapter sits above the header, not inside the search page: on
+            `/search` the query bar lives in the header and the results live in
+            the page, and both read the same `nuqs` params. Two readers of one
+            URL cannot disagree; two copies of the adapter could.
+          */}
+          <NuqsAdapter>
+            <SiteHeader />
+            <main className="flex-1">{children}</main>
+            <SiteFooter />
+          </NuqsAdapter>
           <Toaster richColors position="top-center" />
         </ClerkProvider>
       </body>

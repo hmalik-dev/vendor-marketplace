@@ -18,6 +18,21 @@ vi.mock('@clerk/nextjs', () => ({
   UserButton: () => <button type="button">Open user button</button>,
 }));
 
+/*
+ * The header fetches the taxonomy because frame `02` puts the query bar in it.
+ * The bar itself is `HeaderQuery`'s to test — it owns the `nuqs` state — so
+ * here it is stubbed down to whether it rendered at all.
+ */
+const getCategories = vi.fn(async () => []);
+
+vi.mock('@/lib/vendor-data', () => ({
+  getCategories: () => getCategories(),
+}));
+
+vi.mock('@/components/search/header-query', () => ({
+  HeaderQuery: () => (pathname === '/search' ? <div data-testid="header-query" /> : null),
+}));
+
 const { SiteHeader } = await import('./site-header');
 
 describe('SiteHeader', () => {
@@ -30,8 +45,8 @@ describe('SiteHeader', () => {
     cleanup();
   });
 
-  it('links the wordmark to the home page', () => {
-    render(<SiteHeader />);
+  it('links the wordmark to the home page', async () => {
+    render(await SiteHeader());
 
     expect(screen.getByRole('link', { name: BRAND_NAME })).toHaveProperty(
       'href',
@@ -39,14 +54,14 @@ describe('SiteHeader', () => {
     );
   });
 
-  it('labels the primary navigation landmark', () => {
-    render(<SiteHeader />);
+  it('labels the primary navigation landmark', async () => {
+    render(await SiteHeader());
 
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeDefined();
   });
 
-  it('sends signed-out visitors to the full sign-in and sign-up pages', () => {
-    render(<SiteHeader />);
+  it('sends signed-out visitors to the full sign-in and sign-up pages', async () => {
+    render(await SiteHeader());
 
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveProperty(
       'href',
@@ -60,8 +75,8 @@ describe('SiteHeader', () => {
     expect(screen.queryByRole('button', { name: 'Open user button' })).toBeNull();
   });
 
-  it('carries the marketing nav on the landing page', () => {
-    render(<SiteHeader />);
+  it('carries the marketing nav on the landing page', async () => {
+    render(await SiteHeader());
 
     expect(screen.getByRole('link', { name: 'Browse' })).toHaveProperty(
       'href',
@@ -71,29 +86,47 @@ describe('SiteHeader', () => {
     expect(screen.getByRole('link', { name: 'For vendors' })).toBeDefined();
   });
 
-  it('drops the marketing nav elsewhere, where the frames fill that space differently', () => {
+  it('drops the marketing nav elsewhere, where the frames fill that space differently', async () => {
     pathname = '/search';
 
-    render(<SiteHeader />);
+    render(await SiteHeader());
 
     expect(screen.queryByRole('link', { name: 'Browse' })).toBeNull();
     // The wordmark and the account actions survive — only the nav is scoped.
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeDefined();
   });
 
-  it('hides the marketing nav from a signed-in visitor', () => {
+  /*
+   * Frame `02` puts the query bar inside this 64px bar; frame `01` puts the
+   * marketing nav there instead. The two are mutually exclusive by route.
+   */
+  it('carries the query bar on the search screen and the nav on the landing page', async () => {
+    pathname = '/search';
+    const search = render(await SiteHeader());
+    expect(search.getByTestId('header-query')).toBeDefined();
+    expect(search.queryByRole('link', { name: 'Browse' })).toBeNull();
+
+    cleanup();
+
+    pathname = '/';
+    const landing = render(await SiteHeader());
+    expect(landing.queryByTestId('header-query')).toBeNull();
+    expect(landing.getByRole('link', { name: 'Browse' })).toBeDefined();
+  });
+
+  it('hides the marketing nav from a signed-in visitor', async () => {
     authState = 'signed-in';
 
-    render(<SiteHeader />);
+    render(await SiteHeader());
 
     expect(screen.queryByRole('link', { name: 'Browse' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'For vendors' })).toBeNull();
   });
 
-  it('offers the dashboard and user button when signed in', () => {
+  it('offers the dashboard and user button when signed in', async () => {
     authState = 'signed-in';
 
-    render(<SiteHeader />);
+    render(await SiteHeader());
 
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveProperty(
       'href',

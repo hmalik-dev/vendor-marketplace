@@ -7,7 +7,6 @@ import {
   type VendorSearchResult,
 } from '@vendor-marketplace/shared';
 import { SlidersHorizontal, SearchX } from 'lucide-react';
-import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { useEffect, useState } from 'react';
 import { ApiClientError, apiRequest } from '@/lib/api-client';
 import type { WireTag } from '@/lib/wire-schemas';
@@ -122,11 +121,12 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   return (
     <div data-app-shell className="flex w-full min-w-0 flex-col lg:app-shell">
       {/*
-        The query restates itself above the results, so a customer can change
-        their mind without going back to the landing page. Name search sits
-        beside it as the smallest thing on the screen.
+        The tablet and mobile home for the query — frame `14`. From `lg` the
+        bar lives in the header instead (frame `02`), so this row is hidden
+        rather than duplicated; both read the same `nuqs` params, so whichever
+        one is on screen is showing the same query.
       */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-stone-200 px-5 py-3 sm:px-6.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-stone-200 px-5 py-3 sm:px-6.5 lg:hidden">
         <SearchBar
           categories={categories}
           value={{ category: state.category, city: state.city, date: state.date }}
@@ -262,11 +262,10 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   );
 }
 
-/** `nuqs` needs its adapter above any component reading query state. */
+/**
+ * The adapter `nuqs` needs lives in the root layout, because the header's copy
+ * of the query bar reads the same params from outside this tree.
+ */
 export function SearchShell(props: SearchShellProps): React.ReactElement {
-  return (
-    <NuqsAdapter>
-      <SearchScreen {...props} />
-    </NuqsAdapter>
-  );
+  return <SearchScreen {...props} />;
 }

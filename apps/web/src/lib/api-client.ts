@@ -30,6 +30,17 @@ export interface ApiRequestOptions<T> {
   /** Clerk session token. `null` sends the request unauthenticated. */
   token?: string | null;
   signal?: AbortSignal;
+  /**
+   * Seconds to cache this response on the server, for **public reference data
+   * only** — the taxonomy and the tag vocabulary, which every page needs and
+   * which change when ops edit them rather than per request.
+   *
+   * Anything scoped to a session or a vendor must leave this unset and keep
+   * the default `no-store`: a cached response is shared between visitors, and
+   * one customer reading another's data is the failure this guards against.
+   * Ignored in the browser, where `fetch` has no `next` option.
+   */
+  revalidate?: number;
 }
 
 /** Reads the API's structured error body, tolerating a non-JSON failure page. */
@@ -87,7 +98,7 @@ async function readJsonBody(response: Response, path: string): Promise<unknown> 
  * `undefined` deep inside a component.
  */
 export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>): Promise<T> {
-  const { schema, method = 'GET', body, token, signal } = options;
+  const { schema, method = 'GET', body, token, signal, revalidate } = options;
 
   const headers: Record<string, string> = { accept: 'application/json' };
   if (token) {
@@ -102,7 +113,9 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
     headers,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     ...(signal ? { signal } : {}),
-    cache: 'no-store',
+    // `cache` and `next.revalidate` are mutually exclusive — sending both makes
+    // Next ignore the revalidate and store nothing.
+    ...(revalidate === undefined ? { cache: 'no-store' as const } : { next: { revalidate } }),
   });
 
   if (!response.ok) {

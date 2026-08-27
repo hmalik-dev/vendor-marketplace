@@ -128,13 +128,27 @@ export async function getOwnAvailability(): Promise<WireAvailability[]> {
   }
 }
 
+/**
+ * How long the taxonomy and the tag vocabulary are cached on the server. Both
+ * are public reference data that changes when ops edits it, and the header
+ * needs the categories on every route — without this, putting the search bar
+ * in the header would cost an API call per page view.
+ */
+const REFERENCE_DATA_REVALIDATE_SECONDS = 3600;
+
 /** Public reference data; no session needed. */
 export async function getCategories(): Promise<Category[]> {
-  return apiRequest('/categories', { schema: wireCategoryListSchema });
+  return apiRequest('/categories', {
+    schema: wireCategoryListSchema,
+    revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
+  });
 }
 
 export async function getActiveTags(): Promise<WireTag[]> {
-  return apiRequest('/tags', { schema: wireTagListSchema });
+  return apiRequest('/tags', {
+    schema: wireTagListSchema,
+    revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
+  });
 }
 
 /** One row of four on the landing page — see design/design-plan/10-landing.md. */
