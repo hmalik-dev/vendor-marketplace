@@ -185,3 +185,33 @@ describe('log redaction', () => {
     expect(captured.join('')).not.toContain('valid-signature');
   });
 });
+
+/*
+ * Vercel's Fastify preset boots the API by importing `server.ts` and calling
+ * its default export, and it refuses the deployment with "The default export
+ * must be a function or server" when there is not one. That failure only ever
+ * surfaces at runtime, in production, as a 500 on every route — the build
+ * still succeeds — so the contract is asserted here instead.
+ */
+describe('the Vercel Fastify entrypoint', () => {
+  it('default-exports a factory', async () => {
+    const { default: createServer } = await import('./server.js');
+
+    expect(typeof createServer).toBe('function');
+  });
+
+  it('takes no required argument, because the preset calls it with none', async () => {
+    const { default: createServer } = await import('./server.js');
+
+    expect(createServer.length).toBe(0);
+  });
+
+  it('still exports the injectable builder the suites use', async () => {
+    // The factory wires the real Postgres and S3 clients. It sits beside
+    // `buildServer` rather than replacing it so the route suites can keep
+    // injecting their own database, and so importing the module opens no pool.
+    const module = await import('./server.js');
+
+    expect(typeof module.buildServer).toBe('function');
+  });
+});

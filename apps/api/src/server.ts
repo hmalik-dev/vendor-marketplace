@@ -8,10 +8,11 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import { createDatabase, loadEnv } from '@vendor-marketplace/db';
 import { MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
-import { allowedOrigins, type ApiEnv } from './config/env.js';
+import { allowedOrigins, parseEnv, type ApiEnv } from './config/env.js';
 import type { AppDatabase } from './lib/database.js';
-import type { ObjectStorage } from './lib/storage.js';
+import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
@@ -99,4 +100,24 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
 
   await app.ready();
   return app;
+}
+
+/**
+ * The entrypoint Vercel's Fastify preset imports. The platform owns the socket,
+ * so this deliberately does not `listen` and installs no signal handlers —
+ * `index.ts` remains the entrypoint for the container image, where the process
+ * does own the socket and has to drain its own connections on SIGTERM.
+ *
+ * It is a factory rather than a ready-made instance so that importing this
+ * module never opens a Postgres pool: the route suites import `buildServer`
+ * from here and inject their own database, and a top-level `createDatabase()`
+ * would connect during test collection.
+ */
+export default async function createServer(): Promise<FastifyInstance> {
+  loadEnv();
+
+  const env = parseEnv();
+  const { db } = createDatabase();
+
+  return buildServer({ env, db, storage: createS3Storage(env) });
 }
