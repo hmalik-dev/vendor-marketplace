@@ -12,9 +12,9 @@ import { Placeholder } from '@/components/ui/placeholder';
  * numbers are real — condition in design/design-plan/98-post-mvp.md.
  */
 const GUARANTEES = [
-  'Real availability, not a contact form',
+  'Live calendars — if a date shows open, it is',
   'Payment held until the event is complete',
-  'No service fee, ever',
+  'Published prices, and no service fee on top',
 ] as const;
 
 /**
@@ -86,14 +86,22 @@ export function AuthScreen({ headline, subhead, children }: AuthScreenProps): Re
         />
 
         <div className="absolute inset-x-0 bottom-0 p-12">
+          {/*
+            The premise is published pricing *and* published availability —
+            both halves. The word "transparent" never appears; the two lines
+            demonstrate it and the italic third line closes on the customer's
+            own decision. See design/design-plan/21-sign-up.md.
+          */}
           <p className="font-display text-[38px] leading-[1.15] text-stone-0">
-            Prices on the label.
+            See the price.
             <br />
-            Dates you can trust.
+            See the open dates.
+            <br />
+            <span className="text-gold-200 italic">Then decide.</span>
           </p>
           <p className="mt-3 max-w-100 text-md leading-relaxed text-stone-0/82">
-            Every review comes from a booking that actually happened — and payment is held until
-            your event is done.
+            Every vendor publishes what they charge and when they&apos;re free — before you talk to
+            anyone, and without asking for a quote.
           </p>
 
           <ul className="mt-6.5 flex max-w-100 flex-col gap-2.75 border-t border-stone-0/22 pt-5">

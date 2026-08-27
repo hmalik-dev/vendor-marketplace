@@ -33,6 +33,7 @@
 
   /* Gold — waiting on someone. */
   --color-gold-50: #f5eedc;
+  --color-gold-200: #f3c98b; /* pale gold — the italic accent on an ink ground */
   --color-gold-400: #c99a2e;
   --color-gold-600: #7a5a12; /* gold as text — #8A6716 measures 4.27:1 and fails */
 

@@ -106,12 +106,38 @@ describe('SignUpPage', () => {
   it('states the three guarantees and no platform statistics', () => {
     render(<SignUpPage />);
 
-    expect(screen.getByText('Real availability, not a contact form')).toBeDefined();
+    expect(screen.getByText('Live calendars — if a date shows open, it is')).toBeDefined();
     expect(screen.getByText('Payment held until the event is complete')).toBeDefined();
-    expect(screen.getByText('No service fee, ever')).toBeDefined();
+    expect(screen.getByText('Published prices, and no service fee on top')).toBeDefined();
 
     // Nothing on this screen may claim a scale the product does not have.
     expect(document.body.textContent).not.toMatch(/\d[\d,]*\s*(vendors|events|reviews|bookings)/i);
     expect(document.body.textContent).not.toMatch(/thousands|#1|trusted by/i);
+  });
+
+  it('leads the marketing panel with the three-line headline, closing in italic', () => {
+    const { container } = render(<SignUpPage />);
+
+    const headline = [...container.querySelectorAll('p')].find((p) =>
+      p.textContent?.startsWith('See the price.'),
+    );
+
+    // Both halves of the premise, then the line that hands over the decision.
+    expect(headline?.textContent).toBe('See the price.See the open dates.Then decide.');
+    // "Then decide." is the only italic run, and it is pale gold on the ink wash.
+    const accent = headline?.querySelector('span');
+    expect(accent?.textContent).toBe('Then decide.');
+    expect(accent?.className).toContain('italic');
+    expect(accent?.className).toContain('text-gold-200');
+  });
+
+  it('demonstrates published pricing rather than calling it transparent', () => {
+    render(<SignUpPage />);
+
+    expect(
+      screen.getByText(/Every vendor publishes what they charge and when they're free/),
+    ).toBeDefined();
+    // 21-sign-up.md: never use the word, show the mechanism instead.
+    expect(document.body.textContent).not.toMatch(/transparen/i);
   });
 });
