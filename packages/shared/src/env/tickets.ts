@@ -9,9 +9,17 @@ import { CAPABILITIES, type Capability } from './capabilities.js';
  * `capabilitiesForTicket`.
  *
  * Lettered splits share their parent's number: `#6a`/`#6b`/`#6c` are all
- * `--ticket 6`, `#7a`/`#7b` are `--ticket 7`, `#22a`/`#22b` are `--ticket 22`.
+ * `--ticket 6` and `#22a`/`#22b` are `--ticket 22`. `#7a`/`#7b` were merged
+ * back into a single `#7` on 2026-08-27, which is why that row never changed.
  * A split never changes which external services the work needs, so a second
  * entry would only be a second thing to keep in sync.
+ *
+ * Rows marked RETIRED are ticket numbers that were merged into another ticket
+ * and no longer appear on the status board. They keep their rows on purpose:
+ * the contiguity test is what catches a live board ticket with no registry row,
+ * and `--ticket <old number>` still gates correctly for anyone working from a
+ * commit message or branch that predates the merge. They are labelled so nobody
+ * mistakes one for outstanding work.
  */
 export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>> = {
   0: [],
@@ -19,7 +27,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   2: ['auth'],
   3: ['auth', 'storage'],
   4: ['auth', 'storage'],
-  5: ['auth'],
+  5: ['auth'], // RETIRED — merged into #4 (Vendor Service Setup)
   6: ['auth', 'storage'],
   7: ['auth'],
   8: ['auth'],
@@ -27,7 +35,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   10: ['auth', 'stripe'],
   11: ['auth', 'email'],
   12: ['auth'],
-  13: ['auth'],
+  13: ['auth'], // RETIRED — merged into #8 (Messaging + Notification Center)
   14: [...CAPABILITIES],
   15: ['auth', 'sentry'],
   16: ['auth', 'storage'],
@@ -40,8 +48,10 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   23: ['auth', 'storage'],
   24: ['auth'],
   25: ['auth'],
-  26: [],
-  27: ['auth'],
+  // #26 gained `auth` when the Clerk pin (old #27) merged into it on 2026-08-27:
+  // the responsive-header half needs no external service, the Clerk half does.
+  26: ['auth'],
+  27: ['auth'], // RETIRED — merged into #26 (Chrome Parity)
   28: [],
   29: ['auth', 'storage'],
   30: [],

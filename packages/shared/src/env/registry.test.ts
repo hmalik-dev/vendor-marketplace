@@ -200,7 +200,10 @@ describe('capabilitiesForTicket', () => {
     expect(capabilitiesForTicket(23)).toEqual(['core', 'auth', 'storage', 'e2e']);
     expect(capabilitiesForTicket(24)).toEqual(['core', 'auth', 'e2e']);
     expect(capabilitiesForTicket(25)).toEqual(['core', 'auth', 'e2e']);
-    expect(capabilitiesForTicket(26)).toEqual(['core', 'e2e']);
+    // #26 and #27 merged into one Chrome Parity ticket on 2026-08-27. The merged
+    // ticket carries `auth` because the Clerk pin half touches the auth screens;
+    // #27 is retired but still resolves, so the old number cannot silently throw.
+    expect(capabilitiesForTicket(26)).toEqual(['core', 'auth', 'e2e']);
     expect(capabilitiesForTicket(27)).toEqual(['core', 'auth', 'e2e']);
     expect(capabilitiesForTicket(28)).toEqual(['core', 'e2e']);
     expect(capabilitiesForTicket(29)).toEqual(['core', 'auth', 'storage', 'e2e']);
