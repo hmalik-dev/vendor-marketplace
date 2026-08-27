@@ -1,55 +1,56 @@
-import type { VendorCard } from '@vendor-marketplace/shared';
-import { Avatar } from '@/components/ui/avatar';
-import { Placeholder } from '@/components/ui/placeholder';
+import { StockPhoto } from '@/components/ui/stock-photo';
 
 /**
  * The three cards, at the sizes, angles and offsets frame `01` draws them.
  * The shadow deepens with elevation, so the stack reads as three objects on a
  * table rather than three rectangles at three angles.
+ *
+ * `sizes` is the card's own rendered width — these never scale with the
+ * viewport, they are fixed boxes the whole cluster shrinks at `sm`.
  */
 const CARDS = [
   {
-    label: 'florist / tablescape',
+    src: '/stock/florals.jpg',
+    sizes: '236px',
     className:
       'top-0 left-5 h-73 w-59 rotate-[-4deg] rounded-2xl shadow-[0_14px_40px_rgba(35,32,28,.16)]',
   },
   {
-    label: 'photographer / portrait',
+    src: '/stock/portrait.jpg',
+    sizes: '254px',
     className:
       'top-17.5 left-47.5 h-79 w-63.5 rotate-[3deg] rounded-2xl shadow-[0_18px_46px_rgba(35,32,28,.2)]',
   },
   {
-    label: 'dj / dance floor',
+    src: '/stock/dj.jpg',
+    sizes: '188px',
     /*
      * The smallest card is the one the composition can lose: below `lg` the
      * two columns have already stacked and the cluster is doing its work with
      * two cards, where a third would only make the stack taller.
      */
     className:
-      'top-52 left-1 hidden h-37.5 w-47 rotate-[2deg] rounded-[14px] shadow-[0_12px_32px_rgba(35,32,28,.14)] lg:flex',
+      'top-52 left-1 hidden h-37.5 w-47 rotate-[2deg] rounded-[14px] shadow-[0_12px_32px_rgba(35,32,28,.14)] lg:block',
   },
 ] as const;
-
-export interface PhotoClusterProps {
-  /**
-   * The vendor the floating chip names. Omitted when nothing is published yet,
-   * which takes the chip with it — the chip's whole job is to be a real vendor.
-   */
-  vendor?: VendorCard;
-}
 
 /**
  * The proof that real vendors exist, and what fills the hero's right-hand 44%.
  *
- * It is not decoration — each placeholder is labelled with the shot it is
- * waiting for, so the hero reads as deliberately unfinished until real vendor
- * photography replaces them at launch, rather than as a design choice.
+ * The three cards carry licensed stock standing in for launch photography —
+ * a tablescape, a couple's portrait and a dance floor, one per card, so the
+ * stack shows three different kinds of vendor rather than three of the same.
+ *
+ * Frame `01` floats a vendor chip over the stack reading "★ 4.9 · replies in
+ * 2h". It is **deferred post-MVP**: reply time is the implied ranking mechanic
+ * open question 2 says not to ship before it is real, and a single hand-picked
+ * vendor's rating on the hero is platform marketing rather than a query
+ * result. It returns when there is data behind it — see
+ * design/design-plan/98-post-mvp.md.
  *
  * See design/design-plan/10-landing.md.
  */
-export function PhotoCluster({ vendor }: PhotoClusterProps): React.ReactElement {
-  const location = vendor ? [vendor.city, vendor.state].filter(Boolean).join(', ') : '';
-
+export function PhotoCluster(): React.ReactElement {
   return (
     /*
      * 392px is the frame's height for this column, and it is what sets the
@@ -61,38 +62,17 @@ export function PhotoCluster({ vendor }: PhotoClusterProps): React.ReactElement 
      * overlaps that make it a cluster instead of three photographs.
      */
     <div className="relative h-98 w-125 shrink-0 max-sm:h-65 max-sm:origin-top max-sm:scale-65">
-      {CARDS.map((card) => (
-        <Placeholder key={card.label} label={card.label} className={`absolute ${card.className}`} />
+      {CARDS.map((card, index) => (
+        <StockPhoto
+          key={card.src}
+          src={card.src}
+          sizes={card.sizes}
+          // The two cards above the fold at 1440 load eagerly; a hero that
+          // paints its headline over three empty boxes is the thing to avoid.
+          priority={index < 2}
+          className={`absolute ${card.className}`}
+        />
       ))}
-
-      {/*
-        The chip is the one piece of the cluster that carries meaning, so it
-        carries a vendor who actually exists: a name, a rating that came out of
-        real reviews, and where they work. An unreviewed vendor shows no
-        rating rather than a 0.0 that reads as a bad one.
-      */}
-      {vendor ? (
-        <div className="absolute top-4 left-78 flex items-center gap-2.25 rounded-full bg-stone-0 py-2 pr-3.75 pl-2 shadow-[0_8px_24px_rgba(35,32,28,.14)]">
-          <Avatar name={vendor.businessName} src={vendor.profileImageUrl} size="xs" />
-          <div>
-            <p className="text-xs font-semibold text-stone-900">{vendor.businessName}</p>
-            <p className="text-[10.5px] text-stone-600">
-              {vendor.reviewCount > 0 ? (
-                <>
-                  <span aria-hidden="true">★ </span>
-                  {vendor.avgRating.toFixed(1)}
-                  <span className="sr-only"> out of 5, from {vendor.reviewCount} reviews</span>
-                  {location ? ` · ${location}` : ''}
-                </>
-              ) : location === '' ? (
-                'New'
-              ) : (
-                location
-              )}
-            </p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

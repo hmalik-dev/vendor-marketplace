@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
-import { Placeholder } from '@/components/ui/placeholder';
+import { StockPhoto } from '@/components/ui/stock-photo';
 
 /**
  * The three guarantees on the marketing panel.
@@ -75,10 +75,7 @@ export function AuthScreen({ headline, subhead, children }: AuthScreenProps): Re
         letterboxing into a strip.
       */}
       <div className="relative hidden w-150 shrink-0 overflow-hidden xl:block">
-        <Placeholder
-          label="vendor photograph — full bleed"
-          className="absolute inset-0 !items-center justify-center !p-0"
-        />
+        <StockPhoto src="/stock/auth.jpg" sizes="600px" priority className="absolute inset-0" />
         <div
           aria-hidden="true"
           className="absolute inset-0"

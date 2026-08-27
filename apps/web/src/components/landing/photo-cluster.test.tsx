@@ -1,58 +1,44 @@
-import type { VendorCard as VendorCardData } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PhotoCluster } from './photo-cluster';
-
-function vendor(overrides: Partial<VendorCardData> = {}): VendorCardData {
-  return {
-    id: '00000000-0000-4000-8000-000000000001',
-    businessName: 'Kessler & Co.',
-    slug: 'kessler-co',
-    city: 'Austin',
-    state: 'TX',
-    profileImageUrl: null,
-    coverImageUrl: null,
-    avgRating: 4.9,
-    reviewCount: 127,
-    startingPriceCents: 145_000,
-    categories: [],
-    ...overrides,
-  };
-}
 
 describe('PhotoCluster', () => {
   afterEach(() => {
     cleanup();
   });
 
-  it('labels every placeholder with the shot it is waiting for', () => {
-    render(<PhotoCluster />);
+  it('stacks three photographs, one per kind of vendor', () => {
+    const { container } = render(<PhotoCluster />);
 
-    for (const label of ['florist / tablescape', 'photographer / portrait', 'dj / dance floor']) {
-      expect(screen.getByRole('img', { name: `Placeholder for ${label}` }), label).toBeDefined();
+    const sources = [...container.querySelectorAll('img')].map((img) => img.getAttribute('src'));
+    expect(sources).toHaveLength(3);
+    // Three different shots — a stack of three of the same proves nothing.
+    expect(new Set(sources).size).toBe(3);
+    for (const src of sources) {
+      // next/image rewrites through its loader, so the path arrives encoded.
+      expect(src).toMatch(/%2Fstock%2F/);
     }
   });
 
-  it('names a vendor who actually exists on the chip', () => {
-    render(<PhotoCluster vendor={vendor()} />);
+  it('keeps the photographs decorative, so no alt text is read twice', () => {
+    const { container } = render(<PhotoCluster />);
 
-    expect(screen.getByText('Kessler & Co.')).toBeDefined();
-    expect(screen.getByText(/4\.9/)).toBeDefined();
-    expect(screen.getByText(/Austin, TX/)).toBeDefined();
+    for (const img of container.querySelectorAll('img')) {
+      expect(img.getAttribute('alt')).toBe('');
+    }
+    // The headline beside the cluster is what names the page.
+    expect(screen.queryByRole('img')).toBeNull();
   });
 
-  it('shows no rating at all for an unreviewed vendor, never a 0.0', () => {
-    render(<PhotoCluster vendor={vendor({ avgRating: 0, reviewCount: 0 })} />);
-
-    expect(screen.getByText('Austin, TX')).toBeDefined();
-    expect(screen.queryByText(/0\.0/)).toBeNull();
-    expect(screen.queryByText(/★/)).toBeNull();
-  });
-
-  it('drops the chip rather than inventing a vendor for it', () => {
-    render(<PhotoCluster />);
+  /*
+   * The frame's floating chip is deferred post-MVP: reply time is the implied
+   * ranking mechanic open question 2 says not to ship, and one hand-picked
+   * vendor's rating on the hero is marketing rather than a query result.
+   */
+  it('floats no vendor chip over the stack', () => {
+    const { container } = render(<PhotoCluster />);
 
     expect(screen.queryByText(/★/)).toBeNull();
-    expect(screen.queryByText('Kessler & Co.')).toBeNull();
+    expect(container.textContent).not.toMatch(/replies in/i);
   });
 });

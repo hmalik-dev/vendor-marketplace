@@ -214,7 +214,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
             {/* The cluster is the composition, so it never stacks above lg. */}
             <div className="mt-12 flex justify-center max-lg:overflow-hidden lg:mt-0 lg:justify-start">
-              <PhotoCluster vendor={featuredVendors[0]} />
+              <PhotoCluster />
             </div>
           </div>
 
