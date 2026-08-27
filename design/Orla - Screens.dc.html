@@ -39,11 +39,20 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 .card{background:#FFFDF9;border-radius:16px;box-shadow:0 2px 10px rgba(35,32,28,.06);overflow:hidden}
 .h2{font-family:'Instrument Serif',serif;font-size:26px;color:#23201C;letter-spacing:-.01em}
 .sh{font-family:'Instrument Serif',serif;font-size:21px;color:#23201C}
+.sk{background:linear-gradient(90deg,#EFE9E0 0%,#F4F0E8 50%,#EFE9E0 100%);background-size:200% 100%;animation:shim 1.5s linear infinite;border-radius:4px}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.spin{border:2px solid rgba(180,85,47,.28);border-top-color:#B4552F;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pls{animation:pls 2s ease-in-out infinite}
+@keyframes pls{0%,100%{opacity:.4}50%{opacity:1}}
+.tile{background:#FFFDF9;border-radius:14px;border:1px solid #E4DDD1;padding:16px}
+.tl{font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459;margin-bottom:12px}
+.tn{font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#6B6459;margin-top:10px}
 </style>
 </helmet>
 
 <div style="padding:44px 48px 30px">
-<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="position:relative;width:29px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:32px;color:#23201C">{{ brandName }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-left:8px">Thirteen desktop frames · 1440 × 900 reference · tablet and mobile adaptations at the end</span></div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="position:relative;width:29px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:32px;color:#23201C">{{ brandName }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-left:8px">Thirteen desktop frames · tablet and mobile adaptations · twelve error, loading, upload and empty states</span></div>
 <div style="max-width:860px;font:400 13.5px/1.7 'Instrument Sans',sans-serif;color:#4A443C">Direction <strong style="font-weight:600">1a</strong>, headline <strong style="font-weight:600">4b</strong>. System rules held throughout: clay <span style="font-family:'JetBrains Mono',monospace;font-size:12px">#B4552F</span> is a fill only and clay-as-text is <span style="font-family:'JetBrains Mono',monospace;font-size:12px">#A34A28</span>; muted labels are <span style="font-family:'JetBrains Mono',monospace;font-size:12px">#6B6459</span>; app surfaces never scroll the page — panes scroll inside a fixed shell; colour is a signal, so clay means <em>act here</em>, sage means <em>settled</em>, gold means <em>waiting on someone</em>. Photography is labelled placeholder.</div>
 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid rgba(35,32,28,.1);font:400 12.5px 'Instrument Sans',sans-serif;color:#4A443C">
 <span class="sc-mvp">MVP</span><span>ships as drawn</span>
@@ -1034,6 +1043,617 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 <div style="flex:1;text-align:center;font-size:10.5px;font-weight:500;color:#6B6459"><div style="width:20px;height:20px;border-radius:6px;background:#F1ECE4;margin:0 auto 5px"></div>Calendar</div>
 </div>
 </div>
+</div>
+
+</div>
+</div>
+
+<div style="padding:20px 48px 26px">
+<div class="h2" style="margin-bottom:8px">States, errors and empties</div>
+<div style="max-width:880px;font:400 13.5px/1.7 'Instrument Sans',sans-serif;color:#4A443C">Every state below is a real screen, not a fallback. Rules: <strong style="font-weight:600">one loading idiom per screen</strong> — skeletons for content, a 16px clay spinner for a single element, the wordmark pulse for first paint only, never two at once. Errors say what happened, whether money moved, and what to do next; a marketplace error that doesn't answer <em>"was I charged?"</em> is not finished. Empty states are the first impression of a feature, so each carries a serif headline and exactly one primary action. Colour keeps its meaning: <span style="color:#A34A28;font-weight:600">clay</span> = act here, <span style="color:#7A5A12;font-weight:600">gold</span> = waiting on someone, <span style="color:#3D6A8C;font-weight:600">steel</span> = neutral information, <span style="color:#B23A30;font-weight:600">red</span> = something broke. Red is never used for "pending".</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">15</span><span class="sc-t">404 — page not found</span><span class="sc-mvp">MVP</span><span class="sc-d">The marketing shell stays, so the visitor is still inside the product. The broken mark does the illustration work — no cartoon, no oversized "404". A 404 on a marketplace is usually a stale vendor link, so the recovery is <em>category links</em>, not just "go home": the fastest route back to intent.</span></div>
+<div class="fr" data-screen-label="15 404">
+<div class="hd" style="padding:0 40px">
+<div style="display:flex;align-items:center;gap:34px">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:26px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.4px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:23px;color:#23201C">Orla</span></div>
+<div style="display:flex;gap:24px;font-size:13.5px;font-weight:500;color:#4A443C"><span>Browse</span><span>How it works</span><span>For vendors</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:18px"><span style="font-size:13.5px;font-weight:500;color:#4A443C">Log in</span><span style="font-size:13px;font-weight:600;color:#F8F5EF;background:#23201C;border-radius:999px;padding:10px 18px">Sign up</span></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 40px">
+<div style="position:relative;width:74px;height:46px;margin-bottom:26px"><div style="position:absolute;left:0;top:0;width:46px;height:46px;border-radius:50%;background:#EFE9E0"></div><div style="position:absolute;left:28px;top:0;width:46px;height:46px;border-radius:50%;border:1.5px dashed #D5CEC2"></div></div>
+<div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.16em;color:#6B6459;margin-bottom:12px">404 · NOT FOUND</div>
+<div style="font-family:'Instrument Serif',serif;font-size:38px;color:#23201C;letter-spacing:-.015em;margin-bottom:12px">This page isn't here</div>
+<div style="max-width:440px;text-align:center;font:400 14px/1.65 'Instrument Sans',sans-serif;color:#4A443C;margin-bottom:26px">The link may be old, or a vendor may have taken their listing down. Nothing is wrong with your account.</div>
+<div style="display:flex;gap:12px;margin-bottom:40px"><span class="btnP">Browse vendors</span><span class="btnS">Back to home</span></div>
+<div style="border-top:1px solid #E4DDD1;padding-top:22px;width:620px;text-align:center">
+<div class="lbl" style="margin-bottom:12px">Or start with a category</div>
+<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+<span style="font-size:12.5px;font-weight:500;color:#A34A28;background:#FDF4EF;border:1px solid #EFD8CC;border-radius:999px;padding:7px 14px">Photography</span>
+<span style="font-size:12.5px;font-weight:500;color:#A34A28;background:#FDF4EF;border:1px solid #EFD8CC;border-radius:999px;padding:7px 14px">Catering</span>
+<span style="font-size:12.5px;font-weight:500;color:#A34A28;background:#FDF4EF;border:1px solid #EFD8CC;border-radius:999px;padding:7px 14px">Venues</span>
+<span style="font-size:12.5px;font-weight:500;color:#A34A28;background:#FDF4EF;border:1px solid #EFD8CC;border-radius:999px;padding:7px 14px">Music &amp; DJs</span>
+<span style="font-size:12.5px;font-weight:500;color:#A34A28;background:#FDF4EF;border:1px solid #EFD8CC;border-radius:999px;padding:7px 14px">Florals</span>
+<span style="font-size:12.5px;font-weight:500;color:#A34A28;background:#FDF4EF;border:1px solid #EFD8CC;border-radius:999px;padding:7px 14px">Hair &amp; makeup</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">16</span><span class="sc-t">500 — our fault</span><span class="sc-mvp">MVP</span><span class="sc-d">Two things a user needs from a server error and rarely gets: <strong style="font-weight:600;color:#4A443C">confirmation that no money moved</strong>, and a reference they can paste to support. The retry is primary because most 500s are transient. The incident id is mono and selectable. No apology paragraph — one sentence.</span></div>
+<div class="fr" data-screen-label="16 Server error">
+<div class="hd" style="padding:0 40px">
+<div style="display:flex;align-items:center;gap:10px"><div style="position:relative;width:26px;height:18px"><div style="position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:18px;height:18px;border-radius:50%;border:1.4px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:23px;color:#23201C">Orla</span></div>
+<span style="font-size:13.5px;font-weight:600;color:#A34A28">Contact support</span>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 40px">
+<div style="width:46px;height:46px;border-radius:50%;background:#FBEEEC;display:flex;align-items:center;justify-content:center;margin-bottom:24px"><div style="width:18px;height:18px;border-radius:50%;background:#B23A30"></div></div>
+<div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.16em;color:#6B6459;margin-bottom:12px">500 · SERVER ERROR</div>
+<div style="font-family:'Instrument Serif',serif;font-size:38px;color:#23201C;letter-spacing:-.015em;margin-bottom:12px">Something broke on our end</div>
+<div style="max-width:460px;text-align:center;font:400 14px/1.65 'Instrument Sans',sans-serif;color:#4A443C;margin-bottom:22px">This wasn't anything you did. We've been notified and we're looking at it.</div>
+<div style="display:flex;align-items:center;gap:10px;background:#EDF0E9;border-radius:10px;padding:11px 16px;margin-bottom:26px"><div style="width:16px;height:16px;border-radius:50%;background:#5E6B4F;flex:none"></div><span style="font:500 12.5px 'Instrument Sans',sans-serif;color:#4B5940">No payment was taken and no booking was changed.</span></div>
+<div style="display:flex;gap:12px;margin-bottom:26px"><span class="btnP">Try again</span><span class="btnS">Go to my bookings</span></div>
+<div style="font:400 12.5px 'Instrument Sans',sans-serif;color:#6B6459">Reference <span style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#F1ECE4;border-radius:5px;padding:3px 7px;color:#4A443C">err_9F3K2QX7</span> — include this if you write to us</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">17</span><span class="sc-t">Search — loading</span><span class="sc-mvp">MVP</span><span class="sc-d">The chrome the user already filled in never skeletons — header, search values and Refine bar render instantly; only the results area is unknown. Six card skeletons mirror the real card's exact geometry (4:3 cover, 21px title line, two chips, divider, price row) so nothing shifts on arrival. Minimum 200ms so a fast query doesn't flash. Count line reads "Searching…" rather than a fake number.</span></div>
+<div class="fr" data-screen-label="17 Search loading">
+<div class="hd" style="padding:0 26px">
+<div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span></div>
+<div style="display:flex;align-items:center;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:999px;box-shadow:0 2px 10px rgba(35,32,28,.06);height:42px;padding:0 5px 0 18px">
+<div style="padding-right:16px;border-right:1px solid #EFE9E0"><div style="font:600 9.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">Vendor type</div><div style="font-size:13px;font-weight:500;color:#23201C">Photography</div></div>
+<div style="padding:0 16px;border-right:1px solid #EFE9E0"><div style="font:600 9.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">City</div><div style="font-size:13px;font-weight:500;color:#23201C">Austin, TX</div></div>
+<div style="padding:0 18px 0 16px"><div style="font:600 9.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">Date</div><div style="font-size:13px;font-weight:500;color:#23201C">Jun 14, 2026</div></div>
+<div style="width:32px;height:32px;border-radius:50%;background:#B4552F;display:flex;align-items:center;justify-content:center"><div class="spin" style="width:14px;height:14px;border-color:rgba(255,253,249,.35);border-top-color:#FFFDF9"></div></div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px"><span style="font-size:13px;font-weight:500;color:#4A443C">Messages</span><div style="width:30px;height:30px;border-radius:50%;background:#F7E7E0;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#8E3F20">AN</div></div>
+</div>
+<div style="flex:none;height:54px;background:#FFFDF9;border-bottom:1px solid #E4DDD1;display:flex;align-items:center;gap:9px;padding:0 26px">
+<span class="lbl">Refine</span>
+<span style="font-size:12.5px;font-weight:500;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:8px;padding:7px 12px">Price</span>
+<span style="font-size:12.5px;font-weight:500;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:8px;padding:7px 12px">Style</span>
+<span style="font-size:12.5px;font-weight:500;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:8px;padding:7px 12px">Rating</span>
+<span style="font-size:12.5px;font-weight:500;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:8px;padding:7px 12px">Distance</span>
+<span style="font-size:12.5px;font-weight:600;color:#8E3F20;background:#F7E7E0;border:1px solid #EFD8CC;border-radius:8px;padding:7px 12px">Free on Jun 14 ✕</span>
+</div>
+<div style="flex:1;padding:20px 26px;overflow:hidden">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><div class="spin" style="width:14px;height:14px"></div><span style="font:400 13px 'Instrument Sans',sans-serif;color:#6B6459">Searching photographers in Austin…</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+<div class="card"><div class="sk" style="height:152px;border-radius:0"></div><div style="padding:14px"><div class="sk" style="height:17px;width:64%"></div><div class="sk" style="height:11px;width:46%;margin-top:9px"></div><div style="display:flex;gap:6px;margin-top:12px"><div class="sk" style="height:20px;width:76px;border-radius:6px"></div><div class="sk" style="height:20px;width:90px;border-radius:6px"></div></div><div style="height:1px;background:#EFE9E0;margin:13px 0"></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="sk" style="height:11px;width:36px"></div><div class="sk" style="height:17px;width:66px"></div></div></div></div>
+<div class="card"><div class="sk" style="height:152px;border-radius:0"></div><div style="padding:14px"><div class="sk" style="height:17px;width:54%"></div><div class="sk" style="height:11px;width:52%;margin-top:9px"></div><div style="display:flex;gap:6px;margin-top:12px"><div class="sk" style="height:20px;width:76px;border-radius:6px"></div><div class="sk" style="height:20px;width:70px;border-radius:6px"></div></div><div style="height:1px;background:#EFE9E0;margin:13px 0"></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="sk" style="height:11px;width:36px"></div><div class="sk" style="height:17px;width:58px"></div></div></div></div>
+<div class="card"><div class="sk" style="height:152px;border-radius:0"></div><div style="padding:14px"><div class="sk" style="height:17px;width:70%"></div><div class="sk" style="height:11px;width:40%;margin-top:9px"></div><div style="display:flex;gap:6px;margin-top:12px"><div class="sk" style="height:20px;width:76px;border-radius:6px"></div><div class="sk" style="height:20px;width:84px;border-radius:6px"></div></div><div style="height:1px;background:#EFE9E0;margin:13px 0"></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="sk" style="height:11px;width:36px"></div><div class="sk" style="height:17px;width:62px"></div></div></div></div>
+<div class="card"><div class="sk" style="height:152px;border-radius:0"></div><div style="padding:14px"><div class="sk" style="height:17px;width:58%"></div><div class="sk" style="height:11px;width:48%;margin-top:9px"></div><div style="display:flex;gap:6px;margin-top:12px"><div class="sk" style="height:20px;width:76px;border-radius:6px"></div><div class="sk" style="height:20px;width:78px;border-radius:6px"></div></div><div style="height:1px;background:#EFE9E0;margin:13px 0"></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="sk" style="height:11px;width:36px"></div><div class="sk" style="height:17px;width:60px"></div></div></div></div>
+<div class="card"><div class="sk" style="height:152px;border-radius:0"></div><div style="padding:14px"><div class="sk" style="height:17px;width:66%"></div><div class="sk" style="height:11px;width:44%;margin-top:9px"></div><div style="display:flex;gap:6px;margin-top:12px"><div class="sk" style="height:20px;width:76px;border-radius:6px"></div><div class="sk" style="height:20px;width:92px;border-radius:6px"></div></div><div style="height:1px;background:#EFE9E0;margin:13px 0"></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="sk" style="height:11px;width:36px"></div><div class="sk" style="height:17px;width:64px"></div></div></div></div>
+<div class="card"><div class="sk" style="height:152px;border-radius:0"></div><div style="padding:14px"><div class="sk" style="height:17px;width:50%"></div><div class="sk" style="height:11px;width:54%;margin-top:9px"></div><div style="display:flex;gap:6px;margin-top:12px"><div class="sk" style="height:20px;width:76px;border-radius:6px"></div><div class="sk" style="height:20px;width:74px;border-radius:6px"></div></div><div style="height:1px;background:#EFE9E0;margin:13px 0"></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="sk" style="height:11px;width:36px"></div><div class="sk" style="height:17px;width:56px"></div></div></div></div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">18</span><span class="sc-t">Search — no results</span><span class="sc-mvp">MVP</span><span class="sc-d">A zero-result search is the highest-risk moment in a young marketplace, so this screen never dead-ends. It names the filter most likely at fault, offers <strong style="font-weight:600;color:#4A443C">one-tap relaxations</strong> in the order that costs the user least, and — because supply is thin — shows the three nearest dates that <em>do</em> have availability. The active filters stay visible above so the user can see what they searched.</span></div>
+<div class="fr" data-screen-label="18 Search no results">
+<div class="hd" style="padding:0 26px">
+<div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span></div>
+<div style="display:flex;align-items:center;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:999px;box-shadow:0 2px 10px rgba(35,32,28,.06);height:42px;padding:0 5px 0 18px">
+<div style="padding-right:16px;border-right:1px solid #EFE9E0"><div style="font:600 9.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">Vendor type</div><div style="font-size:13px;font-weight:500;color:#23201C">Photography</div></div>
+<div style="padding:0 16px;border-right:1px solid #EFE9E0"><div style="font:600 9.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">City</div><div style="font-size:13px;font-weight:500;color:#23201C">Marfa, TX</div></div>
+<div style="padding:0 18px 0 16px"><div style="font:600 9.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">Date</div><div style="font-size:13px;font-weight:500;color:#23201C">Jun 14, 2026</div></div>
+<div style="width:32px;height:32px;border-radius:50%;background:#B4552F"></div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px"><span style="font-size:13px;font-weight:500;color:#4A443C">Messages</span><div style="width:30px;height:30px;border-radius:50%;background:#F7E7E0;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#8E3F20">AN</div></div>
+</div>
+<div style="flex:none;height:54px;background:#FFFDF9;border-bottom:1px solid #E4DDD1;display:flex;align-items:center;gap:9px;padding:0 26px">
+<span class="lbl">Refine</span>
+<span style="font-size:12.5px;font-weight:600;color:#8E3F20;background:#F7E7E0;border:1px solid #EFD8CC;border-radius:8px;padding:7px 12px">Under $1,200 ✕</span>
+<span style="font-size:12.5px;font-weight:600;color:#8E3F20;background:#F7E7E0;border:1px solid #EFD8CC;border-radius:8px;padding:7px 12px">Free on Jun 14 ✕</span>
+<span style="font-size:12.5px;font-weight:600;color:#8E3F20;background:#F7E7E0;border:1px solid #EFD8CC;border-radius:8px;padding:7px 12px">Within 25 mi ✕</span>
+<span style="font-size:12.5px;font-weight:600;color:#A34A28;margin-left:4px">Clear all</span>
+</div>
+<div style="flex:1;padding:44px 26px;overflow:hidden;display:flex;flex-direction:column;align-items:center">
+<div style="position:relative;width:62px;height:38px;margin-bottom:20px"><div style="position:absolute;left:0;top:0;width:38px;height:38px;border-radius:50%;border:1.5px solid #D5CEC2"></div><div style="position:absolute;left:24px;top:0;width:38px;height:38px;border-radius:50%;border:1.5px dashed #D5CEC2"></div></div>
+<div style="font-family:'Instrument Serif',serif;font-size:30px;color:#23201C;margin-bottom:10px">No photographers match all three filters</div>
+<div style="max-width:520px;text-align:center;font:400 13.5px/1.65 'Instrument Sans',sans-serif;color:#4A443C;margin-bottom:22px">Marfa is a small market — the distance limit is the usual culprit here. Loosen one filter and results come back.</div>
+<div style="display:flex;gap:10px;margin-bottom:34px">
+<span class="btnP">Search within 100 mi</span>
+<span class="btnS">Any price</span>
+<span class="btnS">Any date</span>
+</div>
+<div style="width:100%;max-width:1000px;border-top:1px solid #E4DDD1;padding-top:24px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px"><div class="sh">Free on a nearby date instead</div><span style="font-size:12.5px;font-weight:600;color:#A34A28">See all 14 in the region →</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+<div class="card"><div class="ph" style="height:108px"><span class="phl">cover 4:3 / photographer</span></div><div style="padding:13px"><div class="sh" style="font-size:18px">June Harlow</div><div style="font-size:12.5px;color:#6B6459;margin-top:4px"><strong style="color:#4A443C">★ 4.9</strong> (127) · Alpine, TX · 41 mi</div><div style="margin-top:9px"><span class="pill" style="background:#EDF0E9;color:#4B5940">Free Jun 20</span></div></div></div>
+<div class="card"><div class="ph" style="height:108px"><span class="phl">cover 4:3 / photographer</span></div><div style="padding:13px"><div class="sh" style="font-size:18px">Cardenas Studio</div><div style="font-size:12.5px;color:#6B6459;margin-top:4px"><strong style="color:#4A443C">★ 4.8</strong> (64) · Marathon, TX · 55 mi</div><div style="margin-top:9px"><span class="pill" style="background:#EDF0E9;color:#4B5940">Free Jun 15</span></div></div></div>
+<div class="card"><div class="ph" style="height:108px"><span class="phl">cover 4:3 / photographer</span></div><div style="padding:13px"><div class="sh" style="font-size:18px">Wren &amp; Field</div><div style="font-size:12.5px;color:#6B6459;margin-top:4px"><strong style="color:#4A443C">★ 5.0</strong> (18) · Fort Davis, TX · 62 mi</div><div style="margin-top:9px"><span class="pill" style="background:#F5EEDC;color:#7A5A12">2 dates left</span></div></div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">19</span><span class="sc-t">Bookings hub — empty (new customer)</span><span class="sc-mvp">MVP</span><span class="sc-d">The month grouping and the rail are still drawn, so the user learns the shape of the feature before they have data in it. One primary action. The rail carries the mechanism promises rather than a fake "recent activity" list — an empty rail would be worse than a repositioned one.</span></div>
+<div class="fr" data-screen-label="19 Bookings hub empty">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span></div>
+<div style="display:flex;align-items:center;gap:16px"><span style="font-size:13px;font-weight:500;color:#4A443C">Browse</span><span style="font-size:13px;font-weight:500;color:#4A443C">Messages</span><div style="width:30px;height:30px;border-radius:50%;background:#F7E7E0;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#8E3F20">AN</div></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div class="side">
+<div class="lbl" style="padding:0 12px 10px">Booking</div>
+<div class="nav navA">My bookings</div>
+<div class="nav">Messages</div>
+<div class="nav">Saved vendors</div>
+<div class="nav">Payments</div>
+<div style="margin-top:auto;padding:12px"><div class="lbl" style="margin-bottom:6px">Account</div><div class="nav" style="padding-left:0">Settings</div></div>
+</div>
+<div style="flex:1;padding:24px 28px;overflow:hidden;display:flex;flex-direction:column">
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px"><div><div class="h2">My bookings</div><div style="font-size:12.5px;color:#6B6459;margin-top:4px">Nothing booked yet</div></div><span class="btnP">Find a vendor</span></div>
+<div style="display:flex;gap:8px;margin-bottom:20px"><span style="font-size:12.5px;font-weight:600;color:#8E3F20;background:#F7E7E0;border-radius:8px;padding:7px 12px">All</span><span style="font-size:12.5px;font-weight:500;color:#6B6459;padding:7px 12px">Pending</span><span style="font-size:12.5px;font-weight:500;color:#6B6459;padding:7px 12px">Confirmed</span><span style="font-size:12.5px;font-weight:500;color:#6B6459;padding:7px 12px">Past</span></div>
+<div style="flex:1;display:flex;gap:22px;min-height:0">
+<div style="flex:1;background:#FFFDF9;border:1px dashed #D5CEC2;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 40px">
+<div style="position:relative;width:58px;height:36px;margin-bottom:20px"><div style="position:absolute;left:0;top:0;width:36px;height:36px;border-radius:50%;background:#F1ECE4"></div><div style="position:absolute;left:22px;top:0;width:36px;height:36px;border-radius:50%;border:1.5px solid #D5CEC2"></div></div>
+<div style="font-family:'Instrument Serif',serif;font-size:26px;color:#23201C;margin-bottom:9px">No bookings yet</div>
+<div style="max-width:400px;text-align:center;font:400 13.5px/1.65 'Instrument Sans',sans-serif;color:#4A443C;margin-bottom:20px">Every request you send will land here, grouped by month, with its status and the vendor's replies.</div>
+<span class="btnP">Find a vendor</span>
+<div style="margin-top:26px;display:flex;gap:26px">
+<div style="text-align:center"><div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6B6459">01</div><div style="font-size:12.5px;font-weight:500;color:#4A443C;margin-top:4px">Send a request</div></div>
+<div style="text-align:center"><div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6B6459">02</div><div style="font-size:12.5px;font-weight:500;color:#4A443C;margin-top:4px">Get a quote</div></div>
+<div style="text-align:center"><div style="font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#6B6459">03</div><div style="font-size:12.5px;font-weight:500;color:#4A443C;margin-top:4px">Pay when you're ready</div></div>
+</div>
+</div>
+<div style="width:340px;flex:none;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:18px;padding:18px">
+<div class="lbl" style="margin-bottom:12px">How booking works here</div>
+<div style="font:400 13px/1.6 'Instrument Sans',sans-serif;color:#4A443C;display:flex;flex-direction:column;gap:14px">
+<div><strong style="font-weight:600;color:#23201C">Real availability.</strong> Calendars come from the vendor, not a guess.</div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div><strong style="font-weight:600;color:#23201C">Payment is held.</strong> Your money reaches the vendor after the event.</div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div><strong style="font-weight:600;color:#23201C">No service fee.</strong> The price you're quoted is the price you pay.</div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div><strong style="font-weight:600;color:#23201C">Reviews from real bookings.</strong> Only events that happened here.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">20</span><span class="sc-t">Vendor dashboard — empty &amp; unpublished</span><span class="sc-mvp">MVP</span><span class="sc-d">A vendor's empty dashboard almost always has a cause, and it's usually that the profile isn't live. So this isn't a generic empty state — the gold banner names the three blockers, the empty pane says <em>why</em> there are no requests, and the CTA fixes the cause instead of shrugging. Gold, not red: nothing is broken, someone is just waiting on them.</span></div>
+<div class="fr" data-screen-label="20 Vendor dashboard empty">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span><span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B6459;margin-left:8px">Vendor</span></div>
+<div style="display:flex;align-items:center;gap:16px"><span class="pill" style="background:#F5EEDC;color:#7A5A12">Draft profile</span><div style="width:30px;height:30px;border-radius:50%;background:#E4E9DE;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#4B5940">JH</div></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div class="side">
+<div class="lbl" style="padding:0 12px 10px">Vending</div>
+<div class="nav navA">Dashboard</div>
+<div class="nav">Requests<span style="margin-left:auto;font-size:12px;color:#6B6459">0</span></div>
+<div class="nav">Messages<span style="margin-left:auto;font-size:12px;color:#6B6459">0</span></div>
+<div class="nav">Availability</div>
+<div class="nav">My profile<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#C99A2E"></span></div>
+<div class="nav">Payouts<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#C99A2E"></span></div>
+</div>
+<div style="flex:1;padding:22px 28px;overflow:hidden;display:flex;flex-direction:column">
+<div style="display:flex;align-items:flex-start;gap:12px;background:#F5EEDC;border:1px solid #E8DBB8;border-radius:12px;padding:14px 16px;margin-bottom:20px">
+<div style="width:18px;height:18px;border-radius:50%;background:#C99A2E;flex:none;margin-top:1px"></div>
+<div style="flex:1">
+<div style="font:600 13.5px 'Instrument Sans',sans-serif;color:#23201C;margin-bottom:4px">Your profile isn't live yet — three things left</div>
+<div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#7A5A12">Add at least 6 portfolio images · Set a starting price · Connect payouts. Customers can't find you until all three are done.</div>
+</div>
+<span class="btnP" style="flex:none">Finish my profile</span>
+</div>
+<div style="display:flex;gap:22px;flex:1;min-height:0">
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div class="sh" style="margin-bottom:12px">Incoming requests</div>
+<div style="flex:1;background:#FFFDF9;border:1px dashed #D5CEC2;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 40px">
+<div style="position:relative;width:58px;height:36px;margin-bottom:18px"><div style="position:absolute;left:0;top:0;width:36px;height:36px;border-radius:50%;background:#F1ECE4"></div><div style="position:absolute;left:22px;top:0;width:36px;height:36px;border-radius:50%;border:1.5px dashed #D5CEC2"></div></div>
+<div style="font-family:'Instrument Serif',serif;font-size:26px;color:#23201C;margin-bottom:9px">No requests yet</div>
+<div style="max-width:420px;text-align:center;font:400 13.5px/1.65 'Instrument Sans',sans-serif;color:#4A443C;margin-bottom:18px">Nothing has come in because your listing is still a draft. Published vendors in Austin get their first request within a couple of weeks.</div>
+<span class="btnS">Preview my profile</span>
+</div>
+</div>
+<div style="width:340px;flex:none;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:18px;padding:18px">
+<div class="lbl" style="margin-bottom:14px">Setup · 4 of 7 done</div>
+<div style="height:6px;border-radius:999px;background:#F1ECE4;margin-bottom:18px"><div style="width:57%;height:6px;border-radius:999px;background:#B4552F"></div></div>
+<div style="display:flex;flex-direction:column;gap:12px;font:400 13px 'Instrument Sans',sans-serif;color:#4A443C">
+<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border-radius:50%;background:#EDF0E9;border:1px solid #C9D3BE;flex:none"></div><span style="color:#6B6459;text-decoration:line-through">Business name</span></div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border-radius:50%;background:#EDF0E9;border:1px solid #C9D3BE;flex:none"></div><span style="color:#6B6459;text-decoration:line-through">Category &amp; city</span></div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border-radius:50%;background:#EDF0E9;border:1px solid #C9D3BE;flex:none"></div><span style="color:#6B6459;text-decoration:line-through">About &amp; services</span></div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border-radius:50%;background:#EDF0E9;border:1px solid #C9D3BE;flex:none"></div><span style="color:#6B6459;text-decoration:line-through">Availability</span></div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border-radius:50%;border:1.5px solid #C99A2E;flex:none"></div><span style="font-weight:500">Portfolio images <span style="color:#7A5A12">2 of 6</span></span></div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border-radius:50%;border:1.5px solid #C99A2E;flex:none"></div><span style="font-weight:500">Starting price</span></div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:16px;height:16px;border-radius:50%;border:1.5px solid #C99A2E;flex:none"></div><span style="font-weight:500">Connect payouts</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">21</span><span class="sc-t">Checkout — payment declined</span><span class="sc-mvp">MVP</span><span class="sc-d">The most delicate error in the product. Three jobs, in this order: confirm <strong style="font-weight:600;color:#4A443C">nothing was charged</strong>, say what the bank said in plain words, and hold the booking so the user doesn't fear losing the date. The declined field goes red and keeps focus; the summary rail is untouched so the deal on the table never appears to change. Button reads "Try this payment again", never bare "Retry".</span></div>
+<div class="fr" data-screen-label="21 Checkout declined">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#6B6459"><span style="width:16px;height:16px;border-radius:4px;background:#EDF0E9;display:inline-block"></span>Secure checkout</div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="flex:1;padding:26px 34px;overflow:hidden">
+<div class="h2" style="margin-bottom:16px">Confirm and pay</div>
+<div style="display:flex;align-items:flex-start;gap:12px;background:#FBEEEC;border:1px solid #EFCEC9;border-radius:12px;padding:14px 16px;margin-bottom:20px;max-width:620px">
+<div style="width:18px;height:18px;border-radius:50%;background:#B23A30;flex:none;margin-top:1px"></div>
+<div>
+<div style="font:600 13.5px 'Instrument Sans',sans-serif;color:#23201C;margin-bottom:4px">Your card was declined — you haven't been charged</div>
+<div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4A443C">Your bank refused the payment without giving a reason, which usually means a fraud hold or insufficient funds. Try the same card again, use another card, or call your bank. <strong style="font-weight:600">Jun 14 stays held for you for 24 hours.</strong></div>
+</div>
+</div>
+<div style="max-width:620px">
+<div class="lbl" style="margin-bottom:6px">Card number</div>
+<div style="background:#FFFDF9;border:1.5px solid #B23A30;box-shadow:0 0 0 3px rgba(178,58,48,.18);border-radius:10px;padding:11px 13px;font-size:13.5px;color:#23201C;display:flex;justify-content:space-between"><span>4242 4242 4242 4242</span><span style="color:#B23A30;font-weight:600;font-size:12px">Declined</span></div>
+<div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#B23A30;margin-top:6px">Declined by your bank · code <span style="font-family:'JetBrains Mono',monospace">card_declined</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:16px">
+<div><div class="lbl" style="margin-bottom:6px">Expiry</div><div class="inp" style="background:#FFFDF9">04 / 28</div></div>
+<div><div class="lbl" style="margin-bottom:6px">CVC</div><div class="inp" style="background:#FFFDF9;color:#6B6459">•••</div></div>
+<div><div class="lbl" style="margin-bottom:6px">ZIP</div><div class="inp" style="background:#FFFDF9">78704</div></div>
+</div>
+<div style="display:flex;gap:12px;margin-top:22px;align-items:center"><span class="btnP">Try this payment again</span><span class="btnS">Use a different card</span></div>
+<div style="margin-top:24px;padding-top:18px;border-top:1px solid #E4DDD1;font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#6B6459;max-width:520px">If it declines twice, don't try a third time — repeated attempts can extend the hold. Message June Harlow and she can extend the date instead.</div>
+</div>
+</div>
+<div style="width:420px;flex:none;background:#FFFDF9;border-left:1px solid #E4DDD1;padding:24px;overflow:hidden">
+<div class="lbl" style="margin-bottom:14px">Your booking</div>
+<div style="display:flex;gap:12px;margin-bottom:18px"><div class="ph" style="width:64px;height:64px;border-radius:10px;flex:none"><span class="phl">64²</span></div><div><div class="sh" style="font-size:18px">June Harlow</div><div style="font-size:12.5px;color:#6B6459;margin-top:3px">Photography · Austin, TX</div><div style="margin-top:7px"><span class="pill" style="background:#F5EEDC;color:#7A5A12">Date held · 24h</span></div></div></div>
+<div style="height:1px;background:#EFE9E0;margin-bottom:16px"></div>
+<div style="display:flex;flex-direction:column;gap:11px;font-size:13px;color:#4A443C">
+<div style="display:flex;justify-content:space-between"><span>Full-day coverage</span><span style="font-weight:600;color:#23201C">$1,450</span></div>
+<div style="display:flex;justify-content:space-between"><span>Second shooter</span><span style="font-weight:600;color:#23201C">$300</span></div>
+<div style="display:flex;justify-content:space-between"><span>Service fee</span><span style="font-weight:600;color:#4B5940">None</span></div>
+</div>
+<div style="height:1px;background:#EFE9E0;margin:16px 0"></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600;color:#23201C">Due today</span><span style="font-family:'Instrument Serif',serif;font-size:30px;color:#23201C">$1,750</span></div>
+<div style="margin-top:16px;background:#EDF0E9;border-radius:10px;padding:12px 14px;font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4B5940">Held until the event. June is paid the day after Jun 14.</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">22</span><span class="sc-t">Booking request — validation errors</span><span class="sc-mvp">MVP</span><span class="sc-d">Field errors appear <strong style="font-weight:600;color:#4A443C">only after a submit attempt</strong>, never while typing. Three tiers used together: a summary at the submit bar that counts and links, red on the fields that are wrong, and gold on the field that is technically valid but will lose the user the booking (a date the vendor has blocked). Every message says how to fix it, not just that it's wrong.</span></div>
+<div class="fr" data-screen-label="22 Booking request errors">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span></div>
+<span style="font-size:13px;font-weight:500;color:#4A443C">Save and finish later</span>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="flex:1;padding:26px 34px;overflow:hidden">
+<div class="h2" style="margin-bottom:4px">Request a booking</div>
+<div style="font-size:12.5px;color:#6B6459;margin-bottom:20px">June Harlow · Photography · Austin, TX</div>
+<div style="display:flex;align-items:flex-start;gap:12px;background:#FBEEEC;border:1px solid #EFCEC9;border-radius:12px;padding:13px 16px;margin-bottom:20px;max-width:640px">
+<div style="width:18px;height:18px;border-radius:50%;background:#B23A30;flex:none;margin-top:1px"></div>
+<div><div style="font:600 13.5px 'Instrument Sans',sans-serif;color:#23201C;margin-bottom:3px">Two fields need fixing before this can go out</div><div style="font:400 12.5px 'Instrument Sans',sans-serif;color:#4A443C"><span style="color:#B23A30;font-weight:600;text-decoration:underline">Guest count</span> · <span style="color:#B23A30;font-weight:600;text-decoration:underline">Phone number</span></div></div>
+</div>
+<div style="max-width:640px;display:grid;grid-template-columns:1fr 1fr;gap:16px 20px">
+<div><div class="lbl" style="margin-bottom:6px">Event date</div><div style="background:#FFFDF9;border:1.5px solid #C99A2E;border-radius:10px;padding:11px 13px;font-size:13.5px;color:#23201C">Jun 14, 2026</div><div style="font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#7A5A12;margin-top:6px">June has this date blocked. You can still send the request, but she'll likely decline — <span style="text-decoration:underline">see her open dates</span>.</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Event type</div><div class="inp" style="background:#FFFDF9">Wedding</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Guest count</div><div style="background:#FFFDF9;border:1.5px solid #B23A30;box-shadow:0 0 0 3px rgba(178,58,48,.18);border-radius:10px;padding:11px 13px;font-size:13.5px;color:#23201C">450</div><div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#B23A30;margin-top:6px">June covers events up to 300 guests. Enter 300 or fewer, or find a larger-event photographer.</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Phone number</div><div style="background:#FFFDF9;border:1.5px solid #B23A30;border-radius:10px;padding:11px 13px;font-size:13.5px;color:#23201C">(512) 555-01</div><div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#B23A30;margin-top:6px">Needs 10 digits — you're two short.</div></div>
+<div style="grid-column:1 / -1"><div class="lbl" style="margin-bottom:6px">What you're planning</div><div class="inp" style="background:#FFFDF9;height:72px;color:#4A443C;line-height:1.55">Outdoor ceremony at 5pm, reception until 11. We'd love documentary-style coverage…</div><div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#6B6459;margin-top:6px">108 / 1000 · vendors reply faster to specific requests</div></div>
+</div>
+</div>
+<div style="width:380px;flex:none;background:#FFFDF9;border-left:1px solid #E4DDD1;padding:24px;display:flex;flex-direction:column">
+<div class="lbl" style="margin-bottom:14px">Requesting</div>
+<div style="display:flex;gap:12px;margin-bottom:16px"><div class="ph" style="width:60px;height:60px;border-radius:10px;flex:none"><span class="phl">60²</span></div><div><div class="sh" style="font-size:18px">June Harlow</div><div style="font-size:12.5px;color:#6B6459;margin-top:3px"><strong style="color:#4A443C">★ 4.9</strong> (127)</div></div></div>
+<div style="height:1px;background:#EFE9E0;margin-bottom:14px"></div>
+<div style="font-size:13px;color:#4A443C;line-height:1.6"><strong style="font-weight:600;color:#23201C">Full-day coverage</strong><br>8 hours · 2 shooters · gallery in 4 weeks</div>
+<div style="margin-top:14px;font-family:'Instrument Serif',serif;font-size:26px;color:#23201C">From $1,450</div>
+<div style="margin-top:auto;padding-top:18px;border-top:1px solid #E4DDD1">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><div style="width:16px;height:16px;border-radius:50%;background:#FBEEEC;border:1.5px solid #B23A30;flex:none"></div><span style="font:500 12.5px 'Instrument Sans',sans-serif;color:#B23A30">2 fields to fix</span></div>
+<div style="font-size:13.5px;font-weight:600;color:#FFFDF9;background:#DDA98C;padding:11px 20px;border-radius:10px;text-align:center">Send request</div>
+<div style="font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#6B6459;margin-top:9px;text-align:center">Sending doesn't charge you. You pay only after June sends a quote you accept.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">23</span><span class="sc-t">Messaging — offline &amp; failed send</span><span class="sc-mvp">MVP</span><span class="sc-d">Connection loss is steel, not red — it's information, and it resolves itself. The composer stays usable and typed text is never destroyed; the message sits in the thread at 55% opacity with an inline <strong style="font-weight:600;color:#4A443C">Not sent · Retry</strong> under it. The conversation list dims because its counts can't be trusted while offline. One banner only — no toast on top of it.</span></div>
+<div class="fr" data-screen-label="23 Messaging offline">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span></div>
+<div style="display:flex;align-items:center;gap:16px"><span style="font-size:13px;font-weight:500;color:#4A443C">Browse</span><div style="width:30px;height:30px;border-radius:50%;background:#F7E7E0;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#8E3F20">AN</div></div>
+</div>
+<div style="flex:none;height:42px;background:#EEF3FA;border-bottom:1px solid #D3E0EE;display:flex;align-items:center;gap:10px;padding:0 26px">
+<div class="spin" style="width:13px;height:13px;border-color:rgba(61,106,140,.3);border-top-color:#3D6A8C"></div>
+<span style="font:500 12.5px 'Instrument Sans',sans-serif;color:#3D6A8C">No connection — reconnecting. Messages you send will go out automatically when you're back.</span>
+<span style="font-size:12.5px;font-weight:600;color:#3D6A8C;text-decoration:underline;margin-left:auto">Retry now</span>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="width:300px;flex:none;background:#FFFDF9;border-right:1px solid #E4DDD1;opacity:.55;padding:14px 0">
+<div style="padding:0 16px 12px"><div class="inp" style="padding:8px 12px;font-size:12.5px;color:#6B6459">Search conversations</div></div>
+<div style="padding:11px 16px;background:#F7E7E0;display:flex;gap:11px;align-items:center"><div style="width:34px;height:34px;border-radius:50%;background:#E4E9DE;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#4B5940;flex:none">JH</div><div style="min-width:0"><div style="font-size:13px;font-weight:600;color:#23201C">June Harlow</div><div style="font-size:12px;color:#6B6459;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Sounds good — I'll send a quote…</div></div></div>
+<div style="padding:11px 16px;display:flex;gap:11px;align-items:center"><div style="width:34px;height:34px;border-radius:50%;background:#F7E7E0;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#8E3F20;flex:none">MC</div><div style="min-width:0"><div style="font-size:13px;font-weight:500;color:#23201C">Mesa Catering</div><div style="font-size:12px;color:#6B6459;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Can you do 140 plated?</div></div></div>
+<div style="padding:11px 16px;display:flex;gap:11px;align-items:center"><div style="width:34px;height:34px;border-radius:50%;background:#E4E9DE;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#4B5940;flex:none">TL</div><div style="min-width:0"><div style="font-size:13px;font-weight:500;color:#23201C">Travis Loft</div><div style="font-size:12px;color:#6B6459;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Walkthrough on the 3rd?</div></div></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="flex:none;height:60px;border-bottom:1px solid #E4DDD1;background:#FFFDF9;display:flex;align-items:center;gap:11px;padding:0 22px"><div style="width:36px;height:36px;border-radius:50%;background:#E4E9DE;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:14px;color:#4B5940">JH</div><div><div style="font-size:13.5px;font-weight:600;color:#23201C">June Harlow</div><div style="font-size:11.5px;color:#6B6459">Status unavailable while offline</div></div></div>
+<div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:14px;justify-content:flex-end;overflow:hidden">
+<div style="align-self:flex-start;max-width:60%;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:14px;padding:12px 15px;font-size:13.5px;line-height:1.6;color:#23201C">Hi Anjali — June 14 works. Are you thinking full day or ceremony only?</div>
+<div style="align-self:flex-end;max-width:60%;background:#F7E7E0;border-radius:14px;padding:12px 15px;font-size:13.5px;line-height:1.6;color:#23201C">Full day, ceremony at 5pm.</div>
+<div style="align-self:flex-end;max-width:60%">
+<div style="background:#F7E7E0;border-radius:14px;padding:12px 15px;font-size:13.5px;line-height:1.6;color:#23201C;opacity:.55">Also — can you hold the date while I check with my parents?</div>
+<div style="display:flex;align-items:center;gap:7px;justify-content:flex-end;margin-top:6px"><div style="width:13px;height:13px;border-radius:50%;border:1.5px solid #B23A30;flex:none"></div><span style="font:500 11.5px 'Instrument Sans',sans-serif;color:#B23A30">Not sent</span><span style="font:600 11.5px 'Instrument Sans',sans-serif;color:#A34A28;text-decoration:underline">Retry</span><span style="font:400 11.5px 'Instrument Sans',sans-serif;color:#6B6459">·</span><span style="font:500 11.5px 'Instrument Sans',sans-serif;color:#6B6459">Delete</span></div>
+</div>
+</div>
+<div style="flex:none;border-top:1px solid #E4DDD1;background:#FFFDF9;padding:14px 22px;display:flex;gap:12px;align-items:center">
+<div class="inp" style="flex:1;color:#6B6459">Write a message… (it'll send when you're back online)</div>
+<div style="font-size:13.5px;font-weight:600;color:#FFFDF9;background:#DDA98C;padding:11px 18px;border-radius:10px">Send</div>
+</div>
+</div>
+<div style="width:320px;flex:none;background:#FFFDF9;border-left:1px solid #E4DDD1;padding:20px;opacity:.55">
+<div class="lbl" style="margin-bottom:12px">This booking</div>
+<div class="sh" style="font-size:18px">Jun 14, 2026</div>
+<div style="font-size:12.5px;color:#6B6459;margin-top:4px">Wedding · 120 guests · Austin</div>
+<div style="margin-top:12px"><span class="pill" style="background:#F5EEDC;color:#7A5A12">Awaiting quote</span></div>
+<div style="height:1px;background:#EFE9E0;margin:16px 0"></div>
+<div style="font-size:12.5px;color:#6B6459;line-height:1.6">Quote and payment actions are unavailable until you reconnect.</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">24</span><span class="sc-t">Image upload — in progress</span><span class="sc-mvp">MVP</span><span class="sc-d">The only uploads in the product are images: portfolio shots, the cover, and a vendor avatar. Uploading is <strong style="font-weight:600;color:#4A443C">never a modal and never blocking</strong> — tiles appear the instant files are picked, each carries its own determinate progress ring, and the vendor can keep editing other sections while bytes move. The <em>whole upload</em> gets one aggregate line, not a spinner per tile plus a spinner in the header. Cover is a designation on an existing tile, not a separate uploader. The gold helper is the same publish blocker shown in the section nav and the save bar.</span></div>
+<div class="fr" data-screen-label="24 Image upload">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span><span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B6459;margin-left:8px">Vendor</span></div>
+<div style="display:flex;align-items:center;gap:14px"><span style="font-size:12.5px;color:#6B6459">Uploading 4 of 8 · 62%</span><span class="btnS">Preview</span><div style="width:30px;height:30px;border-radius:50%;background:#E4E9DE;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#4B5940">JH</div></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="width:200px;flex:none;background:#FFFDF9;border-right:1px solid #E4DDD1;padding:18px 12px">
+<div class="lbl" style="padding:0 10px 10px">My profile</div>
+<div class="nav">Basics</div>
+<div class="nav">About</div>
+<div class="nav">Services &amp; pricing<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#C99A2E"></span></div>
+<div class="nav navA">Portfolio<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#C99A2E"></span></div>
+<div class="nav">Availability</div>
+<div class="nav">Payouts<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#C99A2E"></span></div>
+</div>
+<div style="flex:1;padding:24px 30px;overflow:hidden;display:flex;flex-direction:column">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:4px"><div class="h2">Portfolio</div><span style="font-size:12.5px;font-weight:600;color:#A34A28">Reorder</span></div>
+<div style="font:400 12.5px 'Instrument Sans',sans-serif;color:#7A5A12;margin-bottom:18px">4 of 6 images minimum · JPG or PNG, up to 12 MB each, at least 1200px wide</div>
+<div style="display:flex;gap:22px;flex:1;min-height:0">
+<div style="flex:1;min-width:0">
+<div style="border:1.5px dashed #B4552F;background:#FDF4EF;border-radius:14px;padding:22px;display:flex;align-items:center;gap:16px;margin-bottom:20px">
+<div style="position:relative;width:38px;height:26px;flex:none"><div style="position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:#F7E7E0"></div><div style="position:absolute;left:12px;top:0;width:26px;height:26px;border-radius:50%;border:1.5px solid #B4552F"></div></div>
+<div style="flex:1"><div style="font:600 13.5px 'Instrument Sans',sans-serif;color:#23201C">Drop images here</div><div style="font:400 12.5px 'Instrument Sans',sans-serif;color:#6B6459;margin-top:3px">Or choose files from your computer · you can add more while these finish</div></div>
+<span class="btnS" style="flex:none">Choose files</span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+<div style="position:relative;border-radius:12px;overflow:hidden"><div class="ph" style="height:104px"><span class="phl">ceremony-01.jpg</span></div><div style="position:absolute;left:8px;top:8px"><span class="pill" style="background:#FFFDF9;color:#8E3F20;box-shadow:0 2px 10px rgba(35,32,28,.12)">Cover</span></div></div>
+<div style="border-radius:12px;overflow:hidden"><div class="ph" style="height:104px"><span class="phl">portrait-04.jpg</span></div></div>
+<div style="border-radius:12px;overflow:hidden"><div class="ph" style="height:104px"><span class="phl">reception-11.jpg</span></div></div>
+<div style="border-radius:12px;overflow:hidden"><div class="ph" style="height:104px"><span class="phl">details-02.jpg</span></div></div>
+<div style="position:relative;border-radius:12px;overflow:hidden;background:#EFE9E0;height:104px"><div style="position:absolute;inset:0;background:rgba(35,32,28,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px"><div class="spin" style="width:22px;height:22px;border-width:2.5px;border-color:rgba(255,253,249,.35);border-top-color:#FFFDF9"></div><span style="font:600 11px 'Instrument Sans',sans-serif;color:#FFFDF9">78%</span></div><div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,253,249,.3)"><div style="width:78%;height:3px;background:#FFFDF9"></div></div></div>
+<div style="position:relative;border-radius:12px;overflow:hidden;background:#EFE9E0;height:104px"><div style="position:absolute;inset:0;background:rgba(35,32,28,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px"><div class="spin" style="width:22px;height:22px;border-width:2.5px;border-color:rgba(255,253,249,.35);border-top-color:#FFFDF9"></div><span style="font:600 11px 'Instrument Sans',sans-serif;color:#FFFDF9">41%</span></div><div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,253,249,.3)"><div style="width:41%;height:3px;background:#FFFDF9"></div></div></div>
+<div style="border-radius:12px;background:#F1ECE4;border:1px solid #E4DDD1;height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><div class="sk" style="width:60%;height:9px"></div><span style="font:400 10.5px 'JetBrains Mono',monospace;color:#6B6459">queued</span></div>
+<div style="border-radius:12px;background:#F1ECE4;border:1px solid #E4DDD1;height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><div class="sk" style="width:60%;height:9px"></div><span style="font:400 10.5px 'JetBrains Mono',monospace;color:#6B6459">queued</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:18px;background:#EEF3FA;border:1px solid #D3E0EE;border-radius:10px;padding:11px 14px">
+<div style="flex:1"><div style="font:500 12.5px 'Instrument Sans',sans-serif;color:#3D6A8C;margin-bottom:6px">Uploading 4 of 8 — 18.2 MB of 29.4 MB</div><div style="height:5px;border-radius:999px;background:#DCE7F2"><div style="width:62%;height:5px;border-radius:999px;background:#3D6A8C"></div></div></div>
+<span style="font-size:12.5px;font-weight:600;color:#3D6A8C;text-decoration:underline">Cancel</span>
+</div>
+</div>
+<div style="width:280px;flex:none;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:14px;padding:18px">
+<div class="lbl" style="margin-bottom:12px">What makes a good portfolio</div>
+<div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4A443C;display:flex;flex-direction:column;gap:12px">
+<div><strong style="font-weight:600;color:#23201C">Six minimum, twelve is plenty.</strong> Customers scan, they don't browse.</div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div><strong style="font-weight:600;color:#23201C">Lead with a wide shot.</strong> Your cover is what appears in search results.</div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div><strong style="font-weight:600;color:#23201C">One event per three images.</strong> Range reads better than volume.</div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div>Drag a tile onto the first slot to make it your cover.</div>
+</div>
+</div>
+</div>
+<div style="flex:none;display:flex;align-items:center;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid #E4DDD1">
+<span style="display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:rgba(255,253,249,.6);background:#B4552F;padding:11px 20px;border-radius:10px"><span class="spin" style="width:14px;height:14px;border-color:rgba(255,253,249,.35);border-top-color:#FFFDF9;display:inline-block"></span>Saving…</span>
+<span style="font:400 12.5px 'Instrument Sans',sans-serif;color:#6B6459">Images save as they finish — you can leave this page.</span>
+<span style="margin-left:auto;font-size:12.5px;font-weight:600;color:#7A5A12">3 blockers left before publishing</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">25</span><span class="sc-t">Image upload — failures</span><span class="sc-mvp">MVP</span><span class="sc-d">Uploads fail in four distinct ways and each needs a different sentence, so a single "Upload failed" toast is not enough. Partial success is the normal case: <strong style="font-weight:600;color:#4A443C">the five that worked stay put</strong> and are already saved — nothing is rolled back. Failures keep their tile so the vendor can see which shot it was, name the reason in one line, and offer the fix that matches (retry for transient, replace for too-large, remove for unsupported). The banner counts and offers one <em>Retry all</em>; the header aggregate turns red rather than adding a second alert.</span></div>
+<div class="fr" data-screen-label="25 Upload failures">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span><span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B6459;margin-left:8px">Vendor</span></div>
+<div style="display:flex;align-items:center;gap:14px"><span style="font-size:12.5px;font-weight:600;color:#B23A30">5 of 8 uploaded</span><span class="btnS">Preview</span><div style="width:30px;height:30px;border-radius:50%;background:#E4E9DE;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#4B5940">JH</div></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="width:200px;flex:none;background:#FFFDF9;border-right:1px solid #E4DDD1;padding:18px 12px">
+<div class="lbl" style="padding:0 10px 10px">My profile</div>
+<div class="nav">Basics</div>
+<div class="nav">About</div>
+<div class="nav">Services &amp; pricing<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#C99A2E"></span></div>
+<div class="nav navA">Portfolio<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#B23A30"></span></div>
+<div class="nav">Availability</div>
+<div class="nav">Payouts<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#C99A2E"></span></div>
+</div>
+<div style="flex:1;padding:24px 30px;overflow:hidden;display:flex;flex-direction:column">
+<div class="h2" style="margin-bottom:14px">Portfolio</div>
+<div style="display:flex;align-items:flex-start;gap:12px;background:#FBEEEC;border:1px solid #EFCEC9;border-radius:12px;padding:14px 16px;margin-bottom:18px">
+<div style="width:18px;height:18px;border-radius:50%;background:#B23A30;flex:none;margin-top:1px"></div>
+<div style="flex:1"><div style="font:600 13.5px 'Instrument Sans',sans-serif;color:#23201C;margin-bottom:3px">3 of 8 images didn't upload</div><div style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#4A443C">The other five are saved and live on your profile. Each failure below says what went wrong — two can be retried as-is.</div></div>
+<span class="btnP" style="flex:none">Retry the 2 that can</span>
+</div>
+<div style="display:flex;gap:22px;flex:1;min-height:0">
+<div style="flex:1;min-width:0">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+<div style="position:relative;border-radius:12px;overflow:hidden"><div class="ph" style="height:100px"><span class="phl">ceremony-01.jpg</span></div><div style="position:absolute;left:8px;top:8px"><span class="pill" style="background:#FFFDF9;color:#8E3F20;box-shadow:0 2px 10px rgba(35,32,28,.12)">Cover</span></div></div>
+<div style="border-radius:12px;overflow:hidden"><div class="ph" style="height:100px"><span class="phl">portrait-04.jpg</span></div></div>
+<div style="border-radius:12px;overflow:hidden"><div class="ph" style="height:100px"><span class="phl">reception-11.jpg</span></div></div>
+<div style="border-radius:12px;overflow:hidden"><div class="ph" style="height:100px"><span class="phl">details-02.jpg</span></div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:11px;margin-top:16px">
+
+<div style="display:flex;align-items:center;gap:13px;background:#FFFDF9;border:1px solid #EFCEC9;border-radius:12px;padding:11px 13px">
+<div style="width:56px;height:44px;border-radius:8px;background:#FBEEEC;border:1px solid #EFCEC9;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:14px;height:14px;border-radius:50%;background:#B23A30"></div></div>
+<div style="flex:1;min-width:0"><div style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C">golden-hour-full.tif <span style="font-family:'JetBrains Mono',monospace;font-weight:400;font-size:11px;color:#6B6459">· 48.6 MB</span></div><div style="font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#B23A30;margin-top:3px">TIF isn't supported and it's over the 12 MB limit. Export it as a JPG at 2400px wide and it'll be well under.</div></div>
+<span class="btnS" style="flex:none;padding:8px 14px;font-size:12.5px">Replace file</span><span style="font-size:12.5px;font-weight:500;color:#6B6459;flex:none">Remove</span>
+</div>
+
+<div style="display:flex;align-items:center;gap:13px;background:#FFFDF9;border:1px solid #EFCEC9;border-radius:12px;padding:11px 13px">
+<div style="width:56px;height:44px;border-radius:8px;overflow:hidden;flex:none;position:relative"><div class="ph" style="height:44px;box-sizing:border-box"></div><div style="position:absolute;inset:0;background:rgba(178,58,48,.18)"></div></div>
+<div style="flex:1;min-width:0"><div style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C">reception-12.jpg <span style="font-family:'JetBrains Mono',monospace;font-weight:400;font-size:11px;color:#6B6459">· 3.1 MB · 74% done</span></div><div style="font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#B23A30;margin-top:3px">The connection dropped partway through. Nothing wrong with the file — retrying picks up where it stopped.</div></div>
+<span class="btnP" style="flex:none;padding:8px 14px;font-size:12.5px">Retry</span><span style="font-size:12.5px;font-weight:500;color:#6B6459;flex:none">Remove</span>
+</div>
+
+<div style="display:flex;align-items:center;gap:13px;background:#FFFDF9;border:1px solid #E8DBB8;border-radius:12px;padding:11px 13px">
+<div style="width:56px;height:44px;border-radius:8px;overflow:hidden;flex:none;position:relative"><div class="ph" style="height:44px;box-sizing:border-box"></div><div style="position:absolute;inset:0;background:rgba(201,154,46,.2)"></div></div>
+<div style="flex:1;min-width:0"><div style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C">detail-ring.jpg <span style="font-family:'JetBrains Mono',monospace;font-weight:400;font-size:11px;color:#6B6459">· 680 × 450</span></div><div style="font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#7A5A12;margin-top:3px">Too small to use — it'd look soft on a profile. We need at least 1200px wide. Upload it again at full size.</div></div>
+<span class="btnS" style="flex:none;padding:8px 14px;font-size:12.5px">Replace file</span><span style="font-size:12.5px;font-weight:500;color:#6B6459;flex:none">Remove</span>
+</div>
+
+</div>
+<div style="border:1.5px dashed #D5CEC2;background:#FFFDF9;border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;margin-top:16px">
+<div style="flex:1;font:400 12.5px 'Instrument Sans',sans-serif;color:#6B6459">Add more images — JPG or PNG, up to 12 MB, at least 1200px wide</div>
+<span class="btnS" style="flex:none">Choose files</span>
+</div>
+</div>
+<div style="width:280px;flex:none;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:14px;padding:18px">
+<div class="lbl" style="margin-bottom:12px">Image requirements</div>
+<div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4A443C;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between"><span>Formats</span><strong style="font-weight:600;color:#23201C">JPG, PNG</strong></div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div style="display:flex;justify-content:space-between"><span>Max size</span><strong style="font-weight:600;color:#23201C">12 MB each</strong></div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div style="display:flex;justify-content:space-between"><span>Min width</span><strong style="font-weight:600;color:#23201C">1200 px</strong></div>
+<div style="height:1px;background:#EFE9E0"></div>
+<div style="display:flex;justify-content:space-between"><span>Per upload</span><strong style="font-weight:600;color:#23201C">20 files</strong></div>
+</div>
+<div style="margin-top:16px;background:#F5EEDC;border-radius:10px;padding:12px 13px;font:400 12px/1.55 'Instrument Sans',sans-serif;color:#7A5A12">Shooting RAW or TIF? Export JPGs at 2400px on the long edge — that's sharp on every screen and stays under the limit.</div>
+</div>
+</div>
+<div style="flex:none;display:flex;align-items:center;gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid #E4DDD1">
+<span class="btnP">Save changes</span>
+<span style="font:400 12.5px 'Instrument Sans',sans-serif;color:#6B6459">The five that uploaded are already saved.</span>
+<span style="margin-left:auto;font-size:12.5px;font-weight:600;color:#7A5A12">3 blockers left before publishing</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">26</span><span class="sc-t">State library — everything smaller than a screen</span><span class="sc-mvp">MVP</span><span class="sc-d">The pieces that appear inside the twelve screens rather than replacing them: banners, toasts, field states, loaders, skeleton variants and the four interrupting dialogs. Build these once as components; every screen above composes from them. Rules on each tile.</span></div>
+<div class="fr" style="height:auto;padding:26px;display:block;background:#F4F0E8;box-sizing:border-box" data-screen-label="26 State library">
+
+<div class="lbl" style="margin-bottom:12px">Inline banners — one per screen, at the top of the pane it concerns</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:28px">
+<div style="display:flex;align-items:flex-start;gap:11px;background:#EEF3FA;border:1px solid #D3E0EE;border-radius:12px;padding:13px 15px"><div style="width:16px;height:16px;border-radius:50%;background:#3D6A8C;flex:none;margin-top:1px"></div><div><div style="font:600 13px 'Instrument Sans',sans-serif;color:#23201C">Steel · information, resolves itself</div><div style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#3D6A8C;margin-top:3px">No connection — reconnecting. Nothing you've typed is lost.</div></div></div>
+<div style="display:flex;align-items:flex-start;gap:11px;background:#F5EEDC;border:1px solid #E8DBB8;border-radius:12px;padding:13px 15px"><div style="width:16px;height:16px;border-radius:50%;background:#C99A2E;flex:none;margin-top:1px"></div><div><div style="font:600 13px 'Instrument Sans',sans-serif;color:#23201C">Gold · waiting on someone</div><div style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#7A5A12;margin-top:3px">Your profile isn't live — 3 things left before customers can find you.</div></div></div>
+<div style="display:flex;align-items:flex-start;gap:11px;background:#FBEEEC;border:1px solid #EFCEC9;border-radius:12px;padding:13px 15px"><div style="width:16px;height:16px;border-radius:50%;background:#B23A30;flex:none;margin-top:1px"></div><div><div style="font:600 13px 'Instrument Sans',sans-serif;color:#23201C">Red · it failed, money named</div><div style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#4A443C;margin-top:3px">Your card was declined — you haven't been charged.</div></div></div>
+<div style="display:flex;align-items:flex-start;gap:11px;background:#EDF0E9;border:1px solid #C9D3BE;border-radius:12px;padding:13px 15px"><div style="width:16px;height:16px;border-radius:50%;background:#5E6B4F;flex:none;margin-top:1px"></div><div><div style="font:600 13px 'Instrument Sans',sans-serif;color:#23201C">Sage · settled</div><div style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#4B5940;margin-top:3px">Payout connected. You'll be paid the day after each event.</div></div></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:28px">
+<div class="tile">
+<div class="tl">Toasts · bottom-right, 5s, stack of 3 max</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;background:#FFFDF9;border-radius:12px;box-shadow:0 12px 40px rgba(35,40,38,.2);overflow:hidden"><div style="width:4px;background:#5E6B4F;flex:none"></div><div style="padding:11px 13px;flex:1"><div style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C">Request sent to June Harlow</div><div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#6B6459;margin-top:2px">She has 48 hours to reply.</div></div><div style="padding:11px 12px 0 0;font-size:12px;color:#6B6459">✕</div></div>
+<div style="display:flex;background:#FFFDF9;border-radius:12px;box-shadow:0 12px 40px rgba(35,40,38,.2);overflow:hidden"><div style="width:4px;background:#3D6A8C;flex:none"></div><div style="padding:11px 13px;flex:1"><div style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C">Draft saved</div><div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#6B6459;margin-top:2px">Undo</div></div><div style="padding:11px 12px 0 0;font-size:12px;color:#6B6459">✕</div></div>
+<div style="display:flex;background:#FFFDF9;border-radius:12px;box-shadow:0 12px 40px rgba(35,40,38,.2);overflow:hidden"><div style="width:4px;background:#B23A30;flex:none"></div><div style="padding:11px 13px;flex:1"><div style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C">Couldn't upload 2 of 8 images</div><div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#A34A28;margin-top:2px;font-weight:600">Try those again</div></div><div style="padding:11px 12px 0 0;font-size:12px;color:#6B6459">✕</div></div>
+</div>
+<div class="tn">Never a toast for something the user must act on — that gets a banner or a dialog. Errors carry an action and don't auto-dismiss.</div>
+</div>
+
+<div class="tile">
+<div class="tl">Field states</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div><div class="lbl" style="margin-bottom:5px">Rest</div><div class="inp">Austin, TX</div></div>
+<div><div class="lbl" style="margin-bottom:5px">Focus</div><div style="background:#F1ECE4;border:1.5px solid #B4552F;box-shadow:0 0 0 3px rgba(180,85,47,.15);border-radius:10px;padding:10px 13px;font-size:13.5px;color:#23201C">Austin, T<span style="color:#B4552F">|</span></div></div>
+<div><div class="lbl" style="margin-bottom:5px">Error</div><div style="background:#F1ECE4;border:1.5px solid #B23A30;box-shadow:0 0 0 3px rgba(178,58,48,.18);border-radius:10px;padding:10px 13px;font-size:13.5px;color:#23201C">austin</div><div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#B23A30;margin-top:5px">Pick a city from the list so vendors can be matched.</div></div>
+<div><div class="lbl" style="margin-bottom:5px">Blocking (publish)</div><div style="background:#F1ECE4;border:1.5px solid #C99A2E;border-radius:10px;padding:10px 13px;font-size:13.5px;color:#6B6459">—</div><div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#7A5A12;margin-top:5px">Needed before your profile can go live.</div></div>
+<div><div class="lbl" style="margin-bottom:5px">Disabled</div><div style="background:#F4F0E8;border:1px solid #E4DDD1;border-radius:10px;padding:10px 13px;font-size:13.5px;color:#C9C1B5">Set by your vendor</div></div>
+</div>
+</div>
+
+<div class="tile">
+<div class="tl">Loading — one idiom per screen</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div><div style="font:500 11.5px 'Instrument Sans',sans-serif;color:#6B6459;margin-bottom:7px">Element · button working</div><div style="display:flex;gap:10px;align-items:center"><div style="display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:rgba(255,253,249,.6);background:#B4552F;padding:11px 20px;border-radius:10px"><div class="spin" style="width:14px;height:14px;border-color:rgba(255,253,249,.35);border-top-color:#FFFDF9"></div>Sending…</div><div class="spin" style="width:16px;height:16px"></div></div></div>
+<div><div style="font:500 11.5px 'Instrument Sans',sans-serif;color:#6B6459;margin-bottom:7px">Content · skeleton rows (list, table)</div><div style="display:flex;flex-direction:column;gap:9px"><div style="display:flex;align-items:center;gap:10px"><div class="sk" style="width:34px;height:34px;border-radius:50%"></div><div style="flex:1"><div class="sk" style="height:12px;width:52%"></div><div class="sk" style="height:10px;width:34%;margin-top:6px"></div></div><div class="sk" style="height:20px;width:62px;border-radius:999px"></div></div><div style="display:flex;align-items:center;gap:10px"><div class="sk" style="width:34px;height:34px;border-radius:50%"></div><div style="flex:1"><div class="sk" style="height:12px;width:44%"></div><div class="sk" style="height:10px;width:40%;margin-top:6px"></div></div><div class="sk" style="height:20px;width:62px;border-radius:999px"></div></div></div></div>
+<div><div style="font:500 11.5px 'Instrument Sans',sans-serif;color:#6B6459;margin-bottom:7px">Page · first paint and auth redirects only</div><div style="height:76px;background:#F8F5EF;border-radius:10px;display:flex;align-items:center;justify-content:center"><div class="pls" style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #A34A28"></div></div><span style="font-family:'Instrument Serif',serif;font-size:21px;color:#A34A28">Orla</span></div></div></div>
+</div>
+<div class="tn">Skeletons wait 200ms before showing and mirror real dimensions. Never a spinner and a skeleton on one screen.</div>
+</div>
+</div>
+
+<div class="lbl" style="margin-bottom:12px">Interrupting dialogs — only when the user cannot continue without deciding</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+<div class="tile" style="background:#F8F5EF">
+<div class="tl">Date taken while you were deciding · conflict</div>
+<div style="background:#FFFDF9;border-radius:16px;box-shadow:0 12px 40px rgba(35,40,38,.2);padding:20px">
+<span class="pill" style="background:#F5EEDC;color:#7A5A12">Availability changed</span>
+<div class="sh" style="margin:12px 0 8px">Jun 14 was just booked</div>
+<div style="font:400 13px/1.6 'Instrument Sans',sans-serif;color:#4A443C">Another customer confirmed this date two minutes ago. You haven't been charged. June is free on <strong style="font-weight:600">Jun 15</strong> and <strong style="font-weight:600">Jun 20</strong>.</div>
+<div style="display:flex;gap:10px;margin-top:18px"><span class="btnP">See her open dates</span><span class="btnS">Find another photographer</span></div>
+</div>
+</div>
+<div class="tile" style="background:#F8F5EF">
+<div class="tl">Session expired · re-auth without losing work</div>
+<div style="background:#FFFDF9;border-radius:16px;box-shadow:0 12px 40px rgba(35,40,38,.2);padding:20px">
+<div class="sh" style="margin-bottom:8px">You've been signed out</div>
+<div style="font:400 13px/1.6 'Instrument Sans',sans-serif;color:#4A443C">For security we sign you out after 30 days. <strong style="font-weight:600">Your draft request is saved</strong> — signing back in returns you to it.</div>
+<div style="margin-top:14px"><div class="lbl" style="margin-bottom:5px">Password</div><div class="inp" style="background:#F1ECE4;color:#6B6459">••••••••</div></div>
+<div style="display:flex;gap:10px;margin-top:16px;align-items:center"><span class="btnP">Sign back in</span><span style="font-size:13px;font-weight:600;color:#A34A28">Email me a link</span></div>
+</div>
+</div>
+<div class="tile" style="background:#F8F5EF">
+<div class="tl">Listing removed · 410, not 404</div>
+<div style="background:#FFFDF9;border-radius:16px;box-shadow:0 12px 40px rgba(35,40,38,.2);padding:20px">
+<div class="sh" style="margin-bottom:8px">Mesa Catering isn't taking bookings</div>
+<div style="font:400 13px/1.6 'Instrument Sans',sans-serif;color:#4A443C">They paused their listing on Aug 2. Your existing booking with them is unaffected — it's still confirmed for Sep 12.</div>
+<div style="display:flex;gap:10px;margin-top:18px"><span class="btnP">See similar caterers</span><span class="btnS">Open my booking</span></div>
+</div>
+</div>
+<div class="tile" style="background:#F8F5EF">
+<div class="tl">Destructive confirm · cancel a confirmed booking</div>
+<div style="background:#FFFDF9;border-radius:16px;box-shadow:0 12px 40px rgba(35,40,38,.2);padding:20px">
+<div class="sh" style="margin-bottom:8px">Cancel your Jun 14 booking?</div>
+<div style="font:400 13px/1.6 'Instrument Sans',sans-serif;color:#4A443C">June keeps the <strong style="font-weight:600">$500 deposit</strong> under her policy; <strong style="font-weight:600">$1,250 returns to your card</strong> in 5–10 days. The date is released immediately and this can't be undone.</div>
+<div style="display:flex;gap:10px;margin-top:18px;align-items:center"><span style="font-size:13.5px;font-weight:600;color:#FFFDF9;background:#B23A30;padding:11px 20px;border-radius:10px">Cancel booking</span><span class="btnS">Keep it</span><span style="font-size:13px;font-weight:600;color:#A34A28;margin-left:auto">Message June instead</span></div>
+</div>
+</div>
+</div>
+
+<div style="margin-top:28px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+<div class="tile"><div class="tl">403 · not yours to open</div><div style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">You don't have access to this booking</div><div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4A443C;margin-top:7px">It belongs to another account. If you're vending under a business, switch accounts.</div><div style="display:flex;gap:9px;margin-top:14px"><span class="btnS" style="padding:8px 14px;font-size:12.5px">Switch account</span><span style="font-size:12.5px;font-weight:600;color:#A34A28;align-self:center">My bookings</span></div></div>
+<div class="tile"><div class="tl">Empty search history · first visit</div><div style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">No saved vendors yet</div><div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4A443C;margin-top:7px">Tap the bookmark on any vendor and they'll collect here so you can compare quotes side by side.</div><div style="margin-top:14px"><span class="btnS" style="padding:8px 14px;font-size:12.5px">Browse photographers</span></div></div>
+<div class="tile"><div class="tl">Too many attempts · rate limit</div><div style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Try again in 4 minutes</div><div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4A443C;margin-top:7px">Five failed sign-ins in a row locks the form briefly. This protects your account — nothing is wrong with it.</div><div style="display:flex;gap:9px;margin-top:14px"><span style="font-size:12.5px;font-weight:600;color:#A34A28">Reset my password</span></div></div>
 </div>
 
 </div>
