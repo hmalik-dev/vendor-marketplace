@@ -1,13 +1,17 @@
 import {
   generateSlug,
+  vendorSearchResultSchema,
   type CreateVendorProfileInput,
   type PublishBlockerKey,
   type Tag,
+  type VendorSearchQuery,
+  type VendorSearchResult,
   type UpdateVendorProfileInput,
   type VendorProfileDetail,
 } from '@vendor-marketplace/shared';
 import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import {
@@ -344,4 +348,27 @@ export async function updateVendorProfile(
   }
 
   return loadDetail(db, row);
+}
+
+/**
+ * The public search.
+ *
+ * The page and the facet counts are fetched together because the rail's counts
+ * have to describe the same set the grid does — two round trips could disagree
+ * with each other across a write, and a category offering "12" that returns
+ * eight is worse than no count at all.
+ */
+export async function searchPublishedVendors(
+  db: AppDatabase,
+  query: VendorSearchQuery,
+): Promise<VendorSearchResult> {
+  const [page, facets] = await Promise.all([searchVendors(db, query), categoryFacets(db, query)]);
+
+  return vendorSearchResultSchema.parse({
+    items: page.items,
+    total: page.total,
+    page: query.page,
+    pageSize: query.pageSize,
+    facets: { categories: facets },
+  });
 }

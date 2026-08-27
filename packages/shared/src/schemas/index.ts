@@ -624,6 +624,15 @@ export const vendorSearchQuerySchema = z
     /** Excludes vendors whose calendar is booked or blocked on this date. */
     date: calendarDateSchema.optional(),
     minRating: z.coerce.number().min(0).max(REVIEW_RATING_MAX).optional(),
+    /**
+     * Tag ids, AND-combined: a vendor must carry every one of them. A customer
+     * who picks "Korean" and "halal" wants both, not either — OR would bury the
+     * matches they actually asked for under everything that matched one.
+     */
+    tags: z
+      .union([z.array(uuidSchema), uuidSchema.transform((one) => [one])])
+      .optional()
+      .transform((value) => (value === undefined || value.length === 0 ? undefined : value)),
     sort: vendorSortOptionSchema.default('relevance'),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
@@ -636,6 +645,48 @@ export const vendorSearchQuerySchema = z
     { message: 'Minimum price must not exceed maximum price', path: ['minPriceCents'] },
   );
 export type VendorSearchQuery = z.infer<typeof vendorSearchQuerySchema>;
+
+/**
+ * A vendor as a search result: everything the card needs to be a complete
+ * decision unit, and nothing else. The profile detail is a separate fetch, so
+ * a page of twenty cards does not carry twenty bios.
+ */
+export const vendorCardSchema = z.object({
+  id: uuidSchema,
+  businessName: z.string(),
+  slug: z.string(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  profileImageUrl: z.string().nullable(),
+  coverImageUrl: z.string().nullable(),
+  avgRating: z.number().min(0).max(REVIEW_RATING_MAX),
+  reviewCount: z.int().min(0),
+  /** Cheapest active package, or `null` when the vendor has none priced yet. */
+  startingPriceCents: z.int().min(0).nullable(),
+  categories: z.array(z.object({ id: uuidSchema, name: z.string(), slug: z.string() })),
+  /** Only present when the query carried a date: the answer that was asked for. */
+  availableOnDate: z.boolean().optional(),
+});
+export type VendorCard = z.infer<typeof vendorCardSchema>;
+
+/**
+ * How many published vendors each category would return under the rest of the
+ * current filters. A query result, not marketing — see design-plan/98-post-mvp.md.
+ */
+export const categoryFacetSchema = z.object({
+  categoryId: uuidSchema,
+  count: z.int().min(0),
+});
+export type CategoryFacet = z.infer<typeof categoryFacetSchema>;
+
+export const vendorSearchResultSchema = z.object({
+  items: z.array(vendorCardSchema),
+  total: z.int().min(0),
+  page: z.int().min(1),
+  pageSize: z.int().min(1),
+  facets: z.object({ categories: z.array(categoryFacetSchema) }),
+});
+export type VendorSearchResult = z.infer<typeof vendorSearchResultSchema>;
 
 /** Envelope for every paginated list response. */
 export const paginatedSchema = <T extends z.ZodType>(item: T) =>

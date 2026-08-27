@@ -3,6 +3,7 @@ import {
   describeBlockers,
   PUBLISH_BLOCKER_KEYS,
   PUBLISH_BLOCKERS,
+  vendorNounFor,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
@@ -264,5 +265,52 @@ describe('publish blockers', () => {
     expect(describeBlockers(['bio', 'responseTime', 'packages'])).toBe(
       'a short bio, response time and a bookable package',
     );
+  });
+});
+
+describe('vendorNounFor', () => {
+  it('names the vendors, not the service they sell under', () => {
+    expect(vendorNounFor('photography', 24)).toBe('photographers');
+    expect(vendorNounFor('photography', 1)).toBe('photographer');
+    expect(vendorNounFor('catering', 3)).toBe('caterers');
+    expect(vendorNounFor('florals', 1)).toBe('florist');
+  });
+
+  it('falls back to plain vendors when no category is selected', () => {
+    expect(vendorNounFor(undefined, 12)).toBe('vendors');
+    expect(vendorNounFor(undefined, 1)).toBe('vendor');
+    expect(vendorNounFor('', 4)).toBe('vendors');
+  });
+
+  it('falls back rather than throwing on a slug it does not know', () => {
+    expect(vendorNounFor('not-a-category', 2)).toBe('vendors');
+  });
+
+  /*
+   * "1 photography" is the bug this exists to prevent. Categories named for a
+   * thing rather than for a craft are the exception — a venue really is called
+   * a venue — so they are listed rather than silently allowed.
+   */
+  const NAMED_FOR_THE_THING = new Set(['venues', 'carts']);
+
+  it('gives every seeded category a countable noun', () => {
+    for (const category of CATEGORY_SEEDS) {
+      expect(category.vendorNoun.one.length).toBeGreaterThan(0);
+      expect(category.vendorNoun.many.length).toBeGreaterThan(0);
+      expect(category.vendorNoun.many).toBe(category.vendorNoun.many.toLowerCase());
+
+      if (!NAMED_FOR_THE_THING.has(category.slug)) {
+        expect(category.vendorNoun.many).not.toBe(category.name.toLowerCase());
+      }
+    }
+  });
+
+  it('never leaves a craft name standing in for the people who do it', () => {
+    for (const category of CATEGORY_SEEDS) {
+      if (NAMED_FOR_THE_THING.has(category.slug)) {
+        continue;
+      }
+      expect(category.vendorNoun.many).not.toMatch(/(ing|phy|ty)$/);
+    }
   });
 });

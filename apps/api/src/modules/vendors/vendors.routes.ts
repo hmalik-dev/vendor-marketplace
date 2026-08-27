@@ -2,6 +2,8 @@ import {
   createVendorProfileSchema,
   updateVendorProfileSchema,
   vendorProfileDetailSchema,
+  vendorSearchQuerySchema,
+  vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole } from '../../lib/guards.js';
@@ -9,6 +11,7 @@ import { requireRole } from '../../lib/guards.js';
 import {
   createVendorProfile,
   getOwnVendorProfile,
+  searchPublishedVendors,
   updateVendorProfile,
 } from './vendors.service.js';
 
@@ -17,6 +20,22 @@ const OWN_PROFILE_PATH = '/vendor/profile';
 
 export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
   const vendorOnly = requireRole('vendor');
+
+  /*
+   * Public and unauthenticated: discovery is the front door, and requiring an
+   * account to look is how a marketplace stays empty. Only published,
+   * non-deleted vendors are ever visible.
+   */
+  app.get(
+    '/vendors',
+    {
+      schema: {
+        querystring: vendorSearchQuerySchema,
+        response: { 200: vendorSearchResultSchema },
+      },
+    },
+    async (request) => searchPublishedVendors(app.db, request.query),
+  );
 
   app.get(
     OWN_PROFILE_PATH,

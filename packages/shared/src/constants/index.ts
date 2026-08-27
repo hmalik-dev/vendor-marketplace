@@ -168,6 +168,14 @@ export interface CategorySeed {
   /** Lucide icon name rendered by the frontend. */
   readonly icon: string;
   readonly displayOrder: number;
+  /**
+   * What the people in this category are called, for sentences about them:
+   * "24 photographers in Austin". The category is named for the service
+   * ("Photography"); a result count is about the vendors, and no amount of
+   * string-mangling turns one into the other. Display language, so it lives
+   * here rather than in a column.
+   */
+  readonly vendorNoun: { readonly one: string; readonly many: string };
 }
 
 /**
@@ -185,6 +193,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Portraits, candids, photo booths, and full-day coverage.',
     icon: 'camera',
     displayOrder: 1,
+    vendorNoun: { one: 'photographer', many: 'photographers' },
   },
   {
     name: 'Entertainment',
@@ -192,6 +201,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'DJs, live bands, musicians, MCs, dancers, and performers.',
     icon: 'music',
     displayOrder: 2,
+    vendorNoun: { one: 'entertainer', many: 'entertainers' },
   },
   {
     name: 'Catering',
@@ -199,6 +209,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Caterers, private chefs, bartenders, and buffet service.',
     icon: 'utensils',
     displayOrder: 3,
+    vendorNoun: { one: 'caterer', many: 'caterers' },
   },
   {
     name: 'Venues',
@@ -206,6 +217,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Halls, lofts, rooftops, gardens, and private dining rooms.',
     icon: 'building-2',
     displayOrder: 4,
+    vendorNoun: { one: 'venue', many: 'venues' },
   },
   {
     name: 'Beauty',
@@ -213,6 +225,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Makeup artists, hair stylists, henna, and grooming.',
     icon: 'sparkles',
     displayOrder: 5,
+    vendorNoun: { one: 'beauty pro', many: 'beauty pros' },
   },
   {
     name: 'Carts',
@@ -220,6 +233,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Coffee, ice cream, dessert, and cocktail carts.',
     icon: 'ice-cream-cone',
     displayOrder: 6,
+    vendorNoun: { one: 'cart', many: 'carts' },
   },
   {
     name: 'Florals',
@@ -227,6 +241,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Bouquets, centerpieces, arches, and floral installations.',
     icon: 'flower',
     displayOrder: 7,
+    vendorNoun: { one: 'florist', many: 'florists' },
   },
   {
     name: 'Decor',
@@ -234,6 +249,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Backdrops, table styling, uplighting, and stage design.',
     icon: 'palette',
     displayOrder: 8,
+    vendorNoun: { one: 'decorator', many: 'decorators' },
   },
   {
     name: 'Videography',
@@ -241,6 +257,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Highlight films, ceremony coverage, and drone work.',
     icon: 'video',
     displayOrder: 9,
+    vendorNoun: { one: 'videographer', many: 'videographers' },
   },
   {
     name: 'Planning',
@@ -248,6 +265,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Planners and day-of coordinators who run the event for you.',
     icon: 'clipboard-list',
     displayOrder: 10,
+    vendorNoun: { one: 'planner', many: 'planners' },
   },
   {
     name: 'Rentals',
@@ -255,8 +273,24 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Tents, tables, chairs, AV, and everything in between.',
     icon: 'package',
     displayOrder: 11,
+    vendorNoun: { one: 'rental supplier', many: 'rental suppliers' },
   },
 ];
+
+/**
+ * "24 photographers in Austin" — the sentence a result count belongs in.
+ * Falls back to "vendor" for a slug with no noun of its own, which is what a
+ * search with no category selected wants anyway.
+ */
+export function vendorNounFor(categorySlug: string | undefined, count: number): string {
+  const seed = CATEGORY_SEEDS.find((category) => category.slug === categorySlug);
+
+  if (!seed) {
+    return count === 1 ? 'vendor' : 'vendors';
+  }
+
+  return count === 1 ? seed.vendorNoun.one : seed.vendorNoun.many;
+}
 
 /**
  * Slugs that no longer appear in `CATEGORY_SEEDS`, each mapped to the seeded

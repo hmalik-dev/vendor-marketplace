@@ -51,6 +51,13 @@ Copy is imperative and specific, 2–4 words: "Request booking", "Send a message
 Availability chip is sage when free on the searched date, gold when scarce
 ("2 dates left"), absent when no date is in the query.
 
+**On the cover's aspect ratio.** Frames `02` and `03` draw the cover as a fixed
+`height:150px` box, which at the 352px card width those frames produce is closer
+to 2.35:1 than to 4:3. The label _inside_ that box reads "cover 4:3", and so
+does this file — two statements of intent against one hand-sized box. The build
+follows 4:3. If the letterbox was the intent rather than the sketch, change it
+here first and the cards will follow.
+
 ## Inputs
 
 Rest: `bg-stone-150 border border-stone-300 rounded-lg px-3.5 py-2.5 text-base`.
