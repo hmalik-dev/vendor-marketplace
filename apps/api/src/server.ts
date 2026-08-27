@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   serializerCompiler,
@@ -103,21 +104,45 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
 }
 
 /**
- * The entrypoint Vercel's Fastify preset imports. The platform owns the socket,
- * so this deliberately does not `listen` and installs no signal handlers —
- * `index.ts` remains the entrypoint for the container image, where the process
- * does own the socket and has to drain its own connections on SIGTERM.
+ * The request handler Vercel's Fastify preset invokes. The preset treats a
+ * default-exported function as a Node `(req, res)` handler rather than as a
+ * factory — returning the instance instead leaves the response unwritten and
+ * every request hangs until the platform's 300s ceiling — so this hands the
+ * request to Fastify's own server and lets it answer.
  *
- * It is a factory rather than a ready-made instance so that importing this
- * module never opens a Postgres pool: the route suites import `buildServer`
- * from here and inject their own database, and a top-level `createDatabase()`
- * would connect during test collection.
+ * The instance is memoised, not rebuilt per request: a warm invocation reuses
+ * one Fastify app and one Postgres pool, and the promise is cached rather than
+ * the resolved app so concurrent cold requests share a single boot.
+ *
+ * `index.ts` remains the entrypoint for the container image, where the process
+ * owns the socket and has to drain it on SIGTERM.
  */
-export default async function createServer(): Promise<FastifyInstance> {
+let bootstrapped: Promise<FastifyInstance> | undefined;
+
+/**
+ * A factory rather than a ready-made instance, so importing this module opens
+ * no Postgres pool: the route suites import `buildServer` from here and inject
+ * their own database, and connecting at module scope would reach the network
+ * during test collection.
+ */
+async function bootstrap(): Promise<FastifyInstance> {
   loadEnv();
 
   const env = parseEnv();
   const { db } = createDatabase();
 
+  // `buildServer` awaits `app.ready()`, which is what makes `app.server` able
+  // to accept an emitted request below.
   return buildServer({ env, db, storage: createS3Storage(env) });
+}
+
+export default async function handler(
+  request: IncomingMessage,
+  reply: ServerResponse,
+): Promise<void> {
+  bootstrapped ??= bootstrap();
+
+  const app = await bootstrapped;
+
+  app.server.emit('request', request, reply);
 }

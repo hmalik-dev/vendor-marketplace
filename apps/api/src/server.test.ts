@@ -194,20 +194,24 @@ describe('log redaction', () => {
  * still succeeds — so the contract is asserted here instead.
  */
 describe('the Vercel Fastify entrypoint', () => {
-  it('default-exports a factory', async () => {
-    const { default: createServer } = await import('./server.js');
+  it('default-exports a handler', async () => {
+    const { default: handler } = await import('./server.js');
 
-    expect(typeof createServer).toBe('function');
+    expect(typeof handler).toBe('function');
   });
 
-  it('takes no required argument, because the preset calls it with none', async () => {
-    const { default: createServer } = await import('./server.js');
+  it('takes the (req, res) pair the preset calls it with', async () => {
+    // The preset invokes a default-exported function as a Node request
+    // handler, not as a factory. A handler that ignored these and returned the
+    // app instead would leave the response unwritten, which is not a crash —
+    // every request simply hangs until the platform's 300s ceiling.
+    const { default: handler } = await import('./server.js');
 
-    expect(createServer.length).toBe(0);
+    expect(handler.length).toBe(2);
   });
 
   it('still exports the injectable builder the suites use', async () => {
-    // The factory wires the real Postgres and S3 clients. It sits beside
+    // The handler wires the real Postgres and S3 clients. It sits beside
     // `buildServer` rather than replacing it so the route suites can keep
     // injecting their own database, and so importing the module opens no pool.
     const module = await import('./server.js');
