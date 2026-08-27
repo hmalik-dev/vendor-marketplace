@@ -10,10 +10,10 @@ import {
   type Category,
 } from '@vendor-marketplace/shared';
 import { ShieldCheck, Star, Tag } from 'lucide-react';
-import { CategoryIconBadge } from '@/components/category-icon';
 import { HeroSearch } from '@/components/landing/hero-search';
 import { PhotoCluster } from '@/components/landing/photo-cluster';
 import { Button } from '@/components/ui/button';
+import { StockPhoto } from '@/components/ui/stock-photo';
 import { VendorCard } from '@/components/vendors/vendor-card';
 import { redirectVendorToDashboard } from '@/lib/current-user';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
@@ -238,22 +238,32 @@ export default async function HomePage(): Promise<React.ReactElement> {
             >
               {featured.map((category) => (
                 <li key={category.slug}>
+                  {/*
+                    `overflow-hidden` with no padding on the card itself is what
+                    lets the radius clip the photograph — with padding the image
+                    cannot reach the edge, and without the clip its corners
+                    escape the card. See design/design-plan/10-landing.md.
+                  */}
                   <Link
                     href={`/search?category=${category.slug}`}
-                    className="block h-full rounded-xl bg-stone-0 p-3.5 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) hover:shadow-hover motion-safe:hover:-translate-y-0.5"
+                    className="block h-full overflow-hidden rounded-xl bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) hover:shadow-hover motion-safe:hover:-translate-y-0.5"
                   >
-                    <CategoryIconBadge icon={category.icon} size="card" />
-                    <h3 className="mt-2.5 font-display text-[17px] text-stone-900">
-                      {category.name}
-                    </h3>
-                    {/*
-                      What the category covers, never a vendor count and never
-                      a from-price — both are deferred until the numbers are
-                      real (design/design-plan/98-post-mvp.md).
-                    */}
-                    <p className="mt-0.75 text-xs text-stone-600">
-                      {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
-                    </p>
+                    <StockPhoto
+                      src={`/categories/${category.slug}.jpg`}
+                      sizes="(min-width: 1024px) 15vw, (min-width: 640px) 30vw, 45vw"
+                      className="h-[94px] w-full"
+                    />
+                    <div className="px-3.25 pt-2.75 pb-3.25">
+                      <h3 className="font-display text-[17px] text-stone-900">{category.name}</h3>
+                      {/*
+                        What the category covers, never a vendor count and never
+                        a from-price — both are deferred until the numbers are
+                        real (design/design-plan/98-post-mvp.md).
+                      */}
+                      <p className="mt-0.75 text-[11.5px] text-stone-600">
+                        {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
+                      </p>
+                    </div>
                   </Link>
                 </li>
               ))}

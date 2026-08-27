@@ -40,12 +40,10 @@ describe('CategoryIcon', () => {
 });
 
 describe('CategoryIconBadge', () => {
-  it('sizes the inline badge at 28px and the card badge at 36px', () => {
+  it('sizes the badge at 28px', () => {
     const inline = render(<CategoryIconBadge icon="music" />);
-    expect(inline.container.firstElementChild?.className).toContain('size-7');
 
-    const card = render(<CategoryIconBadge icon="music" size="card" />);
-    expect(card.container.firstElementChild?.className).toContain('size-9');
+    expect(inline.container.firstElementChild?.className).toContain('size-7');
   });
 
   it('puts the glyph in the primary circle the icon spec calls for', () => {

@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ReactNode } from 'react';
 import {
   BRAND_NAME,
@@ -127,6 +129,58 @@ describe('HomePage', () => {
     );
     for (const category of featured) {
       expect(screen.getByText(category.shortDescription), category.slug).toBeDefined();
+    }
+  });
+
+  /*
+   * Frame `01` was revised on 2026-08-27: the clay glyph circle became a 94px
+   * cover photograph clipped by the card radius. These six are the only
+   * photography the platform owns — every vendor-side cover stays a labelled
+   * placeholder, so a test that finds stock art on a vendor card is a
+   * regression, not a feature.
+   */
+  it('draws each featured category as its photograph', async () => {
+    render(await HomePage());
+
+    const grid = screen.getByRole('list', { name: 'Browse by category' });
+    const images = within(grid).getAllByRole('presentation', { hidden: true });
+
+    expect(images).toHaveLength(LANDING_CATEGORY_COUNT);
+
+    for (const [index, seed] of CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT).entries()) {
+      // `next/image` rewrites `src` through its loader, so the assertion is on
+      // the path it was asked to load, which is what has to stay slug-keyed.
+      expect(images[index]?.getAttribute('src'), seed.slug).toContain(
+        encodeURIComponent(`/categories/${seed.slug}.jpg`),
+      );
+    }
+  });
+
+  it('leaves the category photographs decorative', async () => {
+    render(await HomePage());
+
+    const grid = screen.getByRole('list', { name: 'Browse by category' });
+
+    // The category name sits directly beneath each image, so alt text would be
+    // read twice — the same reasoning `StockPhoto` documents.
+    for (const image of within(grid).getAllByRole('presentation', { hidden: true })) {
+      expect(image.getAttribute('alt')).toBe('');
+    }
+  });
+
+  /*
+   * The card has no glyph fallback any more, so a category promoted into the
+   * landing six without a photograph ships a broken image. That is a content
+   * gap rather than a styling one, and this is where it is caught: promoting a
+   * seventh category, or renaming a slug, fails here and names the file to add.
+   */
+  it('has a photograph on disk for every category the landing promotes', () => {
+    const directory = join(process.cwd(), 'public', 'categories');
+
+    for (const seed of CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT)) {
+      expect(existsSync(join(directory, `${seed.slug}.jpg`)), `missing ${seed.slug}.jpg`).toBe(
+        true,
+      );
     }
   });
 

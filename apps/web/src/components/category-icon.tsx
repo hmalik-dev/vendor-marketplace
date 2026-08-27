@@ -58,26 +58,24 @@ export function CategoryIcon({ icon, className }: CategoryIconProps): React.Reac
   return <Icon aria-hidden="true" className={cn('size-5', className)} />;
 }
 
-export interface CategoryIconBadgeProps extends CategoryIconProps {
-  /** `inline` is the 28px chip badge; `card` is the 36px landing-card badge. */
-  size?: 'inline' | 'card';
-}
+export type CategoryIconBadgeProps = CategoryIconProps;
 
-/** The glyph in a `clay-100` circle, per the icon spec. */
-export function CategoryIconBadge({
-  icon,
-  size = 'inline',
-  className,
-}: CategoryIconBadgeProps): React.ReactElement {
+/**
+ * The glyph in a `clay-100` circle, per the icon spec — the 28px chip badge.
+ *
+ * The 36px `card` variant is gone with the landing card that was its only
+ * caller: frame `01` now draws a photograph there, and the glyph circle it
+ * replaced was the whole of that size's purpose.
+ */
+export function CategoryIconBadge({ icon, className }: CategoryIconBadgeProps): React.ReactElement {
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full bg-clay-100 text-clay-600',
-        size === 'card' ? 'size-9' : 'size-7',
+        'inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-clay-100 text-clay-600',
         className,
       )}
     >
-      <CategoryIcon icon={icon} className={size === 'card' ? 'size-4.5' : 'size-3.5'} />
+      <CategoryIcon icon={icon} className="size-3.5" />
     </span>
   );
 }
