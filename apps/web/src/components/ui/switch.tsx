@@ -31,3 +31,11 @@ function Switch({
 }
 
 export { Switch }
+
+/**
+ * Widens the switch's built-in hit area to the 44px touch minimum without
+ * resizing the control itself, which is designed small on purpose. Pointer
+ * widths fall back to the component's own `-inset-y-2`.
+ */
+export const SWITCH_TOUCH_TARGET =
+  "relative after:absolute after:-inset-3.5 after:content-[''] lg:after:hidden"

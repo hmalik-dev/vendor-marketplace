@@ -7,6 +7,7 @@ import {
   createBookingRequestSchema,
   createReviewSchema,
   createServicePackageSchema,
+  updateServicePackageSchema,
   createTagSuggestionSchema,
   createVendorProfileSchema,
   paginatedSchema,
@@ -329,6 +330,31 @@ describe('createServicePackageSchema', () => {
   });
 });
 
+describe('updateServicePackageSchema', () => {
+  it('leaves out every field the caller did not send', () => {
+    const parsed = updateServicePackageSchema.parse({ name: 'Full-Day Coverage' });
+
+    // The create schema defaults `inclusions` and `priceType`. Carrying those
+    // defaults into a partial update would silently erase a package's
+    // inclusions on a rename.
+    expect(parsed).toEqual({ name: 'Full-Day Coverage' });
+    expect('inclusions' in parsed).toBe(false);
+    expect('priceType' in parsed).toBe(false);
+  });
+
+  it('accepts the active toggle on its own', () => {
+    expect(updateServicePackageSchema.parse({ isActive: false })).toEqual({ isActive: false });
+  });
+
+  it('rejects an empty patch', () => {
+    expect(updateServicePackageSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('still enforces the price band on the fields it does carry', () => {
+    expect(updateServicePackageSchema.safeParse({ priceCents: 100 }).success).toBe(false);
+  });
+});
+
 describe('availabilityBulkUpdateSchema', () => {
   it('accepts calendar date strings with a status', () => {
     const parsed = availabilityBulkUpdateSchema.parse({
@@ -520,9 +546,9 @@ describe('createVendorProfileSchema responseTimeHours', () => {
   });
 
   it('rejects a response window outside the offered set', () => {
-    expect(
-      createVendorProfileSchema.safeParse({ ...base, responseTimeHours: 3 }).success,
-    ).toBe(false);
+    expect(createVendorProfileSchema.safeParse({ ...base, responseTimeHours: 3 }).success).toBe(
+      false,
+    );
   });
 });
 

@@ -1,5 +1,8 @@
 import {
+  availabilitySchema,
   categorySchema,
+  portfolioItemSchema,
+  servicePackageSchema,
   tagSchema,
   userSchema,
   vendorProfileDetailSchema,
@@ -36,3 +39,25 @@ export const wireVendorProfileSchema = vendorProfileDetailSchema.extend({
 });
 
 export type WireVendorProfile = z.infer<typeof wireVendorProfileSchema>;
+
+export const wireServicePackageSchema = servicePackageSchema.extend({
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+export type WireServicePackage = z.infer<typeof wireServicePackageSchema>;
+
+export const wireServicePackageListSchema = z.array(wireServicePackageSchema);
+
+export const wirePortfolioItemSchema = portfolioItemSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WirePortfolioItem = z.infer<typeof wirePortfolioItemSchema>;
+
+export const wirePortfolioListSchema = z.array(wirePortfolioItemSchema);
+
+/**
+ * Availability carries no timestamps — `date` is a `YYYY-MM-DD` calendar date
+ * that stays a string end to end — so the domain schema needs no coercion.
+ */
+export const wireAvailabilityListSchema = z.array(availabilitySchema);
+export type WireAvailability = z.infer<typeof availabilitySchema>;

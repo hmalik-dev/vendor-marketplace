@@ -108,4 +108,35 @@ describe('apiRequest', () => {
         error instanceof ApiClientError && error.message.includes('did not match its schema'),
     );
   });
+
+  it('reads a bodiless 204 as null rather than failing to parse it', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(
+      apiRequest('/vendor/portfolio/abc', { schema: z.null(), method: 'DELETE' }),
+    ).resolves.toBeNull();
+  });
+
+  it('still rejects an empty body against a schema that expects one', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(apiRequest('/users/me', { schema: bodySchema })).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof ApiClientError && error.message.includes('did not match its schema'),
+    );
+  });
+
+  it('reports a success body that is not valid JSON', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('<!doctype html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      }),
+    );
+
+    await expect(apiRequest('/users/me', { schema: bodySchema })).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof ApiClientError && error.message.includes('was not valid JSON'),
+    );
+  });
 });

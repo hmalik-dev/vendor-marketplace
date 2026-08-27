@@ -289,25 +289,46 @@ export const servicePackageSchema = z.object({
 });
 export type ServicePackage = z.infer<typeof servicePackageSchema>;
 
-export const createServicePackageSchema = z.object({
+const inclusionsSchema = z.array(trimmedString(200)).max(20);
+
+/**
+ * The editable shape of a package, with no defaults attached.
+ *
+ * The defaults belong to *creation* only. `.partial()` does not strip them, so
+ * a schema built by making a defaulted shape optional still substitutes the
+ * default for every key the caller left out — which would turn "rename this
+ * package" into "rename it and throw away its inclusions".
+ */
+const servicePackageFieldsSchema = z.object({
   name: trimmedString(MAX_BUSINESS_NAME_LENGTH, 2),
   description: trimmedString(5_000, 10),
   priceCents: priceCentsSchema,
-  priceType: priceTypeSchema.default('fixed'),
+  priceType: priceTypeSchema,
   durationHours: z.number().min(0.5).max(999.9).optional(),
   maxGuests: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
-  inclusions: z.array(trimmedString(200)).max(20).default([]),
+  inclusions: inclusionsSchema,
   displayOrder: z.int().min(0).optional(),
+});
+
+export const createServicePackageSchema = servicePackageFieldsSchema.extend({
+  priceType: priceTypeSchema.default('fixed'),
+  inclusions: inclusionsSchema.default([]),
 });
 export type CreateServicePackageInput = z.infer<typeof createServicePackageSchema>;
 
-export const updateServicePackageSchema = createServicePackageSchema
+export const updateServicePackageSchema = servicePackageFieldsSchema
   .partial()
   .extend({ isActive: z.boolean().optional() })
   .refine((value) => Object.keys(value).length > 0, {
     message: 'Provide at least one field to update',
   });
 export type UpdateServicePackageInput = z.infer<typeof updateServicePackageSchema>;
+
+/** Full ordered list of the vendor's package ids, applied as one reorder. */
+export const reorderServicePackagesSchema = z.object({
+  packageIds: z.array(uuidSchema).min(1),
+});
+export type ReorderServicePackagesInput = z.infer<typeof reorderServicePackagesSchema>;
 
 // --- Portfolio -------------------------------------------------------------
 
@@ -335,6 +356,16 @@ export const reorderPortfolioSchema = z.object({
   itemIds: z.array(uuidSchema).min(1),
 });
 export type ReorderPortfolioInput = z.infer<typeof reorderPortfolioSchema>;
+
+/**
+ * Caption edits only. The image itself is immutable — replacing a photo means
+ * deleting the item and uploading a new one, so a stored object is never
+ * orphaned behind a row that now points somewhere else.
+ */
+export const updatePortfolioItemSchema = z.object({
+  caption: z.string().trim().max(MAX_CAPTION_LENGTH).nullable(),
+});
+export type UpdatePortfolioItemInput = z.infer<typeof updatePortfolioItemSchema>;
 
 // --- Availability ----------------------------------------------------------
 

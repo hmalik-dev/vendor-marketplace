@@ -59,6 +59,29 @@ async function toClientError(response: Response): Promise<ApiClientError> {
 }
 
 /**
+ * Reads a success body. A 204 carries no body at all, so `response.json()`
+ * would reject on it — the empty body becomes `null`, which a `z.null()`
+ * schema accepts and every other schema correctly rejects.
+ */
+async function readJsonBody(response: Response, path: string): Promise<unknown> {
+  const raw = await response.text();
+
+  if (raw.trim() === '') {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new ApiClientError(
+      response.status,
+      ERROR_CODES.INTERNAL_ERROR,
+      `API response for ${path} was not valid JSON`,
+    );
+  }
+}
+
+/**
  * The single fetch path to the Fastify API. Every response is validated
  * against a schema, so a contract drift surfaces here rather than as a
  * `undefined` deep inside a component.
@@ -86,7 +109,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
     throw await toClientError(response);
   }
 
-  const parsed = schema.safeParse(await response.json());
+  const parsed = schema.safeParse(await readJsonBody(response, path));
   if (!parsed.success) {
     throw new ApiClientError(
       response.status,

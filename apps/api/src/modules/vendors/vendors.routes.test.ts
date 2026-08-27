@@ -107,7 +107,8 @@ describe('/vendor/profile', () => {
       expect(body.isPublished).toBe(false);
       expect(body.categoryIds).toEqual([photographyId]);
       expect(body.tags).toEqual([]);
-      expect(body.publishBlockers).toEqual([]);
+      // The bio was supplied; a bookable package is the one thing still missing.
+      expect(body.publishBlockers).toEqual(['Publish at least one service package']);
     });
 
     it('persists the category selection', async () => {
@@ -271,6 +272,21 @@ describe('/vendor/profile', () => {
       expect(response.statusCode).toBe(201);
     }
 
+    /** Publishing needs something bookable, so most publish tests need one. */
+    async function addPackage(): Promise<void> {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/packages',
+        headers: bearer(VENDOR),
+        payload: {
+          name: 'Half-day coverage',
+          description: 'Four hours of documentary coverage and edited photos.',
+          priceCents: 120_000,
+        },
+      });
+      expect(response.statusCode).toBe(201);
+    }
+
     it('answers 404 when there is nothing to edit', async () => {
       const response = await harness.app.inject({
         method: 'PUT',
@@ -341,6 +357,7 @@ describe('/vendor/profile', () => {
 
     it('publishes once every prerequisite is met', async () => {
       await createProfile({ bio: 'Documentary wedding photography.' });
+      await addPackage();
 
       const response = await harness.app.inject({
         method: 'PUT',
@@ -355,6 +372,7 @@ describe('/vendor/profile', () => {
 
     it('unpublishes without any prerequisite check', async () => {
       await createProfile({ bio: 'Documentary wedding photography.' });
+      await addPackage();
       await harness.app.inject({
         method: 'PUT',
         url: '/vendor/profile',
@@ -384,6 +402,7 @@ describe('/vendor/profile', () => {
 
       expect(response.json().publishBlockers).toEqual([
         'Write a short bio so customers know what you do',
+        'Publish at least one service package',
       ]);
     });
 

@@ -3,9 +3,12 @@
  * Tailwind 4 is CSS-first: apps import this file after `@import 'tailwindcss'`
  * so every surface inherits the same design tokens.
  *
- * Source of truth: ~/.claude/plans/vendor-marketplace-design-system.md
- * "The Curated Introduction" — warm terracotta action colour grounded by deep
- * sage, on warm cream rather than stark white.
+ * Source of truth: design/design-plan/01-foundations.md (the Orla design plan).
+ *
+ * NOTE: the ramps below are the pre-Orla palette (terracotta `primary-*`,
+ * Fraunces/Albert Sans). Ticket #21 replaces them with the Orla tokens — clay
+ * as a fill-only action colour, sage/gold/steel as signals, Instrument
+ * Serif/Sans — and nothing here should be extended in the meantime.
  */
 
 @theme {

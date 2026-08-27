@@ -99,6 +99,18 @@
  * design system defers a true dark inversion to post-MVP.
  */
 
+/*
+ * A full-height app shell (design/design-plan/04-laws.md, scroll budget 1.0x) fills the
+ * viewport on its own. The site footer lives in the root layout, above every
+ * route, so it is removed here rather than by threading a `showFooter` flag
+ * through every layout between the two.
+ */
+@media (width >= 64rem) {
+  body:has([data-app-shell]) > footer {
+    display: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -17,3 +17,9 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
 }
 
 export { Input }
+
+/**
+ * Raises an input to the 44px touch minimum below `lg`, where the input method
+ * is a finger, and hands it back its designed height on pointer widths.
+ */
+export const INPUT_TOUCH_HEIGHT = "h-11 lg:h-8"

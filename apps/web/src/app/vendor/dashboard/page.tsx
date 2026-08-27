@@ -15,14 +15,19 @@ const PROFILE_EDIT_PATH = '/vendor/profile/edit';
 
 const SECTIONS = [
   {
-    title: 'Packages and portfolio',
-    description: 'What you offer, what it costs, and the work that proves it.',
-    arrivesIn: 'Ticket #4',
+    title: 'Packages',
+    description: 'What a customer books, and what it costs.',
+    href: '/vendor/packages',
+  },
+  {
+    title: 'Portfolio',
+    description: 'The work that proves you can do it.',
+    href: '/vendor/portfolio',
   },
   {
     title: 'Availability',
     description: 'Block the dates you are away so requests only reach you when free.',
-    arrivesIn: 'Ticket #5',
+    href: '/vendor/availability',
   },
   {
     title: 'Getting paid',

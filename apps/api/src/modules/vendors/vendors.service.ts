@@ -8,6 +8,7 @@ import {
 import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
+import { countActivePackages } from '../packages/packages.dao.js';
 import {
   findActiveCategoryIds,
   findVendorCategoryIds,
@@ -49,6 +50,7 @@ export function toVendorProfileDetail(
   row: VendorProfileRow,
   categoryIds: string[],
   tagRows: TagRow[],
+  activePackageCount: number,
 ): VendorProfileDetail {
   return {
     ...row,
@@ -57,16 +59,20 @@ export function toVendorProfileDetail(
     avgRating: parseRating(row.avgRating),
     categoryIds,
     tags: tagRows satisfies Tag[],
-    publishBlockers: publishBlockers(row, categoryIds),
+    publishBlockers: publishBlockers(row, categoryIds, activePackageCount),
   };
 }
 
 /**
  * Everything still standing between this profile and a public listing. Returned
  * rather than thrown so the dashboard can show the list before the vendor tries
- * to publish. Ticket #4 adds "at least one service package" here.
+ * to publish.
  */
-export function publishBlockers(row: VendorProfileRow, categoryIds: readonly string[]): string[] {
+export function publishBlockers(
+  row: VendorProfileRow,
+  categoryIds: readonly string[],
+  activePackageCount: number,
+): string[] {
   const blockers: string[] = [];
 
   if (!row.businessName.trim()) {
@@ -80,6 +86,9 @@ export function publishBlockers(row: VendorProfileRow, categoryIds: readonly str
   }
   if (!row.bio?.trim()) {
     blockers.push('Write a short bio so customers know what you do');
+  }
+  if (activePackageCount === 0) {
+    blockers.push('Publish at least one service package');
   }
 
   return blockers;
@@ -124,12 +133,51 @@ async function assertCategoriesSelectable(
 }
 
 async function loadDetail(db: AppDatabase, row: VendorProfileRow): Promise<VendorProfileDetail> {
-  const [categoryIds, tagRows] = await Promise.all([
+  const [categoryIds, tagRows, activePackageCount] = await Promise.all([
     findVendorCategoryIds(db, row.id),
     findVendorTags(db, row.id),
+    countActivePackages(db, row.id),
   ]);
 
-  return toVendorProfileDetail(row, categoryIds, tagRows);
+  return toVendorProfileDetail(row, categoryIds, tagRows, activePackageCount);
+}
+
+/**
+ * The signed-in vendor's own profile row, for the surfaces that hang off it —
+ * packages, portfolio, availability. They all need the vendor id and none of
+ * them can do anything useful before the profile exists.
+ */
+export async function requireOwnVendorProfile(
+  db: AppDatabase,
+  userId: string,
+): Promise<VendorProfileRow> {
+  const row = await findVendorProfileByUserId(db, userId);
+  if (!row) {
+    throw notFound('Create your business profile before setting up your services');
+  }
+
+  return row;
+}
+
+/**
+ * Takes a published profile back off the marketplace once its last bookable
+ * package goes away. Publishing requires a package, so continuing to list a
+ * vendor with none would send customers to a profile they cannot book.
+ */
+export async function unpublishForMissingPackages(
+  db: AppDatabase,
+  vendor: VendorProfileRow,
+): Promise<boolean> {
+  if (!vendor.isPublished) {
+    return false;
+  }
+
+  if ((await countActivePackages(db, vendor.id)) > 0) {
+    return false;
+  }
+
+  await updateVendorProfileById(db, vendor.id, { isPublished: false });
+  return true;
 }
 
 /** The signed-in vendor's own profile. */
@@ -255,10 +303,14 @@ export async function updateVendorProfile(
 
   if (input.isPublished !== undefined) {
     if (input.isPublished) {
-      const effectiveCategories = categoryIds ?? (await findVendorCategoryIds(db, existing.id));
+      const [effectiveCategories, activePackageCount] = await Promise.all([
+        categoryIds === undefined ? findVendorCategoryIds(db, existing.id) : categoryIds,
+        countActivePackages(db, existing.id),
+      ]);
       const blockers = publishBlockers(
         { ...existing, ...patch } as VendorProfileRow,
         effectiveCategories,
+        activePackageCount,
       );
 
       if (blockers.length > 0) {

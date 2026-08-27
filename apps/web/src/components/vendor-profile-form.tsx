@@ -37,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Switch, SWITCH_TOUCH_TARGET } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 
 export interface VendorProfileFormProps {
@@ -527,9 +527,7 @@ export function VendorProfileForm({
               <div className="flex items-start gap-3">
                 <Switch
                   id="isPublished"
-                  // Keeps the switch its designed size while giving touch a 44px
-                  // target, as the viewport checklist requires.
-                  className="relative after:absolute after:-inset-3.5 after:content-[''] sm:after:hidden"
+                  className={SWITCH_TOUCH_TARGET}
                   checked={isPublished}
                   disabled={isSaving || (!isPublished && publishBlockers.length > 0)}
                   onCheckedChange={(next) => void togglePublished(next)}
