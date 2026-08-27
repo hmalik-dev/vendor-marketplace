@@ -199,9 +199,10 @@ describe('HomePage', () => {
   it('offers the vendor half of the split CTA to a visitor with no session', async () => {
     render(await HomePage());
 
+    // Every vendor CTA arrives with the role pre-selected — 21-sign-up.md.
     expect(screen.getByRole('link', { name: 'Join as a vendor' })).toHaveProperty(
       'href',
-      'http://localhost:3000/sign-up',
+      'http://localhost:3000/sign-up?role=vendor',
     );
     expect(screen.queryByRole('link', { name: 'Go to your dashboard' })).toBeNull();
   });

@@ -19,11 +19,14 @@ Tailwind 4 is CSS-first; there is no palette in a JS config.
   /* Sage — settled, confirmed, complete */
   --color-sage-50: #edf0e9;
   --color-sage-100: #e4e9de;
+  --color-sage-150: #d9e2c8; /* pale sage — the italic accent on an ink ground */
+  --color-sage-200: #a8c08e; /* pale sage — decorative dots on an ink ground */
   --color-sage-400: #5e6b4f;
   --color-sage-600: #4b5940; /* sage as text */
 
   /* Gold — waiting on someone */
   --color-gold-50: #f5eedc;
+  --color-gold-200: #f3c98b; /* pale gold — the italic accent on an ink ground */
   --color-gold-400: #c99a2e;
   --color-gold-600: #7a5a12; /* gold as text — do not use #8A6716, it fails AA */
 

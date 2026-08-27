@@ -56,14 +56,19 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 </div>
 
 <div class="sc">
-<div class="sc-h"><span class="sc-n">01</span><span class="sc-t">Landing</span><span class="sc-mvp">MVP</span><span class="sc-post">Post-MVP: stats</span><span class="sc-d">Hero, search bar and the top of the category row all inside the first 836px — a visitor can start searching without scrolling. <strong style="font-weight:600;color:#4A443C">Revised:</strong> search is <em>category-first</em> — the first field is a vendor-type picker, not a text box. Nobody searches "June Harlow"; they search photography, Austin, June 14. <strong style="font-weight:600;color:#4A443C">Revised:</strong> the badge no longer counts vendors and category cards describe the category rather than counting it. The stats band is cut entirely; the trust section below the fold does that work. All of it returns when the numbers are real.</span></div>
+<div class="sc-h"><span class="sc-n">01</span><span class="sc-t">Landing</span><span class="sc-mvp">MVP</span><span class="sc-rev">Revised</span><span class="sc-post">Post-MVP: stats, reply time</span><span class="sc-d">Hero, search bar and the top of the category row all inside the first 836px — a visitor can start searching without scrolling. <strong style="font-weight:600;color:#4A443C">Revised:</strong> the header now carries <em>two</em> entry points — <strong style="font-weight:600;color:#4A443C">Sign up</strong> as the ink pill for the volume path (customers) and <strong style="font-weight:600;color:#4A443C">List your services</strong> as a named text link for vendors. Both land on screen 12, whose role cards make the actual fork; the vendor link arrives with <span style="font-family:'JetBrains Mono',monospace;font-size:11px">?role=vendor</span> pre-selected. The floating vendor chip and every "replies in ~2h" claim are deferred — both need history the app doesn't have. Search is <em>category-first</em> — the first field is a vendor-type picker, not a text box. Nobody searches "June Harlow"; they search photography, Austin, June 14. <strong style="font-weight:600;color:#4A443C">Revised:</strong> the badge no longer counts vendors and category cards describe the category rather than counting it. The stats band is cut entirely; the trust section below the fold does that work. All of it returns when the numbers are real.</span></div>
 <div class="fr" data-screen-label="01 Landing">
 <div class="hd" style="padding:0 40px">
 <div style="display:flex;align-items:center;gap:34px">
 <div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:24px;color:#23201C">{{ brandName }}</span></div>
 <div style="display:flex;gap:24px;font-size:13.5px;font-weight:500;color:#4A443C"><span>Browse</span><span>How it works</span><span>For vendors</span></div>
 </div>
-<div style="display:flex;align-items:center;gap:16px"><span style="font-size:13.5px;font-weight:500;color:#4A443C">Sign in</span><span style="font-size:13px;font-weight:600;color:#F8F5EF;background:#23201C;padding:10px 18px;border-radius:999px">Join as a vendor</span></div>
+<div style="display:flex;align-items:center;gap:18px">
+<span style="font-size:13.5px;font-weight:500;color:#4A443C">List your services</span>
+<div style="width:1px;height:20px;background:#E4DDD1"></div>
+<span style="font-size:13.5px;font-weight:500;color:#4A443C">Sign in</span>
+<span style="font-size:13px;font-weight:600;color:#F8F5EF;background:#23201C;padding:10px 18px;border-radius:999px">Sign up</span>
+</div>
 </div>
 <div style="flex:1;overflow:hidden;background:linear-gradient(155deg,#F8F5EF 0%,#F7F0E8 52%,#F2E4D8 100%);position:relative">
 <div style="position:absolute;right:-130px;top:-110px;width:440px;height:440px;border-radius:50%;background:rgba(180,85,47,.06)"></div>
@@ -86,7 +91,6 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 <div class="ph" style="position:absolute;left:20px;top:0;width:236px;height:292px;border-radius:16px;transform:rotate(-4deg);box-shadow:0 14px 40px rgba(35,32,28,.16)"><span class="phl">florist / tablescape</span></div>
 <div class="ph" style="position:absolute;left:190px;top:70px;width:254px;height:316px;border-radius:16px;transform:rotate(3deg);box-shadow:0 18px 46px rgba(35,32,28,.2)"><span class="phl">photographer / portrait</span></div>
 <div class="ph" style="position:absolute;left:4px;top:208px;width:188px;height:150px;border-radius:14px;transform:rotate(2deg);box-shadow:0 12px 32px rgba(35,32,28,.14)"><span class="phl">dj / dance floor</span></div>
-<div style="position:absolute;left:312px;top:16px;display:flex;align-items:center;gap:9px;background:#FFFDF9;border-radius:999px;padding:8px 15px 8px 8px;box-shadow:0 8px 24px rgba(35,32,28,.14)"><div style="width:30px;height:30px;border-radius:50%;background:#EADCCB;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:14px;color:#8E3F20">MK</div><div><div style="font-size:12px;font-weight:600;color:#23201C">Maya Kessler</div><div style="font-size:10.5px;color:#6B6459">★ 4.9 · replies in 2h</div></div></div>
 </div>
 </div>
 <div style="padding:6px 40px 0;position:relative">
@@ -155,7 +159,7 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 </div>
 
 <div class="sc">
-<div class="sc-h"><span class="sc-n">03</span><span class="sc-t">Vendor profile</span><span class="sc-mvp">MVP</span><span class="sc-d">Cover capped at 150px so the fold isn't eaten, with the avatar and name sitting cleanly <em>below</em> it — the earlier overlapping avatar was pulled up across a pane's <code style="font-family:'JetBrains Mono',monospace;font-size:11px">overflow:hidden</code> boundary, which sliced its top edge. Tabs swap the content pane rather than anchor-scrolling; the 380px booking rail is sticky — it's the page's entire purpose.</span></div>
+<div class="sc-h"><span class="sc-n">03</span><span class="sc-t">Vendor profile</span><span class="sc-mvp">MVP</span><span class="sc-post">Post-MVP: reply time</span><span class="sc-d">Cover capped at 150px so the fold isn't eaten, with the avatar and name sitting cleanly <em>below</em> it — the earlier overlapping avatar was pulled up across a pane's <code style="font-family:'JetBrains Mono',monospace;font-size:11px">overflow:hidden</code> boundary, which sliced its top edge. Tabs swap the content pane rather than anchor-scrolling; the 380px booking rail is sticky — it's the page's entire purpose.</span></div>
 <div class="fr" data-screen-label="03 Vendor profile">
 <div class="hd">
 <div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:23px;color:#23201C">{{ brandName }}</span></div>
@@ -169,7 +173,7 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 <div style="width:72px;height:72px;border-radius:50%;background:#EADCCB;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:28px;color:#8E3F20;flex:none">MK</div>
 <div>
 <div style="font-family:'Instrument Serif',serif;font-size:33px;line-height:1.1;color:#23201C">Kessler &amp; Co.</div>
-<div style="display:flex;align-items:center;gap:12px;margin-top:6px;font-size:13px;color:#4A443C"><span>★ <strong style="font-weight:700">4.9</strong> <span style="color:#6B6459">(127 reviews)</span></span><span style="color:#6B6459">·</span><span>Austin, TX</span><span style="color:#6B6459">·</span><span>Replies in ~2h</span></div>
+<div style="display:flex;align-items:center;gap:12px;margin-top:6px;font-size:13px;color:#4A443C"><span>★ <strong style="font-weight:700">4.9</strong> <span style="color:#6B6459">(127 reviews)</span></span><span style="color:#6B6459">·</span><span>Austin, TX</span></div>
 </div>
 </div>
 <div style="display:flex;gap:6px;padding-bottom:12px"><span style="font-size:11.5px;font-weight:600;background:#F7E7E0;color:#8E3F20;padding:5px 10px;border-radius:6px">Photography</span><span style="font-size:11.5px;font-weight:600;background:#EEF3FA;color:#3D6A8C;padding:5px 10px;border-radius:6px">English · Spanish</span><span style="font-size:11.5px;font-weight:600;background:#EDF0E9;color:#4B5940;padding:5px 10px;border-radius:6px">Documentary style</span><span style="font-size:11.5px;font-weight:600;background:#F0EAE1;color:#4A443C;padding:5px 10px;border-radius:6px">+3 more</span></div>
@@ -183,11 +187,10 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 <div style="flex:1;overflow:hidden;padding:18px 0 0">
 <div style="font-family:'Instrument Serif',serif;font-style:italic;font-size:20px;line-height:1.4;color:#4A443C;max-width:620px">"Quiet, documentary, never asks you to pose."</div>
 <div style="font-size:14.5px;line-height:1.7;color:#4A443C;max-width:640px;margin-top:14px">Ten years photographing weddings across central Texas. I shoot on film for the portraits and digital for everything else, and I stay out of the way — you'll forget I'm there until the album arrives.</div>
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:20px;max-width:680px">
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px;max-width:520px">
 <div style="background:#FFFDF9;border-radius:12px;padding:12px 14px"><div class="lbl">Experience</div><div style="font-family:'Instrument Serif',serif;font-size:22px;color:#23201C;margin-top:3px">10 yrs</div></div>
 <div style="background:#FFFDF9;border-radius:12px;padding:12px 14px"><div class="lbl">Events</div><div style="font-family:'Instrument Serif',serif;font-size:22px;color:#23201C;margin-top:3px">184</div></div>
 <div style="background:#FFFDF9;border-radius:12px;padding:12px 14px"><div class="lbl">Travels</div><div style="font-family:'Instrument Serif',serif;font-size:22px;color:#23201C;margin-top:3px">60 mi</div></div>
-<div style="background:#FFFDF9;border-radius:12px;padding:12px 14px"><div class="lbl">Replies</div><div style="font-family:'Instrument Serif',serif;font-size:22px;color:#23201C;margin-top:3px">~2h</div></div>
 </div>
 <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:22px;max-width:680px"><div class="h2" style="font-size:20px">Recent work</div><span style="font-size:12.5px;font-weight:600;color:#A34A28">See all 34 →</span></div>
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px;max-width:680px">
@@ -693,7 +696,7 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 </div>
 
 <div class="sc">
-<div class="sc-h"><span class="sc-n">12</span><span class="sc-t">Sign up</span><span class="sc-mvp">MVP</span><span class="sc-rev">Revised</span><span class="sc-d">Split screen — the auth panel keeps its narrow focused column, and the width beside it does honest work as proof rather than sitting empty. Role choice comes first and sits side by side, because it's a comparison. <strong style="font-weight:600;color:#4A443C">Revised:</strong> the marketing panel's stat columns are replaced by three mechanism guarantees — the last thing a hesitant sign-up reads is the worst place for a placeholder number.</span></div>
+<div class="sc-h"><span class="sc-n">12</span><span class="sc-t">Sign up</span><span class="sc-mvp">MVP</span><span class="sc-rev">Revised</span><span class="sc-d">Split screen — the auth panel keeps its narrow focused column, and the width beside it does honest work as proof rather than sitting empty. Role choice comes first and sits side by side, because it's a comparison. <strong style="font-weight:600;color:#4A443C">Revised:</strong> the marketing panel's stat columns are replaced by three mechanism guarantees — the last thing a hesitant sign-up reads is the worst place for a placeholder number. This is the <em>customer</em> state; selecting "I'm a vendor" swaps the panel — see <strong style="font-weight:600;color:#4A443C">12b</strong> below.</span></div>
 <div class="fr" data-screen-label="12 Sign up">
 <div style="flex:1;display:flex;overflow:hidden">
 <div style="flex:1;background:#F8F5EF;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 60px;position:relative;overflow:hidden">
@@ -732,6 +735,54 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 <div style="display:flex;align-items:flex-start;gap:10px"><div class="dot" style="background:#A8C08E;margin-top:6px"></div><span style="font-size:13.5px;line-height:1.5;color:rgba(255,253,249,.9)">Live calendars — if a date shows open, it is</span></div>
 <div style="display:flex;align-items:flex-start;gap:10px"><div class="dot" style="background:#A8C08E;margin-top:6px"></div><span style="font-size:13.5px;line-height:1.5;color:rgba(255,253,249,.9)">Payment held until the event is complete</span></div>
 <div style="display:flex;align-items:flex-start;gap:10px"><div class="dot" style="background:#A8C08E;margin-top:6px"></div><span style="font-size:13.5px;line-height:1.5;color:rgba(255,253,249,.9)">Published prices, and no service fee on top</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sc">
+<div class="sc-h"><span class="sc-n">12b</span><span class="sc-t">Sign up — vendor selected</span><span class="sc-mvp">MVP</span><span class="sc-d">The right panel is <strong style="font-weight:600;color:#4A443C">role-aware</strong>: same premise, inverted. A customer is promised they'll <em>see</em> the price and the open dates; a vendor is promised they <em>set</em> them. Selecting a role swaps the panel's headline, body and three guarantees — the form column is identical. <strong style="font-weight:600;color:#4A443C">No fee language on vendor surfaces</strong> — vendors do pay something, and the model isn't settled, so this panel makes no claim either way.</span></div>
+<div class="fr" data-screen-label="12b Sign up vendor">
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="flex:1;background:#F8F5EF;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 60px;position:relative;overflow:hidden">
+<div style="position:absolute;left:-110px;bottom:-120px;width:340px;height:340px;border-radius:50%;background:rgba(94,107,79,.06)"></div>
+<div style="width:100%;max-width:460px;position:relative">
+<div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:26px"><div style="position:relative;width:26px;height:19px"><div style="position:absolute;left:0;top:0;width:19px;height:19px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:19px;height:19px;border-radius:50%;border:1.4px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:29px;color:#23201C">{{ brandName }}</span></div>
+<div style="font-family:'Instrument Serif',serif;font-size:32px;line-height:1.15;color:#23201C;text-align:center">Let's get you set up</div>
+<div style="font-size:14px;color:#4A443C;text-align:center;margin-top:7px;margin-bottom:22px">First — which one are you? This can't be changed later.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px">
+<div style="background:#FFFDF9;border:1px solid #E4DDD1;border-radius:14px;padding:16px 14px">
+<div style="width:34px;height:34px;border-radius:50%;background:#F1ECE4;display:flex;align-items:center;justify-content:center;margin-bottom:10px"><div style="width:13px;height:13px;border:1.6px solid #6B6459;border-radius:3px"></div></div>
+<div style="font-size:14.5px;font-weight:600;color:#23201C">I'm planning an event</div>
+<div style="font-size:12px;line-height:1.5;color:#4A443C;margin-top:4px">Find and book vendors near you.</div>
+</div>
+<div style="background:#EDF0E9;border:2px solid #5E6B4F;border-radius:14px;padding:16px 14px">
+<div style="width:34px;height:34px;border-radius:50%;background:#FFFDF9;display:flex;align-items:center;justify-content:center;margin-bottom:10px"><div style="width:13px;height:13px;border:1.6px solid #4B5940;border-radius:50%"></div></div>
+<div style="font-size:14.5px;font-weight:600;color:#23201C">I'm a vendor</div>
+<div style="font-size:12px;line-height:1.5;color:#4A443C;margin-top:4px">List your services and take bookings.</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:13px">
+<div><div class="lbl" style="margin-bottom:6px">Business name</div><div class="inp" style="background:#FFFDF9">Kessler &amp; Co.</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Email</div><div class="inp" style="background:#FFFDF9">maya@kesslerco.com</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Password</div><div class="inp" style="background:#FFFDF9">••••••••••</div><div style="font-size:11.5px;color:#6B6459;margin-top:5px">At least 10 characters</div></div>
+<div class="btnP" style="text-align:center;padding:13px 0;margin-top:2px">Create my account</div>
+<div style="text-align:center;font-size:13px;color:#4A443C">Already with us? <span style="color:#A34A28;font-weight:600">Sign in</span></div>
+</div>
+</div>
+</div>
+<div style="width:600px;flex:none;position:relative;overflow:hidden">
+<div class="ph" style="position:absolute;inset:0;padding:0;align-items:center;justify-content:center"><span class="phl" style="font-size:11px">vendor at work — full bleed</span></div>
+<div style="position:absolute;inset:0;background:linear-gradient(200deg,rgba(35,32,28,.12) 0%,rgba(40,48,34,.62) 55%,rgba(28,32,24,.86) 100%)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;padding:46px 48px">
+<div style="font-family:'Instrument Serif',serif;font-size:38px;line-height:1.15;color:#FFFDF9">Set your prices.<br>Set your dates.<br><span style="font-style:italic;color:#D9E2C8">Get booked.</span></div>
+<div style="font-size:15px;line-height:1.6;color:rgba(255,253,249,.82);max-width:410px;margin-top:12px">Enquiries arrive already knowing what you charge and that your date is free — so you spend your evenings working, not writing quotes.</div>
+<div style="display:flex;flex-direction:column;gap:11px;margin-top:26px;padding-top:20px;border-top:1px solid rgba(255,253,249,.22);max-width:400px">
+<div style="display:flex;align-items:flex-start;gap:10px"><div class="dot" style="background:#C4D6A8;margin-top:6px"></div><span style="font-size:13.5px;line-height:1.5;color:rgba(255,253,249,.9)">You publish your own packages and prices</span></div>
+<div style="display:flex;align-items:flex-start;gap:10px"><div class="dot" style="background:#C4D6A8;margin-top:6px"></div><span style="font-size:13.5px;line-height:1.5;color:rgba(255,253,249,.9)">Your calendar decides which dates you're offered</span></div>
+<div style="display:flex;align-items:flex-start;gap:10px"><div class="dot" style="background:#C4D6A8;margin-top:6px"></div><span style="font-size:13.5px;line-height:1.5;color:rgba(255,253,249,.9)">Paid out after the event — no chasing invoices</span></div>
 </div>
 </div>
 </div>
@@ -878,7 +929,7 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 <div class="fr" style="width:390px;height:844px" data-screen-label="14 Landing mobile">
 <div class="hd" style="height:56px;padding:0 16px">
 <div style="display:flex;align-items:center;gap:8px"><div style="position:relative;width:20px;height:14px"><div style="position:absolute;left:0;top:0;width:14px;height:14px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:14px;height:14px;border-radius:50%;border:1.1px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:21px;color:#23201C">{{ brandName }}</span></div>
-<div style="display:flex;flex-direction:column;gap:3px"><span style="width:18px;height:1.6px;background:#23201C"></span><span style="width:18px;height:1.6px;background:#23201C"></span><span style="width:18px;height:1.6px;background:#23201C"></span></div>
+<div style="display:flex;align-items:center;gap:12px"><span style="font-size:12.5px;font-weight:600;color:#F8F5EF;background:#23201C;padding:8px 14px;border-radius:999px">Sign up</span><div style="display:flex;flex-direction:column;gap:3px"><span style="width:18px;height:1.6px;background:#23201C"></span><span style="width:18px;height:1.6px;background:#23201C"></span><span style="width:18px;height:1.6px;background:#23201C"></span></div></div>
 </div>
 <div style="flex:1;overflow:hidden;background:linear-gradient(170deg,#F8F5EF 0%,#F7F0E8 50%,#F2E4D8 100%);padding:22px 16px 0">
 <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(180,85,47,.1);color:#8E3F20;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;margin-bottom:14px"><span style="width:5px;height:5px;border-radius:50%;background:#B4552F"></span>{{ heroBadge }}</div>
@@ -939,7 +990,7 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 <div style="width:64px;height:64px;border-radius:50%;background:#EADCCB;border:3px solid #F8F5EF;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:24px;color:#8E3F20;flex:none">MK</div>
 </div>
 <div style="font-family:'Instrument Serif',serif;font-size:27px;line-height:1.15;color:#23201C;margin-top:10px">Kessler &amp; Co.</div>
-<div style="font-size:12.5px;color:#4A443C;margin-top:5px">★ <strong style="font-weight:700">4.9</strong> (127) · Austin, TX · Replies in ~2h</div>
+<div style="font-size:12.5px;color:#4A443C;margin-top:5px">★ <strong style="font-weight:700">4.9</strong> (127) · Austin, TX</div>
 <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><span style="font-size:11.5px;font-weight:600;background:#F7E7E0;color:#8E3F20;padding:5px 10px;border-radius:6px">Photography</span><span style="font-size:11.5px;font-weight:600;background:#EDF0E9;color:#4B5940;padding:5px 10px;border-radius:6px">Free Jun 14</span></div>
 <div style="display:flex;gap:20px;border-bottom:1px solid #E4DDD1;margin-top:14px;overflow:hidden">
 <span style="font-size:13px;font-weight:600;color:#23201C;padding:9px 0;box-shadow:inset 0 -2px 0 #B4552F">About</span>

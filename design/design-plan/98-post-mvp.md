@@ -44,9 +44,54 @@ These are query results or per-vendor facts, not platform marketing, and they st
 
 - Search result count — "24 photographers in Austin" (it's the answer to the query)
 - Filter facet counts inside the Refine bar popovers
-- A vendor's own rating, review count and reply time on their profile
+- A vendor's own rating and review count on their profile (reply time is deferred — below)
 - A vendor's own metrics on their private dashboard
 - Real counts in admin
+
+## Deferred: all fee language on vendor surfaces
+
+Vendors pay something — service fee, commission or subscription — and the model
+isn't settled. **No vendor-facing surface makes any fee claim, in either
+direction.** Not "no fees", not a rate, not a hint. The vendor sign-up panel talks
+about the payment _mechanism_ instead ("Paid out after the event — no chasing
+invoices"), which holds true under any model.
+
+The **customer** side keeps "Published prices, and no service fee on top" — true
+of the customer's half of the transaction, and a real differentiator there. It must
+not be mirrored, or negated, onto the vendor side.
+
+**Unblock:** pricing decided. The vendor panel then gains a fourth guarantee
+stating plainly what a vendor pays, and the vendor section gets a pricing block. A
+claim walked back later costs more trust than saying nothing now.
+
+## Deferred: reply-time claims
+
+Median reply time ("Replies in ~2h", a "Replies" stat tile, "★ 4.9 · replies in
+2h" on the landing hero chip) requires message history that does not exist at
+launch. A brand-new vendor's first enquiry would be measured against a number
+invented for them.
+
+Removed from: the landing hero chip (chip deleted entirely), the vendor profile
+meta line, the profile's stat tiles (four → three), and the mobile profile.
+
+**Kept:** the vendor's own private dashboard metric. That's their data about
+themselves and it starts empty honestly. The dashboard's "keep it under 4h to stay
+ranked" line implied a ranking signal that does not exist, so it is softened to a
+plain nudge — see the reply-time ranking entry below and `16-vendor-dashboard.md`.
+
+**Unblock:** ~10 answered enquiries for a given vendor. It then returns as a
+**per-vendor fact shown only for vendors who have one** — never as a platform
+average, and never as a default for a new profile.
+
+## Deferred: the landing hero vendor chip
+
+A floating card over the photo cluster showing a named vendor, their rating and
+their reply time. Three fabricated facts in the most prominent position on the
+site. Deleted; the photo cluster carries the hero on its own.
+
+**Unblock:** real vendors with real ratings worth featuring — and an editorial
+decision about who gets featured, which is a fairness question as much as a design
+one.
 
 ## Deferred: Events as an entity
 
@@ -96,12 +141,16 @@ need behavioural data. Category browsing plus the Refine bar is the whole discov
 
 ## Deferred: reply-time ranking
 
-The vendor dashboard shows "keep it under 4h to stay ranked", which implies a
-ranking signal. **The signal must exist before that copy ships** — either build
-the ranking or change the line to a plain nudge. Flagged in `16`.
+The vendor dashboard used to show "keep it under 4h to stay ranked", which implied
+a ranking signal the app does not have. **Resolved by changing the copy**, not by
+building the signal: the line is now a plain nudge with no mechanic attached — see
+`16-vendor-dashboard.md`.
+
+**Unblock:** a real ranking signal that reads reply time. Only then may any
+surface tell a vendor that replying faster ranks them higher.
 
 ## Open design questions
 
-Live in `99-open-questions.md`. The vendor-doesn't-reply path (question 2) is
+Live in `99-open-questions.md`. The vendor-doesn't-reply path (question 1) is
 the one I'd resolve inside MVP — it's the most common failure in a two-sided
 marketplace and it currently has no designed surface.

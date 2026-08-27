@@ -68,11 +68,29 @@ describe('SiteHeader', () => {
       'http://localhost:3000/sign-in',
     );
     // Sign-up must be a page, not a modal: it collects the role first.
-    expect(screen.getByRole('link', { name: 'Join as a vendor' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: 'Sign up' })).toHaveProperty(
       'href',
       'http://localhost:3000/sign-up',
     );
     expect(screen.queryByRole('button', { name: 'Open user button' })).toBeNull();
+  });
+
+  /*
+   * Both account types are reachable from the first screen. The pill is the
+   * customer path because that is the volume; the vendor path is *named* and
+   * arrives with the role pre-selected, so `/sign-up`'s cards stay the real
+   * fork. See design/design-plan/21-sign-up.md.
+   */
+  it('offers the vendor door as a named link carrying the role', async () => {
+    render(await SiteHeader());
+
+    expect(screen.getByRole('link', { name: 'List your services' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/sign-up?role=vendor',
+    );
+    // The old single "Join as a vendor" pill is gone — it offered the
+    // low-volume path as the page's only account action.
+    expect(screen.queryByRole('link', { name: 'Join as a vendor' })).toBeNull();
   });
 
   it('carries the marketing nav on the landing page', async () => {
@@ -134,6 +152,7 @@ describe('SiteHeader', () => {
     );
     expect(screen.getByRole('button', { name: 'Open user button' })).toBeDefined();
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Get started' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'List your services' })).toBeNull();
   });
 });

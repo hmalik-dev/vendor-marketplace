@@ -16,7 +16,7 @@ header 64px                                                    bg-stone-0
 │ │ H1 54px Instrument Serif           │  3 overlapping      │ │
 │ │ sub-line 16px stone-700 max-450    │  cards, rotated     │ │
 │ │ [ Vendor type ▾ | City | Date ]    │  −4° / +3° / +2°    │ │
-│ │ Or jump straight to · 4 pills      │  + floating vendor  │ │
+│ │ Or jump straight to · 4 pills      │  cards only         │ │
 │ └────────────────────────────────────┴─────────────────────┘ │
 │ Browse by category — 6 cards across                          │
 └──────────────────────────────────────────────────────────────┘
@@ -33,6 +33,26 @@ A single `rgba(180,85,47,.06)` circle, 440px, sits behind the cluster at
 
 The headline names the friction the product removes. It deliberately does **not**
 promise meeting anyone — not meeting them is the point.
+
+## Header
+
+Left: logo, then `Browse` · `How it works` · `For vendors`.
+Right: **List your services** (text) · 1px divider · **Sign in** (text) ·
+**Sign up** (ink pill).
+
+Both account types are reachable from the first screen. The pill is the customer
+path because that's the volume; the vendor path is **named** rather than styled
+as a peer button — "List your services" says what it does, where a second pill
+would ask the visitor to pick a door before they know the building. Both land on
+`/sign-up`, whose role cards make the actual fork; the vendor link arrives with
+`?role=vendor` pre-selected. Full reasoning in `21-sign-up.md`.
+
+The former single **Join as a vendor** pill is gone: it offered the low-volume
+path as the page's only account action and left customers with nothing but
+"Sign in".
+
+At 390 the header keeps a compact **Sign up** pill beside the hamburger — sign-up
+is too important to bury in a drawer. "List your services" drops out of the bar.
 
 ## Search bar — category-first
 
@@ -67,9 +87,14 @@ Values carry into `/search` as URL params.
 ## Photo cluster
 
 Three placeholder cards at 236×292 (−4°), 254×316 (+3°), 188×150 (+2°), shadows
-increasing with elevation, plus a floating vendor chip (avatar + name + "★ 4.9 ·
-replies in 2h"). This is the proof that real vendors exist and it is what fills
-the width — it is not decoration, so it ships with real vendor work at launch.
+increasing with elevation. This is the proof that real vendors exist and it is
+what fills the width — it is not decoration, so it ships with real vendor work
+at launch.
+
+**No floating vendor chip in MVP.** An earlier version overlaid a card showing a
+named vendor with a rating and "replies in 2h". All three are history the app
+doesn't have on day one, and a fabricated one in the most prominent position on
+the site is the worst possible placeholder. Deferred — see `98-post-mvp.md`.
 
 ## Category row
 
@@ -114,6 +139,8 @@ The hero's photo cluster and the trust signals carry the proof instead. See
 - [ ] Hero is two columns at ≥1024; the cluster never stacks above that
 - [ ] **No number on this page that isn't read from the database** — and in MVP that means no platform stats at all
 - [ ] Category cards describe the category; they do not count vendors
+- [ ] Both sign-up paths present in the header, customer as the pill
+- [ ] No vendor chip, rating or reply-time claim anywhere on the page
 
 ## Post-MVP
 
@@ -122,5 +149,6 @@ The hero's photo cluster and the trust signals carry the proof instead. See
 - A stats band (events booked · average rating · median reply)
 - City picker in the hero once there's more than one live market
 - Free-text / semantic search as an additional entry point beside the pickers
+- The floating vendor chip, once there are real vendors with real ratings to feature
 
 All gated on the condition in `98-post-mvp.md`.

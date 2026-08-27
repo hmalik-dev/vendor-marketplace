@@ -56,8 +56,10 @@ were cut deliberately and are recorded in `98-post-mvp.md`:
 - **No platform statistics on public pages.** The app is new; it has no vendor count, no "events booked", no average rating worth publishing. Public surfaces prove themselves with mechanism (real availability, payment held until the event, no service fee). Metric marketing returns when the numbers are real — the unblock condition is written down.
 - **No Event entity.** There is no way to create an event in MVP, so no screen may assume one. Bookings group by **month**, derived from their dates; occasion and venue are free-text fields on the booking. "Still to book" was removed as an invalid concept.
 - **Search is category + city + date, not a text query.** Three enumerable pickers, URL-addressable. The vendor-type field cannot hold an unrecognised value. Name search is a secondary affordance for the referral case.
+- **No reply-time claim on any public surface.** A median reply time needs message history the app doesn't have at launch. It survives only as the vendor's own private dashboard metric, which starts empty honestly.
+- **No fee language on vendor surfaces, in either direction.** Vendors pay something and the model isn't settled, so no vendor-facing surface makes a claim it might have to walk back. The customer's "no service fee on top" stays; it is not mirrored or negated.
 
-Rule that outlives all three: **every number on a public page is read from the
+Rule that outlives all of them: **every number on a public page is read from the
 database at request time, or it does not ship.**
 
 ## Revision of 2026-08-27
@@ -77,6 +79,25 @@ Unchanged and still correct: `04 Booking request`, `05 Checkout`,
 `06 Booking confirmed`, `08 Vendor dashboard`, `09 Vendor profile editor`,
 `10 Messaging`, `11 Availability`, `13 Admin`. Tokens, the logo, the brand
 constant and the component vocabulary are unchanged.
+
+## Revision — second pass, 2026-08-27
+
+Three frames were revised again and one was added.
+
+| Frame                           | Change                                                                                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01 Landing`                    | Header carries **two** entry points — **List your services** (text) · divider · **Sign in** · **Sign up** (ink pill); the single "Join as a vendor" pill is gone. Hero vendor chip deleted. |
+| `03 Vendor profile`             | "Replies in ~2h" cut from the meta line; About stat tiles four → **three** (Replies tile removed)                                                                                           |
+| `12 Sign up`                    | Marketing panel is **role-aware**; this frame is the customer state                                                                                                                         |
+| `12b Sign up — vendor selected` | **New.** Vendor state of the same screen: sage accent, "Set your prices. / Set your dates. / _Get booked._", three vendor guarantees, no fee claim                                          |
+| `14 Adaptations`                | Mobile header keeps a compact **Sign up** pill beside the hamburger; mobile profile drops its reply-time line                                                                               |
+
+Also resolved: open question 2 (reply-time ranking) — the signal is deferred, so
+the vendor dashboard's "keep it under 4h to stay ranked" is softened to a plain
+norm rather than a promised mechanic.
+
+Unchanged by this pass: `02`, `04`–`11`, `13`. Tokens gain one value —
+`--color-sage-150`, the pale-sage italic accent on the vendor panel's ink ground.
 
 ## Non-negotiables
 

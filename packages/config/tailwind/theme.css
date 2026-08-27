@@ -27,6 +27,7 @@
   /* Sage — settled, confirmed, complete. */
   --color-sage-50: #edf0e9;
   --color-sage-100: #e4e9de;
+  --color-sage-150: #d9e2c8; /* pale sage — the italic accent on an ink ground */
   --color-sage-200: #a8c08e; /* pale sage — decorative dots on an ink ground */
   --color-sage-400: #5e6b4f;
   --color-sage-600: #4b5940; /* sage as text */

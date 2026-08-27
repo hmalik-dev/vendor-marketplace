@@ -18,9 +18,10 @@ const BROWSE_LINKS = [
   { href: '/search', label: 'All vendors' },
 ];
 
+/** The vendor links carry `?role=vendor` — see design/design-plan/21-sign-up.md. */
 const COMPANY_LINKS = [
   { href: '/#how-it-works', label: 'How it works' },
-  { href: '/sign-up', label: 'For vendors' },
+  { href: '/sign-up?role=vendor', label: 'For vendors' },
 ];
 
 /**
@@ -29,7 +30,7 @@ const COMPANY_LINKS = [
  * people who can actually use them.
  */
 const SIGNED_OUT_LINKS = [
-  { href: '/sign-up', label: 'Become a vendor' },
+  { href: '/sign-up?role=vendor', label: 'Become a vendor' },
   { href: '/sign-in', label: 'Sign in' },
 ];
 

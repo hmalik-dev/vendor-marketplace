@@ -12,7 +12,7 @@ cover — 21:9, capped at 150px so it cannot eat the fold
 ┌───────────────── content column ─────────────┬── booking rail 380px ──┐
 │ avatar 72px + name, fully BELOW the cover    │  From $1,450           │  sticky
 │ Business name  Instrument Serif 33px         │  Free on June 14       │
-│ ★ 4.9 (127) · Austin, TX · Replies in ~2h    │  [date] [guests]       │
+│ ★ 4.9 (127) · Austin, TX                     │  [date] [guests]       │
 │ [category] [languages] [style] [+3 more]     │  [package ▾]           │
 │ ── About | Packages | Portfolio | Reviews |  │  Request booking       │
 │    Availability ────────────────────────────  │  Send a message        │
@@ -53,10 +53,15 @@ sections with a scroll-spy indicator.
 
 ## Tab content
 
-**About** — tagline as a Serif italic pull-quote, bio at max 640px, four stat
-tiles (Experience / Events / Travels / Replies) each a `stone-0` 12px-radius
-card with an uppercase label over a 22px Serif number, then a 4-up recent-work
-strip linking into the portfolio.
+**About** — tagline as a Serif italic pull-quote, bio at max 640px, **three** stat
+tiles (Experience / Events / Travels) each a `stone-0` 12px-radius card with an
+uppercase label over a 22px Serif number, then a 4-up recent-work strip linking
+into the portfolio.
+
+The fourth tile was **Replies**. It is gone, along with "Replies in ~2h" from the
+meta line and from the mobile profile: a median reply time needs message history
+the app doesn't have at launch, so a brand-new vendor's first enquiry would be
+measured against a number invented for them. Deferred — `98-post-mvp.md`.
 
 **Packages** — 2 columns. Each card: name (Serif), price (Serif, large),
 duration, inclusions as a checklist with `clay-400` checks, and "Select this
@@ -99,10 +104,12 @@ and both CTAs, so the action is never off-screen.
 - [ ] Rail sticky through the whole page
 - [ ] Tabs swap the pane at ≥1280 and write to the URL
 - [ ] Document height ≤ 2.5 viewports on the longest tab
+- [ ] No reply-time claim on the meta line, the stat tiles or the mobile profile
 
 ## Post-MVP
 
 - "Similar vendors" strip at the bottom of the profile
 - Video in the portfolio lightbox
 - Vendor response to a review
-- Note: the vendor's own rating, review count and reply time **stay in MVP** — they're that vendor's facts, not platform marketing, and they're absent until earned rather than faked
+- Reply time returns as a fourth stat tile and a meta-line item, per vendor and only once that vendor has answered enough enquiries to have one — `98-post-mvp.md`
+- Note: the vendor's own rating and review count **stay in MVP** — they're that vendor's facts, not platform marketing, and they're absent until earned rather than faked

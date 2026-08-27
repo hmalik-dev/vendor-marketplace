@@ -43,8 +43,12 @@ common failure path in a two-sided marketplace and it has no surface today.
 
 ## 2. Does reply-time ranking exist? — **blocks a line of copy**
 
-**Deferred post-MVP.** Screen 16 says "keep it under 4h to stay ranked". Either the ranking signal is
-real, or that sentence changes. Don't ship an implied mechanic that isn't there.
+**Deferred post-MVP.** Screen 16 said "keep it under 4h to stay ranked". Either the
+ranking signal is real, or that sentence changes — don't ship an implied mechanic
+that isn't there. Since the signal is deferred, **the sentence changed**: the
+dashboard nudge no longer mentions ranking. Public reply-time claims go with it —
+the profile meta line, the "Replies" stat tile and the landing hero chip are all
+removed. See `98-post-mvp.md`.
 
 ## 3. Review asymmetry
 
@@ -59,8 +63,7 @@ Six featured of eleven by `displayOrder`. Editorial (ops picks)
 
 Every placeholder is labelled with the shot it needs. The product is photo-forward
 by design, so launch quality depends on the first cohort of vendors having good
-cover images. Decide whether onboarding includes a minimum-quality gate or a
-shoot-day offer for early vendors.
+cover images. -- only recommended sizes for photos
 
 ## 6. Where does the occasion field come from?
 

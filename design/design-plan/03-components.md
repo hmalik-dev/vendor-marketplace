@@ -10,7 +10,7 @@ here first — a value chosen inside a page is a second source of truth.
 | Primary     | `bg-clay-400 text-stone-0 font-semibold text-base px-5 py-2.5 rounded-lg`                | The one action the screen exists for                                      |
 | Secondary   | `bg-stone-0 text-stone-900 border border-stone-300 font-semibold px-5 py-2.5 rounded-lg` | The alternative                                                           |
 | Ghost       | `text-clay-500 font-semibold`, no fill, no border                                        | "View all →", tertiary actions                                            |
-| Ink         | `bg-stone-900 text-stone-50 rounded-full px-4.5 py-2.5`                                  | "Join as a vendor" in the marketing header only                           |
+| Ink         | `bg-stone-900 text-stone-50 rounded-full px-4.5 py-2.5`                                  | "Sign up" in the marketing header only                                    |
 | Destructive | `bg-error-500 text-stone-0`                                                              | Irreversible only; always behind an AlertDialog; never the primary action |
 
 Hover: primary → `clay-500` + `scale(1.02)`; secondary → `bg-stone-150`; ghost →

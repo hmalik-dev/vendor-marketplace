@@ -374,8 +374,12 @@ export default async function HomePage(): Promise<React.ReactElement> {
               hides the same pair, and a page that disagrees with itself is a bug.
             */}
             <Show when="signed-out">
+              {/*
+                Every vendor CTA arrives at sign-up with the role pre-selected;
+                the role cards there stay the real fork — 21-sign-up.md.
+              */}
               <Button variant="secondary" className="mt-5" asChild>
-                <Link href="/sign-up">Join as a vendor</Link>
+                <Link href="/sign-up?role=vendor">Join as a vendor</Link>
               </Button>
             </Show>
             <Show when="signed-in">

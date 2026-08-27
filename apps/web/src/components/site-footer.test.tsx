@@ -57,9 +57,10 @@ describe('SiteFooter', () => {
       'href',
       'http://localhost:3000/sign-in',
     );
+    // The vendor door pre-selects the role — design/design-plan/21-sign-up.md.
     expect(screen.getByRole('link', { name: 'Become a vendor' })).toHaveProperty(
       'href',
-      'http://localhost:3000/sign-up',
+      'http://localhost:3000/sign-up?role=vendor',
     );
   });
 

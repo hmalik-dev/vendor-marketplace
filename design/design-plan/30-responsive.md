@@ -26,8 +26,21 @@ they must not break, and they never dictate the desktop layout.
 | Editor                | 200px nav + 2-col grid + submit bar              | Nav → dots rail          | Nav on top, 2-col fields                                                  | 1 col, submit bar sticky                                                            |
 | Messaging             | 3 panes                                          | 2 panes + context toggle | **2 panes 40/60**, context as a collapsible strip under the thread header | List → thread with back arrow; context behind a "Booking ▾" chip                    |
 | Availability          | 3 months + rail                                  | 2 months                 | 1 month + rail below                                                      | 1 month, swipe, tap to toggle                                                       |
-| Sign up               | Split screen                                     | Split                    | Auth column centred, photo drops                                          | Single column                                                                       |
+| Sign up               | Split screen                                     | Split                    | Auth column centred, photo drops                                          | Single column; role cards stack                                                     |
 | Admin                 | Fixed header, 15 rows                            | ~13 rows                 | Horizontal scroll                                                         | Card list, not a table                                                              |
+
+## Marketing header
+
+The header's account cluster degrades in one step, and the **Sign up** pill never
+degrades: it stays a pill at 390, beside the hamburger, because sign-up is too
+important to bury in a drawer.
+
+| Control                             | 1440 · 1280 · 1024               | 768 · 390                     |
+| ----------------------------------- | -------------------------------- | ----------------------------- |
+| Browse / How it works / For vendors | In the bar                       | Drawer                        |
+| **List your services**              | In the bar, before a 1px divider | Drawer                        |
+| **Sign in**                         | In the bar                       | Drawer                        |
+| **Sign up** (ink)                   | In the bar                       | **Stays in the bar**, compact |
 
 ## Rules that survive every width
 

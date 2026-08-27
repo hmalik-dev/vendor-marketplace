@@ -1,143 +1,58 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const signUpProps = vi.fn<(props: Record<string, unknown>) => void>();
+const formProps = vi.fn<(props: Record<string, unknown>) => void>();
 
-vi.mock('@clerk/nextjs', () => ({
-  SignUp: (props: Record<string, unknown>) => {
-    signUpProps(props);
-    return <div data-testid="clerk-sign-up" />;
+vi.mock('@/components/auth/sign-up-form', () => ({
+  SignUpForm: (props: Record<string, unknown>) => {
+    formProps(props);
+    return <div data-testid="sign-up-form" />;
   },
 }));
 
 const { default: SignUpPage } = await import('./page');
 
-const CUSTOMER = "I'm planning an event";
-const VENDOR = "I'm a vendor";
+async function renderWith(params: Record<string, string | string[] | undefined>): Promise<unknown> {
+  return render(await SignUpPage({ searchParams: Promise.resolve(params) }));
+}
 
 describe('SignUpPage', () => {
   afterEach(() => {
     cleanup();
-    signUpProps.mockClear();
-  });
-
-  it('asks for a role before rendering the Clerk form', () => {
-    render(<SignUpPage />);
-
-    expect(screen.queryByTestId('clerk-sign-up')).toBeNull();
-    expect(screen.getByRole('radio', { name: new RegExp(CUSTOMER) })).toBeDefined();
-    expect(screen.getByRole('radio', { name: new RegExp(VENDOR) })).toBeDefined();
+    formProps.mockClear();
   });
 
   /*
-   * The choice is irreversible, so both options stay on screen after selection
-   * rather than collapsing to a line of text — the visitor can still see what
-   * they did not pick, and change it, right up until the form is submitted.
+   * The header's "List your services" link is the vendor door, and it has to
+   * land with the vendor card already chosen — a pre-selection that arrives a
+   * frame late reads as the page changing its mind.
    */
-  it('keeps both roles visible and selectable after one is chosen', async () => {
-    const user = userEvent.setup();
-    render(<SignUpPage />);
+  it.each([
+    ['vendor', 'vendor'],
+    ['customer', 'customer'],
+  ] as const)('pre-selects the %s role from ?role=', async (param, expected) => {
+    await renderWith({ role: param });
 
-    await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
-
-    const vendor = screen.getByRole('radio', { name: new RegExp(VENDOR) });
-    const customer = screen.getByRole('radio', { name: new RegExp(CUSTOMER) });
-
-    expect(vendor).toHaveProperty('checked', true);
-    expect(customer).toHaveProperty('checked', false);
-
-    await user.click(customer);
-    expect(screen.getByRole('radio', { name: new RegExp(CUSTOMER) })).toHaveProperty(
-      'checked',
-      true,
-    );
-    expect(signUpProps).toHaveBeenLastCalledWith(
-      expect.objectContaining({ unsafeMetadata: { role: 'customer' } }),
-    );
+    expect(formProps).toHaveBeenCalledWith({ initialRole: expected });
   });
 
-  it('carries the vendor role into Clerk as unsafe metadata', async () => {
-    const user = userEvent.setup();
-    render(<SignUpPage />);
+  it('asks the question outright when no role is given', async () => {
+    await renderWith({});
 
-    await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
-
-    expect(screen.getByTestId('clerk-sign-up')).toBeDefined();
-    expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ unsafeMetadata: { role: 'vendor' } }),
-    );
-  });
-
-  it('carries the customer role into Clerk as unsafe metadata', async () => {
-    const user = userEvent.setup();
-    render(<SignUpPage />);
-
-    await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
-
-    expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ unsafeMetadata: { role: 'customer' } }),
-    );
-  });
-
-  it('sends the new account to the role-resolving dashboard route', async () => {
-    const user = userEvent.setup();
-    render(<SignUpPage />);
-
-    await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
-
-    expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ fallbackRedirectUrl: '/after-sign-in' }),
-    );
-  });
-
-  it('groups the two roles under one labelled choice', () => {
-    render(<SignUpPage />);
-
-    expect(screen.getByRole('group', { name: 'Which one are you?' })).toBeDefined();
-    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(formProps).toHaveBeenCalledWith({ initialRole: null });
   });
 
   /*
-   * The marketing panel is mechanism, not metrics: a placeholder number in
-   * front of a hesitant sign-up is the worst possible place for one.
-   * See design/design-plan/98-post-mvp.md.
+   * The role is irreversible, so an unrecognised string must never quietly
+   * become a choice — including a repeated param, which arrives as an array.
    */
-  it('states the three guarantees and no platform statistics', () => {
-    render(<SignUpPage />);
+  it.each([
+    ['an unknown role', { role: 'admin' }],
+    ['an empty role', { role: '' }],
+    ['a repeated role', { role: ['vendor', 'customer'] }],
+  ])('falls back to no pre-selection for %s', async (_label, params) => {
+    await renderWith(params);
 
-    expect(screen.getByText('Live calendars — if a date shows open, it is')).toBeDefined();
-    expect(screen.getByText('Payment held until the event is complete')).toBeDefined();
-    expect(screen.getByText('Published prices, and no service fee on top')).toBeDefined();
-
-    // Nothing on this screen may claim a scale the product does not have.
-    expect(document.body.textContent).not.toMatch(/\d[\d,]*\s*(vendors|events|reviews|bookings)/i);
-    expect(document.body.textContent).not.toMatch(/thousands|#1|trusted by/i);
-  });
-
-  it('leads the marketing panel with the three-line headline, closing in italic', () => {
-    const { container } = render(<SignUpPage />);
-
-    const headline = [...container.querySelectorAll('p')].find((p) =>
-      p.textContent?.startsWith('See the price.'),
-    );
-
-    // Both halves of the premise, then the line that hands over the decision.
-    expect(headline?.textContent).toBe('See the price.See the open dates.Then decide.');
-    // "Then decide." is the only italic run, and it is pale gold on the ink wash.
-    const accent = headline?.querySelector('span');
-    expect(accent?.textContent).toBe('Then decide.');
-    expect(accent?.className).toContain('italic');
-    expect(accent?.className).toContain('text-gold-200');
-  });
-
-  it('demonstrates published pricing rather than calling it transparent', () => {
-    render(<SignUpPage />);
-
-    expect(
-      screen.getByText(/Every vendor publishes what they charge and when they're free/),
-    ).toBeDefined();
-    // 21-sign-up.md: never use the word, show the mechanism instead.
-    expect(document.body.textContent).not.toMatch(/transparen/i);
+    expect(formProps).toHaveBeenCalledWith({ initialRole: null });
   });
 });

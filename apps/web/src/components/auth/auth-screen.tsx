@@ -2,33 +2,89 @@ import type { ReactNode } from 'react';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { StockPhoto } from '@/components/ui/stock-photo';
 
-/**
- * The three guarantees on the marketing panel.
- *
- * Deliberately mechanism, not metrics: a new marketplace has no vendor count,
- * no "events booked" and no average rating worth publishing, and the last thing
- * a hesitant sign-up reads is the worst possible place for a placeholder
- * number. Each of these is true on day one. The stats band returns when the
- * numbers are real — condition in design/design-plan/98-post-mvp.md.
- */
-const GUARANTEES = [
-  'Live calendars — if a date shows open, it is',
-  'Payment held until the event is complete',
-  'Published prices, and no service fee on top',
-] as const;
+/** Which side of the marketplace the marketing panel is speaking to. */
+export type AuthPanelRole = 'customer' | 'vendor';
+
+interface AuthPanel {
+  /** The photograph behind the wash — the product's own content. */
+  photo: string;
+  /**
+   * The 200deg wash that lets the proof copy sit legibly over a photograph.
+   * Each panel keeps the same structure and shifts hue: warm for the customer,
+   * green for the vendor, matching the accent on the selected role card.
+   */
+  wash: string;
+  /** The headline's first two lines, then the italic line that closes it. */
+  headline: readonly [string, string, string];
+  /** Tailwind class for that closing line — pale gold or pale sage on ink. */
+  accentClass: string;
+  body: string;
+  /**
+   * Mechanism, not metrics: a new marketplace has no vendor count, no "events
+   * booked" and no average rating worth publishing, and the last thing a
+   * hesitant sign-up reads is the worst possible place for a placeholder
+   * number. Each of these is true on day one. The stats band returns when the
+   * numbers are real — condition in design/design-plan/98-post-mvp.md.
+   */
+  guarantees: readonly [string, string, string];
+}
 
 /**
- * The 200deg wash that lets the proof copy sit legibly over a photograph. It
- * is specific to this screen, so it lives here rather than in the shared theme.
+ * The two panels are the same promise inverted: a customer is told they will
+ * **see** the price and the open dates, a vendor that they **set** them. That
+ * symmetry is the product, so neither panel invents its own angle.
+ *
+ * The vendor panel makes **no claim about fees, in either direction** — vendors
+ * do pay something and the model is not settled, so "Paid out after the event"
+ * describes the payment mechanism instead, which holds under any model. The
+ * customer's "no service fee on top" is true of the customer's half of the
+ * transaction and is deliberately not mirrored or negated across.
+ * See design/design-plan/21-sign-up.md.
  */
-const PHOTO_WASH =
-  'linear-gradient(200deg, rgba(35,32,28,.12) 0%, rgba(58,31,18,.62) 55%, rgba(35,32,28,.85) 100%)';
+const PANELS: Record<AuthPanelRole, AuthPanel> = {
+  customer: {
+    photo: '/stock/auth.jpg',
+    wash: 'linear-gradient(200deg, rgba(35,32,28,.12) 0%, rgba(58,31,18,.62) 55%, rgba(35,32,28,.85) 100%)',
+    // The premise is published pricing *and* published availability — both
+    // halves. The word "transparent" never appears; the two lines demonstrate
+    // it and the italic third hands the decision back to the visitor.
+    headline: ['See the price.', 'See the open dates.', 'Then decide.'],
+    accentClass: 'text-gold-200',
+    body: "Every vendor publishes what they charge and when they're free — before you talk to anyone, and without asking for a quote.",
+    guarantees: [
+      'Live calendars — if a date shows open, it is',
+      'Payment held until the event is complete',
+      'Published prices, and no service fee on top',
+    ],
+  },
+  vendor: {
+    photo: '/stock/dj.jpg',
+    wash: 'linear-gradient(200deg, rgba(35,32,28,.12) 0%, rgba(40,48,34,.62) 55%, rgba(28,32,24,.86) 100%)',
+    headline: ['Set your prices.', 'Set your dates.', 'Get booked.'],
+    accentClass: 'text-sage-150',
+    body: 'Enquiries arrive already knowing what you charge and that your date is free — so you spend your evenings working, not writing quotes.',
+    // The vendor's pain is unpaid quoting and calendar chaos, not price
+    // discovery, so each line answers one of those. None of them claims volume
+    // — that's a platform-scale promise the app cannot keep on day one.
+    guarantees: [
+      'You publish your own packages and prices',
+      "Your calendar decides which dates you're offered",
+      'Paid out after the event — no chasing invoices',
+    ],
+  },
+};
 
 export interface AuthScreenProps {
   /** Serif headline: "Let's get you set up", "Welcome back". */
   headline: string;
   /** The one line under it. */
   subhead: string;
+  /**
+   * Which marketing panel to show beside the form. Defaults to the customer
+   * panel: it is the volume path, and it is what a visitor with no role yet —
+   * or anyone signing in, who already has one — should read.
+   */
+  panel?: AuthPanelRole;
   children: ReactNode;
 }
 
@@ -39,7 +95,14 @@ export interface AuthScreenProps {
  * marketing panel uses the width honestly. Below 1280 the photograph drops and
  * the auth column centres — see design/design-plan/21-sign-up.md.
  */
-export function AuthScreen({ headline, subhead, children }: AuthScreenProps): React.ReactElement {
+export function AuthScreen({
+  headline,
+  subhead,
+  panel = 'customer',
+  children,
+}: AuthScreenProps): React.ReactElement {
+  const { photo, wash, headline: proof, accentClass, body, guarantees } = PANELS[panel];
+
   return (
     // The attribute is what globals.css keys the chrome-suppression rule off.
     <div data-auth-screen className="flex min-h-dvh">
@@ -72,37 +135,26 @@ export function AuthScreen({ headline, subhead, children }: AuthScreenProps): Re
       {/*
         The photograph is the product's content, so it gets real width — but it
         carries no information, so it leaves entirely below 1280 rather than
-        letterboxing into a strip.
+        letterboxing into a strip. Keying the wrapper on the panel remounts the
+        photograph on a role change, so the new one loads rather than being
+        cross-faded out of a stale layer.
       */}
-      <div className="relative hidden w-150 shrink-0 overflow-hidden xl:block">
-        <StockPhoto src="/stock/auth.jpg" sizes="600px" priority className="absolute inset-0" />
-        <div
-          aria-hidden="true"
-          className="absolute inset-0"
-          style={{ backgroundImage: PHOTO_WASH }}
-        />
+      <div key={panel} className="relative hidden w-150 shrink-0 overflow-hidden xl:block">
+        <StockPhoto src={photo} sizes="600px" priority className="absolute inset-0" />
+        <div aria-hidden="true" className="absolute inset-0" style={{ backgroundImage: wash }} />
 
         <div className="absolute inset-x-0 bottom-0 p-12">
-          {/*
-            The premise is published pricing *and* published availability —
-            both halves. The word "transparent" never appears; the two lines
-            demonstrate it and the italic third line closes on the customer's
-            own decision. See design/design-plan/21-sign-up.md.
-          */}
           <p className="font-display text-[38px] leading-[1.15] text-stone-0">
-            See the price.
+            {proof[0]}
             <br />
-            See the open dates.
+            {proof[1]}
             <br />
-            <span className="text-gold-200 italic">Then decide.</span>
+            <span className={`${accentClass} italic`}>{proof[2]}</span>
           </p>
-          <p className="mt-3 max-w-100 text-md leading-relaxed text-stone-0/82">
-            Every vendor publishes what they charge and when they&apos;re free — before you talk to
-            anyone, and without asking for a quote.
-          </p>
+          <p className="mt-3 max-w-100 text-md leading-relaxed text-stone-0/82">{body}</p>
 
           <ul className="mt-6.5 flex max-w-100 flex-col gap-2.75 border-t border-stone-0/22 pt-5">
-            {GUARANTEES.map((guarantee) => (
+            {guarantees.map((guarantee) => (
               <li key={guarantee} className="flex items-start gap-2.5">
                 <span
                   aria-hidden="true"
