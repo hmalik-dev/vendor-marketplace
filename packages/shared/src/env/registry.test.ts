@@ -209,6 +209,25 @@ describe('capabilitiesForTicket', () => {
     expect(capabilitiesForTicket(29)).toEqual(['core', 'auth', 'storage', 'e2e']);
     expect(capabilitiesForTicket(30)).toEqual(['core', 'e2e']);
     expect(capabilitiesForTicket(31)).toEqual(['core', 'auth', 'e2e']);
+    expect(capabilitiesForTicket(32)).toEqual(['core', 'e2e']);
+  });
+
+  // The three tickets opened by the 2026-08-27 production outage, when the API
+  // answered 500 on every route for ~19h behind a deployment Vercel called Ready.
+  it('resolves the tickets opened by the 2026-08-27 outage', () => {
+    // #33 is a web-tier resilience change and #35 is a CI check; neither reaches
+    // a paid service. #34 needs `storage` because half its scope is deciding how
+    // uploads cross the platform's 4.5MB request-body cap.
+    expect(capabilitiesForTicket(33)).toEqual(['core', 'e2e']);
+    expect(capabilitiesForTicket(34)).toEqual(['core', 'storage', 'e2e']);
+    expect(capabilitiesForTicket(35)).toEqual(['core', 'e2e']);
+  });
+
+  it('resolves the two design-revision tickets from the 2026-08-27 frame import', () => {
+    // #36 and #37 carry frames `01` and `18`. Parity work on imagery and a
+    // control shape needs no external service, so both start on `core` alone.
+    expect(capabilitiesForTicket(36)).toEqual(['core', 'e2e']);
+    expect(capabilitiesForTicket(37)).toEqual(['core', 'e2e']);
   });
 
   // #26 and #27 sat on the status board for a day with no registry row, so

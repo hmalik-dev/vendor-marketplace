@@ -56,6 +56,20 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   29: ['auth', 'storage'],
   30: [],
   31: ['auth'],
+  // #32 touches no external service: it decides whether the demo cover files
+  // are tracked in the repo or pushed to the bucket, and only the second half
+  // would need `storage`. Declared bare so the ticket is never gated on keys it
+  // may not end up using.
+  32: [],
+  33: [],
+  // #34 carries `storage` because deciding the upload path — presigned direct-to-R2
+  // versus a smaller body cap — is half its scope.
+  34: ['storage'],
+  35: [],
+  // Frames `01` and `18`, revised 2026-08-27. Both are web-tier parity work on
+  // imagery and a control shape; neither reaches an external service.
+  36: [],
+  37: [],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
