@@ -7,6 +7,11 @@ import { CAPABILITIES, type Capability } from './capabilities.js';
  * `core` and `e2e` are implicit on every ticket — every ticket touches the app
  * and every ticket is browser-verified — so they are omitted here and added by
  * `capabilitiesForTicket`.
+ *
+ * Lettered splits share their parent's number: `#6a`/`#6b`/`#6c` are all
+ * `--ticket 6`, `#7a`/`#7b` are `--ticket 7`, `#22a`/`#22b` are `--ticket 22`.
+ * A split never changes which external services the work needs, so a second
+ * entry would only be a second thing to keep in sync.
  */
 export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>> = {
   0: [],
@@ -32,6 +37,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   20: [],
   21: ['auth'],
   22: ['auth'],
+  23: ['auth', 'storage'],
+  24: ['auth'],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

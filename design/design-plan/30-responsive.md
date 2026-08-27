@@ -13,21 +13,21 @@ they must not break, and they never dictate the desktop layout.
 
 ## Degradation table
 
-| Screen                | 1440 (design target)                | 1280                     | 768                                                                       | 390                                                                                 |
-| --------------------- | ----------------------------------- | ------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Header                | Full nav, never hides               | Same                     | Hamburger → drawer                                                        | Hamburger, 56px tall                                                                |
-| Landing               | Hero 56/44 split                    | Same                     | Stacked, cluster → 2 photos                                               | Stacked, search becomes a stacked card                                              |
-| Search                | 280px rail + 3 col                  | Same, 3 col              | **Filters button + count pill row**, 2 col                                | Sticky bottom "Filters · 3" + "Sort", 1 col                                         |
-| Vendor profile        | Content + 380px sticky rail, tabs   | 340px rail               | Rail → inline card above the tabs                                         | Stacked; **rail becomes a sticky bottom bar** with from-price + Request booking     |
-| Booking request       | Form + 400px rail                   | Same                     | Rail → summary card above the form                                        | Summary accordion, sticky Continue                                                  |
-| Checkout              | Form + 420px rail                   | Same                     | Same, narrower                                                            | Summary accordion above, total always visible                                       |
-| Vendor dashboard      | Sidebar + content + 340px rail      | Rail wraps under content | Icon rail 72px                                                            | Bottom tab bar; **rail content leads** — requests first, then stats, then checklist |
-| Customer bookings hub | Sidebar + content + rail            | Rail wraps under         | Icon rail; tabs stay, groups stack                                        | Bottom tabs; event groups stack, tabs become a scrollable row                       |
-| Editor                | 200px nav + 2-col grid + submit bar | Nav → dots rail          | Nav on top, 2-col fields                                                  | 1 col, submit bar sticky                                                            |
-| Messaging             | 3 panes                             | 2 panes + context toggle | **2 panes 40/60**, context as a collapsible strip under the thread header | List → thread with back arrow; context behind a "Booking ▾" chip                    |
-| Availability          | 3 months + rail                     | 2 months                 | 1 month + rail below                                                      | 1 month, swipe, tap to toggle                                                       |
-| Sign up               | Split screen                        | Split                    | Auth column centred, photo drops                                          | Single column                                                                       |
-| Admin                 | Fixed header, 15 rows               | ~13 rows                 | Horizontal scroll                                                         | Card list, not a table                                                              |
+| Screen                | 1440 (design target)                             | 1280                     | 768                                                                       | 390                                                                                 |
+| --------------------- | ------------------------------------------------ | ------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Header                | Full nav, never hides                            | Same                     | Hamburger → drawer                                                        | Hamburger, 56px tall                                                                |
+| Landing               | Hero 56/44 split                                 | Same                     | Stacked, cluster → 2 photos                                               | Stacked, search becomes a stacked card                                              |
+| Search                | 3-input query bar + horizontal Refine bar, 4 col | 3 col                    | Query bar keeps 3 inputs; Refine wraps to 2 rows, 2 col                   | Query bar stacks to a 3-row card; sticky bottom "Filters · 3" + "Sort", 1 col       |
+| Vendor profile        | Content + 380px sticky rail, tabs                | 340px rail               | Rail → inline card above the tabs                                         | Stacked; **rail becomes a sticky bottom bar** with from-price + Request booking     |
+| Booking request       | Form + 400px rail                                | Same                     | Rail → summary card above the form                                        | Summary accordion, sticky Continue                                                  |
+| Checkout              | Form + 420px rail                                | Same                     | Same, narrower                                                            | Summary accordion above, total always visible                                       |
+| Vendor dashboard      | Sidebar + content + 340px rail                   | Rail wraps under content | Icon rail 72px                                                            | Bottom tab bar; **rail content leads** — requests first, then stats, then checklist |
+| Customer bookings hub | Sidebar + content + rail                         | Rail wraps under         | Icon rail; tabs stay, month groups stack                                  | Bottom tabs; month groups stack, tabs become a scrollable row                       |
+| Editor                | 200px nav + 2-col grid + submit bar              | Nav → dots rail          | Nav on top, 2-col fields                                                  | 1 col, submit bar sticky                                                            |
+| Messaging             | 3 panes                                          | 2 panes + context toggle | **2 panes 40/60**, context as a collapsible strip under the thread header | List → thread with back arrow; context behind a "Booking ▾" chip                    |
+| Availability          | 3 months + rail                                  | 2 months                 | 1 month + rail below                                                      | 1 month, swipe, tap to toggle                                                       |
+| Sign up               | Split screen                                     | Split                    | Auth column centred, photo drops                                          | Single column                                                                       |
+| Admin                 | Fixed header, 15 rows                            | ~13 rows                 | Horizontal scroll                                                         | Card list, not a table                                                              |
 
 ## Rules that survive every width
 
@@ -59,3 +59,17 @@ unmet step.
 - [ ] Rails and master–detail degrade per the table — not by stacking everything
 - [ ] Right pattern for the width (bottom sheet vs modal)
 - [ ] Primary action reachable without scrolling on every screen
+
+## The three query inputs survive every width
+
+Vendor type, city and date stay together as one control group at every breakpoint.
+At 390 they stack into a three-row card rather than collapsing into the filter
+sheet — they are the query, not a refinement, and the vendor-type select is the
+single most important control on the page.
+
+The **Refine bar** is what collapses: at 390 its chips move into a bottom sheet
+behind a "Filters · 3" trigger. The query never joins them, and the date never
+appears there at any width.
+
+There is no 280px filter rail at any width — it was deleted from the desktop
+composition, so there is nothing for the narrower widths to degrade.

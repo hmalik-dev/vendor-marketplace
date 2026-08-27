@@ -5,10 +5,28 @@ so the reasoning isn't lost.
 
 ## RESOLVED — Is this a one-event dashboard?
 
-**No.** The product is a standing hub for any vendor booking, for any event, now
-or in future. Screen 20 was rebuilt around events-as-containers with Upcoming /
-History / All, and "Still to book" was removed: there is no fixed set of
-categories an event should have. See `20-customer-bookings-hub.md`.
+**No.** It's a standing hub for any vendor booking, now or in future. Upcoming /
+History / All tabs; "Still to book" removed — there is no fixed set of categories
+an event should have. See `20-customer-bookings-hub.md`.
+
+## RESOLVED — Does an Event entity exist in MVP?
+
+**No, and no screen may assume one.** An earlier draft grouped bookings under
+named events ("Nandakumar wedding") with an "Event details →" link and a "My
+events" nav item. There is no way to create an event in the product, so all of
+that is removed. Bookings group by **month derived from their dates**; occasion
+and venue are free-text fields on the booking. Events as a real object with their
+own page are post-MVP. See `98-post-mvp.md`.
+
+## RESOLVED — How do users search?
+
+**Category + city + date, as three pickers.** Not a text query — nobody searches
+"June Harlow" to find a photographer, and a text box has to guess intent from
+strings like "wedding photographer near me". The vendor-type field is a select
+that cannot hold an unrecognised value, so a query always resolves to a category
+the platform recognises. Category is selectable in **exactly one control** — no
+chip strip, no rail checkbox group. Name search is a secondary `clay-500` link
+for the referral case. See `11-search.md`.
 
 ## RESOLVED — Public metrics on a brand-new app
 
@@ -47,8 +65,16 @@ by design, so launch quality depends on the first cohort of vendors having good
 cover images. Decide whether onboarding includes a minimum-quality gate or a
 shoot-day offer for early vendors.
 
-## 6. Event creation friction
+## 6. Where does the occasion field come from?
 
-MVP says an event is optional and auto-created from a booking's date. Confirm
-that's right — the alternative (event first, then vendors) is a cleaner model but
-adds a step before anyone has seen value.
+The booking card reads "Photography · Wedding". That occasion string is the
+`event_type` already collected in the booking request form (screen 04) — confirm
+it's a controlled vocabulary (Wedding / Birthday / Corporate / Quinceañera / …)
+rather than free text, since it's now displayed as a label and will eventually
+become the grouping key when events ship.
+
+## 7. City coverage
+
+Search assumes a set of live markets. Decide what a visitor sees for a city with
+no vendors — MVP spec says "We're not in [city] yet" with email capture, which
+needs a market list to check against.

@@ -8,7 +8,7 @@ first screen**. That is the budget, and it is spent before anything else.
 1. **Columns before stacking.** Two blocks read together sit side by side. Stacking is what happens when width runs out.
 2. **Fixed chrome, scrolling content.** App surfaces fill the viewport and scroll _inside_ panes. Header, sidebar, rails, section navs and submit bars never scroll away.
 3. **Master–detail over navigate-away.** A list that leads to a detail renders both at ≥1280 (bookings, messages, packages, admin).
-4. **A persistent rail beats a modal.** Filters, order summaries, booking context and publish checklists live in rails. Modals are for interruptive single decisions only.
+4. **A persistent rail beats a modal — when its contents are referenced _while_ working in the main pane.** Order summaries, booking context, the publish checklist and the messaging context earn their width that way. **Search filters do not** — you set them, then you read results — so `/search` has no filter rail; its filters are a horizontal Refine bar and the width goes to results. Modals remain for interruptive single decisions only.
 5. **Forms are grids, not queues.** Paired short fields share a row. Multi-section forms get a sticky section nav and a sticky submit bar.
 6. **Panes and tabs over anchor-scrolling.** Alternatives become tabs; narratives become scroll.
 7. **Density scales with width.** More width means more columns and rows — not bigger cards and wider margins.
@@ -44,17 +44,22 @@ smaller type, never tighter padding, never a scrollbar the user is expected to a
 ## Design parity — the gate every screen passes before it is Done
 
 The implementation must match its frame in `../Orla - Screens.dc.html`. Not
-"inspired by", not "the same components arranged differently" — **parity**. The
-frame is the acceptance criterion, and it is checked in a real browser, not by
-reading the diff.
+"inspired by", not "the same components arranged differently" — **1:1 parity**.
+The frame is the acceptance criterion, and it is checked in a real browser, not
+by reading the diff.
+
+Parity is checked on five axes and **all five are hard gates**: **layout**,
+**style**, **colour**, **font**, and **the literal text**. A screen whose copy
+paraphrases the frame has failed just as surely as one whose composition differs
+— the words are part of the design.
 
 **Precedence when sources disagree:**
 
 1. **The rendered frame** — the markup in `Orla - Screens.dc.html`. This wins.
 2. **This design plan** — the values and the reasoning behind them.
-3. **The frame's caption** — the `sc-d` blurb above each frame. **Not spec.** Frame
-   `03` is captioned "cover capped at 340px" while the frame renders
-   `height:190px`. Never build from a caption.
+3. **The frame's caption** — the `sc-d` blurb above each frame. **Not spec**, and
+   it goes stale: the pre-revision frame `03` was captioned "cover capped at
+   340px" while rendering `height:190px`. Read the markup, never the caption.
 
 Where 1 and 2 disagree, build 1 and correct 2 in the same ticket, so the next
 implementer doesn't rediscover the same conflict.
@@ -67,8 +72,13 @@ implementer doesn't rediscover the same conflict.
 2. Drive the real implementation with Playwright at the same viewport, signed in
    as the role the screen belongs to, on data that populates it — an empty
    surface proves nothing.
-3. Screenshot both. Compare them side by side.
-4. Run the desktop review checklist below against the live page, then the
+3. Screenshot both. Compare them side by side across all five axes.
+4. **Diff the strings.** Pull the frame's visible text out of its markup and
+   compare it to the live DOM's text content. Headings, field labels, button
+   copy, helper lines, micro-labels, empty states and count sentences must read
+   word for word — same wording, same capitalisation, same punctuation.
+   `31-content-voice.md` records the approved strings.
+5. Run the desktop review checklist below against the live page, then the
    adaptation checklist in `30-responsive.md` at 1280 / 768 / 390.
 
 ### What parity means, concretely
@@ -83,7 +93,14 @@ implementer doesn't rediscover the same conflict.
 | Presence of every element in the frame, including empty and loading states            |                                                                  |
 
 A screen that reproduces the frame's _content_ in a different _composition_ has
-failed. The composition is the design.
+failed. The composition is the design. A screen that reproduces the composition
+with reworded copy has failed too. The words are the design.
+
+**Six frames were revised on 2026-08-27** — `01 Landing`, `02 Search & browse`,
+`03 Vendor profile`, `07 Customer bookings hub`, `12 Sign up`, and
+`14 Adaptations`. Any screen built against the earlier version of one of those
+frames is out of parity and carries a redesign ticket. The eight unchanged frames
+(`04`, `05`, `06`, `08`, `09`, `10`, `11`, `13`) are untouched by that revision.
 
 ### Evidence
 

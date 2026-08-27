@@ -38,13 +38,31 @@ The whole panel — role choice and form — must fit inside 836px without scrol
 
 ## Marketing panel — mechanism, not metrics
 
-**"Prices on the label. Dates you can trust."** (Serif 38px) · one line: "Every
-review comes from a booking that actually happened — and payment is held until
-your event is done." · then three guarantees with pale-sage dots above a hairline:
+**Revised copy.** Headline is three lines, Serif 38px, the last line italic in
+`#F3C98B`:
 
-- Real availability, not a contact form
+```
+See the price.
+See the open dates.
+*Then decide.*
+```
+
+Body, one line: "Every vendor publishes what they charge and when they're free —
+before you talk to anyone, and without asking for a quote."
+
+Then three guarantees with pale-sage dots above a hairline:
+
+- Live calendars — if a date shows open, it is
 - Payment held until the event is complete
-- No service fee, ever
+- Published prices, and no service fee on top
+
+The premise is published pricing **and** published availability — both halves.
+Never use the word "transparent"; demonstrate it instead.
+
+The previous copy ("Prices on the label. Dates you can trust." / "Every review
+comes from a booking that actually happened…" / "Real availability, not a contact
+form" / "No service fee, ever") is superseded. Layout, type sizes, colours and
+the split-screen composition are unchanged — **this is a copy change only.**
 
 **No counts, no ratings, no "events booked".** A new marketplace has none of
 those honestly, and a placeholder number here — the last thing a hesitant
@@ -68,6 +86,8 @@ source of truth and it drifts.
 - [ ] Role cards side by side, chosen role visible with a Change affordance after selection
 - [ ] Panel fits 836px with no scroll
 - [ ] Marketing panel contains no platform statistics
+- [ ] Marketing panel headline is the three-line "See the price. / See the open dates. / _Then decide._"
+- [ ] The three guarantee lines match the frame word for word
 - [ ] Below 1280 the photo panel drops cleanly, no letterboxing
 
 ## Post-MVP

@@ -51,12 +51,28 @@ Copy is imperative and specific, 2–4 words: "Request booking", "Send a message
 Availability chip is sage when free on the searched date, gold when scarce
 ("2 dates left"), absent when no date is in the query.
 
-**On the cover's aspect ratio.** Frames `02` and `03` draw the cover as a fixed
-`height:150px` box, which at the 352px card width those frames produce is closer
-to 2.35:1 than to 4:3. The label _inside_ that box reads "cover 4:3", and so
-does this file — two statements of intent against one hand-sized box. The build
-follows 4:3. If the letterbox was the intent rather than the sketch, change it
-here first and the cards will follow.
+### Two densities
+
+|         | Search grid (compact)  | Landing / featured      |
+| ------- | ---------------------- | ----------------------- |
+| Cover   | **132px** fixed height | 4:3                     |
+| Padding | 12px                   | 14px                    |
+| Name    | 19px Serif             | 21px Serif              |
+| Chips   | availability only      | category + availability |
+
+The search grid runs at the compact end so **8 cards fit at 1440 × 900** with the
+third row peeking — that number is an acceptance criterion in `11-search.md`, and
+it is what the 280px filter rail used to make impossible.
+
+**On the cover's aspect ratio.** Frame `02` draws the compact card's cover as a
+fixed-height box while the label inside it reads "cover 4:3". The fixed height
+wins for the compact variant — 132px is the value, and the image is cropped to
+fill. The 4:3 ratio holds for the landing and featured variants, where the card
+is wider and nothing depends on a row height.
+
+**The vendor-profile cover is a different thing** and is specified in
+`12-vendor-profile.md`: 21:9, `box-sizing: border-box`, **150px**, with the 72px
+avatar entirely below it.
 
 ## Inputs
 

@@ -12,11 +12,11 @@ header 64px                                                    bg-stone-0
 ┌──────────────────────────────────────────────────────────────┐
 │ hero — gradient(155deg, stone-50 0%, #F7F0E8 52%, #F2E4D8)   │
 │ ┌────────────────── 56% ─────────────┬───── 44% ───────────┐ │
-│ │ badge · 412 vendors in Austin      │  photo cluster      │ │
+│ │ badge · Now booking in Austin      │  photo cluster      │ │
 │ │ H1 54px Instrument Serif           │  3 overlapping      │ │
 │ │ sub-line 16px stone-700 max-450    │  cards, rotated     │ │
-│ │ [ search bar, rounded-full ]       │  −4° / +3° / +2°    │ │
-│ │ Popular: Florals · Taco carts ·    │  + floating vendor  │ │
+│ │ [ Vendor type ▾ | City | Date ]    │  −4° / +3° / +2°    │ │
+│ │ Or jump straight to · 4 pills      │  + floating vendor  │ │
 │ └────────────────────────────────────┴─────────────────────┘ │
 │ Browse by category — 6 cards across                          │
 └──────────────────────────────────────────────────────────────┘
@@ -34,13 +34,33 @@ A single `rgba(180,85,47,.06)` circle, 440px, sits behind the cluster at
 The headline names the friction the product removes. It deliberately does **not**
 promise meeting anyone — not meeting them is the point.
 
-## Search bar
+## Search bar — category-first
 
 The hero's centrepiece. `bg-stone-0 rounded-full shadow-lg`, 7px padding with a
-24px left inset. Three segments — What (1.25fr) / Where (1fr) / When (0.8fr) —
-divided by 1px × 32px `stone-300` rules, then a `clay-400` pill button.
-Each segment: uppercase micro-label over a 15px value. Empty state shows "Add a
-date" in `stone-600`, never a greyed-out placeholder that reads as disabled.
+24px left inset. Three segments divided by 1px × 32px `stone-300` rules, then a
+`clay-400` pill button:
+
+| Segment         | Flex | Label         | Control                                                    |
+| --------------- | ---- | ------------- | ---------------------------------------------------------- |
+| **Vendor type** | 1.3  | `Vendor type` | **Select** over the eleven categories, with a ▾ affordance |
+| **City**        | 1    | `City`        | Typeahead over live markets                                |
+| **Event date**  | 0.8  | `Event date`  | Date picker; "Add a date" in `stone-600` when empty        |
+
+Labels are exactly `Vendor type` / `City` / `Event date`. The former
+`What` / `Where` / `When` are gone — they described a text box, and the first
+field is no longer one.
+
+**The first field is a picker, not a text box.** A visitor knows they need a
+photographer in Austin on June 14 — they do not know a vendor's name, and asking
+them to phrase a query invites "wedding photographer near me cheap" and a bad
+result set. Three enumerable values also make the query shareable and cacheable.
+Full reasoning in `11-search.md`.
+
+Below the bar: **"Or jump straight to"** with four category pills — Photography,
+Florals, Catering, Entertainment. `stone-0` fill, 1px `stone-300` border,
+`rounded-full`, 12.5px / 600 ink, 6px × 12px padding. They set `?category=` and
+go. This replaces the old "Popular: Florals · Taco carts · Live bands"
+underlined-link row, which pointed at free-text queries that no longer exist.
 
 Values carry into `/search` as URL params.
 
@@ -54,12 +74,13 @@ the width — it is not decoration, so it ships with real vendor work at launch.
 ## Category row
 
 Six cards — the first six by `displayOrder`, which doubles as landing priority.
-The full eleven live on search, where a category is a filter you can click.
+The full eleven live on search, where a category is a value the select carries.
 
 Card: `bg-stone-0 rounded-xl p-3.5`; a 36px `clay-100` circle holding the
 category's lucide glyph in `clay-500`; name in Instrument Serif 17px; then a
 plain description of what the category covers in 11.5px `stone-600` — "Photo &
-film", "DJs, bands, hosts", "Hair & makeup".
+film", "DJs, bands, hosts", "Food, bar, carts", "Halls & outdoor", "Bouquets &
+decor", "Hair & makeup".
 
 **Not a vendor count and not a from-price.** Both are deferred (below).
 
@@ -85,6 +106,9 @@ The hero's photo cluster and the trust signals carry the proof instead. See
 ## Acceptance
 
 - [ ] Search bar fully visible at 1440 × 900 without scrolling
+- [ ] Vendor type is a select over categories — no free-text query field on this page
+- [ ] Segment labels read exactly `Vendor type`, `City`, `Event date`
+- [ ] "Or jump straight to" + four category pills; no "Popular:" link row
 - [ ] Category row's top edge visible in the first 836px
 - [ ] Total document height ≤ 4 viewports
 - [ ] Hero is two columns at ≥1024; the cluster never stacks above that
@@ -97,5 +121,6 @@ The hero's photo cluster and the trust signals carry the proof instead. See
 - Category counts and from-prices, computed per city
 - A stats band (events booked · average rating · median reply)
 - City picker in the hero once there's more than one live market
+- Free-text / semantic search as an additional entry point beside the pickers
 
 All gated on the condition in `98-post-mvp.md`.

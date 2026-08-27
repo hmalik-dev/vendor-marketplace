@@ -193,6 +193,14 @@ describe('capabilitiesForTicket', () => {
     expect(capabilitiesForTicket(19)).toEqual([...CAPABILITIES]);
   });
 
+  it('resolves the two design-revision tickets added on 2026-08-27', () => {
+    // #23 rebuilds the search screen and touches uploaded vendor imagery;
+    // #24 is a copy-only change behind auth. Neither needs a paid service, so
+    // both must start without Stripe, Resend or Sentry keys.
+    expect(capabilitiesForTicket(23)).toEqual(['core', 'auth', 'storage', 'e2e']);
+    expect(capabilitiesForTicket(24)).toEqual(['core', 'auth', 'e2e']);
+  });
+
   it('fails loudly on an unknown ticket rather than checking nothing', () => {
     expect(() => capabilitiesForTicket(999)).toThrow(/Unknown ticket #999/);
   });

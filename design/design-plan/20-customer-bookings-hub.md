@@ -1,111 +1,114 @@
 # 20 — Customer bookings hub (`/bookings`) — **MVP**
 
 **Purpose:** the customer's standing home for **every vendor booking they ever
-make**, across any number of events, now and in future. This is not a
-single-event planner.
+make**. Not a single-event planner, and — importantly — **not dependent on an
+Event entity, which does not exist in MVP.**
 
 **Shell:** `app-shell`, sidebar + content + 340px rail. No page scroll.
 
-## What changed and why
+## Two corrections from earlier drafts
 
-An earlier draft framed this as a one-event dashboard: a countdown to _the_
-wedding and a "Still to book" grid of open categories. That was wrong for this
-product. A customer may book a photographer for a wedding this June, a taco cart
-for a birthday in September, and a DJ two years from now. There is no single
-event to count down to, and there is no fixed checklist of categories an event
-"should" have — so **"Still to book" is not a valid concept** and has been removed.
+**1. It is not one event.** An earlier draft counted down to _the_ wedding and
+showed a "Still to book" grid of open categories. A customer may book a
+photographer for a wedding in June, a taco cart for a birthday in September, and
+a DJ two years out. There is no single event to count down to and no fixed
+checklist of categories an event "should" have. **"Still to book" is removed.**
 
-The organising unit is the **event**, and the customer may have many.
+**2. There is no Event object to group by.** A later draft grouped bookings under
+named events ("Nandakumar wedding") with an "Event details →" link. **There is no
+way to create an event in MVP**, so nothing in this screen may assume one.
+
+## What groups bookings in MVP
+
+**Month, derived from the booking date.** No new entity, no new step for the user:
+
+```
+JUNE 2026 ──────────────────────────────── 3 bookings
+[ booking ] [ booking ] [ booking ]
+
+SEPTEMBER 2026 ─────────────────────────── 1 booking
+[ booking ] [ + Book another vendor ]
+```
+
+Group header: uppercase micro-label, a hairline rule filling the width, and the
+count right-aligned. Purely presentational — it's a `groupBy(startOfMonth(date))`
+over the bookings the user already has.
+
+**Occasion lives on the booking itself.** Each card reads "Photography · Wedding"
+— category plus the occasion the customer already typed into the booking request.
+It's a free-text field on the booking, not a foreign key. Same for the venue, which
+appears in the card's sub-line ("$1,450 paid · Barr Mansion").
+
+This gives the customer the context they need to tell two bookings apart, with
+zero new data model.
 
 ## Content
 
-**Title:** "Your bookings". Summary line states the real shape of the account —
-"4 bookings across 2 upcoming events. Next up is **Kessler & Co.** in 49 days."
-The countdown is to the next _booking_, derived, not to a hardcoded life event.
+**Title:** "Your bookings". Summary: "4 upcoming bookings. Next up is **Kessler &
+Co.** in 49 days." The countdown is derived from the nearest booking date.
 
-### Tabs — MVP
+### Tabs
 
-| Tab          | Contains                                              |
-| ------------ | ----------------------------------------------------- |
-| **Upcoming** | Anything with an event date in the future, any status |
-| **History**  | Past events: completed, cancelled, declined, expired  |
-| **All**      | Everything, newest event first                        |
+| Tab          | Contains                                      |
+| ------------ | --------------------------------------------- |
+| **Upcoming** | Booking date in the future, any status        |
+| **History**  | Past: completed, cancelled, declined, expired |
+| **All**      | Everything, soonest first                     |
 
-Tab state in `?tab=`. Beside the tabs, two filter controls: **All events ▾**
-(scopes to one event) and **Date ▾** (sort). Counts sit next to the tab labels.
+State in `?tab=`. Beside them: **All categories ▾** and **Soonest first ▾**
+(these replace the earlier "All events ▾" and "Date ▾"). Counts next to the tab
+labels.
 
-### Grouping
+**Booking card** — thumbnail, status pill, vendor name (Serif 17px), "Category ·
+Occasion", the date in Serif 21px ("Sun, Jun 14" — weekday included), and a
+sub-line with amount, state and venue. The date is the largest element because
+it's what gets scanned.
 
-Within a tab, bookings group under their event with a group header:
-
-```
-Nandakumar wedding      Sun, June 14 · Barr Mansion · 120 guests   Event details →
-[ booking ] [ booking ] [ booking ]
-
-Dad's 60th              Sat, Sept 5 · Home · 40 guests             Event details →
-[ booking ] [ + Add a vendor ]
-```
-
-Group header: event name in Instrument Serif 19px, facts in 12px `stone-600`, and
-a right-aligned link to the event. Three booking cards per row.
-
-**Booking card** — thumbnail, status pill, vendor name (Serif 17px), category,
-then the date in Serif 21px with the amount or state beneath. The date is the
-largest thing on the card because it's what the customer scans for.
-
-**"Add a vendor" card** — a dashed peer at the end of each event group, linking
-into search pre-filtered to that event's date and city. This replaces "Still to
-book": it's an invitation, not a checklist, and it never implies the customer has
-forgotten something.
-
-An event with no bookings yet still renders its group header and the add card.
+**"Book another vendor"** — a dashed peer at the end of the last group, linking
+into search pre-filled with that month's date and the customer's city. Its
+sub-line reads "Search Sept 5 in Austin". An invitation, not a checklist.
 
 ## Rail
 
-**Needs you** — clay panel per item, action inline ("Casa Verde sent a quote —
-$3,840 for 120 guests, expires in 3 days" + Review quote / Decline). Gold panels
-for softer nudges (leave a review). Items are drawn from all events, not one.
+**Needs you** — clay panel per item with the action inline ("Casa Verde sent a
+quote — $3,840 for 120 guests, expires in 3 days" + Review quote / Decline). Gold
+panels for softer nudges. Drawn from all bookings.
 
 **Recent messages** — three rows, then "View all".
 
 ## Sidebar
 
-My bookings (active) · My events (count) · Messages (unread dot) · Saved vendors ·
-My profile. Bottom card: "Planning something new? Start an event and keep its
-vendors, dates and messages together." → **New event**.
+My bookings (count, active) · Messages (unread dot) · Saved vendors · My profile.
+Bottom card: "Booking for something new? Search by vendor type, city and date —
+availability is live." → **Find a vendor**.
 
-## Events — MVP scope
-
-An event is a lightweight container: name, date, location, guest count. Creating
-one is optional — a booking made without an event is filed under an
-auto-created one named for its date, and can be renamed later. Do not gate
-booking behind event creation.
-
-`/events/[id]` shows one event's bookings, dates, and messages. `/events` lists
-them.
+**No "My events" item. No "New event" CTA. Nothing links to an event page.**
 
 ## Booking detail
 
-Master–detail at ≥1280: 380px list + detail pane, independent scroll, selection
-in the URL. Below 1280 they're separate pages. Detail carries the status stepper,
-full price breakdown, cancellation policy in plain language, and a link into the
-thread.
+Master–detail at ≥1280: 380px list + detail pane, independent scroll, selection in
+the URL. Below 1280 they're separate pages. Detail carries the status stepper,
+full price breakdown, cancellation policy in plain language, and a link to the thread.
 
-Contextual actions by status: Quoted → Review quote + Decline · Accepted → Pay
-now · Confirmed → Message + Cancel · Completed → Leave a review.
+Contextual actions: Quoted → Review quote + Decline · Accepted → Pay now ·
+Confirmed → Message + Cancel · Completed → Leave a review.
 
 ## Acceptance
 
-- [ ] Nothing in the UI assumes one event, one date, or a fixed set of categories
-- [ ] Upcoming / History / All present, counted, and URL-addressable
-- [ ] Bookings visibly grouped by event; group header names the event
-- [ ] "Add a vendor" routes to search pre-filtered to that event's date and city
-- [ ] The word "dashboard" appears nowhere in the UI — this is "Your bookings"
-- [ ] Zero-state renders the sidebar prompt and an empty-state CTA, never a blank pane
+- [ ] **No reference to an Event entity anywhere** — no event name as a link, no event page, no "create an event"
+- [ ] Grouping is by month and derived from booking dates alone
+- [ ] Group header renders `JUNE 2026` + rule + "3 bookings"
+- [ ] Occasion and venue render from fields on the booking
+- [ ] Filter controls read "All categories ▾" and "Soonest first ▾"
+- [ ] Upcoming / History / All present, counted, URL-addressable
+- [ ] Nothing assumes one event, one date, or a fixed set of categories
+- [ ] The word "dashboard" appears nowhere in the UI
+- [ ] Zero-state shows the sidebar prompt and an empty-state CTA, never a blank pane
 - [ ] No page scroll
 
 ## Post-MVP
 
-- **Event templates / suggested categories.** Once there's booking data showing what people actually pair, a per-event-type suggestion row becomes honest. Until then it would be guesswork dressed as guidance.
-- **Shared events** — co-planners on one event, with roles.
-- **Budget tracking across an event's bookings.**
+- **Events as a real entity** — name a group of bookings, give it a page, a date, a venue and a guest count, and let the customer file bookings into it. The month grouping is the honest stand-in until then, and it stays as the default view afterwards.
+- Event templates / suggested categories — needs real pairing data
+- Shared events with co-planners and roles
+- Budget tracking across a group of bookings

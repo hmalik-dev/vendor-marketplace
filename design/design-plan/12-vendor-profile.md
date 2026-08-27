@@ -8,9 +8,9 @@ the product.
 
 ```
 header 64px
-cover — 21:9, capped at 190px so it cannot eat the fold
+cover — 21:9, capped at 150px so it cannot eat the fold
 ┌───────────────── content column ─────────────┬── booking rail 380px ──┐
-│ avatar 80px, overlapping the cover by 32px   │  From $1,450           │  sticky
+│ avatar 72px + name, fully BELOW the cover    │  From $1,450           │  sticky
 │ Business name  Instrument Serif 33px         │  Free on June 14       │
 │ ★ 4.9 (127) · Austin, TX · Replies in ~2h    │  [date] [guests]       │
 │ [category] [languages] [style] [+3 more]     │  [package ▾]           │
@@ -22,6 +22,26 @@ cover — 21:9, capped at 190px so it cannot eat the fold
 │ Recent work — 4 thumbnails + See all 34 →    │  · 127 verified        │
 └──────────────────────────────────────────────┴────────────────────────┘
 ```
+
+## Header — no overlap
+
+**Changed from an earlier draft.** The cover is **150px** (was 190px) and the
+avatar is **72px** (was 80px). The avatar and the name sit **below** the cover,
+not overlapping it.
+
+The earlier version pulled the avatar up 32px with a negative margin, but that
+margin crossed a pane's `overflow: hidden` boundary and the browser sliced the
+avatar's top edge along with part of the name. The overlap flourish is not worth
+a clipped identity block, and the flat version reads cleaner at this cover height
+anyway.
+
+Concretely, per the frame: the cover box is `box-sizing: border-box; height:150px`,
+the content column below it opens with `padding-top: 18px`, and the identity row
+is `display:flex; gap:16px; align-items:center` with **no negative margin**.
+
+If an overlap is ever wanted back, it has to live **inside** one positioned
+wrapper containing both the cover and the identity row — never as a negative
+margin reaching out of a clipping container.
 
 ## Tabs, not anchors
 
@@ -73,7 +93,9 @@ and both CTAs, so the action is never off-screen.
 ## Acceptance
 
 - [ ] Name, rating, from-price and both CTAs visible without scrolling
-- [ ] Cover ≤ 190px tall — the frame renders `height:190px`; frame `03`'s caption says 340px and is stale, ignore it
+- [ ] **Cover is 150px tall** and `box-sizing: border-box`
+- [ ] **Avatar is 72px and sits entirely below the cover** — no negative margin, no overlap
+- [ ] Avatar and name render fully — nothing clipped by the cover or by a pane boundary
 - [ ] Rail sticky through the whole page
 - [ ] Tabs swap the pane at ≥1280 and write to the URL
 - [ ] Document height ≤ 2.5 viewports on the longest tab
