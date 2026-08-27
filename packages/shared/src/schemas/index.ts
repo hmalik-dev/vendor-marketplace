@@ -37,6 +37,7 @@ import {
   USER_ROLES,
   VENDOR_SETTABLE_AVAILABILITY_STATUSES,
   VENDOR_SORT_OPTIONS,
+  PUBLISH_BLOCKER_KEYS,
 } from '../constants/index.js';
 
 // --- Primitives ------------------------------------------------------------
@@ -586,7 +587,7 @@ export const vendorProfileDetailSchema = vendorProfileSchema.extend({
    * Human-readable prerequisites still standing between this profile and a
    * public listing. Empty means the publish toggle is safe to turn on.
    */
-  publishBlockers: z.array(z.string()),
+  publishBlockers: z.array(z.enum(PUBLISH_BLOCKER_KEYS)),
 });
 export type VendorProfileDetail = z.infer<typeof vendorProfileDetailSchema>;
 

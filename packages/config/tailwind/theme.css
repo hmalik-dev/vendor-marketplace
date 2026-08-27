@@ -181,12 +181,23 @@
 
 /* Fills the viewport below the header; the page itself never scrolls. */
 @utility app-shell {
+  position: relative;
   height: calc(100dvh - var(--header-height));
   overflow: hidden;
 }
 
-/* A pane inside the shell that scrolls on its own. */
+/*
+ * A pane inside the shell that scrolls on its own.
+ *
+ * `position: relative` is load-bearing, not decoration: an absolutely
+ * positioned descendant with no positioned ancestor resolves against the
+ * document, and Radix Select keeps a hidden native `<select>` offset to its
+ * trigger's page position. Left unanchored those escape the pane and stretch
+ * the document, which turns an in-pane anchor jump into a page scroll that
+ * drags the header and the submit bar off screen.
+ */
 @utility app-pane {
+  position: relative;
   height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;

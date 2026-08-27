@@ -13,16 +13,98 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const PRICE_TYPES = ['fixed', 'starting_at', 'hourly'] as const;
 export type PriceType = (typeof PRICE_TYPES)[number];
 
-export const AVAILABILITY_STATUSES = ['available', 'booked', 'blocked'] as const;
+/**
+ * `pending` is a date held by an open booking request: the vendor cannot block
+ * it while someone is waiting on an answer, and it resolves the moment the
+ * request does. Nothing writes it until the booking lifecycle lands in #7 — it
+ * exists here so the calendar can render the state its legend promises, rather
+ * than advertising a colour no row can ever carry.
+ */
+export const AVAILABILITY_STATUSES = ['available', 'booked', 'blocked', 'pending'] as const;
 export type AvailabilityStatus = (typeof AVAILABILITY_STATUSES)[number];
 
 /**
  * Statuses a vendor may set directly. `booked` is owned by the booking
- * lifecycle (ticket #10) and is never writable from the availability calendar.
+ * lifecycle (ticket #10) and `pending` by the request lifecycle (#7); neither
+ * is ever writable from the availability calendar.
  */
 export const VENDOR_SETTABLE_AVAILABILITY_STATUSES = ['available', 'blocked'] as const;
 export type VendorSettableAvailabilityStatus =
   (typeof VENDOR_SETTABLE_AVAILABILITY_STATUSES)[number];
+
+/**
+ * Statuses the calendar renders but refuses to edit, because someone else owns
+ * them. Derived from the two sets above so a new status cannot be added without
+ * deciding which side of the line it falls on.
+ */
+export const LOCKED_AVAILABILITY_STATUSES = AVAILABILITY_STATUSES.filter(
+  (status): status is Exclude<AvailabilityStatus, VendorSettableAvailabilityStatus> =>
+    !(VENDOR_SETTABLE_AVAILABILITY_STATUSES as readonly string[]).includes(status),
+);
+
+/**
+ * Everything that keeps a vendor profile from going live.
+ *
+ * Each blocker carries three things because three surfaces need different ones
+ * at once: the section it belongs to (the editor's nav paints a gold dot
+ * there), a short noun for the submit bar's summary line, and the full sentence
+ * the vendor reads next to the field. Keeping them together is what lets the
+ * field, the nav and the submit bar say the same thing without any of them
+ * re-deriving it from another's wording.
+ *
+ * The API is the authority on which of these are unmet; it returns the keys.
+ */
+export const PUBLISH_BLOCKERS = {
+  businessName: {
+    section: 'business',
+    short: 'business name',
+    message: 'Add your business name',
+  },
+  location: {
+    section: 'location',
+    short: 'location',
+    message: 'Add the city and state you serve',
+  },
+  categories: {
+    section: 'business',
+    short: 'categories',
+    message: 'Choose at least one service category',
+  },
+  bio: {
+    section: 'business',
+    short: 'a short bio',
+    message: 'Write a short bio so customers know what you do',
+  },
+  responseTime: {
+    section: 'responseTime',
+    short: 'response time',
+    message: 'Say how quickly you usually reply',
+  },
+  packages: {
+    section: 'packages',
+    short: 'a bookable package',
+    message: 'Publish at least one service package',
+  },
+} as const;
+
+export const PUBLISH_BLOCKER_KEYS = Object.keys(PUBLISH_BLOCKERS) as ReadonlyArray<
+  keyof typeof PUBLISH_BLOCKERS
+>;
+export type PublishBlockerKey = keyof typeof PUBLISH_BLOCKERS;
+
+/**
+ * Joins blocker shorts the way a person would: "a, b and c". The submit bar
+ * reads as a sentence, not as a list widget.
+ */
+export function describeBlockers(keys: readonly PublishBlockerKey[]): string {
+  const shorts = keys.map((key) => PUBLISH_BLOCKERS[key].short);
+
+  if (shorts.length <= 1) {
+    return shorts[0] ?? '';
+  }
+
+  return `${shorts.slice(0, -1).join(', ')} and ${shorts.at(-1)}`;
+}
 
 export const BOOKING_REQUEST_STATUSES = [
   'pending',

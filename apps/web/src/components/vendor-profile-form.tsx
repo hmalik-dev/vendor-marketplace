@@ -3,13 +3,16 @@
 import {
   BRAND_DOMAIN,
   createVendorProfileSchema,
+  describeBlockers,
   generateSlug,
   kmToMiles,
   MAX_VENDOR_BIO_LENGTH,
   milesToKm,
+  PUBLISH_BLOCKERS,
   RESPONSE_TIME_HOURS_OPTIONS,
   updateVendorProfileSchema,
   type Category,
+  type PublishBlockerKey,
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -72,10 +75,30 @@ const BIO_WARNING_THRESHOLD = 100;
 const SECTION_IDS = {
   business: 'business-information',
   location: 'location-service-area',
+  responseTime: 'response-time',
   tags: 'tags',
 } as const;
 
-interface FormState {
+/**
+ * The storefront's checklist, in the order the frame lists it. `packages` and
+ * `portfolio` live on their own surfaces — law 3 keeps packages a master-detail
+ * screen — but they are still sections of the same storefront, so they carry
+ * their blocker dot here rather than being invisible until the vendor
+ * stumbles on them.
+ *
+ * Payouts is deliberately absent until #9 makes it satisfiable: a nav entry
+ * with a dot the vendor can never clear is worse than no entry at all.
+ */
+const SECTION_ORDER = [
+  { key: 'business', label: 'Business', id: SECTION_IDS.business },
+  { key: 'location', label: 'Location', id: SECTION_IDS.location },
+  { key: 'tags', label: 'Tags', id: SECTION_IDS.tags },
+  { key: 'responseTime', label: 'Response time', id: SECTION_IDS.responseTime },
+  { key: 'packages', label: 'Packages', id: 'packages', href: '/vendor/packages' },
+  { key: 'portfolio', label: 'Portfolio', id: 'portfolio', href: '/vendor/portfolio' },
+] as const;
+
+export interface FormState {
   businessName: string;
   slug: string;
   bio: string;
@@ -140,21 +163,59 @@ function toPayload(form: FormState): Record<string, unknown> {
 }
 
 /**
- * Which sections still hold something back from publishing.
+ * Which blockers the form can still see for itself.
  *
- * These mirror `publishBlockers` in the API, which stays the authority — the
- * server's list is what the submit bar prints. Recomputing them from form state
- * is what lets the nav's dots clear as the vendor types, rather than only after
- * a save round-trip.
+ * The API stays the authority — its list is what survives a reload, and it is
+ * the only thing that knows about packages. Recomputing the field-level ones
+ * here is what lets a dot clear as the vendor types rather than only after a
+ * save round-trip.
  */
-function blockingSections(form: FormState): Record<keyof typeof SECTION_IDS, boolean> {
-  return {
-    business:
-      form.businessName.trim() === '' || form.bio.trim() === '' || form.categoryIds.length === 0,
-    location: form.city.trim() === '' || form.state.trim() === '',
-    tags: false,
-  };
+export function liveBlockers(form: FormState): PublishBlockerKey[] {
+  const blockers: PublishBlockerKey[] = [];
+
+  if (form.businessName.trim() === '') {
+    blockers.push('businessName');
+  }
+  if (form.city.trim() === '' || form.state.trim() === '') {
+    blockers.push('location');
+  }
+  if (form.categoryIds.length === 0) {
+    blockers.push('categories');
+  }
+  if (form.bio.trim() === '') {
+    blockers.push('bio');
+  }
+  if (form.responseTimeHours === NO_RESPONSE_TIME) {
+    blockers.push('responseTime');
+  }
+
+  return blockers;
 }
+
+/**
+ * The blockers the vendor should see right now: everything the form can judge
+ * live, plus the ones only the server knows about (packages), minus anything
+ * the server reported that the vendor has since fixed in the form.
+ */
+export function mergeBlockers(
+  live: readonly PublishBlockerKey[],
+  fromServer: readonly PublishBlockerKey[],
+): PublishBlockerKey[] {
+  const serverOnly = fromServer.filter(
+    (key) => !(PUBLISH_BLOCKER_FORM_KEYS as readonly string[]).includes(key),
+  );
+
+  return [...live, ...serverOnly];
+}
+
+/** The blockers this form owns; the rest can only be resolved server-side. */
+const PUBLISH_BLOCKER_FORM_KEYS = [
+  'businessName',
+  'location',
+  'categories',
+  'bio',
+  'responseTime',
+] as const;
 
 /**
  * The vendor's business profile, used for both first-time onboarding and later
@@ -176,7 +237,7 @@ export function VendorProfileForm({
   const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(initialState(profile)));
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  const [publishBlockers, setPublishBlockers] = useState<readonly string[]>(
+  const [publishBlockers, setPublishBlockers] = useState<readonly PublishBlockerKey[]>(
     profile?.publishBlockers ?? [],
   );
   const [isPublished, setIsPublished] = useState(profile?.isPublished ?? false);
@@ -195,14 +256,26 @@ export function VendorProfileForm({
     return () => clearTimeout(timer);
   }, [justSaved]);
 
-  const blocking = blockingSections(form);
+  const blockers = useMemo(
+    () => mergeBlockers(liveBlockers(form), publishBlockers),
+    [form, publishBlockers],
+  );
+  const blockedSections = useMemo<ReadonlySet<string>>(
+    () => new Set<string>(blockers.map((key) => PUBLISH_BLOCKERS[key].section)),
+    [blockers],
+  );
+
+  const responseTimeBlocks = blockers.includes('responseTime');
+
   const sections: FormSection[] = useMemo(
-    () => [
-      { id: SECTION_IDS.business, label: 'Business information', blocks: blocking.business },
-      { id: SECTION_IDS.location, label: 'Location & service area', blocks: blocking.location },
-      { id: SECTION_IDS.tags, label: 'Tags', blocks: blocking.tags },
-    ],
-    [blocking.business, blocking.location, blocking.tags],
+    () =>
+      SECTION_ORDER.map((section) => ({
+        id: section.id,
+        label: section.label,
+        blocks: blockedSections.has(section.key),
+        ...('href' in section ? { href: section.href } : {}),
+      })),
+    [blockedSections],
   );
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
@@ -282,247 +355,303 @@ export function VendorProfileForm({
   };
 
   return (
-    <div className="xl:grid xl:grid-cols-[var(--sidebar-width-sm)_1fr] xl:items-start xl:gap-8">
-      <FormSectionNav sections={sections} className="sticky top-24 hidden xl:block" />
+    // The storefront rail replaces the vendor nav on this screen (frame `09`):
+    // one 200px rail, and it is the checklist the vendor is working through.
+    <div
+      data-section-rail
+      className="flex min-h-0 flex-col lg:h-full lg:flex-row lg:overflow-hidden"
+    >
+      <FormSectionNav
+        sections={sections}
+        className="hidden shrink-0 border-stone-300 bg-stone-0 lg:flex lg:w-(--sidebar-width-sm) lg:border-r"
+      />
 
-      <form onSubmit={(event) => void save(event)} className="min-w-0">
-        <div className="divide-y divide-stone-150 rounded-lg border border-stone-300 bg-card shadow-sm">
-          <section id={SECTION_IDS.business} className="scroll-mt-24 p-5 sm:p-6">
-            <h2 className="font-display text-lg font-semibold text-stone-800">
-              Business information
-            </h2>
-
-            {/*
-             * The photo and the cover describe one thing — the vendor's visual
-             * identity — so they sit on one row, identity first. A full-width
-             * cover above a lone circle reads as an orphaned row.
-             */}
-            <div className="mt-4 flex items-start gap-4 sm:gap-5">
-              {/* Fixed to the circle's width: left to size itself, the column
-                stretches to its longest text and starves the cover beside it. */}
-              <div className="w-24 shrink-0 sm:w-40">
-                <ImageUpload
-                  label="Profile photo"
-                  prefix="vendor-profile"
-                  value={form.profileImageUrl}
-                  onChange={(url) => update('profileImageUrl', url)}
-                  rounded
-                  showHint={false}
-                  disabled={isSaving}
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <ImageUpload
-                  label="Cover image"
-                  prefix="vendor-cover"
-                  value={form.coverImageUrl}
-                  onChange={(url) => update('coverImageUrl', url)}
-                  // Height-matched to the profile circle rather than an aspect
-                  // ratio: the two are a pair, and an aspect-ratio drop zone
-                  // grows taller every time the pane gets wider.
-                  aspectClassName="h-24 sm:h-40"
-                  showHint={false}
-                  disabled={isSaving}
-                />
-              </div>
-            </div>
-            {/* One hint for the pair — the same rule governs both uploads. */}
-            <p className="mt-2 text-xs text-stone-600">
-              JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB.
+      <form
+        onSubmit={(event) => void save(event)}
+        className="flex min-w-0 flex-1 flex-col lg:overflow-hidden"
+      >
+        <div className="app-pane min-h-0 flex-1 px-4 pt-5.5 sm:px-7">
+          <div className="max-w-[65rem]">
+            <h1 className="font-display text-display-md text-stone-900">Your storefront</h1>
+            <p className="mt-0.5 mb-4.5 text-base text-stone-700">
+              This is what a customer sees before they decide to message you.
             </p>
+          </div>
 
-            <div className="field-grid mt-5 border-t border-stone-300 pt-5">
-              <div>
-                <Label htmlFor="businessName">Business name</Label>
-                <Input
-                  id="businessName"
-                  value={form.businessName}
-                  onChange={(event) => update('businessName', event.target.value)}
-                  required
-                  maxLength={200}
-                  className="mt-1.5"
-                />
-              </div>
+          <div className="max-w-[65rem] divide-y divide-stone-200">
+            <section id={SECTION_IDS.business} className="scroll-mt-6 pb-6">
+              <h2 className="sr-only">Business</h2>
 
-              <div>
-                <Label htmlFor="slug">Profile link</Label>
-                <Input
-                  id="slug"
-                  value={form.slug}
-                  onChange={(event) => update('slug', event.target.value)}
-                  placeholder={generateSlug(form.businessName || 'your-business')}
-                  className="mt-1.5"
-                />
-                <p className="mt-1 truncate text-xs text-stone-600">
-                  {BRAND_DOMAIN}/vendors/{slugPreview}
-                </p>
-              </div>
-
-              <div className="sm:col-span-2">
-                <Label htmlFor="bio">About your business</Label>
-                <Textarea
-                  id="bio"
-                  value={form.bio}
-                  onChange={(event) => update('bio', event.target.value)}
-                  placeholder="What you do, who you do it for, and what makes a day with you feel different."
-                  maxLength={MAX_VENDOR_BIO_LENGTH}
-                  className="mt-1.5 min-h-[140px]"
-                />
-                <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
-                  <p className="text-stone-600">A couple of paragraphs is plenty.</p>
-                  <p
-                    // Warns before the cap rather than only on reaching it, so a
-                    // vendor can finish the sentence instead of being cut off.
-                    className={cn(
-                      'shrink-0 tabular-nums',
-                      bioRemaining <= BIO_WARNING_THRESHOLD ? 'text-clay-600' : 'text-stone-600',
-                    )}
-                  >
-                    {form.bio.length} / {MAX_VENDOR_BIO_LENGTH}
-                  </p>
+              {/*
+               * The photo and the cover describe one thing — the vendor's visual
+               * identity — so they sit on one row, identity first. A full-width
+               * cover above a lone circle reads as an orphaned row.
+               */}
+              <div className="mt-4 flex items-start gap-4 sm:gap-5">
+                {/* Fixed to the circle's width: left to size itself, the column
+                stretches to its longest text and starves the cover beside it. */}
+                <div className="w-24 shrink-0 sm:w-40">
+                  <ImageUpload
+                    label="Profile photo"
+                    prefix="vendor-profile"
+                    value={form.profileImageUrl}
+                    onChange={(url) => update('profileImageUrl', url)}
+                    rounded
+                    showHint={false}
+                    disabled={isSaving}
+                  />
                 </div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <Label htmlFor="categories">Categories</Label>
-                <div id="categories" className="mt-1.5">
-                  <CategoryPicker
-                    categories={categories}
-                    selectedCategoryIds={form.categoryIds}
-                    onChange={(ids) => update('categoryIds', ids)}
+                <div className="min-w-0 flex-1">
+                  <ImageUpload
+                    label="Cover image"
+                    prefix="vendor-cover"
+                    value={form.coverImageUrl}
+                    onChange={(url) => update('coverImageUrl', url)}
+                    // Height-matched to the profile circle rather than an aspect
+                    // ratio: the two are a pair, and an aspect-ratio drop zone
+                    // grows taller every time the pane gets wider.
+                    aspectClassName="h-24 sm:h-40"
+                    showHint={false}
                     disabled={isSaving}
                   />
                 </div>
               </div>
-            </div>
-          </section>
+              {/* One hint for the pair — the same rule governs both uploads. */}
+              <p className="mt-2 text-xs text-stone-600">
+                JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB.
+              </p>
 
-          {/*
-           * Location comes before tags: where a vendor works decides whether a
-           * customer ever sees them, which is a more consequential answer than a
-           * taste tag.
-           */}
-          <section id={SECTION_IDS.location} className="scroll-mt-24 p-5 sm:p-6">
-            <h2 className="font-display text-lg font-semibold text-stone-800">
-              Location &amp; service area
-            </h2>
-
-            <div className="field-grid mt-4">
-              <div className="sm:col-span-2">
-                <Label htmlFor="address">Address</Label>
-                <Input
-                  id="address"
-                  value={form.address}
-                  onChange={(event) => update('address', event.target.value)}
-                  className="mt-1.5"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  value={form.city}
-                  onChange={(event) => update('city', event.target.value)}
-                  required
-                  className="mt-1.5"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="state">State</Label>
-                <Select value={form.state} onValueChange={(value) => update('state', value)}>
-                  <SelectTrigger
-                    id="state"
-                    className="mt-1.5 w-full data-[size=default]:h-11 sm:data-[size=default]:h-9"
-                  >
-                    <SelectValue placeholder="Choose a state" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {US_STATES.map((state) => (
-                      <SelectItem key={state} value={state}>
-                        {state}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <Label htmlFor="serviceRadius">Service radius</Label>
-                  <span className="text-sm font-medium text-stone-700">
-                    {form.serviceRadiusMiles} miles
-                  </span>
+              <div className="field-grid mt-5 border-t border-stone-300 pt-5">
+                <div>
+                  <Label htmlFor="businessName">Business name</Label>
+                  <Input
+                    id="businessName"
+                    value={form.businessName}
+                    onChange={(event) => update('businessName', event.target.value)}
+                    required
+                    maxLength={200}
+                    className="mt-1.5"
+                  />
                 </div>
-                <input
-                  id="serviceRadius"
-                  type="range"
-                  min={SERVICE_RADIUS_MIN_MILES}
-                  max={SERVICE_RADIUS_MAX_MILES}
-                  step={SERVICE_RADIUS_STEP_MILES}
-                  value={form.serviceRadiusMiles}
-                  onChange={(event) => update('serviceRadiusMiles', Number(event.target.value))}
-                  className="mt-3 h-6 w-full accent-clay-400"
-                />
-                <p className="mt-1 text-xs text-stone-600">How far you will travel for an event.</p>
-              </div>
 
-              {/* One select does not deserve a card of its own. */}
-              <div>
-                <Label htmlFor="responseTime">Response time</Label>
-                <Select
-                  value={form.responseTimeHours}
-                  onValueChange={(value) => update('responseTimeHours', value)}
-                >
-                  <SelectTrigger
-                    id="responseTime"
-                    className="mt-1.5 w-full data-[size=default]:h-11 sm:data-[size=default]:h-9"
+                <div>
+                  <Label htmlFor="slug">Profile link</Label>
+                  <Input
+                    id="slug"
+                    value={form.slug}
+                    onChange={(event) => update('slug', event.target.value)}
+                    placeholder={generateSlug(form.businessName || 'your-business')}
+                    className="mt-1.5"
+                  />
+                  <p className="mt-1 truncate text-xs text-stone-600">
+                    {BRAND_DOMAIN}/vendors/{slugPreview}
+                  </p>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <Label htmlFor="bio">About your business</Label>
+                  <Textarea
+                    id="bio"
+                    value={form.bio}
+                    onChange={(event) => update('bio', event.target.value)}
+                    placeholder="What you do, who you do it for, and what makes a day with you feel different."
+                    maxLength={MAX_VENDOR_BIO_LENGTH}
+                    className="mt-1.5 min-h-[140px]"
+                  />
+                  <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
+                    <p className="text-stone-600">A couple of paragraphs is plenty.</p>
+                    <p
+                      // Warns before the cap rather than only on reaching it, so a
+                      // vendor can finish the sentence instead of being cut off.
+                      className={cn(
+                        'shrink-0 tabular-nums',
+                        bioRemaining <= BIO_WARNING_THRESHOLD ? 'text-clay-600' : 'text-stone-600',
+                      )}
+                    >
+                      {form.bio.length} / {MAX_VENDOR_BIO_LENGTH}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <Label htmlFor="categories">Categories</Label>
+                  <div id="categories" className="mt-1.5">
+                    <CategoryPicker
+                      categories={categories}
+                      selectedCategoryIds={form.categoryIds}
+                      onChange={(ids) => update('categoryIds', ids)}
+                      disabled={isSaving}
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/*
+             * Location comes before tags: where a vendor works decides whether a
+             * customer ever sees them, which is a more consequential answer than a
+             * taste tag.
+             */}
+            <section id={SECTION_IDS.location} className="scroll-mt-6 py-6">
+              <h2 className="sr-only">Location &amp; service area</h2>
+
+              <div className="field-grid mt-4">
+                <div className="sm:col-span-2">
+                  <Label htmlFor="address">Address</Label>
+                  <Input
+                    id="address"
+                    value={form.address}
+                    onChange={(event) => update('address', event.target.value)}
+                    className="mt-1.5"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={form.city}
+                    onChange={(event) => update('city', event.target.value)}
+                    required
+                    className="mt-1.5"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="state">State</Label>
+                  <Select value={form.state} onValueChange={(value) => update('state', value)}>
+                    <SelectTrigger
+                      id="state"
+                      className="mt-1.5 w-full data-[size=default]:h-11 sm:data-[size=default]:h-9"
+                    >
+                      <SelectValue placeholder="Choose a state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {US_STATES.map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label htmlFor="serviceRadius">Service radius</Label>
+                    <span className="text-sm font-medium text-stone-700">
+                      {form.serviceRadiusMiles} miles
+                    </span>
+                  </div>
+                  <input
+                    id="serviceRadius"
+                    type="range"
+                    min={SERVICE_RADIUS_MIN_MILES}
+                    max={SERVICE_RADIUS_MAX_MILES}
+                    step={SERVICE_RADIUS_STEP_MILES}
+                    value={form.serviceRadiusMiles}
+                    onChange={(event) => update('serviceRadiusMiles', Number(event.target.value))}
+                    className="mt-3 h-6 w-full accent-clay-400"
+                  />
+                  <p className="mt-1 text-xs text-stone-600">
+                    How far you will travel for an event.
+                  </p>
+                </div>
+
+                {/*
+                  The first of the three places a publish blocker shows at
+                  once. The gold border and gold helper are the blocking-field
+                  variant in design/design-plan/03-components.md — the same gold
+                  the nav dot and the submit bar carry, so all three read as one
+                  thing rather than three warnings.
+                */}
+                <div id={SECTION_IDS.responseTime} className="scroll-mt-6">
+                  <Label htmlFor="responseTime">Typical response time</Label>
+                  <Select
+                    value={form.responseTimeHours}
+                    onValueChange={(value) => update('responseTimeHours', value)}
                   >
-                    <SelectValue placeholder="Choose a response window" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_RESPONSE_TIME}>Not specified</SelectItem>
-                    {RESPONSE_TIME_HOURS_OPTIONS.map((hours) => (
-                      <SelectItem key={hours} value={String(hours)}>
-                        {RESPONSE_TIME_LABELS[hours]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="mt-1 text-xs text-stone-600">
-                  How quickly customers can expect to hear back.
-                </p>
+                    <SelectTrigger
+                      id="responseTime"
+                      aria-describedby="responseTime-help"
+                      className={cn(
+                        'mt-1.5 w-full data-[size=default]:h-11 sm:data-[size=default]:h-9',
+                        responseTimeBlocks && 'border-gold-400',
+                      )}
+                    >
+                      <SelectValue placeholder="Choose one" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_RESPONSE_TIME}>Not specified</SelectItem>
+                      {RESPONSE_TIME_HOURS_OPTIONS.map((hours) => (
+                        <SelectItem key={hours} value={String(hours)}>
+                          {RESPONSE_TIME_LABELS[hours]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p
+                    id="responseTime-help"
+                    className={cn(
+                      'mt-1.5 text-xs',
+                      responseTimeBlocks ? 'text-gold-600' : 'text-stone-600',
+                    )}
+                  >
+                    {responseTimeBlocks
+                      ? 'Required before you can publish'
+                      : 'How quickly customers can expect to hear back.'}
+                  </p>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section id={SECTION_IDS.tags} className="scroll-mt-24 p-5 sm:p-6">
-            <h2 className="font-display text-lg font-semibold text-stone-800">Tags</h2>
-            <p className="mt-1 text-sm text-stone-600">
-              How customers find someone who fits their celebration.
-            </p>
-            <div className="mt-4">
-              <TagPicker
-                allTags={allTags}
-                selectedTagIds={form.tagIds}
-                onTagsChange={(ids) => update('tagIds', ids)}
-                disabled={isSaving}
-              />
-            </div>
-          </section>
+            <section id={SECTION_IDS.tags} className="scroll-mt-6 py-6">
+              <h2 className="font-display text-display-sm text-stone-900">Tags</h2>
+              <p className="mt-1 text-base text-stone-700">
+                How customers find someone who fits their celebration.
+              </p>
+              <div className="mt-4">
+                <TagPicker
+                  allTags={allTags}
+                  selectedTagIds={form.tagIds}
+                  onTagsChange={(ids) => update('tagIds', ids)}
+                  disabled={isSaving}
+                />
+              </div>
+            </section>
+          </div>
         </div>
 
         {/*
-         * Sticky rather than parked after the last field: the primary action,
-         * the save state, and what is blocking publication stay reachable
-         * without scrolling back down.
+         * The bar is the pane's floor rather than a block after the last field:
+         * the primary action, the save state, and what is holding publication
+         * back all stay on screen while the vendor works down the form.
          */}
-        <div className="sticky bottom-0 z-(--z-sticky) mt-4 rounded-lg border border-stone-300 bg-stone-0/95 px-4 py-3 shadow-lg backdrop-blur sm:px-6">
+        {/*
+          The pane's floor at `lg`, where the shell owns the viewport. Below it
+          the page scrolls normally, so the bar sticks instead — the primary
+          action stays reachable at every width (30-responsive.md).
+        */}
+        <div className="sticky bottom-0 z-(--z-sticky) shrink-0 border-t border-stone-300 bg-stone-0 px-4 py-3.5 sm:px-7 lg:static">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {isNew ? (
-              <p className="text-sm text-stone-600">
+              <p className="text-base text-stone-700">
                 You can change any of this after you create your profile.
+              </p>
+            ) : blockers.length > 0 ? (
+              /*
+               * The third of the three places a blocker appears at once — the
+               * field, the nav, and here — so the vendor sees what and where
+               * without scrolling to find either.
+               */
+              <p className="flex items-center gap-2.5 text-base text-stone-700">
+                <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-gold-400" />
+                <span>
+                  <strong className="font-semibold">
+                    {blockers.length} thing{blockers.length === 1 ? '' : 's'}
+                  </strong>{' '}
+                  left before you can publish — {describeBlockers(blockers)}
+                </span>
               </p>
             ) : (
               <div className="flex items-start gap-3">
@@ -530,7 +659,7 @@ export function VendorProfileForm({
                   id="isPublished"
                   className={SWITCH_TOUCH_TARGET}
                   checked={isPublished}
-                  disabled={isSaving || (!isPublished && publishBlockers.length > 0)}
+                  disabled={isSaving}
                   onCheckedChange={(next) => void togglePublished(next)}
                 />
                 <div>
@@ -538,19 +667,22 @@ export function VendorProfileForm({
                   <p className="text-xs text-stone-600">
                     {isPublished
                       ? 'Customers can find and book you.'
-                      : publishBlockers.length > 0
-                        ? `${publishBlockers.length} thing${publishBlockers.length === 1 ? '' : 's'} left: ${publishBlockers.join(' · ')}`
-                        : 'Only you can see this profile right now.'}
+                      : 'Ready to publish — flip this when you are.'}
                   </p>
                 </div>
               </div>
             )}
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3.5">
               <span aria-live="polite" className="text-sm text-stone-600">
                 {isSaving ? 'Saving…' : justSaved ? 'Saved' : isDirty ? 'Unsaved changes' : ''}
               </span>
-              <Button type="submit" variant="primary" disabled={isSaving}>
+              {profile !== null ? (
+                <Button type="button" variant="secondary" size="sm" asChild>
+                  <a href={`/vendors/${profile.slug}`}>Preview</a>
+                </Button>
+              ) : null}
+              <Button type="submit" variant="primary" size="sm" disabled={isSaving}>
                 {isNew ? 'Create profile' : 'Save changes'}
               </Button>
             </div>

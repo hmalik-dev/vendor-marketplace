@@ -1,14 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface FormSection {
-  /** Matches the `id` on the section element. */
+  /** Matches the `id` on the section element, or the route for a link item. */
   id: string;
   label: string;
   /** A gold dot marks a section holding something back from publishing. */
   blocks: boolean;
+  /**
+   * Set when the section lives on its own surface rather than in this form.
+   * The storefront is one checklist even though it spans several routes.
+   */
+  href?: string;
 }
 
 export interface FormSectionNavProps {
@@ -17,16 +23,23 @@ export interface FormSectionNavProps {
 }
 
 /**
- * The sticky section nav that multi-section forms carry at >=1280px. It doubles
- * as a completion indicator, so a vendor can see both *what* is blocking
- * publication and *where* to fix it without scrolling the form looking for it.
+ * The storefront's section rail. It doubles as a completion indicator, so a
+ * vendor can see both *what* is blocking publication and *where* to fix it
+ * without scrolling the form looking for it — the same blocker appears in the
+ * field, here, and in the submit bar at once.
+ *
+ * See design/design-plan/17-vendor-profile-editor.md.
  */
 export function FormSectionNav({ sections, className }: FormSectionNavProps): React.ReactElement {
-  const [activeId, setActiveId] = useState<string | undefined>(sections[0]?.id);
+  const anchorIds = useMemo(
+    () => sections.filter((section) => section.href === undefined).map((section) => section.id),
+    [sections],
+  );
+  const [activeId, setActiveId] = useState<string | undefined>(anchorIds[0]);
 
   useEffect(() => {
-    const elements = sections
-      .map((section) => document.getElementById(section.id))
+    const elements = anchorIds
+      .map((id) => document.getElementById(id))
       .filter((element): element is HTMLElement => element !== null);
 
     if (elements.length === 0) {
@@ -54,45 +67,62 @@ export function FormSectionNav({ sections, className }: FormSectionNavProps): Re
     }
 
     return () => observer.disconnect();
-  }, [sections]);
+    // Keyed on the ids rather than the section objects: the parent rebuilds
+    // those every render as blockers clear, and re-observing on each keystroke
+    // would tear the observer down mid-scroll.
+  }, [anchorIds]);
 
-  const remaining = sections.filter((section) => section.blocks).length;
+  const hasBlockers = sections.some((section) => section.blocks);
 
   return (
-    <nav aria-label="Form sections" className={className}>
-      <ul className="space-y-1">
-        {sections.map((section) => {
-          const isActive = section.id === activeId;
+    <nav aria-label="Storefront sections" className={cn('flex flex-col gap-1 p-3 pt-4', className)}>
+      {sections.map((section) => {
+        const isActive = section.href === undefined && section.id === activeId;
+        const content = (
+          <>
+            {section.label}
+            {section.blocks ? (
+              <span
+                aria-label="Needs attention before publishing"
+                role="img"
+                className="ml-auto size-1.75 shrink-0 rounded-full bg-gold-400"
+              />
+            ) : null}
+          </>
+        );
+        const classes = cn(
+          'flex items-center gap-2.5 rounded-[9px] px-3 py-2.5 text-base font-medium transition-colors duration-(--duration-fast)',
+          isActive
+            ? 'bg-clay-100 font-semibold text-clay-600 shadow-[inset_3px_0_0_var(--color-clay-400)]'
+            : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900',
+        );
 
-          return (
-            <li key={section.id}>
-              <a
-                href={`#${section.id}`}
-                aria-current={isActive ? 'true' : undefined}
-                className={cn(
-                  'flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm transition-colors duration-(--duration-fast)',
-                  isActive
-                    ? 'bg-clay-100 font-medium text-clay-600'
-                    : 'text-stone-600 hover:bg-stone-100 hover:text-stone-800',
-                )}
-              >
-                {section.label}
-                {section.blocks ? (
-                  <span
-                    aria-label="Needs attention before publishing"
-                    className="size-2 shrink-0 rounded-full bg-gold-400"
-                  />
-                ) : null}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
+        return section.href !== undefined ? (
+          <Link key={section.id} href={section.href} className={classes}>
+            {content}
+          </Link>
+        ) : (
+          <a
+            key={section.id}
+            href={`#${section.id}`}
+            aria-current={isActive ? 'true' : undefined}
+            className={classes}
+          >
+            {content}
+          </a>
+        );
+      })}
 
-      <p className="mt-4 border-t border-stone-300 px-3 pt-4 text-xs text-stone-600">
-        {remaining === 0
-          ? 'Everything needed to publish is filled in.'
-          : `${remaining} ${remaining === 1 ? 'section needs' : 'sections need'} attention before publishing.`}
+      {/* The legend the dots are read against, kept at the foot of the rail. */}
+      <p className="mt-auto flex items-center gap-1.5 px-3 pt-4 pb-1 text-xs leading-normal text-stone-600">
+        {hasBlockers ? (
+          <>
+            <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-gold-400" />
+            Gold dots block publishing
+          </>
+        ) : (
+          'Everything needed to publish is filled in.'
+        )}
       </p>
     </nav>
   );

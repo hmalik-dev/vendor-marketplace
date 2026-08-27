@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describeBlockers,
+  PUBLISH_BLOCKER_KEYS,
+  PUBLISH_BLOCKERS,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
@@ -236,5 +239,30 @@ describe('CATEGORY_SLUG_SUCCESSORS', () => {
 
   it('folds lighting into decor rather than leaving it standalone', () => {
     expect(CATEGORY_SLUG_SUCCESSORS.lighting).toBe('decor');
+  });
+});
+
+describe('publish blockers', () => {
+  it('gives every blocker a section, a short noun and a full sentence', () => {
+    for (const key of PUBLISH_BLOCKER_KEYS) {
+      const blocker = PUBLISH_BLOCKERS[key];
+
+      expect(blocker.section.length).toBeGreaterThan(0);
+      expect(blocker.short.length).toBeGreaterThan(0);
+      expect(blocker.message.length).toBeGreaterThan(0);
+      // The short form goes in a sentence, so it must not read as a heading.
+      expect(blocker.short).toBe(blocker.short.toLowerCase());
+    }
+  });
+
+  it('reads as a sentence rather than a list widget', () => {
+    expect(describeBlockers([])).toBe('');
+    expect(describeBlockers(['responseTime'])).toBe('response time');
+    expect(describeBlockers(['responseTime', 'packages'])).toBe(
+      'response time and a bookable package',
+    );
+    expect(describeBlockers(['bio', 'responseTime', 'packages'])).toBe(
+      'a short bio, response time and a bookable package',
+    );
   });
 });

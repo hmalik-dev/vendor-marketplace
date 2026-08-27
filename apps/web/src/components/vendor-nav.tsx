@@ -16,6 +16,9 @@ interface VendorNavItem {
  * Ordered the way a vendor sets a business up: describe it, price it, show the
  * work, then say when you are free.
  */
+/** The one vendor route that supplies its own rail. */
+const EDITOR_PATH = '/vendor/profile/edit';
+
 const ITEMS: readonly VendorNavItem[] = [
   { href: '/vendor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/vendor/profile/edit', label: 'Business profile', icon: Store },
@@ -30,13 +33,22 @@ const ITEMS: readonly VendorNavItem[] = [
  * horizontally scrollable strip rather than stacking five full-width rows and
  * spending a third of a small screen before the page begins.
  */
-export function VendorNav(): React.ReactElement {
+export function VendorNav(): React.ReactElement | null {
   const pathname = usePathname();
+
+  /*
+   * The storefront editor carries its own 200px section rail, and frame `09`
+   * shows one rail on that screen, not two. Returning null lets the layout's
+   * flex row collapse rather than leaving an empty column behind.
+   */
+  if (pathname.startsWith(EDITOR_PATH)) {
+    return null;
+  }
 
   return (
     <nav
       aria-label="Vendor"
-      className="border-b border-stone-300 bg-stone-0 lg:border-r lg:border-b-0"
+      className="border-b border-stone-300 bg-stone-0 lg:w-(--sidebar-width-sm) lg:shrink-0 lg:border-r lg:border-b-0 xl:w-(--sidebar-width)"
     >
       <ul className="flex gap-1 overflow-x-auto px-3 py-2 lg:sticky lg:top-(--header-height) lg:flex-col lg:h-[calc(100dvh-var(--header-height))] lg:overflow-visible lg:px-3 lg:py-6">
         {ITEMS.map((item) => {

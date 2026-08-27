@@ -1,6 +1,7 @@
 import {
   generateSlug,
   type CreateVendorProfileInput,
+  type PublishBlockerKey,
   type Tag,
   type UpdateVendorProfileInput,
   type VendorProfileDetail,
@@ -72,23 +73,31 @@ export function publishBlockers(
   row: VendorProfileRow,
   categoryIds: readonly string[],
   activePackageCount: number,
-): string[] {
-  const blockers: string[] = [];
+): PublishBlockerKey[] {
+  const blockers: PublishBlockerKey[] = [];
 
   if (!row.businessName.trim()) {
-    blockers.push('Add your business name');
+    blockers.push('businessName');
   }
   if (!row.city?.trim() || !row.state?.trim()) {
-    blockers.push('Add the city and state you serve');
+    blockers.push('location');
   }
   if (categoryIds.length === 0) {
-    blockers.push('Choose at least one service category');
+    blockers.push('categories');
   }
   if (!row.bio?.trim()) {
-    blockers.push('Write a short bio so customers know what you do');
+    blockers.push('bio');
+  }
+  /*
+   * A customer deciding between two vendors reads the reply window before they
+   * read the bio, so an unanswered one keeps the profile back the same way a
+   * missing category does.
+   */
+  if (row.responseTimeHours === null || row.responseTimeHours === undefined) {
+    blockers.push('responseTime');
   }
   if (activePackageCount === 0) {
-    blockers.push('Publish at least one service package');
+    blockers.push('packages');
   }
 
   return blockers;

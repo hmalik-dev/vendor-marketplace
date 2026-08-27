@@ -2,7 +2,6 @@ import { toDateString, pageTitle } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AvailabilityCalendar } from '@/components/availability/availability-calendar';
-import { VendorSurface } from '@/components/vendor-surface';
 import { requireRole } from '@/lib/current-user';
 import { getOwnAvailability, getOwnVendorProfile } from '@/lib/vendor-data';
 
@@ -22,23 +21,14 @@ export default async function VendorAvailabilityPage(): Promise<React.ReactEleme
   }
 
   const entries = await getOwnAvailability();
-  const blockedCount = entries.filter((entry) => entry.status === 'blocked').length;
 
   return (
-    <VendorSurface
-      eyebrow="Your business"
-      heading="Availability"
-      description="Block the dates you are away. Everything else stays open for requests."
-      fills
-      aside={
-        <p className="rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-700">
-          {blockedCount === 0
-            ? 'Every future date is open'
-            : `${blockedCount} blocked ${blockedCount === 1 ? 'date' : 'dates'}`}
-        </p>
-      }
-    >
+    // The calendar owns its own heading row, because the month range sits on
+    // the heading's baseline and is driven by the calendar's own state — see
+    // frame `11 Availability`. `data-app-shell` is what globals.css keys the
+    // footer suppression off: this surface owns the viewport.
+    <div data-app-shell className="w-full px-4 pt-5.5 sm:px-6 lg:app-shell lg:px-0 lg:pl-6">
       <AvailabilityCalendar initialEntries={entries} today={toDateString(new Date())} />
-    </VendorSurface>
+    </div>
   );
 }

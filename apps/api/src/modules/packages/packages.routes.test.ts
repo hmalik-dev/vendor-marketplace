@@ -34,6 +34,9 @@ describe('/vendor/packages', () => {
         city: 'Austin',
         state: 'TX',
         bio: 'Documentary wedding photography.',
+        // A reply window is a publish prerequisite, and these tests go on to
+        // publish; without it the profile is held back for the wrong reason.
+        responseTimeHours: 24,
       },
     });
     expect(response.statusCode).toBe(201);
@@ -300,7 +303,7 @@ describe('/vendor/packages', () => {
       });
 
       expect(profile.json().isPublished).toBe(false);
-      expect(profile.json().publishBlockers).toContain('Publish at least one service package');
+      expect(profile.json().publishBlockers).toContain('packages');
     });
 
     it('leaves a published profile alone while another package stays active', async () => {

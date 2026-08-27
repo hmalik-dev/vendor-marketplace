@@ -9,10 +9,14 @@ import { Button } from '@/components/ui/button';
  */
 export function SiteHeader(): React.ReactElement {
   return (
-    <header className="sticky top-0 z-(--z-header) border-b border-stone-300 bg-stone-0">
+    // The height sits on the header, not the nav inside it, so the bottom
+    // border is part of the 64px rather than a 65th pixel — an app shell is
+    // measured against `--header-height`, and one stray pixel is enough to make
+    // the page scroll.
+    <header className="sticky top-0 z-(--z-header) box-border h-(--header-height) border-b border-stone-300 bg-stone-0">
       <nav
         aria-label="Main"
-        className="flex h-(--header-height) items-center justify-between gap-4 px-4 sm:px-6 lg:px-10"
+        className="flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-10"
       >
         <Link href="/" className="transition-opacity hover:opacity-80">
           {/* The wordmark reads BRAND_NAME — never a literal. */}

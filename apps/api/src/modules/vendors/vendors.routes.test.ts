@@ -107,8 +107,9 @@ describe('/vendor/profile', () => {
       expect(body.isPublished).toBe(false);
       expect(body.categoryIds).toEqual([photographyId]);
       expect(body.tags).toEqual([]);
-      // The bio was supplied; a bookable package is the one thing still missing.
-      expect(body.publishBlockers).toEqual(['Publish at least one service package']);
+      // The bio was supplied; a reply window and a bookable package are what
+      // is still missing.
+      expect(body.publishBlockers).toEqual(['responseTime', 'packages']);
     });
 
     it('persists the category selection', async () => {
@@ -350,13 +351,11 @@ describe('/vendor/profile', () => {
       });
 
       expect(response.statusCode).toBe(400);
-      expect(response.json().details.blockers).toContain(
-        'Write a short bio so customers know what you do',
-      );
+      expect(response.json().details.blockers).toContain('bio');
     });
 
     it('publishes once every prerequisite is met', async () => {
-      await createProfile({ bio: 'Documentary wedding photography.' });
+      await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
       await addPackage();
 
       const response = await harness.app.inject({
@@ -370,8 +369,46 @@ describe('/vendor/profile', () => {
       expect(response.json().isPublished).toBe(true);
     });
 
-    it('unpublishes without any prerequisite check', async () => {
+    /*
+     * A customer deciding between two vendors reads the reply window before
+     * they read the bio, so an unanswered one holds the profile back the same
+     * way a missing category does.
+     */
+    it('holds publication back until a reply window is set', async () => {
       await createProfile({ bio: 'Documentary wedding photography.' });
+      await addPackage();
+
+      const blocked = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+
+      expect(blocked.statusCode).toBe(400);
+      expect(blocked.json().details.blockers).toEqual(['responseTime']);
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { responseTimeHours: 24 },
+      });
+
+      const published = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+
+      expect(published.statusCode).toBe(200);
+      expect(published.json().isPublished).toBe(true);
+      expect(published.json().publishBlockers).toEqual([]);
+    });
+
+    it('unpublishes without any prerequisite check', async () => {
+      await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
       await addPackage();
       await harness.app.inject({
         method: 'PUT',
@@ -400,10 +437,7 @@ describe('/vendor/profile', () => {
         headers: bearer(VENDOR),
       });
 
-      expect(response.json().publishBlockers).toEqual([
-        'Write a short bio so customers know what you do',
-        'Publish at least one service package',
-      ]);
+      expect(response.json().publishBlockers).toEqual(['bio', 'responseTime', 'packages']);
     });
 
     it('rejects an attempt to write a derived rating', async () => {
@@ -435,9 +469,7 @@ describe('/vendor/profile', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().bio).toBeNull();
-      expect(response.json().publishBlockers).toContain(
-        'Write a short bio so customers know what you do',
-      );
+      expect(response.json().publishBlockers).toContain('bio');
 
       const rows = await harness.database.db.select().from(vendorProfiles);
       expect(rows[0]?.bio).toBeNull();

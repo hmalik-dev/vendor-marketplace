@@ -113,6 +113,20 @@
   body:has([data-app-shell]) > footer {
     display: none;
   }
+
+  /*
+   * "App surfaces do not scroll the page" — the shell fills the viewport and
+   * its panes scroll inside it. Saying so here rather than trusting every
+   * descendant to stay inside its box: a portalled or absolutely-positioned
+   * child (Radix Select keeps a hidden native `<select>` for form submission)
+   * escapes the pane's overflow and stretches the document, which turns an
+   * in-pane anchor jump into a page scroll that drags the header and the
+   * submit bar off screen.
+   */
+  html:has([data-app-shell]),
+  body:has([data-app-shell]) {
+    overflow: hidden;
+  }
 }
 
 /*

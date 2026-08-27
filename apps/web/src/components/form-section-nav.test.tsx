@@ -40,16 +40,24 @@ describe('FormSectionNav', () => {
     );
   });
 
-  it('counts the sections still needing attention', () => {
+  /*
+   * The rail carries the legend the dots are read against, not a second count —
+   * the submit bar already says how many things are left, and two numbers that
+   * can disagree is worse than one.
+   */
+  it('explains what the gold dots mean while any are showing', () => {
     render(<FormSectionNav sections={SECTIONS} />);
 
-    expect(screen.getByText('1 section needs attention before publishing.')).toBeDefined();
+    expect(screen.getByText('Gold dots block publishing')).toBeDefined();
   });
 
-  it('pluralises the count', () => {
-    render(<FormSectionNav sections={SECTIONS.map((section) => ({ ...section, blocks: true }))} />);
+  it('marks every blocking section and no others', () => {
+    render(<FormSectionNav sections={SECTIONS} />);
 
-    expect(screen.getByText('3 sections need attention before publishing.')).toBeDefined();
+    const blocking = SECTIONS.filter((section) => section.blocks);
+    expect(screen.getAllByLabelText('Needs attention before publishing')).toHaveLength(
+      blocking.length,
+    );
   });
 
   it('says so when nothing is blocking', () => {

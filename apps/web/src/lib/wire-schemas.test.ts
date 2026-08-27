@@ -128,13 +128,27 @@ describe('wireVendorProfileSchema', () => {
     expect(parsed.tags[0]?.createdAt).toBeInstanceOf(Date);
   });
 
-  it('carries the outstanding publish prerequisites', () => {
+  /*
+   * Blockers travel as keys rather than sentences: the field, the section nav
+   * and the submit bar each need a different rendering of the same blocker, and
+   * re-deriving one from another's wording is how they drift apart.
+   */
+  it('carries the outstanding publish prerequisites as keys', () => {
     const parsed = wireVendorProfileSchema.parse({
       ...PROFILE_JSON,
-      publishBlockers: ['Write a short bio so customers know what you do'],
+      publishBlockers: ['bio', 'responseTime'],
     });
 
-    expect(parsed.publishBlockers).toEqual(['Write a short bio so customers know what you do']);
+    expect(parsed.publishBlockers).toEqual(['bio', 'responseTime']);
+  });
+
+  it('rejects a blocker the client has no rendering for', () => {
+    expect(
+      wireVendorProfileSchema.safeParse({
+        ...PROFILE_JSON,
+        publishBlockers: ['Write a short bio so customers know what you do'],
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects a profile response with no publish prerequisites field', () => {
