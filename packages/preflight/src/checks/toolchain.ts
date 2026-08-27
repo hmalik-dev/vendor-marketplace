@@ -4,7 +4,20 @@ import { COMPOSE_SERVICES, type Capability } from '@vendor-marketplace/shared/en
 import { runCommand } from '../exec.js';
 import { type Check, type CheckContext, type CheckResult, fail, pass } from '../types.js';
 
-const MIN_NODE_MAJOR = 20;
+/**
+ * Fallback only. The real floor is `engines.node` in the root `package.json`,
+ * which is the one number CI, `.nvmrc` and the API image all answer to — see
+ * `toolchain.test.ts`, which fails if any of them drifts below it.
+ */
+const FALLBACK_NODE_MAJOR = 22;
+
+/** `">=22.22.2"` -> `22`. A range this cannot read falls back rather than passing everything. */
+export function requiredNodeMajor(engineRange: string | undefined): number {
+  const match = /(\d+)/.exec(engineRange ?? '');
+  const parsed = match ? Number.parseInt(match[1] ?? '', 10) : Number.NaN;
+
+  return Number.isNaN(parsed) ? FALLBACK_NODE_MAJOR : parsed;
+}
 
 interface RootManifest {
   readonly packageManager?: string;
@@ -19,20 +32,21 @@ function readRootManifest(repoRoot: string): RootManifest {
   }
 }
 
-function checkNode(): CheckResult {
+function checkNode(repoRoot: string): CheckResult {
+  const required = requiredNodeMajor(readRootManifest(repoRoot).engines?.node);
   const [major] = process.versions.node.split('.');
   const parsed = Number.parseInt(major ?? '', 10);
 
-  if (Number.isNaN(parsed) || parsed < MIN_NODE_MAJOR) {
+  if (Number.isNaN(parsed) || parsed < required) {
     return fail(
       'core',
-      `Node >= ${MIN_NODE_MAJOR}`,
+      `Node >= ${required}`,
       `running Node ${process.versions.node}`,
-      `nvm install ${MIN_NODE_MAJOR} && nvm use ${MIN_NODE_MAJOR}`,
+      `nvm install ${required} && nvm use ${required}`,
     );
   }
 
-  return pass('core', `Node >= ${MIN_NODE_MAJOR}`, `v${process.versions.node}`);
+  return pass('core', `Node >= ${required}`, `v${process.versions.node}`);
 }
 
 async function checkPnpm(repoRoot: string): Promise<CheckResult> {
@@ -129,6 +143,10 @@ export const toolchainCheck: Check = {
   id: 1,
   title: 'Toolchain',
   async run(context) {
-    return [checkNode(), await checkPnpm(context.repoRoot), ...(await checkDocker(context))];
+    return [
+      checkNode(context.repoRoot),
+      await checkPnpm(context.repoRoot),
+      ...(await checkDocker(context)),
+    ];
   },
 };

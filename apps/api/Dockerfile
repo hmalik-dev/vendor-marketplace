@@ -11,7 +11,7 @@
 # Debian slim rather than Alpine: `sharp` ships glibc prebuilds that need no
 # toolchain, and the musl path is the one that surprises people at build time.
 
-ARG NODE_VERSION=22-bookworm-slim
+ARG NODE_VERSION=24-bookworm-slim
 
 FROM node:${NODE_VERSION} AS base
 ENV PNPM_HOME=/pnpm
