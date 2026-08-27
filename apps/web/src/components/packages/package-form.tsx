@@ -12,6 +12,9 @@ import {
 import { Plus, X } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
+import { PRICE_TYPE_LABELS } from '@/lib/package-labels';
+
+export { PRICE_TYPE_LABELS };
 import { ApiClientError } from '@/lib/api-client';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
@@ -28,12 +31,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-
-export const PRICE_TYPE_LABELS: Record<PriceType, string> = {
-  fixed: 'Fixed price',
-  starting_at: 'Starting at',
-  hourly: 'Per hour',
-};
 
 const MAX_INCLUSIONS = 20;
 const MAX_INCLUSION_LENGTH = 200;

@@ -12,11 +12,13 @@ import {
   wirePortfolioListSchema,
   wireServicePackageListSchema,
   wireTagListSchema,
+  wirePublicVendorProfileSchema,
   wireVendorProfileSchema,
   type WireAvailability,
   type WirePortfolioItem,
   type WireServicePackage,
   type WireTag,
+  type WirePublicVendorProfile,
   type WireVendorProfile,
 } from './wire-schemas';
 
@@ -172,6 +174,55 @@ export async function getFeaturedVendors(): Promise<VendorCard[]> {
     });
 
     return result.items;
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * The public vendor profile — frame `03`. Unauthenticated, because the page
+ * where the decision happens cannot sit behind a sign-up.
+ *
+ * `null` for a slug that is missing, unpublished or deleted: the API answers
+ * 404 for all three, and the page turns that into `notFound()` so the visitor
+ * gets the designed 404 with its category recovery rather than a raw error.
+ * Any other failure propagates to the error boundary — a vendor page that
+ * silently renders empty is worse than one that says it broke.
+ */
+export async function getPublicVendorProfile(
+  slug: string,
+): Promise<WirePublicVendorProfile | null> {
+  try {
+    return await apiRequest(`/vendors/${encodeURIComponent(slug)}`, {
+      schema: wirePublicVendorProfileSchema,
+    });
+  } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 404) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * The vendor's calendar for the profile's Availability tab.
+ *
+ * An empty list is the honest answer to a failure here: the calendar's
+ * convention is that a date with no row is free, so an empty list renders a
+ * fully open month rather than a broken pane — and the tab is one of five, none
+ * of the others depending on it. The profile read above is the one that must
+ * propagate, because without it there is no page.
+ */
+export async function getPublicVendorAvailability(slug: string): Promise<WireAvailability[]> {
+  try {
+    return await apiRequest(`/vendors/${encodeURIComponent(slug)}/availability`, {
+      schema: wireAvailabilityListSchema,
+    });
   } catch (error) {
     if (error instanceof ApiClientError) {
       return [];

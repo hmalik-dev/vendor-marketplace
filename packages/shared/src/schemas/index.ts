@@ -700,6 +700,51 @@ export const vendorCardSchema = z.object({
 export type VendorCard = z.infer<typeof vendorCardSchema>;
 
 /**
+ * The public vendor profile — frame `03`, the page where the decision happens.
+ *
+ * Deliberately not `vendorProfileSchema`: that carries `userId`,
+ * `stripeAccountId`, `stripeOnboarded`, `address`, `isDeleted` and the exact
+ * coordinates, none of which is any of a visitor's business. A public shape
+ * that starts from the private one and remembers to `omit` leaks the next
+ * column somebody adds; this one starts empty and names what is public.
+ *
+ * `avgRating` and `reviewCount` are the derived columns, never recomputed here.
+ */
+export const publicVendorProfileSchema = z.object({
+  id: uuidSchema,
+  businessName: z.string(),
+  slug: slugSchema,
+  bio: z.string().nullable(),
+  profileImageUrl: z.string().nullable(),
+  coverImageUrl: z.string().nullable(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  /** Stored in kilometres; the display boundary converts with `kmToMiles`. */
+  serviceRadiusKm: z.int().nullable(),
+  responseTimeHours: z.int().nullable(),
+  avgRating: z.number().min(0).max(REVIEW_RATING_MAX),
+  reviewCount: z.int().min(0),
+  /** Completed bookings — the only "events" figure that is not self-declared. */
+  completedEventCount: z.int().min(0),
+  /** Cheapest active package, or `null` when nothing is priced yet. */
+  startingPriceCents: z.int().min(0).nullable(),
+  categories: z.array(z.object({ id: uuidSchema, name: z.string(), slug: z.string() })),
+  tags: z.array(tagSchema),
+  /** Active packages only, in display order. */
+  packages: z.array(servicePackageSchema),
+  portfolio: z.array(portfolioItemSchema),
+});
+export type PublicVendorProfile = z.infer<typeof publicVendorProfileSchema>;
+
+/**
+ * The `:slug` path parameter. Shaped rather than free: a slug that cannot exist
+ * is rejected at the edge as a 400, so the handler never runs a lookup for a
+ * string the column could not hold.
+ */
+export const vendorSlugParamsSchema = z.object({ slug: slugSchema });
+export type VendorSlugParams = z.infer<typeof vendorSlugParamsSchema>;
+
+/**
  * How many published vendors each category would return under the rest of the
  * current filters. A query result, not marketing — see design-plan/98-post-mvp.md.
  */

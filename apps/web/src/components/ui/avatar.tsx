@@ -14,7 +14,13 @@ export const AVATAR_SIZES = {
   sm: 34,
   md: 38,
   lg: 64,
-  xl: 80,
+  /*
+   * The public vendor profile's identity row. `12-vendor-profile.md` revised
+   * this from 80 to 72 when the avatar stopped overlapping the cover; 80 was
+   * left behind and unused, so the token follows the plan rather than keeping
+   * a size nothing renders.
+   */
+  xl: 72,
 } as const;
 
 export type AvatarSize = keyof typeof AVATAR_SIZES;

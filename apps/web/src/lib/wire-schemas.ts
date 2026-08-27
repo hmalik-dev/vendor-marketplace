@@ -2,6 +2,7 @@ import {
   availabilitySchema,
   categorySchema,
   portfolioItemSchema,
+  publicVendorProfileSchema,
   servicePackageSchema,
   tagSchema,
   userSchema,
@@ -54,6 +55,17 @@ export const wirePortfolioItemSchema = portfolioItemSchema.extend({
 export type WirePortfolioItem = z.infer<typeof wirePortfolioItemSchema>;
 
 export const wirePortfolioListSchema = z.array(wirePortfolioItemSchema);
+
+/**
+ * The public profile as JSON: its nested packages, portfolio items and tags all
+ * carry timestamps, which cross the wire as ISO strings.
+ */
+export const wirePublicVendorProfileSchema = publicVendorProfileSchema.extend({
+  tags: z.array(wireTagSchema),
+  packages: z.array(wireServicePackageSchema),
+  portfolio: z.array(wirePortfolioItemSchema),
+});
+export type WirePublicVendorProfile = z.infer<typeof wirePublicVendorProfileSchema>;
 
 /**
  * Availability carries no timestamps — `date` is a `YYYY-MM-DD` calendar date

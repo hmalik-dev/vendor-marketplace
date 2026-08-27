@@ -4,7 +4,11 @@ import {
   vendorProfileDetailSchema,
   vendorSearchQuerySchema,
   vendorSearchResultSchema,
+  publicVendorProfileSchema,
+  vendorSlugParamsSchema,
 } from '@vendor-marketplace/shared';
+import { z } from 'zod';
+import { availabilitySchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole } from '../../lib/guards.js';
 import { requireRole } from '../../lib/guards.js';
@@ -14,6 +18,7 @@ import {
   searchPublishedVendors,
   updateVendorProfile,
 } from './vendors.service.js';
+import { getPublicVendorAvailability, getPublicVendorProfile } from './vendor-profile.service.js';
 
 /** Where a vendor's own profile lives, used as the `Location` on creation. */
 const OWN_PROFILE_PATH = '/vendor/profile';
@@ -35,6 +40,33 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => searchPublishedVendors(app.db, request.query),
+  );
+
+  /**
+   * The public profile — frame `03`. Unauthenticated for the same reason the
+   * search is: the page where the decision happens cannot sit behind a sign-up.
+   */
+  app.get(
+    '/vendors/:slug',
+    {
+      schema: {
+        params: vendorSlugParamsSchema,
+        response: { 200: publicVendorProfileSchema },
+      },
+    },
+    async (request) => getPublicVendorProfile(app.db, request.params.slug),
+  );
+
+  /** The calendar behind the profile's Availability tab. */
+  app.get(
+    '/vendors/:slug/availability',
+    {
+      schema: {
+        params: vendorSlugParamsSchema,
+        response: { 200: z.array(availabilitySchema) },
+      },
+    },
+    async (request) => getPublicVendorAvailability(app.db, request.params.slug),
   );
 
   app.get(
