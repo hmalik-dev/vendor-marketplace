@@ -11,6 +11,7 @@ import {
   CATEGORY_SLUG_SUCCESSORS,
   CATEGORY_SLUGS,
   LANDING_CATEGORY_COUNT,
+  LANDING_JUMP_CATEGORY_SLUGS,
   DEFAULT_PLATFORM_FEE_RATE,
   ERROR_CODES,
   MIN_BOOKING_AMOUNT_CENTS,
@@ -80,9 +81,9 @@ describe('CATEGORY_SEEDS', () => {
       'Entertainment',
       'Catering',
       'Venues',
+      'Florals',
       'Beauty',
       'Carts',
-      'Florals',
       'Decor',
       'Videography',
       'Planning',
@@ -109,7 +110,7 @@ describe('CATEGORY_SEEDS', () => {
     );
   });
 
-  it('features the categories the landing page leads with, carts included', () => {
+  it('features the six categories frame 01 draws, in the order it draws them', () => {
     const featured = CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT).map((c) => c.name);
 
     expect(featured).toEqual([
@@ -117,9 +118,39 @@ describe('CATEGORY_SEEDS', () => {
       'Entertainment',
       'Catering',
       'Venues',
+      'Florals',
       'Beauty',
-      'Carts',
     ]);
+  });
+
+  it('gives the landing card a short line, never a count or a from-price', () => {
+    for (const category of CATEGORY_SEEDS) {
+      expect(category.shortDescription.split(' ').length, category.slug).toBeLessThanOrEqual(4);
+      expect(category.shortDescription, category.slug).not.toMatch(/[0-9$]/);
+      expect(category.shortDescription.endsWith('.'), category.slug).toBe(false);
+    }
+  });
+
+  it('leads the six landing cards with the exact lines the frame carries', () => {
+    const lines = CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT).map((c) => c.shortDescription);
+
+    expect(lines).toEqual([
+      'Photo & film',
+      'DJs, bands, hosts',
+      'Food, bar, carts',
+      'Halls & outdoor',
+      'Bouquets & decor',
+      'Hair & makeup',
+    ]);
+  });
+
+  it('jumps straight to four categories the taxonomy actually holds', () => {
+    const slugs = CATEGORY_SEEDS.map((c) => c.slug);
+
+    expect(LANDING_JUMP_CATEGORY_SLUGS).toHaveLength(4);
+    for (const slug of LANDING_JUMP_CATEGORY_SLUGS) {
+      expect(slugs, slug).toContain(slug);
+    }
   });
 
   it('features fewer categories than it seeds, so the landing grid stays a taste', () => {

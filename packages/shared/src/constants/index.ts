@@ -165,6 +165,14 @@ export interface CategorySeed {
   readonly name: string;
   readonly slug: string;
   readonly description: string;
+  /**
+   * The landing card's line — "Photo & film". Three or four words naming what
+   * the category covers, never a vendor count and never a from-price: a new
+   * marketplace has neither worth publishing, and the full sentence in
+   * `description` is twice too long for a card an eighth of the page wide.
+   * See design/design-plan/10-landing.md.
+   */
+  readonly shortDescription: string;
   /** Lucide icon name rendered by the frontend. */
   readonly icon: string;
   readonly displayOrder: number;
@@ -184,13 +192,15 @@ export interface CategorySeed {
  * two-word name is a sign the category is really two categories.
  *
  * `displayOrder` doubles as landing-page priority — `LANDING_CATEGORY_COUNT`
- * cards are featured on `/`, so the first entries are the highest-intent ones.
+ * cards are featured on `/`, so the first entries are the highest-intent ones,
+ * and the first six are exactly the six frame `01` draws, in its order.
  */
 export const CATEGORY_SEEDS: readonly CategorySeed[] = [
   {
     name: 'Photography',
     slug: 'photography',
     description: 'Portraits, candids, photo booths, and full-day coverage.',
+    shortDescription: 'Photo & film',
     icon: 'camera',
     displayOrder: 1,
     vendorNoun: { one: 'photographer', many: 'photographers' },
@@ -199,6 +209,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     name: 'Entertainment',
     slug: 'entertainment',
     description: 'DJs, live bands, musicians, MCs, dancers, and performers.',
+    shortDescription: 'DJs, bands, hosts',
     icon: 'music',
     displayOrder: 2,
     vendorNoun: { one: 'entertainer', many: 'entertainers' },
@@ -207,6 +218,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     name: 'Catering',
     slug: 'catering',
     description: 'Caterers, private chefs, bartenders, and buffet service.',
+    shortDescription: 'Food, bar, carts',
     icon: 'utensils',
     displayOrder: 3,
     vendorNoun: { one: 'caterer', many: 'caterers' },
@@ -215,38 +227,43 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     name: 'Venues',
     slug: 'venues',
     description: 'Halls, lofts, rooftops, gardens, and private dining rooms.',
+    shortDescription: 'Halls & outdoor',
     icon: 'building-2',
     displayOrder: 4,
     vendorNoun: { one: 'venue', many: 'venues' },
   },
   {
+    name: 'Florals',
+    slug: 'florals',
+    description: 'Bouquets, centerpieces, arches, and floral installations.',
+    shortDescription: 'Bouquets & decor',
+    icon: 'flower',
+    displayOrder: 5,
+    vendorNoun: { one: 'florist', many: 'florists' },
+  },
+  {
     name: 'Beauty',
     slug: 'beauty',
     description: 'Makeup artists, hair stylists, henna, and grooming.',
+    shortDescription: 'Hair & makeup',
     icon: 'sparkles',
-    displayOrder: 5,
+    displayOrder: 6,
     vendorNoun: { one: 'beauty pro', many: 'beauty pros' },
   },
   {
     name: 'Carts',
     slug: 'carts',
     description: 'Coffee, ice cream, dessert, and cocktail carts.',
+    shortDescription: 'Coffee & dessert',
     icon: 'ice-cream-cone',
-    displayOrder: 6,
-    vendorNoun: { one: 'cart', many: 'carts' },
-  },
-  {
-    name: 'Florals',
-    slug: 'florals',
-    description: 'Bouquets, centerpieces, arches, and floral installations.',
-    icon: 'flower',
     displayOrder: 7,
-    vendorNoun: { one: 'florist', many: 'florists' },
+    vendorNoun: { one: 'cart', many: 'carts' },
   },
   {
     name: 'Decor',
     slug: 'decor',
     description: 'Backdrops, table styling, uplighting, and stage design.',
+    shortDescription: 'Styling & lighting',
     icon: 'palette',
     displayOrder: 8,
     vendorNoun: { one: 'decorator', many: 'decorators' },
@@ -255,6 +272,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     name: 'Videography',
     slug: 'videography',
     description: 'Highlight films, ceremony coverage, and drone work.',
+    shortDescription: 'Films & drone',
     icon: 'video',
     displayOrder: 9,
     vendorNoun: { one: 'videographer', many: 'videographers' },
@@ -263,6 +281,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     name: 'Planning',
     slug: 'planning',
     description: 'Planners and day-of coordinators who run the event for you.',
+    shortDescription: 'Planners & coordinators',
     icon: 'clipboard-list',
     displayOrder: 10,
     vendorNoun: { one: 'planner', many: 'planners' },
@@ -271,6 +290,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     name: 'Rentals',
     slug: 'rentals',
     description: 'Tents, tables, chairs, AV, and everything in between.',
+    shortDescription: 'Tents, tables, AV',
     icon: 'package',
     displayOrder: 11,
     vendorNoun: { one: 'rental supplier', many: 'rental suppliers' },
@@ -320,6 +340,24 @@ export const CATEGORY_SLUGS = CATEGORY_SEEDS.map((category) => category.slug);
  * grid of eleven inert cards is bloat, not browse.
  */
 export const LANDING_CATEGORY_COUNT = 6;
+
+/**
+ * The four categories behind "Or jump straight to" in the landing hero.
+ *
+ * A shortcut past the search bar for the visitor who already knows what they
+ * need, so it is the four highest-intent types rather than the first four of
+ * the row below it — Florals outranks Venues here and does not on the grid.
+ * They replace the old "Popular: Florals · Taco carts · Live bands" link row,
+ * which pointed at free-text queries that no longer exist.
+ *
+ * See design/design-plan/10-landing.md.
+ */
+export const LANDING_JUMP_CATEGORY_SLUGS = [
+  'photography',
+  'florals',
+  'catering',
+  'entertainment',
+] as const;
 
 // --- Tag seed data ---------------------------------------------------------
 

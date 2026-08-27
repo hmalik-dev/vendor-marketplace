@@ -28,6 +28,28 @@ describe('SiteFooter', () => {
     expect(screen.getByRole('navigation', { name: 'Footer' })).toBeDefined();
   });
 
+  it('carries the four columns the design calls for', () => {
+    render(<SiteFooter />);
+
+    for (const heading of ['Browse', 'Company', 'Account']) {
+      expect(screen.getByText(heading), heading).toBeDefined();
+    }
+    expect(screen.getByText('Made for the people who make the day.')).toBeDefined();
+  });
+
+  it('sends the browse column into search with a category already chosen', () => {
+    render(<SiteFooter />);
+
+    expect(screen.getByRole('link', { name: 'Photography' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/search?category=photography',
+    );
+    expect(screen.getByRole('link', { name: 'All vendors' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/search',
+    );
+  });
+
   it('offers the authentication routes to signed-out visitors', () => {
     render(<SiteFooter />);
 
@@ -48,9 +70,9 @@ describe('SiteFooter', () => {
 
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Become a vendor' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveProperty(
       'href',
-      'http://localhost:3000/',
+      'http://localhost:3000/dashboard',
     );
   });
 });

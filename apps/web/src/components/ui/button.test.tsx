@@ -59,6 +59,9 @@ describe('Button', () => {
     expect(button.className).toContain('bg-stone-900');
     expect(button.className).toContain('text-stone-50');
     expect(button.className).toContain('rounded-full');
+    // 18px, not the 20px the default size gives every other button.
+    expect(button.className).toContain('px-4.5');
+    expect(button.className).not.toContain('px-5');
   });
 
   it('paints destructive in error rather than in clay', () => {

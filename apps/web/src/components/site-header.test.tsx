@@ -6,6 +6,11 @@ import { BRAND_NAME } from '@vendor-marketplace/shared';
 type AuthState = 'signed-in' | 'signed-out';
 
 let authState: AuthState = 'signed-out';
+let pathname = '/';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname,
+}));
 
 vi.mock('@clerk/nextjs', () => ({
   Show: ({ when, children }: { when: AuthState; children: ReactNode }) =>
@@ -18,6 +23,7 @@ const { SiteHeader } = await import('./site-header');
 describe('SiteHeader', () => {
   beforeEach(() => {
     authState = 'signed-out';
+    pathname = '/';
   });
 
   afterEach(() => {
@@ -52,6 +58,36 @@ describe('SiteHeader', () => {
       'http://localhost:3000/sign-up',
     );
     expect(screen.queryByRole('button', { name: 'Open user button' })).toBeNull();
+  });
+
+  it('carries the marketing nav on the landing page', () => {
+    render(<SiteHeader />);
+
+    expect(screen.getByRole('link', { name: 'Browse' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/search',
+    );
+    expect(screen.getByRole('link', { name: 'How it works' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'For vendors' })).toBeDefined();
+  });
+
+  it('drops the marketing nav elsewhere, where the frames fill that space differently', () => {
+    pathname = '/search';
+
+    render(<SiteHeader />);
+
+    expect(screen.queryByRole('link', { name: 'Browse' })).toBeNull();
+    // The wordmark and the account actions survive — only the nav is scoped.
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeDefined();
+  });
+
+  it('hides the marketing nav from a signed-in visitor', () => {
+    authState = 'signed-in';
+
+    render(<SiteHeader />);
+
+    expect(screen.queryByRole('link', { name: 'Browse' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'For vendors' })).toBeNull();
   });
 
   it('offers the dashboard and user button when signed in', () => {

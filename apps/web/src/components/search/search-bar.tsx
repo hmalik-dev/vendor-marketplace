@@ -56,9 +56,11 @@ export function SearchBar({
     'font-semibold tracking-[.05em] text-stone-600 uppercase',
     isHero ? 'text-[10.5px]' : 'text-[9.5px]',
   );
+  const fieldText = isHero ? 'text-md' : 'text-[13.5px]';
   const field = cn(
     'min-w-0 bg-transparent text-stone-900 outline-none placeholder:text-stone-600',
-    isHero ? 'mt-0.5 text-md' : 'text-[13.5px]',
+    fieldText,
+    isHero && 'mt-0.5',
   );
   /*
    * Below `sm` the three segments stack into a three-row card. They are the
@@ -113,14 +115,39 @@ export function SearchBar({
         className={cn(segment, isHero ? 'sm:flex-[0.8] sm:pl-4.5' : 'sm:flex-[0.85] sm:pl-3.5')}
       >
         <span className={label}>Event date</span>
-        <input
-          type="date"
-          value={draft.date}
-          onChange={(event) => setDraft((previous) => ({ ...previous, date: event.target.value }))}
-          // An empty date reads "Add a date", never a grey placeholder that
-          // looks disabled — see design/design-plan/10-landing.md.
-          className={cn(field, draft.date === '' && 'text-stone-600')}
-        />
+        {/*
+          An empty date reads "Add a date", not the browser's "mm/dd/yyyy" —
+          the frame draws the prompt, and the placeholder attribute does
+          nothing on a date input. So the native edit field is made transparent
+          while it is empty and unfocused, and the prompt is laid over it;
+          focusing hands the field straight back to the browser's own editor.
+          See design/design-plan/10-landing.md.
+        */}
+        <span className={cn('relative flex min-w-0', isHero && 'mt-0.5')}>
+          <input
+            type="date"
+            value={draft.date}
+            onChange={(event) =>
+              setDraft((previous) => ({ ...previous, date: event.target.value }))
+            }
+            className={cn(
+              'peer w-full min-w-0 bg-transparent text-stone-900 outline-none',
+              fieldText,
+              draft.date === '' && 'text-transparent focus:text-stone-600',
+            )}
+          />
+          {draft.date === '' ? (
+            <span
+              aria-hidden="true"
+              className={cn(
+                'pointer-events-none absolute inset-y-0 left-0 flex items-center text-stone-600 peer-focus:hidden',
+                fieldText,
+              )}
+            >
+              Add a date
+            </span>
+          ) : null}
+        </span>
       </label>
 
       <button

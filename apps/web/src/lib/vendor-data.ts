@@ -1,6 +1,10 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import type { Category } from '@vendor-marketplace/shared';
+import {
+  vendorSearchResultSchema,
+  type Category,
+  type VendorCard,
+} from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import {
   wireAvailabilityListSchema,
@@ -131,4 +135,34 @@ export async function getCategories(): Promise<Category[]> {
 
 export async function getActiveTags(): Promise<WireTag[]> {
   return apiRequest('/tags', { schema: wireTagListSchema });
+}
+
+/** One row of four on the landing page — see design/design-plan/10-landing.md. */
+export const FEATURED_VENDOR_COUNT = 4;
+
+/**
+ * The vendors the landing page leads with: the best-reviewed published ones.
+ *
+ * Sorted by rating rather than curated, because "featured" on a marketplace
+ * with no editorial team is otherwise a euphemism for "whichever four the
+ * database returned first".
+ *
+ * A failure here yields an empty list rather than propagating: the front door
+ * must still render its search bar when one section's data is unavailable, and
+ * a marketplace with no published vendors yet is a normal state, not an error.
+ */
+export async function getFeaturedVendors(): Promise<VendorCard[]> {
+  try {
+    const result = await apiRequest(`/vendors?sort=rating&pageSize=${FEATURED_VENDOR_COUNT}`, {
+      schema: vendorSearchResultSchema,
+    });
+
+    return result.items;
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      return [];
+    }
+
+    throw error;
+  }
 }

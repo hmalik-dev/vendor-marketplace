@@ -36,27 +36,24 @@ are in `98-post-mvp.md`.
 
 ## 1. What happens when a vendor doesn't reply? — **resolve inside MVP**
 
-The 48-hour expiry is specified; the customer-side experience is not designed.
+**Deferred post-MVP.** The 48-hour expiry is specified; the customer-side experience is not designed.
 Options: auto-suggest similar vendors free on the same date · expire quietly ·
 nudge the vendor at 24h and tell the customer it happened. This is the most
 common failure path in a two-sided marketplace and it has no surface today.
 
 ## 2. Does reply-time ranking exist? — **blocks a line of copy**
 
-Screen 16 says "keep it under 4h to stay ranked". Either the ranking signal is
+**Deferred post-MVP.** Screen 16 says "keep it under 4h to stay ranked". Either the ranking signal is
 real, or that sentence changes. Don't ship an implied mechanic that isn't there.
 
 ## 3. Review asymmetry
 
-Customer→vendor public; vendor→customer private but surfaced in the messaging
-context rail ("About Priya"). Confirm intended — a customer seeing their own
-private rating quoted back would be a bad surprise.
+Customer→vendor public; vendor→customer private but self viewable/viewable by vendor after they are requested so it is surfaced in the messaging
+context rail ("About Priya").
 
 ## 4. Category ordering on the landing page
 
-Six featured of eleven by `displayOrder`. Editorial (ops picks) or algorithmic
-(by vendor count)? Decides whether ops needs a UI for it. Note that with counts
-deferred, the algorithmic option has no visible justification in MVP.
+Six featured of eleven by `displayOrder`. Editorial (ops picks)
 
 ## 5. Photography
 
@@ -67,7 +64,7 @@ shoot-day offer for early vendors.
 
 ## 6. Where does the occasion field come from?
 
-The booking card reads "Photography · Wedding". That occasion string is the
+**Deferred post-MVP.** The booking card reads "Photography · Wedding". That occasion string is the
 `event_type` already collected in the booking request form (screen 04) — confirm
 it's a controlled vocabulary (Wedding / Birthday / Corporate / Quinceañera / …)
 rather than free text, since it's now displayed as a label and will eventually

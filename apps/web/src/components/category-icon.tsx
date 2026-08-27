@@ -59,7 +59,7 @@ export function CategoryIcon({ icon, className }: CategoryIconProps): React.Reac
 }
 
 export interface CategoryIconBadgeProps extends CategoryIconProps {
-  /** `inline` is the 28px chip badge; `card` is the 40px landing-card badge. */
+  /** `inline` is the 28px chip badge; `card` is the 36px landing-card badge. */
   size?: 'inline' | 'card';
 }
 
@@ -73,11 +73,11 @@ export function CategoryIconBadge({
     <span
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-full bg-clay-100 text-clay-600',
-        size === 'card' ? 'size-10' : 'size-7',
+        size === 'card' ? 'size-9' : 'size-7',
         className,
       )}
     >
-      <CategoryIcon icon={icon} className={size === 'card' ? 'size-5' : 'size-3.5'} />
+      <CategoryIcon icon={icon} className={size === 'card' ? 'size-4.5' : 'size-3.5'} />
     </span>
   );
 }

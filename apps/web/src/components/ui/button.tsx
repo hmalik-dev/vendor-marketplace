@@ -43,6 +43,13 @@ const buttonVariants = cva(
         'icon-sm': 'size-9',
       },
     },
+    /*
+     * Ink carries its own horizontal padding — 18px, not the 20px every other
+     * default-size button uses (03-components.md, and frame `01` draws the
+     * same). It has to be a compound rather than part of the variant, because
+     * cva emits `size` after `variant` and `px-5` would otherwise win.
+     */
+    compoundVariants: [{ variant: 'ink', size: 'default', class: 'px-4.5' }],
     defaultVariants: {
       variant: 'primary',
       size: 'default',
