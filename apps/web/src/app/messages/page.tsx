@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/** Never prerendered: the thread list is one signed-in customer's own. */
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   searchParams: Promise<{ conversation?: string }>;
 }

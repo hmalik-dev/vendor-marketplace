@@ -12,6 +12,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Never prerendered. The `loading.tsx` beside this file gives Next a shell it
+ * could otherwise try to statically generate, and this page resolves the signed-in
+ * customer before it can render anything — which is not a question a build has an
+ * answer to.
+ */
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   searchParams: Promise<{ tab?: string }>;
 }
