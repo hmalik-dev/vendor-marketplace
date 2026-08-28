@@ -210,6 +210,38 @@ describe('reconcileClerkUsers', () => {
     expect(summary).toMatchObject({ examined: 0, deleted: 0 });
   });
 
+  /*
+   * Caught by the first production dry run: 50 of 54 rows would have been
+   * retired, because the seeded marketplace uses `seed_mkt_…` ids Clerk has
+   * never issued. Reading that as "deleted in Clerk" would have taken the
+   * entire public marketplace down on the first real run.
+   */
+  it('leaves seeded accounts Clerk never issued alone', async () => {
+    await seed('seed_mkt_vendor_june-harlow');
+    await seed('seed_mkt_customer_0');
+
+    const clerk = clerkHolding();
+    const summary = await reconcileClerkUsers(harness.database.db, clerk);
+
+    expect(summary).toMatchObject({ examined: 0, deleted: 0, skipped: 2 });
+    expect(clerk.getUserList).not.toHaveBeenCalled();
+
+    const [vendor] = await read('seed_mkt_vendor_june-harlow');
+    expect(vendor?.deletedAt).toBeNull();
+  });
+
+  it('still reconciles real Clerk rows alongside seeded ones', async () => {
+    await seed('seed_mkt_customer_0');
+    await seed('user_a', { email: 'katherine@example.com', firstName: 'Kathryn' });
+
+    const summary = await reconcileClerkUsers(
+      harness.database.db,
+      clerkHolding(clerkUser('user_a')),
+    );
+
+    expect(summary).toMatchObject({ examined: 1, updated: 1, skipped: 1 });
+  });
+
   /* A bulk pass is where Clerk's rate limit bites, so ids go up in batches. */
   it('asks Clerk in batches rather than once per row', async () => {
     for (let index = 0; index < 5; index += 1) {
@@ -223,12 +255,34 @@ describe('reconcileClerkUsers', () => {
     expect(clerk.getUserList.mock.calls[0]?.[0].userId).toHaveLength(5);
   });
 
+  /*
+   * The first real run is against production rows nobody has looked at in
+   * weeks, so the count has to be answerable before it is irreversible.
+   */
+  it('reports what would change without writing, under --dry-run', async () => {
+    await seed('user_a', { email: 'katherine@example.com', firstName: 'Kathryn' });
+    await seed('user_gone');
+
+    const summary = await reconcileClerkUsers(
+      harness.database.db,
+      clerkHolding(clerkUser('user_a')),
+      { dryRun: true },
+    );
+
+    expect(summary).toMatchObject({ examined: 2, updated: 1, deleted: 1 });
+
+    const [untouched] = await read('user_a');
+    expect(untouched?.firstName).toBe('Kathryn');
+    const [alive] = await read('user_gone');
+    expect(alive?.deletedAt).toBeNull();
+  });
+
   it('does nothing, and asks Clerk nothing, when there are no local rows', async () => {
     const clerk = clerkHolding();
 
     const summary = await reconcileClerkUsers(harness.database.db, clerk);
 
-    expect(summary).toEqual({ examined: 0, updated: 0, deleted: 0, unchanged: 0 });
+    expect(summary).toEqual({ examined: 0, updated: 0, deleted: 0, unchanged: 0, skipped: 0 });
     expect(clerk.getUserList).not.toHaveBeenCalled();
   });
 

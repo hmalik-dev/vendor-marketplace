@@ -51,6 +51,23 @@ export interface ReconcileSummary {
   deleted: number;
   /** Rows already agreeing with Clerk. On a second run this is all of them. */
   unchanged: number;
+  /** Rows Clerk never issued — seeded demo accounts — left untouched. */
+  skipped: number;
+}
+
+/**
+ * Clerk mints user ids with this prefix. The seeded marketplace accounts use
+ * `seed_mkt_…`, which Clerk has never heard of.
+ *
+ * The distinction matters more than it looks: without it, every seeded vendor
+ * reads as "deleted in Clerk" and the pass retires the entire public
+ * marketplace on its first run. A row Clerk never issued is not a row Clerk
+ * deleted, and is simply outside this pass's jurisdiction.
+ */
+const CLERK_ID_PREFIX = 'user_';
+
+export function isClerkIdentity(clerkUserId: string): boolean {
+  return clerkUserId.startsWith(CLERK_ID_PREFIX);
 }
 
 /** Clerk's own cap on ids per `getUserList` query. */
@@ -83,13 +100,23 @@ function asWebhookData(user: ClerkApiUser): ClerkWebhookUserData {
 export async function reconcileClerkUsers(
   db: AppDatabase,
   clerk: ClerkUserSource,
+  /**
+   * Reports what would change without writing anything.
+   *
+   * The first run of a repair pass is against production data that nobody has
+   * looked at in weeks, and "how many rows would this retire?" is a question
+   * worth being able to answer before the answer is irreversible.
+   */
+  options: { dryRun?: boolean } = {},
 ): Promise<ReconcileSummary> {
-  const local = await listLiveClerkIdentities(db);
+  const rows = await listLiveClerkIdentities(db);
+  const local = rows.filter((row) => isClerkIdentity(row.clerkUserId));
   const summary: ReconcileSummary = {
     examined: local.length,
     updated: 0,
     deleted: 0,
     unchanged: 0,
+    skipped: rows.length - local.length,
   };
 
   if (local.length === 0) {
@@ -119,6 +146,11 @@ export async function reconcileClerkUsers(
     const user = remote.get(row.clerkUserId);
 
     if (!user) {
+      if (options.dryRun) {
+        summary.deleted += 1;
+        continue;
+      }
+
       // The same path the event would have taken, so deletion behaves once.
       const outcome = await applyClerkUserEvent(db, {
         type: 'user.deleted',
@@ -157,6 +189,11 @@ export async function reconcileClerkUsers(
 
     if (!drifted) {
       summary.unchanged += 1;
+      continue;
+    }
+
+    if (options.dryRun) {
+      summary.updated += 1;
       continue;
     }
 
