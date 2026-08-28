@@ -224,8 +224,16 @@ export default async function HomePage(): Promise<React.ReactElement> {
               </div>
             </div>
 
-            {/* The cluster is the composition, so it never stacks above lg. */}
-            <div className="mt-12 flex justify-center max-lg:overflow-hidden lg:mt-0 lg:justify-start">
+            {/*
+              The cluster is the composition, not an illustration: it only
+              means anything sitting beside the headline. Below `lg` the hero
+              is a single column, so it had become a third block of
+              photographs in a vertical scroll — between the copy and the
+              category cards, which are the row that actually leads somewhere.
+              It is dropped there rather than stacked. The category cards are
+              untouched at every width.
+            */}
+            <div className="hidden lg:flex lg:justify-start">
               <PhotoCluster />
             </div>
           </div>

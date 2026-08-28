@@ -279,6 +279,30 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Browse by category' })).toBeDefined();
   });
 
+  /*
+   * The hero cluster is the composition, and it only reads as one beside the
+   * headline. Below `lg` the hero is a single column, so it had become a third
+   * block of photographs in a vertical scroll ahead of the category cards —
+   * which are the row that actually leads somewhere, and which stay at every
+   * width.
+   */
+  it('drops the hero photo cluster below lg and keeps the category cards', async () => {
+    const { container } = render(await HomePage());
+
+    // next/image rewrites src through the optimiser, so this matches the
+    // encoded original rather than the literal path.
+    const cluster = container.querySelector('img[src*="florals.jpg"]');
+    expect(cluster).not.toBeNull();
+
+    const clusterColumn = cluster?.closest('div.hidden');
+    expect(clusterColumn?.className).toContain('hidden');
+    expect(clusterColumn?.className).toContain('lg:flex');
+
+    // The category cards are a different row and are not gated on width.
+    const categoryCard = container.querySelector('img[src*="categories%2Fphotography.jpg"]');
+    expect(categoryCard?.closest('div.hidden')).toBeNull();
+  });
+
   it('still renders the front door when the taxonomy is unavailable', async () => {
     // `getCategories` degrades to `[]` rather than throwing — the hero and its
     // search bar must survive a bad day on `/categories`. See ticket #33.
