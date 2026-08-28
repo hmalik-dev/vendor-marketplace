@@ -10,7 +10,8 @@
     "test": "vitest run",
     "preflight": "tsx src/cli.ts",
     "env:example": "tsx src/env-example.ts",
-    "secrets:scan": "tsx src/secrets/cli.ts"
+    "secrets:scan": "tsx src/secrets/cli.ts",
+    "smoke": "tsx src/smoke/cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1118.0",

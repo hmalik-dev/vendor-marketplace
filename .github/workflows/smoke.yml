@@ -1,0 +1,56 @@
+# The post-deploy smoke check.
+#
+# CI proves the code compiles and the suites pass; it says nothing about whether
+# the deployed process actually answers. The API served 500 on every route for
+# about nineteen hours behind a build the platform reported as Ready, twice, and
+# a single request would have caught both. This workflow is that request.
+#
+# It reports and stops. There is deliberately **no automatic rollback**: a flaky
+# network would otherwise revert a healthy release on its own.
+name: Post-deploy smoke
+
+on:
+  push:
+    branches: [main]
+  # So a deployment can be re-checked by hand without an empty commit.
+  workflow_dispatch:
+
+concurrency:
+  # Never cancelled in flight: a superseded run still tells us whether the
+  # deployment it was checking came up, and that is worth knowing.
+  group: smoke-${{ github.ref }}
+
+jobs:
+  smoke:
+    name: Does the deployment actually serve?
+    runs-on: ubuntu-latest
+    # Comfortably above the check's own deadline, so the job's ceiling never
+    # pre-empts the check's own bounded retry and hides its report.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Wait for the deploy, then prove it serves real data
+        env:
+          # Repository variables win, so moving to a custom domain is a
+          # settings change; the defaults keep the check working with no setup.
+          SMOKE_API_URL: ${{ vars.SMOKE_API_URL || 'https://vendor-marketplace-production.up.railway.app' }}
+          SMOKE_WEB_URL: ${{ vars.SMOKE_WEB_URL || 'https://web-gules-eta-41.vercel.app' }}
+          # The check waits for this commit to be the one answering, so it
+          # cannot be satisfied by the previous release still standing.
+          SMOKE_COMMIT: ${{ github.sha }}
+          # Both platforms build from the same push; ten minutes covers a cold
+          # build on either without letting a dead deployment be retried
+          # indefinitely — a deploy that has not answered by then is the news.
+          SMOKE_DEADLINE_MS: 600000
+        run: pnpm smoke

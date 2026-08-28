@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { deployedCommit } from './health.routes.js';
 
 describe('GET /health', () => {
   let harness: TestHarness;
@@ -57,6 +58,17 @@ describe('GET /ready', () => {
     expect(typeof response.json().timestamp).toBe('string');
   });
 
+  /*
+   * A post-deploy check has to know *which* build answered, or the previous,
+   * still-healthy release will vouch for a new one that never booted.
+   */
+  it('names the commit it is serving', async () => {
+    const response = await harness.app.inject({ method: 'GET', url: '/ready' });
+
+    // Off a platform there is no SHA to report, and null is the honest answer.
+    expect(response.json().commit).toBeNull();
+  });
+
   it('answers 503 naming storage when the bucket is unreachable', async () => {
     harness.setStorageAvailable(false);
 
@@ -105,4 +117,18 @@ describe('probes with the database stopped', () => {
     expect(response.statusCode).toBe(503);
     expect(response.json()).toMatchObject({ status: 'not_ready', database: 'down' });
   });
+});
+
+describe('deployedCommit', () => {
+  it("reads Railway's injected SHA", () => {
+    expect(deployedCommit({ RAILWAY_GIT_COMMIT_SHA: 'abc123' })).toBe('abc123');
+  });
+
+  /* A blank or absent value must not become an empty-string "commit". */
+  it.each([{}, { RAILWAY_GIT_COMMIT_SHA: '' }, { RAILWAY_GIT_COMMIT_SHA: '   ' }])(
+    'has no commit for %p',
+    (source) => {
+      expect(deployedCommit(source)).toBeNull();
+    },
+  );
 });

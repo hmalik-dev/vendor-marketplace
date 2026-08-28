@@ -13,6 +13,16 @@ export const readyResponseSchema = z.object({
   status: z.enum(['ready', 'not_ready']),
   database: dependencyStateSchema,
   storage: dependencyStateSchema,
+  /**
+   * The commit this process is running, or `null` off a platform.
+   *
+   * Readiness alone cannot tell a caller *which* build answered, so a
+   * post-deploy check that only asked "are you ready?" would be satisfied by
+   * the previous, still-healthy release while the new one was failing to boot.
+   * Naming the commit is what makes the check able to wait for the deploy it
+   * was triggered for.
+   */
+  commit: z.string().nullable(),
   timestamp: z.string(),
 });
 
@@ -25,6 +35,15 @@ type DependencyState = z.infer<typeof dependencyStateSchema>;
  * which is a restart loop rather than a readiness failure.
  */
 const DEPENDENCY_TIMEOUT_MS = 2_000;
+
+/**
+ * Railway injects the deployed commit; there is no equivalent when the API runs
+ * from a working copy, and a local `null` is the honest answer rather than a
+ * guess read out of the developer's git checkout.
+ */
+export function deployedCommit(source: NodeJS.ProcessEnv = process.env): string | null {
+  return source.RAILWAY_GIT_COMMIT_SHA?.trim() || null;
+}
 
 interface ProbeResult {
   state: DependencyState;
@@ -102,6 +121,7 @@ export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
         status: ready ? ('ready' as const) : ('not_ready' as const),
         database: database.state,
         storage: storage.state,
+        commit: deployedCommit(),
         timestamp: new Date().toISOString(),
       });
     },

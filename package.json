@@ -11,6 +11,7 @@
     "preflight": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run preflight",
     "secrets:scan": "pnpm --filter @vendor-marketplace/preflight run secrets:scan",
     "secrets:scan:all": "pnpm --filter @vendor-marketplace/preflight run secrets:scan -- --tracked",
+    "smoke": "pnpm --filter @vendor-marketplace/preflight run smoke",
     "env:example": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run env:example",
     "start": "pnpm install && docker compose up -d && docker compose up -d --wait postgres storage && pnpm db:migrate && pnpm db:seed && pnpm dev",
     "dev": "turbo run dev",
