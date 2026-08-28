@@ -12,13 +12,13 @@ The app is new, so it has no vendor count, no "events booked", no average rating
 and no median reply time worth publishing. Every one of these was removed from
 the public surfaces:
 
-| Surface                 | Was                                                        | Now (MVP)                                                                      |
-| ----------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Landing hero badge      | "412 vendors in Austin"                                    | "Now booking in Austin"                                                        |
-| Landing category cards  | "64 vendors · from $850"                                   | "Photo & film" — what the category _is_                                        |
-| Landing stats row       | 2,412 booked / 4.8 / 2h                                    | **Removed entirely**                                                           |
-| Sign-up marketing panel | "2,412 events booked in Austin this year" + 3 stat columns | "See the price. See the open dates. Then decide." + three mechanism guarantees |
-| Confirmation cross-sell | "Florals — 38 near you"                                    | "Florals" — category chips, no counts                                          |
+| Surface                 | Was                                                        | Now (MVP)                                                                |
+| ----------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Landing hero badge      | "412 vendors in Austin"                                    | "Now booking in Austin"                                                  |
+| Landing category cards  | "64 vendors · from $850"                                   | "Photo & film" — what the category _is_                                  |
+| Landing stats row       | 2,412 booked / 4.8 / 2h                                    | **Removed entirely**                                                     |
+| Sign-up marketing panel | "2,412 events booked in Austin this year" + 3 stat columns | "Prices on the label. Dates you can trust." + three mechanism guarantees |
+| Confirmation cross-sell | "Florals — 38 near you"                                    | "Florals" — category chips, no counts                                    |
 
 **What public pages prove themselves with instead:** the mechanism. Real
 availability rather than a contact form. Payment held until the event is
@@ -43,8 +43,8 @@ liability — it goes stale silently and it's a lie the moment it does.
 These are query results or per-vendor facts, not platform marketing, and they stay:
 
 - Search result count — "24 photographers in Austin" (it's the answer to the query)
-- Filter facet counts inside the Refine bar popovers
-- A vendor's own rating and review count on their profile (reply time is deferred — below)
+- Filter facet counts in the search rail
+- A vendor's own rating, review count and reply time on their profile
 - A vendor's own metrics on their private dashboard
 - Real counts in admin
 
@@ -61,8 +61,8 @@ of the customer's half of the transaction, and a real differentiator there. It m
 not be mirrored, or negated, onto the vendor side.
 
 **Unblock:** pricing decided. The vendor panel then gains a fourth guarantee
-stating plainly what a vendor pays, and the vendor section gets a pricing block. A
-claim walked back later costs more trust than saying nothing now.
+stating plainly what a vendor pays, and the vendor marketing page gets a pricing
+section. A claim walked back later costs more trust than saying nothing now.
 
 ## Deferred: reply-time claims
 
@@ -75,9 +75,9 @@ Removed from: the landing hero chip (chip deleted entirely), the vendor profile
 meta line, the profile's stat tiles (four → three), and the mobile profile.
 
 **Kept:** the vendor's own private dashboard metric. That's their data about
-themselves and it starts empty honestly. The dashboard's "keep it under 4h to stay
-ranked" line implied a ranking signal that does not exist, so it is softened to a
-plain nudge — see the reply-time ranking entry below and `16-vendor-dashboard.md`.
+themselves and it starts empty honestly. Caveat: the dashboard's "keep it under 4h
+to stay ranked" line implies a ranking signal — confirm it exists or soften the
+copy (`99-open-questions.md` #2).
 
 **Unblock:** ~10 answered inquiries for a given vendor. It then returns as a
 **per-vendor fact shown only for vendors who have one** — never as a platform
@@ -118,39 +118,35 @@ Removed for the same reason: **"Still to book"**. There is no fixed set of
 categories an event should have, and asserting one invents an obligation the
 customer never agreed to.
 
+## Deferred: multi-vendor single booking
+
+One request to several vendors at once. The hub's per-event grouping is the seed
+of it. Out of MVP scope; revisit once the request→quote→pay loop is proven.
+
 ## Deferred: free-text and semantic search
 
 MVP search is **category + city + date**, three enumerable pickers — see
 `11-search.md`. Nobody arrives knowing a vendor's name, so a text box on the main
-path is a worse question than a dropdown. Name search survives as a secondary
-`clay-500` link beside the query bar, for the referral case only.
+path is a worse question than a dropdown. Name search exists as a secondary link
+in the rail for the referral case.
 
 Deferred: semantic search over profile text ("someone who shoots on film"), saved
 searches with alerts, and map view. **Unblock:** enough profile copy to index, and
 enough vendors per category that browsing a grid stops being sufficient.
 
-## Deferred: multi-vendor single booking
-
-One request to several vendors at once. The hub's month grouping is the seed
-of it. Out of MVP scope; revisit once the request→quote→pay loop is proven.
-
 ## Deferred: vendor discovery beyond search
 
 No recommendations, no "similar vendors", no personalised home feed in MVP — all
-need behavioural data. Category browsing plus the Refine bar is the whole discovery surface.
+need behavioural data. Category browsing plus filters is the whole discovery surface.
 
 ## Deferred: reply-time ranking
 
-The vendor dashboard used to show "keep it under 4h to stay ranked", which implied
-a ranking signal the app does not have. **Resolved by changing the copy**, not by
-building the signal: the line is now a plain nudge with no mechanic attached — see
-`16-vendor-dashboard.md`.
-
-**Unblock:** a real ranking signal that reads reply time. Only then may any
-surface tell a vendor that replying faster ranks them higher.
+The vendor dashboard shows "keep it under 4h to stay ranked", which implies a
+ranking signal. **The signal must exist before that copy ships** — either build
+the ranking or change the line to a plain nudge. Flagged in `16`.
 
 ## Open design questions
 
-Live in `99-open-questions.md`. The vendor-doesn't-reply path (question 1) is
+Live in `99-open-questions.md`. The vendor-doesn't-reply path (question 2) is
 the one I'd resolve inside MVP — it's the most common failure in a two-sided
 marketplace and it currently has no designed surface.

@@ -17,15 +17,7 @@ Dashboard · Requests (count as a `clay-400` pill when >0) · Bookings · Messag
 ## Content column
 
 **Title states the number:** "Maya, you have 4 new requests" — not "Dashboard".
-Beside it, the reply-time nudge: "Median reply time 2h · most vendors reply the
-same day."
-
-The old line read "keep it under 4h to stay ranked". There is no reply-time
-ranking signal, so the mechanic it implied is gone — the nudge now states a norm
-rather than a reward. It is also the **only** reply-time surface left in the
-product: it is this vendor's own data on their own private screen, and it starts
-empty rather than at an invented number. Every public reply-time claim is deferred
-— see `98-post-mvp.md`.
+Beside it, the reply-time nudge: "Median reply time 2h · keep it under 4h to stay ranked."
 
 **Stats row** — four cards across, never stacked: Bookings this month · Response
 rate · Rating · Earnings this month. Serif 30px number over a 10.5px uppercase
@@ -63,7 +55,7 @@ event names.
 
 ## Post-MVP
 
-- **Reply-time ranking** — the nudge may promise a ranking benefit only once a signal that reads reply time actually exists; until then it stays a plain norm. See `98-post-mvp.md`
+- **Reply-time ranking must exist before the "keep it under 4h to stay ranked" line ships.** Either build the signal or soften the copy to a plain nudge — see `99-open-questions.md` #2
 - Earnings trend chart and payout history
 - Benchmark comparisons ("vendors like you reply in 3h") — needs a cohort to compare against
 - Calendar sync (Google / iCal)

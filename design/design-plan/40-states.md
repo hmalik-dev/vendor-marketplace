@@ -1,7 +1,15 @@
 # 40 — Error, loading and empty states
 
-Frames 15–24 in `Orla - Screens.dc.html`. Every state is a designed screen, not a
+Frames 15–26 in `Orla - Screens.dc.html`. Every state is a designed screen, not a
 fallback. If a state isn't here, it isn't built.
+
+**Section number 25 is used twice in the source file** — once for the 1024
+small-laptop set (`30-responsive.md`) and once for `25 Upload failures` below.
+Every frame's `data-screen-label` is still unique, so **always reference a frame
+by its full label**, never by its section number alone. The three 1024 state
+frames are `25 Search — loading · 1024`, `25 Search — no results · 1024` and
+`25 Vendor dashboard — empty · 1024`; they are the 1024 renderings of 17, 18
+and 20 below.
 
 ## The four questions every error must answer
 
@@ -27,11 +35,11 @@ Red is never used for `pending`. Gold is never used for a failure.
 
 ## Loading — one idiom per screen, never two
 
-| Scope   | Treatment                                                                                        | Rule                                                                                               |
-| ------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| Element | 16px spinner, 2px `clay-400` ring, transparent quarter; label dims to 60%                        | inside buttons and single controls only                                                            |
-| Content | Skeletons mirroring real geometry; `stone-200` shimmer `stone-200 → stone-150 → stone-200`, 1.5s | min 200ms display so fast loads don't flash; chrome the user already filled in **never** skeletons |
-| Page    | Wordmark pulse 0.4 → 1 → 0.4 over 2s                                                             | first paint and auth redirects only                                                                |
+| Scope   | Treatment                                                                                        | Rule                                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Element | 16px spinner, 2px `clay-400` ring, transparent quarter; label dims to 60%                        | inside buttons and single controls only                                                                  |
+| Content | Skeletons mirroring real geometry; `stone-200` shimmer `stone-200 → stone-150 → stone-200`, 1.5s | min 200ms display so fast loads don't flash; chrome the user already filled in **never** skeletons       |
+| Page    | The mark’s two rings converging and parting, 1.9s                                                | first paint and auth redirects only; geometry only, no wordmark (it renders before fonts are guaranteed) |
 
 Skeleton variants: vendor card, list row, table row, message bubble. One per
 content type; a generic grey box is a bug.
@@ -112,7 +120,7 @@ The banner counts failures and offers one _Retry all that can_; the header
 aggregate turns red rather than adding a second alert. Never a bare
 "Upload failed" toast.
 
-## Dialogs (frame 24)
+## Dialogs (frame `26 State library`)
 
 Interrupt only when the user cannot continue without deciding.
 

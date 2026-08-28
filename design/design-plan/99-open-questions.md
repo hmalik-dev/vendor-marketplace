@@ -6,27 +6,20 @@ so the reasoning isn't lost.
 ## RESOLVED — Is this a one-event dashboard?
 
 **No.** It's a standing hub for any vendor booking, now or in future. Upcoming /
-History / All tabs; "Still to book" removed — there is no fixed set of categories
-an event should have. See `20-customer-bookings-hub.md`.
+History / All tabs; "Still to book" removed.
 
 ## RESOLVED — Does an Event entity exist in MVP?
 
-**No, and no screen may assume one.** An earlier draft grouped bookings under
-named events ("Nandakumar wedding") with an "Event details →" link and a "My
-events" nav item. There is no way to create an event in the product, so all of
-that is removed. Bookings group by **month derived from their dates**; occasion
-and venue are free-text fields on the booking. Events as a real object with their
-own page are post-MVP. See `98-post-mvp.md`.
+**No, and no screen may assume one.** Bookings group by month derived from their
+dates; occasion and venue are free-text fields on the booking. Events as a real
+object with their own page are post-MVP. See `98-post-mvp.md`.
 
 ## RESOLVED — How do users search?
 
 **Category + city + date, as three pickers.** Not a text query — nobody searches
-"June Harlow" to find a photographer, and a text box has to guess intent from
-strings like "wedding photographer near me". The vendor-type field is a select
-that cannot hold an unrecognised value, so a query always resolves to a category
-the platform recognises. Category is selectable in **exactly one control** — no
-chip strip, no rail checkbox group. Name search is a secondary `clay-500` link
-for the referral case. See `11-search.md`.
+"June Harlow" to find a photographer. A category chip strip above the results
+makes switching type a single click, and name search is a secondary link for the
+referral case. See `11-search.md`.
 
 ## RESOLVED — Public metrics on a brand-new app
 
@@ -43,27 +36,26 @@ common failure path in a two-sided marketplace and it has no surface today.
 
 ## 2. Does reply-time ranking exist? — **blocks a line of copy**
 
-**Deferred post-MVP.** Screen 16 said "keep it under 4h to stay ranked". Either the
-ranking signal is real, or that sentence changes — don't ship an implied mechanic
-that isn't there. Since the signal is deferred, **the sentence changed**: the
-dashboard nudge no longer mentions ranking. Public reply-time claims go with it —
-the profile meta line, the "Replies" stat tile and the landing hero chip are all
-removed. See `98-post-mvp.md`.
+Screen 16 says "keep it under 4h to stay ranked". Either the ranking signal is
+real, or that sentence changes. Don't ship an implied mechanic that isn't there.
 
 ## 3. Review asymmetry
 
-Customer→vendor public; vendor→customer private but self viewable/viewable by vendor after they are requested so it is surfaced in the messaging
-context rail ("About Priya").
+**Resolved.** Customer→vendor public; vendor→customer private but self-viewable,
+and viewable by a vendor once they have been requested — so it is surfaced in the
+messaging context rail ("About Priya").
 
 ## 4. Category ordering on the landing page
 
-Six featured of eleven by `displayOrder`. Editorial (ops picks)
+**Resolved: editorial (ops picks).** Six featured of eleven by `displayOrder`.
+With counts deferred, the algorithmic option has no visible justification in MVP.
 
 ## 5. Photography
 
 Every placeholder is labelled with the shot it needs. The product is photo-forward
 by design, so launch quality depends on the first cohort of vendors having good
-cover images. -- only recommended sizes for photos
+cover images. **Resolved:** no quality gate and no shoot-day offer — onboarding
+states recommended sizes for photos and nothing more.
 
 ## 6. Where does the occasion field come from?
 

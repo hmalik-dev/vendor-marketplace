@@ -60,15 +60,14 @@ data or it doesn't ship.
 
 ## Acceptance
 
-- [ ] Today is editable; every earlier date is disabled
-- [ ] A past date shows the status it actually had, not an empty cell
-- [ ] A range drag spanning today keeps today and drops what precedes it
-
 - [ ] Three months visible at 1440 with no month navigation
 - [ ] Booked dates cannot be cleared from this screen
 - [ ] Drag-select works across a month boundary
 - [ ] Rail counts recompute live as dates are blocked
 - [ ] Mobile: one month, swipe between, tap to toggle
+- [ ] Today is editable; every earlier date is disabled
+- [ ] A past date shows the status it actually had, not an empty cell
+- [ ] A range drag spanning today keeps today and drops what precedes it
 
 ## Post-MVP
 

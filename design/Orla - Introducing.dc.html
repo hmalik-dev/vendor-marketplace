@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#E9E4DA;font-family:'Instrument Sans',system-ui,sans-serif}
+a{color:#A34A28}a:hover{color:#8E3F20}
+</style>
+<script>window.OM_SCENES = '[{"name":"Opening","dur":3.5,"desc":"The two Orla circles glide together and the wordmark settles under an Introducing label"},{"name":"Scatter","dur":4.5,"desc":"Tabs, DMs, a spreadsheet and an inbox drift apart — booking vendors used to take fifteen tabs and four DMs"},{"name":"Bridge","dur":2.5,"desc":"The mess collapses into the Orla mark and two rings ripple out: no back-and-forth"},{"name":"Search","dur":6.5,"desc":"A browser window rises out of the mark and the category-first search fills in: Photography, Austin, Jun 14"},{"name":"Results","dur":6.5,"desc":"Vendor cards stagger in with availability chips and starting prices, then the camera pushes into June Harlow"},{"name":"Request","dur":5.5,"desc":"The booking request fills itself in and the rail promises that sending charges nothing"},{"name":"Quote","dur":6.5,"desc":"June replies, a quote card arrives, the customer accepts, and payment is held until the event"},{"name":"Confirmed","dur":4,"desc":"The sage confirmation moment — Jun 14 is booked, with the booking id"},{"name":"Flip","dur":3,"desc":"The customer screen lifts away and the vendor dashboard rises in with the same booking arriving as a request"},{"name":"VendorDay","dur":8,"desc":"June sends the quote, the date blocks itself on her calendar, and the payout is scheduled for the day after"},{"name":"Close","dur":5.5,"desc":"The device recedes and the mark returns with the tagline and both calls to action"}]';</script>
+<script>window.OM_PLAYBACK = '{"mode":"times","count":1}';</script>
+<!-- Real photography goes here. Drop licensed Shutterstock files into
+     uploads/covers/ with these names (or paste absolute image URLs).
+     Any entry that fails to load falls back to the brand-toned cover art. -->
+<script>window.OM_COVERS = {  categories: [
+    "uploads/photography.jpg",
+    "uploads/music.jpg",
+    "uploads/catering.jpg",
+    "uploads/venues.jpg",
+    "uploads/florals.jpg",
+    "uploads/beauty.jpg"
+  ],
+  vendors: [
+    "uploads/june-harlow.jpg",
+    "uploads/cardenas-studio.jpg",
+    "uploads/wren-and-field.jpg",
+    "uploads/bright-room-co.jpg",
+    "uploads/marlowe-and-sons.jpg",
+    "uploads/pomona-films.jpg"
+  ]
+};</script>
+<!-- Audio. "Home Was You" by Scott Buckley, CC-BY 4.0 (cut at -ss 11.0):
+     56.000s, audio-only AAC, −16.3 LUFS, −1.7 dBTP, lift at 8.04s — lands on
+     the Bridge cue, no retime needed. ATTRIBUTION IS REQUIRED wherever this
+     film ships — see design-plan/41-film-audio.md. Empty a value and that
+     track is absent (no media element is created). -->
+<script>window.OM_AUDIO = {
+  music: "uploads/soundtrack.mp4",
+  voice: "",
+  musicVolume: 0.85,
+  voiceVolume: 1
+};</script>
+<script>window.TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "motionEditor": true,
+  "captions": true,
+  "cursor": true
+}/*EDITMODE-END*/;</script>
+</helmet>
+<x-import component-from-global-scope="OrlaIntroApp" from="./animations-v3.jsx ./tweaks-panel.jsx ./intro-video.jsx" style="position:absolute;inset:0" hint-size="100%,100%"></x-import>
+
+</x-dc>
+</body>
+</html>

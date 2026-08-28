@@ -144,6 +144,7 @@ Shadows are warm-tinted with the ink, never neutral grey, never black.
   --sidebar-width-sm: 12.5rem; /* 200px — also the form section nav */
   --sidebar-width-icon: 4.5rem; /* 72px tablet icon rail */
   --rail-width: 21.25rem; /* 340px — dashboard rails */
+  --rail-filter: 17.5rem; /* 280px — search filters */
   --rail-booking: 23.75rem; /* 380px — vendor profile */
   --rail-summary: 26.25rem; /* 420px — checkout */
   --rail-context: 20rem; /* 320px — messaging booking context */
@@ -156,7 +157,6 @@ Shadows are warm-tinted with the ink, never neutral grey, never black.
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --z-sticky: 10;
   --z-header: 40;
-  --z-skip-link: 45; /* focused skip link — above the header, below the drawer */
   --z-drawer: 50;
   --z-modal: 60;
   --z-toast: 70;

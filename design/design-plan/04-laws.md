@@ -79,7 +79,9 @@ implementer doesn't rediscover the same conflict.
    word for word — same wording, same capitalisation, same punctuation.
    `31-content-voice.md` records the approved strings.
 5. Run the desktop review checklist below against the live page, then the
-   adaptation checklist in `30-responsive.md` at 1280 / 768 / 390.
+   adaptation checklist in `30-responsive.md` at 1280 / **1024** / 768 / 390.
+   A screen drawn in section 25 is additionally compared 1:1 against its own
+   **1024 × 640** frame, on the same five axes.
 
 ### What parity means, concretely
 

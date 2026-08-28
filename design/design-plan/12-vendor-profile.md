@@ -12,8 +12,10 @@ cover — 21:9, capped at 150px so it cannot eat the fold
 ┌───────────────── content column ─────────────┬── booking rail 380px ──┐
 │ avatar 72px + name, fully BELOW the cover    │  From $1,450           │  sticky
 │ Business name  Instrument Serif 33px         │  Free on June 14       │
-│ ★ 4.9 (127) · Austin, TX                     │  [date] [guests]       │
+│ ★ 4.9 (127 reviews) · Austin, TX             │  [date] [guests]       │
 │ [category] [languages] [style] [+3 more]     │  [package ▾]           │
+│   ^ category lives HERE only — never also in │                        │
+│     the meta line above                      │                        │
 │ ── About | Packages | Portfolio | Reviews |  │  Request booking       │
 │    Availability ────────────────────────────  │  Send a message        │
 │ tagline (Serif italic 20px)                  │  ───────────────       │
@@ -25,19 +27,11 @@ cover — 21:9, capped at 150px so it cannot eat the fold
 
 ## Header — no overlap
 
-**Changed from an earlier draft.** The cover is **150px** (was 190px) and the
-avatar is **72px** (was 80px). The avatar and the name sit **below** the cover,
-not overlapping it.
-
-The earlier version pulled the avatar up 32px with a negative margin, but that
-margin crossed a pane's `overflow: hidden` boundary and the browser sliced the
-avatar's top edge along with part of the name. The overlap flourish is not worth
-a clipped identity block, and the flat version reads cleaner at this cover height
-anyway.
-
-Concretely, per the frame: the cover box is `box-sizing: border-box; height:150px`,
-the content column below it opens with `padding-top: 18px`, and the identity row
-is `display:flex; gap:16px; align-items:center` with **no negative margin**.
+The avatar (72px) and the name sit **below** the cover, not overlapping it. An
+earlier version pulled the avatar up 32px with a negative margin, but that margin
+crossed a pane's `overflow: hidden` boundary and the browser sliced the avatar's
+top edge along with part of the name. The overlap flourish is not worth a clipped
+identity block, and the flat version reads cleaner at this cover height anyway.
 
 If an overlap is ever wanted back, it has to live **inside** one positioned
 wrapper containing both the cover and the identity row — never as a negative
@@ -45,10 +39,10 @@ margin reaching out of a clipping container.
 
 ## Tabs, not anchors
 
-At ≥1280 the five tabs **swap the content pane**. Five sections stacked into one
+At ≥1024 the five tabs **swap the content pane**. Five sections stacked into one
 long scroll is a phone pattern and it buries the reviews people came to read.
 Active tab: 13.5px / 600 ink with `inset 0 -2px 0 clay-400`. State in `?tab=` so
-tabs are shareable and the back button works. Below 1280 they become anchored
+tabs are shareable and the back button works. Below 1024 they become anchored
 sections with a scroll-spy indicator.
 
 ## Tab content
@@ -58,10 +52,9 @@ tiles (Experience / Events / Travels) each a `stone-0` 12px-radius card with an
 uppercase label over a 22px Serif number, then a 4-up recent-work strip linking
 into the portfolio.
 
-The fourth tile was **Replies**. It is gone, along with "Replies in ~2h" from the
-meta line and from the mobile profile: a median reply time needs message history
-the app doesn't have at launch, so a brand-new vendor's first inquiry would be
-measured against a number invented for them. Deferred — `98-post-mvp.md`.
+All three read from what the vendor entered on their own profile — years in
+business, events shot, travel radius — so they're true from the first day a
+profile is published. **A "Replies" tile is not**, and is deferred.
 
 **Packages** — 2 columns. Each card: name (Serif), price (Serif, large),
 duration, inclusions as a checklist with `clay-400` checks, and "Select this
@@ -86,7 +79,7 @@ screen 19. Clicking a free date pre-fills the rail's date field.
 
 `bg-stone-0 rounded-2xl shadow-md`, sticky, 380px. Order is fixed:
 
-1. From-price (Serif 36px) with the duration beside it, and the availability line for the searched date in `sage-600`.
+1. From-price (Serif 36px) with the duration beside it, and the availability line for the searched date in `sage-600`. No reply-time promise here — deferred.
 2. Date + Guests on one row; package select below.
 3. **Request booking** (primary, full width) then **Send a message** (secondary).
 4. "You won't be charged yet — [Vendor] confirms the date first." 11.5px, centred.
@@ -95,21 +88,37 @@ screen 19. Clicking a free date pre-fills the rail's date field.
 On scroll past the profile header a slim sticky bar appears with the vendor name
 and both CTAs, so the action is never off-screen.
 
+## Reply time — deferred post-MVP
+
+Median reply time appeared in the profile meta line, as a stat tile, and on the
+hero chip. It requires a history of messages that doesn't exist at launch, and a
+vendor's _first_ inquiry would be measured against a number invented for them.
+
+Removed from every customer-facing surface. The vendor's **private dashboard**
+keeps its own reply metric — that's their data about themselves, and it starts
+empty honestly. Note the dashboard's "keep it under 4h to stay ranked" line
+depends on a ranking signal that may not exist; see `99-open-questions.md` #2.
+
+**Unblock:** a vendor has enough answered inquiries for a median to mean
+something — roughly ten. Then it returns to the meta line and the rail as a
+per-vendor fact, shown only for vendors who have one.
+
 ## Acceptance
 
 - [ ] Name, rating, from-price and both CTAs visible without scrolling
-- [ ] **Cover is 150px tall** and `box-sizing: border-box`
-- [ ] **Avatar is 72px and sits entirely below the cover** — no negative margin, no overlap
+- [ ] Cover ≤ 150px tall
 - [ ] Avatar and name render fully — nothing clipped by the cover or by a pane boundary
+- [ ] No reply-time claim on any customer-facing part of this page
+- [ ] Three stat tiles, all sourced from vendor-entered profile data
+- [ ] Meta line is two segments — rating and location. Category is the chip row's job and appears once on the page
 - [ ] Rail sticky through the whole page
-- [ ] Tabs swap the pane at ≥1280 and write to the URL
+- [ ] Tabs swap the pane at ≥1024 and write to the URL
 - [ ] Document height ≤ 2.5 viewports on the longest tab
-- [ ] No reply-time claim on the meta line, the stat tiles or the mobile profile
 
 ## Post-MVP
 
 - "Similar vendors" strip at the bottom of the profile
 - Video in the portfolio lightbox
 - Vendor response to a review
-- Reply time returns as a fourth stat tile and a meta-line item, per vendor and only once that vendor has answered enough inquiries to have one — `98-post-mvp.md`
-- Note: the vendor's own rating and review count **stay in MVP** — they're that vendor's facts, not platform marketing, and they're absent until earned rather than faked
+- Median reply time in the meta line and booking rail, once a vendor has ~10 answered inquiries
+- Note: the vendor's own rating, review count and reply time **stay in MVP** — they're that vendor's facts, not platform marketing, and they're absent until earned rather than faked

@@ -60,9 +60,8 @@ State in `?tab=`. Beside them: **All categories ▾** and **Soonest first ▾**
 labels.
 
 **Booking card** — thumbnail, status pill, vendor name (Serif 17px), "Category ·
-Occasion", the date in Serif 21px ("Sun, Jun 14" — weekday included), and a
-sub-line with amount, state and venue. The date is the largest element because
-it's what gets scanned.
+Occasion", the date in Serif 21px ("Sun, Jun 14" — weekday included), and a sub-line with amount,
+state and venue. The date is the largest element because it's what gets scanned.
 
 **"Book another vendor"** — a dashed peer at the end of the last group, linking
 into search pre-filled with that month's date and the customer's city. Its
@@ -97,13 +96,13 @@ Confirmed → Message + Cancel · Completed → Leave a review.
 
 - [ ] **No reference to an Event entity anywhere** — no event name as a link, no event page, no "create an event"
 - [ ] Grouping is by month and derived from booking dates alone
-- [ ] Group header renders `JUNE 2026` + rule + "3 bookings"
 - [ ] Occasion and venue render from fields on the booking
-- [ ] Filter controls read "All categories ▾" and "Soonest first ▾"
 - [ ] Upcoming / History / All present, counted, URL-addressable
 - [ ] Nothing assumes one event, one date, or a fixed set of categories
 - [ ] The word "dashboard" appears nowhere in the UI
 - [ ] Zero-state shows the sidebar prompt and an empty-state CTA, never a blank pane
+- [ ] Group header renders `JUNE 2026` + rule + "3 bookings"
+- [ ] Filter controls read "All categories ▾" and "Soonest first ▾"
 - [ ] No page scroll
 
 ## Post-MVP

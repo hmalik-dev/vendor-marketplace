@@ -96,7 +96,9 @@ yields — a rail earns its width when its contents are referenced _while_ worki
 the main pane (the booking rail, the vendor checklist, the messaging context).
 Search filters aren't: you set them, then you read results.
 
-Grid: 2 columns at 1024–1279, 3 at 1280–1439, **4 at ≥1440**, 5 at ≥1728.
+Grid: **3 columns at 1024–1439** (310px cards, 3:2 cover 207px tall — frame
+`25 Search results — 1024`), **4 at ≥1440**, 5 at ≥1728. Two columns belong to
+768, not to 1024.
 
 ## Refine bar
 
@@ -137,10 +139,6 @@ ids, not strings. Shareable, back button works, SWR revalidates.
 
 ## Acceptance
 
-- [ ] The date picker cannot select a day before today; today is selectable
-- [ ] A typed past date holds the search back and is explained, not silently cleared
-- [ ] A past `?date=` is dropped, the search still runs, and the customer is told
-
 - [ ] Three query inputs: vendor type, city, date — no more, no fewer
 - [ ] **Vendor type cannot hold an unrecognised value** — it resolves to a category id or stays empty
 - [ ] Category is selectable in exactly one control
@@ -150,7 +148,10 @@ ids, not strings. Shareable, back button works, SWR revalidates.
 - [ ] Name search present as the smallest affordance on the screen
 - [ ] No separate active-filter pill row
 - [ ] Page height exactly one viewport; only the results grid scrolls
-- [ ] 4 columns at 1440, 3 at 1280, 2 at 1024
+- [ ] 4 columns at 1440, 3 at 1280, **3 at 1024** — one full row plus the next row's top edge visible at 640
+- [ ] The date picker cannot select a day before today; today is selectable
+- [ ] A typed past date holds the search back and is explained, not silently cleared
+- [ ] A past `?date=` is dropped, the search still runs, and the customer is told
 
 ## Post-MVP
 
