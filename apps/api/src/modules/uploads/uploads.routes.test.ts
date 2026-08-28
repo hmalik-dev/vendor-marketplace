@@ -22,7 +22,9 @@ function multipartBody(filename: string, contentType: string, content: Buffer): 
 
 const MULTIPART_HEADERS = { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` };
 
-async function jpegBytes(width = 900, height = 600): Promise<Buffer> {
+// Wider than `MIN_UPLOAD_IMAGE_WIDTH`, so the fixture clears the publishable
+// floor and these tests stay about routing rather than about image quality.
+async function jpegBytes(width = 1600, height = 1200): Promise<Buffer> {
   return sharp({
     create: { width, height, channels: 3, background: { r: 10, g: 90, b: 140 } },
   })

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { formatPrice } from '../utils/index.js';
+import { formatPrice, isUniversallyPastDate } from '../utils/index.js';
 import {
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_STATUSES,
@@ -651,8 +651,20 @@ export const vendorSearchQuerySchema = z
     state: z.string().trim().max(MAX_NAME_LENGTH).optional(),
     minPriceCents: z.coerce.number().int().min(0).optional(),
     maxPriceCents: z.coerce.number().int().min(0).optional(),
-    /** Excludes vendors whose calendar is booked or blocked on this date. */
-    date: calendarDateSchema.optional(),
+    /**
+     * Excludes vendors whose calendar is booked or blocked on this date.
+     *
+     * A date that is already past everywhere on Earth is refused rather than
+     * searched: nobody can be booked for it, so the honest answer is 400 and
+     * not an empty result set that looks like the market is bare. The web
+     * layer strips one before it ever gets here, but the endpoint is public
+     * and #7 books against this same field.
+     */
+    date: calendarDateSchema
+      .refine((value) => !isUniversallyPastDate(value), {
+        message: 'Event date has already passed',
+      })
+      .optional(),
     minRating: z.coerce.number().min(0).max(REVIEW_RATING_MAX).optional(),
     /**
      * Tag ids, AND-combined: a vendor must carry every one of them. A customer

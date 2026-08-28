@@ -1,11 +1,16 @@
 'use client';
 
-import { ACCEPTED_IMAGE_MIME_TYPES, MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
-import { ImagePlus, Loader2 } from 'lucide-react';
+import {
+  ACCEPTED_IMAGE_MIME_TYPES,
+  MAX_UPLOAD_BYTES,
+  UPLOAD_CONSTRAINT_LINE,
+} from '@vendor-marketplace/shared';
+import { ImagePlus } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';
-import { useImageUpload } from '@/lib/use-api';
+import { useImageUpload, UploadTransportError } from '@/lib/use-api';
+import { connectionFailure, rejectedFailure, screenFile, type UploadFailure } from '@/lib/uploads';
 import { cn } from '@/lib/utils';
 
 export interface ImageUploadProps {
@@ -45,33 +50,45 @@ export function ImageUpload({
   const upload = useImageUpload();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [failure, setFailure] = useState<UploadFailure | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  const isUploading = progress !== null;
 
   const handleFile = async (file: File | undefined): Promise<void> => {
     if (!file) {
       return;
     }
 
-    if (!(ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
-      toast.error('Choose a JPEG, PNG, or WebP image.');
-      return;
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      toast.error(`That image is larger than the ${MAX_UPLOAD_MB}MB limit.`);
+    /*
+     * A refusal states what happened and how to fix it, in place, and stays
+     * on screen — a toast that says "Upload failed" and then disappears is
+     * the thing `40-states.md` rules out.
+     */
+    const screened = screenFile(file);
+    if (screened) {
+      setFailure(screened);
       return;
     }
 
-    setIsUploading(true);
+    setFailure(null);
+    setProgress(0);
     try {
-      const stored = await upload(file, prefix);
+      const stored = await upload(file, prefix, { onProgress: setProgress });
       onChange(stored.imageUrl);
       toast.success(`${label} updated.`);
     } catch (error) {
       // The previous image is left in place: `onChange` never ran.
-      toast.error(error instanceof ApiClientError ? error.message : 'That upload failed.');
+      setFailure(
+        error instanceof UploadTransportError
+          ? connectionFailure()
+          : rejectedFailure(
+              error instanceof ApiClientError ? error.message : 'The server would not take it.',
+            ),
+      );
     } finally {
-      setIsUploading(false);
+      setProgress(null);
       if (inputRef.current) {
         // Clearing the input lets the same file be retried after a failure.
         inputRef.current.value = '';
@@ -129,10 +146,16 @@ export function ImageUpload({
           </span>
         )}
 
+        {/*
+          Determinate, never a spinner: the percentage is the whole point of
+          watching a large photograph go up.
+        */}
         {isUploading ? (
-          <span className="absolute inset-0 flex items-center justify-center bg-stone-900/30">
-            <Loader2 aria-hidden="true" className="size-6 animate-spin text-stone-0" />
-            <span className="sr-only">Uploading…</span>
+          <span
+            role="status"
+            className="absolute inset-0 flex items-center justify-center bg-stone-900/40 text-sm font-semibold text-stone-0"
+          >
+            {progress}%<span className="sr-only"> uploaded</span>
           </span>
         ) : null}
 
@@ -146,8 +169,20 @@ export function ImageUpload({
           className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
         />
       </div>
-      {showHint ? (
-        <p className="text-xs text-stone-600">JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB.</p>
+      {showHint ? <p className="text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p> : null}
+
+      {/*
+        The reason and its matching fix, side by side and persistent. Gold for
+        a file that is valid but not good enough to publish; red for one that
+        failed outright — `40-states.md`, and the two never swap.
+      */}
+      {failure ? (
+        <p
+          role="status"
+          className={cn('text-xs', failure.tone === 'gold' ? 'text-gold-600' : 'text-error-500')}
+        >
+          {failure.reason} <span className="text-stone-600">{failure.fix}</span>
+        </p>
       ) : null}
     </div>
   );

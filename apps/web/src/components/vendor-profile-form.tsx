@@ -11,6 +11,7 @@ import {
   PUBLISH_BLOCKERS,
   RESPONSE_TIME_HOURS_OPTIONS,
   updateVendorProfileSchema,
+  UPLOAD_CONSTRAINT_LINE,
   type Category,
   type PublishBlockerKey,
 } from '@vendor-marketplace/shared';
@@ -29,7 +30,7 @@ import {
 } from '@/lib/wire-schemas';
 import { CategoryPicker } from '@/components/category-picker';
 import { FormSectionNav, type FormSection } from '@/components/form-section-nav';
-import { ImageUpload, MAX_UPLOAD_MB } from '@/components/image-upload';
+import { ImageUpload } from '@/components/image-upload';
 import { TagPicker } from '@/components/tags/tag-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -416,10 +417,12 @@ export function VendorProfileForm({
                   />
                 </div>
               </div>
-              {/* One hint for the pair — the same rule governs both uploads. */}
-              <p className="mt-2 text-xs text-stone-600">
-                JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB.
-              </p>
+              {/*
+                One hint for the pair — the same rule governs both uploads, and
+                it is the same sentence the drop zones carry, read from the one
+                constant so the two can never drift.
+              */}
+              <p className="mt-2 text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p>
 
               <div className="field-grid mt-5 border-t border-stone-300 pt-5">
                 <div>

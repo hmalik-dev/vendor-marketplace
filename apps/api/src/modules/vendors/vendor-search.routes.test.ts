@@ -242,6 +242,45 @@ describe('GET /vendors', () => {
     expect(names((await search('?name=%20%20')).items)).toEqual(['Delaney Rowe', 'Kessler & Co.']);
   });
 
+  /*
+   * `%` and `_` are LIKE syntax. Unescaped, `?name=%` matched every row and
+   * dumped the whole directory, and a business whose name contains one could
+   * never be found literally. Both directions are asserted here.
+   */
+  it('treats LIKE wildcards in a name search as literal characters', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
+    await seedVendor({ user: 'user_b', businessName: 'Delaney Rowe' });
+
+    expect((await search('?name=%25')).items).toEqual([]);
+    expect((await search('?name=_')).items).toEqual([]);
+  });
+
+  it('finds a business whose name literally contains a wildcard character', async () => {
+    await seedVendor({ user: 'user_a', businessName: '100% Film Co.' });
+    await seedVendor({ user: 'user_b', businessName: 'Delaney Rowe' });
+
+    expect(names((await search('?name=100%25')).items)).toEqual(['100% Film Co.']);
+  });
+
+  /*
+   * The web layer strips a past date before it ever reaches here, but the
+   * endpoint is public and #7 books against the same field. An empty result
+   * set would read as "no vendors are free", which is a different and wrong
+   * answer to "that day has gone".
+   */
+  it('rejects an event date that has already passed', async () => {
+    const response = await harness.app.inject({ method: 'GET', url: '/vendors?date=2020-01-01' });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ statusCode: 400 });
+  });
+
+  it('accepts an event date in the future', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
+
+    expect(names((await search('?date=2099-06-01')).items)).toEqual(['Kessler & Co.']);
+  });
+
   it('ignores a free-text q rather than filtering on it', async () => {
     await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
     await seedVendor({ user: 'user_b', businessName: 'Delaney Rowe' });

@@ -24,6 +24,20 @@ import type { AppDatabase } from '../../lib/database.js';
  *
  * Only published, non-deleted vendors are ever visible here.
  */
+/**
+ * Escapes the three characters LIKE treats as syntax so a name search matches
+ * the letters the customer typed and nothing else.
+ *
+ * The value was already a bound parameter, so this was never injection — it
+ * was a correctness bug in both directions: a bare `%` matched every vendor
+ * and dumped the whole directory, while a business with a `%` or `_` in its
+ * name could not be found literally. The backslash must be escaped first, or
+ * it would go on to escape the escapes added after it.
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
 const VISIBLE = and(eq(vendorProfiles.isPublished, true), eq(vendorProfiles.isDeleted, false));
 
 /**
@@ -64,7 +78,7 @@ function filters(query: VendorSearchQuery, exceptCategory = false): SQL[] {
    */
   if (query.name) {
     conditions.push(
-      sql`lower(${vendorProfiles.businessName}) LIKE ${`%${query.name.toLowerCase()}%`}`,
+      sql`lower(${vendorProfiles.businessName}) LIKE ${`%${escapeLikePattern(query.name.toLowerCase())}%`} ESCAPE '\\'`,
     );
   }
 

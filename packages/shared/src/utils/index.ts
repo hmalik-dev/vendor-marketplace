@@ -197,3 +197,22 @@ export function isFutureDate(value: string, now: Date = new Date()): boolean {
   const today = parseDateString(toDateString(now));
   return today !== null && parsed.getTime() > today.getTime();
 }
+
+/**
+ * True when a calendar date is in the past **for every visitor on Earth**, and
+ * so may be rejected by a server that does not know the caller's timezone.
+ *
+ * `todayDateString` is deliberately local and therefore client-only, but the
+ * API still has to refuse `?date=2020-01-01`. The widest wall-clock spread in
+ * use is UTC-12 to UTC+14, so the day before the server's UTC day is the last
+ * one that could still be somebody's today. Anything earlier is past
+ * everywhere, which is the only claim a server can make without guessing.
+ */
+export function isUniversallyPastDate(value: string, now: Date = new Date()): boolean {
+  const parsed = parseDateString(value);
+  if (parsed === null) {
+    return false;
+  }
+
+  return parsed.getTime() < addDays(now, -1).setUTCHours(0, 0, 0, 0);
+}

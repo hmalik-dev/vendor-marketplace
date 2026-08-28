@@ -20,6 +20,7 @@ import { VendorCard } from '@/components/vendors/vendor-card';
 import { NameSearch } from './name-search';
 import { RefineBar } from './refine-bar';
 import { SearchBar } from './search-bar';
+import { noResultsDiagnosis, noResultsHeadline, relaxations } from './relaxations';
 import { activeRefineCount, toSearchQuery, useSearchState, type SearchState } from './search-state';
 
 /**
@@ -46,30 +47,22 @@ export interface SearchShellProps {
 }
 
 /**
- * The two refinements most worth loosening, named explicitly rather than as a
- * generic "adjust your filters" — the point is to say which one is costing them
- * results. Ordered by how much each typically narrows a set.
+ * The count line while a search is in flight — frame `17`.
+ *
+ * Never a stale number and never an invented one: the previous result set's
+ * count is about a query the customer has already changed, and "0 vendors"
+ * before the answer arrives reads as an empty market. It says what is
+ * happening instead, and names the query where the query is known.
  */
-function loosenSuggestion(state: SearchState): string {
-  if (state.date && (state.minPriceCents !== null || state.maxPriceCents !== null)) {
-    return 'try widening the price range or clearing the date';
+function searchingLine(state: SearchState): string {
+  const noun = state.category === '' ? '' : vendorNounFor(state.category, 0);
+  const where = state.city === '' ? '' : ` in ${state.city}`;
+
+  if (noun === '' && where === '') {
+    return 'Searching…';
   }
-  if (state.date) {
-    return 'try clearing the date';
-  }
-  if (state.minPriceCents !== null || state.maxPriceCents !== null) {
-    return 'try widening the price range';
-  }
-  if (state.minRating !== null) {
-    return 'try lowering the minimum rating';
-  }
-  if (state.tags.length > 0) {
-    return 'try removing a tag';
-  }
-  if (state.name) {
-    return 'try checking the spelling, or search by vendor type instead';
-  }
-  return 'try a different vendor type or city';
+
+  return `Searching ${noun === '' ? 'vendors' : noun}${where}…`;
 }
 
 function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElement {
@@ -137,6 +130,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   }, [state.date]);
 
   const refineCount = activeRefineCount(state);
+  const diagnosis = noResultsDiagnosis(state);
   const total = result?.total ?? 0;
   // "24 photographers in Austin" — the count is about the vendors, not about
   // the category they sell under.
@@ -211,7 +205,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
       {/* Neither the query bar nor the Refine bar scrolls; only the grid does. */}
       <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 sm:px-6.5">
         <h1 className="font-display text-[22px] text-stone-900">
-          {isLoading && result === null ? 'Finding vendors…' : heading}
+          {isLoading ? searchingLine(state) : heading}
           {state.date ? (
             <span className="ml-2.5 font-sans text-[13px] text-stone-600">
               free on {AVAILABILITY_DATE_FORMATTER.format(new Date(`${state.date}T00:00:00Z`))}
@@ -247,20 +241,48 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
             ))}
           </div>
         ) : total === 0 ? (
+          /*
+            Frame `18`. It never dead-ends: the headline counts the filters the
+            customer actually set, the sentence names the narrowest one, and
+            each button loosens exactly one thing so they can see what changed.
+          */
           <EmptyState
             icon={<SearchX />}
-            headline="No vendors match your search"
-            description={`Nothing here yet — ${loosenSuggestion(state)}.`}
+            headline={noResultsHeadline(state)}
+            description={
+              // With nothing filtered there is no culprit to name, so it says
+              // where to go next instead of inventing a diagnosis.
+              diagnosis ?? 'Try a different vendor type or city.'
+            }
             action={
-              refineCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={clearRefinements}
-                  className="text-base font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
-                >
-                  Clear every refinement
-                </button>
-              ) : undefined
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                {relaxations(state).map((relaxation, index) => (
+                  <button
+                    key={relaxation.label}
+                    type="button"
+                    onClick={() => setState(relaxation.patch)}
+                    className={cn(
+                      'min-h-11 rounded-full px-4.5 text-sm font-semibold lg:min-h-9',
+                      // The first is the one most likely to bring results back,
+                      // so it is the primary action rather than one of a row.
+                      index === 0
+                        ? 'bg-clay-500 text-stone-0 hover:bg-clay-600'
+                        : 'border border-stone-300 bg-stone-0 text-stone-800 hover:bg-stone-100',
+                    )}
+                  >
+                    {relaxation.label}
+                  </button>
+                ))}
+                {refineCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={clearRefinements}
+                    className="text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
+                  >
+                    Clear all
+                  </button>
+                ) : null}
+              </div>
             }
           />
         ) : (

@@ -35,64 +35,128 @@ export function useApi(): BrowserRequest {
   );
 }
 
+export interface ImageUploadOptions {
+  signal?: AbortSignal;
+  /**
+   * Called with 0–100 as the bytes go out. `40-states.md` allows determinate
+   * progress only, and `fetch` cannot report upload progress at all — which is
+   * why this path is `XMLHttpRequest` rather than the one `apiRequest` uses.
+   */
+  onProgress?: (percent: number) => void;
+}
+
 export type ImageUploader = (
   file: File,
   prefix: string,
-  signal?: AbortSignal,
+  options?: ImageUploadOptions,
 ) => Promise<UploadedImage>;
 
 /**
- * Uploads one image and returns the stored variants. `fetch` has to set its own
- * multipart boundary, so this cannot go through `apiRequest`'s JSON path.
+ * The network failure a dropped connection produces, kept distinct from a
+ * server refusal: the bytes are still good, so the vendor is offered Retry
+ * rather than Replace file.
+ */
+export class UploadTransportError extends Error {
+  constructor() {
+    super('The upload did not reach the server.');
+    this.name = 'UploadTransportError';
+  }
+}
+
+/** Reads the structured error body the API sends, tolerating a non-JSON page. */
+function uploadError(status: number, rawBody: string): ApiClientError {
+  let payload: unknown = null;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    payload = null;
+  }
+
+  const parsed = apiErrorSchema.safeParse(payload);
+  return parsed.success
+    ? new ApiClientError(parsed.data.statusCode, parsed.data.error, parsed.data.message)
+    : new ApiClientError(
+        status,
+        ERROR_CODES.INTERNAL_ERROR,
+        // Surfaced to the vendor as a tile reason, so it says what happened
+        // rather than the bare "Upload failed" `40-states.md` rules out.
+        `The server would not take that file (${status}).`,
+      );
+}
+
+/**
+ * Uploads one image and returns the stored variants, reporting progress as it
+ * goes. Multipart sets its own boundary, so this cannot go through
+ * `apiRequest`'s JSON path either way.
  */
 export function useImageUpload(): ImageUploader {
   const { getToken } = useAuth();
 
   return useCallback(
-    async (file, prefix, signal) => {
+    async (file, prefix, options = {}) => {
       const token = await getToken();
+      const { signal, onProgress } = options;
 
       const body = new FormData();
       body.append('file', file);
 
-      const response = await fetch(
-        `${BASE_URL}/upload/image?prefix=${encodeURIComponent(prefix)}`,
-        {
-          method: 'POST',
-          headers: token ? { authorization: `Bearer ${token}` } : {},
-          body,
-          ...(signal ? { signal } : {}),
-        },
-      );
+      return new Promise<UploadedImage>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', `${BASE_URL}/upload/image?prefix=${encodeURIComponent(prefix)}`);
+        if (token) {
+          request.setRequestHeader('authorization', `Bearer ${token}`);
+        }
 
-      let payload: unknown = null;
-      try {
-        payload = await response.json();
-      } catch {
-        payload = null;
-      }
+        if (onProgress) {
+          request.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable && event.total > 0) {
+              onProgress(Math.round((event.loaded / event.total) * 100));
+            }
+          });
+        }
 
-      if (!response.ok) {
-        const parsed = apiErrorSchema.safeParse(payload);
-        throw parsed.success
-          ? new ApiClientError(parsed.data.statusCode, parsed.data.error, parsed.data.message)
-          : new ApiClientError(
-              response.status,
-              ERROR_CODES.INTERNAL_ERROR,
-              `Upload failed with status ${response.status}`,
+        const abort = (): void => request.abort();
+        signal?.addEventListener('abort', abort);
+
+        request.addEventListener('loadend', () => {
+          signal?.removeEventListener('abort', abort);
+
+          // status 0 is the browser's report of a request that never completed
+          // — offline, DNS, TLS, or an abort. None of them blame the file.
+          if (request.status === 0) {
+            reject(new UploadTransportError());
+            return;
+          }
+
+          if (request.status < 200 || request.status >= 300) {
+            reject(uploadError(request.status, request.responseText));
+            return;
+          }
+
+          let payload: unknown = null;
+          try {
+            payload = JSON.parse(request.responseText);
+          } catch {
+            payload = null;
+          }
+
+          const parsed = uploadedImageSchema.safeParse(payload);
+          if (!parsed.success) {
+            reject(
+              new ApiClientError(
+                request.status,
+                ERROR_CODES.INTERNAL_ERROR,
+                'Upload response did not match its schema',
+              ),
             );
-      }
+            return;
+          }
 
-      const parsed = uploadedImageSchema.safeParse(payload);
-      if (!parsed.success) {
-        throw new ApiClientError(
-          response.status,
-          ERROR_CODES.INTERNAL_ERROR,
-          'Upload response did not match its schema',
-        );
-      }
+          resolve(parsed.data);
+        });
 
-      return parsed.data;
+        request.send(body);
+      });
     },
     [getToken],
   );

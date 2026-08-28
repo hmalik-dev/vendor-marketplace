@@ -3,20 +3,23 @@
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
   MAX_CAPTION_LENGTH,
-  MAX_UPLOAD_BYTES,
+  UPLOAD_CONSTRAINT_LINE,
 } from '@vendor-marketplace/shared';
-import { ArrowLeft, ArrowRight, ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ImagePlus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { ApiClientError } from '@/lib/api-client';
 import { moveItem } from '@/lib/reorder';
-import { useApi, useImageUpload } from '@/lib/use-api';
+import { useApi } from '@/lib/use-api';
+import { useUploadQueue } from '@/lib/use-upload-queue';
+import { aggregateLine, failureSentence, retryableTasks } from '@/lib/uploads';
 import { cn } from '@/lib/utils';
 import { wirePortfolioItemSchema, wirePortfolioListSchema } from '@/lib/wire-schemas';
 import type { WirePortfolioItem } from '@/lib/wire-schemas';
-import { MAX_UPLOAD_MB } from '@/components/image-upload';
+import { UploadTile } from '@/components/uploads/upload-tile';
+import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -41,58 +44,39 @@ export interface PortfolioManagerProps {
  */
 export function PortfolioManager({ initialItems }: PortfolioManagerProps): React.ReactElement {
   const request = useApi();
-  const upload = useImageUpload();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<readonly WirePortfolioItem[]>(initialItems);
-  const [uploadingCount, setUploadingCount] = useState(0);
   const [isBusy, setIsBusy] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<WirePortfolioItem | null>(null);
 
-  const addFiles = async (files: readonly File[]): Promise<void> => {
-    const accepted = files.filter((file) => {
-      if (!(ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
-        toast.error(`${file.name} is not a JPEG, PNG, or WebP.`);
-        return false;
-      }
-      if (file.size > MAX_UPLOAD_BYTES) {
-        toast.error(`${file.name} is larger than the ${MAX_UPLOAD_MB}MB limit.`);
-        return false;
-      }
-      return true;
-    });
+  /*
+   * Each finished upload is saved on its own, so a failure never rolls back a
+   * sibling — partial success is the normal case, not an edge case. The photo
+   * joins the gallery the moment its row exists rather than after the batch,
+   * which is what lets the vendor leave the page mid-upload.
+   */
+  const persist = useCallback(
+    async (stored: { imageUrl: string; thumbnailUrl: string | null }): Promise<void> => {
+      const created = await request('/vendor/portfolio', {
+        method: 'POST',
+        body: { imageUrl: stored.imageUrl, thumbnailUrl: stored.thumbnailUrl },
+        schema: wirePortfolioItemSchema,
+      });
 
-    if (accepted.length === 0) {
-      return;
-    }
+      setItems((previous) => [...previous, created]);
+    },
+    [request],
+  );
 
-    setUploadingCount((previous) => previous + accepted.length);
+  const queue = useUploadQueue({ prefix: 'portfolio', onUploaded: persist });
 
-    // Sequential rather than parallel: the order photos land in is the order
-    // they were chosen, and each upload re-encodes an image server-side.
-    for (const file of accepted) {
-      try {
-        const stored = await upload(file, 'portfolio');
-        const created = await request('/vendor/portfolio', {
-          method: 'POST',
-          body: { imageUrl: stored.imageUrl, thumbnailUrl: stored.thumbnailUrl },
-          schema: wirePortfolioItemSchema,
-        });
-
-        setItems((previous) => [...previous, created]);
-      } catch (error) {
-        toast.error(
-          error instanceof ApiClientError ? error.message : `Could not add ${file.name}.`,
-        );
-      } finally {
-        setUploadingCount((previous) => previous - 1);
-      }
-    }
-
-    router.refresh();
-  };
+  const inFlight = queue.tasks.filter((task) => task.status !== 'done');
+  const progressLine = aggregateLine(queue.tasks);
+  const failures = failureSentence(queue.tasks);
+  const canRetry = retryableTasks(queue.tasks).length > 0;
 
   const saveCaption = async (item: WirePortfolioItem, caption: string): Promise<void> => {
     const next = caption.trim();
@@ -177,7 +161,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
           event.preventDefault();
           setIsDragging(false);
           if (draggingId === null) {
-            void addFiles([...event.dataTransfer.files]);
+            queue.addFiles([...event.dataTransfer.files]);
           }
         }}
         className={cn(
@@ -186,14 +170,28 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
         )}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-stone-600">
-            Drag photos here, or choose them. JPEG, PNG, or WebP, up to {MAX_UPLOAD_MB}MB each.
-          </p>
+          <div>
+            <p className="text-sm text-stone-600">Drag photos here, or choose them.</p>
+            {/*
+              The constraint line, stated before the picker opens and in the
+              same words as the requirements rail — `40-states.md` requires it
+              in both places, so both read the one constant.
+            */}
+            <p className="mt-0.5 text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p>
+          </div>
           <div className="flex items-center gap-3">
-            {uploadingCount > 0 ? (
-              <span className="flex items-center gap-2 text-sm text-stone-600">
-                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-                Uploading {uploadingCount}…
+            {/*
+              The compact count in the header. It turns red when something has
+              failed rather than adding a second alert beside the banner.
+            */}
+            {inFlight.length > 0 ? (
+              <span
+                className={cn(
+                  'text-sm font-medium',
+                  failures ? 'text-error-500' : 'text-steel-600',
+                )}
+              >
+                {inFlight.length} in progress
               </span>
             ) : null}
             <Button
@@ -208,6 +206,13 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
           </div>
         </div>
 
+        {/* One aggregate line for the batch, in steel — never a second spinner. */}
+        {progressLine ? (
+          <p role="status" className="mt-3 text-sm text-steel-600">
+            {progressLine}
+          </p>
+        ) : null}
+
         <input
           ref={inputRef}
           type="file"
@@ -216,13 +221,64 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
           className="sr-only"
           aria-label="Add portfolio photos"
           onChange={(event) => {
-            void addFiles([...(event.target.files ?? [])]);
+            queue.addFiles([...(event.target.files ?? [])]);
             event.target.value = '';
           }}
         />
       </div>
 
-      {items.length === 0 ? (
+      {queue.heldBackNotice ? (
+        <Banner status="pending" title="Some files were held back" className="mt-4">
+          {queue.heldBackNotice}
+        </Banner>
+      ) : null}
+
+      {/*
+        One banner that counts, never a bare "Upload failed" toast. Each
+        reason lives on its own tile below, so repeating them here would say
+        the same thing twice.
+      */}
+      {failures ? (
+        <Banner status="failed" title="Some photos didn't upload" className="mt-4">
+          <span className="flex flex-wrap items-center gap-3">
+            <span>{failures}</span>
+            {canRetry ? (
+              <button
+                type="button"
+                onClick={queue.retryAll}
+                className="font-semibold text-clay-500 underline underline-offset-2"
+              >
+                Retry all that can
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={queue.dismissAllFailed}
+              className="font-semibold text-stone-700 underline underline-offset-2"
+            >
+              Dismiss
+            </button>
+          </span>
+        </Banner>
+      ) : null}
+
+      {/*
+        Tiles appear the moment files are picked and a failed one keeps its
+        place, so the vendor can tell which shot it was. Completed tiles drop
+        out because the photo itself is already in the gallery below.
+      */}
+      {inFlight.length > 0 ? (
+        <ul
+          aria-label="Uploads in progress"
+          className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+        >
+          {inFlight.map((task) => (
+            <UploadTile key={task.id} task={task} onDismiss={queue.dismiss} />
+          ))}
+        </ul>
+      ) : null}
+
+      {items.length === 0 && inFlight.length === 0 ? (
         <p className="mt-6 rounded-lg border border-stone-300 bg-card px-6 py-12 text-center text-sm text-stone-600">
           No photos yet. Your gallery is what convinces a customer to send a request — eight to
           twelve of your best is plenty.

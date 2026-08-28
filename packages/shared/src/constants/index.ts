@@ -515,9 +515,48 @@ export const DEFAULT_PAGE_SIZE = 20;
 export const MESSAGES_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 100;
 
+/*
+ * The upload contract, stated once. `design/design-plan/40-states.md` fixes it
+ * at "JPG or PNG · 12 MB each · min 1200px wide · 20 files per upload", and
+ * the same sentence has to appear in the drop zone, the requirements rail and
+ * the server's own refusals — so every one of them reads these.
+ */
+
 /** Largest accepted upload before server-side image processing. */
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-export const ACCEPTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+
+/**
+ * Accepted **input** formats. WebP is deliberately not among them: it is the
+ * format `sharp` writes, not one a camera or an editor exports, and offering
+ * it in the picker only widened the set of files a vendor could pick and then
+ * be refused for. Narrowing the client without narrowing the server would do
+ * the reverse, so both ends read this list.
+ */
+export const ACCEPTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png'] as const;
+
+/**
+ * Narrowest image worth publishing. A photograph below this renders soft on a
+ * profile cover, which is a quality floor rather than a validity one — the
+ * vendor is asked to replace it, not told the file is invalid.
+ */
+export const MIN_UPLOAD_IMAGE_WIDTH = 1200;
+
+/**
+ * Files accepted in one batch. Over this the extras are held back and named
+ * rather than the whole selection being refused: the twenty that fit are still
+ * work the vendor does not have to redo.
+ */
+export const MAX_UPLOAD_BATCH_FILES = 20;
+
+/** Human-readable file extensions for the accepted set, in picker order. */
+export const ACCEPTED_IMAGE_LABEL = 'JPG or PNG';
+
+/**
+ * The one constraint sentence. `40-states.md` requires it verbatim in both the
+ * drop zone and the requirements rail, so it is built here rather than
+ * retyped at each site.
+ */
+export const UPLOAD_CONSTRAINT_LINE = `${ACCEPTED_IMAGE_LABEL} · ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB each · min ${MIN_UPLOAD_IMAGE_WIDTH}px wide · ${MAX_UPLOAD_BATCH_FILES} files per upload`;
 
 /** Column widths mirrored from the Drizzle schema, enforced by Zod. */
 export const MAX_SLUG_LENGTH = 200;
