@@ -302,3 +302,186 @@ describe('/vendor/portfolio', () => {
     });
   });
 });
+
+/**
+ * "Cover is a designation on an existing tile (drag to first slot), never a
+ * second uploader" — `40-states.md`. The cover stays a stored column, so what
+ * matters is that the column and the list can never disagree.
+ */
+describe('the cover follows the first portfolio photo', () => {
+  let harness: TestHarness;
+  let photographyId: string;
+
+  async function coverOf(clerkUserId: string): Promise<string | null> {
+    const response = await harness.app.inject({
+      method: 'GET',
+      url: '/vendor/profile',
+      headers: bearer(clerkUserId),
+    });
+    expect(response.statusCode).toBe(200);
+
+    return response.json().coverImageUrl as string | null;
+  }
+
+  async function add(clerkUserId: string, imageUrl: string): Promise<string> {
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/vendor/portfolio',
+      headers: bearer(clerkUserId),
+      payload: { imageUrl, thumbnailUrl: `${imageUrl}-thumb` },
+    });
+    expect(response.statusCode).toBe(201);
+
+    return response.json().id as string;
+  }
+
+  beforeAll(async () => {
+    harness = await createTestHarness();
+    harness.clerkUsers.set(VENDOR, {
+      clerkUserId: VENDOR,
+      email: 'cover@example.com',
+      firstName: 'Cover',
+      lastName: 'Vendor',
+      roleHint: 'vendor',
+      avatarUrl: null,
+    });
+
+    const rows = await harness.database.db.select().from(categories);
+    photographyId = rows.find((row) => row.slug === 'photography')!.id;
+  });
+
+  afterEach(async () => {
+    await harness.database.db.delete(vendorProfiles);
+    await harness.database.db.delete(users);
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  async function profile(): Promise<void> {
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+      payload: {
+        businessName: 'Cover Studio',
+        categoryIds: [photographyId],
+        city: 'Austin',
+        state: 'TX',
+        bio: 'Documentary wedding photography.',
+      },
+    });
+    expect(response.statusCode).toBe(201);
+  }
+
+  /* Otherwise a vendor has a portfolio and no banner until they reorder a list of one. */
+  it('adopts the first photo uploaded as the cover', async () => {
+    await profile();
+    await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
+
+    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
+  });
+
+  it('leaves the cover alone when a second photo goes on the end', async () => {
+    await profile();
+    await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
+    await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
+
+    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
+  });
+
+  /* The designation *is* the drag: first slot means cover. */
+  it('moves the cover when a photo is dragged into first place', async () => {
+    await profile();
+    const first = await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
+    const second = await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
+
+    const response = await harness.app.inject({
+      method: 'PUT',
+      url: '/vendor/portfolio/reorder',
+      headers: bearer(VENDOR),
+      payload: { itemIds: [second, first] },
+    });
+    expect(response.statusCode).toBe(200);
+
+    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/second.webp');
+  });
+
+  it('promotes the next photo when the cover is deleted', async () => {
+    await profile();
+    const first = await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
+    await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
+
+    const response = await harness.app.inject({
+      method: 'DELETE',
+      url: `/vendor/portfolio/${first}`,
+      headers: bearer(VENDOR),
+    });
+    expect(response.statusCode).toBe(204);
+
+    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/second.webp');
+  });
+
+  /* An empty portfolio means no cover. The profile has a placeholder for it. */
+  it('clears the cover when the last photo goes', async () => {
+    await profile();
+    const only = await add(VENDOR, 'http://cdn.test/portfolio/only.webp');
+
+    await harness.app.inject({
+      method: 'DELETE',
+      url: `/vendor/portfolio/${only}`,
+      headers: bearer(VENDOR),
+    });
+
+    expect(await coverOf(VENDOR)).toBeNull();
+  });
+
+  /*
+   * The acceptance criterion: order and cover are one write. A reorder that
+   * names a photo the vendor does not own is refused, and must leave the
+   * order and the cover exactly as they were — not one of the two.
+   */
+  it('changes neither the order nor the cover when the reorder is refused', async () => {
+    await profile();
+    const first = await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
+    const second = await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
+
+    const refused = await harness.app.inject({
+      method: 'PUT',
+      url: '/vendor/portfolio/reorder',
+      headers: bearer(VENDOR),
+      payload: { itemIds: [second, UNKNOWN_ID] },
+    });
+    expect(refused.statusCode).toBeGreaterThanOrEqual(400);
+
+    const listed = await harness.app.inject({
+      method: 'GET',
+      url: '/vendor/portfolio',
+      headers: bearer(VENDOR),
+    });
+    expect(listed.json().map((item: { id: string }) => item.id)).toEqual([first, second]);
+    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
+  });
+
+  it('is unchanged by two reorders in a row', async () => {
+    await profile();
+    const first = await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
+    const second = await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
+
+    for (const order of [
+      [second, first],
+      [first, second],
+    ]) {
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/portfolio/reorder',
+        headers: bearer(VENDOR),
+        payload: { itemIds: order },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
+  });
+});

@@ -66,6 +66,40 @@ export const emailSchema = z.email().max(MAX_EMAIL_LENGTH);
 
 export const urlSchema = z.url().max(MAX_URL_LENGTH);
 
+/**
+ * A stored reference to an image, in any of the three shapes the product
+ * actually persists.
+ *
+ * Since #47 an upload stores an **object key** — `portfolio/abc.webp` — so the
+ * CDN can move without a migration. Seeded marketing art is a **site-relative
+ * path**, served by the web app itself. An avatar from Clerk is an **absolute
+ * URL** on a host that is not ours. `resolveImageUrl` already resolves all
+ * three at the render boundary; this is the same contract, stated on the way
+ * in.
+ *
+ * A bare `z.url()` here rejected the first two, which is why adding a portfolio
+ * photo failed for every real upload: the client sent the key #47 told it to
+ * store, and the schema demanded a URL.
+ */
+export const imageRefSchema = z
+  .string()
+  .min(1)
+  .max(MAX_URL_LENGTH)
+  .refine(
+    (value) => {
+      // An absolute URL, but only over http(s): a `javascript:` or `data:`
+      // value reaching an `img src` is the reason this is an allowlist.
+      if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
+        return /^https?:\/\//i.test(value);
+      }
+
+      // Otherwise a site-relative path or a bare object key. Neither may
+      // traverse, and neither may be protocol-relative.
+      return !value.startsWith('//') && !value.split('/').includes('..');
+    },
+    { message: 'Must be an image URL, a site path, or a stored key' },
+  );
+
 /** E.164-ish; permissive because Clerk owns phone verification. */
 export const phoneSchema = z
   .string()
@@ -324,8 +358,8 @@ export const vendorProfileSchema = z.object({
   bio: z.string().nullable(),
   tagline: z.string().max(MAX_TAGLINE_LENGTH).nullable(),
   yearsInBusiness: z.int().nullable(),
-  profileImageUrl: urlSchema.nullable(),
-  coverImageUrl: urlSchema.nullable(),
+  profileImageUrl: imageRefSchema.nullable(),
+  coverImageUrl: imageRefSchema.nullable(),
   address: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
   city: z.string().max(MAX_NAME_LENGTH).nullable(),
   state: z.string().max(MAX_NAME_LENGTH).nullable(),
@@ -381,8 +415,8 @@ export const createVendorProfileSchema = z.object({
       message: 'Choose one of the offered response windows',
     })
     .optional(),
-  profileImageUrl: urlSchema.optional(),
-  coverImageUrl: urlSchema.optional(),
+  profileImageUrl: imageRefSchema.optional(),
+  coverImageUrl: imageRefSchema.optional(),
 });
 export type CreateVendorProfileInput = z.infer<typeof createVendorProfileSchema>;
 
@@ -483,8 +517,8 @@ export type ReorderServicePackagesInput = z.infer<typeof reorderServicePackagesS
 export const portfolioItemSchema = z.object({
   id: uuidSchema,
   vendorId: uuidSchema,
-  imageUrl: urlSchema,
-  thumbnailUrl: urlSchema.nullable(),
+  imageUrl: imageRefSchema,
+  thumbnailUrl: imageRefSchema.nullable(),
   caption: z.string().max(MAX_CAPTION_LENGTH).nullable(),
   displayOrder: z.int(),
   createdAt: z.date(),
@@ -492,8 +526,9 @@ export const portfolioItemSchema = z.object({
 export type PortfolioItem = z.infer<typeof portfolioItemSchema>;
 
 export const createPortfolioItemSchema = z.object({
-  imageUrl: urlSchema,
-  thumbnailUrl: urlSchema.optional(),
+  imageUrl: imageRefSchema,
+  // Nullish, not optional: an upload with no thumbnail sends an explicit null.
+  thumbnailUrl: imageRefSchema.nullish(),
   caption: z.string().trim().max(MAX_CAPTION_LENGTH).optional(),
   displayOrder: z.int().min(0).optional(),
 });

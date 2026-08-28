@@ -16,6 +16,7 @@ import {
   findPortfolioByVendor,
   insertPortfolioItem,
   nextDisplayOrder,
+  syncCoverFromPortfolio,
   updatePortfolioItemById,
 } from './portfolio.dao.js';
 
@@ -46,7 +47,18 @@ export async function addPortfolioItem(
     displayOrder: input.displayOrder ?? (await nextDisplayOrder(db, vendor.id)),
   };
 
-  return toPortfolioItem(await insertPortfolioItem(db, values));
+  const row = await insertPortfolioItem(db, values);
+
+  /*
+   * The first photo a vendor uploads becomes their cover, because otherwise
+   * they would have a portfolio and no banner until they thought to reorder a
+   * list of one.
+   */
+  await db.transaction(async (tx) => {
+    await syncCoverFromPortfolio(tx, vendor.id);
+  });
+
+  return toPortfolioItem(row);
 }
 
 export async function updatePortfolioItem(

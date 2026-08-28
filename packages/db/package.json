@@ -34,7 +34,8 @@
     "seed": "tsx src/scripts/seed.ts",
     "seed:marketing": "tsx src/scripts/seed-marketing.ts",
     "studio": "drizzle-kit studio",
-    "keys:from-urls": "tsx src/scripts/keys-from-urls.ts"
+    "keys:from-urls": "tsx src/scripts/keys-from-urls.ts",
+    "cover:from-portfolio": "tsx src/scripts/cover-from-portfolio.ts"
   },
   "dependencies": {
     "@vendor-marketplace/shared": "workspace:*",

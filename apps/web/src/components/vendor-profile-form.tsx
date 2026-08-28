@@ -115,7 +115,6 @@ export interface FormState {
   serviceRadiusMiles: number;
   responseTimeHours: string;
   profileImageUrl: string | null;
-  coverImageUrl: string | null;
   categoryIds: string[];
   tagIds: string[];
 }
@@ -142,7 +141,6 @@ function initialState(profile: WireVendorProfile | null): FormState {
         ? NO_RESPONSE_TIME
         : String(profile.responseTimeHours),
     profileImageUrl: profile?.profileImageUrl ?? null,
-    coverImageUrl: profile?.coverImageUrl ?? null,
     categoryIds: [...(profile?.categoryIds ?? [])],
     tagIds: (profile?.tags ?? []).map((tag) => tag.id),
   };
@@ -173,7 +171,6 @@ function toPayload(form: FormState): Record<string, unknown> {
     responseTimeHours:
       form.responseTimeHours === NO_RESPONSE_TIME ? undefined : Number(form.responseTimeHours),
     profileImageUrl: form.profileImageUrl ?? undefined,
-    coverImageUrl: form.coverImageUrl ?? undefined,
     categoryIds: form.categoryIds,
   };
 }
@@ -399,44 +396,23 @@ export function VendorProfileForm({
               <h2 className="sr-only">Business</h2>
 
               {/*
-               * The photo and the cover describe one thing — the vendor's visual
-               * identity — so they sit on one row, identity first. A full-width
-               * cover above a lone circle reads as an orphaned row.
+               * The profile photo alone. There is no cover drop zone: the
+               * cover is a **designation on an existing portfolio tile**, not
+               * a second upload of the same image (`40-states.md`). Whatever
+               * sits first in the portfolio is the cover, and the portfolio
+               * editor says so on the tile.
                */}
-              <div className="mt-4 flex items-start gap-4 sm:gap-5">
-                {/* Fixed to the circle's width: left to size itself, the column
-                stretches to its longest text and starves the cover beside it. */}
-                <div className="w-24 shrink-0 sm:w-40">
-                  <ImageUpload
-                    label="Profile photo"
-                    prefix="vendor-profile"
-                    value={form.profileImageUrl}
-                    onChange={(url) => update('profileImageUrl', url)}
-                    rounded
-                    showHint={false}
-                    disabled={isSaving}
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <ImageUpload
-                    label="Cover image"
-                    prefix="vendor-cover"
-                    value={form.coverImageUrl}
-                    onChange={(url) => update('coverImageUrl', url)}
-                    // Height-matched to the profile circle rather than an aspect
-                    // ratio: the two are a pair, and an aspect-ratio drop zone
-                    // grows taller every time the pane gets wider.
-                    aspectClassName="h-24 sm:h-40"
-                    showHint={false}
-                    disabled={isSaving}
-                  />
-                </div>
+              <div className="mt-4 w-24 sm:w-40">
+                <ImageUpload
+                  label="Profile photo"
+                  prefix="vendor-profile"
+                  value={form.profileImageUrl}
+                  onChange={(url) => update('profileImageUrl', url)}
+                  rounded
+                  showHint={false}
+                  disabled={isSaving}
+                />
               </div>
-              {/*
-                One hint for the pair — the same rule governs both uploads, and
-                it is the same sentence the drop zones carry, read from the one
-                constant so the two can never drift.
-              */}
               <p className="mt-2 text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p>
 
               <div className="field-grid mt-5 border-t border-stone-300 pt-5">

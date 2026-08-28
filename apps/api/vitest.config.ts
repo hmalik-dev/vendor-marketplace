@@ -16,7 +16,12 @@ export default defineConfig({
      * blew the 60s hook timeout, on a different file each run. Capping the
      * pool trades a little wall-clock for a suite that does not fail on how
      * busy the machine happens to be.
+     *
+     * Lowered from three to two once `packages/db` grew an eighth suite: the
+     * db package now runs its files one at a time, which makes it slower and
+     * therefore overlapping with this one for longer, and three workers here
+     * started blowing the same hook timeout again.
      */
-    maxWorkers: 3,
+    maxWorkers: 2,
   },
 });

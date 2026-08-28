@@ -13,6 +13,7 @@ import {
   bookingRequests,
   bookings,
   categories,
+  portfolioItems,
   reviews,
   servicePackages,
   users,
@@ -322,6 +323,25 @@ export async function seedMarketingData<
       .insert(vendorCategories)
       .values({ vendorId: profile.id, categoryId })
       .onConflictDoNothing();
+
+    /*
+     * The cover is the first portfolio photo, not a separate upload — the rule
+     * `40-states.md` sets and #51 enforces. Seeding a cover with an empty
+     * portfolio would leave every seeded vendor contradicting it, so the same
+     * image is inserted as portfolio item zero.
+     */
+    const coverKey = `${MARKETING_COVER_BASE}/${vendor.slug}.jpg`;
+    const [existingCover] = await db
+      .select({ id: portfolioItems.id })
+      .from(portfolioItems)
+      .where(and(eq(portfolioItems.vendorId, profile.id), eq(portfolioItems.imageUrl, coverKey)))
+      .limit(1);
+
+    if (!existingCover) {
+      await db
+        .insert(portfolioItems)
+        .values({ vendorId: profile.id, imageUrl: coverKey, displayOrder: 0 });
+    }
 
     /*
      * Packages have no natural key, so they are replaced wholesale rather than

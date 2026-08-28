@@ -9,7 +9,9 @@ import {
   createServicePackageSchema,
   updateServicePackageSchema,
   createTagSuggestionSchema,
+  createPortfolioItemSchema,
   createVendorProfileSchema,
+  imageRefSchema,
   paginatedSchema,
   sendMessageSchema,
   setVendorTagsSchema,
@@ -837,5 +839,60 @@ describe('the tagline and the experience figure', () => {
   /* Neither is required: a profile without them is still a valid profile. */
   it('accepts a profile that answers neither', () => {
     expect(createVendorProfileSchema.safeParse(MINIMAL_VENDOR_PROFILE).success).toBe(true);
+  });
+});
+
+/**
+ * Since #47 an upload stores an object key, seeded art is a site-relative
+ * path, and a Clerk avatar is an absolute URL on a host that is not ours. All
+ * three are persisted, so all three have to pass on the way in — a bare
+ * `z.url()` here is what made adding a portfolio photo fail for every real
+ * upload.
+ */
+describe('imageRefSchema', () => {
+  it.each([
+    'portfolio/abc.webp',
+    '/marketing/covers/june-harlow.jpg',
+    'https://cdn.example.com/a.webp',
+    'https://img.clerk.com/abc',
+  ])('accepts %s', (value) => {
+    expect(imageRefSchema.safeParse(value).success).toBe(true);
+  });
+
+  /* An `img src` is a sink, so the non-http schemes are an allowlist, not a filter. */
+  it.each(['javascript:alert(1)', 'data:image/png;base64,AAA', 'file:///etc/passwd'])(
+    'rejects %s',
+    (value) => {
+      expect(imageRefSchema.safeParse(value).success).toBe(false);
+    },
+  );
+
+  it('rejects a protocol-relative URL, which would follow the page onto any host', () => {
+    expect(imageRefSchema.safeParse('//evil.example/a.webp').success).toBe(false);
+  });
+
+  it.each(['../../etc/passwd', 'a/../../b.webp'])('rejects the traversal %s', (value) => {
+    expect(imageRefSchema.safeParse(value).success).toBe(false);
+  });
+
+  it('rejects an empty reference', () => {
+    expect(imageRefSchema.safeParse('').success).toBe(false);
+  });
+
+  /* The exact payload the portfolio manager posts after an upload. */
+  it('accepts the key the upload flow actually sends', () => {
+    const result = createPortfolioItemSchema.safeParse({
+      imageUrl: 'portfolio/abc.webp',
+      thumbnailUrl: 'portfolio/abc-thumb.webp',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts an upload that produced no thumbnail', () => {
+    expect(
+      createPortfolioItemSchema.safeParse({ imageUrl: 'portfolio/abc.webp', thumbnailUrl: null })
+        .success,
+    ).toBe(true);
   });
 });

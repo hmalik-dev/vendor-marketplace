@@ -285,88 +285,110 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
           twelve of your best is plenty.
         </p>
       ) : (
-        <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {items.map((item, index) => (
-            <li
-              key={item.id}
-              draggable={!isBusy}
-              onDragStart={() => setDraggingId(item.id)}
-              onDragEnd={() => setDraggingId(null)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                const from = items.findIndex((row) => row.id === draggingId);
-                setDraggingId(null);
-                if (from !== -1) {
-                  move(from, index);
-                }
-              }}
-              className={cn(
-                'overflow-hidden rounded-lg border border-stone-300 bg-card shadow-sm',
-                draggingId === item.id && 'opacity-50',
-              )}
-            >
-              {/* A plain <img>: user uploads on an origin that changes between
-                  environments, so next/image would need per-env remote patterns. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.thumbnailUrl ?? item.imageUrl ?? ''}
-                alt={item.caption ?? ''}
-                className="aspect-[4/3] w-full cursor-grab object-cover"
-              />
+        <>
+          {/*
+            States the rule the tile badge only shows the result of. Without it
+            a vendor can see which photo is the cover but not how to change it.
+          */}
+          <p className="mt-6 text-sm text-stone-600">
+            The first photo is your cover — drag another into first place to change it.
+          </p>
+          <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            {items.map((item, index) => (
+              <li
+                key={item.id}
+                draggable={!isBusy}
+                onDragStart={() => setDraggingId(item.id)}
+                onDragEnd={() => setDraggingId(null)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const from = items.findIndex((row) => row.id === draggingId);
+                  setDraggingId(null);
+                  if (from !== -1) {
+                    move(from, index);
+                  }
+                }}
+                className={cn(
+                  'overflow-hidden rounded-lg border border-stone-300 bg-card shadow-sm',
+                  draggingId === item.id && 'opacity-50',
+                )}
+              >
+                <div className="relative">
+                  {/* A plain <img>: user uploads on an origin that changes between
+                    environments, so next/image would need per-env remote patterns. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.thumbnailUrl ?? item.imageUrl ?? ''}
+                    alt={item.caption ?? ''}
+                    className="aspect-[4/3] w-full cursor-grab object-cover"
+                  />
+                  {/*
+                  The cover is a designation on a tile, never a second upload
+                  (`40-states.md`) — so the designation has to be visible on the
+                  tile. A vendor must be able to see which photo is their cover
+                  without being told the rule about first place.
+                */}
+                  {index === 0 ? (
+                    <span className="absolute top-2 left-2 rounded-md bg-stone-900/75 px-2 py-1 text-[10.5px] font-semibold tracking-[.05em] text-stone-0 uppercase">
+                      Cover
+                    </span>
+                  ) : null}
+                </div>
 
-              <div className="space-y-2 p-3">
-                <Input
-                  defaultValue={item.caption ?? ''}
-                  placeholder="Add a caption"
-                  maxLength={MAX_CAPTION_LENGTH}
-                  aria-label={`Caption for photo ${index + 1}`}
-                  className={INPUT_TOUCH_HEIGHT}
-                  onBlur={(event) => void saveCaption(item, event.target.value)}
-                />
+                <div className="space-y-2 p-3">
+                  <Input
+                    defaultValue={item.caption ?? ''}
+                    placeholder="Add a caption"
+                    maxLength={MAX_CAPTION_LENGTH}
+                    aria-label={`Caption for photo ${index + 1}`}
+                    className={INPUT_TOUCH_HEIGHT}
+                    onBlur={(event) => void saveCaption(item, event.target.value)}
+                  />
 
-                <div className="flex items-center justify-between">
-                  <div className="flex">
+                  <div className="flex items-center justify-between">
+                    <div className="flex">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-11 lg:size-8"
+                        aria-label={`Move photo ${index + 1} earlier`}
+                        disabled={isBusy || index === 0}
+                        onClick={() => move(index, index - 1)}
+                      >
+                        <ArrowLeft aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-11 lg:size-8"
+                        aria-label={`Move photo ${index + 1} later`}
+                        disabled={isBusy || index === items.length - 1}
+                        onClick={() => move(index, index + 1)}
+                      >
+                        <ArrowRight aria-hidden="true" />
+                      </Button>
+                    </div>
+
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="size-11 lg:size-8"
-                      aria-label={`Move photo ${index + 1} earlier`}
-                      disabled={isBusy || index === 0}
-                      onClick={() => move(index, index - 1)}
+                      aria-label={`Remove photo ${index + 1}`}
+                      disabled={isBusy}
+                      onClick={() => setPendingRemoval(item)}
                     >
-                      <ArrowLeft aria-hidden="true" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-11 lg:size-8"
-                      aria-label={`Move photo ${index + 1} later`}
-                      disabled={isBusy || index === items.length - 1}
-                      onClick={() => move(index, index + 1)}
-                    >
-                      <ArrowRight aria-hidden="true" />
+                      <Trash2 aria-hidden="true" className="text-destructive" />
                     </Button>
                   </div>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-11 lg:size-8"
-                    aria-label={`Remove photo ${index + 1}`}
-                    disabled={isBusy}
-                    onClick={() => setPendingRemoval(item)}
-                  >
-                    <Trash2 aria-hidden="true" className="text-destructive" />
-                  </Button>
                 </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <Dialog

@@ -14,7 +14,6 @@ const COMPLETE: FormState = {
   serviceRadiusMiles: 60,
   responseTimeHours: '24',
   profileImageUrl: null,
-  coverImageUrl: null,
   categoryIds: ['photography'],
   tagIds: [],
 };
