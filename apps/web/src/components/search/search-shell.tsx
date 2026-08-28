@@ -29,9 +29,24 @@ import { activeRefineCount, toSearchQuery, useSearchState, type SearchState } fr
  */
 const SKELETON_COUNT = 8;
 
-/** Four across at the reference viewport; the grid gains columns, not margins. */
+/**
+ * The grid gains columns, not margins.
+ *
+ * **Three across from `lg`**, which is the `25 Search results — 1024` frame:
+ * 1024 is a 13" laptop, and it gets the desktop composition with a column
+ * removed rather than the two-column tablet one. The gap follows the frames —
+ * 14px at 1024, 16px at 1440.
+ */
 const GRID_COLUMNS =
-  'grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 min-[90rem]:grid-cols-4 min-[108rem]:grid-cols-5';
+  'grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 min-[90rem]:grid-cols-4 min-[90rem]:gap-4 min-[108rem]:grid-cols-5';
+
+/**
+ * Two full rows of skeletons, which is `columns × 2` — 8 at 1440 and 6 at 1024,
+ * as the two loading frames draw them. The count is fixed and the surplus is
+ * hidden in CSS, because the column count is a media query and this component
+ * renders on the server where there is no viewport to read.
+ */
+const SKELETONS_BEYOND_TWO_ROWS_AT_1024 = 'max-[90rem]:hidden';
 
 /** "free on Sun, Jun 14" — the weekday is what makes a date legible at a glance. */
 const AVAILABILITY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
@@ -146,7 +161,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         rather than duplicated; both read the same `nuqs` params, so whichever
         one is on screen is showing the same query.
       */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-stone-200 px-5 py-3 sm:px-6.5 lg:hidden">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-stone-200 px-5 py-3 min-[90rem]:px-6.5 lg:hidden">
         <SearchBar
           categories={categories}
           value={{ category: state.category, city: state.city, date: state.date }}
@@ -203,7 +218,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
       </div>
 
       {/* Neither the query bar nor the Refine bar scrolls; only the grid does. */}
-      <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 sm:px-6.5">
+      <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 min-[90rem]:px-6.5">
         <h1 className="font-display text-[22px] text-stone-900">
           {isLoading ? searchingLine(state) : heading}
           {state.date ? (
@@ -229,7 +244,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         ) : null}
       </div>
 
-      <div className="app-pane px-5 pb-20 sm:px-6.5 lg:pb-4">
+      <div className="app-pane px-5 pb-20 min-[90rem]:px-6.5 lg:pb-4">
         {error !== null ? (
           <EmptyState icon={<SearchX />} headline="Something went wrong" description={error} />
         ) : isLoading ? (
@@ -237,7 +252,10 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           // never a full-page spinner beside them.
           <div className={GRID_COLUMNS}>
             {Array.from({ length: SKELETON_COUNT }, (_unused, index) => (
-              <VendorCardSkeleton key={index} />
+              <VendorCardSkeleton
+                key={index}
+                {...(index >= 6 ? { className: SKELETONS_BEYOND_TWO_ROWS_AT_1024 } : {})}
+              />
             ))}
           </div>
         ) : total === 0 ? (

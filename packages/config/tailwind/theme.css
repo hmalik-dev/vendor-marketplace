@@ -95,6 +95,14 @@
   --text-display-md--line-height: 1.2;
   --text-display-lg: 34px;
   --text-display-lg--line-height: 1.15;
+  /*
+   * The hero headline's 1024 step. `30-responsive.md` takes display type from
+   * 54 to 40px at that width, and frame `25 Landing — 1024` draws it at 40 —
+   * a size between `display-lg` and `display-xl` that exists only because
+   * height, not width, is the binding constraint on a 13" laptop.
+   */
+  --text-display-hero-md: 40px;
+  --text-display-hero-md--line-height: 1.04;
   --text-display-xl: 54px;
   --text-display-xl--line-height: 1.08;
 
@@ -116,6 +124,13 @@
   --header-height: 4rem; /* 64px — 56px below 768 */
   --sidebar-width: 15rem; /* 240px */
   --sidebar-width-sm: 12.5rem; /* 200px — also the sticky form section nav */
+  /*
+   * Declared by `01-foundations.md`, and deliberately unused. The 2026-08-27
+   * responsive pass **considered an icon rail at 1024 and rejected it**: it
+   * returns ~150px of width on a screen whose constraint is height, and costs
+   * label recognition on a product a vendor opens weekly. Sidebars keep their
+   * labels at every width — see `30-responsive.md`.
+   */
   --sidebar-width-icon: 4.5rem; /* 72px tablet icon rail */
   --rail-width: 21.25rem; /* 340px — dashboard rails */
   --rail-filter: 17.5rem; /* 280px — search filters */

@@ -209,13 +209,18 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 italic second line in clay carrying the promise. It repeats
                 nowhere else — design/design-plan/31-content-voice.md.
               */}
-              <h1 className="font-display text-display-lg leading-[1.04] tracking-[-.02em] text-stone-900 sm:text-display-xl">
+              {/*
+                Three steps, because 1024 is a drawn viewport rather than a
+                squeezed 1440: `25 Landing — 1024` sets the headline at 40px so
+                the category row — the fold marker — still clears 640px.
+              */}
+              <h1 className="font-display text-display-lg leading-[1.04] tracking-[-.02em] text-stone-900 sm:text-display-hero-md min-[90rem]:text-display-xl">
                 Book your vendors
                 <br />
                 <span className="text-clay-500 italic">without the back-and-forth.</span>
               </h1>
 
-              <p className="mt-3.75 max-w-112.5 text-lg text-stone-700">
+              <p className="mt-3.75 max-w-112.5 text-base text-stone-700 min-[90rem]:text-lg">
                 Compare real availability and pricing from vendors near you, send one request, and
                 pay securely once the date is locked in.
               </p>

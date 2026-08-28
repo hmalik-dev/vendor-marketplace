@@ -17,14 +17,19 @@ export function Skeleton({ className }: { className?: string }): React.ReactElem
   );
 }
 
-/** A vendor card's shape: 4:3 cover, name, meta row, chips, price row. */
-export function VendorCardSkeleton(): React.ReactElement {
+/**
+ * A vendor card's shape: 3:2 cover, name, meta row, chips, price row.
+ *
+ * The cover ratio has to be the card's own, or the grid reflows the moment the
+ * data lands — which is the one thing a skeleton exists to prevent.
+ */
+export function VendorCardSkeleton({ className }: { className?: string }): React.ReactElement {
   return (
     <div
       data-slot="skeleton-vendor-card"
-      className="overflow-hidden rounded-2xl bg-stone-0 shadow-sm"
+      className={cn('overflow-hidden rounded-2xl bg-stone-0 shadow-sm', className)}
     >
-      <Skeleton className="aspect-[4/3] w-full rounded-none" />
+      <Skeleton className="aspect-[3/2] w-full rounded-none" />
       <div className="flex flex-col gap-2.5 p-4">
         <Skeleton className="h-5 w-2/3" />
         <Skeleton className="h-3 w-1/2" />

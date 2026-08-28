@@ -99,7 +99,36 @@ describe('SearchShell loading state — frame 17', () => {
     expect(screen.getAllByLabelText('Vendor type').length).toBeGreaterThan(0);
     // Two full rows of four, mirroring the live grid's geometry exactly —
     // `40-states.md` requires a skeleton to be the shape of what replaces it.
-    expect(container.querySelectorAll('[data-slot="skeleton-vendor-card"]')).toHaveLength(8);
+    const skeletons = container.querySelectorAll('[data-slot="skeleton-vendor-card"]');
+    expect(skeletons).toHaveLength(8);
+
+    /*
+     * Two full rows is `columns x 2`, so 1024's three-column grid wants six,
+     * not eight — frame `25 Search — loading · 1024`. The count is fixed and
+     * the surplus is hidden in CSS, because this renders on the server where
+     * there is no viewport to measure.
+     */
+    expect(
+      [...skeletons].filter((node) => node.className.includes('max-[90rem]:hidden')),
+    ).toHaveLength(2);
+  });
+
+  /*
+   * 1024 is a drawn viewport, not a squeezed 1440: `25 Search results — 1024`
+   * gives a 13" laptop the desktop composition with a column removed, rather
+   * than the two-column tablet grid it used to inherit.
+   */
+  it('goes three across from lg, four at the 1440 reference width', async () => {
+    apiRequest.mockImplementation(neverResolves);
+
+    const { container } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
+    const grid = container.querySelector('[data-slot="skeleton-vendor-card"]')?.parentElement;
+
+    expect(grid?.className).toContain('lg:grid-cols-3');
+    expect(grid?.className).toContain('min-[90rem]:grid-cols-4');
+    // The gap follows the frames: 14px at 1024, 16px at 1440.
+    expect(grid?.className).toContain('gap-3.5');
+    expect(grid?.className).toContain('min-[90rem]:gap-4');
   });
 
   /*
