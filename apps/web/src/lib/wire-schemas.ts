@@ -1,6 +1,10 @@
 import {
   availabilitySchema,
+  bookingRequestDetailSchema,
+  bookingWithContextSchema,
   categorySchema,
+  customerProfileSchema,
+  customerReviewSchema,
   portfolioItemSchema,
   publicVendorProfileSchema,
   servicePackageSchema,
@@ -73,3 +77,47 @@ export type WirePublicVendorProfile = z.infer<typeof wirePublicVendorProfileSche
  */
 export const wireAvailabilityListSchema = z.array(availabilitySchema);
 export type WireAvailability = z.infer<typeof availabilitySchema>;
+
+/*
+ * The booking surfaces, as JSON. Dates on the wire are ISO strings; the domain
+ * schemas model them as `Date`, so each one is coerced back at the boundary.
+ */
+export const wireCustomerReviewSchema = customerReviewSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireCustomerReview = z.infer<typeof wireCustomerReviewSchema>;
+export const wireCustomerReviewListSchema = z.array(wireCustomerReviewSchema);
+
+export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
+  expiresAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+export type WireBookingRequest = z.infer<typeof wireBookingRequestSchema>;
+export const wireBookingRequestListSchema = z.array(wireBookingRequestSchema);
+
+export const wireBookingSchema = bookingWithContextSchema.extend({
+  paidAt: z.coerce.date().nullable(),
+  completedAt: z.coerce.date().nullable(),
+  cancelledAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+export type WireBooking = z.infer<typeof wireBookingSchema>;
+export const wireBookingListSchema = z.array(wireBookingSchema);
+
+/**
+ * A customer as a vendor sees them. The discriminated union survives the
+ * coercion, so the `limited` branch still cannot carry contact details.
+ */
+export const wireCustomerProfileSchema = z.discriminatedUnion('visibility', [
+  customerProfileSchema.options[0].extend({
+    memberSince: z.coerce.date(),
+    recentReviews: wireCustomerReviewListSchema,
+  }),
+  customerProfileSchema.options[1].extend({
+    memberSince: z.coerce.date(),
+    recentReviews: wireCustomerReviewListSchema,
+  }),
+]);
+export type WireCustomerProfile = z.infer<typeof wireCustomerProfileSchema>;

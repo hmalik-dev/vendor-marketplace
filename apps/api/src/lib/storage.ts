@@ -3,7 +3,17 @@ import { HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s
 import type { ApiEnv } from '../config/env.js';
 
 /** Object namespaces the API writes into, kept to a closed set. */
-export const STORAGE_PREFIXES = ['vendor-profile', 'vendor-cover', 'portfolio'] as const;
+/**
+ * The namespaces an upload may be written under. Closed, because the prefix
+ * becomes part of the object key and an open one would let a caller write
+ * anywhere in the bucket. `customer-profile` is a customer's own avatar.
+ */
+export const STORAGE_PREFIXES = [
+  'vendor-profile',
+  'vendor-cover',
+  'portfolio',
+  'customer-profile',
+] as const;
 export type StoragePrefix = (typeof STORAGE_PREFIXES)[number];
 
 /**

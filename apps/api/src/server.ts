@@ -21,6 +21,7 @@ import { storagePlugin } from './plugins/storage.js';
 import { availabilityRoutes } from './modules/availability/availability.routes.js';
 import { bookingRequestRoutes } from './modules/booking-requests/booking-requests.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
+import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
@@ -90,6 +91,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(categoryRoutes);
   await app.register(tagRoutes);
   await app.register(userRoutes);
+  await app.register(customerRoutes);
   await app.register(vendorRoutes);
   await app.register(packageRoutes);
   await app.register(portfolioRoutes);

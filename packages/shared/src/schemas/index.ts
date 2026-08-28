@@ -168,9 +168,14 @@ export const updateUserSchema = z
     lastName: trimmedString(MAX_NAME_LENGTH),
     phone: phoneSchema.nullable(),
     avatarUrl: urlSchema.nullable(),
-    bio: z.string().trim().max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
-    city: z.string().trim().max(MAX_NAME_LENGTH).nullable(),
-    state: z.string().trim().max(MAX_NAME_LENGTH).nullable(),
+    /*
+     * `null` clears the bio; a string has to survive trimming. Without the
+     * minimum, "   " stored as an empty string and rendered as a bio that was
+     * there but said nothing.
+     */
+    bio: z.string().trim().min(1).max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
+    city: z.string().trim().min(1).max(MAX_NAME_LENGTH).nullable(),
+    state: z.string().trim().min(1).max(MAX_NAME_LENGTH).nullable(),
     budgetTier: budgetTierSchema.nullable(),
     typicalGuestCountMin: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
     typicalGuestCountMax: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
@@ -192,6 +197,103 @@ export const updateUserSchema = z
     },
   );
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
+// --- Customer profiles -----------------------------------------------------
+
+/**
+ * How much of a customer a vendor may see, and when.
+ *
+ * A vendor deciding whether to accept a request needs enough to judge the
+ * person — how long they have been here, whether they finish what they book,
+ * what other vendors said. They do not need to be able to identify or contact
+ * them, because they have not agreed to work together yet. Accepting is what
+ * makes contact details relevant, so that is where they appear.
+ */
+export const CUSTOMER_PROFILE_VISIBILITIES = ['limited', 'full'] as const;
+export type CustomerProfileVisibility = (typeof CUSTOMER_PROFILE_VISIBILITIES)[number];
+export const customerProfileVisibilitySchema = z.enum(CUSTOMER_PROFILE_VISIBILITIES);
+
+/** A vendor-to-customer review, as the customer profile renders it. */
+export const customerReviewSchema = z.object({
+  id: uuidSchema,
+  rating: z.int().min(REVIEW_RATING_MIN).max(REVIEW_RATING_MAX),
+  title: z.string().max(MAX_TITLE_LENGTH).nullable(),
+  content: z.string(),
+  /** Who wrote it — the business name, never the vendor's personal identity. */
+  vendorBusinessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+  createdAt: z.date(),
+});
+export type CustomerReview = z.infer<typeof customerReviewSchema>;
+
+/**
+ * What every vendor with a booking relationship may see. Deliberately carries
+ * no field that identifies or contacts the person.
+ */
+const limitedCustomerProfileShape = {
+  id: uuidSchema,
+  visibility: customerProfileVisibilitySchema,
+  firstName: trimmedString(MAX_NAME_LENGTH, 0),
+  memberSince: z.date(),
+  bio: z.string().max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
+  city: z.string().max(MAX_NAME_LENGTH).nullable(),
+  state: z.string().max(MAX_NAME_LENGTH).nullable(),
+  budgetTier: budgetTierSchema.nullable(),
+  typicalGuestCountMin: z.int().nullable(),
+  typicalGuestCountMax: z.int().nullable(),
+  /*
+   * There is deliberately no `emailVerified` here. Clerk holds that signal and
+   * the local row does not mirror it, so the badge #16 asks for could only be
+   * rendered as always-true — which is decoration, not a signal. It returns
+   * when the Clerk sync carries the field.
+   */
+  totalBookingsCount: z.int().min(0),
+  completedBookingsCount: z.int().min(0),
+  cancelledBookingsCount: z.int().min(0),
+  avgCustomerRating: z.number().min(0).max(REVIEW_RATING_MAX),
+  customerReviewCount: z.int().min(0),
+  /**
+   * `completed / (completed + cancelled)`, or `null` when that denominator is
+   * zero — a customer who has finished nothing and cancelled nothing has no
+   * rate, and showing 0% would read as a bad one rather than an absent one.
+   */
+  completionRate: z.number().min(0).max(1).nullable(),
+  /** The most recent public vendor-to-customer reviews. */
+  recentReviews: z.array(customerReviewSchema),
+} as const;
+
+export const limitedCustomerProfileSchema = z.object({
+  ...limitedCustomerProfileShape,
+  visibility: z.literal('limited'),
+});
+
+/** Everything above, plus the contact details accepting a booking earns. */
+export const fullCustomerProfileSchema = z.object({
+  ...limitedCustomerProfileShape,
+  visibility: z.literal('full'),
+  lastName: trimmedString(MAX_NAME_LENGTH, 0),
+  email: emailSchema,
+  phone: phoneSchema.nullable(),
+  avatarUrl: urlSchema.nullable(),
+});
+
+export const customerProfileSchema = z.discriminatedUnion('visibility', [
+  limitedCustomerProfileSchema,
+  fullCustomerProfileSchema,
+]);
+export type CustomerProfile = z.infer<typeof customerProfileSchema>;
+export type LimitedCustomerProfile = z.infer<typeof limitedCustomerProfileSchema>;
+export type FullCustomerProfile = z.infer<typeof fullCustomerProfileSchema>;
+
+/**
+ * `completed / (completed + cancelled)`, or `null` when nothing has settled
+ * either way. One implementation so the API and the UI cannot disagree about
+ * what the rate means.
+ */
+export function completionRate(completed: number, cancelled: number): number | null {
+  const settled = completed + cancelled;
+
+  return settled === 0 ? null : completed / settled;
+}
 
 // --- Categories ------------------------------------------------------------
 

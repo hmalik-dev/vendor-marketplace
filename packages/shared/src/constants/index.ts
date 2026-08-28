@@ -192,6 +192,21 @@ export type ReviewType = (typeof REVIEW_TYPES)[number];
 export const BUDGET_TIERS = ['budget', 'mid_range', 'premium', 'luxury'] as const;
 export type BudgetTier = (typeof BUDGET_TIERS)[number];
 
+/**
+ * How a budget tier is written wherever a person reads it. The dollar signs
+ * are the compact form a card has room for; the label and range are what the
+ * selector and the tooltip say, so the glyph is never the only explanation.
+ */
+export const BUDGET_TIER_LABELS: Record<
+  BudgetTier,
+  { glyph: string; label: string; range: string }
+> = {
+  budget: { glyph: '$', label: 'Budget', range: 'Under $500' },
+  mid_range: { glyph: '$$', label: 'Mid-range', range: '$500 – $2,000' },
+  premium: { glyph: '$$$', label: 'Premium', range: '$2,000 – $10,000' },
+  luxury: { glyph: '$$$$', label: 'Luxury', range: '$10,000+' },
+};
+
 /** The three groups a vendor tag belongs to, rendered as sections in the picker. */
 export const TAG_CATEGORIES = ['language', 'cultural', 'dietary'] as const;
 export type TagCategory = (typeof TAG_CATEGORIES)[number];

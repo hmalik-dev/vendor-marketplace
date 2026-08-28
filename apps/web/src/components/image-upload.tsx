@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 export interface ImageUploadProps {
   label: string;
   /** Storage namespace; must be one of the API's known prefixes. */
-  prefix: 'vendor-profile' | 'vendor-cover';
+  prefix: 'vendor-profile' | 'vendor-cover' | 'customer-profile';
   value: string | null;
   onChange: (imageUrl: string) => void;
   /** Sizing utility for the preview frame. Height-based frames stop a wide
