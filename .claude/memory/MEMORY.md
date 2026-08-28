@@ -1,0 +1,17 @@
+- [Local ticket tracker, not Linear](vendor-marketplace-local-ticket-tracker.md) — the queue lives in a markdown file under ~/.claude/plans
+- [Docker Postgres is available](vendor-marketplace-no-docker.md) — container vendor-marketplace-postgres on 5432; PGlite in tests is a choice, not a workaround
+- [Playwright browser verification is mandatory](vendor-marketplace-playwright-verification.md) — every ticket flow gets driven in a real browser before Done
+- [E2E test accounts, one per role](vendor-marketplace-e2e-credentials.md) — customer + vendor credentials in the gitignored .env.e2e.local, never in the repo
+- [Open Playwright before frontend work](open-playwright-before-frontend-work.md) — user watches FE changes live; open the browser session before the first FE edit
+- [Neon dev branch is the app database](vendor-marketplace-neon-dev-branch.md) — Docker Postgres is not; the old pre-#17 Docker data was deleted in the rename
+- [Design is a contract, not code](design-is-a-contract-not-code.md) — design passes edit the plan; tickets write the code
+- [Desktop-first at 1440x900](vendor-marketplace-desktop-first.md) — scroll budgets, rails and the degradation table live in design/design-plan
+- [Two names: vendor-marketplace vs Orla](vendor-marketplace-naming.md) — infra/packages take the repo name; the user-facing name is Orla, read from BRAND_NAME, never a literal
+- [Orla design bundle is the design contract](vendor-marketplace-orla-design.md) — design/design-plan is the spec, the .dc.html frames are the acceptance criterion
+- [Playwright parity gate on every FE ticket](playwright-parity-gate-every-fe-ticket.md) — compare the live page to its new Orla frame at 1440x900 before Done
+- [Design re-imports are merges, not overwrites](orla-design-reimport-is-a-merge.md) — the remote design-plan lags local refinements, and the parity gate is a local-only guardrail to preserve
+- [Ad-hoc work commits as one](adhoc-work-single-commit.md) — don't isolate unrelated changes; the commit hook blocks on a dirty tree
+- [Vercel deployment URL](vendor-marketplace-vercel-deployment.md) — web-gules-eta-41.vercel.app; the parity target after every push
+- [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; the tracker is the durable queue
+- [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; the Neon URL that leaked still needs rotating
+- [Global config repo: claude-workflow](claude-workflow-config-repo.md) — ~/.claude is git-tracked in a private repo; its .gitignore is deny-by-default
