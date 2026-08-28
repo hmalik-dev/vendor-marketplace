@@ -44,7 +44,7 @@ These are query results or per-vendor facts, not platform marketing, and they st
 
 - Search result count — "24 photographers in Austin" (it's the answer to the query)
 - Filter facet counts in the search rail
-- A vendor's own rating, review count and reply time on their profile
+- A vendor's own rating and review count on their profile (reply time is deferred entirely — below)
 - A vendor's own metrics on their private dashboard
 - Real counts in admin
 
@@ -72,12 +72,8 @@ launch. A brand-new vendor's first inquiry would be measured against a number
 invented for them.
 
 Removed from: the landing hero chip (chip deleted entirely), the vendor profile
-meta line, the profile's stat tiles (four → three), and the mobile profile.
-
-**Kept:** the vendor's own private dashboard metric. That's their data about
-themselves and it starts empty honestly. Caveat: the dashboard's "keep it under 4h
-to stay ranked" line implies a ranking signal — confirm it exists or soften the
-copy (`99-open-questions.md` #2).
+meta line, the profile's stat tiles (four → three), the mobile profile, **and the
+vendor dashboard nudge** — see the entry below. Nothing is kept.
 
 **Unblock:** ~10 answered inquiries for a given vendor. It then returns as a
 **per-vendor fact shown only for vendors who have one** — never as a platform
@@ -139,11 +135,36 @@ enough vendors per category that browsing a grid stops being sufficient.
 No recommendations, no "similar vendors", no personalised home feed in MVP — all
 need behavioural data. Category browsing plus filters is the whole discovery surface.
 
-## Deferred: reply-time ranking
+## Deferred: reply time, entirely — the dashboard nudge included
 
-The vendor dashboard shows "keep it under 4h to stay ranked", which implies a
-ranking signal. **The signal must exist before that copy ships** — either build
-the ranking or change the line to a plain nudge. Flagged in `16`.
+**Reply time does not exist anywhere in the MVP.** This is stronger than the
+earlier position, which kept a private dashboard metric.
+
+Frame `08 Vendor dashboard` still renders "Median reply time 2h · keep it under 4h
+to stay ranked". It is **not built**, and that is a recorded frame deviation in
+`16-vendor-dashboard.md` — the parity gate must read it as correct, not as drift.
+
+Both halves are unbuildable on day one:
+
+| Half                              | Why it cannot ship                                                                                                                                        |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Median reply time 2h"            | Needs a history of answered messages. A new vendor has none, so the number would be invented — on their own dashboard, where they would know it was false |
+| "keep it under 4h to stay ranked" | Promises that replying faster improves search position. No ranking signal reads reply time                                                                |
+
+Softening to a plain nudge was considered and **rejected**: the nudge still needs
+the median, and the median is the missing part.
+
+**Unblock — both conditions, not either:**
+
+1. A vendor has ~10 answered inquiries, so a median means something, **and**
+2. a ranking signal that genuinely reads reply time exists.
+
+It then returns as a **per-vendor fact shown only for vendors who have one** —
+never a platform average, never a default for a new profile.
+
+**What stays in MVP:** **response rate** on the vendor's private dashboard. It is
+that vendor's own metric about themselves, it starts at an honest zero, and it
+makes no ranking claim.
 
 ## Open design questions
 

@@ -34,10 +34,18 @@ Options: auto-suggest similar vendors free on the same date · expire quietly ·
 nudge the vendor at 24h and tell the customer it happened. This is the most
 common failure path in a two-sided marketplace and it has no surface today.
 
-## 2. Does reply-time ranking exist? — **blocks a line of copy**
+## RESOLVED — Does reply-time ranking exist?
 
-Screen 16 says "keep it under 4h to stay ranked". Either the ranking signal is
-real, or that sentence changes. Don't ship an implied mechanic that isn't there.
+**No, and reply time is omitted from the MVP entirely.** Frame `08` renders
+"Median reply time 2h · keep it under 4h to stay ranked"; that line is **not
+built**, and the omission is recorded as a deliberate frame deviation in
+`16-vendor-dashboard.md`.
+
+The line failed twice over: the median needs message history that does not exist
+on day one, and "to stay ranked" promises a ranking signal that was never built.
+Softening the copy was considered and rejected — a plain nudge still needs the
+median. Reply time is therefore absent from every MVP surface, public and
+private. Unblock condition in `98-post-mvp.md`.
 
 ## 3. Review asymmetry
 

@@ -17,7 +17,38 @@ Dashboard · Requests (count as a `clay-400` pill when >0) · Bookings · Messag
 ## Content column
 
 **Title states the number:** "Maya, you have 4 new requests" — not "Dashboard".
-Beside it, the reply-time nudge: "Median reply time 2h · keep it under 4h to stay ranked."
+**Nothing sits beside it.** See the omission below.
+
+### Reply time is omitted from MVP — a recorded frame deviation
+
+Frame `08 Vendor dashboard` renders **"Median reply time 2h · keep it under 4h to
+stay ranked"** beside the title. **Do not build it.** This is the one deliberate
+deviation from that frame, and it is recorded here so the parity gate reads it as
+correct rather than as drift.
+
+Two independent reasons, either of which is sufficient:
+
+1. **The number does not exist.** Median reply time needs a history of answered
+   messages. On day one a vendor has none, so the figure would be invented — and
+   it would be invented on the vendor's own dashboard, where they can tell.
+2. **The mechanic does not exist.** "to stay ranked" promises that replying faster
+   improves search position. There is no ranking signal that reads reply time.
+   Shipping the sentence would be a claim the product cannot keep.
+
+**Reply time is now absent from every surface in the MVP** — public and private.
+The vendor profile dropped it earlier (`12-vendor-profile.md`); this was the last
+place it survived. There is no softened variant: a plain nudge would still need
+the median, and the median is the part that does not exist.
+
+**What replaces it: nothing.** The title carries the request count, which is the
+number that actually drives the vendor's next action. An empty space beside a
+title is not a gap to fill.
+
+`98-post-mvp.md` holds the unblock condition.
+
+**Response rate stays.** It is in the stats row, it is the vendor's own private
+metric about themselves, and it starts at zero honestly rather than at an
+invented value. It makes no claim about ranking.
 
 **Stats row** — four cards across, never stacked: Bookings this month · Response
 rate · Rating · Earnings this month. Serif 30px number over a 10.5px uppercase
@@ -52,10 +83,12 @@ event names.
 - [ ] Every request row is actionable without navigation
 - [ ] Stats are one row at every width ≥1024
 - [ ] Checklist state matches the real publish gate exactly
+- [ ] **No reply-time figure and no ranking claim anywhere on this screen** — `grep` for "reply", "ranked" and "4h" in the dashboard surface returns nothing
+- [ ] Response rate renders from real data and shows an honest zero for a new vendor
 
 ## Post-MVP
 
-- **Reply-time ranking must exist before the "keep it under 4h to stay ranked" line ships.** Either build the signal or soften the copy to a plain nudge — see `99-open-questions.md` #2
+- **Reply time, in any form** — the median figure and the ranking nudge both return together, and only once a vendor has ~10 answered inquiries _and_ a ranking signal that genuinely reads reply time exists. Until both hold, neither ships. See `98-post-mvp.md`
 - Earnings trend chart and payout history
 - Benchmark comparisons ("vendors like you reply in 3h") — needs a cohort to compare against
 - Calendar sync (Google / iCal)

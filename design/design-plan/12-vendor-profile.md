@@ -108,8 +108,9 @@ vendor's _first_ inquiry would be measured against a number invented for them.
 
 Removed from every customer-facing surface. The vendor's **private dashboard**
 keeps its own reply metric — that's their data about themselves, and it starts
-empty honestly. Note the dashboard's "keep it under 4h to stay ranked" line
-depends on a ranking signal that may not exist; see `99-open-questions.md` #2.
+empty honestly. **The dashboard's reply-time nudge is omitted from the MVP too** —
+reply time now exists on no surface at all. See `16-vendor-dashboard.md` and
+`98-post-mvp.md`.
 
 **Unblock:** a vendor has enough answered inquiries for a median to mean
 something — roughly ten. Then it returns to the meta line and the rail as a
