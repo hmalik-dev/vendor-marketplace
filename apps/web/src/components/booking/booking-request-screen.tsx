@@ -11,7 +11,7 @@ import {
   type EventType,
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { RequestStepper } from '@/components/booking/request-stepper';
 import {
   RequestSummaryRail,
@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiClientError } from '@/lib/api-client';
 import { useApi } from '@/lib/use-api';
+import { useSavedDraft } from '@/lib/use-saved-draft';
 import {
   describeBlockerCount,
   useSubmitValidation,
@@ -65,6 +66,29 @@ const FIELD_LABELS = {
   customDetails: 'Describe what you need',
 } as const;
 
+/** Namespaced so a draft cannot collide with anything else in storage. */
+const DRAFT_KEY_PREFIX = 'orla:booking-request:';
+
+export interface SavedRequestDraft {
+  form: FormState;
+  customDetails: string;
+}
+
+/**
+ * A draft is only worth keeping once the customer has actually said something.
+ *
+ * The date is deliberately excluded: it arrives pre-filled from the vendor's
+ * calendar, so a form holding only that is a form nobody has typed into, and
+ * restoring it would announce a draft the customer never wrote.
+ */
+export function isEmptyDraft(draft: SavedRequestDraft): boolean {
+  const { eventDate: _ignored, ...typed } = draft.form;
+
+  return (
+    draft.customDetails.trim() === '' && Object.values(typed).every((value) => value.trim() === '')
+  );
+}
+
 /**
  * Frame `04`, with frame `22`'s validation vocabulary applied to it.
  *
@@ -99,6 +123,39 @@ export function BookingRequestScreen({
   const [submitting, setSubmitting] = useState(false);
   const [sentAt, setSentAt] = useState<string | null>(null);
   const [sendFailure, setSendFailure] = useState<string | null>(null);
+
+  /*
+   * Kept per vendor: a customer comparing two of them has a half-written
+   * request to each, and one silently overwriting the other would be worse
+   * than not saving at all.
+   */
+  const draft = useSavedDraft<SavedRequestDraft>(`${DRAFT_KEY_PREFIX}${vendorId}`, isEmptyDraft);
+
+  useEffect(() => {
+    if (draft.restored === null) {
+      return;
+    }
+
+    setForm(draft.restored.form);
+    setCustomDetails(draft.restored.customDetails);
+  }, [draft.restored]);
+
+  /*
+   * Written on every change rather than on a timer: the events this protects
+   * against — a reload, a crash, an expired session — give no warning.
+   *
+   * It stops once the request is sent. The form state still holds everything
+   * that was typed at that point, so without this guard the next render would
+   * write the draft straight back after `clear()` and the customer would be
+   * offered their own sent request as an unfinished one.
+   */
+  useEffect(() => {
+    if (sentAt !== null) {
+      return;
+    }
+
+    draft.save({ form, customDetails });
+  }, [draft, form, customDetails, sentAt]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]): void =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -200,6 +257,9 @@ export function BookingRequestScreen({
         },
       });
 
+      // Sent, so the draft has served its purpose: the next request to this
+      // vendor should start empty rather than repeating one already made.
+      draft.clear();
       setSentAt(created.id);
     } catch (error) {
       setSendFailure(
@@ -239,6 +299,23 @@ export function BookingRequestScreen({
             ? 'The more they know now, the fewer messages it takes to lock the date.'
             : 'Nothing is sent yet. Edit anything that is not right.'}
         </p>
+
+        {/*
+          A form that fills itself is unsettling, so the restore is stated
+          rather than left to be noticed. Steel, because it is information
+          that resolves itself — nothing is wrong and nothing is owed.
+        */}
+        {draft.wasRestored && step === 1 ? (
+          <div className="mb-5 flex max-w-[640px] items-start gap-3 rounded-xl border border-steel-200 bg-steel-50 px-4 py-3.25">
+            <span
+              aria-hidden="true"
+              className="mt-0.25 size-4.5 shrink-0 rounded-full bg-steel-600"
+            />
+            <p className="text-base text-stone-900">
+              We kept what you had written. Change anything before you send it.
+            </p>
+          </div>
+        ) : null}
 
         {validation.attempted && validation.blockers.length > 0 ? (
           <div className="mb-5 flex max-w-[640px] items-start gap-3 rounded-xl border border-error-200 bg-error-50 px-4 py-3.25">

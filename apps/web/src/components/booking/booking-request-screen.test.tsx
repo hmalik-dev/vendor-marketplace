@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AvailabilityStatus } from '@vendor-marketplace/shared';
@@ -31,6 +31,10 @@ afterAll(() => {
 afterEach(() => {
   cleanup();
   requestMock.mockReset();
+  // The screen keeps a draft per vendor now, and jsdom shares one storage
+  // across the file — without this, each test starts inside the last one's
+  // half-written request.
+  window.localStorage.clear();
 });
 
 function renderScreen(
@@ -232,5 +236,77 @@ describe('sending', () => {
 
     expect(await screen.findByText(/did not reach us/)).toBeDefined();
     expect(screen.getByRole('button', { name: 'Send request' })).toBeDefined();
+  });
+});
+
+/**
+ * The form is long — occasion, date, time, guest count, venue, notes — and
+ * until #58 a reload lost all of it. It is also what frame `26`'s
+ * session-expired dialog promises is safe.
+ */
+describe('the request survives leaving the page', () => {
+  const OTHER_VENDOR = '22222222-2222-4222-8222-222222222222';
+
+  async function typeVenue(value: string): Promise<void> {
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Venue or location'), value);
+  }
+
+  it('brings back what was typed, and says that it did', async () => {
+    renderScreen();
+    await typeVenue('The Marfa barn');
+
+    cleanup();
+    renderScreen();
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(
+        'The Marfa barn',
+      ),
+    );
+    expect(screen.getByText(/We kept what you had written/)).toBeDefined();
+  });
+
+  /* A customer comparing two vendors has a half-written request to each. */
+  it('keeps each vendor’s request to itself', async () => {
+    renderScreen();
+    await typeVenue('For Kessler');
+
+    cleanup();
+    renderScreen({ vendorId: OTHER_VENDOR });
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(''),
+    );
+    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+  });
+
+  /* A form that fills itself is unsettling; an untouched one has nothing to say. */
+  it('says nothing when there was no draft', () => {
+    renderScreen();
+
+    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+  });
+
+  it('starts the next request empty once one has been sent', async () => {
+    requestMock.mockResolvedValue({ id: '33333333-3333-4333-8333-333333333333' });
+    renderScreen();
+
+    await userEvent.selectOptions(screen.getByLabelText('Event type'), 'wedding');
+    await typeVenue('The Marfa barn');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Your request is with Kessler & Co.' }),
+    ).toBeDefined();
+
+    cleanup();
+    renderScreen();
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(''),
+    );
+    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
   });
 });
