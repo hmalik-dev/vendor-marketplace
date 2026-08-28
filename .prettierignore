@@ -15,3 +15,13 @@ design/support.js
 # re-import diffs cleanly against what was sent. Same reasoning as the exports
 # above: these are imports, not hand-maintained prose.
 design/uploads
+
+# Agent-authored state, not source. Claude writes these during a session —
+# memory files as it learns something, the Status Board as tickets move — and
+# ~/.claude/projects/<slug>/memory symlinks into the first one, so a session
+# writes here directly. Formatting them would put every session one `pnpm
+# format` behind a green `format:check`, for files no human reads as code.
+# The rules, agents, hooks and workflows beside them ARE formatted: those are
+# hand-maintained and reviewed like any other source.
+.claude/memory
+.claude/plans
