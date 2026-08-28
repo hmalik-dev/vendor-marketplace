@@ -577,6 +577,16 @@ export const MAX_VENDOR_BIO_LENGTH = 1_200;
  */
 export const MAX_TAGLINE_LENGTH = 80;
 /**
+ * How far either side of a wanted date the "free on a nearby date" band looks.
+ *
+ * A parameter with a default rather than a number buried in a query: two weeks
+ * is close enough that moving is a real option, and far enough to find someone.
+ */
+export const NEARBY_DATE_WINDOW_DAYS = 14;
+export const MAX_NEARBY_DATE_WINDOW_DAYS = 90;
+/** Cards the band renders — frame `18` draws three. */
+export const NEARBY_ALTERNATIVES_LIMIT = 3;
+/**
  * Self-declared years in business. Zero is a real answer — a vendor starting
  * this year — and renders as "Less than a year" rather than "0 yrs".
  */

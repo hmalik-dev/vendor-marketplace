@@ -21,6 +21,15 @@ export interface VendorCardProps {
    * See design/design-plan/03-components.md.
    */
   density?: 'compact' | 'featured';
+  /**
+   * A day this vendor **is** free, shown as the sage chip.
+   *
+   * The search grid derives this from the searched date, because a vendor that
+   * survived a dated query is free on it. The nearby-dates band passes the
+   * vendor's nearest free day instead, which is the whole point of that band:
+   * the card is saying "not then, but this".
+   */
+  freeOnDate?: string;
   className?: string;
 }
 
@@ -45,11 +54,15 @@ export function VendorCard({
   vendor,
   searchedDate,
   density = 'featured',
+  freeOnDate,
   className,
 }: VendorCardProps): React.ReactElement {
   const location = [vendor.city, vendor.state].filter(Boolean).join(', ');
   const isReviewed = vendor.reviewCount > 0;
   const isCompact = density === 'compact';
+  // An explicit free day wins: the caller knows something the card cannot
+  // work out, which is that this vendor is being offered *instead* of a date.
+  const freeDate = freeOnDate ?? (vendor.availableOnDate && searchedDate ? searchedDate : null);
 
   return (
     <article
@@ -158,7 +171,7 @@ export function VendorCard({
                     {category.name}
                   </span>
                 ))}
-            {vendor.availableOnDate && searchedDate ? (
+            {freeDate ? (
               <span
                 className={cn(
                   'font-semibold bg-sage-50 text-sage-600',
@@ -167,7 +180,8 @@ export function VendorCard({
                     : 'rounded-md px-2.5 py-1 text-xs',
                 )}
               >
-                Free {DATE_CHIP_FORMATTERS[density].format(new Date(`${searchedDate}T00:00:00Z`))}
+                {/* Parsed as UTC: a `DATE` must never shift by a local offset. */}
+                Free {DATE_CHIP_FORMATTERS[density].format(new Date(`${freeDate}T00:00:00Z`))}
               </span>
             ) : null}
           </div>

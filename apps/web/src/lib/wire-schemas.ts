@@ -11,6 +11,8 @@ import {
   sendMessageResultSchema,
   vendorDashboardSchema,
   portfolioItemSchema,
+  nearbyAvailabilityResultSchema,
+  nearbyVendorSchema,
   publicVendorProfileSchema,
   servicePackageSchema,
   tagSchema,
@@ -200,4 +202,14 @@ export type WireVendorCard = z.infer<typeof wireVendorCardSchema>;
 
 export const wireVendorSearchResultSchema = vendorSearchResultSchema.extend({
   items: z.array(wireVendorCardSchema),
+});
+
+export const wireNearbyVendorSchema = nearbyVendorSchema.extend({
+  coverImageUrl: imageUrl(),
+  profileImageUrl: imageUrl(),
+});
+export type WireNearbyVendor = z.infer<typeof wireNearbyVendorSchema>;
+
+export const wireNearbyAvailabilityResultSchema = nearbyAvailabilityResultSchema.extend({
+  items: z.array(wireNearbyVendorSchema),
 });

@@ -1,5 +1,7 @@
 import {
   createVendorProfileSchema,
+  nearbyAvailabilityQuerySchema,
+  nearbyAvailabilityResultSchema,
   updateVendorProfileSchema,
   vendorProfileDetailSchema,
   vendorSearchQuerySchema,
@@ -20,6 +22,7 @@ import {
   updateVendorProfile,
 } from './vendors.service.js';
 import { getPublicVendorAvailability, getPublicVendorProfile } from './vendor-profile.service.js';
+import { findNearbyAvailability } from './nearby-availability.service.js';
 
 /** Where a vendor's own profile lives, used as the `Location` on creation. */
 const OWN_PROFILE_PATH = '/vendor/profile';
@@ -52,6 +55,25 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => searchPublishedVendors(app.db, request.query),
+  );
+
+  /**
+   * Who is free **near** a date that came back empty — frame `18`'s closing
+   * band, and the same question #7 asks when a booking request lands on a date
+   * the vendor has already taken. One endpoint, deliberately: the answer is
+   * identical and a second one would drift.
+   *
+   * Unauthenticated, like the search it continues.
+   */
+  app.get(
+    '/vendors/availability/nearby',
+    {
+      schema: {
+        querystring: nearbyAvailabilityQuerySchema,
+        response: { 200: nearbyAvailabilityResultSchema },
+      },
+    },
+    async (request) => findNearbyAvailability(app.db, request.query),
   );
 
   /**

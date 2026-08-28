@@ -14,10 +14,13 @@ import {
   MAX_BUSINESS_NAME_LENGTH,
   MAX_CAPTION_LENGTH,
   MAX_CUSTOMER_BIO_LENGTH,
+  MAX_NEARBY_DATE_WINDOW_DAYS,
   MAX_TAGLINE_LENGTH,
   MAX_VENDOR_BIO_LENGTH,
   MAX_YEARS_IN_BUSINESS,
   MIN_YEARS_IN_BUSINESS,
+  NEARBY_ALTERNATIVES_LIMIT,
+  NEARBY_DATE_WINDOW_DAYS,
   MAX_EMAIL_LENGTH,
   MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
@@ -1020,6 +1023,51 @@ export const vendorCardSchema = z.object({
   availableOnDate: z.boolean().optional(),
 });
 export type VendorCard = z.infer<typeof vendorCardSchema>;
+
+/**
+ * "Free on a nearby date instead" — frame `18`'s closing band, and the same
+ * answer #7 needs when a booking request lands on a date the vendor has taken.
+ *
+ * One shape serves both, deliberately. A date-window search returning every
+ * free date is more than either consumer renders: the card shows one date, and
+ * the request screen suggests two.
+ */
+export const nearbyAvailabilityQuerySchema = z.object({
+  category: slugSchema.optional(),
+  city: z.string().trim().max(MAX_NAME_LENGTH).optional(),
+  state: z.string().trim().max(MAX_NAME_LENGTH).optional(),
+  /** The date that came back empty. Required — this question needs an anchor. */
+  date: calendarDateSchema,
+  /** Days either side to consider. Never a magic number in the DAO. */
+  windowDays: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_NEARBY_DATE_WINDOW_DAYS)
+    .default(NEARBY_DATE_WINDOW_DAYS),
+  limit: z.coerce.number().int().min(1).max(20).default(NEARBY_ALTERNATIVES_LIMIT),
+});
+export type NearbyAvailabilityQuery = z.infer<typeof nearbyAvailabilityQuerySchema>;
+
+export const nearbyVendorSchema = vendorCardSchema.extend({
+  /** The vendor's nearest free day to the wanted one, never the wanted one. */
+  nearestAvailableDate: calendarDateSchema,
+});
+export type NearbyVendor = z.infer<typeof nearbyVendorSchema>;
+
+export const nearbyAvailabilityResultSchema = z.object({
+  /** Ordered by how close the free date is, then by the search's own order. */
+  items: z.array(nearbyVendorSchema),
+  /**
+   * Every vendor with a free date in the window, not just the ones returned —
+   * what "See all N in the region" counts. Read at request time so the link
+   * never shows a number the page did not measure.
+   */
+  total: z.int().min(0),
+  /** Echoed back so a caller can say what window the answer covers. */
+  windowDays: z.int().min(1),
+});
+export type NearbyAvailabilityResult = z.infer<typeof nearbyAvailabilityResultSchema>;
 
 /**
  * The public vendor profile — frame `03`, the page where the decision happens.

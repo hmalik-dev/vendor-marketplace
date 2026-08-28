@@ -20,6 +20,7 @@ import { VendorCard } from '@/components/vendors/vendor-card';
 import { NameSearch } from './name-search';
 import { RefineBar } from './refine-bar';
 import { SearchBar } from './search-bar';
+import { NearbyDatesBand } from './nearby-dates-band';
 import { noResultsDiagnosis, noResultsHeadline, relaxations } from './relaxations';
 import { activeRefineCount, toSearchQuery, useSearchState, type SearchState } from './search-state';
 
@@ -264,45 +265,53 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
             customer actually set, the sentence names the narrowest one, and
             each button loosens exactly one thing so they can see what changed.
           */
-          <EmptyState
-            icon={<SearchX />}
-            headline={noResultsHeadline(state)}
-            description={
-              // With nothing filtered there is no culprit to name, so it says
-              // where to go next instead of inventing a diagnosis.
-              diagnosis ?? 'Try a different vendor type or city.'
-            }
-            action={
-              <div className="flex flex-wrap items-center justify-center gap-2.5">
-                {relaxations(state).map((relaxation, index) => (
-                  <button
-                    key={relaxation.label}
-                    type="button"
-                    onClick={() => setState(relaxation.patch)}
-                    className={cn(
-                      'min-h-11 rounded-full px-4.5 text-sm font-semibold lg:min-h-9',
-                      // The first is the one most likely to bring results back,
-                      // so it is the primary action rather than one of a row.
-                      index === 0
-                        ? 'bg-clay-500 text-stone-0 hover:bg-clay-600'
-                        : 'border border-stone-300 bg-stone-0 text-stone-800 hover:bg-stone-100',
-                    )}
-                  >
-                    {relaxation.label}
-                  </button>
-                ))}
-                {refineCount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={clearRefinements}
-                    className="text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
-                  >
-                    Clear all
-                  </button>
-                ) : null}
-              </div>
-            }
-          />
+          <>
+            <EmptyState
+              icon={<SearchX />}
+              headline={noResultsHeadline(state)}
+              description={
+                // With nothing filtered there is no culprit to name, so it says
+                // where to go next instead of inventing a diagnosis.
+                diagnosis ?? 'Try a different vendor type or city.'
+              }
+              action={
+                <div className="flex flex-wrap items-center justify-center gap-2.5">
+                  {relaxations(state).map((relaxation, index) => (
+                    <button
+                      key={relaxation.label}
+                      type="button"
+                      onClick={() => setState(relaxation.patch)}
+                      className={cn(
+                        'min-h-11 rounded-full px-4.5 text-sm font-semibold lg:min-h-9',
+                        // The first is the one most likely to bring results back,
+                        // so it is the primary action rather than one of a row.
+                        index === 0
+                          ? 'bg-clay-500 text-stone-0 hover:bg-clay-600'
+                          : 'border border-stone-300 bg-stone-0 text-stone-800 hover:bg-stone-100',
+                      )}
+                    >
+                      {relaxation.label}
+                    </button>
+                  ))}
+                  {refineCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={clearRefinements}
+                      className="text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
+                    >
+                      Clear all
+                    </button>
+                  ) : null}
+                </div>
+              }
+            />
+            {/*
+              Only with a date to be near. Without one the customer has not
+              asked a date question, and the band would be answering something
+              nobody said.
+            */}
+            <NearbyDatesBand date={state.date} category={state.category} city={state.city} />
+          </>
         ) : (
           <div className={GRID_COLUMNS}>
             {result?.items.map((vendor) => (
