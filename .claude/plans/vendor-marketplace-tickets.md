@@ -184,6 +184,7 @@ verification (`e2e`) is implicit on every ticket.
 | 14 | Demo Dataset + Playwright E2E | P3 | M6 | P1 High | Backlog | — | #12 | all | **Content gap partly closed by ef8b341:** `pnpm db:seed:marketing` now seeds 16 photography vendors with covers, packages, and 918 reviews behind 918 completed bookings. **Still open here:** the other 10 categories (5 of 6 landing cards still lead to an empty search), portfolio images, messages, notifications, the non-completed booking statuses, and the 8 E2E suites. Asset tracking for the covers is **#32** |
 | 15 | Admin Portal + Sentry Integration | P3 | M6 | P1 High | Backlog | — | #12, #14 | `core` `auth` `sentry` | Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` |
 | 64 | Flaky test in `packages/preflight` under parallel Turbo runs | P1 | M1.5 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-28** while gating the #61 env-shape commit. `pnpm test --force` failed `@vendor-marketplace/preflight#test` at **1 failed / 131 passed (132)**; an immediate rerun and `pnpm --filter @vendor-marketplace/preflight test` in isolation both passed **132/132**. The failing test's name was **not captured** — the run was piped through `tail -20`, so only the summary survived. Reproduce with the full log: `pnpm test --force > /tmp/t.log 2>&1` in a loop. Suspect contention, not logic: the suite took **36s** inside the Turbo fan-out against **2.15s** isolated, a 17x stretch that points at a real-clock or filesystem assumption rather than a stable failure. Use `/debug-flaky-test`. Gating on a suite that fails ~1 run in 2 is the actual cost here |
+| **65** | **Vendor profile — the identity row overlaps the cover by 34px, not 16px (reported by the user)** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Reported by the user 2026-08-28**, on `/vendors/june-harlow`: the avatar circle is buried in the cover photo and the business name creeps into the image. **Measured at 1440x900 against frame `03`** — live overlaps the banner by **34px** where the frame overlaps by **16px**, and the name's box starts **11px inside** the image where the frame leaves it **7px clear**: an **18px** error. **Centering is not the defect** — name-mid minus avatar-mid is **+0.15px in both**; the whole row simply rides 18px too high, which is what makes the circle read as misaligned. **Cause:** frame `03` puts `padding-top: 18px` on the wrapper between the banner and the identity row and *then* pulls the row up `-34px` (net **-16**); [profile-header.tsx:80](apps/web/src/components/vendors/profile/profile-header.tsx) copied the `-34px` without the 18px. **Fix verified by injection:** `pt-[18px]` on that container reproduces the frame exactly — `overlap 16 · name 7px clear · centering 0.15`. **Why #53 and #56 missed it → see the ticket detail** |
 
 Rows are ordered by build sequence, not by ticket number. **56 rows — 25 Done, 31 open.** Every open ticket is MVP; the Post-MVP Backlog at the foot of this file holds what is deliberately *not* being built.
 
@@ -261,6 +262,7 @@ UNBLOCKED RIGHT NOW — no human, no open dependency:
   #61 Preflight accepts a live key against a local target   (In Progress)
   #63 The ticket capability map stops at #37
   #64 Flaky test in packages/preflight under parallel Turbo
+  #65 Vendor profile — identity row overlaps the cover by 34px, not 16px
 
 WAITING ON A HUMAN (6):
   #9  Stripe Connect onboarding      Stripe dashboard
@@ -318,7 +320,8 @@ Ready now — nothing outside the repo is needed:
 | 1 | **#9** | P0 Critical | Newly unblocked, and back on the critical path. Connect onboarding opens #10 → #12 → #14 → #15 |
 | 2 | **#61** | P1 High | Already `In Progress` — preflight accepts a live key against a local target |
 | 3 | **#63** | P1 High | The capability map stops at #37, so `--ticket` under-checks every newer ticket |
-| 4 | **#64** | P2 Medium | Flaky test in `packages/preflight` under parallel Turbo |
+| 4 | **#65** | P1 High | Vendor-profile identity row overlaps the cover by 34px where frame `03` overlaps by 16px — user-reported, one-line fix, measured |
+| 5 | **#64** | P2 Medium | Flaky test in `packages/preflight` under parallel Turbo |
 
 Everything else open is waiting on one of these:
 
@@ -4777,6 +4780,62 @@ prerequisite** and belongs with **#19**, not ahead of it.
 - [ ] Statement descriptor is set deliberately and recorded in the decisions file
 - [ ] `stripe config --list` no longer reports `display_name = 'VendYou'` (re-login; the CLI caches it)
 - [ ] Legal entity name checked, and either correct or a support ticket is open
+
+---
+
+### #65: Vendor profile — the identity row overlaps the cover by 34px, not 16px (reported by the user)
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Reported by the user 2026-08-28** on `/vendors/june-harlow`: the avatar circle does not
+sit right against the business name, and the name creeps into the cover image.
+
+**Measured at 1440x900, live against frame `03` rendered from `Orla - Screens.dc.html`:**
+
+| | Live | Frame `03` |
+| --- | --- | --- |
+| Avatar overlaps the banner | **34px** | **16px** |
+| Name box top vs banner bottom | **11px inside** the image | **7px clear** below it |
+| Name mid − avatar mid | +0.15px | +0.15px |
+
+**The centering is already correct** and is not what to change — the name's first line is
+centred on the avatar to within 0.15px in both, exactly as **#56** measured. The whole row
+rides **18px too high**, which buries the circle in the photograph and drags the name's
+line box up across the banner's bottom edge. That is what reads as bad alignment.
+
+**Cause.** Frame `03` separates the banner from the identity row with a wrapper carrying
+`padding-top: 18px`, and only then pulls the row up by `-34px` — a net overlap of **16px**.
+The app copied the `-34px` and not the 18px:
+
+```
+FRAME    banner(196) -> wrapper[padding-top:18px] -> row[margin-top:-34px]   = -16
+LIVE     cover(196)  -> container[px-4 ... no pt]  -> row[-mt-[34px]]        = -34
+```
+
+The container is `apps/web/src/components/vendors/profile/profile-header.tsx:80`
+(`mx-auto w-full max-w-7xl overflow-visible px-4 sm:px-6 lg:px-8`). **Fix verified by
+injection before filing:** setting `padding-top: 18px` on it reproduces the frame exactly —
+`overlap 16 · name 7px clear · centering 0.15`.
+
+**Why the two prior tickets missed it, which is the part that must not repeat.**
+**#53** asserted "overlap exactly **34px**" — but 34 is the *margin-top value*, not the
+avatar's rendered relationship to the banner's bottom edge, and in the frame those differ
+by precisely the 18px it never accounted for. **#56** then measured the centering
+(correctly) and closed as no-change without measuring the banner relationship at all. Both
+verified a number the frame's own layout does not produce. **The regression test must
+assert the rendered overlap — cover bottom minus avatar top — not the margin value**, or
+the same blind spot returns with the next revision.
+
+**Acceptance:**
+
+- [ ] `pt-[18px]` (or equivalent) on the identity-row container, so the avatar overlaps the cover by **16px**, not 34px
+- [ ] The business name's box sits **7px clear** below the cover's bottom edge — no part of it over the image
+- [ ] Name-mid to avatar-mid stays within **0.5px**, so #56's centering is not traded away for the fix
+- [ ] A test asserts the **rendered overlap** (`cover.bottom - avatar.top === 16`), never the margin value
+- [ ] Re-measured at 1440 / 1280 / 1024 / 768 / 390 — the overlap holds and the avatar is never clipped, per #53's structural test
+- [ ] Checked on a vendor **with** a cover photo and one **without** (the placeholder banner), since the defect is only visible against real imagery
+- [ ] Parity gate re-run on frame `03` at 1440x900
 
 ---
 
