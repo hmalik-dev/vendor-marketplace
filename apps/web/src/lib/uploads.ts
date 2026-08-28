@@ -129,10 +129,15 @@ export function rejectedFailure(message: string): UploadFailure {
 /**
  * The checks worth doing before a byte leaves the browser. The server
  * re-validates all of them, so this is a courtesy that saves a round trip —
- * never the boundary. Dimensions are not checked here: reading them means
- * decoding the image, so that one stays on the server.
+ * never the boundary. Width is not checked here — reading it means decoding
+ * the image, which is `screenDimensions` below, run once per file rather than
+ * for the whole selection before the first tile appears.
  */
-export function screenFile(file: { name: string; type: string; size: number }): UploadFailure | null {
+export function screenFile(file: {
+  name: string;
+  type: string;
+  size: number;
+}): UploadFailure | null {
   if (!(ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
     return unsupportedFormatFailure(file.name);
   }
@@ -140,6 +145,43 @@ export function screenFile(file: { name: string; type: string; size: number }): 
     return tooLargeFailure(file.size);
   }
   return null;
+}
+
+/**
+ * Reads an image's width in the browser so a too-narrow file gets its own
+ * message — and its own colour — before a byte goes out.
+ *
+ * `40-states.md` gives this failure gold rather than red: the file is valid
+ * and would simply render soft, which is a decision for the vendor rather than
+ * an error to clear. Routing it through the server instead would come back as
+ * a generic red refusal, so the tone would be wrong precisely where the rule
+ * says it does not bend.
+ *
+ * `createImageBitmap` is absent in some environments; there it returns null and
+ * the server's own width check remains the boundary, as it is for every rule
+ * here.
+ */
+export async function readImageWidth(file: Blob): Promise<number | null> {
+  if (typeof createImageBitmap !== 'function') {
+    return null;
+  }
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const { width } = bitmap;
+    bitmap.close();
+    return width;
+  } catch {
+    // Undecodable bytes are the server's refusal to make, with better wording.
+    return null;
+  }
+}
+
+/** The width floor, checked once the file has been screened on type and size. */
+export async function screenDimensions(file: Blob): Promise<UploadFailure | null> {
+  const width = await readImageWidth(file);
+
+  return width !== null && width < MIN_UPLOAD_IMAGE_WIDTH ? tooNarrowFailure(width) : null;
 }
 
 export interface BatchSplit<T> {

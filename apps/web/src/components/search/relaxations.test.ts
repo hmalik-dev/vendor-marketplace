@@ -78,13 +78,13 @@ describe('noResultsHeadline', () => {
 describe('noResultsDiagnosis', () => {
   it('names the narrowest filter as the likely cause', () => {
     expect(noResultsDiagnosis(state({ date: '2026-06-14', minRating: 4 }))).toBe(
-      'the date is the narrowest filter here. Loosen one and results come back.',
+      'The date is the narrowest filter here. Loosen one and results come back.',
     );
   });
 
   it('names the price range when there is no date', () => {
     expect(noResultsDiagnosis(state({ maxPriceCents: 120_000 }))).toBe(
-      'the price range is the narrowest filter here. Loosen one and results come back.',
+      'The price range is the narrowest filter here. Loosen one and results come back.',
     );
   });
 

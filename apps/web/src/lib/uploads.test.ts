@@ -1,5 +1,5 @@
 import { MAX_UPLOAD_BATCH_FILES, MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   aggregateLine,
   connectionFailure,
@@ -7,6 +7,7 @@ import {
   formatMegabytes,
   heldBackSentence,
   retryableTasks,
+  screenDimensions,
   screenFile,
   splitBatch,
   summarise,
@@ -98,6 +99,37 @@ describe('failure tones', () => {
     expect(connectionFailure().fix).toBe('The file is fine — send it again.');
     expect(tooLargeFailure(1).retryable).toBe(false);
     expect(tooNarrowFailure(900).retryable).toBe(false);
+  });
+});
+
+describe('screenDimensions', () => {
+  /*
+   * jsdom has no `createImageBitmap`, which is exactly the absent-decoder path
+   * the helper is written to survive: it declines to judge and leaves the
+   * width floor to the server, rather than passing or failing on a guess.
+   */
+  it('declines to judge where the browser cannot decode an image', async () => {
+    expect(typeof createImageBitmap).not.toBe('function');
+    await expect(screenDimensions(new Blob([new Uint8Array(4)]))).resolves.toBeNull();
+  });
+
+  it('flags a narrow image in gold when a decoder is available', async () => {
+    vi.stubGlobal('createImageBitmap', async () => ({ width: 900, close: () => undefined }));
+
+    await expect(screenDimensions(new Blob([new Uint8Array(4)]))).resolves.toMatchObject({
+      kind: 'too-narrow',
+      tone: 'gold',
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it('passes an image at or above the floor', async () => {
+    vi.stubGlobal('createImageBitmap', async () => ({ width: 1200, close: () => undefined }));
+
+    await expect(screenDimensions(new Blob([new Uint8Array(4)]))).resolves.toBeNull();
+
+    vi.unstubAllGlobals();
   });
 });
 

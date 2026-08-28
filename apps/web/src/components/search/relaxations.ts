@@ -75,14 +75,14 @@ export function noResultsDiagnosis(state: SearchState): string | null {
 
   const culprit =
     first.patch.date !== undefined
-      ? 'the date'
+      ? 'The date'
       : first.patch.minPriceCents !== undefined
-        ? 'the price range'
+        ? 'The price range'
         : first.patch.minRating !== undefined
-          ? 'the rating floor'
+          ? 'The rating floor'
           : first.patch.tags !== undefined
-            ? 'the style filter'
-            : 'the city';
+            ? 'The style filter'
+            : 'The city';
 
   /*
    * Frame `18` reads "Marfa is a small market — the distance limit is the

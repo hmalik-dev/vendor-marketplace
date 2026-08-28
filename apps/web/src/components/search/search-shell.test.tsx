@@ -150,7 +150,7 @@ describe('SearchShell no results — frame 18', () => {
       expect(screen.getByText('No photographers match all 2 filters')).toBeDefined(),
     );
     expect(
-      screen.getByText('the date is the narrowest filter here. Loosen one and results come back.'),
+      screen.getByText('The date is the narrowest filter here. Loosen one and results come back.'),
     ).toBeDefined();
   });
 

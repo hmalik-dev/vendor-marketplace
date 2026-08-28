@@ -168,27 +168,33 @@ describe('useUploadQueue', () => {
   });
 
   it('reports determinate progress as the bytes go out', async () => {
+    // The upload is held open after reporting 40%, so the mid-flight value is
+    // observable rather than raced against completion.
+    let release: (value: typeof stored) => void = () => undefined;
+
     uploadOne.mockImplementation(
       async (_file: File, _prefix: string, options: { onProgress?: (n: number) => void }) => {
         options.onProgress?.(40);
-        return stored;
+        return new Promise<typeof stored>((resolve) => {
+          release = resolve;
+        });
       },
     );
 
-    const seen: number[] = [];
     const { result } = renderHook(() =>
-      useUploadQueue({
-        prefix: 'portfolio',
-        onUploaded: async () => {
-          seen.push(result.current.tasks[0]?.progress ?? -1);
-        },
-      }),
+      useUploadQueue({ prefix: 'portfolio', onUploaded: async () => undefined }),
     );
 
     act(() => result.current.addFiles([jpeg('a.jpg')]));
 
+    await waitFor(() => expect(result.current.tasks[0]?.progress).toBe(40));
+    expect(result.current.tasks[0]?.status).toBe('uploading');
+
+    await act(async () => {
+      release(stored);
+    });
+
     await waitFor(() => expect(result.current.tasks[0]?.status).toBe('done'));
-    expect(seen).toEqual([40]);
     expect(result.current.tasks[0]?.progress).toBe(100);
   });
 });

@@ -7,6 +7,7 @@ import {
   connectionFailure,
   heldBackSentence,
   rejectedFailure,
+  screenDimensions,
   screenFile,
   splitBatch,
   type UploadFailure,
@@ -85,6 +86,17 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
   const send = useCallback(
     async (id: string, file: File): Promise<void> => {
       patch(id, { status: 'uploading', progress: 0, failure: undefined });
+
+      /*
+       * The width floor is checked here rather than with the type and size,
+       * because reading it means decoding the image — cheap enough per file,
+       * too slow to do for twenty before the first tile appears.
+       */
+      const narrow = await screenDimensions(file);
+      if (narrow) {
+        patch(id, { status: 'failed', failure: narrow });
+        return;
+      }
 
       try {
         const stored = await upload(file, prefix, {
