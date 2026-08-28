@@ -351,7 +351,7 @@ export function MessagesScreen({
                   // state from working and keeps the disabled fade.
                   disabled={draft.trim() === '' || draft.length > MESSAGE_MAX_LENGTH}
                 >
-                  Send
+                  {sending ? 'Sending…' : 'Send'}
                 </Button>
               </div>
             </div>

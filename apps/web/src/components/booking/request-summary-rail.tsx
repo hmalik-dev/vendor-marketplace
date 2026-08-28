@@ -174,18 +174,13 @@ export function RequestSummaryRail({
           type="button"
           variant="primary"
           onClick={onPrimary}
-          /*
-            The label stays `primaryLabel` rather than becoming "Sending…". The
-            ring already says the control is working, and swapping the words
-            under the cursor moves the target the reader was aiming at.
-          */
           loading={submitting}
           className={cn(
             'w-full justify-center py-3.25',
             blocked && 'bg-clay-300 hover:bg-clay-300',
           )}
         >
-          {primaryLabel}
+          {submitting ? 'Sending…' : primaryLabel}
         </Button>
 
         {blocked ? (

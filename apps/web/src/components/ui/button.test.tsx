@@ -122,13 +122,13 @@ describe('Button — while its own action runs', () => {
     ).toBe(true);
   });
 
-  /* The label is what the reader aimed at; it dims rather than disappearing. */
-  it('keeps its label, dimmed rather than replaced', () => {
-    render(<Button loading>Send request</Button>);
+  /* Frame `26` draws the working button's label at 60%, not hidden. */
+  it('dims its label to 60% rather than hiding it', () => {
+    render(<Button loading>Sending…</Button>);
 
-    const button = screen.getByRole('button', { name: /Send request/ });
+    const button = screen.getByRole('button', { name: /Sending/ });
 
-    expect(button.textContent).toContain('Send request');
+    expect(button.textContent).toContain('Sending…');
     expect(button.querySelector('span.opacity-60')).not.toBeNull();
   });
 
@@ -140,7 +140,9 @@ describe('Button — while its own action runs', () => {
       </Button>,
     );
 
-    expect(screen.getByRole('status').className).toContain('border-current');
+    // The frame's in-button ring: faint, with a solid leading quarter.
+    expect(screen.getByRole('status').className).toContain('border-stone-0/35');
+    expect(screen.getByRole('status').className).toContain('border-t-stone-0');
   });
 
   it('keeps the specified clay ring on a light-backed variant', () => {
@@ -150,7 +152,7 @@ describe('Button — while its own action runs', () => {
       </Button>,
     );
 
-    expect(screen.getByRole('status').className).toContain('border-clay-400');
+    expect(screen.getByRole('status').className).toContain('border-clay-400/28');
   });
 
   it('draws no ring when it is not working', () => {

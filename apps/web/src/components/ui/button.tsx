@@ -75,9 +75,9 @@ function Button({
      *
      * Never a page spinner and never a skeleton — a skeleton says "content is
      * on its way in this shape", and a button that is working has no shape to
-     * promise. The label stays put and dims rather than being swapped for the
-     * word "Loading", because a control whose text changes under the cursor
-     * has moved the target the reader was aiming at.
+     * promise. The label dims to 60% and the caller says what is happening in
+     * it, exactly as frame `26` draws: a clay fill, `Sending…` at 60%, and the
+     * ring to its left.
      */
     loading?: boolean;
   }) {
@@ -126,11 +126,12 @@ function Button({
           className={
             /*
               On a clay or ink fill a clay ring is invisible, so the ring takes
-              the label's colour. `03-components.md` specifies clay-400 for the
-              light-backed variants, which is what the fallback keeps.
+              the label's colour — the frame draws the in-button ring as
+              `rgba(255,253,249,.35)` with a solid `#FFFDF9` leading quarter.
+              The light-backed variants keep the standing clay ring.
             */
             variant === 'primary' || variant === 'ink' || variant === 'destructive'
-              ? 'border-current border-t-transparent'
+              ? 'border-stone-0/35 border-t-stone-0'
               : undefined
           }
         />
