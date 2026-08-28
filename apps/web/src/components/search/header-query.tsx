@@ -38,6 +38,12 @@ export function HeaderQuery({ categories }: HeaderQueryProps): React.ReactElemen
         categories={categories}
         value={{ category: state.category, city: state.city, date: state.date }}
         onSubmit={(next) => setState(next)}
+        /*
+          The one legitimate circle. This bar is a strip inside the 64px
+          header, not the page's primary object, and the word "Search" here
+          costs the date field the width it needs to read as a date.
+        */
+        action="icon"
         className="min-w-0 flex-1 max-w-140"
       />
       <NameSearch value={state.name} onSubmit={(name) => setState({ name })} />

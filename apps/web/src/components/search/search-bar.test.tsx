@@ -211,3 +211,62 @@ describe('SearchBar accessible names', () => {
     }
   });
 });
+
+/**
+ * The pill/circle split is deliberate, and the rule is about the bar's role
+ * rather than the viewport. What is *not* allowed is the third shape the
+ * frames were once drawn with: a clay circle holding nothing at all, which
+ * reads as decoration rather than as a control.
+ */
+describe('SearchBar — pill and circle discipline', () => {
+  afterEach(cleanup);
+
+  it('labels the submit control by default, for the hero and the full-width bar', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
+  });
+
+  it('keeps the label on the full-width bar even at its compact size', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
+  });
+
+  it('drops the visible label in the compact header, never the accessible one', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
+
+    const button = screen.getByRole('button', { name: 'Search' });
+
+    expect(button.textContent).toBe('');
+    expect(button.getAttribute('aria-label')).toBe('Search');
+  });
+
+  /* A circle without a glyph is not a reduced control, it is an unlabelled one. */
+  it('never renders a bare ring — the circle always holds the magnifier', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
+
+    const button = screen.getByRole('button', { name: 'Search' });
+
+    expect(button.querySelector('[aria-hidden]')).not.toBeNull();
+    // The ring and its stem: two elements, or it is not a magnifier.
+    expect(button.querySelectorAll('span')).toHaveLength(2);
+  });
+
+  it('still submits the query from the icon-only control', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        value={{ category: 'photography', city: 'Austin', date: '' }}
+        onSubmit={onSubmit}
+        action="icon"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({ category: 'photography', city: 'Austin', date: '' });
+  });
+});

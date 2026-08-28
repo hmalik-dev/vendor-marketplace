@@ -31,6 +31,17 @@ export interface SearchBarProps {
   onSubmit: (value: SearchBarValues) => void;
   /** `compact` is the header variant; `hero` is the landing one. */
   size?: 'compact' | 'hero';
+  /**
+   * Whether the submit control keeps its label.
+   *
+   * Deliberately its own prop rather than something derived from `size` or a
+   * media query. The choice follows the bar's **role**, not the window: a
+   * narrow desktop viewport still shows the labelled pill on the hero, and a
+   * wide one still shows the circle in the compact header, because what
+   * decides it is whether the bar is the page's primary object or a strip
+   * inside a 64px header. A breakpoint cannot express that.
+   */
+  action?: 'pill' | 'icon';
   className?: string;
 }
 
@@ -39,6 +50,7 @@ export function SearchBar({
   value,
   onSubmit,
   size = 'compact',
+  action = 'pill',
   className,
 }: SearchBarProps): React.ReactElement {
   const [draft, setDraft] = useState<SearchBarValues>(value);
@@ -69,6 +81,7 @@ export function SearchBar({
   }, [value]);
 
   const isHero = size === 'hero';
+  const isIconAction = action === 'icon';
 
   const label = cn(
     'font-semibold tracking-[.05em] text-stone-600 uppercase',
@@ -243,20 +256,53 @@ export function SearchBar({
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        className={cn(
-          'shrink-0 rounded-full bg-clay-400 font-semibold text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 max-sm:mt-3 max-sm:w-full max-sm:py-2.75',
-          // Inside a white pill the shared 2px cream offset reads as a gap in
-          // the bar, so this ring sits directly on the button's edge.
-          'focus-visible:ring-offset-0',
-          isHero
-            ? 'sm:ml-2 sm:px-6 sm:py-2.75 sm:text-base'
-            : 'sm:ml-1.5 sm:px-5 sm:py-2.5 sm:text-[12.5px]',
-        )}
-      >
-        Search
-      </button>
+      {isIconAction ? (
+        /*
+          The one place the label is dropped, per frames `17` and `18`: inside
+          the 64px header the three segments and a "Search" word cannot both
+          fit, and the date is the field that loses its width first.
+
+          The name is dropped visually, never semantically — `aria-label`
+          carries it. An icon-only control with no icon would be an unlabelled
+          one rather than a reduced one, which is why the glyph below is not
+          optional and the button never renders as a bare ring.
+        */
+        <button
+          type="submit"
+          aria-label="Search"
+          className={cn(
+            'flex size-8 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500',
+            'ml-1.5 focus-visible:ring-offset-0',
+          )}
+        >
+          {/*
+            Drawn rather than imported: the frame's magnifier is an 11px ring
+            with a 5px stem at 45°, and no icon set in the project matches those
+            proportions inside a 32px circle closely enough for the parity gate.
+          */}
+          <span
+            aria-hidden
+            className="relative box-border size-2.75 rounded-full border-[1.7px] border-stone-0"
+          >
+            <span className="absolute -right-1 -bottom-[3px] h-[1.7px] w-[5px] rotate-45 rounded-[2px] bg-stone-0" />
+          </span>
+        </button>
+      ) : (
+        <button
+          type="submit"
+          className={cn(
+            'shrink-0 rounded-full bg-clay-400 font-semibold text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 max-sm:mt-3 max-sm:w-full max-sm:py-2.75',
+            // Inside a white pill the shared 2px cream offset reads as a gap in
+            // the bar, so this ring sits directly on the button's edge.
+            'focus-visible:ring-offset-0',
+            isHero
+              ? 'sm:ml-2 sm:px-6 sm:py-2.75 sm:text-base'
+              : 'sm:ml-1.5 sm:px-5 sm:py-2.5 sm:text-[12.5px]',
+          )}
+        >
+          Search
+        </button>
+      )}
     </form>
   );
 }
