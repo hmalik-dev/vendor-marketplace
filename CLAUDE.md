@@ -21,7 +21,8 @@ product is Orla**, read from `BRAND_NAME` and never written as a literal.
 ## Ticket queue
 
 This project's queue is the **local markdown tracker** above. There is no Linear
-project here and the Linear MCP connector is unauthenticated — never call it.
+project here and no Linear MCP server: one was configured once, never connected,
+and was removed on 2026-08-28. Do not re-add it.
 `/next-ticket` and `/ticket` read eligibility, priority and `Blocked By` from the
 Status Board table and write transitions back to it (Backlog -> In Progress ->
 Done), filling the Branch column and recording the commit SHA in Notes.
