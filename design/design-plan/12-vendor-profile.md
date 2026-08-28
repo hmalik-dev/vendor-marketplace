@@ -8,9 +8,9 @@ the product.
 
 ```
 header 64px
-cover — 21:9, capped at 150px so it cannot eat the fold
+banner — full-bleed, 196px, box-sizing: border-box
 ┌───────────────── content column ─────────────┬── booking rail 380px ──┐
-│ avatar 72px + name, fully BELOW the cover    │  From $1,450           │  sticky
+│ avatar 82px OVERLAPS the banner by 34px      │  From $1,450           │  sticky
 │ Business name  Instrument Serif 33px         │  Free on June 14       │
 │ ★ 4.9 (127 reviews) · Austin, TX             │  [date] [guests]       │
 │ [category] [languages] [style] [+3 more]     │  [package ▾]           │
@@ -25,17 +25,29 @@ cover — 21:9, capped at 150px so it cannot eat the fold
 └──────────────────────────────────────────────┴────────────────────────┘
 ```
 
-## Header — no overlap
+## Header — the overlap, done the safe way
 
-The avatar (72px) and the name sit **below** the cover, not overlapping it. An
-earlier version pulled the avatar up 32px with a negative margin, but that margin
-crossed a pane's `overflow: hidden` boundary and the browser sliced the avatar's
-top edge along with part of the name. The overlap flourish is not worth a clipped
-identity block, and the flat version reads cleaner at this cover height anyway.
+**The avatar overlaps the banner again**, and frame `03 Vendor profile` is the
+spec. An earlier build pulled the avatar up with a negative margin that crossed a
+pane's `overflow: hidden` boundary, and the browser sliced the avatar's top edge
+along with part of the name. That is why the previous revision flattened it. The
+fix was never "no overlap" — it was to keep the overlap **inside one positioned
+wrapper containing both the banner and the identity row**, which is exactly what
+the frame now does:
 
-If an overlap is ever wanted back, it has to live **inside** one positioned
-wrapper containing both the cover and the identity row — never as a negative
-margin reaching out of a clipping container.
+| Element      | Value                                                            |
+| ------------ | ---------------------------------------------------------------- |
+| Banner       | full-bleed, `height: 196px`, `box-sizing: border-box`            |
+| Identity row | `margin-top: -34px`, `position: relative`, `z-index: 2`          |
+| Avatar       | 82px circle, `4px solid stone-50` ring, `box-sizing: border-box` |
+
+The `z-index: 2` and `position: relative` on the identity row are load-bearing —
+they are what lift it above the banner instead of letting a clipping ancestor cut
+it. **A negative margin reaching out of a clipping container is still a bug**;
+this one does not, because the wrapper contains both.
+
+This also makes desktop consistent with the tablet and mobile treatments, which
+already overlapped.
 
 ## Tabs, not anchors
 
@@ -106,8 +118,8 @@ per-vendor fact, shown only for vendors who have one.
 ## Acceptance
 
 - [ ] Name, rating, from-price and both CTAs visible without scrolling
-- [ ] Cover ≤ 150px tall
-- [ ] Avatar and name render fully — nothing clipped by the cover or by a pane boundary
+- [ ] Banner is 196px, `box-sizing: border-box`
+- [ ] Avatar is 82px and overlaps the banner by 34px, with nothing clipped by a pane boundary
 - [ ] No reply-time claim on any customer-facing part of this page
 - [ ] Three stat tiles, all sourced from vendor-entered profile data
 - [ ] Meta line is two segments — rating and location. Category is the chip row's job and appears once on the page

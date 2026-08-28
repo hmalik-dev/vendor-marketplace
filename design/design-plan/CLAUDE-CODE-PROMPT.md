@@ -62,7 +62,7 @@ the free-text query field on the main path with a category select.
 - **The date must not appear in the Refine bar.** It is a search input; a filter chip for it would be a second control for the same value.
 - An active filter is shown by its own chip's filled state and label value — **do not render a separate active-filter pill row**.
 - Facet counts move inside each popover, beside the options they belong to.
-- Results grid: **4 columns at ≥1440**, 3 at 1280, 2 at 1024, 5 at ≥1728. Cards compact (132px cover, 12px padding, 19px name) so two full rows fit above the fold — 8 visible.
+- Results grid: **4 columns at ≥1440**, 3 at 1280, **3 at 1024**, 5 at ≥1728. Cards compact (`aspect-ratio: 3/2` cover, 12px padding, 19px name) so two full rows fit above the fold — 8 visible.
 - Name search is a plain `clay-500` "Search by name" link beside the query bar, opening a name typeahead. Deliberately the smallest affordance on the screen; referral case only.
 - URL shape: `?category=photography&city=austin-tx&date=2026-06-14` — all three are ids, not strings. Via `nuqs`.
 - Keep the card component, skeletons and empty states as built; only the count changes (8 skeletons).

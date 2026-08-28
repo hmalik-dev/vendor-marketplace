@@ -39,7 +39,7 @@ Copy is imperative and specific, 2–4 words: "Request booking", "Send a message
 `translateY(-2px)`; cover `scale(1.03)`.
 
 ```
-[ cover 4:3 ]                                  full-bleed to the card's top corners
+[ cover 3:2 ]                                  full-bleed to the card's top corners
   (avatar 34px, circle, 2px stone-0 border, overlapping the seam by 17px)
   Business name                                Instrument Serif 21px
   ★ 4.9 (127) · Austin, TX                     12.5px, rating bold in stone-700
@@ -53,26 +53,30 @@ Availability chip is sage when free on the searched date, gold when scarce
 
 ### Two densities
 
-|         | Search grid (compact)  | Landing / featured      |
-| ------- | ---------------------- | ----------------------- |
-| Cover   | **132px** fixed height | 4:3                     |
-| Padding | 12px                   | 14px                    |
-| Name    | 19px Serif             | 21px Serif              |
-| Chips   | availability only      | category + availability |
+|         | Search grid (compact) | Landing / featured      |
+| ------- | --------------------- | ----------------------- |
+| Cover   | `aspect-ratio: 3/2`   | `aspect-ratio: 3/2`     |
+| Padding | 12px                  | 14px                    |
+| Name    | 19px Serif            | 21px Serif              |
+| Chips   | availability only     | category + availability |
 
 The search grid runs at the compact end so **8 cards fit at 1440 × 900** with the
 third row peeking — that number is an acceptance criterion in `11-search.md`, and
 it is what the 280px filter rail used to make impossible.
 
-**On the cover's aspect ratio.** Frame `02` draws the compact card's cover as a
-fixed-height box while the label inside it reads "cover 4:3". The fixed height
-wins for the compact variant — 132px is the value, and the image is cropped to
-fill. The 4:3 ratio holds for the landing and featured variants, where the card
-is wider and nothing depends on a row height.
+**On the cover's aspect ratio.** Every vendor-card cover declares
+**`aspect-ratio: 3/2`** and never a fixed height — frames `02`, `14`, `18` and
+`25 Search results — 1024` all label it "cover 3:2", and the markup declares the
+ratio directly. A fixed height against a fluid card width crops the same vendor's
+photo differently at every breakpoint, which a vendor cannot design a cover
+against; 3:2 is also the native ratio of essentially every camera, so an uploaded
+portfolio image needs no re-crop. The cover height therefore _follows_ the column
+width: 4 columns at 1440 and 3 at 1024 both land near 207px. See the card-covers
+rule in `30-responsive.md`.
 
-**The vendor-profile cover is a different thing** and is specified in
-`12-vendor-profile.md`: 21:9, `box-sizing: border-box`, **150px**, with the 72px
-avatar entirely below it.
+**The vendor-profile banner is a different thing** and is specified in
+`12-vendor-profile.md`: a full-bleed **196px** banner that the **82px** avatar
+deliberately overlaps.
 
 ## Inputs
 
@@ -110,7 +114,7 @@ scrolls the page; if its content overflows, the rail scrolls internally.
 
 Until real photography exists:
 `repeating-linear-gradient(135deg, #E6DFD3 0 9px, #EFE9DF 9px 18px)` with a 9px
-JetBrains Mono `stone-600` label naming the shot ("cover 4:3", "photographer /
+JetBrains Mono `stone-600` label naming the shot ("cover 3:2", "photographer /
 portrait"). Never a hand-drawn illustration, never a stock-photo stand-in.
 
 ## Empty states

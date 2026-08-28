@@ -123,7 +123,7 @@ popover beside their options.
 Count sentence names category, city and date. Beside it, one quiet positioning
 line: "Prices are what they charge — no quotes needed."
 
-Cards per `03-components.md` at the compact end: 132px cover, 12px padding, one
+Cards per `03-components.md` at the compact end: `aspect-ratio: 3/2` cover, 12px padding, one
 availability chip, name at 19px.
 
 ## States
