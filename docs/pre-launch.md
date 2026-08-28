@@ -7,7 +7,7 @@ defect the moment it stops being true.
 This file is the gate. Nothing here is optional; items marked **BLOCKER** would
 cause user-visible harm, legal exposure, or data loss on day one.
 
-The ticket tracker (`~/.claude/plans/vendor-marketplace-tickets.md`) holds the
+The ticket tracker (`.claude/plans/vendor-marketplace-tickets.md`) holds the
 build queue. This file holds the things that are _not_ tickets — configuration,
 credentials, data and legal — plus pointers to the tickets that are.
 

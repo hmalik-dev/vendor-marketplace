@@ -8,7 +8,7 @@ metadata:
   modified: 2026-08-26T15:16:58.266Z
 ---
 
-Every ticket in `vendor-marketplace` must be driven through its **full user flow in a real browser via the Playwright MCP tools** before it is marked Done. The browser run has to cover the ticket's entire scope — every behavioral requirement listed in `~/.claude/plans/vendor-marketplace-tickets.md` for that ticket, not a spot check of the happy path.
+Every ticket in `vendor-marketplace` must be driven through its **full user flow in a real browser via the Playwright MCP tools** before it is marked Done. The browser run has to cover the ticket's entire scope — every behavioral requirement listed in `.claude/plans/vendor-marketplace-tickets.md` for that ticket, not a spot check of the happy path.
 
 Unit tests, route suites against PGlite, and HTTP smoke tests do **not** substitute for this. They are still required; the browser pass is additional and comes last, after `verify-and-ship`-style checks pass.
 

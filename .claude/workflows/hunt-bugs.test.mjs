@@ -89,7 +89,7 @@ const check = (name, cond, detail = '') => {
   );
   check(
     'stack down: static sweep still ran',
-    state.labels.filter((l) => l.startsWith('sweep:')).length === 9,
+    state.labels.filter((l) => l.startsWith('sweep:')).length === 11,
   );
 }
 
@@ -136,7 +136,7 @@ const check = (name, cond, detail = '') => {
     },
   });
   check(
-    '9 identical findings dedupe to 1',
+    '11 identical findings dedupe to 1',
     result.verified.length === 1,
     `${result.verified.length} survived`,
   );

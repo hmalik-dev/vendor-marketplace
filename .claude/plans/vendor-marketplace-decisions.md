@@ -1,6 +1,6 @@
 # Vendor Marketplace — Finalized Decisions
 
-Cross-reference document for the project plan at `~/.claude/plans/vendor-marketplace-plan.md`. Any model reviewing or implementing from the plan should treat these decisions as settled unless the user explicitly reopens them.
+Cross-reference document for the project plan at `.claude/plans/vendor-marketplace-plan.md`. Any model reviewing or implementing from the plan should treat these decisions as settled unless the user explicitly reopens them.
 
 ---
 

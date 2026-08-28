@@ -113,6 +113,34 @@ UI exposes; a count computed by loading rows; a join that multiplies rows and is
 then not deduplicated.`,
   },
   {
+    key: 'state-side-effects',
+    prompt: `Hunt for handlers whose own calls undo each other. First build a
+side-effect map of every shared store, context and reducer in apps/web: for each
+action or setter, list what it sets and — separately — what it resets that it
+does not own. That map is the point; the defect is invisible without it. Then
+read each onClick, onSubmit and onChange and trace its calls in order. Look for:
+a later call resetting state an earlier call in the same handler just set; a
+handler whose final state does not match what its own label promises; two awaits
+whose resolution order decides the outcome; an optimistic update with no rollback
+on the failure branch; a close or reset handler clearing state a sibling still
+renders from. Both functions working in isolation is the normal case here — the
+bug is the interaction. Booking request, messaging and availability carry the
+most shared state.`,
+  },
+  {
+    key: 'illegal-states',
+    prompt: `Hunt for domain states the types permit but the business forbids.
+Read the Zod schemas in packages/shared and the Drizzle tables in packages/db
+against the state machines mapped above. Look for: fields optional in the type
+that are mandatory once a status is reached, so "paid with no vendor" or
+"confirmed with no date" is representable; a status union and a nullable
+timestamp that can disagree with each other; two booleans encoding three states
+when only two are legal; a bare string where an as-const enum already exists; a
+column left nullable that every write path populates; an API type wider than the
+column it lands in. Report each as a concrete row or object that should be
+impossible and is not — not as a style preference.`,
+  },
+  {
     key: 'absent-and-boundary',
     prompt: `Hunt for unhandled absence and boundary conditions. Look for: a
 .find(), Map.get() or array index used without a guard; a DB row destructured

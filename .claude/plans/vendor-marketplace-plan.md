@@ -1220,7 +1220,7 @@ email, notification, and admin work in M5 and M6 then ships to a running system.
 
 ## 11. Feature-Sized Backlog
 
-**The backlog lives in `~/.claude/plans/vendor-marketplace-tickets.md`.** Its Status Board
+**The backlog lives in `.claude/plans/vendor-marketplace-tickets.md`.** Its Status Board
 is the queue and its Ticket Details are the executable specification.
 
 A full copy of the ticket specifications previously lived here and drifted badly — the
@@ -1337,7 +1337,7 @@ pipeline exists.
 
 ### Resolved Decisions
 
-All open decisions have been resolved. Full rationale in `~/.claude/plans/vendor-marketplace-decisions.md`.
+All open decisions have been resolved. Full rationale in `.claude/plans/vendor-marketplace-decisions.md`.
 
 | # | Decision | Resolution |
 |---|----------|-----------|
@@ -1351,7 +1351,7 @@ All open decisions have been resolved. Full rationale in `~/.claude/plans/vendor
 
 ## Ticket Tracker
 
-**The tracker lives in `~/.claude/plans/vendor-marketplace-tickets.md`.** It is the
+**The tracker lives in `.claude/plans/vendor-marketplace-tickets.md`.** It is the
 single source of truth for ticket status, branch, blocking relationships, and
 executable specification.
 
@@ -1402,7 +1402,7 @@ The entire build, test, demo, and verification process is 100% agentic via Claud
 
 ### Ticket Tracking
 
-Tracked in `~/.claude/plans/vendor-marketplace-tickets.md`, which is the single source of truth for status and specification. No Linear MCP calls during development — push the full backlog to Linear as a historical record after MVP ships.
+Tracked in `.claude/plans/vendor-marketplace-tickets.md`, which is the single source of truth for status and specification. No Linear MCP calls during development — push the full backlog to Linear as a historical record after MVP ships.
 
 Each session:
 1. Reads the tracker to find the next eligible ticket

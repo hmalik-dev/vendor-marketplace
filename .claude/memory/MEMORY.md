@@ -1,4 +1,4 @@
-- [Local ticket tracker, not Linear](vendor-marketplace-local-ticket-tracker.md) — the queue lives in a markdown file under ~/.claude/plans
+- [Local ticket tracker, not Linear](vendor-marketplace-local-ticket-tracker.md) — the queue lives in a markdown file in the repo
 - [Docker Postgres is available](vendor-marketplace-no-docker.md) — container vendor-marketplace-postgres on 5432; PGlite in tests is a choice, not a workaround
 - [Playwright browser verification is mandatory](vendor-marketplace-playwright-verification.md) — every ticket flow gets driven in a real browser before Done
 - [E2E test accounts, one per role](vendor-marketplace-e2e-credentials.md) — customer + vendor credentials in the gitignored .env.e2e.local, never in the repo

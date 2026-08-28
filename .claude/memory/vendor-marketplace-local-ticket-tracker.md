@@ -8,7 +8,7 @@ metadata:
   modified: 2026-08-26T06:40:05.844Z
 ---
 
-For the `vendor-marketplace` repo, the ticket queue lives at `~/.claude/plans/vendor-marketplace-tickets.md`, not Linear. `/next-ticket` and `/ticket` must read status/priority/blocked-by from that file's Status Board table and write status transitions back to it (Backlog → In Progress → Done, filling the Branch and Notes columns).
+For the `vendor-marketplace` repo, the ticket queue lives at `.claude/plans/vendor-marketplace-tickets.md`, not Linear. `/next-ticket` and `/ticket` must read status/priority/blocked-by from that file's Status Board table and write status transitions back to it (Backlog → In Progress → Done, filling the Branch and Notes columns).
 
 Companion planning docs in the same directory: `vendor-marketplace-plan.md` (architecture, data model, API contracts), `vendor-marketplace-decisions.md` (settled tech + business decisions). The design plan is **not** in this directory — it lives in the repo at `design/design-plan/`.
 

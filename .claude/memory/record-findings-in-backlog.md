@@ -6,7 +6,7 @@ metadata:
 ---
 
 Every bug, defect or finding discovered during a ticket run must be **recorded
-in the ticket backlog** (`~/.claude/plans/vendor-marketplace-tickets.md`) — as a
+in the ticket backlog** (`.claude/plans/vendor-marketplace-tickets.md`) — as a
 new ticket, or as a note on the ticket it belongs to. Reporting it in the chat
 response is not enough.
 

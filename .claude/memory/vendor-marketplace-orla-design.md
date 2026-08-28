@@ -11,7 +11,7 @@ brand and logo, component vocabulary, layout laws, one file per screen 10–22,
 responsive, voice, open questions) and `design/Orla - Screens.dc.html` holds
 thirteen 1440x900 reference frames plus a tablet/mobile adaptation frame.
 
-It **replaced** `~/.claude/plans/vendor-marketplace-design-system.md` and
+It **replaced** `.claude/plans/vendor-marketplace-design-system.md` and
 `vendor-marketplace-color-schemes.md`, both deleted. Nothing should reference
 them again.
 
