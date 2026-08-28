@@ -36,6 +36,10 @@ coverage/
 
 # Playwright MCP scratch output
 .playwright-mcp/
+# Browser-verification screenshots. They belong in the scratchpad, never in the
+# tree — four of them were committed by a careless `git add -A` in #30 and cost
+# 1.7MB. The repo has no legitimate PNG at its root, so this cannot hide one.
+/*.png
 
 # Tool-managed skill packs installed into the repo (see skills-lock.json)
 .claude/skills/

@@ -147,19 +147,29 @@ export function AuthScreen({
 
   return (
     // The attribute is what globals.css keys the chrome-suppression rule off.
-    <div data-auth-screen className="flex min-h-dvh">
+    <div data-auth-screen className="relative flex min-h-dvh overflow-hidden">
+      {/*
+        A single soft clay disc bleeding off the corner, as in the frame.
+
+        It hangs on the screen rather than inside the scrolling column, and the
+        screen clips it. Positioned in the column it extended 120px past the
+        bottom of the scroll box, so the role-selection state — which is barely
+        half a viewport of content — still showed a scrollbar and could be
+        dragged down into empty cream.
+      */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-30 -left-27 size-85 rounded-full bg-clay-400/5"
+      />
+
       {/*
         `my-auto` on the panel rather than `justify-center` on the column: a
         centred flex child taller than its container is clipped at the top
-        instead of being scrolled to, and a sliced headline is a bug.
+        instead of being scrolled to, and a sliced headline is a bug. The
+        column still scrolls when the form genuinely outgrows the viewport —
+        it just no longer scrolls for a decoration.
       */}
       <div className="relative flex flex-1 flex-col items-center overflow-y-auto bg-stone-50 px-6 py-10 sm:px-10 xl:px-15">
-        {/* A single soft clay disc bleeding off the corner, as in the frame. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-30 -left-27 size-85 rounded-full bg-clay-400/5"
-        />
-
         <div className="relative my-auto w-full max-w-115">
           <div className="mb-6.5 flex justify-center">
             <Logo size={LOGO_SIZES.authPanel} />
