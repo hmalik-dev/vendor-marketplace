@@ -1,0 +1,256 @@
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { WireConversation } from '@/lib/wire-schemas';
+
+const call = vi.fn();
+let connected = true;
+const onEventRef: { current: ((event: unknown) => void) | null } = { current: null };
+
+vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
+vi.mock('@/lib/use-event-stream', () => ({
+  useEventStream: ({ onEvent }: { onEvent: (event: unknown) => void }) => {
+    onEventRef.current = onEvent;
+    return { connected };
+  },
+}));
+
+const { MessagesScreen } = await import('./messages-screen');
+
+/* Real UUIDs: a streamed message is parsed by the wire schema, which
+ * validates ids — a placeholder string would be silently dropped. */
+const VIEWER = '11111111-1111-4111-8111-111111111111';
+const THEM = '22222222-2222-4222-8222-222222222222';
+const CONVERSATION = '33333333-3333-4333-8333-333333333333';
+
+afterEach(() => {
+  cleanup();
+  call.mockReset();
+  connected = true;
+});
+
+function conversation(overrides: Partial<WireConversation> = {}): WireConversation {
+  return {
+    id: CONVERSATION,
+    otherPartyName: 'Kessler & Co.',
+    otherPartyAvatarUrl: null,
+    lastMessagePreview: 'Would you be able to stay till 10?',
+    lastMessageAt: new Date('2026-04-21T14:41:00Z'),
+    unreadCount: 2,
+    bookingContext: 'Jun 14 wedding',
+    vendorSlug: 'kessler-co',
+    ...overrides,
+  } as WireConversation;
+}
+
+function message(id: string, senderId: string, content: string) {
+  return {
+    id,
+    conversationId: CONVERSATION,
+    senderId,
+    content,
+    readAt: null,
+    createdAt: new Date('2026-04-21T09:14:00Z'),
+  };
+}
+
+/** The screen loads a thread and marks it read on mount. */
+function respondWith(messages: ReturnType<typeof message>[]): void {
+  call.mockImplementation(async (path: string) => {
+    if (path.endsWith('/messages')) {
+      return { items: messages, total: messages.length, page: 1, pageSize: 50 };
+    }
+    if (path === '/conversations') {
+      return [conversation()];
+    }
+    return null;
+  });
+}
+
+describe('MessagesScreen', () => {
+  /* The line that makes a list of names navigable. */
+  it('carries the booking line on every conversation row', async () => {
+    respondWith([]);
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    expect(await screen.findByText('Re: Jun 14 wedding')).toBeDefined();
+  });
+
+  it('marks an unread row bold and a read one not', async () => {
+    respondWith([]);
+    render(
+      <MessagesScreen
+        initialConversations={[
+          conversation({ id: VIEWER, otherPartyName: 'Unread Co.', unreadCount: 3 }),
+          conversation({ id: THEM, otherPartyName: 'Read Co.', unreadCount: 0 }),
+        ]}
+        viewerId={VIEWER}
+        initialConversationId={THEM}
+      />,
+    );
+
+    // Scoped to the list: the active thread also names itself in its header.
+    const list = screen.getByRole('list');
+    expect(within(list).getByText('Unread Co.').className).toContain('font-bold');
+    expect(within(list).getByText('Read Co.').className).toContain('font-medium');
+  });
+
+  it('opens the conversation named in the URL rather than the first', async () => {
+    respondWith([]);
+    render(
+      <MessagesScreen
+        initialConversations={[
+          conversation({ id: VIEWER, otherPartyName: 'First Co.' }),
+          conversation({ id: THEM, otherPartyName: 'Second Co.' }),
+        ]}
+        viewerId={VIEWER}
+        initialConversationId={THEM}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith(`/conversations/${THEM}/messages`, expect.anything()),
+    );
+  });
+
+  it('invites the first message rather than showing a blank thread', async () => {
+    respondWith([]);
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    expect(await screen.findByText(/Start the conversation/)).toBeDefined();
+  });
+
+  it('sides each bubble by who sent it', async () => {
+    respondWith([
+      message('44444444-4444-4444-8444-444444444444', THEM, 'From them'),
+      message('55555555-5555-4555-8555-555555555555', VIEWER, 'From me'),
+    ]);
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    const theirs = await screen.findByText('From them');
+    const mine = screen.getByText('From me');
+
+    // The tail is one squared corner on the sender's side, mirrored per side.
+    expect(theirs.className).toContain('rounded-[14px_14px_14px_4px]');
+    expect(mine.className).toContain('rounded-[14px_14px_4px_14px]');
+    expect(mine.closest('div')?.className).toContain('self-end');
+  });
+
+  /*
+   * A dropped stream is the normal case on a phone, so it is steel — never red
+   * — and the composer stays usable throughout.
+   */
+  it('says it is reconnecting without disabling the composer', async () => {
+    connected = false;
+    respondWith([]);
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    expect(await screen.findByText('Reconnecting')).toBeDefined();
+    expect(screen.getByLabelText('Write a message')).toHaveProperty('disabled', false);
+  });
+
+  it('sends a message and clears the composer', async () => {
+    respondWith([]);
+    call.mockImplementation(async (path: string, options: { method?: string }) => {
+      if (path.endsWith('/messages') && options.method === 'POST') {
+        return message('66666666-6666-4666-8666-666666666666', VIEWER, 'On my way');
+      }
+      if (path.endsWith('/messages')) {
+        return { items: [], total: 0, page: 1, pageSize: 50 };
+      }
+      // A send refreshes the list, so this has to answer with one.
+      return path === '/conversations' ? [conversation()] : null;
+    });
+
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    await userEvent.type(await screen.findByLabelText('Write a message'), 'On my way');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText('On my way')).toBeDefined();
+    expect(screen.getByLabelText('Write a message')).toHaveProperty('value', '');
+  });
+
+  /* Typed text is never destroyed — a failed send leaves it to be retried. */
+  it('keeps the draft when a send fails', async () => {
+    call.mockImplementation(async (path: string, options: { method?: string }) => {
+      if (path.endsWith('/messages') && options.method === 'POST') {
+        throw new Error('offline');
+      }
+      if (path.endsWith('/messages')) {
+        return { items: [], total: 0, page: 1, pageSize: 50 };
+      }
+      return path === '/conversations' ? [conversation()] : null;
+    });
+
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    await userEvent.type(await screen.findByLabelText('Write a message'), 'On my way');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText(/Your text is still here/)).toBeDefined();
+    expect(screen.getByLabelText('Write a message')).toHaveProperty('value', 'On my way');
+  });
+
+  it('appends a streamed message to the open thread', async () => {
+    respondWith([]);
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    await screen.findByLabelText('Write a message');
+
+    await act(async () => {
+      onEventRef.current?.({
+        type: 'new_message',
+        conversationId: CONVERSATION,
+        message: {
+          ...message('77777777-7777-4777-8777-777777777777', THEM, 'Just arrived'),
+          createdAt: new Date('2026-04-21T15:00:00Z').toISOString(),
+        },
+      });
+    });
+
+    expect(await screen.findByText('Just arrived')).toBeDefined();
+  });
+});

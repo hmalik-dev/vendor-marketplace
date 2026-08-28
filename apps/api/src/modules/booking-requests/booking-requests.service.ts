@@ -19,6 +19,8 @@ import type {
   VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import type { EventHub } from '../../lib/event-stream.js';
+import { notificationHref } from '../messaging/messaging.service.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
 import {
@@ -49,6 +51,22 @@ function invalidTransition(from: BookingRequestStatus, to: BookingRequestStatus)
     ERROR_CODES.INVALID_STATE_TRANSITION,
     `A ${from} request cannot become ${to}`,
   );
+}
+
+const NOTIFICATION_DATE = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+/**
+ * "December 19", not `2026-12-19`.
+ *
+ * A notification body is read by a person, and an ISO date in it is a stored
+ * value leaking into copy — the same class of defect as rendering a row id.
+ */
+function readableDate(date: string): string {
+  return NOTIFICATION_DATE.format(new Date(`${date}T00:00:00Z`));
 }
 
 /** Postgres NUMERIC arrives as a string; the wire contract is a number. */
@@ -177,6 +195,7 @@ async function notifyParty(
   party: 'customer' | 'vendor',
   type: NotificationType,
   copy: NotificationCopy,
+  hub?: EventHub,
 ): Promise<void> {
   const userId = party === 'customer' ? row.customerId : await findVendorUserId(db, row.vendorId);
 
@@ -184,13 +203,33 @@ async function notifyParty(
     return;
   }
 
-  await insertNotification(db, {
+  const stored = await insertNotification(db, {
     userId,
     type,
     title: copy.title,
     body: copy.body,
     data: { bookingRequestId: row.id, vendorId: row.vendorId },
   });
+
+  /*
+   * Pushed live where a stream is open, so the bell moves the moment the row
+   * exists. The row is the source of truth either way — a user with no stream
+   * open sees it on their next load, which is why this is best-effort.
+   */
+  if (hub && stored) {
+    hub.publish(userId, {
+      type: 'new_notification',
+      notification: {
+        id: stored.id,
+        type: stored.type,
+        title: stored.title,
+        body: stored.body,
+        href: notificationHref(stored),
+        readAt: stored.readAt,
+        createdAt: stored.createdAt,
+      },
+    });
+  }
 }
 
 /** The caller's vendor profile id, when they hold the vendor role. */
@@ -224,6 +263,7 @@ async function requireParticipant(
 
 export async function createBookingRequest(
   db: AppDatabase,
+  hub: EventHub,
   user: AuthenticatedUser,
   input: CreateBookingRequestInput,
   now: Date = new Date(),
@@ -286,10 +326,17 @@ export async function createBookingRequest(
     bookingRequestId: row.id,
   });
 
-  await notifyParty(db, row, 'vendor', 'new_request', {
-    title: 'New booking request',
-    body: `A customer asked about ${row.eventDate}. You have a week to reply.`,
-  });
+  await notifyParty(
+    db,
+    row,
+    'vendor',
+    'new_request',
+    {
+      title: 'New booking request',
+      body: `A customer asked about ${readableDate(row.eventDate)}. You have a week to reply.`,
+    },
+    hub,
+  );
 
   return toDetail(row, vendor, servicePackage, await nameOf(db, row.customerId));
 }
@@ -383,6 +430,8 @@ export async function listBookingRequests(
 interface TransitionOptions {
   quote?: QuoteBookingRequestInput;
   now?: Date;
+  /** Present when the caller can reach open streams; absent in a plain read. */
+  hub?: EventHub;
 }
 
 /**
@@ -428,7 +477,7 @@ export async function transitionRequest(
     await holdDate(db, updated.vendorId, updated.eventDate);
   }
 
-  await announce(db, updated, action, row.status, vendor.businessName);
+  await announce(db, updated, action, row.status, vendor.businessName, options.hub);
 
   const servicePackage = updated.packageId
     ? ((await findPackagesByIds(db, [updated.packageId]))[0] ?? null)
@@ -538,35 +587,64 @@ async function announce(
   action: RequestAction,
   from: BookingRequestStatus,
   businessName: string,
+  hub?: EventHub,
 ): Promise<void> {
   switch (action) {
     case 'quote':
-      await notifyParty(db, row, 'customer', 'request_quoted', {
-        title: `${businessName} sent a quote`,
-        body: 'Open the request to see the price and accept it.',
-      });
+      await notifyParty(
+        db,
+        row,
+        'customer',
+        'request_quoted',
+        {
+          title: `${businessName} sent a quote`,
+          body: 'Open the request to see the price and accept it.',
+        },
+        hub,
+      );
       return;
     case 'accept':
       /*
        * Whoever did not accept is the one who needs telling: the vendor
        * answers a `pending` request, the customer accepts a `quoted` one.
        */
-      await notifyParty(db, row, from === 'pending' ? 'customer' : 'vendor', 'request_accepted', {
-        title: 'Request accepted',
-        body: `${row.eventDate} is held. Payment confirms the booking.`,
-      });
+      await notifyParty(
+        db,
+        row,
+        from === 'pending' ? 'customer' : 'vendor',
+        'request_accepted',
+        {
+          title: 'Request accepted',
+          body: `${readableDate(row.eventDate)} is held. Payment confirms the booking.`,
+        },
+        hub,
+      );
       return;
     case 'decline':
-      await notifyParty(db, row, 'customer', 'request_declined', {
-        title: `${businessName} declined`,
-        body: 'The date is free again — try another vendor for it.',
-      });
+      await notifyParty(
+        db,
+        row,
+        'customer',
+        'request_declined',
+        {
+          title: `${businessName} declined`,
+          body: 'The date is free again — try another vendor for it.',
+        },
+        hub,
+      );
       return;
     case 'cancel':
-      await notifyParty(db, row, 'vendor', 'request_cancelled', {
-        title: 'A request was withdrawn',
-        body: `The customer cancelled their request for ${row.eventDate}.`,
-      });
+      await notifyParty(
+        db,
+        row,
+        'vendor',
+        'request_cancelled',
+        {
+          title: 'A request was withdrawn',
+          body: `The customer cancelled their request for ${readableDate(row.eventDate)}.`,
+        },
+        hub,
+      );
   }
 }
 

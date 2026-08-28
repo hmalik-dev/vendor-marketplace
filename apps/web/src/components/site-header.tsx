@@ -4,6 +4,7 @@ import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { MarketingNav } from '@/components/marketing-nav';
 import { HeaderQuery } from '@/components/search/header-query';
+import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
 
@@ -79,8 +80,19 @@ export async function SiteHeader(): Promise<React.ReactElement> {
 
           <Show when="signed-in">
             <Button variant="ghost" asChild>
+              <Link href="/messages">Messages</Link>
+            </Button>
+            {/*
+              Four items do not fit at 390 — they pushed the header past the
+              viewport. Dashboard is the one that gives way: it is reachable
+              from the avatar menu and from `/dashboard` itself, where Messages
+              and the bell have no other route on a phone until #26 builds the
+              drawer.
+            */}
+            <Button variant="ghost" asChild className="max-sm:hidden">
               <Link href="/dashboard">Dashboard</Link>
             </Button>
+            <NotificationBell />
             <UserButton />
           </Show>
         </div>

@@ -3,8 +3,12 @@ import {
   bookingRequestDetailSchema,
   bookingWithContextSchema,
   categorySchema,
+  conversationSummarySchema,
   customerProfileSchema,
   customerReviewSchema,
+  notificationItemSchema,
+  paginatedSchema,
+  sendMessageResultSchema,
   vendorDashboardSchema,
   portfolioItemSchema,
   publicVendorProfileSchema,
@@ -126,3 +130,24 @@ export type WireCustomerProfile = z.infer<typeof wireCustomerProfileSchema>;
 /** The vendor dashboard's figures. No date fields, so no coercion is needed. */
 export const wireVendorDashboardSchema = vendorDashboardSchema;
 export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
+
+/** Messaging, as JSON — every timestamp coerced back at the boundary. */
+export const wireConversationSchema = conversationSummarySchema.extend({
+  lastMessageAt: z.coerce.date().nullable(),
+});
+export type WireConversation = z.infer<typeof wireConversationSchema>;
+export const wireConversationListSchema = z.array(wireConversationSchema);
+
+export const wireMessageSchema = sendMessageResultSchema.extend({
+  readAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+});
+export type WireMessage = z.infer<typeof wireMessageSchema>;
+export const wireMessagePageSchema = paginatedSchema(wireMessageSchema);
+
+export const wireNotificationSchema = notificationItemSchema.extend({
+  readAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+});
+export type WireNotification = z.infer<typeof wireNotificationSchema>;
+export const wireNotificationPageSchema = paginatedSchema(wireNotificationSchema);

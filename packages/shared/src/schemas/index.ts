@@ -841,6 +841,55 @@ export const vendorProfileDetailSchema = vendorProfileSchema.extend({
 });
 export type VendorProfileDetail = z.infer<typeof vendorProfileDetailSchema>;
 
+/**
+ * A conversation as the list renders it: who it is with, what was last said,
+ * and the booking it is about.
+ *
+ * The booking line is what makes a list of names navigable — a vendor with
+ * thirty threads is looking for "the June 14 wedding", not for a person.
+ */
+export const conversationSummarySchema = z.object({
+  id: uuidSchema,
+  /** The other party — a business name for the customer, a person for the vendor. */
+  otherPartyName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+  otherPartyAvatarUrl: urlSchema.nullable(),
+  /** `null` until somebody says something. */
+  lastMessagePreview: z.string().nullable(),
+  lastMessageAt: z.date().nullable(),
+  unreadCount: z.int().min(0),
+  /** "Jun 14 wedding", or `null` when no request is linked. */
+  bookingContext: z.string().nullable(),
+  /** The vendor's slug, so the thread can link back to the profile. */
+  vendorSlug: slugSchema,
+});
+export type ConversationSummary = z.infer<typeof conversationSummarySchema>;
+
+export const sendMessageResultSchema = z.object({
+  id: uuidSchema,
+  conversationId: uuidSchema,
+  senderId: uuidSchema,
+  content: z.string(),
+  readAt: z.date().nullable(),
+  createdAt: z.date(),
+});
+export type SendMessageResult = z.infer<typeof sendMessageResultSchema>;
+
+/**
+ * A notification as the panel renders it — the row's `data` payload resolved
+ * into a link, so the client never has to know how to build one from an id.
+ */
+export const notificationItemSchema = z.object({
+  id: uuidSchema,
+  type: notificationTypeSchema,
+  title: z.string().max(MAX_TITLE_LENGTH),
+  body: z.string().nullable(),
+  /** Where clicking it goes, derived from the payload — never a raw id. */
+  href: z.string().max(MAX_URL_LENGTH).nullable(),
+  readAt: z.date().nullable(),
+  createdAt: z.date(),
+});
+export type NotificationItem = z.infer<typeof notificationItemSchema>;
+
 // --- Notifications ---------------------------------------------------------
 
 export const notificationSchema = z.object({

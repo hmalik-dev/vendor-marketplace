@@ -33,6 +33,14 @@ vi.mock('@/components/search/header-query', () => ({
   HeaderQuery: () => (pathname === '/search' ? <div data-testid="header-query" /> : null),
 }));
 
+/*
+ * The bell owns its own fetching and its own stream; the header's job is only
+ * to place it, so it is stubbed to whether it rendered.
+ */
+vi.mock('@/components/messaging/notification-bell', () => ({
+  NotificationBell: () => <button type="button">Notifications</button>,
+}));
+
 const { SiteHeader } = await import('./site-header');
 
 describe('SiteHeader', () => {
@@ -137,11 +145,16 @@ describe('SiteHeader', () => {
     expect(screen.queryByRole('link', { name: 'For vendors' })).toBeNull();
   });
 
-  it('offers the dashboard and user button when signed in', async () => {
+  it('offers messages, the dashboard and the user button when signed in', async () => {
     authState = 'signed-in';
 
     render(await SiteHeader());
 
+    expect(screen.getByRole('link', { name: 'Messages' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/messages',
+    );
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeDefined();
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveProperty(
       'href',
       'http://localhost:3000/dashboard',

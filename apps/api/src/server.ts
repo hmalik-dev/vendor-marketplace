@@ -17,10 +17,12 @@ import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
+import { eventsPlugin } from './plugins/events.js';
 import { storagePlugin } from './plugins/storage.js';
 import { availabilityRoutes } from './modules/availability/availability.routes.js';
 import { bookingRequestRoutes } from './modules/booking-requests/booking-requests.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
+import { messagingRoutes } from './modules/messaging/messaging.routes.js';
 import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
@@ -81,6 +83,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
 
   await app.register(databasePlugin, { db });
+  await app.register(eventsPlugin);
   await app.register(storagePlugin, { storage });
   await app.register(clerkAuthPlugin, {
     secretKey: env.CLERK_SECRET_KEY,
@@ -97,6 +100,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(portfolioRoutes);
   await app.register(availabilityRoutes);
   await app.register(bookingRequestRoutes);
+  await app.register(messagingRoutes, { allowedOrigins: allowedOrigins(env) });
   await app.register(uploadRoutes);
   await app.register(clerkWebhookRoutes, {
     signingSecret: env.CLERK_WEBHOOK_SECRET,

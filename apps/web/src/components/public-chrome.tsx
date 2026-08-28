@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
  * footer underneath it are incompatible, because the footer's height is what
  * makes the *page* scroll when only the panes are supposed to.
  */
-const APP_ROUTE_PREFIXES = ['/bookings', '/customer', '/vendor/'] as const;
+const APP_ROUTE_PREFIXES = ['/bookings', '/customer', '/messages', '/vendor/'] as const;
 
 export function isAppRoute(pathname: string): boolean {
   return APP_ROUTE_PREFIXES.some(

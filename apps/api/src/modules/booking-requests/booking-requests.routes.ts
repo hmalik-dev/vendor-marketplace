@@ -30,7 +30,12 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { body: createBookingRequestSchema, response: { 201: bookingRequestDetailSchema } },
     },
     async (request, reply) => {
-      const created = await createBookingRequest(app.db, authenticated(request.auth), request.body);
+      const created = await createBookingRequest(
+        app.db,
+        app.events,
+        authenticated(request.auth),
+        request.body,
+      );
 
       return reply.status(201).header('location', `${REQUESTS_PATH}/${created.id}`).send(created);
     },
@@ -73,6 +78,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) =>
       transitionRequest(app.db, request.params.requestId, 'quote', authenticated(request.auth), {
         quote: request.body,
+        hub: app.events,
       }),
   );
 
@@ -89,7 +95,9 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
         schema: { params: requestParamsSchema, response: { 200: bookingRequestDetailSchema } },
       },
       async (request) =>
-        transitionRequest(app.db, request.params.requestId, action, authenticated(request.auth)),
+        transitionRequest(app.db, request.params.requestId, action, authenticated(request.auth), {
+          hub: app.events,
+        }),
     );
   }
 

@@ -12,6 +12,7 @@ import {
   type BookingRequestRow,
   type NewBookingRequestRow,
   type NewNotificationRow,
+  type NotificationRow,
   type ServicePackageRow,
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
@@ -251,8 +252,10 @@ export async function ensureConversation(
 export async function insertNotification(
   db: AppDatabase,
   values: NewNotificationRow,
-): Promise<void> {
-  await db.insert(notifications).values(values);
+): Promise<NotificationRow | null> {
+  const inserted = await db.insert(notifications).values(values).returning();
+
+  return inserted?.[0] ?? null;
 }
 
 /** The `users.id` behind a vendor profile — notifications address people. */
