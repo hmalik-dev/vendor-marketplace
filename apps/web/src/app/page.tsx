@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Show } from '@clerk/nextjs';
 import {
-  BRAND_DOMAIN,
   BRAND_NAME,
   CATEGORY_SEEDS,
   LANDING_CATEGORY_COUNT,
@@ -15,6 +14,7 @@ import { PhotoCluster } from '@/components/landing/photo-cluster';
 import { Button } from '@/components/ui/button';
 import { StockPhoto } from '@/components/ui/stock-photo';
 import { VendorCard } from '@/components/vendors/vendor-card';
+import { siteOrigin } from '@/config/env';
 import { redirectVendorToDashboard } from '@/lib/current-user';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
 
@@ -87,7 +87,17 @@ const TRUST_SIGNALS = [
 
 const DESCRIPTION = `Compare real availability and pricing from event vendors near you, send one request, and pay securely once the date is locked in. Now booking in ${LAUNCH_CITY}.`;
 
-const CANONICAL_ORIGIN = `https://${BRAND_DOMAIN}`;
+/*
+ * The origin this deployment actually answers on, not `BRAND_DOMAIN`.
+ *
+ * `BRAND_DOMAIN` is the domain the product will live on; it is not where this
+ * build is served from today, and every absolute URL derived from it — the
+ * canonical, `og:url`, and the `og:image` Next resolves against it — pointed a
+ * crawler and every share card at a host that does not serve this app. The
+ * brand domain stays for display (a vendor's slug preview reads as the URL
+ * they will have); anything a machine follows uses the real origin.
+ */
+const CANONICAL_ORIGIN = siteOrigin();
 
 /**
  * The share-card headline. It has room for a sentence; a browser tab does not,

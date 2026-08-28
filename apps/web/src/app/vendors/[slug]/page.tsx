@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { BRAND_DOMAIN, BRAND_NAME, pageTitle, todayDateString } from '@vendor-marketplace/shared';
+import { BRAND_NAME, pageTitle, todayDateString } from '@vendor-marketplace/shared';
 import { AboutPane } from '@/components/vendors/profile/about-pane';
 import { AvailabilityPane } from '@/components/vendors/profile/availability-pane';
 import { BookingRail } from '@/components/vendors/profile/booking-rail';
@@ -9,6 +9,7 @@ import { PortfolioPane } from '@/components/vendors/profile/portfolio-pane';
 import { ProfileHeader } from '@/components/vendors/profile/profile-header';
 import { ProfileTabs } from '@/components/vendors/profile/profile-tabs';
 import { EmptyState } from '@/components/ui/empty-state';
+import { siteOrigin } from '@/config/env';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
 interface PageProps {
@@ -79,7 +80,9 @@ export default async function VendorProfilePage({
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: vendor.businessName,
-    url: `https://${BRAND_DOMAIN}/vendors/${vendor.slug}`,
+    // The origin this deployment answers on — structured data a crawler
+    // follows must not point at a domain that does not serve this app.
+    url: `${siteOrigin()}/vendors/${vendor.slug}`,
     ...(vendor.bio ? { description: vendor.bio } : {}),
     ...(vendor.profileImageUrl ? { image: vendor.profileImageUrl } : {}),
     ...(vendor.city

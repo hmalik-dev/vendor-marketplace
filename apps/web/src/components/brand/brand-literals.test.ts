@@ -42,6 +42,22 @@ describe('brand literals', () => {
     expect(offenders).toEqual([]);
   });
 
+  /*
+   * `BRAND_DOMAIN` is the domain the product will live on, not the origin this
+   * deployment answers on. Building an absolute URL from it published
+   * `https://orla.com` as the landing page's canonical, its `og:url` and — via
+   * `metadataBase` — its `og:image`, so a crawler and every share card were
+   * pointed at a host that does not serve the app. Anything a machine follows
+   * comes from `siteOrigin()`; the brand domain is for display only.
+   */
+  it('never builds an absolute URL from BRAND_DOMAIN', () => {
+    const offenders = grepFor('https://${BRAND_DOMAIN}').filter(
+      (path) => !ALLOWED_PATHS.includes(path),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
   it('finds the literal when one is present, so the guard cannot pass vacuously', () => {
     // This file contains the strings above, so the raw grep must see itself.
     expect(grepFor('VenMatch')).toContain('src/components/brand/brand-literals.test.ts');

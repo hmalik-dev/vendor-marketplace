@@ -82,8 +82,22 @@ describe('contentSecurityPolicy', () => {
 
   it('omits the image origin entirely when uploads share this one', () => {
     expect(contentSecurityPolicy({ apiOrigin: 'https://api.example.com' })).toContain(
-      `img-src 'self' data: blob:`,
+      `img-src 'self' data: blob: https://img.clerk.com`,
     );
+  });
+
+  /*
+   * The avatar CDN is a separate host from the Frontend API, so `*.clerk.com`
+   * on `connect-src` does not cover it. Without this the header avatar was
+   * blocked for every signed-in user in production — invisible when the policy
+   * is only ever exercised signed-out, which is how it shipped.
+   */
+  it('allows the Clerk avatar CDN, which only a signed-in page requests', () => {
+    const imgSrc = contentSecurityPolicy(ORIGINS)
+      .split('; ')
+      .find((directive) => directive.startsWith('img-src'));
+
+    expect(imgSrc).toContain('https://img.clerk.com');
   });
 
   /*

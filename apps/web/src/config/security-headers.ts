@@ -74,7 +74,19 @@ export function contentSecurityPolicy({
   allowEval,
 }: CspOrigins): string {
   const connect = ["'self'", apiOrigin, ...CLERK_HOSTS];
-  const images = ["'self'", 'data:', 'blob:', ...(imageOrigin ? [imageOrigin] : [])];
+  /*
+   * `img.clerk.com` is Clerk's avatar CDN, and it is not covered by
+   * `*.clerk.com` on `connect-src` because avatars are images. Leaving it out
+   * broke the header avatar for every signed-in user in production — the
+   * policy was verified signed-out, where that element never renders.
+   */
+  const images = [
+    "'self'",
+    'data:',
+    'blob:',
+    'https://img.clerk.com',
+    ...(imageOrigin ? [imageOrigin] : []),
+  ];
   /*
    * `unsafe-eval` is a development-only allowance: webpack's dev runtime uses
    * `eval` for hot module replacement. A production bundle does not, so it is
