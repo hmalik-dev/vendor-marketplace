@@ -202,102 +202,117 @@ export function RefineBar({
   const hasAnyRefinement = hasPrice || state.minRating !== null || state.tags.length > 0;
 
   return (
+    /*
+      Two groups, not one wrapping row. `30-responsive.md`: a wrapping row
+      wraps for width, never for alignment — an item pushed right with an auto
+      margin must not strand a sibling on a second row that had space for it.
+      With `Sort` inside the wrap and carrying `ml-auto`, its own margin ate
+      the line's free space, so the row's break point depended on where the
+      right-aligned item wanted to sit rather than on how wide the chips were.
+
+      The chips now wrap among themselves and `Sort` is a separate, unwrapping
+      sibling held right by the group's `flex-1`. Below `lg` the bar is inside
+      the filter sheet, where the two stack instead.
+    */
     <div
       className={cn(
-        'flex shrink-0 flex-wrap items-center gap-2 border-b border-stone-300 bg-stone-0 px-6.5 py-2.75',
+        'flex shrink-0 flex-col gap-3 border-b border-stone-300 bg-stone-0 px-6.5 py-2.75 lg:flex-row lg:items-center lg:gap-4',
         className,
       )}
     >
-      <span className="mr-0.5 text-[11px] font-semibold tracking-[.05em] text-stone-600 uppercase">
-        Refine
-      </span>
+      <div className="flex flex-wrap items-center gap-2 lg:min-w-0 lg:flex-1">
+        <span className="mr-0.5 text-[11px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+          Refine
+        </span>
 
-      {/*
+        {/*
         The price chip's label always carries the live range and it keeps its
         caret — a range is a value you adjust, not a filter you tick off, so
         there is nothing an `✕` would mean here that dragging back to the ends
         doesn't already say.
       */}
-      <Chip label={priceLabel} tone={hasPrice ? 'valued' : 'resting'}>
-        <fieldset>
-          <legend className="text-sm font-semibold text-stone-900">Price range</legend>
-          <div className="mt-2 flex flex-col gap-2">
-            <label className="text-xs text-stone-600" htmlFor="minPrice">
-              Minimum
-            </label>
-            <input
-              id="minPrice"
-              type="range"
-              min={PRICE_FLOOR_CENTS}
-              max={PRICE_CEILING_CENTS}
-              step={PRICE_STEP_CENTS}
-              value={state.minPriceCents ?? PRICE_FLOOR_CENTS}
-              onChange={(event) => setState({ minPriceCents: Number(event.target.value) || null })}
-              className="h-5 w-full accent-clay-400"
-            />
-            <label className="text-xs text-stone-600" htmlFor="maxPrice">
-              Maximum
-            </label>
-            <input
-              id="maxPrice"
-              type="range"
-              min={PRICE_FLOOR_CENTS}
-              max={PRICE_CEILING_CENTS}
-              step={PRICE_STEP_CENTS}
-              value={state.maxPriceCents ?? PRICE_CEILING_CENTS}
-              onChange={(event) =>
-                setState({
-                  maxPriceCents:
-                    Number(event.target.value) === PRICE_CEILING_CENTS
-                      ? null
-                      : Number(event.target.value),
-                })
-              }
-              className="h-5 w-full accent-clay-400"
-            />
-            <div className="flex justify-between text-xs text-stone-600">
-              <span>{formatPrice(state.minPriceCents ?? PRICE_FLOOR_CENTS)}</span>
-              <span>
-                {state.maxPriceCents === null
-                  ? `${formatPrice(PRICE_CEILING_CENTS)}+`
-                  : formatPrice(state.maxPriceCents)}
-              </span>
+        <Chip label={priceLabel} tone={hasPrice ? 'valued' : 'resting'}>
+          <fieldset>
+            <legend className="text-sm font-semibold text-stone-900">Price range</legend>
+            <div className="mt-2 flex flex-col gap-2">
+              <label className="text-xs text-stone-600" htmlFor="minPrice">
+                Minimum
+              </label>
+              <input
+                id="minPrice"
+                type="range"
+                min={PRICE_FLOOR_CENTS}
+                max={PRICE_CEILING_CENTS}
+                step={PRICE_STEP_CENTS}
+                value={state.minPriceCents ?? PRICE_FLOOR_CENTS}
+                onChange={(event) =>
+                  setState({ minPriceCents: Number(event.target.value) || null })
+                }
+                className="h-5 w-full accent-clay-400"
+              />
+              <label className="text-xs text-stone-600" htmlFor="maxPrice">
+                Maximum
+              </label>
+              <input
+                id="maxPrice"
+                type="range"
+                min={PRICE_FLOOR_CENTS}
+                max={PRICE_CEILING_CENTS}
+                step={PRICE_STEP_CENTS}
+                value={state.maxPriceCents ?? PRICE_CEILING_CENTS}
+                onChange={(event) =>
+                  setState({
+                    maxPriceCents:
+                      Number(event.target.value) === PRICE_CEILING_CENTS
+                        ? null
+                        : Number(event.target.value),
+                  })
+                }
+                className="h-5 w-full accent-clay-400"
+              />
+              <div className="flex justify-between text-xs text-stone-600">
+                <span>{formatPrice(state.minPriceCents ?? PRICE_FLOOR_CENTS)}</span>
+                <span>
+                  {state.maxPriceCents === null
+                    ? `${formatPrice(PRICE_CEILING_CENTS)}+`
+                    : formatPrice(state.maxPriceCents)}
+                </span>
+              </div>
             </div>
-          </div>
-        </fieldset>
-      </Chip>
+          </fieldset>
+        </Chip>
 
-      <Chip
-        label={ratingLabel}
-        tone={state.minRating !== null ? 'active' : 'resting'}
-        {...(state.minRating !== null ? { onClear: () => setState({ minRating: null }) } : {})}
-      >
-        <fieldset>
-          <legend className="text-sm font-semibold text-stone-900">Minimum rating</legend>
-          <div className="mt-2 flex flex-col gap-1.5">
-            {RATING_STEPS.map((step) => (
-              <button
-                key={step.label}
-                type="button"
-                aria-pressed={state.minRating === step.value}
-                onClick={() => setState({ minRating: step.value })}
-                className={cn(
-                  'rounded-md py-1.75 text-center text-xs font-semibold transition-colors duration-(--duration-fast)',
-                  state.minRating === step.value
-                    ? 'bg-clay-400 text-stone-0'
-                    : 'bg-stone-150 text-stone-700 hover:bg-stone-200',
-                )}
-              >
-                {step.label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-      </Chip>
+        <Chip
+          label={ratingLabel}
+          tone={state.minRating !== null ? 'active' : 'resting'}
+          {...(state.minRating !== null ? { onClear: () => setState({ minRating: null }) } : {})}
+        >
+          <fieldset>
+            <legend className="text-sm font-semibold text-stone-900">Minimum rating</legend>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {RATING_STEPS.map((step) => (
+                <button
+                  key={step.label}
+                  type="button"
+                  aria-pressed={state.minRating === step.value}
+                  onClick={() => setState({ minRating: step.value })}
+                  className={cn(
+                    'rounded-md py-1.75 text-center text-xs font-semibold transition-colors duration-(--duration-fast)',
+                    state.minRating === step.value
+                      ? 'bg-clay-400 text-stone-0'
+                      : 'bg-stone-150 text-stone-700 hover:bg-stone-200',
+                  )}
+                >
+                  {step.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        </Chip>
 
-      {TAG_CATEGORIES.map(tagChip)}
+        {TAG_CATEGORIES.map(tagChip)}
 
-      {/*
+        {/*
         Frame `02` also draws a `Style ▾` chip — category-specific tags whose
         option set changes with the selected vendor type (documentary,
         editorial, …). There is no `style` tag category in the data model and no
@@ -307,17 +322,18 @@ export function RefineBar({
         than invented here. Recorded as a named deviation from the frame.
       */}
 
-      {hasAnyRefinement ? (
-        <button
-          type="button"
-          onClick={clearRefinements}
-          className="px-1.5 py-1.75 text-[12.5px] font-semibold text-clay-500 hover:text-clay-600 hover:underline"
-        >
-          Clear
-        </button>
-      ) : null}
+        {hasAnyRefinement ? (
+          <button
+            type="button"
+            onClick={clearRefinements}
+            className="px-1.5 py-1.75 text-[12.5px] font-semibold text-clay-500 hover:text-clay-600 hover:underline"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
 
-      <label className="ml-auto flex items-center gap-2 text-[12.5px] text-stone-600">
+      <label className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
         Sort
         <select
           value={state.sort}

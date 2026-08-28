@@ -180,7 +180,15 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
         <div className={`${CONTAINER} relative`}>
           <div className="grid pt-10 lg:grid-cols-[56%_44%]">
-            <div className="lg:pr-8.5">
+            {/*
+              34px from the copy to the cluster is the frame's gutter at the
+              1440 design target, but at 1024 it was the last 18px the search
+              bar needed: "Any vendor type" wanted 495px and the column gave it
+              486. `30-responsive.md` is explicit that when a control cannot
+              fit at 1024 the widths change, not the content — so the gutter
+              narrows there and the frame's value returns at `xl`.
+            */}
+            <div className="lg:pr-4 xl:pr-8.5">
               <p className="mb-4.5 inline-flex items-center gap-1.75 rounded-full bg-clay-400/10 px-3 py-1.5 text-xs font-semibold text-clay-600">
                 <span aria-hidden="true" className="size-1.25 rounded-full bg-clay-400" />
                 Now booking in {LAUNCH_CITY}

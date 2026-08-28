@@ -60,7 +60,25 @@ export function VendorCard({
       )}
     >
       <Link href={`/vendors/${vendor.slug}`} className="block">
-        <div className={cn('relative overflow-hidden', isCompact ? 'h-33' : 'aspect-[4/3]')}>
+        {/*
+          The featured card drops its cover between `sm` and `lg`, where the
+          landing grid is two columns wide — `design/design-plan/30-responsive.md`.
+          At that width a 4:3 cover is around 260px tall, so four cards become
+          two tall rows of photography stacked under the search, which reads as
+          the page's subject rather than as a supporting row. The compact
+          search card is unaffected: its cover is a fixed 132px and its grid is
+          one column at those widths.
+
+          This is the vendor cards only. The landing category cards keep their
+          photographs at every width — their image *is* the content, and it is
+          94px rather than 4:3.
+        */}
+        <div
+          className={cn(
+            'relative overflow-hidden',
+            isCompact ? 'h-33' : 'aspect-[4/3] sm:max-lg:hidden',
+          )}
+        >
           {vendor.coverImageUrl ? (
             // A vendor's own photograph, from a bucket next/image is not
             // configured per-host for.
@@ -79,8 +97,17 @@ export function VendorCard({
         </div>
 
         <div className={cn('relative', isCompact ? 'px-3.5 pt-3 pb-3.5' : 'px-4 pt-3.5 pb-4')}>
-          {/* Overlaps the seam by half its height, as the frame draws it. */}
-          <div className={cn('absolute', isCompact ? '-top-4 left-3.5' : '-top-[17px] left-4')}>
+          {/*
+            Overlaps the seam by half its height, as the frame draws it — and
+            returns to the flow where there is no seam to overlap, so a
+            coverless card does not hang its avatar off its own top edge.
+          */}
+          <div
+            className={cn(
+              'absolute',
+              isCompact ? '-top-4 left-3.5' : '-top-[17px] left-4 sm:max-lg:static',
+            )}
+          >
             <Avatar name={vendor.businessName} src={vendor.profileImageUrl} size="sm" bordered />
           </div>
 

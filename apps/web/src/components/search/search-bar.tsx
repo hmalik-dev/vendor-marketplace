@@ -167,7 +167,17 @@ export function SearchBar({
       <span aria-hidden="true" className={divider} />
 
       <label
-        className={cn(segment, isHero ? 'sm:flex-[0.8] sm:pl-4.5' : 'sm:flex-[0.85] sm:pl-3.5')}
+        className={cn(
+          segment,
+          /*
+            The floor is the "Add a date" prompt plus the browser's own
+            calendar glyph, which sits inside the field and is not part of the
+            text's measured width — at 1024 the segment shrank to exactly the
+            prompt and the glyph landed on its last letter. Same rule as the
+            vendor-type segment: the width changes, not the words.
+          */
+          isHero ? 'sm:min-w-28 sm:flex-[0.8] sm:pl-4.5' : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
+        )}
       >
         <span className={label}>Event date</span>
         {/*

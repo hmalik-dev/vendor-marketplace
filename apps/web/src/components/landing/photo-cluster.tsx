@@ -63,11 +63,17 @@ export function PhotoCluster(): React.ReactElement {
      * hero row's height — the copy column is shorter and sits inside it.
      *
      * The cards are placed in absolute pixels, which is why this renders only
-     * from `lg`, where there is a column beside the headline wide enough to
-     * hold the 444px composition. The narrow-width scale-down it used to carry
-     * is gone with the widths that needed it.
+     * from `lg` and why it is *scaled* rather than reflowed where its column
+     * is narrower than it is: squeezing the cards individually would lose the
+     * overlaps that make this a cluster instead of three photographs.
+     *
+     * At 1024 the 44% column is 409px against the composition's 500px, so it
+     * was being sliced by the section's `overflow-hidden`. 0.8 fits it with a
+     * margin, and the full size returns at `xl`, where the column is wider
+     * than the cluster again. The height scales with it so the hero row is
+     * not left reserving space for a size nothing renders at.
      */
-    <div className="relative h-98 w-125 shrink-0">
+    <div className="relative h-79 w-125 origin-top-left scale-80 xl:h-98 xl:scale-100">
       {CARDS.map((card, index) => (
         <StockPhoto
           key={card.src}

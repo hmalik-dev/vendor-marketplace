@@ -35,6 +35,43 @@ describe('VendorCard', () => {
     expect(screen.getByText('$1,450')).toBeDefined();
   });
 
+  /*
+   * `30-responsive.md`: the featured vendor row drops its cover between `sm`
+   * and `lg`, where the landing grid is two columns and a 4:3 cover is around
+   * 260px tall — four cards become two tall rows of photography stacked under
+   * the search. The compact search card is unaffected; its cover is a fixed
+   * 132px and its grid is one column at those widths.
+   */
+  it('drops the featured cover in the two-column range and keeps it elsewhere', () => {
+    const { container } = render(<VendorCard vendor={vendor()} density="featured" />);
+    const cover = container.querySelector('[class*="aspect-[4/3]"]');
+
+    expect(cover).not.toBeNull();
+    expect(cover?.className).toContain('sm:max-lg:hidden');
+  });
+
+  it('keeps the compact search card cover at every width', () => {
+    const { container } = render(<VendorCard vendor={vendor()} density="compact" />);
+    const cover = container.querySelector('[class*="h-33"]');
+
+    expect(cover).not.toBeNull();
+    // `overflow-hidden` contains the substring, so this asserts the absence
+    // of the responsive variant rather than of the word.
+    expect(cover?.className).not.toContain('max-lg:hidden');
+  });
+
+  /*
+   * The avatar overlaps the cover seam by half its height. With no seam to
+   * overlap it must rejoin the flow, or a coverless card hangs it off its own
+   * top edge.
+   */
+  it('returns the avatar to the flow where the cover is hidden', () => {
+    const { container } = render(<VendorCard vendor={vendor()} density="featured" />);
+    const avatarWrapper = container.querySelector('[class*="-top-[17px]"]');
+
+    expect(avatarWrapper?.className).toContain('sm:max-lg:static');
+  });
+
   it('links to the vendor profile', () => {
     render(<VendorCard vendor={vendor()} />);
 

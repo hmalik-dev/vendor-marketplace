@@ -90,7 +90,15 @@ export function CategorySelect({
             'focus-visible:ring-0 focus-visible:ring-offset-0',
             // Stacks to a full-width row below `sm`, with the bar itself.
             'max-sm:w-full max-sm:py-1.5',
-            isHero ? 'sm:flex-[1.3]' : 'sm:flex-[1.15]',
+            /*
+              A flex share alone let this segment fall below its own longest
+              label at 1024, where the hero column is narrowest — "Any vendor
+              type" truncated to "Any vendor ty…". `30-responsive.md` says the
+              widths change rather than the content, so the segment carries a
+              floor wide enough for its longest value, and the space comes from
+              City, whose "Anywhere" needs a quarter of what it is given.
+            */
+            isHero ? 'sm:min-w-36 sm:flex-[1.3]' : 'sm:min-w-33 sm:flex-[1.15]',
           )}
         >
           <span

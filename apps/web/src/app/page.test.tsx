@@ -303,6 +303,20 @@ describe('HomePage', () => {
     expect(categoryCard?.closest('div.hidden')).toBeNull();
   });
 
+  /*
+   * `30-responsive.md`: a control that gains responsibility at 1024 must fit
+   * at 1024, and if it cannot, the widths change rather than the content. The
+   * hero gutter is the frame's 34px at the design target and narrower at `lg`,
+   * which is the 18px the search bar needed for "Any vendor type".
+   */
+  it('narrows the hero gutter at lg so the search bar fits at 1024', async () => {
+    const { container } = render(await HomePage());
+    const copyColumn = container.querySelector('[class*="lg:pr-4"]');
+
+    expect(copyColumn).not.toBeNull();
+    expect(copyColumn?.className).toContain('xl:pr-8.5');
+  });
+
   it('still renders the front door when the taxonomy is unavailable', async () => {
     // `getCategories` degrades to `[]` rather than throwing — the hero and its
     // search bar must survive a bad day on `/categories`. See ticket #33.
