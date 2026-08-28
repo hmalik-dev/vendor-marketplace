@@ -84,6 +84,20 @@ export function assertWebEnv(source: NodeJS.ProcessEnv = process.env): WebEnv {
   return result.data;
 }
 
+const LOCAL_ORIGIN = 'http://localhost:3000';
+
+/** Vercel supplies these on every deployment; neither carries a scheme. */
+function vercelOrigin(source: NodeJS.ProcessEnv): string | null {
+  /*
+   * The project's stable production domain, preferred even on a preview
+   * deployment: a preview's canonical URL and its share cards should point at
+   * production, not at a build-specific hostname that will 404 next week.
+   */
+  const host = source.VERCEL_PROJECT_PRODUCTION_URL ?? source.VERCEL_URL;
+
+  return host ? `https://${host.replace(/\/+$/, '')}` : null;
+}
+
 /**
  * This app's own public origin, without a trailing slash.
  *
@@ -91,9 +105,23 @@ export function assertWebEnv(source: NodeJS.ProcessEnv = process.env): WebEnv {
  * it is the same `WEB_URL` the API allow-lists for CORS rather than a second
  * value that could disagree. `WEB_URL` accepts a comma-separated list, because
  * it doubles as that allow-list — the first entry is the canonical origin.
+ *
+ * **A deployed environment never falls back to localhost.** `WEB_URL` carries
+ * a localhost default so a laptop needs no configuration, and that default
+ * reached production: every `<loc>` in the sitemap, the `Host` in robots.txt
+ * and every OG image URL pointed at `http://localhost:3000`, which makes the
+ * sitemap useless to a crawler and renders every shared link as a blank card.
+ * So when Vercel is the host, its own domain wins over a localhost value —
+ * whether that value was defaulted or set by hand, because a localhost
+ * canonical on a public origin is never what was meant.
  */
 export function siteOrigin(source: NodeJS.ProcessEnv = process.env): string {
-  const first = (source.WEB_URL ?? 'http://localhost:3000').split(',')[0]?.trim() ?? '';
+  const configured = (source.WEB_URL ?? '').split(',')[0]?.trim().replace(/\/+$/, '') ?? '';
+  const deployed = vercelOrigin(source);
 
-  return first.replace(/\/+$/, '') || 'http://localhost:3000';
+  if (deployed && (!configured || configured.startsWith('http://localhost'))) {
+    return deployed;
+  }
+
+  return configured || deployed || LOCAL_ORIGIN;
 }

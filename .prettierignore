@@ -10,3 +10,8 @@ packages/db/drizzle
 # (design/design-plan/*.md) is hand-maintained and IS formatted.
 design/*.dc.html
 design/support.js
+
+# The source documents handed to the design project, kept verbatim so a
+# re-import diffs cleanly against what was sent. Same reasoning as the exports
+# above: these are imports, not hand-maintained prose.
+design/uploads

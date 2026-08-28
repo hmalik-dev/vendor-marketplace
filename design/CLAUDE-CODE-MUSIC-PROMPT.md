@@ -15,7 +15,7 @@ A warm, calm product film for **Orla**, a marketplace where people book event
 vendors (photographers, caterers, venues, florists). The brand is warm and
 human: clay orange, ink, cream, serif type. The film shows a couple's wedding
 vendors being booked, then the same booking from the vendor's side. The mood is
-*relief*, not hype — the promise is "no back-and-forth."
+_relief_, not hype — the promise is "no back-and-forth."
 
 ## What to find
 

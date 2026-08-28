@@ -7,15 +7,15 @@ with no attribution required. It is recorded anyway: "no attribution required"
 is not the same as "no provenance", and the question a launch review asks is
 "where did this come from", which a licence name alone does not answer.
 
-| File                | Source                                                                                   | Licence          |
-| ------------------- | ---------------------------------------------------------------------------------------- | ---------------- |
+| File                | Source                                                                                    | Licence          |
+| ------------------- | ----------------------------------------------------------------------------------------- | ---------------- |
 | `auth.jpg`          | Unsplash — [`photo-1503525443530-339273ca8a86`](https://unsplash.com/photos/339273ca8a86) | Unsplash Licence |
-| `auth-customer.jpg` | **Unverified**                                                                           | **Unknown**      |
-| `auth-vendor.jpg`   | **Unverified**                                                                           | **Unknown**      |
-| `dj.jpg`            | **Unverified**                                                                           | **Unknown**      |
-| `florals.jpg`       | **Unverified**                                                                           | **Unknown**      |
-| `portrait.jpg`      | **Unverified**                                                                           | **Unknown**      |
-| `venue.jpg`         | **Unverified**                                                                           | **Unknown**      |
+| `auth-customer.jpg` | **Unverified**                                                                            | **Unknown**      |
+| `auth-vendor.jpg`   | **Unverified**                                                                            | **Unknown**      |
+| `dj.jpg`            | **Unverified**                                                                            | **Unknown**      |
+| `florals.jpg`       | **Unverified**                                                                            | **Unknown**      |
+| `portrait.jpg`      | **Unverified**                                                                            | **Unknown**      |
+| `venue.jpg`         | **Unverified**                                                                            | **Unknown**      |
 
 ## The unverified rows are a launch blocker
 
