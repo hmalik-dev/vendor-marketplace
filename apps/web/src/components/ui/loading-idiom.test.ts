@@ -20,11 +20,22 @@ import { describe, expect, it } from 'vitest';
  * class or the icon that carries it, the skeleton by the module it comes from
  * or a rendered `*Skeleton` tag. `\bSkeleton\b` would miss `VendorCardSkeleton`
  * entirely — there is no word boundary in front of a capital mid-identifier.
+ *
+ * `loading={…}` counts as a spinner because `Button` draws one from it. Without
+ * that, the rule had a hole the moment the element loader moved inside a
+ * component: a screen could render skeletons and a spinning button at once and
+ * the check would see only the skeletons.
  */
-const SPINNER = /animate-spin|<Loader2\b/;
+const SPINNER = /animate-spin|<Loader2\b|<Spinner\b|\bloading=\{/;
 const SKELETON = /from '@\/components\/ui\/skeleton'|<\w*Skeleton\b/;
 
-const EXEMPT = ['src/components/ui/skeleton.tsx', 'src/components/ui/sonner.tsx'];
+const EXEMPT = [
+  'src/components/ui/skeleton.tsx',
+  'src/components/ui/sonner.tsx',
+  // Where the element loader is *defined* into the button, not rendered beside
+  // a skeleton. Exempt for the same reason `skeleton.tsx` is.
+  'src/components/ui/button.tsx',
+];
 
 function sourceFiles(directory: string, base: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

@@ -346,9 +346,12 @@ export function MessagesScreen({
                   type="button"
                   variant="primary"
                   onClick={() => void submit()}
-                  disabled={sending || draft.trim() === '' || draft.length > MESSAGE_MAX_LENGTH}
+                  loading={sending}
+                  // Empty or over-length is unavailable, which is a different
+                  // state from working and keeps the disabled fade.
+                  disabled={draft.trim() === '' || draft.length > MESSAGE_MAX_LENGTH}
                 >
-                  {sending ? 'Sending…' : 'Send'}
+                  Send
                 </Button>
               </div>
             </div>

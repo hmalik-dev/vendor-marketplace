@@ -3,6 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { Slot } from 'radix-ui';
 
 import { cn } from '@/lib/utils';
+import { Spinner } from '@/components/ui/skeleton';
 
 /*
  * The five variants in design/design-plan/03-components.md. Copy is imperative
@@ -62,21 +63,85 @@ function Button({
   variant = 'primary',
   size = 'default',
   asChild = false,
+  loading = false,
+  children,
+  disabled,
   ...props
 }: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
+    /**
+     * The element loader: this one control is busy.
+     *
+     * Never a page spinner and never a skeleton — a skeleton says "content is
+     * on its way in this shape", and a button that is working has no shape to
+     * promise. The label stays put and dims rather than being swapped for the
+     * word "Loading", because a control whose text changes under the cursor
+     * has moved the target the reader was aiming at.
+     */
+    loading?: boolean;
   }) {
   const Comp = asChild ? Slot.Root : 'button';
+
+  /*
+   * `asChild` hands rendering to the child — a `Link`, usually — and injecting
+   * a second element would break Slot's single-child contract. A link is a
+   * navigation rather than an action, so it has nothing to be busy about.
+   */
+  if (asChild) {
+    return (
+      <Comp
+        data-slot="button"
+        data-variant={variant}
+        data-size={size}
+        className={cn(buttonVariants({ variant, size, className }))}
+        {...props}
+      >
+        {children}
+      </Comp>
+    );
+  }
 
   return (
     <Comp
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      data-loading={loading ? 'true' : undefined}
+      // Busy is not the same as unavailable: the control still exists and will
+      // work again, so it is announced rather than merely greyed out.
+      aria-busy={loading || undefined}
+      // A second submit would send the request twice.
+      disabled={disabled ?? loading}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        // The disabled fade is for a control you cannot use. This one you can,
+        // it is simply working, so it keeps its full contrast.
+        loading && 'disabled:opacity-100',
+      )}
       {...props}
-    />
+    >
+      {loading ? (
+        <Spinner
+          className={
+            /*
+              On a clay or ink fill a clay ring is invisible, so the ring takes
+              the label's colour. `03-components.md` specifies clay-400 for the
+              light-backed variants, which is what the fallback keeps.
+            */
+            variant === 'primary' || variant === 'ink' || variant === 'destructive'
+              ? 'border-current border-t-transparent'
+              : undefined
+          }
+        />
+      ) : null}
+      {/*
+        Wrapped only while loading. The variants space an icon from its label
+        with `gap-2` on the button itself, and a permanent wrapper would put
+        both inside one child and collapse that gap.
+      */}
+      {loading ? <span className="opacity-60">{children}</span> : children}
+    </Comp>
   );
 }
 

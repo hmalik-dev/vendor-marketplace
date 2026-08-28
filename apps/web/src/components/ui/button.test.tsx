@@ -98,3 +98,77 @@ describe('Button', () => {
     expect(button).toHaveProperty('disabled', true);
   });
 });
+
+/**
+ * The element loader. A button that is working is not a button that is
+ * unavailable, and the two must not look or sound the same.
+ */
+describe('Button — while its own action runs', () => {
+  it('shows the 16px ring and announces itself as busy', () => {
+    render(<Button loading>Send request</Button>);
+
+    const button = screen.getByRole('button', { name: /Send request/ });
+
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.querySelector('[role=status]')).not.toBeNull();
+  });
+
+  /* A second click would send the request twice. */
+  it('cannot be pressed again while it is working', () => {
+    render(<Button loading>Send request</Button>);
+
+    expect(
+      (screen.getByRole('button', { name: /Send request/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  /* The label is what the reader aimed at; it dims rather than disappearing. */
+  it('keeps its label, dimmed rather than replaced', () => {
+    render(<Button loading>Send request</Button>);
+
+    const button = screen.getByRole('button', { name: /Send request/ });
+
+    expect(button.textContent).toContain('Send request');
+    expect(button.querySelector('span.opacity-60')).not.toBeNull();
+  });
+
+  /* On a clay fill a clay ring is invisible. */
+  it('takes the label’s colour on a filled variant', () => {
+    render(
+      <Button loading variant="primary">
+        Send
+      </Button>,
+    );
+
+    expect(screen.getByRole('status').className).toContain('border-current');
+  });
+
+  it('keeps the specified clay ring on a light-backed variant', () => {
+    render(
+      <Button loading variant="secondary">
+        Save
+      </Button>,
+    );
+
+    expect(screen.getByRole('status').className).toContain('border-clay-400');
+  });
+
+  it('draws no ring when it is not working', () => {
+    render(<Button>Send request</Button>);
+
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  /* A link navigates; it has no action of its own to be busy about. */
+  it('leaves an asChild link untouched', () => {
+    render(
+      <Button asChild>
+        <a href="/search">Find a vendor</a>
+      </Button>,
+    );
+
+    expect(
+      screen.getByRole('link', { name: 'Find a vendor' }).querySelector('[role=status]'),
+    ).toBeNull();
+  });
+});
