@@ -88,8 +88,19 @@ header 64px — logo | [ Vendor type ▾ | City | Date | Search ] | by name | ac
 **The 280px filter rail is gone.** It held a permanent column of the viewport for
 controls touched once or twice per session, and capped results at three across.
 Filters are one horizontal **Refine** bar, which returns the full width to what the
-page is for: **8 vendors visible instead of 3**, four across, two full rows with
-the third peeking to signal there's more.
+page is for: **8 vendors instead of 3**, four across — a full first row, with the
+second row's cards carrying their price row above the fold and their bottom edge
+just past it, which is what signals there's more.
+
+> **Corrected 2026-08-27, after the 3:2 cover import.** This budget previously
+> read "two full rows with the third peeking". That was written against the old
+> 132px cover and is arithmetically impossible at 3:2: at 1440 the cards are
+> 335px wide, so a cover is 223px and a card 357px, and two rows plus the chrome
+> above them come to roughly 911px. **Frame `02 Search` does not achieve it
+> either** — measured in a browser, its second row ends at 943px inside a 902px
+> frame, clipped by the frame's own `overflow: hidden`. The frame is the
+> acceptance criterion, so the budget is corrected to what the frame draws
+> rather than the code being bent to a number the design no longer meets.
 
 This is the one place the "a persistent rail beats a modal" law in `04-laws.md`
 yields — a rail earns its width when its contents are referenced _while_ working in
@@ -144,7 +155,7 @@ ids, not strings. Shareable, back button works, SWR revalidates.
 - [ ] Category is selectable in exactly one control
 - [ ] Date does not appear in the Refine bar
 - [ ] No filter rail; filters are a horizontal bar
-- [ ] 8 cards visible at 1440 × 900 with none sliced — assert each first- and second-row card's `getBoundingClientRect().bottom <= pane.bottom`
+- [ ] 8 cards rendered at 1440 × 900, four across. The **first** row is fully visible, and every second-row card's **price row** is above the fold — assert each first-row card's `getBoundingClientRect().bottom <= innerHeight`, and each second-row card's price row likewise. The second row's bottom edge falls just past the fold, as frame `02` draws it
 - [ ] Name search present as the smallest affordance on the screen
 - [ ] No separate active-filter pill row
 - [ ] Page height exactly one viewport; only the results grid scrolls

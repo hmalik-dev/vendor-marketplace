@@ -36,23 +36,39 @@ describe('VendorCard', () => {
   });
 
   /*
+   * A ratio, never a fixed height: a fixed height against a fluid card width
+   * crops the same photo differently at every breakpoint, which is a cover no
+   * vendor can design against. Both densities declare it, so a regression to a
+   * `h-*` on either one fails here.
+   */
+  it.each(['compact', 'featured'] as const)(
+    'gives the %s cover a 3:2 ratio, not a height',
+    (density) => {
+      const { container } = render(<VendorCard vendor={vendor()} density={density} />);
+      const cover = container.querySelector('[class*="aspect-[3/2]"]');
+
+      expect(cover).not.toBeNull();
+      expect(cover?.className).not.toMatch(/\bh-\d/);
+    },
+  );
+
+  /*
    * `30-responsive.md`: the featured vendor row drops its cover between `sm`
-   * and `lg`, where the landing grid is two columns and a 4:3 cover is around
+   * and `lg`, where the landing grid is two columns and the cover is around
    * 260px tall — four cards become two tall rows of photography stacked under
-   * the search. The compact search card is unaffected; its cover is a fixed
-   * 132px and its grid is one column at those widths.
+   * the search. The compact search card is unaffected; its grid is one column
+   * at those widths.
    */
   it('drops the featured cover in the two-column range and keeps it elsewhere', () => {
     const { container } = render(<VendorCard vendor={vendor()} density="featured" />);
-    const cover = container.querySelector('[class*="aspect-[4/3]"]');
+    const cover = container.querySelector('[class*="aspect-[3/2]"]');
 
-    expect(cover).not.toBeNull();
     expect(cover?.className).toContain('sm:max-lg:hidden');
   });
 
   it('keeps the compact search card cover at every width', () => {
     const { container } = render(<VendorCard vendor={vendor()} density="compact" />);
-    const cover = container.querySelector('[class*="h-33"]');
+    const cover = container.querySelector('[class*="aspect-[3/2]"]');
 
     expect(cover).not.toBeNull();
     // `overflow-hidden` contains the substring, so this asserts the absence
@@ -132,13 +148,13 @@ describe('VendorCard', () => {
   it('falls back to a labelled placeholder when the vendor has no cover', () => {
     render(<VendorCard vendor={vendor()} />);
 
-    expect(screen.getByRole('img', { name: 'Placeholder for cover 4:3' })).toBeDefined();
+    expect(screen.getByRole('img', { name: 'Placeholder for cover 3:2' })).toBeDefined();
   });
 
   it('uses the vendor photograph when there is one', () => {
     render(<VendorCard vendor={vendor({ coverImageUrl: 'https://example.test/cover.jpg' })} />);
 
-    expect(screen.queryByRole('img', { name: 'Placeholder for cover 4:3' })).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Placeholder for cover 3:2' })).toBeNull();
   });
 
   it('handles a vendor with no location without leaving a stray separator', () => {

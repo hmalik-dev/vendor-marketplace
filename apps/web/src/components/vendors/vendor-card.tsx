@@ -61,22 +61,28 @@ export function VendorCard({
     >
       <Link href={`/vendors/${vendor.slug}`} className="block">
         {/*
+          A ratio, never a fixed height. A fixed height against a fluid card
+          width crops the same vendor's photo differently at every breakpoint,
+          which is a cover nobody can design against; 3:2 is also the native
+          ratio of essentially every camera, so an uploaded portfolio image
+          needs no re-crop. The height follows the column — near 207px at both
+          four columns (1440) and three (1024).
+
           The featured card drops its cover between `sm` and `lg`, where the
           landing grid is two columns wide — `design/design-plan/30-responsive.md`.
-          At that width a 4:3 cover is around 260px tall, so four cards become
-          two tall rows of photography stacked under the search, which reads as
-          the page's subject rather than as a supporting row. The compact
-          search card is unaffected: its cover is a fixed 132px and its grid is
-          one column at those widths.
+          At that width the cover is around 260px tall, so four cards become two
+          tall rows of photography stacked under the search, which reads as the
+          page's subject rather than as a supporting row. The compact search
+          card is unaffected: its grid is one column at those widths.
 
           This is the vendor cards only. The landing category cards keep their
           photographs at every width — their image *is* the content, and it is
-          94px rather than 4:3.
+          94px rather than a ratio.
         */}
         <div
           className={cn(
-            'relative overflow-hidden',
-            isCompact ? 'h-33' : 'aspect-[4/3] sm:max-lg:hidden',
+            'relative aspect-[3/2] overflow-hidden',
+            isCompact ? null : 'sm:max-lg:hidden',
           )}
         >
           {vendor.coverImageUrl ? (
@@ -90,7 +96,7 @@ export function VendorCard({
             />
           ) : (
             <Placeholder
-              label="cover 4:3"
+              label="cover 3:2"
               className="size-full transition-transform duration-(--duration-slow) motion-safe:group-hover/card:scale-[1.03]"
             />
           )}
