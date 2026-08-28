@@ -1,4 +1,5 @@
 import { ClerkProvider } from '@clerk/nextjs';
+import { ui } from '@clerk/ui';
 import { shadcn } from '@clerk/ui/themes';
 import type { Metadata } from 'next';
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
@@ -104,6 +105,7 @@ export default function RootLayout({
           appearance object: it becomes a second source of truth and it drifts.
         */}
         <ClerkProvider
+          ui={ui}
           appearance={{ theme: shadcn, variables: { borderRadius: 'var(--radius-lg)' } }}
           localization={CLERK_COPY}
         >

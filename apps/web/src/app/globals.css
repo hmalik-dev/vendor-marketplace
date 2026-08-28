@@ -174,6 +174,18 @@ body:has([data-auth-screen]) > footer {
  * overrides do not reach the `@clerk/ui` theme build, so the corrections live
  * here. Everything below resolves to a token, so the palette still has exactly
  * one source of truth.
+ *
+ * **These selectors are safe because the component build is pinned.** They name
+ * Clerk's internal DOM, which unpinned is whatever its CDN serves today — a
+ * component update on their side would quietly grow the auth card's frame back
+ * with nothing failing and nothing to notice. `layout.tsx` passes `ui` from
+ * `@clerk/ui` to `ClerkProvider`, so that structure now moves only when this
+ * repository upgrades the dependency, which is a diff and is reviewable.
+ *
+ * They are kept rather than replaced by `appearance.elements` because several
+ * of them do work that API cannot express — the `display: contents` flattening
+ * below reorders Clerk's card and footer around our own hint, which is a
+ * layout relationship between their DOM and ours, not a style on one element.
  */
 .cl-avatarBox,
 .cl-userButtonAvatarBox {
