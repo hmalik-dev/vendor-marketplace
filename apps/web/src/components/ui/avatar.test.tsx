@@ -76,7 +76,7 @@ describe('Avatar', () => {
   });
 
   it('adds the stone-0 border only when it overlaps imagery', () => {
-    render(<Avatar name="Maya Fernandez" bordered />);
+    render(<Avatar name="Maya Fernandez" ring="card" />);
     expect(screen.getByRole('img', { name: 'Maya Fernandez' }).className).toContain(
       'border-2 border-stone-0',
     );

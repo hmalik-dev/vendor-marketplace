@@ -114,7 +114,7 @@ export function VendorCard({
               isCompact ? '-top-4 left-3.5' : '-top-[17px] left-4 sm:max-lg:static',
             )}
           >
-            <Avatar name={vendor.businessName} src={vendor.profileImageUrl} size="sm" bordered />
+            <Avatar name={vendor.businessName} src={vendor.profileImageUrl} size="sm" ring="card" />
           </div>
 
           <h3

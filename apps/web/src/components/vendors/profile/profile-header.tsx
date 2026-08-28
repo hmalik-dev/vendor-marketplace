@@ -19,15 +19,16 @@ export interface ProfileHeaderProps {
 }
 
 /**
- * The identity block of frame `03`: a 150px 21:9 cover, then the avatar and
- * name entirely below it.
+ * The identity block of frame `03`: a full-bleed 196px banner with an 82px
+ * avatar overlapping it.
  *
- * **There is no overlap, and that is deliberate.** An earlier revision pulled
- * the avatar up 32px with a negative margin; the pane it sits in has
- * `overflow:hidden`, so the browser sliced the avatar's top edge and part of
- * the name off. `12-vendor-profile.md` records the decision: if the flourish is
- * ever wanted back it has to live inside one positioned wrapper holding both
- * the cover and the identity row, not a margin crossing a clipping boundary.
+ * **The overlap was flattened once and is now back, built the only way it is
+ * safe.** The earlier attempt pulled the avatar up with a negative margin that
+ * crossed a pane's `overflow: hidden` boundary, and the browser sliced its top
+ * edge off. What makes this version safe is that the banner and the identity
+ * row live inside **one positioned wrapper that does not clip**, and the row is
+ * lifted out of the banner with `position: relative` and `z-index`. Those
+ * declarations are load-bearing: drop either and the old defect returns.
  */
 export function ProfileHeader({
   businessName,
@@ -45,15 +46,20 @@ export function ProfileHeader({
   const hiddenTagCount = tags.length - visibleTags.length;
 
   return (
-    <>
+    /*
+      The one wrapper the overlap depends on. It holds both the banner and the
+      identity row and never clips, so the row's negative margin cannot cross a
+      boundary that would slice the avatar.
+    */
+    <div className="relative overflow-visible">
       {/*
-        `box-sizing: border-box` on a fixed 150px so any border or padding a
+        `box-sizing: border-box` on a fixed 196px so any border or padding a
         later change adds is taken out of the height rather than added to it —
         the acceptance criterion the sliced-avatar bug produced.
       */}
       <div
         data-testid="profile-cover"
-        className="box-border flex h-[150px] w-full shrink-0 items-end bg-stone-200"
+        className="relative z-0 box-border flex h-[196px] w-full shrink-0 items-end bg-stone-200"
         style={
           coverImageUrl
             ? {
@@ -66,20 +72,29 @@ export function ProfileHeader({
       >
         {coverImageUrl ? null : (
           <span className="p-3 text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
-            cover 21:9
+            cover · full-bleed banner
           </span>
         )}
       </div>
 
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-4 pt-4.5 pb-3.5">
+      <div className="mx-auto w-full max-w-7xl overflow-visible px-4 sm:px-6 lg:px-8">
+        {/*
+          Lifted out of the banner. `relative` and `z-index` are what put the
+          avatar over the banner rather than under it — without them the
+          negative margin only moves the row, and the banner paints on top.
+        */}
+        <div
+          data-testid="profile-identity"
+          className="relative z-[2] -mt-[34px] flex items-start gap-4 pb-3.5"
+        >
           <Avatar
             name={businessName}
             src={profileImageUrl}
             size="xl"
-            className="font-display text-[28px]"
+            ring="banner"
+            className="shadow-[0_4px_14px_rgba(35,32,28,.10)]"
           />
-          <div className="min-w-0">
+          <div className="mt-[23px] min-w-0">
             <h1 className="font-display text-[33px] leading-[1.1] text-stone-900">
               {businessName}
             </h1>
@@ -133,7 +148,7 @@ export function ProfileHeader({
           ) : null}
         </ul>
       </div>
-    </>
+    </div>
   );
 }
 

@@ -15,12 +15,12 @@ export const AVATAR_SIZES = {
   md: 38,
   lg: 64,
   /*
-   * The public vendor profile's identity row. `12-vendor-profile.md` revised
-   * this from 80 to 72 when the avatar stopped overlapping the cover; 80 was
-   * left behind and unused, so the token follows the plan rather than keeping
-   * a size nothing renders.
+   * The public vendor profile's identity row. Frame `03` reinstates the
+   * overlap the previous revision flattened, and sizes the avatar at 82 with
+   * the 4px ring drawn *inside* it — hence `box-border` below, so the ring
+   * comes out of the 82 rather than adding to it.
    */
-  xl: 72,
+  xl: 82,
 } as const;
 
 export type AvatarSize = keyof typeof AVATAR_SIZES;
@@ -54,13 +54,28 @@ export function initialsFor(name: string): string {
   return `${first}${last}`.toUpperCase();
 }
 
+/**
+ * The two ring treatments the design draws, each matching the ground it sits
+ * against so the avatar reads as cut out of it rather than outlined.
+ *
+ * `card` is the 2px `stone-0` ring on a vendor card's seam; `banner` is the
+ * 4px `stone-50` ring where the profile avatar overlaps its banner — the page
+ * ground, deliberately not `stone-0`.
+ */
+const AVATAR_RINGS = {
+  card: 'border-2 border-stone-0',
+  banner: 'border-4 border-stone-50',
+} as const;
+
+export type AvatarRing = keyof typeof AVATAR_RINGS;
+
 export interface AvatarProps {
   /** The person or business the avatar stands for. Drives initials and tone. */
   name: string;
   src?: string | null;
   size?: AvatarSize;
-  /** 2px stone-0 border, for an avatar overlapping imagery. */
-  bordered?: boolean;
+  /** A ring matching the ground behind it, for an avatar overlapping imagery. */
+  ring?: AvatarRing;
   className?: string;
 }
 
@@ -68,13 +83,15 @@ export function Avatar({
   name,
   src,
   size = 'sm',
-  bordered = false,
+  ring,
   className,
 }: AvatarProps): React.ReactElement {
   const pixels = AVATAR_SIZES[size];
   const shared = cn(
-    'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full',
-    bordered && 'border-2 border-stone-0',
+    // `box-border` keeps the ring inside the declared size, so an 82px avatar
+    // occupies 82px whether or not it is ringed and the overlap stays exact.
+    'box-border inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full',
+    ring && AVATAR_RINGS[ring],
     className,
   );
 
