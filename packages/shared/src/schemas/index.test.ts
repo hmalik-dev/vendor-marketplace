@@ -649,18 +649,32 @@ describe('tagSuggestionResponseSchema', () => {
 });
 
 describe('uploadedImageSchema', () => {
-  it('requires both processed variants to be absolute URLs', () => {
-    const parsed = uploadedImageSchema.parse({
-      imageUrl: 'https://cdn.example.com/a.webp',
-      thumbnailUrl: 'https://cdn.example.com/a-thumb.webp',
-    });
-    expect(parsed.thumbnailUrl).toBe('https://cdn.example.com/a-thumb.webp');
+  const uploaded = {
+    imageKey: 'portfolio/a.webp',
+    thumbnailKey: 'portfolio/a-thumb.webp',
+    imageUrl: 'https://cdn.example.com/portfolio/a.webp',
+    thumbnailUrl: 'https://cdn.example.com/portfolio/a-thumb.webp',
+  };
+
+  /*
+   * The keys are what a caller persists — the URLs come back for an immediate
+   * preview and are never stored, because a stored URL couples the row to the
+   * CDN it was uploaded under.
+   */
+  it('carries the object keys alongside the preview URLs', () => {
+    const parsed = uploadedImageSchema.parse(uploaded);
+
+    expect(parsed.imageKey).toBe('portfolio/a.webp');
+    expect(parsed.thumbnailKey).toBe('portfolio/a-thumb.webp');
+    expect(parsed.thumbnailUrl).toBe('https://cdn.example.com/portfolio/a-thumb.webp');
   });
 
-  it('rejects a relative image path', () => {
-    expect(
-      uploadedImageSchema.safeParse({ imageUrl: '/a.webp', thumbnailUrl: '/a-thumb.webp' }).success,
-    ).toBe(false);
+  it('requires a key for each variant', () => {
+    expect(uploadedImageSchema.safeParse({ ...uploaded, imageKey: '' }).success).toBe(false);
+  });
+
+  it('rejects a relative preview URL', () => {
+    expect(uploadedImageSchema.safeParse({ ...uploaded, imageUrl: '/a.webp' }).success).toBe(false);
   });
 });
 

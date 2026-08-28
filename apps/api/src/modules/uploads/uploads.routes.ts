@@ -67,7 +67,17 @@ export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
         app.storage.put(thumbnailKey, processed.thumbnail, WEBP_CONTENT_TYPE),
       ]);
 
-      return reply.status(201).header('location', imageUrl).send({ imageUrl, thumbnailUrl });
+      /*
+       * The **keys** are what the caller persists; the URLs come back only so
+       * the upload can be previewed without a round trip. Storing a URL would
+       * couple the row to the CDN it happened to be uploaded under.
+       */
+      return reply.status(201).header('location', imageUrl).send({
+        imageKey: key,
+        thumbnailKey,
+        imageUrl,
+        thumbnailUrl,
+      });
     },
   );
 };

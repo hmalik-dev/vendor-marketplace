@@ -216,3 +216,57 @@ export function isUniversallyPastDate(value: string, now: Date = new Date()): bo
 
   return parsed.getTime() < addDays(now, -1).setUTCHours(0, 0, 0, 0);
 }
+
+// --- Image URLs ------------------------------------------------------------
+
+/**
+ * Turns a stored image value into a URL a browser can fetch.
+ *
+ * **The database stores an object key, never a host.** An absolute URL in a
+ * column couples every row to the CDN it was uploaded under, so moving the CDN
+ * stops being a config change and becomes a migration plus a window where the
+ * data is split across two hosts. Storing the key and resolving here removes
+ * that coupling permanently: changing `S3_PUBLIC_URL` repoints every image with
+ * no data change at all.
+ *
+ * Two kinds of value are deliberately passed through rather than prefixed,
+ * because neither is ours to host:
+ *
+ * - an **absolute URL** — a Clerk avatar, or a row written before this change;
+ * - a **site-relative path** — the seeded marketing imagery under `/marketing`,
+ *   which the web app serves itself.
+ *
+ * This is the only place resolution happens. A second one would be a second
+ * source of truth, which is the thing the ticket exists to remove.
+ */
+export function resolveImageUrl(
+  publicBaseUrl: string | undefined,
+  stored: string | null | undefined,
+): string | null {
+  const value = stored?.trim();
+
+  if (!value) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(value) || value.startsWith('/')) {
+    return value;
+  }
+
+  const base = publicBaseUrl?.replace(/\/+$/, '');
+
+  // Without a base there is no URL to build. A bare key would 404, and a bare
+  // host would render the bucket root, so the honest answer is "no image".
+  return base ? `${base}/${value.replace(/^\/+/, '')}` : null;
+}
+
+/**
+ * The inverse, for migrating rows written before keys were stored: strips a
+ * known base so an absolute URL becomes the key it was always describing.
+ * Anything not under that base is left exactly as it is.
+ */
+export function toObjectKey(publicBaseUrl: string, stored: string): string {
+  const base = publicBaseUrl.replace(/\/+$/, '');
+
+  return stored.startsWith(`${base}/`) ? stored.slice(base.length + 1) : stored;
+}

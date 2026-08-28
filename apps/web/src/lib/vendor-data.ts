@@ -1,10 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import {
-  vendorSearchResultSchema,
-  type Category,
-  type VendorCard,
-} from '@vendor-marketplace/shared';
+import { type Category } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import {
@@ -15,12 +11,14 @@ import {
   wireTagListSchema,
   wirePublicVendorProfileSchema,
   wireVendorDashboardSchema,
+  wireVendorSearchResultSchema,
   wireVendorProfileSchema,
   type WireAvailability,
   type WirePortfolioItem,
   type WireServicePackage,
   type WireTag,
   type WirePublicVendorProfile,
+  type WireVendorCard,
   type WireVendorDashboard,
   type WireVendorProfile,
 } from './wire-schemas';
@@ -227,10 +225,10 @@ export const FEATURED_VENDOR_COUNT = 4;
  * must still render its search bar when one section's data is unavailable, and
  * a marketplace with no published vendors yet is a normal state, not an error.
  */
-export async function getFeaturedVendors(): Promise<VendorCard[]> {
+export async function getFeaturedVendors(): Promise<WireVendorCard[]> {
   return degradeToEmpty(async () => {
     const result = await apiRequest(`/vendors?sort=rating&pageSize=${FEATURED_VENDOR_COUNT}`, {
-      schema: vendorSearchResultSchema,
+      schema: wireVendorSearchResultSchema,
     });
 
     return result.items;

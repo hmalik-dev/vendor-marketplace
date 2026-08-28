@@ -59,10 +59,11 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
    * which is what lets the vendor leave the page mid-upload.
    */
   const persist = useCallback(
-    async (stored: { imageUrl: string; thumbnailUrl: string | null }): Promise<void> => {
+    async (stored: { imageKey: string; thumbnailKey: string | null }): Promise<void> => {
       const created = await request('/vendor/portfolio', {
         method: 'POST',
-        body: { imageUrl: stored.imageUrl, thumbnailUrl: stored.thumbnailUrl },
+        // The key is persisted; the URL is built at the render boundary.
+        body: { imageUrl: stored.imageKey, thumbnailUrl: stored.thumbnailKey },
         schema: wirePortfolioItemSchema,
       });
 
@@ -309,7 +310,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
                   environments, so next/image would need per-env remote patterns. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={item.thumbnailUrl ?? item.imageUrl}
+                src={item.thumbnailUrl ?? item.imageUrl ?? ''}
                 alt={item.caption ?? ''}
                 className="aspect-[4/3] w-full cursor-grab object-cover"
               />

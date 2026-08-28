@@ -15,9 +15,35 @@ import {
   servicePackageSchema,
   tagSchema,
   userSchema,
+  vendorCardSchema,
   vendorProfileDetailSchema,
+  vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
+import { resolveImageUrl } from '@vendor-marketplace/shared';
 import { z } from 'zod';
+
+/**
+ * The one place a stored image value becomes a URL.
+ *
+ * The database holds an **object key**, so that moving the CDN is a config
+ * change rather than a migration — and the resolution happens here, on the way
+ * in, so no component has to remember to do it. A second resolution site would
+ * be a second source of truth, which is the coupling this exists to remove.
+ *
+ * `NEXT_PUBLIC_S3_PUBLIC_URL` is read as a literal property access because
+ * Next inlines these only when it can see one statically.
+ */
+const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_S3_PUBLIC_URL;
+
+const imageUrl = () =>
+  z
+    .string()
+    .nullable()
+    .transform((value) => resolveImageUrl(IMAGE_BASE_URL, value));
+
+/** Non-nullable in the row, but still resolvable to nothing. */
+const requiredImageUrl = () =>
+  z.string().transform((value) => resolveImageUrl(IMAGE_BASE_URL, value));
 
 /**
  * The domain schemas in `@vendor-marketplace/shared` model timestamps as `Date`, which
@@ -26,6 +52,7 @@ import { z } from 'zod';
  * without forking the rest of the shape.
  */
 export const wireUserSchema = userSchema.extend({
+  avatarUrl: imageUrl(),
   bannedAt: z.coerce.date().nullable(),
   deletedAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
@@ -43,6 +70,8 @@ export const wireTagListSchema = z.array(wireTagSchema);
 export const wireCategoryListSchema = z.array(categorySchema);
 
 export const wireVendorProfileSchema = vendorProfileDetailSchema.extend({
+  profileImageUrl: imageUrl(),
+  coverImageUrl: imageUrl(),
   tags: z.array(wireTagSchema),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -59,6 +88,8 @@ export type WireServicePackage = z.infer<typeof wireServicePackageSchema>;
 export const wireServicePackageListSchema = z.array(wireServicePackageSchema);
 
 export const wirePortfolioItemSchema = portfolioItemSchema.extend({
+  imageUrl: requiredImageUrl(),
+  thumbnailUrl: imageUrl(),
   createdAt: z.coerce.date(),
 });
 export type WirePortfolioItem = z.infer<typeof wirePortfolioItemSchema>;
@@ -70,6 +101,8 @@ export const wirePortfolioListSchema = z.array(wirePortfolioItemSchema);
  * carry timestamps, which cross the wire as ISO strings.
  */
 export const wirePublicVendorProfileSchema = publicVendorProfileSchema.extend({
+  profileImageUrl: imageUrl(),
+  coverImageUrl: imageUrl(),
   tags: z.array(wireTagSchema),
   packages: z.array(wireServicePackageSchema),
   portfolio: z.array(wirePortfolioItemSchema),
@@ -133,6 +166,7 @@ export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
 
 /** Messaging, as JSON — every timestamp coerced back at the boundary. */
 export const wireConversationSchema = conversationSummarySchema.extend({
+  otherPartyAvatarUrl: imageUrl(),
   lastMessageAt: z.coerce.date().nullable(),
 });
 export type WireConversation = z.infer<typeof wireConversationSchema>;
@@ -151,3 +185,19 @@ export const wireNotificationSchema = notificationItemSchema.extend({
 });
 export type WireNotification = z.infer<typeof wireNotificationSchema>;
 export const wireNotificationPageSchema = paginatedSchema(wireNotificationSchema);
+
+/**
+ * Search results, with each card's images resolved from their stored keys.
+ *
+ * The domain schema is used directly on the API side, where the values are
+ * still keys; this is the boundary where they become URLs.
+ */
+export const wireVendorCardSchema = vendorCardSchema.extend({
+  coverImageUrl: imageUrl(),
+  profileImageUrl: imageUrl(),
+});
+export type WireVendorCard = z.infer<typeof wireVendorCardSchema>;
+
+export const wireVendorSearchResultSchema = vendorSearchResultSchema.extend({
+  items: z.array(wireVendorCardSchema),
+});

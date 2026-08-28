@@ -32,7 +32,7 @@ export interface UseUploadQueueOptions {
    * throwing marks it failed, because an image in object storage that no row
    * points at is not a photo the vendor has.
    */
-  onUploaded: (stored: { imageUrl: string; thumbnailUrl: string | null }) => Promise<void>;
+  onUploaded: (stored: { imageKey: string; thumbnailKey: string | null }) => Promise<void>;
 }
 
 export interface UploadQueue {

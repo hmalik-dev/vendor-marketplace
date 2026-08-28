@@ -384,7 +384,17 @@ export type UpdateVendorProfileInput = z.infer<typeof updateVendorProfileSchema>
 // --- Uploads ---------------------------------------------------------------
 
 /** What `POST /upload/image` returns once the processed variants are stored. */
+/**
+ * What an upload returns: the **object keys**, not URLs.
+ *
+ * The key is what gets stored, so that a CDN move is a config change rather
+ * than a migration. `resolveImageUrl` turns one into a URL at the render
+ * boundary, which is the only place that resolution happens.
+ */
 export const uploadedImageSchema = z.object({
+  imageKey: z.string().min(1).max(MAX_URL_LENGTH),
+  thumbnailKey: z.string().min(1).max(MAX_URL_LENGTH),
+  /** Resolved for immediate preview only — never persisted. */
   imageUrl: urlSchema,
   thumbnailUrl: urlSchema,
 });

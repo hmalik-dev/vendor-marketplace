@@ -18,7 +18,12 @@ export interface ImageUploadProps {
   /** Storage namespace; must be one of the API's known prefixes. */
   prefix: 'vendor-profile' | 'vendor-cover' | 'customer-profile';
   value: string | null;
-  onChange: (imageUrl: string) => void;
+  /**
+   * Receives the stored **object key**, which is what gets persisted. The
+   * preview uses the resolved URL the upload also returns, so a fresh upload
+   * shows immediately without waiting for a round trip.
+   */
+  onChange: (imageKey: string, previewUrl: string) => void;
   /** Sizing utility for the preview frame. Height-based frames stop a wide
    * drop zone growing taller as the pane widens. */
   aspectClassName?: string;
@@ -76,7 +81,7 @@ export function ImageUpload({
     setProgress(0);
     try {
       const stored = await upload(file, prefix, { onProgress: setProgress });
-      onChange(stored.imageUrl);
+      onChange(stored.imageKey, stored.imageUrl);
       toast.success(`${label} updated.`);
     } catch (error) {
       // The previous image is left in place: `onChange` never ran.

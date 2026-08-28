@@ -1,4 +1,5 @@
-import { kmToMiles, type PortfolioItem } from '@vendor-marketplace/shared';
+import { kmToMiles } from '@vendor-marketplace/shared';
+import type { WirePortfolioItem } from '@/lib/wire-schemas';
 import { PortfolioStrip } from './portfolio-strip';
 
 export interface AboutPaneProps {
@@ -6,7 +7,7 @@ export interface AboutPaneProps {
   completedEventCount: number;
   serviceRadiusKm: number | null;
   responseTimeHours: number | null;
-  portfolio: readonly PortfolioItem[];
+  portfolio: readonly WirePortfolioItem[];
   onSeeAllHref: string;
 }
 

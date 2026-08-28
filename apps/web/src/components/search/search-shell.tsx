@@ -4,10 +4,10 @@ import {
   isPastDate,
   todayDateString,
   vendorNounFor,
-  vendorSearchResultSchema,
   type Category,
   type VendorSearchResult,
 } from '@vendor-marketplace/shared';
+import { wireVendorSearchResultSchema } from '@/lib/wire-schemas';
 import { SlidersHorizontal, SearchX } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ApiClientError, apiRequest } from '@/lib/api-client';
@@ -99,7 +99,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
     setError(null);
 
     apiRequest(`/vendors?${query}`, {
-      schema: vendorSearchResultSchema,
+      schema: wireVendorSearchResultSchema,
       token: null,
       signal: controller.signal,
     })

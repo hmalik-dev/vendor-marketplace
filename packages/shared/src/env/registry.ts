@@ -415,6 +415,28 @@ export const ENV_REGISTRY = [
     setup: MINIO_SETUP,
   },
   {
+    /*
+     * The same base, readable in the browser.
+     *
+     * The database stores object keys, so a URL is built at the render
+     * boundary — and some of those renders happen in client components (the
+     * upload preview, the message avatars). Both halves must resolve to the
+     * same host, which is why this mirrors `S3_PUBLIC_URL` rather than being a
+     * second setting: a mismatch would split the images across two hosts,
+     * which is exactly what storing keys exists to prevent.
+     */
+    key: 'NEXT_PUBLIC_S3_PUBLIC_URL',
+    capability: 'storage',
+    audience: 'browser',
+    consumers: ['web'],
+    environments: 'per-environment',
+    shape: HTTP_URL,
+    productionShape: HTTPS_URL,
+    defaultValue: 'http://localhost:9000/vendor-marketplace-uploads',
+    description: 'Public base URL for images, mirroring S3_PUBLIC_URL for the browser.',
+    setup: MINIO_SETUP,
+  },
+  {
     key: 'S3_FORCE_PATH_STYLE',
     capability: 'storage',
     audience: 'server',

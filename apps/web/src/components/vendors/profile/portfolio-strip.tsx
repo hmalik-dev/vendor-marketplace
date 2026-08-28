@@ -1,11 +1,16 @@
 import Link from 'next/link';
-import type { PortfolioItem } from '@vendor-marketplace/shared';
+import type { WirePortfolioItem } from '@/lib/wire-schemas';
 
 /** How many pieces the About tab previews before "See all". */
 const STRIP_COUNT = 4;
 
 export interface PortfolioStripProps {
-  items: readonly PortfolioItem[];
+  /*
+   * The wire shape, whose `imageUrl` is already resolved from a stored object
+   * key — and is `null` when no image base is configured, which renders as no
+   * image rather than as a broken one.
+   */
+  items: readonly WirePortfolioItem[];
   seeAllHref: string;
 }
 
@@ -45,7 +50,7 @@ export function PortfolioStrip({
                 so this deliberately skips `next/image` as `Avatar` does. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={item.thumbnailUrl ?? item.imageUrl}
+              src={item.thumbnailUrl ?? item.imageUrl ?? ''}
               alt={item.caption ?? ''}
               className="h-[118px] w-full rounded-xl bg-stone-200 object-cover"
             />
