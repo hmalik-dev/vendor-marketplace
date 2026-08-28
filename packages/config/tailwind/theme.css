@@ -159,10 +159,17 @@
   --z-toast: 70; /* toasts, above everything */
 
   /*
-   * Content loading. The shimmer sweeps stone-200 -> stone-150 -> stone-200,
-   * and the wordmark pulse is the page-level state.
+   * Loading. The shimmer sweeps stone-200 -> stone-150 -> stone-200 for
+   * content, and the mark's two rings converging and parting are the
+   * page-level state.
+   *
+   * The page loader is geometry only, because it renders before webfonts are
+   * guaranteed and a wordmark in a fallback serif is a worse first impression
+   * than no wordmark — `40-states.md`, and frame `26` draws it. The easing and
+   * the 1.9s are the frame's own.
    */
-  --animate-wordmark-pulse: wordmark-pulse 2s ease-in-out infinite;
+  --animate-mark-converge-left: mark-converge-left 1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  --animate-mark-converge-right: mark-converge-right 1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 
   @keyframes shimmer {
     0%,
@@ -174,13 +181,29 @@
     }
   }
 
-  @keyframes wordmark-pulse {
+  /*
+   * The rings hold apart, meet in the middle, hold, and part again — the pause
+   * at 46-54% is what makes it read as a meeting rather than a bounce.
+   */
+  @keyframes mark-converge-left {
     0%,
     100% {
-      opacity: 0.4;
+      transform: translateX(-9px);
     }
-    50% {
-      opacity: 1;
+    46%,
+    54% {
+      transform: translateX(7px);
+    }
+  }
+
+  @keyframes mark-converge-right {
+    0%,
+    100% {
+      transform: translateX(9px);
+    }
+    46%,
+    54% {
+      transform: translateX(-7px);
     }
   }
 

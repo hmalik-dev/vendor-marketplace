@@ -126,18 +126,3 @@ export function Spinner({ className }: { className?: string }): React.ReactEleme
     />
   );
 }
-
-/**
- * The page-level state: the wordmark pulsing. First load and auth redirects
- * only — anything else gets skeletons.
- */
-export function PageLoading({ children }: { children: React.ReactNode }): React.ReactElement {
-  return (
-    <div
-      role="status"
-      className="flex min-h-[60vh] items-center justify-center font-display text-display-md text-clay-500 motion-safe:animate-wordmark-pulse"
-    >
-      {children}
-    </div>
-  );
-}

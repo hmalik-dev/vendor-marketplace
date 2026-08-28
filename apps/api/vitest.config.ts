@@ -17,11 +17,13 @@ export default defineConfig({
      * pool trades a little wall-clock for a suite that does not fail on how
      * busy the machine happens to be.
      *
-     * Lowered from three to two once `packages/db` grew an eighth suite: the
-     * db package now runs its files one at a time, which makes it slower and
-     * therefore overlapping with this one for longer, and three workers here
-     * started blowing the same hook timeout again.
+     * Lowered to one. Two still blew the hook timeout intermittently once the
+     * db package began running its files serially and the web package's own
+     * ceiling went up — both of which keep those suites alive longer and so
+     * overlapping with this one for longer. Every file here boots a WASM
+     * Postgres; one at a time is the only setting that does not depend on how
+     * busy the rest of the run happens to be.
      */
-    maxWorkers: 2,
+    maxWorkers: 1,
   },
 });
