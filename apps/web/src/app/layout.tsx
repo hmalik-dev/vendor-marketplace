@@ -3,7 +3,8 @@ import { shadcn } from '@clerk/ui/themes';
 import type { Metadata } from 'next';
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { BRAND_NAME } from '@vendor-marketplace/shared';
+import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
+import { siteOrigin } from '@/config/env';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { Toaster } from '@/components/ui/sonner';
@@ -35,9 +36,32 @@ const jetBrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
+/**
+ * `metadataBase` is what makes every relative OG and canonical URL absolute.
+ * Without it Next warns and emits relative `og:image` paths, which no preview
+ * renderer resolves — the reason a shared link showed a blank card.
+ */
 export const metadata: Metadata = {
+  metadataBase: new URL(siteOrigin()),
+  /*
+    No `template`. Every page already sets a composed title through
+    `pageTitle()`, which is the single place the `<page> · <brand>` shape is
+    defined — a template here appended the brand a second time, so the sign-in
+    tab read the brand name twice.
+  */
   title: BRAND_NAME,
-  description: 'Find and book photographers, DJs, caterers, and florists for your event.',
+  description: BRAND_DESCRIPTION,
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: BRAND_NAME,
+    title: BRAND_NAME,
+    description: BRAND_DESCRIPTION,
+    url: '/',
+  },
+  // `summary_large_image` is what turns the 1200x630 card into a full-width
+  // preview rather than a thumbnail beside the text.
+  twitter: { card: 'summary_large_image', title: BRAND_NAME, description: BRAND_DESCRIPTION },
 };
 
 /**

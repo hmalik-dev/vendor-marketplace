@@ -83,3 +83,17 @@ export function assertWebEnv(source: NodeJS.ProcessEnv = process.env): WebEnv {
 
   return result.data;
 }
+
+/**
+ * This app's own public origin, without a trailing slash.
+ *
+ * `metadataBase`, the sitemap and robots all build absolute URLs from it, and
+ * it is the same `WEB_URL` the API allow-lists for CORS rather than a second
+ * value that could disagree. `WEB_URL` accepts a comma-separated list, because
+ * it doubles as that allow-list — the first entry is the canonical origin.
+ */
+export function siteOrigin(source: NodeJS.ProcessEnv = process.env): string {
+  const first = (source.WEB_URL ?? 'http://localhost:3000').split(',')[0]?.trim() ?? '';
+
+  return first.replace(/\/+$/, '') || 'http://localhost:3000';
+}

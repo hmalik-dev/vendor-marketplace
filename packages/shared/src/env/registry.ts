@@ -156,7 +156,11 @@ export const ENV_REGISTRY = [
     key: 'WEB_URL',
     capability: 'core',
     audience: 'server',
-    consumers: ['api', 'tooling'],
+    // `web` reads its own origin for `metadataBase`, the sitemap and robots:
+    // every absolute URL a crawler or a link preview sees is built from it, so
+    // it is the same value the API allow-lists rather than a second one that
+    // could disagree.
+    consumers: ['api', 'web', 'tooling'],
     environments: 'per-environment',
     shape: HTTP_URL_LIST,
     productionShape: HTTPS_URL_LIST,

@@ -305,9 +305,15 @@ describe('registrySchemaShape', () => {
     );
   });
 
+  /*
+   * `WEB_URL` joined this list in #30: the web tier builds `metadataBase`, the
+   * sitemap and robots from its own origin, and it reads the same value the
+   * API allow-lists rather than a second one that could disagree.
+   */
   it('lists the keys the web build reads for a capability', () => {
     expect(registryKeys({ consumer: 'web', capabilities: ['core'] })).toEqual([
       'NODE_ENV',
+      'WEB_URL',
       'API_URL',
       'NEXT_PUBLIC_API_URL',
     ]);

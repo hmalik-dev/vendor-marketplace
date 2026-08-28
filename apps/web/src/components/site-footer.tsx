@@ -1,13 +1,16 @@
 import Link from 'next/link';
 import { Show } from '@clerk/nextjs';
-import { LANDING_JUMP_CATEGORY_SLUGS, CATEGORY_SEEDS } from '@vendor-marketplace/shared';
+import {
+  BRAND_TAGLINE,
+  LANDING_JUMP_CATEGORY_SLUGS,
+  CATEGORY_SEEDS,
+} from '@vendor-marketplace/shared';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 
 /**
  * The line the whole brand is aimed at. It is about the vendors, not the
  * platform — see design/design-plan/10-landing.md.
  */
-const TAGLINE = 'Made for the people who make the day.';
 
 /** The same four categories the hero jumps to, so the two agree. */
 const BROWSE_LINKS = [
@@ -81,7 +84,7 @@ export function SiteFooter(): React.ReactElement {
             <Link href="/" className="inline-block transition-opacity hover:opacity-80">
               <Logo size={LOGO_SIZES.marketingFooter} tone="dark" />
             </Link>
-            <p className="mt-3.5 max-w-64 text-base text-stone-50/78">{TAGLINE}</p>
+            <p className="mt-3.5 max-w-64 text-base text-stone-50/78">{BRAND_TAGLINE}</p>
           </div>
 
           <nav aria-label="Footer" className="grid gap-10 sm:grid-cols-3 lg:col-span-3">
