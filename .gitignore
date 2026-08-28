@@ -59,6 +59,12 @@ skills-lock.json
 # Session-local scheduler state, not configuration.
 .claude/scheduled_tasks.lock
 
+# Approved Bash commands are stored here verbatim, so this file is exactly where
+# a pasted credential ends up — and this repo is public. It was protected only by
+# `~/.config/git/ignore` on one machine, which no clone carries; a second machine
+# would have had nothing stopping `git add -A` from publishing it.
+.claude/settings.local.json
+
 # Local design scratch, not a build input
 /vendor-marketplace-header.png
 
