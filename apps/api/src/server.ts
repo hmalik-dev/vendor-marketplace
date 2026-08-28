@@ -19,6 +19,7 @@ import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { storagePlugin } from './plugins/storage.js';
 import { availabilityRoutes } from './modules/availability/availability.routes.js';
+import { bookingRequestRoutes } from './modules/booking-requests/booking-requests.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
@@ -93,6 +94,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(packageRoutes);
   await app.register(portfolioRoutes);
   await app.register(availabilityRoutes);
+  await app.register(bookingRequestRoutes);
   await app.register(uploadRoutes);
   await app.register(clerkWebhookRoutes, {
     signingSecret: env.CLERK_WEBHOOK_SECRET,

@@ -32,6 +32,7 @@ describe('BookingRail', () => {
     render(
       <BookingRail
         businessName="Kessler & Co."
+        slug="kessler-and-co"
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={127}
@@ -43,31 +44,49 @@ describe('BookingRail', () => {
 
   /*
    * `40-states.md`: a blocked primary action stays visible and its helper line
-   * explains the block. Hiding these would leave the page with no visible ask,
+   * explains the block. Hiding it would leave the page with no visible ask,
    * which is the one thing this screen exists for.
    */
-  it('keeps both actions visible but disabled until #7 and #8 exist', () => {
+  it('sends the selected package through to the request form, and still blocks messaging', () => {
     render(
       <BookingRail
         businessName="Kessler & Co."
+        slug="kessler-and-co"
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
       />,
     );
 
-    const request = screen.getByRole('button', { name: 'Request booking' });
+    const request = screen.getByRole('link', { name: 'Request booking' });
     const message = screen.getByRole('button', { name: 'Send a message' });
 
-    expect(request).toHaveProperty('disabled', true);
+    expect(request.getAttribute('href')).toBe('/vendors/kessler-and-co/request?package=pkg-1');
     expect(message).toHaveProperty('disabled', true);
-    expect(screen.getByText(/Requests and messages open shortly/)).toBeDefined();
+    expect(screen.getByText(/Messaging opens shortly/)).toBeDefined();
+  });
+
+  it('omits the package when the vendor has none to choose from', () => {
+    render(
+      <BookingRail
+        businessName="Kessler & Co."
+        slug="kessler-and-co"
+        startingPriceCents={null}
+        packages={[]}
+        reviewCount={0}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Request booking' }).getAttribute('href')).toBe(
+      '/vendors/kessler-and-co/request',
+    );
   });
 
   it('names the vendor in the charge reassurance', () => {
     render(
       <BookingRail
         businessName="Kessler & Co."
+        slug="kessler-and-co"
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
@@ -82,6 +101,7 @@ describe('BookingRail', () => {
     render(
       <BookingRail
         businessName="Kessler & Co."
+        slug="kessler-and-co"
         startingPriceCents={null}
         packages={[]}
         reviewCount={0}
@@ -96,6 +116,7 @@ describe('BookingRail', () => {
     render(
       <BookingRail
         businessName="Kessler & Co."
+        slug="kessler-and-co"
         startingPriceCents={175_000}
         packages={[
           servicePackage(),
@@ -114,6 +135,7 @@ describe('BookingRail', () => {
     render(
       <BookingRail
         businessName="Kessler & Co."
+        slug="kessler-and-co"
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}

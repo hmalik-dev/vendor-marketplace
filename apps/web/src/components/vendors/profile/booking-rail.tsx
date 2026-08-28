@@ -1,12 +1,15 @@
 'use client';
 
 import { formatPrice, type ServicePackage } from '@vendor-marketplace/shared';
+import Link from 'next/link';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 export interface BookingRailProps {
   businessName: string;
+  /** Carries the chosen package through to the request form's rail. */
+  slug: string;
   startingPriceCents: number | null;
   packages: readonly ServicePackage[];
   reviewCount: number;
@@ -16,16 +19,15 @@ export interface BookingRailProps {
  * The rail from frame `03`, in the frame's fixed order: from-price, the event
  * fields, both CTAs, the charge reassurance, then the trust lines.
  *
- * **Both actions render disabled.** `Request booking` needs #7 and
- * `Send a message` needs #8, neither of which exists yet. `40-states.md` is
- * explicit about this case — the primary button goes to the disabled fill,
- * *stays visible*, and its helper line explains the block — and #31 established
- * the rule it follows from: a control that opens nothing is furniture, so it
- * either does something or says why it cannot. Hiding them instead would leave
- * the page with no visible ask, which is the one thing this screen exists for.
+ * `Request booking` opens frame `04` with the selected package already in its
+ * rail. `Send a message` still renders disabled — messaging is #8 — following
+ * the rule #31 established: a control that opens nothing either does something
+ * or says why it cannot, and it never simply disappears, because hiding it
+ * would leave the page with no visible ask.
  */
 export function BookingRail({
   businessName,
+  slug,
   startingPriceCents,
   packages,
   reviewCount,
@@ -90,8 +92,16 @@ export function BookingRail({
           </div>
         ) : null}
 
-        <Button variant="primary" disabled className="mt-1 w-full justify-center py-3.25">
-          Request booking
+        <Button asChild variant="primary" className="mt-1 w-full justify-center py-3.25">
+          <Link
+            href={
+              packageId
+                ? `/vendors/${slug}/request?package=${packageId}`
+                : `/vendors/${slug}/request`
+            }
+          >
+            Request booking
+          </Link>
         </Button>
         <Button variant="secondary" disabled className="w-full justify-center py-3">
           Send a message
@@ -103,8 +113,8 @@ export function BookingRail({
           — which is true today and stays true when the buttons wake up.
         */}
         <p className="mt-0.5 text-center text-[11.5px] leading-[1.5] text-stone-600">
-          Requests and messages open shortly. You won&rsquo;t be charged yet — {businessName}{' '}
-          confirms the date first.
+          Messaging opens shortly. You won&rsquo;t be charged yet — {businessName} confirms the date
+          first.
         </p>
       </div>
 

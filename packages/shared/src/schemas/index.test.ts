@@ -22,6 +22,7 @@ import {
   vendorSearchQuerySchema,
 } from './index.js';
 import {
+  BOOKING_REQUEST_NOTES_MAX_LENGTH,
   ERROR_CODES,
   MAX_CUSTOMER_BIO_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
@@ -385,7 +386,41 @@ describe('availabilityBulkUpdateSchema', () => {
 });
 
 describe('createBookingRequestSchema', () => {
-  const valid = { vendorId: UUID, eventDate: '2026-09-01', eventType: 'Wedding' };
+  const valid = { vendorId: UUID, eventDate: '2026-09-01', eventType: 'wedding' };
+
+  it('rejects an occasion outside the controlled vocabulary', () => {
+    expect(
+      createBookingRequestSchema.safeParse({ ...valid, packageId: UUID, eventType: 'Wedding' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('accepts a wall-clock start time and rejects a malformed one', () => {
+    expect(
+      createBookingRequestSchema.parse({ ...valid, packageId: UUID, eventStartTime: '14:00' })
+        .eventStartTime,
+    ).toBe('14:00');
+    expect(
+      createBookingRequestSchema.safeParse({ ...valid, packageId: UUID, eventStartTime: '2:00 PM' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('rejects a custom request whose description is too short to quote from', () => {
+    expect(
+      createBookingRequestSchema.safeParse({ ...valid, customDetails: 'Photos' }).success,
+    ).toBe(false);
+  });
+
+  it('caps the note at the length frame 04 counts to', () => {
+    expect(
+      createBookingRequestSchema.safeParse({
+        ...valid,
+        packageId: UUID,
+        customDetails: 'x'.repeat(BOOKING_REQUEST_NOTES_MAX_LENGTH + 1),
+      }).success,
+    ).toBe(false);
+  });
 
   it('accepts a package request', () => {
     expect(createBookingRequestSchema.parse({ ...valid, packageId: UUID }).packageId).toBe(UUID);

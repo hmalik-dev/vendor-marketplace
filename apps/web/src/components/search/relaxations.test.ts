@@ -26,7 +26,13 @@ describe('relaxations', () => {
 
   it('leads with the date, which rules out every already-booked vendor', () => {
     const options = relaxations(
-      state({ date: '2026-06-14', minPriceCents: 100_000, minRating: 4, tags: ['a'], city: 'Marfa' }),
+      state({
+        date: '2026-06-14',
+        minPriceCents: 100_000,
+        minRating: 4,
+        tags: ['a'],
+        city: 'Marfa',
+      }),
     );
 
     expect(options.map((option) => option.label)).toEqual([

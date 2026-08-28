@@ -116,6 +116,72 @@ export const BOOKING_REQUEST_STATUSES = [
 ] as const;
 export type BookingRequestStatus = (typeof BOOKING_REQUEST_STATUSES)[number];
 
+/**
+ * The only transitions the request lifecycle allows. Anything absent here is
+ * refused with `INVALID_STATE_TRANSITION` — the map is the state machine, so a
+ * new edge cannot be introduced by an endpoint forgetting to check.
+ *
+ * `accepted` is terminal for this ticket: payment turns it into a booking in
+ * #10, and `declined`, `expired` and `cancelled` are final in every case.
+ */
+export const BOOKING_REQUEST_TRANSITIONS: Record<
+  BookingRequestStatus,
+  readonly BookingRequestStatus[]
+> = {
+  pending: ['quoted', 'accepted', 'declined', 'cancelled', 'expired'],
+  quoted: ['accepted', 'declined', 'cancelled', 'expired'],
+  accepted: [],
+  declined: [],
+  expired: [],
+  cancelled: [],
+};
+
+/** Statuses a lazy expiry sweep may still move to `expired`. */
+export const EXPIRABLE_BOOKING_REQUEST_STATUSES = ['pending', 'quoted'] as const;
+
+/** Longest "anything else we should know" note on a request — frame `04`. */
+export const BOOKING_REQUEST_NOTES_MAX_LENGTH = 600;
+
+/**
+ * The occasion a booking request is for — a controlled vocabulary, not free
+ * text, because `20-customer-bookings-hub.md` renders it as a label
+ * ("Photography · Wedding") and `99-open-questions.md` #6 asks for exactly
+ * that guarantee. Stored in `booking_requests.event_type`, which is a
+ * `varchar` rather than a `pgEnum` so widening the list needs no migration —
+ * the closed set is enforced by `eventTypeSchema` at the API edge.
+ */
+export const EVENT_TYPES = [
+  'wedding',
+  'engagement',
+  'birthday',
+  'anniversary',
+  'quinceanera',
+  'baby_shower',
+  'graduation',
+  'corporate',
+  'fundraiser',
+  'holiday_party',
+  'memorial',
+  'other',
+] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
+
+/** How each occasion is written wherever a person reads it. */
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  wedding: 'Wedding',
+  engagement: 'Engagement',
+  birthday: 'Birthday',
+  anniversary: 'Anniversary',
+  quinceanera: 'Quinceañera',
+  baby_shower: 'Baby shower',
+  graduation: 'Graduation',
+  corporate: 'Corporate event',
+  fundraiser: 'Fundraiser',
+  holiday_party: 'Holiday party',
+  memorial: 'Memorial',
+  other: 'Something else',
+};
+
 export const BOOKING_STATUSES = ['confirmed', 'completed', 'cancelled', 'disputed'] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 

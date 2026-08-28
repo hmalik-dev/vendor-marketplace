@@ -2,11 +2,13 @@ import { z } from 'zod';
 import { formatPrice, isUniversallyPastDate } from '../utils/index.js';
 import {
   AVAILABILITY_STATUSES,
+  BOOKING_REQUEST_NOTES_MAX_LENGTH,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
   DEFAULT_PAGE_SIZE,
   ERROR_CODES,
+  EVENT_TYPES,
   MAX_ADDRESS_LENGTH,
   MAX_ADMIN_NOTE_LENGTH,
   MAX_BUSINESS_NAME_LENGTH,
@@ -98,6 +100,7 @@ export const priceTypeSchema = z.enum(PRICE_TYPES);
 export const availabilityStatusSchema = z.enum(AVAILABILITY_STATUSES);
 export const vendorSettableAvailabilityStatusSchema = z.enum(VENDOR_SETTABLE_AVAILABILITY_STATUSES);
 export const bookingRequestStatusSchema = z.enum(BOOKING_REQUEST_STATUSES);
+export const eventTypeSchema = z.enum(EVENT_TYPES);
 export const bookingStatusSchema = z.enum(BOOKING_STATUSES);
 export const reviewTypeSchema = z.enum(REVIEW_TYPES);
 export const budgetTierSchema = z.enum(BUDGET_TIERS);
@@ -407,12 +410,23 @@ export type AvailabilityBulkUpdateInput = z.infer<typeof availabilityBulkUpdateS
 
 // --- Booking requests ------------------------------------------------------
 
+/** `HH:MM` wall clock at the venue — no zone, because the venue's clock is the clock. */
+export const clockTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Enter a time as HH:MM');
+
 export const bookingRequestSchema = z.object({
   id: uuidSchema,
   customerId: uuidSchema,
   vendorId: uuidSchema,
   packageId: uuidSchema.nullable(),
   eventDate: calendarDateSchema,
+  eventStartTime: clockTimeSchema.nullable(),
+  /*
+   * Read back as a plain string rather than `eventTypeSchema`: rows written
+   * before the vocabulary closed, and rows written after it later widens, must
+   * still be readable. The closed set is enforced on the way in.
+   */
   eventType: z.string().max(MAX_BUSINESS_NAME_LENGTH).nullable(),
   eventLocation: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
   guestCount: z.int().nullable(),
@@ -427,22 +441,80 @@ export const bookingRequestSchema = z.object({
 });
 export type BookingRequest = z.infer<typeof bookingRequestSchema>;
 
+/**
+ * What a request looks like to the two people in it. The vendor and package
+ * facts are denormalised onto the read model because every surface that lists
+ * requests (#22a, #22b) renders "Photography · Wedding" beside a business name
+ * — and a per-row profile fetch to render a list is how a hub gets slow.
+ */
+export const bookingRequestDetailSchema = bookingRequestSchema.extend({
+  vendor: z.object({
+    id: uuidSchema,
+    slug: slugSchema,
+    businessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+    city: z.string().max(MAX_NAME_LENGTH).nullable(),
+    state: z.string().max(MAX_NAME_LENGTH).nullable(),
+    avatarUrl: urlSchema.nullable(),
+    avgRating: z.number().min(0).max(REVIEW_RATING_MAX),
+    reviewCount: z.int().min(0),
+  }),
+  /** `null` for a custom request, and for a package the vendor later deleted. */
+  package: z
+    .object({
+      id: uuidSchema,
+      name: z.string().max(MAX_TITLE_LENGTH),
+      priceCents: z.int(),
+      priceType: priceTypeSchema,
+      durationHours: z.number().nullable(),
+      inclusions: z.array(z.string()),
+    })
+    .nullable(),
+});
+export type BookingRequestDetail = z.infer<typeof bookingRequestDetailSchema>;
+
+/** A custom request has no package, so its description is the whole brief. */
+const CUSTOM_REQUEST_MIN_LENGTH = 10;
+
 export const createBookingRequestSchema = z
   .object({
     vendorId: uuidSchema,
     /** Present for a package request, absent for a custom request. */
     packageId: uuidSchema.optional(),
     eventDate: calendarDateSchema,
-    eventType: z.string().trim().max(MAX_BUSINESS_NAME_LENGTH).optional(),
+    eventStartTime: clockTimeSchema.optional(),
+    eventType: eventTypeSchema.optional(),
     eventLocation: z.string().trim().max(MAX_ADDRESS_LENGTH).optional(),
     guestCount: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
-    customDetails: z.string().trim().min(10).max(5_000).optional(),
+    customDetails: z.string().trim().max(BOOKING_REQUEST_NOTES_MAX_LENGTH).optional(),
   })
-  .refine((value) => value.packageId !== undefined || value.customDetails !== undefined, {
-    message: 'Select a package or describe your custom request',
-    path: ['packageId'],
-  });
+  /*
+   * Without a package there is nothing to quote from, so the description stops
+   * being the optional "anything else" note of frame `04` and becomes the
+   * required brief the rail asks for instead.
+   */
+  .refine(
+    (value) =>
+      value.packageId !== undefined ||
+      (value.customDetails !== undefined &&
+        value.customDetails.length >= CUSTOM_REQUEST_MIN_LENGTH),
+    {
+      message: 'Select a package, or describe what you need in a sentence or two',
+      path: ['customDetails'],
+    },
+  );
 export type CreateBookingRequestInput = z.infer<typeof createBookingRequestSchema>;
+
+/** Why a vendor declined, or why a customer pulled the request. */
+export const bookingRequestReasonSchema = z.object({
+  reason: z.string().trim().max(1_000).optional(),
+});
+export type BookingRequestReasonInput = z.infer<typeof bookingRequestReasonSchema>;
+
+/** Whose requests a list call wants — the caller's role decides which is legal. */
+export const bookingRequestListQuerySchema = z.object({
+  status: bookingRequestStatusSchema.optional(),
+});
+export type BookingRequestListQuery = z.infer<typeof bookingRequestListQuerySchema>;
 
 export const quoteBookingRequestSchema = z.object({
   quotedPriceCents: priceCentsSchema,
@@ -478,6 +550,18 @@ export const bookingSchema = z.object({
   updatedAt: z.date(),
 });
 export type Booking = z.infer<typeof bookingSchema>;
+
+/**
+ * A booking as the hubs render it. `eventType` lives on the request rather than
+ * the booking row, and the hub card's sub-line reads "$1,450 paid · Barr
+ * Mansion" — so both travel with every booking the API returns.
+ */
+export const bookingWithContextSchema = bookingSchema.extend({
+  eventType: z.string().max(MAX_BUSINESS_NAME_LENGTH).nullable(),
+  /** The venue, named as the hub names it. Mirrors `eventLocation`. */
+  venue: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
+});
+export type BookingWithContext = z.infer<typeof bookingWithContextSchema>;
 
 // --- Messaging -------------------------------------------------------------
 

@@ -5,6 +5,7 @@ import {
   integer,
   pgTable,
   text,
+  time,
   timestamp,
   uniqueIndex,
   uuid,
@@ -35,6 +36,8 @@ export const bookingRequests = pgTable(
     // Kept on record even if the vendor later retires the package.
     packageId: uuid('package_id').references(() => servicePackages.id, { onDelete: 'set null' }),
     eventDate: date('event_date').notNull(),
+    /** Local wall-clock start, `HH:MM`. No zone: the venue's clock is the clock. */
+    eventStartTime: time('event_start_time'),
     eventType: varchar('event_type', { length: 200 }),
     eventLocation: varchar('event_location', { length: 500 }),
     guestCount: integer('guest_count'),

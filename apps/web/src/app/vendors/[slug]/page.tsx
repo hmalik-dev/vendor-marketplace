@@ -173,6 +173,7 @@ export default async function VendorProfilePage({
         <div className="lg:sticky lg:top-[calc(var(--header-height)+16px)] lg:self-start">
           <BookingRail
             businessName={vendor.businessName}
+            slug={vendor.slug}
             startingPriceCents={vendor.startingPriceCents}
             packages={vendor.packages}
             reviewCount={vendor.reviewCount}

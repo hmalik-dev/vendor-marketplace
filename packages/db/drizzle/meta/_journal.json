@@ -43,6 +43,13 @@
       "when": 1787799422527,
       "tag": "0005_amazing_nitro",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787884960061,
+      "tag": "0006_omniscient_gambit",
+      "breakpoints": true
     }
   ]
 }
