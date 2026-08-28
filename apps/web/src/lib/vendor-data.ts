@@ -138,19 +138,75 @@ export async function getOwnAvailability(): Promise<WireAvailability[]> {
  */
 const REFERENCE_DATA_REVALIDATE_SECONDS = 3600;
 
-/** Public reference data; no session needed. */
-export async function getCategories(): Promise<Category[]> {
-  return apiRequest('/categories', {
-    schema: wireCategoryListSchema,
-    revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
-  });
+export interface ReferenceReadOptions {
+  /**
+   * Propagate an upstream failure instead of degrading to an empty list.
+   *
+   * For the few surfaces where an empty taxonomy is a trap rather than a
+   * smaller page: the storefront editor cannot be completed without a
+   * category, so an error boundary the vendor can retry is honest, while a
+   * form whose category select is silently empty is not.
+   */
+  required?: boolean;
 }
 
-export async function getActiveTags(): Promise<WireTag[]> {
-  return apiRequest('/tags', {
-    schema: wireTagListSchema,
-    revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
-  });
+/**
+ * Next signals `redirect()` and `notFound()` by throwing, marking the error
+ * with a `digest`. A degrading read that swallowed one would strand the
+ * visitor on the page it was trying to leave, so it is never caught here.
+ */
+function isNavigationSignal(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    typeof (error as { digest?: unknown }).digest === 'string'
+  );
+}
+
+/**
+ * Runs a reference read so that an upstream failure costs one section of the
+ * page rather than the whole route.
+ *
+ * The blast radius is the reason: since the search bar moved into the header,
+ * the taxonomy is read on **every** page, so one 500 on `/categories` took the
+ * entire site down in production. Every failure mode degrades the same way —
+ * an HTTP error, a body that is not JSON, a schema drift, and an API that is
+ * not answering at all are all "this list is unavailable right now" to the
+ * visitor, and none of them is a reason to withhold the rest of the page.
+ */
+async function degradeToEmpty<T>(read: () => Promise<T[]>, required?: boolean): Promise<T[]> {
+  try {
+    return await read();
+  } catch (error) {
+    if (required === true || isNavigationSignal(error)) {
+      throw error;
+    }
+
+    return [];
+  }
+}
+
+/** Public reference data; no session needed. */
+export async function getCategories(options: ReferenceReadOptions = {}): Promise<Category[]> {
+  return degradeToEmpty(
+    () =>
+      apiRequest('/categories', {
+        schema: wireCategoryListSchema,
+        revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
+      }),
+    options.required,
+  );
+}
+
+export async function getActiveTags(options: ReferenceReadOptions = {}): Promise<WireTag[]> {
+  return degradeToEmpty(
+    () =>
+      apiRequest('/tags', {
+        schema: wireTagListSchema,
+        revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
+      }),
+    options.required,
+  );
 }
 
 /** One row of four on the landing page — see design/design-plan/10-landing.md. */
@@ -168,19 +224,13 @@ export const FEATURED_VENDOR_COUNT = 4;
  * a marketplace with no published vendors yet is a normal state, not an error.
  */
 export async function getFeaturedVendors(): Promise<VendorCard[]> {
-  try {
+  return degradeToEmpty(async () => {
     const result = await apiRequest(`/vendors?sort=rating&pageSize=${FEATURED_VENDOR_COUNT}`, {
       schema: vendorSearchResultSchema,
     });
 
     return result.items;
-  } catch (error) {
-    if (error instanceof ApiClientError) {
-      return [];
-    }
-
-    throw error;
-  }
+  });
 }
 
 /**

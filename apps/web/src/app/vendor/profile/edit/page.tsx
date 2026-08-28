@@ -19,8 +19,11 @@ export default async function VendorProfileEditPage(): Promise<React.ReactElemen
 
   const [profile, categories, allTags] = await Promise.all([
     getOwnVendorProfile(),
-    getCategories(),
-    getActiveTags(),
+    // Required, not degrading: a storefront cannot be saved without a
+    // category, so an empty select here would be a form the vendor can fill in
+    // and never submit. See `ReferenceReadOptions` in `lib/vendor-data`.
+    getCategories({ required: true }),
+    getActiveTags({ required: true }),
   ]);
 
   return (

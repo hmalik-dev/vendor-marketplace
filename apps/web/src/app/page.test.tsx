@@ -279,6 +279,18 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Browse by category' })).toBeDefined();
   });
 
+  it('still renders the front door when the taxonomy is unavailable', async () => {
+    // `getCategories` degrades to `[]` rather than throwing — the hero and its
+    // search bar must survive a bad day on `/categories`. See ticket #33.
+    getCategories.mockResolvedValue([]);
+
+    render(await HomePage());
+
+    expect(screen.getByRole('heading', { level: 1 })).toBeDefined();
+    expect(screen.queryByRole('heading', { name: 'Browse by category' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /All 0 categories/ })).toBeNull();
+  });
+
   it('names the three steps and the three trust signals below the fold', async () => {
     render(await HomePage());
 

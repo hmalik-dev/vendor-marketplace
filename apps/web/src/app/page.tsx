@@ -230,57 +230,65 @@ export default async function HomePage(): Promise<React.ReactElement> {
             </div>
           </div>
 
-          <section aria-labelledby="categories-heading" className="pt-1.5 pb-16">
-            <div className="mb-3.5 flex items-baseline justify-between gap-4">
-              <h2
-                id="categories-heading"
-                className="font-display text-display-md tracking-[-.01em] text-stone-900"
-              >
-                Browse by category
-              </h2>
-              {/* The count is the taxonomy's length, read from the API. */}
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/search">All {categories.length} categories →</Link>
-              </Button>
-            </div>
+          {/*
+            Same rule as the featured row below: a section with nothing to list
+            is not drawn. The taxonomy degrades to empty when the API is having
+            a bad day, and "All 0 categories" over a bare grid is a worse front
+            door than a hero that simply ends after the search bar.
+          */}
+          {featured.length > 0 ? (
+            <section aria-labelledby="categories-heading" className="pt-1.5 pb-16">
+              <div className="mb-3.5 flex items-baseline justify-between gap-4">
+                <h2
+                  id="categories-heading"
+                  className="font-display text-display-md tracking-[-.01em] text-stone-900"
+                >
+                  Browse by category
+                </h2>
+                {/* The count is the taxonomy's length, read from the API. */}
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/search">All {categories.length} categories →</Link>
+                </Button>
+              </div>
 
-            <ul
-              aria-labelledby="categories-heading"
-              className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6"
-            >
-              {featured.map((category) => (
-                <li key={category.slug}>
-                  {/*
-                    `overflow-hidden` with no padding on the card itself is what
-                    lets the radius clip the photograph — with padding the image
-                    cannot reach the edge, and without the clip its corners
-                    escape the card. See design/design-plan/10-landing.md.
-                  */}
-                  <Link
-                    href={`/search?category=${category.slug}`}
-                    className="block h-full overflow-hidden rounded-xl bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) hover:shadow-hover motion-safe:hover:-translate-y-0.5"
-                  >
-                    <StockPhoto
-                      src={`/categories/${category.slug}.jpg`}
-                      sizes="(min-width: 1024px) 15vw, (min-width: 640px) 30vw, 45vw"
-                      className="h-[94px] w-full"
-                    />
-                    <div className="px-3.25 pt-2.75 pb-3.25">
-                      <h3 className="font-display text-[17px] text-stone-900">{category.name}</h3>
-                      {/*
-                        What the category covers, never a vendor count and never
-                        a from-price — both are deferred until the numbers are
-                        real (design/design-plan/98-post-mvp.md).
-                      */}
-                      <p className="mt-0.75 text-[11.5px] text-stone-600">
-                        {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
-                      </p>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
+              <ul
+                aria-labelledby="categories-heading"
+                className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6"
+              >
+                {featured.map((category) => (
+                  <li key={category.slug}>
+                    {/*
+                      `overflow-hidden` with no padding on the card itself is
+                      what lets the radius clip the photograph — with padding the
+                      image cannot reach the edge, and without the clip its
+                      corners escape the card. See design/design-plan/10-landing.md.
+                    */}
+                    <Link
+                      href={`/search?category=${category.slug}`}
+                      className="block h-full overflow-hidden rounded-xl bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) hover:shadow-hover motion-safe:hover:-translate-y-0.5"
+                    >
+                      <StockPhoto
+                        src={`/categories/${category.slug}.jpg`}
+                        sizes="(min-width: 1024px) 15vw, (min-width: 640px) 30vw, 45vw"
+                        className="h-[94px] w-full"
+                      />
+                      <div className="px-3.25 pt-2.75 pb-3.25">
+                        <h3 className="font-display text-[17px] text-stone-900">{category.name}</h3>
+                        {/*
+                          What the category covers, never a vendor count and
+                          never a from-price — both are deferred until the
+                          numbers are real (design/design-plan/98-post-mvp.md).
+                        */}
+                        <p className="mt-0.75 text-[11.5px] text-stone-600">
+                          {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </div>
       </section>
 
