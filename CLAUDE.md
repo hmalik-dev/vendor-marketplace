@@ -1,28 +1,33 @@
 # Vendor Marketplace — Project Instructions
 
 Two-sided marketplace connecting customers with event service vendors
-(photographers, DJs, caterters, florists). Turborepo + pnpm monorepo.
+(photographers, DJs, caterers, florists). Turborepo + pnpm monorepo.
 
-**Ticket tracker:** `~/.claude/plans/vendor-marketplace-tickets.md`
-**Plan:** `~/.claude/plans/vendor-marketplace-plan.md`
-**Decisions:** `~/.claude/plans/vendor-marketplace-decisions.md`
-**Design:** `design/` — `design/design-plan/` is the implementation spec (tokens,
-brand, component vocabulary, layout laws, one file per screen, responsive, voice),
-and `design/Orla - Screens.dc.html` holds the thirteen 1440×900 reference frames
+The repo and every package are named `vendor-marketplace`. **The user-facing
+product is Orla**, read from `BRAND_NAME` and never written as a literal.
+
+## Where things are
+
+| What                           | Where                                                                                                                        |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Ticket queue                   | `~/.claude/plans/vendor-marketplace-tickets.md` — the Status Board table                                                     |
+| Plan                           | `~/.claude/plans/vendor-marketplace-plan.md`                                                                                 |
+| Decisions                      | `~/.claude/plans/vendor-marketplace-decisions.md`                                                                            |
+| Design contract                | `design/` — `Orla - Screens.dc.html` holds the 1440x900 frames and is the acceptance criterion; `design-plan/` explains them |
+| Path-scoped conventions        | `.claude/rules/` — loaded automatically when you touch matching files                                                        |
+| Review and verification agents | `.claude/agents/` and `~/.claude/agents/`                                                                                    |
 
 ## Ticket queue
 
-This project's queue is the **local markdown tracker** above, not Linear. This
-overrides the Linear-resolution step in `~/.claude/orchestration-policy.md`:
-`/next-ticket` and `/ticket` must **not** return `BLOCKED` for a missing
-`Linear project:` entry, and must not call the Linear MCP connector (it is
-unauthenticated here).
+This project's queue is the **local markdown tracker** above. There is no Linear
+project here and the Linear MCP connector is unauthenticated — never call it.
+`/next-ticket` and `/ticket` read eligibility, priority and `Blocked By` from the
+Status Board table and write transitions back to it (Backlog -> In Progress ->
+Done), filling the Branch column and recording the commit SHA in Notes.
 
-Read eligibility, priority, and `Blocked By` from the tracker's Status Board
-table, apply the policy's queue order (highest priority; In Progress before
-ready; respect `Blocked By`), and write transitions back to that table
-(Backlog → In Progress → Done), filling the Branch column and recording the
-commit SHA in Notes when marking Done.
+**Trust the repository over the ticket's prose.** A ticket's "current state"
+section goes stale the moment another ticket touches the same files. Verify each
+claim before implementing it.
 
 ## Commands
 
@@ -31,7 +36,7 @@ Run from the repository root; Turborepo fans each task out across packages.
 | Task            | Command                                                                                      |
 | --------------- | -------------------------------------------------------------------------------------------- |
 | Install         | `pnpm install`                                                                               |
-| Build all       | `pnpm build`                                                                                 |
+| Build all       | `pnpm build` (`--force` when the change touches anything the build _resolves_)               |
 | Typecheck all   | `pnpm typecheck`                                                                             |
 | Lint all        | `pnpm lint`                                                                                  |
 | Test all        | `pnpm test`                                                                                  |
@@ -39,7 +44,7 @@ Run from the repository root; Turborepo fans each task out across packages.
 | Preflight gate  | `pnpm preflight --ticket <n>`                                                                |
 | Regenerate env  | `pnpm env:example`                                                                           |
 | Secret scan     | `pnpm secrets:scan` (staged) · `pnpm secrets:scan:all` (whole tree)                          |
-| Dev servers     | `pnpm dev`                                                                                   |
+| Dev servers     | `pnpm dev` — web on 3000, API on 4000                                                        |
 | Build API image | `docker build -f apps/api/Dockerfile -t vendor-marketplace-api .` (context is the repo root) |
 | Single package  | `pnpm --filter @vendor-marketplace/db <script>`                                              |
 
@@ -53,14 +58,15 @@ Database:
 | Seed reference data  | `pnpm db:seed`                                                 |
 | Browse data          | `pnpm db:studio`                                               |
 
+Deployed web: `web-gules-eta-41.vercel.app` — the parity target after every push.
+
 ## Layout
 
 ```
 apps/
   web/        Next.js 15 (App Router, RSC) frontend      — port 3000
   api/        Fastify 5 backend                          — port 4000
-design/       The Orla design contract — `design-plan/` is the spec, the
-              `.dc.html` files are the 1440x900 reference frames
+design/       The Orla design contract
 packages/
   shared/     Zod schemas, inferred types, constants, utilities, env registry
   db/         Drizzle schema, client, migrations, seed
@@ -68,67 +74,50 @@ packages/
   config/     Shared TypeScript, ESLint, and Tailwind configs
 ```
 
-`packages/preflight` is a leaf: it depends on `packages/shared`, and nothing
-depends on it, so the one-way `apps → packages` direction still holds.
+**Dependency direction is one-way: `apps -> packages`.**
 
-**Dependency direction is one-way: `apps → packages`.** `packages/shared` never
-imports from `packages/db` or from an app. `packages/db` may import enums and
-constants from `packages/shared`.
+## Laws that apply everywhere
 
-## Conventions
+Anything narrower than this lives in `.claude/rules/` and loads when you open a
+matching file. Do not duplicate it here.
 
-- **Enums live once.** Every domain enum is a `as const` array in
-  `packages/shared/src/constants`. `pgEnum` in `packages/db` and `z.enum` in
-  `packages/shared/src/schemas` both derive from it, so the database, the API
-  contract, and the frontend cannot drift. Never redeclare a literal union.
-- **Money is always integer cents.** `price_cents`, `total_amount_cents`, and
-  friends. Convert at the display boundary with `formatPrice`.
-- **Event dates are Postgres `DATE`** and stay `YYYY-MM-DD` strings end to end.
-  Never round-trip one through a `Date` in local time — use the helpers in
-  `packages/shared/src/utils`.
-- **Derived columns** (`vendor_profiles.avg_rating`, `review_count`) are
-  recomputed from source rows, never incremented, and never writable by an
-  endpoint.
-- **Credentials never reach git.** `.gitignore` covers `.env.*` and re-admits
-  only `.env.example`; a pre-commit hook scans the staged blobs; CI scans every
-  tracked file so `--no-verify` cannot bypass it. The rules, the fixture
-  allowlist, and the `secret-scan:allow` pragma live in
-  `packages/preflight/src/secrets/`. If the scan fires on a real value, rotate
-  it rather than only deleting it.
-- **Environment variables live once**, in `packages/shared/src/env/registry.ts`.
-  `.env.example` and `turbo.json`'s `globalPassThroughEnv` are generated from it
-  by `pnpm env:example`; a test in `packages/shared` fails if either drifts.
-  `apps/api/src/config/env.ts` and `apps/web/src/config/env.ts` derive their Zod
-  schemas from the same rows, so presence, shape, and defaults cannot disagree.
-  Never add a variable to `.env.example` by hand.
-- **Every ticket declares its capabilities** (`core`, `auth`, `storage`,
-  `stripe`, `email`, `sentry`; `e2e` is implicit) in
-  `packages/shared/src/env/tickets.ts`. `pnpm preflight --ticket <n>` checks only
-  those, so a ticket that never touches Stripe is never blocked on Stripe keys.
-- **The application database is a Neon branch.** Local development must never
-  point at `production`; preflight refuses to start a ticket that does. The
-  Postgres service in `docker-compose.yml` exists only for offline work.
-- **Schema changes** are made in `packages/db/src/schema`, then committed with
-  the migration generated by `pnpm db:generate`. Never hand-edit a file in
-  `packages/db/drizzle/`.
-- The DB and API test suites boot an in-process Postgres (PGlite) via
-  `@vendor-marketplace/db/testing`, so schema, seed, and route behaviour are verified
-  against a real engine without Docker. `apps/api/src/testing/test-server.ts`
-  wraps it with the real Fastify instance, faking only the two network
-  boundaries — Clerk token verification and svix signature verification.
-- **`apps/api` is layered route → service → DAO.** Routes declare Zod schemas
-  and guards, services hold business rules and throw `AppError`, DAOs own every
-  Drizzle query. Only `AppError` produces a client-visible message; anything
-  else becomes an opaque 500.
-- **Role is chosen once, at sign-up**, and travels as Clerk `unsafeMetadata`.
-  Because the account holder can write that field, it is narrowed by
-  `normalizeRole` at the single point where a user row is created, and every
-  later authorization decision reads the local `users.role` column instead.
+- **Credentials never reach git.** `.gitignore` covers `.env.*` and re-admits only
+  `.env.example`; a pre-commit hook scans staged blobs; CI scans every tracked
+  file so `--no-verify` cannot bypass it. The rules, the fixture allowlist and the
+  `secret-scan:allow` pragma live in `packages/preflight/src/secrets/`. **If the
+  scan fires on a real value, rotate it — deleting it is not enough.**
+- **Credentials never reach Claude configuration either.** Not inline in a
+  command, not in `.claude/settings*.json`, not in an agent, skill or rule. They
+  live in `.env` files and are read from the environment. A `PreToolUse` hook
+  blocks both routes.
+- **The application database is a Neon branch.** Never point local development at
+  `production`.
+- **Never commit generated output.** `packages/db/drizzle/`, `.env.example` and
+  `turbo.json`'s `globalPassThroughEnv` are all generated; edit the source and
+  regenerate.
+- **A development default must never be able to reach production.** Derive it from
+  something the platform sets, or throw.
+- **MVP only.** No ticket implements anything from a screen file's Post-MVP
+  section, and no invented numbers reach a public page.
 
-Global engineering standards (type safety, defensive code, testing, commit
-format, pre-commit gate) live in `~/.claude/CLAUDE.md` and apply here.
+## Verification is delegated, not asserted
+
+Claiming a change works is not verifying it. Use the agents:
+
+| Agent              | Use for                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| `diff-reviewer`    | Adversarial read of the finished diff, in fresh context                            |
+| `security-auditor` | Any diff touching auth, input, data access, uploads, redirects, secrets or logging |
+| `browser-verifier` | Every user-reachable change, driven end to end at both auth states                 |
+| `parity-checker`   | Every screen carrying an Orla frame, at 1440x900, on all five axes                 |
+| `Explore`          | File discovery and symbol tracing, so results stay out of this context             |
+
+Global engineering standards (type safety, defensive code, commit format,
+pre-commit gate) live in `~/.claude/CLAUDE.md` and
+`~/.claude/references/code-standards.md`.
 
 ## Stack
 
-Next.js 15 · Fastify 5 · Drizzle ORM · PostgreSQL 16 · Clerk · Stripe Connect ·
-Cloudflare R2 · Resend · Tailwind CSS 4 + shadcn/ui · Zod · Vitest · Playwright
+Next.js 15 · Fastify 5 · Drizzle ORM · PostgreSQL 16 (Neon) · Clerk ·
+Stripe Connect · Cloudflare R2 · Resend · Tailwind CSS 4 + shadcn/ui · Zod ·
+Vitest · Playwright

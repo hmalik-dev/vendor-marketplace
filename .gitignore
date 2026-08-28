@@ -41,10 +41,23 @@ coverage/
 # 1.7MB. The repo has no legitimate PNG at its root, so this cannot hide one.
 /*.png
 
-# Tool-managed skill packs installed into the repo (see skills-lock.json)
-.claude/skills/
+# Tool-managed skill packs installed into the repo (see skills-lock.json).
+# Note `.claude/skills/*`, not `.claude/skills/`: git does not descend into an
+# ignored directory, so a directory rule would make the negations below
+# unreachable and our own project skills could never be committed.
+.claude/skills/*
+!.claude/skills/run-*/
+!.claude/skills/verify/
 .agents/skills/
 skills-lock.json
+
+# Worktrees Claude Code creates for parallel lanes and isolated subagents.
+# Their contents are a second checkout of this repo; they must never appear as
+# untracked files in the main tree.
+.claude/worktrees/
+
+# Session-local scheduler state, not configuration.
+.claude/scheduled_tasks.lock
 
 # Local design scratch, not a build input
 /vendor-marketplace-header.png

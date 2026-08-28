@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(./**/dist/**)",
+      "Read(./**/.next/**)",
+      "Read(./**/.next-dev/**)",
+      "Read(./**/.turbo/**)",
+      "Read(./**/coverage/**)",
+      "Read(./.playwright-mcp/**)"
+    ]
+  },
+  "worktree": {
+    "baseRef": "fresh",
+    "symlinkDirectories": ["node_modules"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/schema-migration-guard.mjs\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "You are gating a turn in the vendor-marketplace repo. Read the assistant's final message ONLY. Respond {\"ok\": true} unless the message claims a ticket, feature or fix is complete, done, shipped, verified or working. If it makes such a claim, respond {\"ok\": false, \"reason\": \"...\"} naming which of these is missing from the transcript: the actual output of tests/lint/typecheck/build (not a statement that they were run), a browser walkthrough for a user-reachable change, or the commit SHA and its CI result. If the message is a question, a plan, a refusal, an analysis, or reports a failure honestly, respond {\"ok\": true}."
+          }
+        ]
+      }
+    ]
+  }
+}

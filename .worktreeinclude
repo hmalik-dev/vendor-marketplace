@@ -1,0 +1,14 @@
+# Gitignored files copied into every worktree Claude Code creates.
+#
+# A worktree is a fresh checkout, so nothing gitignored comes along by default.
+# Without this file a parallel lane starts with no environment at all: the API
+# cannot reach Neon, the web app has no Clerk keys, and Playwright has no test
+# accounts to sign in with. Uses .gitignore syntax; only files that match AND
+# are gitignored are copied, so tracked files are never duplicated.
+
+.env
+.env.local
+.env.e2e.local
+
+# Neon CLI/integration local state — without it the lane re-prompts for a branch.
+.neon
