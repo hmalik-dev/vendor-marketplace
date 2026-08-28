@@ -18,7 +18,8 @@ import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
  * scrolling to a section, because a visitor who clicks it has already decided
  * which side they are on. See design/design-plan/21-sign-up.md.
  */
-const LINKS = [
+/** Exported so the mobile drawer carries the same three, never a second list. */
+export const MARKETING_LINKS = [
   { label: 'Browse', href: '/search' },
   { label: 'How it works', href: '/#how-it-works' },
   { label: 'For vendors', href: '/sign-up?role=vendor' },
@@ -32,8 +33,10 @@ export function MarketingNav(): React.ReactElement | null {
   }
 
   return (
-    <div className="flex gap-6 max-md:hidden">
-      {LINKS.map((link) => (
+    /* The mirror of the drawer's own breakpoint: at 768 the links are in the
+       drawer, so showing them here as well would draw both. */
+    <div className="flex gap-6 max-[768px]:hidden">
+      {MARKETING_LINKS.map((link) => (
         <Link key={link.label} href={link.href} className={MARKETING_LINK_CLASS}>
           {link.label}
         </Link>

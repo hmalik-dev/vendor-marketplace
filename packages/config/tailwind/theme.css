@@ -121,7 +121,7 @@
   --shadow-hover: 0 8px 24px rgba(35, 32, 28, 0.12);
 
   /* Chrome the full-height app shells are measured against. */
-  --header-height: 4rem; /* 64px — 56px below 768 */
+  --header-height: 4rem; /* 64px; 56px below `md` — see the override below */
   --sidebar-width: 15rem; /* 240px */
   --sidebar-width-sm: 12.5rem; /* 200px — also the sticky form section nav */
   /*
@@ -191,6 +191,22 @@
     to {
       opacity: 1;
     }
+  }
+}
+
+/*
+ * 56px below `md`, per `30-responsive.md`'s Header row.
+ *
+ * An override on the same variable rather than a second token, so every
+ * `app-shell`, sticky offset and `scroll-mt` that already reads
+ * `--header-height` follows without being touched. A surface that hard-coded
+ * 64px would be a second source of truth and would now be wrong by exactly
+ * these 8px on every phone — which is the failure #4 already had to fix a
+ * 1px version of.
+ */
+@media (width < 48rem) {
+  :root {
+    --header-height: 3.5rem;
   }
 }
 

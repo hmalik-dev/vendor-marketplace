@@ -3,6 +3,7 @@ import { Show, UserButton } from '@clerk/nextjs';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { MarketingNav } from '@/components/marketing-nav';
+import { SignedInDrawer, SignedOutDrawer } from '@/components/header-drawer';
 import { HeaderQuery } from '@/components/search/header-query';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
@@ -24,9 +25,10 @@ export async function SiteHeader(): Promise<React.ReactElement> {
 
   return (
     // The height sits on the header, not the nav inside it, so the bottom
-    // border is part of the 64px rather than a 65th pixel — an app shell is
+    // border is part of the height rather than an extra pixel — an app shell is
     // measured against `--header-height`, and one stray pixel is enough to make
-    // the page scroll.
+    // the page scroll. The token is 64px, and 56px below `md` per
+    // `30-responsive.md`; nothing here restates either number.
     <header className="sticky top-0 z-(--z-header) box-border h-(--header-height) border-b border-stone-300 bg-stone-0">
       <nav
         aria-label="Main"
@@ -76,6 +78,13 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             <Button variant="ink" asChild>
               <Link href="/sign-up">Sign up</Link>
             </Button>
+
+            {/*
+              Beside the pill, exactly as frame `14 Landing mobile` draws them:
+              the pill never goes into the drawer, so the visitor's one action
+              stays a tap away.
+            */}
+            <SignedOutDrawer />
           </Show>
 
           <Show when="signed-in">
@@ -84,16 +93,17 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             </Button>
             {/*
               Four items do not fit at 390 — they pushed the header past the
-              viewport. Dashboard is the one that gives way: it is reachable
-              from the avatar menu and from `/dashboard` itself, where Messages
-              and the bell have no other route on a phone until #26 builds the
-              drawer.
+              viewport. Dashboard is the one that gives way, and since #26 it
+              gives way *into the drawer* rather than off the screen: frame
+              `14 Search tablet` keeps Messages in the bar and puts the rest
+              behind the hamburger.
             */}
             <Button variant="ghost" asChild className="max-sm:hidden">
               <Link href="/dashboard">Dashboard</Link>
             </Button>
             <NotificationBell />
             <UserButton />
+            <SignedInDrawer />
           </Show>
         </div>
       </nav>
