@@ -6,7 +6,10 @@ import {
   describeBlockers,
   generateSlug,
   kmToMiles,
+  MAX_TAGLINE_LENGTH,
   MAX_VENDOR_BIO_LENGTH,
+  MAX_YEARS_IN_BUSINESS,
+  MIN_YEARS_IN_BUSINESS,
   milesToKm,
   PUBLISH_BLOCKERS,
   RESPONSE_TIME_HOURS_OPTIONS,
@@ -103,6 +106,9 @@ export interface FormState {
   businessName: string;
   slug: string;
   bio: string;
+  tagline: string;
+  /** Kept as a string: an empty input is "not answered", not zero. */
+  yearsInBusiness: string;
   address: string;
   city: string;
   state: string;
@@ -119,6 +125,11 @@ function initialState(profile: WireVendorProfile | null): FormState {
     businessName: profile?.businessName ?? '',
     slug: profile?.slug ?? '',
     bio: profile?.bio ?? '',
+    tagline: profile?.tagline ?? '',
+    yearsInBusiness:
+      profile?.yearsInBusiness === null || profile?.yearsInBusiness === undefined
+        ? ''
+        : String(profile.yearsInBusiness),
     address: profile?.address ?? '',
     city: profile?.city ?? '',
     state: profile?.state ?? '',
@@ -151,6 +162,10 @@ function toPayload(form: FormState): Record<string, unknown> {
     businessName: form.businessName.trim(),
     slug: form.slug.trim() === '' ? undefined : form.slug.trim(),
     bio: form.bio.trim(),
+    tagline: form.tagline.trim(),
+    // Left blank means "not answered" and is sent as absent; `0` is a real
+    // answer and must survive, which `Number('') === 0` would quietly destroy.
+    yearsInBusiness: form.yearsInBusiness.trim() === '' ? undefined : Number(form.yearsInBusiness),
     address: form.address.trim(),
     city: form.city.trim(),
     state: form.state.trim(),
@@ -448,6 +463,44 @@ export function VendorProfileForm({
                   />
                   <p className="mt-1 truncate text-xs text-stone-600">
                     {BRAND_DOMAIN}/vendors/{slugPreview}
+                  </p>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <Label htmlFor="tagline">Your line</Label>
+                  <Input
+                    id="tagline"
+                    value={form.tagline}
+                    onChange={(event) => update('tagline', event.target.value)}
+                    placeholder="Quiet, documentary, never asks you to pose."
+                    maxLength={MAX_TAGLINE_LENGTH}
+                    className="mt-1.5"
+                  />
+                  <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
+                    <p className="text-stone-600">
+                      One sentence, in your own words. It opens your profile.
+                    </p>
+                    <p className="shrink-0 tabular-nums text-stone-600">
+                      {form.tagline.length} / {MAX_TAGLINE_LENGTH}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="yearsInBusiness">Years in business</Label>
+                  <Input
+                    id="yearsInBusiness"
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_YEARS_IN_BUSINESS}
+                    max={MAX_YEARS_IN_BUSINESS}
+                    value={form.yearsInBusiness}
+                    onChange={(event) => update('yearsInBusiness', event.target.value)}
+                    placeholder="10"
+                    className="mt-1.5"
+                  />
+                  <p className="mt-1 text-xs text-stone-600">
+                    Counted from when you started, not when you joined here.
                   </p>
                 </div>
 

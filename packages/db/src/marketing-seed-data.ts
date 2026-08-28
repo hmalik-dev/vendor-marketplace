@@ -35,6 +35,16 @@ export interface MarketingVendorSeed {
   readonly city: string;
   readonly state: string;
   readonly bio: string;
+  /**
+   * The vendor's own line, opening the About tab as a pull-quote.
+   *
+   * Optional on purpose: two vendors are seeded without one, because a profile
+   * with no pull-quote is a state the page has to render correctly and an
+   * empty state nothing reaches is an empty state nobody has checked.
+   */
+  readonly tagline?: string;
+  /** Self-declared. Omitted for two vendors, and `0` for one just starting. */
+  readonly yearsInBusiness?: number;
   readonly responseTimeHours: number;
   /**
    * The average the generated reviews must reproduce, to two decimal places.
@@ -95,6 +105,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'Documentary coverage of the day as it actually happens. I shoot quietly, mostly on film, and I will not ask you to do anything twice.',
+    tagline: 'Quiet, documentary, never asks you to pose.',
+    yearsInBusiness: 10,
     responseTimeHours: 2,
     rating: 4.9,
     reviewCount: 127,
@@ -108,6 +120,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'A two-person studio working receptions after dark. We bring our own light and we know how to use it.',
+    tagline: 'Warm, unhurried portraits with a lot of laughing.',
+    yearsInBusiness: 8,
     responseTimeHours: 4,
     rating: 4.8,
     reviewCount: 64,
@@ -121,6 +135,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Round Rock',
     state: 'TX',
     bio: 'Outdoor ceremonies, gardens and long golden hours. Newer to Austin, booking a small number of weddings a year.',
+    tagline: 'Flowers that look like they were just picked.',
+    yearsInBusiness: 6,
     responseTimeHours: 3,
     rating: 5,
     reviewCount: 18,
@@ -134,6 +150,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'Natural light only. Bright, airy, unfussy pictures of people who look like themselves.',
+    tagline: 'Clean light, honest colour, nothing overworked.',
+    yearsInBusiness: 4,
     responseTimeHours: 6,
     rating: 4.7,
     reviewCount: 92,
@@ -147,6 +165,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Buda',
     state: 'TX',
     bio: 'Second-generation wedding photographers. Classic, formal coverage and the family groups nobody else remembers to take.',
+    tagline: 'Proper food, cooked on site, served hot.',
+    yearsInBusiness: 15,
     responseTimeHours: 5,
     rating: 4.9,
     reviewCount: 41,
@@ -160,6 +180,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'Cinematic stills and a short film of the day, shot as one job by one team so the two never fight over the same moment.',
+    tagline: 'Films that play like a memory, not a highlight reel.',
+    yearsInBusiness: 7,
     responseTimeHours: 8,
     rating: 4.8,
     reviewCount: 55,
@@ -173,6 +195,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Buda',
     state: 'TX',
     bio: 'Golden-hour portraits and elopements, mostly out in the hill country.',
+    tagline: 'Sculptural arrangements for rooms with high ceilings.',
+    yearsInBusiness: 5,
     responseTimeHours: 12,
     rating: 4.6,
     reviewCount: 43,
@@ -186,6 +210,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'Garden weddings and greenery. Happiest outdoors with a long lens and no schedule.',
+    tagline: 'Small weddings, long tables, very good bread.',
+    yearsInBusiness: 3,
     responseTimeHours: 10,
     rating: 4.5,
     reviewCount: 70,
@@ -199,6 +225,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Round Rock',
     state: 'TX',
     bio: 'Portrait-led coverage. I spend the day looking for faces rather than details.',
+    tagline: 'I keep the dance floor full and the volume sensible.',
+    yearsInBusiness: 12,
     responseTimeHours: 4,
     rating: 4.8,
     reviewCount: 94,
@@ -212,6 +240,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'Relaxed, unposed pictures for couples who would rather be at their own party.',
+    tagline: 'A barn, a field, and room for two hundred.',
+    yearsInBusiness: 20,
     responseTimeHours: 7,
     rating: 4.8,
     reviewCount: 35,
@@ -225,6 +255,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'Full-service studio covering receptions, rehearsal dinners and the morning after.',
+    tagline: 'Editorial polish without the editorial fuss.',
+    yearsInBusiness: 9,
     responseTimeHours: 2,
     rating: 4.9,
     reviewCount: 127,
@@ -238,6 +270,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'Colour-forward coverage of South Asian and multi-day weddings. Four languages between the two of us.',
+    tagline: 'Cakes that taste as good as they photograph.',
+    yearsInBusiness: 6,
     responseTimeHours: 3,
     rating: 4.8,
     reviewCount: 51,
@@ -251,6 +285,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'City-hall ceremonies, rooftops and downtown portraits. Small weddings a speciality.',
+    tagline: 'Straightforward coverage, delivered in a fortnight.',
+    yearsInBusiness: 2,
     responseTimeHours: 9,
     rating: 4.7,
     reviewCount: 23,
@@ -264,6 +300,8 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Austin',
     state: 'TX',
     bio: 'Long-table dinners, vineyards and receptions that run late. We shoot food as carefully as we shoot people.',
+    tagline: 'Seasonal menus built around what is actually good.',
+    yearsInBusiness: 11,
     responseTimeHours: 5,
     rating: 4.9,
     reviewCount: 61,
@@ -277,6 +315,7 @@ export const MARKETING_VENDORS: readonly MarketingVendorSeed[] = [
     city: 'Oakland',
     state: 'CA',
     bio: 'Just opened for bookings. No reviews yet — the first couple to book gets my full attention and a lower rate for it.',
+    yearsInBusiness: 0,
     responseTimeHours: 1,
     // Deliberately unreviewed: the "no reviews yet" state needs a real row to
     // render against, and an out-of-market city keeps the Austin search honest.

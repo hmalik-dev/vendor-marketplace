@@ -50,6 +50,13 @@
       "when": 1787884960061,
       "tag": "0006_omniscient_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787909694091,
+      "tag": "0007_aromatic_bushwacker",
+      "breakpoints": true
     }
   ]
 }

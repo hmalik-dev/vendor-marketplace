@@ -26,6 +26,24 @@ export const vendorProfiles = pgTable(
     /** URL-safe, auto-generated from the business name, vendor-editable. */
     slug: varchar('slug', { length: 200 }).notNull(),
     bio: text('bio'),
+    /**
+     * The vendor's own one-line description of their work, opening the About
+     * tab as a pull-quote.
+     *
+     * Capped at 80 because that is roughly frame `03`'s line, and a hard cap is
+     * what stops it becoming a second bio. Optional, and never a publish
+     * blocker: a vendor without one simply gets no pull-quote.
+     */
+    tagline: varchar('tagline', { length: 80 }),
+    /**
+     * Self-declared years in business, for the Experience stat tile.
+     *
+     * Deliberately not derived from the first completed booking: that is wrong
+     * for an established vendor joining today, which is most of the first
+     * cohort. Unverifiable, but honest about being the vendor's own claim, and
+     * consistent with the other two tiles, which are already vendor-entered.
+     */
+    yearsInBusiness: integer('years_in_business'),
     profileImageUrl: varchar('profile_image_url', { length: 500 }),
     coverImageUrl: varchar('cover_image_url', { length: 500 }),
     address: varchar('address', { length: 500 }),

@@ -52,6 +52,8 @@ export interface PublicVendorRow {
   businessName: string;
   slug: string;
   bio: string | null;
+  tagline: string | null;
+  yearsInBusiness: number | null;
   profileImageUrl: string | null;
   coverImageUrl: string | null;
   city: string | null;
@@ -74,6 +76,8 @@ export async function findPublicVendorBySlug(
       businessName: vendorProfiles.businessName,
       slug: vendorProfiles.slug,
       bio: vendorProfiles.bio,
+      tagline: vendorProfiles.tagline,
+      yearsInBusiness: vendorProfiles.yearsInBusiness,
       profileImageUrl: vendorProfiles.profileImageUrl,
       coverImageUrl: vendorProfiles.coverImageUrl,
       city: vendorProfiles.city,

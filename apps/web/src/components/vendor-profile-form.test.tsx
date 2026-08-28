@@ -6,6 +6,8 @@ const COMPLETE: FormState = {
   businessName: 'Kessler & Co.',
   slug: 'kessler-co',
   bio: 'Ten years photographing weddings across central Texas.',
+  tagline: 'Editorial polish without the editorial fuss.',
+  yearsInBusiness: '9',
   address: '1204 E Cesar Chavez St',
   city: 'Austin',
   state: 'TX',
@@ -73,5 +75,20 @@ describe('mergeBlockers', () => {
       'bio',
       'packages',
     ]);
+  });
+});
+
+/**
+ * Neither field gates publishing. A vendor who has not written a line, or who
+ * would rather not say how long they have been working, is still publishable —
+ * these two add to a profile, they do not certify one.
+ */
+describe('the tagline and the experience figure never block publishing', () => {
+  it('publishes with neither answered', () => {
+    expect(liveBlockers({ ...COMPLETE, tagline: '', yearsInBusiness: '' })).toEqual([]);
+  });
+
+  it('publishes with a vendor in their first year', () => {
+    expect(liveBlockers({ ...COMPLETE, yearsInBusiness: '0' })).toEqual([]);
   });
 });

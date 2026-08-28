@@ -233,6 +233,8 @@ export async function createVendorProfile(
     businessName: input.businessName,
     slug,
     bio: blankToNull(input.bio ?? ''),
+    tagline: blankToNull(input.tagline ?? ''),
+    yearsInBusiness: input.yearsInBusiness ?? null,
     address: blankToNull(input.address ?? ''),
     city: input.city,
     state: input.state,
@@ -280,6 +282,14 @@ export async function updateVendorProfile(
   }
   if (input.bio !== undefined) {
     patch.bio = blankToNull(input.bio);
+  }
+  if (input.tagline !== undefined) {
+    // Blanking the field removes the pull-quote rather than storing an empty
+    // string, which would render as an empty quote on the About tab.
+    patch.tagline = blankToNull(input.tagline);
+  }
+  if (input.yearsInBusiness !== undefined) {
+    patch.yearsInBusiness = input.yearsInBusiness;
   }
   if (input.address !== undefined) {
     patch.address = blankToNull(input.address);

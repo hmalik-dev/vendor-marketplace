@@ -571,6 +571,17 @@ export const MAX_CUSTOMER_BIO_LENGTH = 300;
  * than to protect storage.
  */
 export const MAX_VENDOR_BIO_LENGTH = 1_200;
+/**
+ * The pull-quote that opens the About tab. Roughly frame `03`'s line, and a
+ * hard cap is what keeps it from becoming a second bio.
+ */
+export const MAX_TAGLINE_LENGTH = 80;
+/**
+ * Self-declared years in business. Zero is a real answer — a vendor starting
+ * this year — and renders as "Less than a year" rather than "0 yrs".
+ */
+export const MIN_YEARS_IN_BUSINESS = 0;
+export const MAX_YEARS_IN_BUSINESS = 75;
 
 /**
  * Response windows a vendor may advertise, in hours. A closed set rather than

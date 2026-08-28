@@ -14,7 +14,10 @@ import {
   MAX_BUSINESS_NAME_LENGTH,
   MAX_CAPTION_LENGTH,
   MAX_CUSTOMER_BIO_LENGTH,
+  MAX_TAGLINE_LENGTH,
   MAX_VENDOR_BIO_LENGTH,
+  MAX_YEARS_IN_BUSINESS,
+  MIN_YEARS_IN_BUSINESS,
   MAX_EMAIL_LENGTH,
   MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
@@ -316,6 +319,8 @@ export const vendorProfileSchema = z.object({
   businessName: trimmedString(MAX_BUSINESS_NAME_LENGTH),
   slug: slugSchema,
   bio: z.string().nullable(),
+  tagline: z.string().max(MAX_TAGLINE_LENGTH).nullable(),
+  yearsInBusiness: z.int().nullable(),
   profileImageUrl: urlSchema.nullable(),
   coverImageUrl: urlSchema.nullable(),
   address: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
@@ -352,6 +357,16 @@ export const createVendorProfileSchema = z.object({
     .string()
     .trim()
     .max(MAX_VENDOR_BIO_LENGTH, `Keep your bio under ${MAX_VENDOR_BIO_LENGTH} characters`)
+    .optional(),
+  tagline: z
+    .string()
+    .trim()
+    .max(MAX_TAGLINE_LENGTH, `Keep it to ${MAX_TAGLINE_LENGTH} characters — it is one line`)
+    .optional(),
+  yearsInBusiness: z
+    .int()
+    .min(MIN_YEARS_IN_BUSINESS, 'Years in business cannot be negative')
+    .max(MAX_YEARS_IN_BUSINESS, `Enter ${MAX_YEARS_IN_BUSINESS} or fewer years`)
     .optional(),
   address: z.string().trim().max(MAX_ADDRESS_LENGTH).optional(),
   latitude: latitudeSchema.optional(),
@@ -1022,6 +1037,10 @@ export const publicVendorProfileSchema = z.object({
   businessName: z.string(),
   slug: slugSchema,
   bio: z.string().nullable(),
+  /** The vendor's own line, opening the About tab. Absent for most vendors. */
+  tagline: z.string().nullable(),
+  /** Self-declared, so it is the vendor's claim rather than a platform figure. */
+  yearsInBusiness: z.int().nullable(),
   profileImageUrl: z.string().nullable(),
   coverImageUrl: z.string().nullable(),
   city: z.string().nullable(),

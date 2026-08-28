@@ -133,9 +133,10 @@ export default async function VendorProfilePage({
               about: (
                 <AboutPane
                   bio={vendor.bio}
+                  tagline={vendor.tagline}
+                  yearsInBusiness={vendor.yearsInBusiness}
                   completedEventCount={vendor.completedEventCount}
                   serviceRadiusKm={vendor.serviceRadiusKm}
-                  responseTimeHours={vendor.responseTimeHours}
                   portfolio={vendor.portfolio}
                   onSeeAllHref={`/vendors/${vendor.slug}?tab=portfolio`}
                 />

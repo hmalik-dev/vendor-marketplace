@@ -26,7 +26,9 @@ import {
   ERROR_CODES,
   MAX_CUSTOMER_BIO_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
+  MAX_TAGLINE_LENGTH,
   MAX_TAGS_PER_CATEGORY,
+  MAX_YEARS_IN_BUSINESS,
   MESSAGE_MAX_LENGTH,
   MIN_BOOKING_AMOUNT_CENTS,
   RESPONSE_TIME_HOURS_OPTIONS,
@@ -685,6 +687,8 @@ describe('vendorProfileDetailSchema', () => {
     businessName: 'Sunlit Studio',
     slug: 'sunlit-studio',
     bio: null,
+    tagline: null,
+    yearsInBusiness: null,
     profileImageUrl: null,
     coverImageUrl: null,
     address: null,
@@ -781,5 +785,57 @@ describe('priceCentsSchema messages', () => {
   it('never quotes a bound in cents', () => {
     expect(message(2_400)).not.toMatch(/cents/i);
     expect(message(10_000_100)).not.toMatch(/cents/i);
+  });
+});
+
+/**
+ * Both are the vendor's own claim about themselves, so the only thing the
+ * schema can enforce is that the claim is a plausible one.
+ */
+describe('the tagline and the experience figure', () => {
+  const MINIMAL_VENDOR_PROFILE = {
+    businessName: 'Golden Hour Photography',
+    categoryIds: [UUID],
+    city: 'Austin',
+    state: 'TX',
+  };
+
+  it('accepts a tagline at exactly the cap', () => {
+    const result = createVendorProfileSchema.safeParse({
+      ...MINIMAL_VENDOR_PROFILE,
+      tagline: 'a'.repeat(MAX_TAGLINE_LENGTH),
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('refuses one character past it, and says it is one line', () => {
+    const result = createVendorProfileSchema.safeParse({
+      ...MINIMAL_VENDOR_PROFILE,
+      tagline: 'a'.repeat(MAX_TAGLINE_LENGTH + 1),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toContain('one line');
+  });
+
+  /* Zero is a vendor in their first year, not a missing answer. */
+  it('accepts zero years', () => {
+    expect(
+      createVendorProfileSchema.safeParse({ ...MINIMAL_VENDOR_PROFILE, yearsInBusiness: 0 })
+        .success,
+    ).toBe(true);
+  });
+
+  it.each([-1, MAX_YEARS_IN_BUSINESS + 1, 1.5])('refuses %p years', (years) => {
+    expect(
+      createVendorProfileSchema.safeParse({ ...MINIMAL_VENDOR_PROFILE, yearsInBusiness: years })
+        .success,
+    ).toBe(false);
+  });
+
+  /* Neither is required: a profile without them is still a valid profile. */
+  it('accepts a profile that answers neither', () => {
+    expect(createVendorProfileSchema.safeParse(MINIMAL_VENDOR_PROFILE).success).toBe(true);
   });
 });

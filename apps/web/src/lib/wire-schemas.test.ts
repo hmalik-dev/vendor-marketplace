@@ -99,6 +99,8 @@ describe('wireVendorProfileSchema', () => {
     businessName: 'Sunlit Studio',
     slug: 'sunlit-studio',
     bio: 'Documentary wedding photography.',
+    tagline: 'Quiet, documentary, never asks you to pose.',
+    yearsInBusiness: 10,
     profileImageUrl: null,
     coverImageUrl: 'http://localhost:9000/vendor-marketplace-uploads/vendor-cover/abc.webp',
     address: null,
