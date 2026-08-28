@@ -312,6 +312,22 @@ export const ENV_REGISTRY = [
     setup: CLERK_WEBHOOK_SETUP,
   },
   {
+    key: 'CLERK_WEBHOOK_ENDPOINT',
+    capability: 'auth',
+    audience: 'server',
+    consumers: ['api'],
+    environments: 'per-environment',
+    shape: HTTP_URL,
+    productionShape: HTTPS_URL,
+    // Localhost, because `clerk webhooks listen` forwarding here is the
+    // *correct* local setup. On a deployment the same value being a relay is
+    // the bug this records, which is why the guard only runs off localhost.
+    defaultValue: 'http://localhost:4000/webhooks/clerk',
+    description:
+      'The Svix endpoint configured on the Clerk app. Checked at startup against this deployment, because a webhook pointed elsewhere fails silently.',
+    setup: CLERK_WEBHOOK_SETUP,
+  },
+  {
     key: 'NEXT_PUBLIC_CLERK_SIGN_IN_URL',
     capability: 'auth',
     audience: 'browser',

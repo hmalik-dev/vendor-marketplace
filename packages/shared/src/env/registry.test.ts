@@ -268,7 +268,11 @@ describe('registrySchemaShape', () => {
   it('includes only the rows the consumer reads', () => {
     const shape = registrySchemaShape({ consumer: 'api', capabilities: ['auth'] });
 
-    expect(Object.keys(shape).sort()).toEqual(['CLERK_SECRET_KEY', 'CLERK_WEBHOOK_SECRET']);
+    expect(Object.keys(shape).sort()).toEqual([
+      'CLERK_SECRET_KEY',
+      'CLERK_WEBHOOK_ENDPOINT',
+      'CLERK_WEBHOOK_SECRET',
+    ]);
   });
 
   it('keeps tooling-only rows out of the API contract', () => {

@@ -12,6 +12,7 @@ import {
 import { createDatabase, loadEnv } from '@vendor-marketplace/db';
 import { MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
 import { allowedOrigins, parseEnv, type ApiEnv } from './config/env.js';
+import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
 import type { AppDatabase } from './lib/database.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
@@ -137,6 +138,10 @@ async function bootstrap(): Promise<FastifyInstance> {
   loadEnv();
 
   const env = parseEnv();
+  // Before anything binds: a deployment whose webhooks go elsewhere looks
+  // perfectly healthy, so the only way to find out is to refuse to start.
+  assertWebhookEndpoint(env.CLERK_WEBHOOK_ENDPOINT);
+
   const { db } = createDatabase();
 
   // `buildServer` awaits `app.ready()`, which is what makes `app.server` able

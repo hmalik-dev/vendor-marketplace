@@ -110,3 +110,32 @@ export async function softDeleteUserByClerkId(
 
   return updated?.[0] ?? null;
 }
+
+/**
+ * Every live row, for the reconciliation pass.
+ *
+ * Only the columns Clerk owns are selected: reconciliation compares against
+ * Clerk and must never be tempted to overwrite anything Clerk does not know
+ * about, such as the narrowed local `role`.
+ */
+export async function listLiveClerkIdentities(db: AppDatabase): Promise<
+  {
+    clerkUserId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl: string | null;
+  }[]
+> {
+  return db
+    .select({
+      clerkUserId: users.clerkUserId,
+      email: users.email,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(users)
+    .where(notDeleted)
+    .orderBy(users.clerkUserId);
+}

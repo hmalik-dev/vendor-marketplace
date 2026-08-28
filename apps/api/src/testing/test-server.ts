@@ -14,6 +14,7 @@ export const TEST_ENV: ApiEnv = {
   DATABASE_URL: 'postgres://test',
   CLERK_SECRET_KEY: 'sk_test_not_used',
   CLERK_WEBHOOK_SECRET: 'whsec_not_used',
+  CLERK_WEBHOOK_ENDPOINT: 'http://localhost:4000/webhooks/clerk',
   WEB_URL: 'http://localhost:3000',
   RATE_LIMIT_MAX: 1_000,
   S3_ENDPOINT: 'http://storage.test',
