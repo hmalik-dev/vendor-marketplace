@@ -82,11 +82,11 @@ export interface SavedRequestDraft {
  * restoring it would announce a draft the customer never wrote.
  */
 export function isEmptyDraft(draft: SavedRequestDraft): boolean {
-  const { eventDate: _ignored, ...typed } = draft.form;
+  const typed = Object.entries(draft.form)
+    .filter(([field]) => field !== 'eventDate')
+    .map(([, value]) => value);
 
-  return (
-    draft.customDetails.trim() === '' && Object.values(typed).every((value) => value.trim() === '')
-  );
+  return draft.customDetails.trim() === '' && typed.every((value) => value.trim() === '');
 }
 
 /**

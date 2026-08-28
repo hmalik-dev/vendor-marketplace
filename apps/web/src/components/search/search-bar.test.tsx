@@ -1,8 +1,35 @@
 import type { Category } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchBar, type SearchBarValues } from './search-bar';
+import { SearchStatusProvider, useSearchStatus } from './search-status';
+
+/** Drives the provider into a given state, since it owns its own boolean. */
+function SearchStatusHarness({
+  searching,
+  children,
+}: {
+  searching: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <SearchStatusProvider>
+      <SetSearching searching={searching} />
+      {children}
+    </SearchStatusProvider>
+  );
+}
+
+function SetSearching({ searching }: { searching: boolean }): null {
+  const { setSearching } = useSearchStatus();
+  useEffect(() => {
+    setSearching(searching);
+  }, [searching, setSearching]);
+
+  return null;
+}
 
 const CATEGORIES: Category[] = [
   {
@@ -268,5 +295,74 @@ describe('SearchBar — pill and circle discipline', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
     expect(onSubmit).toHaveBeenCalledWith({ category: 'photography', city: 'Austin', date: '' });
+  });
+});
+
+/**
+ * Frames `17` and `25 — loading` put a spinner in the compact bar's control
+ * while a search runs. The flag crosses a component boundary to get there:
+ * the results own the fetch, the bar lives in the header.
+ */
+describe('SearchBar — while a search is in flight', () => {
+  afterEach(cleanup);
+
+  function renderSearching(searching: boolean) {
+    return render(
+      <SearchStatusHarness searching={searching}>
+        <SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />
+      </SearchStatusHarness>,
+    );
+  }
+
+  it('swaps the magnifier for the ring, keeping the control', () => {
+    renderSearching(true);
+
+    const button = screen.getByRole('button', { name: 'Search' });
+    expect(button.querySelector('[role=status]')).not.toBeNull();
+    // The circle itself is unchanged, so the target does not move.
+    expect(button.className).toContain('rounded-full');
+  });
+
+  it('shows the magnifier again once the search lands', () => {
+    renderSearching(false);
+
+    const button = screen.getByRole('button', { name: 'Search' });
+    expect(button.querySelector('[role=status]')).toBeNull();
+    expect(button.querySelector('[aria-hidden]')).not.toBeNull();
+  });
+
+  /* The hero is never inside the provider, so it must not care. */
+  it('leaves the labelled pill alone', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
+  });
+});
+
+describe('SearchBar — the compact bar’s own measurements', () => {
+  afterEach(cleanup);
+
+  /* 40px at 1024, 42px from 1280 — frames `25` and `17`/`18`. */
+  it('takes the frame’s heights from lg up', () => {
+    const { container } = render(
+      <SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />,
+    );
+    const form = container.querySelector('form');
+
+    expect(form?.className).toContain('lg:h-10');
+    expect(form?.className).toContain('xl:h-[42px]');
+  });
+
+  it('shortens the date label, which is what leaves room for a date', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
+
+    expect(screen.getByText('Date')).toBeDefined();
+    expect(screen.queryByText('Event date')).toBeNull();
+  });
+
+  it('spells it out on the hero, where there is room', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    expect(screen.getByText('Event date')).toBeDefined();
   });
 });

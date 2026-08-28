@@ -8,6 +8,7 @@ import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { siteOrigin } from '@/config/env';
 import { PublicChrome } from '@/components/public-chrome';
 import { SiteFooter } from '@/components/site-footer';
+import { SearchStatusProvider } from '@/components/search/search-status';
 import { SiteHeader } from '@/components/site-header';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
@@ -128,10 +129,17 @@ export default function RootLayout({
             >
               Skip to content
             </a>
-            <SiteHeader />
-            <main id="main" tabIndex={-1} className="flex-1">
-              {children}
-            </main>
+            {/*
+              Wraps the header and the page together, because the one thing it
+              carries — whether a search is in flight — is set by the results
+              and read by the query bar in the header. See `search-status.tsx`.
+            */}
+            <SearchStatusProvider>
+              <SiteHeader />
+              <main id="main" tabIndex={-1} className="flex-1">
+                {children}
+              </main>
+            </SearchStatusProvider>
             {/*
               The footer belongs to the public face. An app screen owns the
               whole viewport, and a footer under a full-height pane layout is

@@ -3,7 +3,9 @@
 import { isPastDate, todayDateString, type Category } from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { Spinner } from '@/components/ui/spinner';
 import { CategorySelect } from './category-select';
+import { useSearchStatus } from './search-status';
 
 /**
  * The query, and the whole of it: **vendor type, city, event date**.
@@ -82,6 +84,12 @@ export function SearchBar({
 
   const isHero = size === 'hero';
   const isIconAction = action === 'icon';
+  /*
+   * Frames `17` and `25 — loading` put a spinner in the compact bar's control
+   * while a search runs. Outside a `SearchStatusProvider` — the landing hero —
+   * this is always false, so the hero is untouched.
+   */
+  const { isSearching } = useSearchStatus();
 
   const label = cn(
     'font-semibold tracking-[.05em] text-stone-600 uppercase',
@@ -153,7 +161,14 @@ export function SearchBar({
         'transition-shadow duration-(--duration-fast) has-[:focus-visible:not([type=submit])]:ring-3 has-[:focus-visible:not([type=submit])]:ring-clay-400/20',
         isHero
           ? 'shadow-lg sm:py-1.75 sm:pr-1.75 sm:pl-6'
-          : 'border border-stone-300 shadow-sm sm:py-1 sm:pr-1 sm:pl-4',
+          : /*
+              A fixed height from `lg`, because the compact bar sits inside a
+              header of its own fixed height and the frames measure it: 40px at
+              1024 (`25`), 42px at 1440 (`17`, `18`). Below `lg` the bar is not
+              in the header at all — `SearchShell` renders it as its own row —
+              so it keeps its padding-driven height there.
+            */
+            'border border-stone-300 shadow-sm sm:py-1 sm:pr-1 sm:pl-4 lg:h-10 lg:py-0 xl:h-[42px]',
         className,
       )}
     >
@@ -192,7 +207,14 @@ export function SearchBar({
           isHero ? 'sm:min-w-28 sm:flex-[0.8] sm:pl-4.5' : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
         )}
       >
-        <span className={label}>Event date</span>
+        {/*
+          "Event date" on the hero, "Date" in the compact bar. Frame `02` draws
+          the long form, but the five frames that show the compact bar in a
+          working state — `17`, `18` and the three at 1024 — all draw "Date",
+          and the short form is what leaves the segment room for a date. The
+          single frame is the stale one.
+        */}
+        <span className={label}>{isHero ? 'Event date' : 'Date'}</span>
         {/*
           An empty date reads "Add a date", not the browser's "mm/dd/yyyy" —
           the frame draws the prompt, and the placeholder attribute does
@@ -271,21 +293,32 @@ export function SearchBar({
           type="submit"
           aria-label="Search"
           className={cn(
-            'flex size-8 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500',
+            // 30px at 1024, 32px from 1280 — the circle follows the bar.
+            'flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 xl:size-8',
             'ml-1.5 focus-visible:ring-offset-0',
           )}
         >
-          {/*
-            Drawn rather than imported: the frame's magnifier is an 11px ring
-            with a 5px stem at 45°, and no icon set in the project matches those
-            proportions inside a 32px circle closely enough for the parity gate.
-          */}
-          <span
-            aria-hidden
-            className="relative box-border size-2.75 rounded-full border-[1.7px] border-stone-0"
-          >
-            <span className="absolute -right-1 -bottom-[3px] h-[1.7px] w-[5px] rotate-45 rounded-[2px] bg-stone-0" />
-          </span>
+          {isSearching ? (
+            /*
+              The control keeps its shape and swaps its glyph while a search is
+              in flight — frames `17` and `25`. A ring that vanished would move
+              the target under a cursor already aimed at it.
+            */
+            <Spinner className="size-3.5 border-stone-0/35 border-t-stone-0" />
+          ) : (
+            /*
+              Drawn rather than imported: the frame's magnifier is an 11px ring
+              with a 5px stem at 45°, and no icon set in the project matches
+              those proportions inside a 32px circle closely enough for the
+              parity gate.
+            */
+            <span
+              aria-hidden
+              className="relative box-border size-2.75 rounded-full border-[1.7px] border-stone-0"
+            >
+              <span className="absolute -right-1 -bottom-[3px] h-[1.7px] w-[5px] rotate-45 rounded-[2px] bg-stone-0" />
+            </span>
+          )}
         </button>
       ) : (
         <button

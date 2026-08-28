@@ -25,17 +25,16 @@ import { describe, expect, it } from 'vitest';
  * that, the rule had a hole the moment the element loader moved inside a
  * component: a screen could render skeletons and a spinning button at once and
  * the check would see only the skeletons.
+ *
+ * The spinner lives in `ui/spinner.tsx` rather than beside the skeletons, so
+ * importing it is not mistaken for importing a skeleton. That is what lets
+ * `button.tsx` — which draws a spinner and no skeleton — be checked like any
+ * other module instead of exempted.
  */
 const SPINNER = /animate-spin|<Loader2\b|<Spinner\b|\bloading=\{/;
 const SKELETON = /from '@\/components\/ui\/skeleton'|<\w*Skeleton\b/;
 
-const EXEMPT = [
-  'src/components/ui/skeleton.tsx',
-  'src/components/ui/sonner.tsx',
-  // Where the element loader is *defined* into the button, not rendered beside
-  // a skeleton. Exempt for the same reason `skeleton.tsx` is.
-  'src/components/ui/button.tsx',
-];
+const EXEMPT = ['src/components/ui/skeleton.tsx', 'src/components/ui/sonner.tsx'];
 
 function sourceFiles(directory: string, base: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

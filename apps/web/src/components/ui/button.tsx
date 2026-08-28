@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { Slot } from 'radix-ui';
 
 import { cn } from '@/lib/utils';
-import { Spinner } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 
 /*
  * The five variants in design/design-plan/03-components.md. Copy is imperative

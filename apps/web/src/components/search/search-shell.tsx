@@ -21,6 +21,7 @@ import { NameSearch } from './name-search';
 import { RefineBar } from './refine-bar';
 import { SearchBar } from './search-bar';
 import { NearbyDatesBand } from './nearby-dates-band';
+import { useSearchStatus } from './search-status';
 import { noResultsDiagnosis, noResultsHeadline, relaxations } from './relaxations';
 import { activeRefineCount, toSearchQuery, useSearchState, type SearchState } from './search-state';
 
@@ -88,6 +89,12 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   const [error, setError] = useState<string | null>(null);
   /** Below `lg` the Refine chips collapse into a sheet. The query never does. */
   const [isRefineSheetOpen, setIsRefineSheetOpen] = useState(false);
+  /*
+   * Published so the compact bar in the header can show the wait in its own
+   * control — frames `17` and `25 — loading`. The results own the fetch; the
+   * bar is a sibling on the far side of the layout.
+   */
+  const { setSearching } = useSearchStatus();
 
   const query = toSearchQuery(state);
 
@@ -97,6 +104,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
     const controller = new AbortController();
 
     setIsLoading(true);
+    setSearching(true);
     setError(null);
 
     apiRequest(`/vendors?${query}`, {
@@ -107,6 +115,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
       .then((body) => {
         setResult(body);
         setIsLoading(false);
+        setSearching(false);
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) {
@@ -116,9 +125,13 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           cause instanceof ApiClientError ? cause.message : 'Could not load vendors just now.',
         );
         setIsLoading(false);
+        setSearching(false);
       });
 
     return () => controller.abort();
+    // `setSearching` is stable — `useState`'s setter — so it is safe to leave
+    // out; including it would not change when this runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   /*
