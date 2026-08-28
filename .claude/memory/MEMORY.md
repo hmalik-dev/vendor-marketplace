@@ -15,3 +15,4 @@
 - [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; the tracker is the durable queue
 - [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; the Neon URL that leaked still needs rotating
 - [Global config repo: claude-workflow](claude-workflow-config-repo.md) — ~/.claude is git-tracked in a private repo; its .gitignore is deny-by-default
+- [Commit ticket changes immediately](commit-ticket-changes-immediately.md) — tracker edits go straight to main, never left dirty
