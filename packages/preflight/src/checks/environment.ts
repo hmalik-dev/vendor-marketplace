@@ -6,10 +6,40 @@ import {
   variablesFor,
 } from '@vendor-marketplace/shared/env';
 import { ENV_FILES } from '../context.js';
-import { type Check, type CheckContext, type CheckResult, fail, pass } from '../types.js';
+import {
+  type Check,
+  type CheckContext,
+  type CheckResult,
+  type Target,
+  fail,
+  pass,
+} from '../types.js';
 
-function setupHint(variable: EnvVariable): string {
-  return [...variable.setup.steps, variable.setup.url].join(' · ');
+function setupHint(variable: EnvVariable, target: Target): string {
+  const url =
+    target === 'production'
+      ? (variable.setup.productionUrl ?? variable.setup.url)
+      : variable.setup.url;
+
+  return [...variable.setup.steps, url].join(' · ');
+}
+
+/**
+ * A credential whose prefix names an environment fails its shape for two very
+ * different reasons: it is malformed, or it is a perfectly good key from the
+ * other environment. Only the second one is about to spend real money, and
+ * printing a regex at the operator holding it invites them to paste it back.
+ */
+function modeMismatch(variable: EnvVariable, value: string, target: Target): string | undefined {
+  if (variable.modes === undefined) {
+    return undefined;
+  }
+
+  const other = target === 'local' ? 'production' : 'local';
+
+  return shapeFor(variable, other)?.test(value) === true
+    ? `is a ${variable.modes[other]} key — the ${target} target needs a ${variable.modes[target]} key`
+    : undefined;
 }
 
 /**
@@ -27,7 +57,7 @@ export function evaluateVariable(variable: EnvVariable, context: CheckContext): 
     }
 
     const fix = context.envFileFound
-      ? `Add ${variable.key} to ${envFile} — ${setupHint(variable)}`
+      ? `Add ${variable.key} to ${envFile} — ${setupHint(variable, context.target)}`
       : `cp .env.example ${envFile}, then set ${variable.key}`;
 
     return fail(variable.capability, variable.key, `not set in ${envFile}`, fix);
@@ -38,7 +68,7 @@ export function evaluateVariable(variable: EnvVariable, context: CheckContext): 
       variable.capability,
       variable.key,
       `still the placeholder ${variable.placeholder}`,
-      setupHint(variable),
+      setupHint(variable, context.target),
     );
   }
 
@@ -54,7 +84,7 @@ export function evaluateVariable(variable: EnvVariable, context: CheckContext): 
       variable.capability,
       variable.key,
       `still the local default ${variable.defaultValue}`,
-      setupHint(variable),
+      setupHint(variable, context.target),
     );
   }
 
@@ -64,8 +94,9 @@ export function evaluateVariable(variable: EnvVariable, context: CheckContext): 
     return fail(
       variable.capability,
       variable.key,
-      `does not match the expected ${context.target} shape ${String(shape)}`,
-      setupHint(variable),
+      modeMismatch(variable, value, context.target) ??
+        `does not match the expected ${context.target} shape ${String(shape)}`,
+      setupHint(variable, context.target),
     );
   }
 

@@ -93,6 +93,13 @@ describe('ENV_REGISTRY integrity', () => {
     for (const variable of ALL_VARIABLES) {
       expect(isCapability(variable.capability), variable.key).toBe(true);
       expect(variable.setup.url, variable.key).toMatch(/^https:\/\//);
+
+      if (variable.setup.productionUrl !== undefined) {
+        // A live-mode route that still points at a test-mode page is worse than
+        // none: it reads as deliberate.
+        expect(variable.setup.productionUrl, variable.key).toMatch(/^https:\/\//);
+        expect(variable.setup.productionUrl, variable.key).not.toContain('/test/');
+      }
       expect(variable.setup.steps.length, variable.key).toBeGreaterThan(0);
       expect(variable.description.length, variable.key).toBeGreaterThan(0);
     }
@@ -135,6 +142,62 @@ describe('ENV_REGISTRY integrity', () => {
     expect(shapeFor(stripe!, 'local')?.test('sk_test_51ABCdefGHIjklMNO')).toBe(true);
     expect(shapeFor(stripe!, 'production')?.test('sk_test_51ABCdefGHIjklMNO')).toBe(false);
     expect(shapeFor(stripe!, 'production')?.test('sk_live_51ABCdefGHIjklMNO')).toBe(true);
+  });
+
+  it('declares localShape, productionShape and modes as one unit', () => {
+    // A mode restriction that is declared in only one direction is the defect
+    // this ticket removes; it must not be reintroducible one field at a time.
+    const partial = ALL_VARIABLES.filter(
+      (variable) =>
+        (variable.modes !== undefined) !==
+        (variable.localShape !== undefined && variable.productionShape !== undefined),
+    ).map((variable) => variable.key);
+
+    expect(partial).toEqual([]);
+  });
+
+  it('gives each target its own tightened shape, and baseline none of them', () => {
+    for (const variable of ALL_VARIABLES.filter((row) => row.productionShape !== undefined)) {
+      expect(shapeFor(variable, 'production'), variable.key).toBe(variable.productionShape);
+      expect(shapeFor(variable, 'local'), variable.key).toBe(variable.localShape ?? variable.shape);
+      expect(shapeFor(variable, 'baseline'), variable.key).toBe(variable.shape);
+    }
+  });
+
+  it('confines every mode-carrying credential to its target, in both directions', () => {
+    const moded = ALL_VARIABLES.filter((variable) => variable.modes !== undefined);
+
+    expect(moded.map((variable) => variable.key)).toEqual([
+      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+      'CLERK_SECRET_KEY',
+      'STRIPE_SECRET_KEY',
+      'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+    ]);
+
+    for (const variable of moded) {
+      // Built from the row itself, so a fifth mode-carrying credential is
+      // covered the moment it is declared rather than when someone remembers.
+      const localValue = variable.placeholder!.replace('...', '51ABCdefGHIjklMNO');
+      const productionValue = localValue.replace(
+        `_${variable.modes!.local}_`,
+        `_${variable.modes!.production}_`,
+      );
+
+      expect(shapeFor(variable, 'local')?.test(localValue), variable.key).toBe(true);
+      expect(shapeFor(variable, 'local')?.test(productionValue), variable.key).toBe(false);
+      expect(shapeFor(variable, 'production')?.test(productionValue), variable.key).toBe(true);
+      expect(shapeFor(variable, 'production')?.test(localValue), variable.key).toBe(false);
+    }
+  });
+
+  it('leaves a credential with no mode in its prefix unrestricted by target', () => {
+    for (const key of ['CLERK_WEBHOOK_SECRET', 'DATABASE_URL', 'S3_ACCESS_KEY_ID']) {
+      const variable = findVariable(key);
+
+      expect(variable, key).toBeDefined();
+      expect(variable!.modes, key).toBeUndefined();
+      expect(shapeFor(variable!, 'local'), key).toBe(variable!.shape);
+    }
   });
 
   it('falls back to the local shape in production when none is tightened', () => {
@@ -292,6 +355,38 @@ describe('registrySchemaShape', () => {
     expect(logLevel).toBeDefined();
     expect(logLevel.parse(undefined)).toBe('info');
     expect(() => logLevel.parse('chatty')).toThrow(/LOG_LEVEL/);
+  });
+
+  it('accepts either mode by default, so a production boot is not rejected', () => {
+    /*
+     * The regression guard for the whole `localShape` mechanism. Both apps
+     * derive this schema at build and boot time in every environment — neither
+     * can tell a release from `pnpm build` on a laptop, because `next build`
+     * and `tsc` both set `NODE_ENV=production`. Defaulting to the local set
+     * would fail the Vercel build and the production API boot on exactly the
+     * live keys that are correct there.
+     */
+    const key = findVariable('STRIPE_SECRET_KEY')!;
+    const local = key.placeholder!.replace('...', '51ABCdefGHIjklMNO');
+    const production = local.replace(`_${key.modes!.local}_`, `_${key.modes!.production}_`);
+    const shape = registrySchemaShape({ consumer: 'api', capabilities: ['stripe'] });
+
+    expect(shape.STRIPE_SECRET_KEY.parse(local)).toBe(local);
+    expect(shape.STRIPE_SECRET_KEY.parse(production)).toBe(production);
+  });
+
+  it('rejects a live key only when the caller names the local target', () => {
+    const key = findVariable('STRIPE_SECRET_KEY')!;
+    const production = key
+      .placeholder!.replace('...', '51ABCdefGHIjklMNO')
+      .replace(`_${key.modes!.local}_`, `_${key.modes!.production}_`);
+    const shape = registrySchemaShape({
+      consumer: 'api',
+      capabilities: ['stripe'],
+      target: 'local',
+    });
+
+    expect(() => shape.STRIPE_SECRET_KEY.parse(production)).toThrow(/STRIPE_SECRET_KEY/);
   });
 
   it('applies the production shape when asked for one', () => {

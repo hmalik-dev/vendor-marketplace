@@ -8,13 +8,17 @@ import { z } from 'zod';
 const WEB_CAPABILITIES = ['core', 'auth'] as const;
 
 /**
- * Build-time validation always uses the local target. `next build` sets
+ * Build-time validation always uses the baseline value set. `next build` sets
  * `NODE_ENV=production` for every build, including a local one, so it cannot
  * distinguish a release from `pnpm build` on a laptop — the stricter production
  * value set is checked by `pnpm preflight --env production` instead.
+ *
+ * Stated explicitly rather than defaulted, because the choice matters in both
+ * directions: the `local` set rejects a live-mode Clerk key, and a live key is
+ * the correct value for the very build this validates on Vercel.
  */
 const envSchema = z.object(
-  registrySchemaShape({ consumer: 'web', capabilities: WEB_CAPABILITIES }),
+  registrySchemaShape({ consumer: 'web', capabilities: WEB_CAPABILITIES, target: 'baseline' }),
 );
 
 export type WebEnv = z.infer<typeof envSchema>;

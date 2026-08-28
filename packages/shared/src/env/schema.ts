@@ -4,6 +4,7 @@ import {
   type EnvVariable,
   type RegistryEntryFor,
   type RegistryKey,
+  type ShapeTarget,
   requiresExplicitValue,
   shapeFor,
 } from './registry.js';
@@ -16,14 +17,19 @@ export interface SchemaShapeOptions<
   /** The surface deriving the schema — only rows it reads are included. */
   readonly consumer: TConsumer;
   readonly capabilities: readonly TCapability[];
-  /** Which shape to enforce. Defaults to `local`. */
-  readonly target?: 'local' | 'production';
+  /**
+   * Which value set to enforce. Defaults to `baseline` — the apps derive their
+   * schema at build and boot time, where they cannot prove which environment
+   * they are in, so a mode restriction there would reject the live keys that
+   * are correct in production. `pnpm preflight` is the caller that knows.
+   */
+  readonly target?: ShapeTarget;
 }
 
 /**
  * A row with a default parses from `undefined`; one without does not. The type
- * describes the local target, where a default always applies — a production
- * schema only ever narrows what is accepted, never what the value is.
+ * describes the baseline target, where a default always applies — a narrower
+ * target only ever narrows what is accepted, never what the value is.
  */
 type FieldFor<TEntry> = TEntry extends { readonly defaultValue: string }
   ? z.ZodDefault<z.ZodString>
@@ -34,7 +40,7 @@ export type RegistryShape<TConsumer extends Consumer, TCapability extends Capabi
   [TEntry in RegistryEntryFor<TConsumer, TCapability> as TEntry['key']]: FieldFor<TEntry>;
 };
 
-function schemaFor(variable: EnvVariable, target: 'local' | 'production'): z.ZodTypeAny {
+function schemaFor(variable: EnvVariable, target: ShapeTarget): z.ZodTypeAny {
   const shape = shapeFor(variable, target);
 
   let field = z.string().min(1, `${variable.key} is required`);
@@ -64,7 +70,7 @@ function rowsFor<TConsumer extends Consumer, TCapability extends Capability>(
 export function registrySchemaShape<TConsumer extends Consumer, TCapability extends Capability>(
   options: SchemaShapeOptions<TConsumer, TCapability>,
 ): RegistryShape<TConsumer, TCapability> {
-  const target = options.target ?? 'local';
+  const target = options.target ?? 'baseline';
   const shape: Record<string, z.ZodTypeAny> = {};
 
   for (const variable of rowsFor(options)) {

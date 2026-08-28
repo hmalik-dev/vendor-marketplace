@@ -1,4 +1,4 @@
-import { registrySchemaShape } from '@vendor-marketplace/shared/env';
+import { type ShapeTarget, registrySchemaShape } from '@vendor-marketplace/shared/env';
 import { z } from 'zod';
 
 /**
@@ -18,7 +18,7 @@ const API_CAPABILITIES = ['core', 'auth', 'storage'] as const;
  * contract; every one of their keys is asserted to exist in the registry by
  * `env.test.ts`.
  */
-function buildSchema(target: 'local' | 'production') {
+function buildSchema(target: ShapeTarget) {
   return z.object({
     ...registrySchemaShape({ consumer: 'api', capabilities: API_CAPABILITIES, target }),
 
@@ -43,12 +43,16 @@ function buildSchema(target: 'local' | 'production') {
 }
 
 /**
- * Boot-time validation always uses the local target. `NODE_ENV` is not a
+ * Boot-time validation always uses the baseline value set. `NODE_ENV` is not a
  * reliable signal for "this is a production deployment" — `next build` and
  * `tsc` set it too — so the stricter production value set is checked by
  * `pnpm preflight --env production` before a release instead.
+ *
+ * `baseline` rather than `local` because the two stopped being the same thing:
+ * the local set now rejects a live-mode credential, which is exactly the value
+ * this schema must accept when it really is running in production.
  */
-const envSchema = buildSchema('local');
+const envSchema = buildSchema('baseline');
 
 export type ApiEnv = z.infer<typeof envSchema>;
 

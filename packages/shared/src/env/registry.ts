@@ -22,6 +22,12 @@ export type EnvironmentScope = 'shared' | 'per-environment';
 export interface EnvSetup {
   /** Where the operator obtains or configures the value. */
   readonly url: string;
+  /**
+   * Where the *live-mode* value comes from, when that is a different page.
+   * Without it, `--env production` tells the operator they need a live key and
+   * then links them to the one page that only issues test keys.
+   */
+  readonly productionUrl?: string;
   /** Literal commands or steps that produce a real value. */
   readonly steps: readonly string[];
 }
@@ -38,8 +44,22 @@ export interface EnvVariable {
    * as `EMAIL_FROM`; presence and non-placeholder checks still apply.
    */
   readonly shape?: RegExp;
+  /**
+   * Stricter syntax applied only by `--env local`. Defaults to `shape`. The
+   * mirror of `productionShape`: a credential whose prefix names an
+   * environment must not be usable against the other one, and the dangerous
+   * direction is the one that points real money and a real user directory at a
+   * laptop.
+   */
+  readonly localShape?: RegExp;
   /** Stricter syntax applied only by `--env production`. Defaults to `shape`. */
   readonly productionShape?: RegExp;
+  /**
+   * What each target's mode is called, for a credential that carries one in its
+   * prefix. Preflight reports "is a live key" instead of printing a regex — an
+   * operator shown a regex pastes the same key back.
+   */
+  readonly modes?: { readonly local: string; readonly production: string };
   /**
    * The literal stand-in written to `.env.example` for a value the operator
    * must supply. Every placeholder must fail its own `shape` — that property is
@@ -51,6 +71,9 @@ export interface EnvVariable {
   readonly description: string;
   readonly setup: EnvSetup;
 }
+
+/** Stripe and Clerk both name the environment a credential belongs to in its prefix. */
+const TEST_LIVE_MODES = { local: 'test', production: 'live' } as const;
 
 const NEON_SETUP: EnvSetup = {
   url: 'https://neon.com/docs/reference/cli-branches',
@@ -90,6 +113,7 @@ const MINIO_SETUP: EnvSetup = {
 
 const STRIPE_SETUP: EnvSetup = {
   url: 'https://dashboard.stripe.com/test/apikeys',
+  productionUrl: 'https://dashboard.stripe.com/apikeys',
   steps: [
     'brew install stripe/stripe-cli/stripe',
     'stripe login',
@@ -283,7 +307,9 @@ export const ENV_REGISTRY = [
     consumers: ['web'],
     environments: 'per-environment',
     shape: /^pk_(test|live)_[A-Za-z0-9$/+=]{16,}$/,
+    localShape: /^pk_test_[A-Za-z0-9$/+=]{16,}$/,
     productionShape: /^pk_live_[A-Za-z0-9$/+=]{16,}$/,
+    modes: TEST_LIVE_MODES,
     placeholder: 'pk_test_...',
     description: 'Clerk publishable key, read by the browser bundle.',
     setup: CLERK_SETUP,
@@ -295,7 +321,9 @@ export const ENV_REGISTRY = [
     consumers: ['api'],
     environments: 'per-environment',
     shape: /^sk_(test|live)_[A-Za-z0-9]{16,}$/,
+    localShape: /^sk_test_[A-Za-z0-9]{16,}$/,
     productionShape: /^sk_live_[A-Za-z0-9]{16,}$/,
+    modes: TEST_LIVE_MODES,
     placeholder: 'sk_test_...',
     description: 'Clerk secret key used by the API to verify session tokens.',
     setup: CLERK_SETUP,
@@ -472,7 +500,9 @@ export const ENV_REGISTRY = [
     consumers: ['api'],
     environments: 'per-environment',
     shape: /^sk_(test|live)_[A-Za-z0-9]{16,}$/,
+    localShape: /^sk_test_[A-Za-z0-9]{16,}$/,
     productionShape: /^sk_live_[A-Za-z0-9]{16,}$/,
+    modes: TEST_LIVE_MODES,
     placeholder: 'sk_test_...',
     description: 'Stripe secret key used by the API for Connect and PaymentIntents.',
     setup: STRIPE_SETUP,
@@ -484,7 +514,9 @@ export const ENV_REGISTRY = [
     consumers: ['web'],
     environments: 'per-environment',
     shape: /^pk_(test|live)_[A-Za-z0-9]{16,}$/,
+    localShape: /^pk_test_[A-Za-z0-9]{16,}$/,
     productionShape: /^pk_live_[A-Za-z0-9]{16,}$/,
+    modes: TEST_LIVE_MODES,
     placeholder: 'pk_test_...',
     description: 'Stripe publishable key, read by the browser bundle.',
     setup: STRIPE_SETUP,
@@ -580,10 +612,7 @@ export type RegistryKey<TConsumer extends Consumer, TCapability extends Capabili
  * this contract exists to prevent. Preflight's environment check and the API
  * and web schemas all derive from this one rule.
  */
-export function requiresExplicitValue(
-  variable: EnvVariable,
-  target: 'local' | 'production',
-): boolean {
+export function requiresExplicitValue(variable: EnvVariable, target: ShapeTarget): boolean {
   return (
     variable.defaultValue === undefined ||
     (target === 'production' && variable.environments === 'per-environment')
@@ -595,12 +624,27 @@ export function exampleValue(variable: EnvVariable): string {
   return variable.defaultValue ?? variable.placeholder ?? '';
 }
 
-/** The syntax a value must match in the given target environment. */
-export function shapeFor(
-  variable: EnvVariable,
-  target: 'local' | 'production',
-): RegExp | undefined {
-  return target === 'production' ? (variable.productionShape ?? variable.shape) : variable.shape;
+/**
+ * Which value set a caller is holding a variable to.
+ *
+ * `baseline` is not a weaker `local` — it is the honest answer for a caller
+ * that cannot tell the two apart. `next build` and `tsc` both set
+ * `NODE_ENV=production`, so neither app can prove at boot whether it is a
+ * laptop or a release; holding them to `local` would reject the live keys that
+ * are correct in production. Only `pnpm preflight` is told which environment it
+ * is checking, so only it applies a mode restriction.
+ */
+export type ShapeTarget = 'baseline' | 'local' | 'production';
+
+/** The syntax a value must match under the given value set. */
+export function shapeFor(variable: EnvVariable, target: ShapeTarget): RegExp | undefined {
+  if (target === 'baseline') {
+    return variable.shape;
+  }
+
+  const tightened = target === 'production' ? variable.productionShape : variable.localShape;
+
+  return tightened ?? variable.shape;
 }
 
 const BY_KEY = new Map<string, EnvVariable>(

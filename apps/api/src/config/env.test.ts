@@ -50,6 +50,18 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...REQUIRED, PORT: '70000' })).toThrow(/PORT/);
   });
 
+  it('accepts a live-mode Clerk key, because this is how it boots in production', () => {
+    /*
+     * `NODE_ENV` is not a reliable signal for "this is a deployment" — `tsc`
+     * sets it too — so boot validation uses the baseline value set. Holding it
+     * to `local` would stop the production API binding a port on exactly the
+     * credential that belongs there.
+     */
+    const live = REQUIRED.CLERK_SECRET_KEY!.replace('_test_', '_live_');
+
+    expect(() => parseEnv({ ...REQUIRED, CLERK_SECRET_KEY: live })).not.toThrow();
+  });
+
   it('rejects a Clerk key still left as its placeholder', () => {
     // Presence alone used to pass here, which is how `sk_test_...` reached a
     // running server and failed on the first authenticated request instead.

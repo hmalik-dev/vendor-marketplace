@@ -104,13 +104,22 @@ matching file. Do not duplicate it here.
 
 Claiming a change works is not verifying it. Use the agents:
 
-| Agent              | Use for                                                                            |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| `diff-reviewer`    | Adversarial read of the finished diff, in fresh context                            |
-| `security-auditor` | Any diff touching auth, input, data access, uploads, redirects, secrets or logging |
-| `browser-verifier` | Every user-reachable change, driven end to end at both auth states                 |
-| `parity-checker`   | Every screen carrying an Orla frame, at 1440x900, on all five axes                 |
-| `Explore`          | File discovery and symbol tracing, so results stay out of this context             |
+| Agent                 | Use for                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `diff-reviewer`       | Adversarial read of the finished diff, in fresh context                            |
+| `security-auditor`    | Any diff touching auth, input, data access, uploads, redirects, secrets or logging |
+| `browser-verifier`    | Every user-reachable change, driven end to end at both auth states                 |
+| `parity-checker`      | Every screen carrying an Orla frame, at 1440x900, on all five axes                 |
+| `Explore`             | File discovery and symbol tracing, so results stay out of this context             |
+| `bug-hunter`          | Read-only defect hunt along one dimension, inside a sweep                          |
+| `unhappy-path-hunter` | Driving one flow in the browser trying to break it                                 |
+
+To sweep the whole application rather than one change, run **`/hunt-bugs`** — a
+workflow that fans read-only hunters across nine defect dimensions, drives seven
+user flows in the browser hunting unhappy paths, and puts every candidate through
+three skeptics before reporting it as a ticket. It needs the dev stack up, so run
+`/start` first. Pass `{"drive": false}` to skip the browser phase, or
+`{"dimensions": [...]}` / `{"flows": [...]}` to narrow it.
 
 Global engineering standards (type safety, defensive code, commit format,
 pre-commit gate) live in `~/.claude/CLAUDE.md` and

@@ -25,6 +25,19 @@ describe('assertWebEnv', () => {
     expect(assertWebEnv(VALID).NEXT_PUBLIC_API_URL).toBe('http://localhost:4000');
   });
 
+  it('accepts a live-mode Clerk key, because this runs on Vercel too', () => {
+    /*
+     * `next build` sets `NODE_ENV=production` for every build, so this schema
+     * cannot tell a release from `pnpm build` on a laptop and must accept the
+     * value that is correct in production. Holding it to the `local` value set
+     * would fail the Vercel build on a live key — and the cheapest way out of
+     * that failure is to put a development credential into production.
+     */
+    const live = VALID.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!.replace('_test_', '_live_');
+
+    expect(() => assertWebEnv({ ...VALID, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: live })).not.toThrow();
+  });
+
   it('rejects a Clerk key left as its placeholder', () => {
     expect(() =>
       assertWebEnv({ ...VALID, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_...' }),

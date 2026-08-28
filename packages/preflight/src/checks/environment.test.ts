@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { findVariable } from '@vendor-marketplace/shared/env';
+import { type EnvVariable, findVariable } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
 import { loadContext } from '../context.js';
 import type { CheckContext, Target } from '../types.js';
@@ -18,8 +18,22 @@ function contextWith(env: NodeJS.ProcessEnv, target: Target = 'local'): CheckCon
 }
 
 const STRIPE_KEY = findVariable('STRIPE_SECRET_KEY')!;
+const CLERK_PUBLISHABLE_KEY = findVariable('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY')!;
+const CLERK_WEBHOOK = findVariable('CLERK_WEBHOOK_SECRET')!;
 const API_URL = findVariable('API_URL')!;
 const EMAIL_FROM = findVariable('EMAIL_FROM')!;
+
+/*
+ * Live-mode fixtures are assembled from a row's own placeholder rather than
+ * written out, following the idiom in `secrets/scan.test.ts`: the checker sees
+ * exactly what an operator would paste, while the source file holds no live-key
+ * token for a scanner — this repository's own included — to trip over.
+ */
+function liveKeyFor(variable: EnvVariable): string {
+  return variable
+    .placeholder!.replace('...', '51ABCdefGHIjklMNO')
+    .replace(`_${variable.modes!.local}_`, `_${variable.modes!.production}_`);
+}
 
 describe('evaluateVariable', () => {
   it('accepts a real value', () => {
@@ -101,7 +115,67 @@ describe('evaluateVariable', () => {
     );
 
     expect(result.ok).toBe(false);
-    expect(result.detail).toContain('production shape');
+    expect(result.detail).toBe('is a test key — the production target needs a live key');
+    // Naming the mode is only half the fix: a hint that links to the page which
+    // issues test keys sends the operator straight back to the value that just
+    // failed.
+    expect(result.fix).toContain('https://dashboard.stripe.com/apikeys');
+    expect(result.fix).not.toContain('/test/apikeys');
+  });
+
+  it('rejects a live Stripe key against a local target', () => {
+    // The mirror of the case above, and the one this ticket exists for: a
+    // perfectly valid key, pointed at a laptop, spending real money.
+    const result = evaluateVariable(
+      STRIPE_KEY,
+      contextWith({ [STRIPE_KEY.key]: liveKeyFor(STRIPE_KEY) }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toBe('is a live key — the local target needs a test key');
+    expect(result.fix).toContain('https://dashboard.stripe.com/test/apikeys');
+  });
+
+  it('rejects a live Clerk key against a local target too, not only Stripe', () => {
+    const result = evaluateVariable(
+      CLERK_PUBLISHABLE_KEY,
+      contextWith({ [CLERK_PUBLISHABLE_KEY.key]: liveKeyFor(CLERK_PUBLISHABLE_KEY) }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toBe('is a live key — the local target needs a test key');
+  });
+
+  it('never echoes the live key it just rejected', () => {
+    const live = liveKeyFor(STRIPE_KEY);
+    const result = evaluateVariable(STRIPE_KEY, contextWith({ [STRIPE_KEY.key]: live }));
+
+    expect(JSON.stringify(result)).not.toContain(live);
+  });
+
+  it('reports a malformed live-prefixed value as a shape failure, not a mode failure', () => {
+    // Prefix alone is not a mode: this matches neither target's shape, so the
+    // operator needs the syntax, not a lecture about environments.
+    const truncated = liveKeyFor(STRIPE_KEY).slice(0, 8);
+    const result = evaluateVariable(STRIPE_KEY, contextWith({ [STRIPE_KEY.key]: truncated }));
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('local shape');
+  });
+
+  it('leaves a credential carrying no mode in its prefix alone in both targets', () => {
+    const value = ['whsec', '9QmZp0RvT7bNw4LcYdF1sHgU'].join('_');
+    const env = { [CLERK_WEBHOOK.key]: value };
+
+    expect(evaluateVariable(CLERK_WEBHOOK, contextWith(env)).ok).toBe(true);
+    expect(evaluateVariable(CLERK_WEBHOOK, contextWith(env, 'production')).ok).toBe(true);
+  });
+
+  it('reports an absent mode-carrying credential as unset, not as the wrong mode', () => {
+    const result = evaluateVariable(STRIPE_KEY, contextWith({}));
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toBe('not set in .env');
   });
 
   it('still checks presence for a free-form value with no shape', () => {
@@ -130,6 +204,26 @@ describe('environmentCheck', () => {
     expect(failures).toContain('STRIPE_SECRET_KEY');
     expect(failures).toContain('STRIPE_WEBHOOK_SECRET');
     expect(failures).toContain('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY');
+  });
+
+  it('fails the run a live key is set for, on the same path the CLI takes', async () => {
+    // The acceptance criterion, driven through `Check.run` rather than through
+    // `evaluateVariable`: `pnpm preflight` must not print "set, shape ok" for a
+    // key that spends real money.
+    const results = await environmentCheck.run(
+      contextWith({
+        [STRIPE_KEY.key]: liveKeyFor(STRIPE_KEY),
+        [CLERK_PUBLISHABLE_KEY.key]: liveKeyFor(CLERK_PUBLISHABLE_KEY),
+      }),
+    );
+    const byName = new Map(results.map((result) => [result.name, result]));
+
+    for (const variable of [STRIPE_KEY, CLERK_PUBLISHABLE_KEY]) {
+      expect(byName.get(variable.key)?.ok, variable.key).toBe(false);
+      expect(byName.get(variable.key)?.detail, variable.key).toBe(
+        'is a live key — the local target needs a test key',
+      );
+    }
   });
 
   it('checks nothing for a capability that was not requested', async () => {

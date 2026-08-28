@@ -1,0 +1,1 @@
+- [Unpinned safety constants](review-checklist-unpinned-safety-constants.md) — flip the literal and re-run the caller's suite; a test of the callee's default pins nothing
