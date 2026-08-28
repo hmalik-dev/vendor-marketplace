@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
+import { isNavigationSignal } from './navigation-signal';
 import { wireUserSchema, type WireUser } from './wire-schemas';
 
 /** Where each role's own dashboard lives. */
@@ -108,12 +109,47 @@ export async function redirectIfSignedIn(): Promise<void> {
 }
 
 /**
+ * Identity on a route that is **declared public** — never inferred from where a
+ * `try/catch` happens to sit.
+ *
+ * On a public route the identity read buys a convenience and nothing more: the
+ * page's content is the same for everyone, so an unreadable user record costs
+ * the vendor redirect and the user menu rather than the page. #33 made the
+ * public routes render for signed-out visitors during an outage; a signed-in
+ * one still got the 500 boundary on `/`, because this read propagated.
+ *
+ * **This must never be used on a protected route.** There the read is
+ * load-bearing — the role gate and the suspension gate both hang off it — and
+ * degrading it would fail open, which is a security defect rather than a
+ * smaller page. `requireCurrentUser` is the protected-route path and it still
+ * propagates.
+ *
+ * A `redirect()` is not a failure: a suspended account still reaches
+ * `/suspended` when the API is answering, because the suspension is a 403 the
+ * API returned rather than an API that could not be reached.
+ */
+async function readIdentityOnPublicRoute(): Promise<WireUser | null> {
+  try {
+    return await getCurrentUserOrSuspend();
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+
+    return null;
+  }
+}
+
+/**
  * Guards the root page. `/` is the customer-facing browse surface, and a vendor
  * has no use for a catalogue of other vendors — their home is their own
  * dashboard. Signed-out visitors and customers fall through and see the page.
+ *
+ * `/` is public, so an unreadable record skips the redirect rather than failing
+ * the page — the visitor gets the marketplace with signed-out chrome.
  */
 export async function redirectVendorToDashboard(): Promise<void> {
-  const user = await getCurrentUserOrSuspend();
+  const user = await readIdentityOnPublicRoute();
 
   if (user?.role === 'vendor') {
     redirect(DASHBOARD_PATH_BY_ROLE.vendor);

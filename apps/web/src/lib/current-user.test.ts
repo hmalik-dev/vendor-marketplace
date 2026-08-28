@@ -5,8 +5,15 @@ const getToken = vi.fn<() => Promise<string | null>>();
 let userId: string | null = null;
 const apiRequest = vi.fn();
 const redirect = vi.fn((path: string) => {
-  // Next's redirect() never returns; throwing keeps callers from running on.
-  throw new Error(`NEXT_REDIRECT:${path}`);
+  /*
+   * Next's redirect() never returns; throwing keeps callers from running on.
+   * The `digest` matters: that is how Next marks a navigation throw, and the
+   * public-route degrade keys on it to let redirects through while swallowing
+   * real failures. Without it here the tests would not exercise that branch.
+   */
+  const signal = new Error(`NEXT_REDIRECT:${path}`) as Error & { digest: string };
+  signal.digest = `NEXT_REDIRECT;replace;${path};307;`;
+  throw signal;
 });
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: async () => ({ getToken, userId }) }));
@@ -220,6 +227,58 @@ describe('redirectVendorToDashboard', () => {
 
     await expect(redirectVendorToDashboard()).rejects.toThrow('NEXT_REDIRECT:/suspended');
     expect(redirect).toHaveBeenCalledWith('/suspended');
+  });
+
+  /*
+   * `/` is public. With the API unreachable the identity read buys only the
+   * convenience redirect, so it is skipped and the visitor gets the
+   * marketplace with signed-out chrome — rather than the 500 boundary a
+   * signed-in visitor used to get while signed-out ones saw the page.
+   */
+  it.each([
+    ['an unreachable API', new Error('fetch failed')],
+    ['a 500 from the API', new ApiClientError(500, 'INTERNAL_ERROR', 'Something went wrong')],
+  ])('renders the public page through %s, skipping the redirect', async (_label, failure) => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(failure);
+
+    await expect(redirectVendorToDashboard()).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * The other half of the same decision, and the one that must not be "fixed".
+ * A protected route that cannot resolve identity must not render: the role gate
+ * and the suspension gate both hang off this read, so degrading it here would
+ * fail open. If someone later wraps this in the public-route catch, these fail.
+ */
+describe('protected routes never degrade', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+    redirect.mockClear();
+  });
+
+  it.each([
+    ['an unreachable API', new Error('fetch failed')],
+    ['a 500 from the API', new ApiClientError(500, 'INTERNAL_ERROR', 'Something went wrong')],
+  ])('propagates %s rather than rendering', async (_label, failure) => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(failure);
+
+    await expect(requireCurrentUser()).rejects.toThrow();
+    // Not a redirect to sign-in either: an outage is not a signed-out session.
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the suspension gate closed when the read fails', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(new Error('fetch failed'));
+
+    // A suspended user must not reach protected content because a read broke.
+    await expect(requireRole('vendor')).rejects.toThrow();
+    expect(redirect).not.toHaveBeenCalled();
   });
 });
 

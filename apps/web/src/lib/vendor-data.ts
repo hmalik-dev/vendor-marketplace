@@ -6,6 +6,7 @@ import {
   type VendorCard,
 } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
+import { isNavigationSignal } from './navigation-signal';
 import {
   wireAvailabilityListSchema,
   wireCategoryListSchema,
@@ -148,19 +149,6 @@ export interface ReferenceReadOptions {
    * form whose category select is silently empty is not.
    */
   required?: boolean;
-}
-
-/**
- * Next signals `redirect()` and `notFound()` by throwing, marking the error
- * with a `digest`. A degrading read that swallowed one would strand the
- * visitor on the page it was trying to leave, so it is never caught here.
- */
-function isNavigationSignal(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    typeof (error as { digest?: unknown }).digest === 'string'
-  );
 }
 
 /**
