@@ -58,7 +58,7 @@ export function ErrorScreen({ digest, reset }: ErrorScreenProps): React.ReactEle
           Try again
         </Button>
         <Button asChild variant="secondary">
-          <a href="/customer/dashboard">Go to my bookings</a>
+          <a href="/bookings">Go to my bookings</a>
         </Button>
       </div>
 

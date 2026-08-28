@@ -162,7 +162,7 @@ export function CustomerHistory({
       {visibleBookings.map((booking) => (
         <HistoryRow
           key={booking.id}
-          href="/customer/dashboard"
+          href="/bookings"
           title={formatEventDate(booking.eventDate)}
           subline={
             [occasionOf(booking.eventType), booking.venue].filter(Boolean).join(' · ') || 'Booked'

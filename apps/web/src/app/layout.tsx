@@ -5,6 +5,7 @@ import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/goo
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { siteOrigin } from '@/config/env';
+import { PublicChrome } from '@/components/public-chrome';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { Toaster } from '@/components/ui/sonner';
@@ -129,7 +130,14 @@ export default function RootLayout({
             <main id="main" tabIndex={-1} className="flex-1">
               {children}
             </main>
-            <SiteFooter />
+            {/*
+              The footer belongs to the public face. An app screen owns the
+              whole viewport, and a footer under a full-height pane layout is
+              what makes the page scroll when only the panes should.
+            */}
+            <PublicChrome>
+              <SiteFooter />
+            </PublicChrome>
           </NuqsAdapter>
           {/*
             Bottom-right, 5s dismiss, per design/design-plan/03-components.md.

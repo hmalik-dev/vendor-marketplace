@@ -645,7 +645,7 @@ function SuccessPanel({
 
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="primary">
-              <Link href="/customer/dashboard">See your requests</Link>
+              <Link href="/bookings">See your requests</Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href={`/vendors/${vendorSlug}`}>Back to {businessName}</Link>

@@ -7,9 +7,14 @@ import { wireUserSchema, type WireUser } from './wire-schemas';
 
 /** Where each role's own dashboard lives. */
 export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
-  customer: '/customer/dashboard',
+  /*
+   * A customer has no dashboard and never did — their home is the list of
+   * bookings they have made. #22b replaced the placeholder that used to sit
+   * at `/customer/dashboard`.
+   */
+  customer: '/bookings',
   vendor: '/vendor/dashboard',
-  admin: '/customer/dashboard',
+  admin: '/bookings',
 };
 
 /**

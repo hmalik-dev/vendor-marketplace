@@ -37,13 +37,18 @@ const CUSTOMER = { id: 'u1', firstName: 'Ada', role: 'customer' as const };
 const VENDOR = { id: 'u2', firstName: 'Grace', role: 'vendor' as const };
 
 describe('DASHBOARD_PATH_BY_ROLE', () => {
-  it('routes each role to its own dashboard', () => {
-    expect(DASHBOARD_PATH_BY_ROLE.customer).toBe('/customer/dashboard');
+  /*
+   * A customer has no dashboard and never did — their home is the list of
+   * bookings they have made, which is what #22b put at `/bookings` in place of
+   * the placeholder that used to sit under `/customer`.
+   */
+  it('sends a customer to their bookings and a vendor to their dashboard', () => {
+    expect(DASHBOARD_PATH_BY_ROLE.customer).toBe('/bookings');
     expect(DASHBOARD_PATH_BY_ROLE.vendor).toBe('/vendor/dashboard');
   });
 
   it('covers every role so the lookup can never return undefined', () => {
-    expect(DASHBOARD_PATH_BY_ROLE.admin).toBe('/customer/dashboard');
+    expect(DASHBOARD_PATH_BY_ROLE.admin).toBe('/bookings');
   });
 });
 
@@ -143,12 +148,12 @@ describe('requireRole', () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it('bounces a customer out of a vendor route to their own dashboard', async () => {
+  it('bounces a customer out of a vendor route to their own bookings', async () => {
     getToken.mockResolvedValue('token');
     apiRequest.mockResolvedValue(CUSTOMER);
 
-    await expect(requireRole('vendor')).rejects.toThrow('NEXT_REDIRECT:/customer/dashboard');
-    expect(redirect).toHaveBeenCalledWith('/customer/dashboard');
+    await expect(requireRole('vendor')).rejects.toThrow('NEXT_REDIRECT:/bookings');
+    expect(redirect).toHaveBeenCalledWith('/bookings');
   });
 
   it('bounces a vendor out of a customer route to their own dashboard', async () => {
