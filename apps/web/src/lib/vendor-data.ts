@@ -14,12 +14,14 @@ import {
   wireServicePackageListSchema,
   wireTagListSchema,
   wirePublicVendorProfileSchema,
+  wireVendorDashboardSchema,
   wireVendorProfileSchema,
   type WireAvailability,
   type WirePortfolioItem,
   type WireServicePackage,
   type WireTag,
   type WirePublicVendorProfile,
+  type WireVendorDashboard,
   type WireVendorProfile,
 } from './wire-schemas';
 
@@ -97,6 +99,20 @@ export async function getOwnPackages(): Promise<WireServicePackage[]> {
   } catch (error) {
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return [];
+    }
+    rethrowUnlessSessionFailure(error);
+  }
+}
+
+/** The vendor's own dashboard figures — recomputed server-side on every read. */
+export async function getVendorDashboard(): Promise<WireVendorDashboard | null> {
+  const token = await vendorToken();
+
+  try {
+    return await apiRequest('/vendor/dashboard', { schema: wireVendorDashboardSchema, token });
+  } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 404) {
+      return null;
     }
     rethrowUnlessSessionFailure(error);
   }

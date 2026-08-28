@@ -8,10 +8,11 @@ import {
   vendorSlugParamsSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
-import { availabilitySchema } from '@vendor-marketplace/shared';
+import { availabilitySchema, vendorDashboardSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole } from '../../lib/guards.js';
 import { requireRole } from '../../lib/guards.js';
+import { getVendorDashboard } from './dashboard.service.js';
 import {
   createVendorProfile,
   getOwnVendorProfile,
@@ -25,6 +26,17 @@ const OWN_PROFILE_PATH = '/vendor/profile';
 
 export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
   const vendorOnly = requireRole('vendor');
+
+  /*
+   * The vendor's own figures, on their own private surface — recomputed from
+   * source rows on every read rather than served from counters. Declared
+   * before `/vendors/:slug` so the literal path wins the match.
+   */
+  app.get(
+    '/vendor/dashboard',
+    { preHandler: vendorOnly, schema: { response: { 200: vendorDashboardSchema } } },
+    async (request) => getVendorDashboard(app.db, assertRole(request.auth, ['vendor']).id),
+  );
 
   /*
    * Public and unauthenticated: discovery is the front door, and requiring an

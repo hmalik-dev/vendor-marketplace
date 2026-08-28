@@ -297,6 +297,21 @@ export async function findBookings(
     .orderBy(desc(bookings.eventDate));
 }
 
+/** The sender's name, for the vendor's request queue. */
+export async function findCustomerNames(
+  db: AppDatabase,
+  customerIds: readonly string[],
+): Promise<{ id: string; firstName: string; lastName: string }[]> {
+  if (customerIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+    .from(users)
+    .where(inArray(users.id, [...customerIds]));
+}
+
 /** Whether a user row exists — guards a notification insert against a stale id. */
 export async function userExists(db: AppDatabase, userId: string): Promise<boolean> {
   const rows = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);

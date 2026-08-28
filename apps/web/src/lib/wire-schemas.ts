@@ -5,6 +5,7 @@ import {
   categorySchema,
   customerProfileSchema,
   customerReviewSchema,
+  vendorDashboardSchema,
   portfolioItemSchema,
   publicVendorProfileSchema,
   servicePackageSchema,
@@ -121,3 +122,7 @@ export const wireCustomerProfileSchema = z.discriminatedUnion('visibility', [
   }),
 ]);
 export type WireCustomerProfile = z.infer<typeof wireCustomerProfileSchema>;
+
+/** The vendor dashboard's figures. No date fields, so no coercion is needed. */
+export const wireVendorDashboardSchema = vendorDashboardSchema;
+export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;

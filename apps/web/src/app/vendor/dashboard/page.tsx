@@ -1,119 +1,120 @@
 import type { Metadata } from 'next';
-import { pageTitle } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { CheckCircle2, Circle } from 'lucide-react';
-import { DashboardShell } from '@/components/dashboard-shell';
-import { TAG_PILL_CLASSES } from '@/components/tags/tag-display';
+import { pageTitle, todayDateString } from '@vendor-marketplace/shared';
+import { DashboardStats } from '@/components/vendor/dashboard-stats';
+import { PublishChecklist } from '@/components/vendor/publish-checklist';
+import { RequestRow } from '@/components/vendor/request-row';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
+import { getOwnBookingRequests } from '@/lib/vendor-requests';
+import { getOwnVendorProfile, getVendorDashboard } from '@/lib/vendor-data';
 import { requireRole } from '@/lib/current-user';
-import { cn } from '@/lib/utils';
-import { getOwnVendorProfile } from '@/lib/vendor-data';
 
-export const metadata: Metadata = { title: pageTitle('Your business') };
+export const metadata: Metadata = {
+  title: pageTitle('Your business'),
+  robots: { index: false, follow: false },
+};
 
 const PROFILE_EDIT_PATH = '/vendor/profile/edit';
 
-const SECTIONS = [
-  {
-    title: 'Packages',
-    description: 'What a customer books, and what it costs.',
-    href: '/vendor/packages',
-  },
-  {
-    title: 'Portfolio',
-    description: 'The work that proves you can do it.',
-    href: '/vendor/portfolio',
-  },
-  {
-    title: 'Availability',
-    description: 'Block the dates you are away so requests only reach you when free.',
-    href: '/vendor/availability',
-  },
-] as const;
-
-/*
- * "Getting paid" is absent until Stripe onboarding (#9) exists to link to. A
- * card that opens nothing is furniture, and the ticket number that used to
- * stand in for its destination was an internal note rendered to the vendor.
+/**
+ * Frame `08` — every incoming request, actionable without navigating away.
+ *
+ * **The title states the number**, because the count is what drives the
+ * vendor's next action. Frame `08` also renders a median reply time beside it;
+ * that is the one deliberate deviation from this frame and it is recorded in
+ * `16-vendor-dashboard.md` and `98-post-mvp.md`. The median needs message
+ * history a new vendor does not have, so on their own dashboard it could only
+ * be invented, and "keep it under 4h to stay ranked" promises a ranking signal
+ * that does not exist. Nothing replaces it.
  */
-
 export default async function VendorDashboardPage(): Promise<React.ReactElement> {
-  await requireRole('vendor');
-  const profile = await getOwnVendorProfile();
+  const [user, profile] = await Promise.all([requireRole('vendor'), getOwnVendorProfile()]);
 
-  // A vendor with no profile has nothing to manage yet, so sign-up leads
-  // straight into creating one rather than to an empty dashboard.
+  // A vendor with no profile has nothing to manage, so sign-up leads straight
+  // into creating one rather than to an empty dashboard.
   if (!profile) {
     redirect(PROFILE_EDIT_PATH);
   }
 
-  const isComplete = profile.publishBlockers.length === 0;
+  const [dashboard, requests] = await Promise.all([getVendorDashboard(), getOwnBookingRequests()]);
+
+  if (!dashboard) {
+    redirect(PROFILE_EDIT_PATH);
+  }
+
+  const today = todayDateString();
+  /*
+   * One query behind both the title and the list, so the number in the heading
+   * and the number of rows can never disagree — the count is derived from the
+   * rows themselves rather than fetched separately.
+   */
+  const waiting = requests.filter((request) => request.status === 'pending');
+  /*
+   * The person's name, not the business's — frame `08` greets "Maya", and a
+   * dashboard that addresses a vendor by their trading name reads like a
+   * mailshot. Falls back to the business when the account has no name, which
+   * Clerk's email sign-up genuinely allows.
+   */
+  const greeting = user.firstName.trim() || profile.businessName;
 
   return (
-    <DashboardShell
-      eyebrow="Vendor"
-      heading="Welcome back"
-      description="Set up your business here, then start receiving booking requests."
-      sections={SECTIONS}
-    >
-      <section
-        className={cn(
-          'mt-8 rounded-lg border p-5 shadow-sm sm:p-6',
-          isComplete ? 'border-sage-200 bg-sage-50' : 'border-gold-200 bg-gold-100',
-        )}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="font-display text-lg font-semibold text-stone-800">
-              {profile.businessName}
-            </h2>
-            <p className="mt-1 text-sm text-stone-700">
-              {profile.isPublished
-                ? 'Your profile is live and customers can find you.'
-                : isComplete
-                  ? 'Your profile is ready — turn on visibility to go live.'
-                  : 'Finish these steps to publish your profile.'}
-            </p>
-          </div>
-          <Button asChild variant="primary">
-            <Link href={PROFILE_EDIT_PATH}>{isComplete ? 'Edit profile' : 'Complete profile'}</Link>
-          </Button>
+    <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-5.5">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+          <h1 className="font-display text-[26px] tracking-[-.01em] text-stone-900">
+            {waiting.length === 0
+              ? `${greeting}, nothing is waiting on you`
+              : `${greeting}, you have ${waiting.length} new ${
+                  waiting.length === 1 ? 'request' : 'requests'
+                }`}
+          </h1>
+          <Link
+            href={`/vendors/${profile.slug}`}
+            className="text-sm font-semibold text-clay-500 hover:underline"
+          >
+            View my public profile
+          </Link>
         </div>
 
-        {!isComplete ? (
-          <ul className="mt-4 space-y-2">
-            {profile.publishBlockers.map((blocker) => (
-              <li key={blocker} className="flex items-center gap-2 text-sm text-stone-700">
-                <Circle aria-hidden="true" className="size-4 shrink-0 text-stone-600" />
-                {blocker}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-4 flex items-center gap-2 text-sm text-stone-700">
-            <CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-sage-600" />
-            Every prerequisite is met.
-          </p>
-        )}
+        <DashboardStats dashboard={dashboard} today={today} />
 
-        {profile.tags.length > 0 ? (
-          <ul className="mt-4 flex flex-wrap gap-2">
-            {profile.tags.map((tag) => (
-              <li key={tag.id}>
-                <span
-                  className={cn(
-                    'inline-block rounded-full px-3 py-1 text-sm',
-                    TAG_PILL_CLASSES[tag.category],
-                  )}
-                >
-                  {tag.name}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
-    </DashboardShell>
+        <h2 className="mb-2.5 font-display text-[21px] text-stone-900">Requests waiting on you</h2>
+
+        <div className="min-h-0 flex-1 overflow-y-auto pb-5">
+          {waiting.length === 0 ? (
+            <EmptyState
+              headline={dashboard.isPublished ? 'No requests right now' : 'Nobody can find you yet'}
+              /*
+                Frame `20`: an empty request list is almost always an
+                unpublished profile, so the state names that cause and the CTA
+                fixes it — rather than shrugging at the vendor.
+              */
+              description={
+                dashboard.isPublished
+                  ? 'Requests land here the moment a customer sends one. Keeping your calendar current is what puts you in their search.'
+                  : 'Your profile is not published, so it does not appear in search. Finish the checklist and requests can start arriving.'
+              }
+              action={
+                dashboard.isPublished ? null : (
+                  <Button asChild variant="primary">
+                    <Link href={PROFILE_EDIT_PATH}>Finish your profile</Link>
+                  </Button>
+                )
+              }
+            />
+          ) : (
+            <ul className="flex flex-col gap-2.5">
+              {waiting.map((request, index) => (
+                <RequestRow key={request.id} request={request} isFirst={index === 0} />
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <PublishChecklist dashboard={dashboard} today={today} />
+    </div>
   );
 }

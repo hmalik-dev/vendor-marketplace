@@ -560,6 +560,16 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     avgRating: z.number().min(0).max(REVIEW_RATING_MAX),
     reviewCount: z.int().min(0),
   }),
+  /**
+   * Who sent it, as the vendor may see them before accepting: a first name and
+   * a last initial, never the full name. The same rule the tiered customer
+   * profile applies — a vendor deciding whether to take the work does not yet
+   * need to be able to identify the person.
+   */
+  customer: z.object({
+    firstName: trimmedString(MAX_NAME_LENGTH, 0),
+    lastInitial: z.string().max(1),
+  }),
   /** `null` for a custom request, and for a package the vendor later deleted. */
   package: z
     .object({
@@ -664,6 +674,46 @@ export const bookingWithContextSchema = bookingSchema.extend({
   venue: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
 });
 export type BookingWithContext = z.infer<typeof bookingWithContextSchema>;
+
+// --- Vendor dashboard ------------------------------------------------------
+
+/**
+ * The vendor's own numbers, on their own private surface.
+ *
+ * Every figure here is a query result over the vendor's own rows — none is a
+ * platform statistic and none makes a ranking claim. There is deliberately no
+ * reply-time median: it needs message history a new vendor does not have, so
+ * on their own dashboard it could only be invented. See `98-post-mvp.md`.
+ */
+export const vendorDashboardSchema = z.object({
+  /** Requests still awaiting this vendor's first answer. Drives the title. */
+  newRequestCount: z.int().min(0),
+  bookingsThisMonth: z.int().min(0),
+  bookingsLastMonth: z.int().min(0),
+  /**
+   * Requests this vendor answered, over requests they were given a chance to
+   * answer, in the last 30 days. `null` when there were none — an honest
+   * absence rather than a 0% that reads as a bad record.
+   */
+  responseRate: z.number().min(0).max(1).nullable(),
+  avgRating: z.number().min(0).max(REVIEW_RATING_MAX),
+  reviewCount: z.int().min(0),
+  /** The vendor's share, not the gross — what actually reaches them. */
+  earningsThisMonthCents: z.int().min(0),
+  isPublished: z.boolean(),
+  /** The **real** publish gate, so the checklist cannot disagree with it. */
+  publishBlockers: z.array(z.enum(PUBLISH_BLOCKER_KEYS)),
+  /** Bookings on today's date, for the rail once the profile is published. */
+  todaysBookings: z.array(
+    z.object({
+      id: uuidSchema,
+      eventDate: calendarDateSchema,
+      eventLocation: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
+      customerFirstName: trimmedString(MAX_NAME_LENGTH, 0),
+    }),
+  ),
+});
+export type VendorDashboard = z.infer<typeof vendorDashboardSchema>;
 
 // --- Messaging -------------------------------------------------------------
 

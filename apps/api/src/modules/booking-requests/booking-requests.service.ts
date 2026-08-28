@@ -33,6 +33,7 @@ import {
   findVendorById,
   findVendorByUserId,
   findVendorUserId,
+  findCustomerNames,
   findVendorsByIds,
   holdDate,
   insertNotification,
@@ -98,17 +99,39 @@ function toPackageSummary(row: ServicePackageRow): NonNullable<BookingRequestDet
   };
 }
 
+interface CustomerName {
+  firstName: string;
+  lastName: string;
+}
+
 function toDetail(
   row: BookingRequestRow,
   vendor: VendorProfileRow,
   servicePackage: ServicePackageRow | null,
+  customer: CustomerName,
 ): BookingRequestDetail {
   return {
     ...row,
     eventStartTime: toClockTime(row.eventStartTime),
     vendor: toVendorSummary(vendor),
+    /*
+     * A first name and one initial. The vendor is judging whether to take the
+     * work, which does not require being able to identify the person — the
+     * full name arrives with acceptance, through the tiered customer profile.
+     */
+    customer: {
+      firstName: customer.firstName,
+      lastInitial: customer.lastName.trim().slice(0, 1).toUpperCase(),
+    },
     package: servicePackage ? toPackageSummary(servicePackage) : null,
   };
+}
+
+/** One customer's name, or empty strings when the row has gone. */
+async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerName> {
+  const [found] = await findCustomerNames(db, [customerId]);
+
+  return { firstName: found?.firstName ?? '', lastName: found?.lastName ?? '' };
 }
 
 /**
@@ -268,7 +291,7 @@ export async function createBookingRequest(
     body: `A customer asked about ${row.eventDate}. You have a week to reply.`,
   });
 
-  return toDetail(row, vendor, servicePackage);
+  return toDetail(row, vendor, servicePackage, await nameOf(db, row.customerId));
 }
 
 export async function getBookingRequest(
@@ -296,7 +319,7 @@ export async function getBookingRequest(
     ? ((await findPackagesByIds(db, [current.packageId]))[0] ?? null)
     : null;
 
-  return toDetail(current, vendor, servicePackage);
+  return toDetail(current, vendor, servicePackage, await nameOf(db, current.customerId));
 }
 
 export async function listBookingRequests(
@@ -336,8 +359,11 @@ export async function listBookingRequests(
     ...new Set(visible.map((row) => row.packageId).filter((id) => id !== null)),
   ]);
 
+  const names = await findCustomerNames(db, [...new Set(visible.map((row) => row.customerId))]);
+
   const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
   const packageById = new Map(packages.map((row) => [row.id, row]));
+  const nameById = new Map(names.map((name) => [name.id, name]));
 
   return visible.flatMap((row) => {
     const vendor = vendorById.get(row.vendorId);
@@ -345,7 +371,12 @@ export async function listBookingRequests(
       return [];
     }
 
-    return [toDetail(row, vendor, row.packageId ? (packageById.get(row.packageId) ?? null) : null)];
+    return [
+      toDetail(row, vendor, row.packageId ? (packageById.get(row.packageId) ?? null) : null, {
+        firstName: nameById.get(row.customerId)?.firstName ?? '',
+        lastName: nameById.get(row.customerId)?.lastName ?? '',
+      }),
+    ];
   });
 }
 
@@ -403,7 +434,7 @@ export async function transitionRequest(
     ? ((await findPackagesByIds(db, [updated.packageId]))[0] ?? null)
     : null;
 
-  return toDetail(updated, vendor, servicePackage);
+  return toDetail(updated, vendor, servicePackage, await nameOf(db, updated.customerId));
 }
 
 const TARGET_STATUS: Record<RequestAction, BookingRequestStatus> = {
