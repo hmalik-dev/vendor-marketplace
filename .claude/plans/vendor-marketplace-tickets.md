@@ -116,6 +116,67 @@ verification (`e2e`) is implicit on every ticket.
 ---
 
 
+## Overnight queue — the autonomous run follows this list, not raw `/next-ticket`
+
+Added 2026-08-29. **This ordered list is the queue for an unattended run.** Raw
+`/next-ticket` is wrong here: it sorts by priority then by oldest ticket, which would start
+on #9 — the largest and riskiest ticket in the backlog — before the small changes that
+unblock sixty others.
+
+Work top to bottom. Take the next ticket only when the one above it is committed and green.
+
+### Wave 1 — unblockers. Small, low-risk, and they release the rest of the backlog
+
+| Order | # | Why it is first |
+| --- | --- | --- |
+| 1 | **#165** | One CSS rule. Direct cause of #89, #109, #119, #121 and the same failure on all 26 unswept frames |
+| 2 | **#74** | The line-height ruling the operator already made. **60+ parity tickets are blocked on it**; fixing them first means measuring everything twice |
+| 3 | **#198** | Five type-scale mappings, decided once. Accounts for most remaining font-axis findings |
+
+### Wave 2 — self-contained functional defects
+
+| Order | # | Note |
+| --- | --- | --- |
+| 4 | **#66** | Six URLs return 500. Ships with the table-driven status-code test the ticket specifies |
+| 5 | **#67** | Booking idempotency. Needs a unique partial index via `pnpm db:generate` — never hand-edit the migration |
+| 6 | **#170** | Upload authorization must become **per prefix**, not per route |
+| 7 | **#171** | Renders the storage key where it needs the resolved URL |
+| 8 | **#222** | Onboarding swallows a 400 with no feedback. The booking-request form is the model to copy |
+
+### Wave 3 — security
+
+| Order | # | Note |
+| --- | --- | --- |
+| 9 | **#215** | Session JWT in a URL query string. Replace with a short-lived single-use stream ticket |
+| 10 | **#172** | Format allow-list bypassed by renaming. Compare the **decoded** format, not the declared one |
+
+### Wave 4 — the critical path, when there is runway
+
+| Order | # | Note |
+| --- | --- | --- |
+| 11 | **#9** | Stripe Connect. **Verified agent-executable 2026-08-29** — test keys present, Connect enabled. Build on **Accounts v2** (`POST /v2/core/accounts`); v1 is refused. Load `npx skills add stripe/ai` first. Unblocks #10, #68, #220, #221 |
+
+### Rules for the unattended run
+
+1. **Work in a worktree.** Two sessions have already swept each other's in-flight files into
+   mislabeled commits on the shared checkout (`b1b8e7c`, `1bd37ab`). `claude --worktree <id>`.
+2. **`pnpm preflight` before every ticket.** It now fails on an empty database
+   (`Demo data present`) — a `docker compose` recreate wipes local data, and without this a
+   run spends hours describing an empty marketplace.
+3. **Never reseed, drop, or recreate shared infrastructure.** If data is missing, stop and
+   report. The agent guards in `.claude/agents/` forbid the bigger hammers.
+4. **Do not edit `design/`.** Another session owns the design bundle and merged it three
+   times on 2026-08-28. Design passes edit the plan; tickets write code.
+5. **Defer rather than guess.** Return `BLOCKED` with one question for any unapproved product
+   decision, destructive migration, or new dependency. A deferred ticket is a good outcome;
+   a guessed one is not.
+6. **Browser work is serial.** One shared Playwright browser. Never run two driving agents at
+   once, and never kill another session's browser.
+7. **Agents never type a password.** `pnpm e2e:auth`, then load `.auth/<role>.json` as
+   `storageState`. See `.claude/rules/e2e-auth.md`.
+8. **Do not sweep parity.** Waves 1-3 are code. Parity re-verification happens after #74 and
+   #165 land, because most findings will move.
+
 ## Beta gate — what blocks shipping to real users
 
 > ## The one-line answer, verified 2026-08-29
@@ -2454,6 +2515,28 @@ Header integration:
 ---
 
 ### #9: Stripe Connect Vendor Onboarding
+
+**Unblocked — verified against the live Stripe test account 2026-08-29.** An earlier
+assessment in this sweep claimed #9 needed a human to supply credentials. **That was wrong.**
+`.env` already carries `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`,
+`STRIPE_WEBHOOK_SECRET` and `STRIPE_PLATFORM_FEE_RATE`, all in **test** mode. Probed directly:
+
+| Probe | Result |
+| --- | --- |
+| `GET /v1/account` | **200** — `acct_1ThejeFAZlti5JuH` |
+| `GET /v1/accounts` | **200** — Connect is enabled, **1 connected account already exists** |
+| `POST /v1/accounts` | **400** — *"Stripe no longer recommends Accounts v1 for new Connect integrations. Create connected accounts with `POST /v2/core/accounts` instead."* |
+
+**So the only decision left is an API-version one, and it is agent-executable:** build on
+**Accounts v2** (`POST /v2/core/accounts`), which is what Stripe now recommends, rather than
+enabling v1 compatibility in the Dashboard (which would be a human action). Choose v2.
+
+Stripe also ships an agent skill for current best practice — `npx skills add stripe/ai` —
+worth loading before writing the integration rather than working from memory.
+
+**This ticket is the critical path.** It unblocks #10, #68, #220 and #221 — the entire
+transaction half of the product, and the reason `accept` returns 402 for every vendor today.
+
 
 **Milestone:** M4 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
 

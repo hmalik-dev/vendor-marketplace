@@ -149,6 +149,46 @@ async function checkMigrations(sql: postgres.Sql, repoRoot: string): Promise<Che
   return pass('core', name, `${expected.length} applied`);
 }
 
+/**
+ * Demo data is what every browser pass drives against. It lives only in the
+ * local Postgres, and a `docker compose` recreate wipes it — which is exactly
+ * what happened on 2026-08-29 mid-sweep, after the PG18 upgrade moved the data
+ * mount. Reference data survived, so `checkSeed` still passed and the run kept
+ * going against an empty marketplace, reporting findings that were artefacts.
+ *
+ * An empty vendor table is therefore a hard failure, not a warning: an
+ * unattended run must stop here rather than spend hours describing a database
+ * that has nothing in it.
+ */
+export async function checkDemoData(sql: postgres.Sql): Promise<CheckResult> {
+  const name = 'Demo data present';
+
+  try {
+    const [vendors] = await sql<
+      { count: number }[]
+    >`select count(*)::int as count from vendor_profiles`;
+    const vendorCount = vendors?.count ?? 0;
+
+    if (vendorCount === 0) {
+      return fail(
+        'core',
+        name,
+        'no vendor profiles — every browser pass would drive an empty marketplace',
+        'pnpm db:seed:marketing',
+      );
+    }
+
+    return pass('core', name, `${vendorCount} vendor profiles`);
+  } catch (error: unknown) {
+    return fail(
+      'core',
+      name,
+      error instanceof Error ? error.message : 'vendor_profiles is unreadable',
+      'pnpm db:migrate && pnpm db:seed && pnpm db:seed:marketing',
+    );
+  }
+}
+
 async function checkSeed(sql: postgres.Sql): Promise<CheckResult> {
   const name = 'Reference data seeded';
 
@@ -228,6 +268,7 @@ export const databaseCheck: Check = {
         pass('core', reachability, hostOf(connectionString) ?? 'connected'),
         await checkMigrations(sql, context.repoRoot),
         await checkSeed(sql),
+        await checkDemoData(sql),
       ];
     } finally {
       await sql.end({ timeout: 5 }).catch(() => undefined);

@@ -27,6 +27,13 @@ and was removed on 2026-08-28. Do not re-add it.
 Status Board table and write transitions back to it (Backlog -> In Progress ->
 Done), filling the Branch column and recording the commit SHA in Notes.
 
+**For an unattended or overnight run, follow the `## Overnight queue` section at
+the top of the tracker instead of raw `/next-ticket`.** Priority-then-oldest
+ordering would start on #9, the largest ticket in the backlog, ahead of the
+three small changes that unblock sixty others. That section also carries the
+rules an unattended run needs: worktree isolation, preflight before every
+ticket, and defer-rather-than-guess.
+
 **Trust the repository over the ticket's prose.** A ticket's "current state"
 section goes stale the moment another ticket touches the same files. Verify each
 claim before implementing it.

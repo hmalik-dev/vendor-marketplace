@@ -1,9 +1,10 @@
+import type postgres from 'postgres';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { CheckContext } from '../types.js';
-import { evaluateBranchSafety, hostOf, resolveBranch } from './database.js';
+import { evaluateBranchSafety, hostOf, resolveBranch, checkDemoData } from './database.js';
 
 const NEON_URL =
   'postgresql://owner:secret@ep-lucky-cherry-1234-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require';
@@ -127,5 +128,34 @@ describe('evaluateBranchSafety', () => {
 
   it('fails when DATABASE_URL is absent entirely', () => {
     expect(evaluateBranchSafety(contextWith({})).ok).toBe(false);
+  });
+});
+
+describe('checkDemoData', () => {
+  // A `docker compose` recreate wipes the local database. Reference data is
+  // reseeded by `db:migrate`, so the existing seed check still passes and an
+  // unattended browser run keeps going against an empty marketplace. This is
+  // the guard that stops it.
+  const sqlReturning = (rows: unknown) => (() => Promise.resolve(rows)) as unknown as postgres.Sql;
+
+  it('passes when vendor profiles exist', async () => {
+    const result = await checkDemoData(sqlReturning([{ count: 16 }]));
+    expect(result.ok).toBe(true);
+    expect(result.detail).toContain('16');
+  });
+
+  it('fails on an empty vendor table and names the seed command', async () => {
+    const result = await checkDemoData(sqlReturning([{ count: 0 }]));
+    expect(result.ok).toBe(false);
+    expect(result.fix).toBe('pnpm db:seed:marketing');
+    expect(result.detail).toContain('empty marketplace');
+  });
+
+  it('fails rather than throwing when the table is unreadable', async () => {
+    const sql = (() =>
+      Promise.reject(new Error('relation does not exist'))) as unknown as postgres.Sql;
+    const result = await checkDemoData(sql);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('relation does not exist');
   });
 });
