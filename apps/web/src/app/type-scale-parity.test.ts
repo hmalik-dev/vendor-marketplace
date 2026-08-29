@@ -14,7 +14,11 @@ import { describe, expect, it } from 'vitest';
  * and a design re-import that changes the frames fails here instead of passing
  * silently.
  *
- * Scope: `line-height` only. `font-size` and `letter-spacing` belong to #198.
+ * #198 adds the other two axes. The frames draw five roles the scale had no
+ * step for — `.lbl`, `.tn` and the card meta line — so the scale gains them
+ * rather than the components rounding to the nearest step they already had.
+ *
+ * Scope: `line-height`, `font-size` and `letter-spacing`.
  */
 
 const require = createRequire(import.meta.url);
@@ -44,6 +48,26 @@ function themeTokens(pattern: RegExp): Map<string, string> {
 
 const THEME_LINE_HEIGHTS = themeTokens(/--text-([a-z0-9-]+)--line-height:\s*([^;]+);/g);
 const THEME_LEADING = themeTokens(/--leading-([a-z0-9-]+):\s*([^;]+);/g);
+const THEME_TRACKING = themeTokens(/--tracking-([a-z0-9-]+):\s*([^;]+);/g);
+/*
+ * A step and its companions share the `--text-` prefix, so the name alone does
+ * not separate them. Only a size is written in `px` — the companions are a
+ * ratio or an em — which is what makes this pattern select the scale itself.
+ */
+const THEME_FONT_SIZES = new Map<string, number>(
+  [...themeTokens(/--text-([a-z0-9-]+):\s*([\d.]+)px;/g)].map(([name, size]) => [
+    name,
+    Number.parseFloat(size),
+  ]),
+);
+
+/** The declaration body of every class rule in the frame stylesheet, by name. */
+const FRAME_RULES = new Map<string, string>(
+  [...frameHtml.matchAll(/\.([A-Za-z][\w-]*)\s*\{([^}]*)\}/g)].map((rule) => [
+    rule[1] as string,
+    rule[2] as string,
+  ]),
+);
 
 /**
  * The line-height of every class the frame stylesheet declares, by class name.
@@ -51,8 +75,7 @@ const THEME_LEADING = themeTokens(/--leading-([a-z0-9-]+):\s*([^;]+);/g);
  * `/1.5`, `.inp` with longhand. A class that sets neither computes `normal`.
  */
 const FRAME_LINE_HEIGHTS = new Map<string, string>(
-  [...frameHtml.matchAll(/\.([A-Za-z][\w-]*)\s*\{([^}]*)\}/g)].map((rule) => {
-    const body = rule[2] as string;
+  [...FRAME_RULES].map(([name, body]) => {
     const longhand = /line-height:\s*([\d.]+)/.exec(body);
     /*
      * The `font:` shorthand carries the ratio after a slash. Everything before
@@ -64,7 +87,29 @@ const FRAME_LINE_HEIGHTS = new Map<string, string>(
      */
     const shorthand = /font:[^;]*?[\d.]+px\s*\/\s*([\d.]+)/.exec(body);
 
-    return [rule[1] as string, longhand?.[1] ?? shorthand?.[1] ?? 'normal'];
+    return [name, longhand?.[1] ?? shorthand?.[1] ?? 'normal'];
+  }),
+);
+
+/**
+ * The font-size of every class that declares one, in px. Both spellings again:
+ * `.lbl` and `.tn` carry the size inside the `font:` shorthand, while `.inp`,
+ * `.sh` and `.h2` use a `font-size` longhand.
+ */
+const FRAME_FONT_SIZES = new Map<string, number>(
+  [...FRAME_RULES].flatMap(([name, body]): Array<[string, number]> => {
+    const declared = /font-size:\s*([\d.]+)px/.exec(body) ?? /font:[^;]*?([\d.]+)px/.exec(body);
+
+    return declared ? [[name, Number.parseFloat(declared[1] as string)]] : [];
+  }),
+);
+
+/** The letter-spacing of every class that declares one, as written. */
+const FRAME_LETTER_SPACING = new Map<string, string>(
+  [...FRAME_RULES].flatMap(([name, body]): Array<[string, string]> => {
+    const declared = /letter-spacing:\s*([^;]+)/.exec(body);
+
+    return declared ? [[name, (declared[1] as string).trim()]] : [];
   }),
 );
 
@@ -73,6 +118,21 @@ function frameLineHeight(name: string): string {
 
   if (found === undefined) {
     throw new Error(`No .${name} rule in the frame stylesheet.`);
+  }
+
+  return found;
+}
+
+/** An `em` length as a number, so `.05em` and `0.05em` compare equal. */
+function emValue(declared: string | undefined): number {
+  return Number.parseFloat(declared?.trim().replace(/em$/, '') ?? '');
+}
+
+function frameFontSize(name: string): number {
+  const found = FRAME_FONT_SIZES.get(name);
+
+  if (found === undefined) {
+    throw new Error(`No .${name} rule with a font-size in the frame stylesheet.`);
   }
 
   return found;
@@ -166,13 +226,18 @@ const FRAME_UI_CLASSES = [
  * `text-base`, 13.5px, which is the frame's size exactly. Only the shadcn
  * `ui/input.tsx` is 12.5px at desktop.
  *
- * `.pill` and `.card` earn no row: the app renders both through a scale step,
- * but `.lbl` and `.tl` are drawn at `text-[10.5px]` — an arbitrary size, which
- * emits no line-height at all and so never reaches this token. That is #235,
- * and it is why #74 could not close its own five controls.
+ * `.lbl`, `.tl` and `.tn` reach a token as of #198, which gave the roles the
+ * frames draw between the t-shirt steps a step of their own. Before that they
+ * were `text-[10.5px]` and `text-[11.5px]` — arbitrary sizes, which emit no
+ * line-height and so never reached this table at all.
+ *
+ * `.pill` and `.card` still earn no row: the app renders both through a scale
+ * step it shares with other roles.
  */
 const STEP_FOR_FRAME_CLASS: Array<[string, string]> = [
   ['xs', 'pill'],
+  ['label', 'lbl'],
+  ['label', 'tl'],
   ['base', 'inp'],
   ['base', 'btnP'],
   ['base', 'btnS'],
@@ -182,10 +247,15 @@ const STEP_FOR_FRAME_CLASS: Array<[string, string]> = [
 ];
 
 /*
- * Steps with no frame UI class of their own. The frames set type at these sizes
- * inline and leave it at `normal` unless it wraps.
+ * Steps that take the frames' default measure, left at `normal` unless the text
+ * wraps. `sm`, `md`, `lg` and `meta` have no frame class of their own.
+ *
+ * `helper` does have one, and it is the exception that proves the rule: `.tn`
+ * sets `11.5px/1.5`, but that is 7 of the 118 places the frames draw 11.5px.
+ * The other 108 — the field-error lines of frame `22` among them — set no
+ * line-height at all, so the ratio belongs to `.tn`'s call site, not the step.
  */
-const BODY_STEPS_WITHOUT_A_FRAME_CLASS = ['sm', 'md', 'lg'];
+const STEPS_AT_THE_FRAME_DEFAULT = ['sm', 'md', 'lg', 'meta', 'helper'];
 
 /* The hero is the one place the frames set a ratio on a heading. */
 const HERO_STEPS: Array<[string, number]> = [
@@ -208,12 +278,9 @@ describe('type scale line-height parity with the design frames', () => {
     },
   );
 
-  it.each(BODY_STEPS_WITHOUT_A_FRAME_CLASS)(
-    '--text-%s--line-height is the frame default',
-    (step) => {
-      expect(THEME_LINE_HEIGHTS.get(step)).toBe('normal');
-    },
-  );
+  it.each(STEPS_AT_THE_FRAME_DEFAULT)('--text-%s--line-height is the frame default', (step) => {
+    expect(THEME_LINE_HEIGHTS.get(step)).toBe('normal');
+  });
 
   it.each(HERO_STEPS)('--text-%s--line-height is the ratio the frame draws at %spx', (step, px) => {
     expect([...(INLINE_RATIOS_BY_SIZE.get(px) ?? [])]).toEqual([THEME_LINE_HEIGHTS.get(step)]);
@@ -246,4 +313,113 @@ describe('type scale line-height parity with the design frames', () => {
       expect(FRAME_RATIOS).toContain(value);
     }
   });
+});
+
+/*
+ * #198. The size each frame class is rendered through. Four of the five roles
+ * the ticket names are a class in the frame stylesheet, so the size is read
+ * from the contract rather than written down here.
+ *
+ * `.inp` earns a row even though `base` already matches it, so that a later
+ * edit to either side is caught. It does **not** pin what actually broke `.inp`
+ * at 1440 — shadcn's `md:text-sm` on the shared controls, which lives in a
+ * component and cannot move a theme token. `the shared form controls` below is
+ * what guards that.
+ */
+const SIZE_STEP_FOR_FRAME_CLASS: Array<[string, string]> = [
+  ['label', 'lbl'],
+  ['label', 'tl'],
+  ['helper', 'tn'],
+  ['base', 'inp'],
+  ['display-sm', 'sh'],
+  ['display-md', 'h2'],
+];
+
+/** `stone-600`, the muted text colour, read from the theme rather than retyped. */
+const STONE_600 = (/--color-stone-600:\s*(#[0-9a-f]{6})/i.exec(themeCss)?.[1] ?? '').toLowerCase();
+
+/**
+ * Card meta is the one role the frames give no class: they set it inline on the
+ * rating line, which the `★` glyph identifies uniquely and `stone-600`
+ * separates from the bold `stone-700` rating in the profile header.
+ *
+ * The frames disagree with themselves here — 12px on `02 Search & browse` and
+ * `04 Booking request`, 12.5px inside `14 Adaptations — tablet 768 & mobile
+ * 390`. The parity gate measures 1440x900, so the desktop value wins, and it is
+ * also the one the frames draw most often. Taking the mode rather than naming a
+ * number keeps that decision tied to the contract.
+ */
+const CARD_META_PX = ((): number | undefined => {
+  const tally = new Map<number, number>();
+
+  for (const match of frameHtml.matchAll(/style="([^"]*)"[^>]*>\s*★/g)) {
+    const style = match[1] as string;
+    const size = /font-size:\s*([\d.]+)px/.exec(style);
+
+    if (!size || !style.toLowerCase().includes(STONE_600)) {
+      continue;
+    }
+
+    const px = Number.parseFloat(size[1] as string);
+
+    tally.set(px, (tally.get(px) ?? 0) + 1);
+  }
+
+  return [...tally.entries()].sort(([, a], [, b]) => b - a)[0]?.[0];
+})();
+
+describe('type scale font-size and letter-spacing parity with the design frames', () => {
+  it.each(SIZE_STEP_FOR_FRAME_CLASS)(
+    '--text-%s is the size the frames draw .%s at',
+    (step, frameName) => {
+      expect(THEME_FONT_SIZES.get(step)).toBe(frameFontSize(frameName));
+    },
+  );
+
+  it('--text-meta is the size the frames draw the card meta line at', () => {
+    expect(STONE_600).toMatch(/^#[0-9a-f]{6}$/);
+    expect(CARD_META_PX).toBeGreaterThan(0);
+    expect(THEME_FONT_SIZES.get('meta')).toBe(CARD_META_PX);
+  });
+
+  it('--tracking-label is the tracking the frame gives .lbl', () => {
+    /*
+     * Compared as a number, not as text: `.05em` and `0.05em` are the same
+     * tracking, and the frame and a formatter need not agree on the zero.
+     */
+    const frameEm = emValue(FRAME_LETTER_SPACING.get('lbl'));
+
+    expect(Number.isFinite(frameEm)).toBe(true);
+    expect(emValue(THEME_TRACKING.get('label'))).toBe(frameEm);
+  });
+
+  /*
+   * #165's ruling, kept executable: tracking follows the role, not the size
+   * step. The frames hold `.h2` at `-.01em` across six sizes and give eight
+   * inline serif spans at 26px no tracking at all, so a `--text-*` companion
+   * would bind it to the wrong thing. `--tracking-*` names the role instead.
+   */
+  it('no scale step carries a letter-spacing companion', () => {
+    expect([...themeCss.matchAll(/--text-[a-z0-9-]+--letter-spacing/g)]).toEqual([]);
+  });
+
+  /*
+   * The frames draw `.inp` at one size at every width, and the app's fields are
+   * the shadcn primitives. shadcn ships them with `md:text-sm`, which took every
+   * field to 12.5px from 768px up — including the 1440 the parity gate measures
+   * — while `text-base` on the same element said 13.5px.
+   *
+   * The token rows above cannot see this: they compare the theme to the frame,
+   * and a responsive variant lives in the component. Re-adding `md:text-sm` left
+   * the whole suite green, which is why this reads the components directly.
+   */
+  it.each(['input.tsx', 'textarea.tsx', 'select.tsx'])(
+    'the shared form controls hold one font size at every width: %s',
+    (file) => {
+      const source = readFileSync(join(process.cwd(), 'src/components/ui', file), 'utf8');
+      const responsive = source.match(/\b(?:sm|md|lg|xl|2xl):text-[a-z0-9.[\]-]+/g) ?? [];
+
+      expect(responsive).toEqual([]);
+    },
+  );
 });

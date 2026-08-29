@@ -330,7 +330,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
                   without being told the rule about first place.
                 */}
                   {index === 0 ? (
-                    <span className="absolute top-2 left-2 rounded-md bg-stone-900/75 px-2 py-1 text-[10.5px] font-semibold tracking-[.05em] text-stone-0 uppercase">
+                    <span className="absolute top-2 left-2 rounded-md bg-stone-900/75 px-2 py-1 text-label font-semibold tracking-label text-stone-0 uppercase">
                       Cover
                     </span>
                   ) : null}

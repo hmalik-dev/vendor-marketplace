@@ -310,7 +310,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                           never a from-price — both are deferred until the
                           numbers are real (design/design-plan/98-post-mvp.md).
                         */}
-                        <p className="mt-0.75 text-[11.5px] text-stone-600">
+                        <p className="mt-0.75 text-helper text-stone-600">
                           {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
                         </p>
                       </div>

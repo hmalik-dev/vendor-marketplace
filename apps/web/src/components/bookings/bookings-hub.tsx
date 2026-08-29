@@ -245,7 +245,7 @@ export function BookingsHub({
           groups.map((group, index) => (
             <section key={group.key} className={index > 0 ? 'mt-5' : undefined}>
               <div className="mb-2.5 flex items-center gap-3">
-                <h2 className="text-xs font-semibold tracking-[.05em] text-stone-600 uppercase">
+                <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">
                   {group.label}
                 </h2>
                 <span aria-hidden="true" className="h-px flex-1 bg-stone-300" />
@@ -292,7 +292,7 @@ export function EmptyBookings(): React.ReactElement {
       <ol className="mt-6.5 flex gap-6.5">
         {['Send a request', 'Get a quote', "Pay when you're ready"].map((step, index) => (
           <li key={step} className="text-center">
-            <span className="font-mono text-[10.5px] font-medium tracking-[.1em] text-stone-600">
+            <span className="font-mono text-label font-medium tracking-[.1em] text-stone-600">
               {String(index + 1).padStart(2, '0')}
             </span>
             <span className="mt-1 block text-sm font-medium text-stone-700">{step}</span>

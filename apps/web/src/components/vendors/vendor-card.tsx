@@ -139,7 +139,12 @@ export function VendorCard({
             {vendor.businessName}
           </h3>
 
-          <p className={cn('mt-0.5 text-stone-600', isCompact ? 'text-xs' : 'text-sm')}>
+          {/*
+            Card meta is 12px at both densities: the frames draw it there on the
+            `02` search grid and on `04`'s rail card alike. The 12.5px in `14
+            Adaptations` is the tablet and mobile size, not the desktop one.
+          */}
+          <p className="mt-0.5 text-meta text-stone-600">
             {isReviewed ? (
               <>
                 <span aria-hidden="true">★ </span>
@@ -176,7 +181,7 @@ export function VendorCard({
                 className={cn(
                   'font-semibold bg-sage-50 text-sage-600',
                   isCompact
-                    ? 'rounded-[5px] px-2 py-0.75 text-[10.5px]'
+                    ? 'rounded-[5px] px-2 py-0.75 text-label'
                     : 'rounded-md px-2.5 py-1 text-xs',
                 )}
               >
@@ -193,14 +198,10 @@ export function VendorCard({
             )}
           >
             {vendor.startingPriceCents === null ? (
-              <span className={cn('text-stone-600', isCompact ? 'text-xs' : 'text-sm')}>
-                Contact for pricing
-              </span>
+              <span className="text-meta text-stone-600">Contact for pricing</span>
             ) : (
               <>
-                <span className={cn('text-stone-600', isCompact ? 'text-xs' : 'text-sm')}>
-                  From
-                </span>
+                <span className="text-meta text-stone-600">From</span>
                 <span
                   className={cn(
                     'font-bold text-stone-900',

@@ -31,7 +31,7 @@ export function ErrorScreen({ digest, reset }: ErrorScreenProps): React.ReactEle
         <span className="size-4.5 rounded-full bg-error-500" />
       </span>
 
-      <p className="font-mono text-[10.5px] font-medium tracking-[.16em] text-stone-600 uppercase">
+      <p className="font-mono text-label font-medium tracking-[.16em] text-stone-600 uppercase">
         500 · Server error
       </p>
 

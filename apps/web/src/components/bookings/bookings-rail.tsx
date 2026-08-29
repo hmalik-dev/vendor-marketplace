@@ -37,7 +37,7 @@ export function BookingsRail({ needsYou }: BookingsRailProps): React.ReactElemen
     >
       {needsYou.length > 0 ? (
         <>
-          <h2 className="mb-2.75 text-xs font-semibold tracking-[.05em] text-stone-600 uppercase">
+          <h2 className="mb-2.75 text-label font-semibold tracking-label text-stone-600 uppercase">
             Needs you
           </h2>
           <ul className="mb-5">
@@ -69,7 +69,7 @@ export function BookingsRail({ needsYou }: BookingsRailProps): React.ReactElemen
         </>
       ) : null}
 
-      <h2 className="mb-3 text-xs font-semibold tracking-[.05em] text-stone-600 uppercase">
+      <h2 className="mb-3 text-label font-semibold tracking-label text-stone-600 uppercase">
         How booking works here
       </h2>
       <div className="flex flex-col gap-3.5 text-base leading-prose text-stone-700">

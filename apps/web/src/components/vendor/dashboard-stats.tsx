@@ -12,7 +12,7 @@ interface StatProps {
 function Stat({ label, value, delta, isPositive = false }: StatProps): React.ReactElement {
   return (
     <li className="rounded-xl bg-stone-0 p-3.25 shadow-sm">
-      <p className="text-xs font-semibold tracking-[.05em] text-stone-600 uppercase">{label}</p>
+      <p className="text-label font-semibold tracking-label text-stone-600 uppercase">{label}</p>
       <p className="mt-1 font-display text-[30px] leading-none text-stone-900">{value}</p>
       <p className={`mt-1 text-xs ${isPositive ? 'text-sage-600' : 'text-stone-600'}`}>{delta}</p>
     </li>

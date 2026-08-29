@@ -39,7 +39,7 @@ const SIGNED_OUT_LINKS = [
 
 const SIGNED_IN_LINKS = [{ href: '/dashboard', label: 'Dashboard' }];
 
-const COLUMN_HEADING = 'text-[10.5px] font-semibold tracking-[.05em] text-stone-50/55 uppercase';
+const COLUMN_HEADING = 'text-label font-semibold tracking-label text-stone-50/55 uppercase';
 const LINK_CLASS =
   'text-base text-stone-50/78 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline';
 

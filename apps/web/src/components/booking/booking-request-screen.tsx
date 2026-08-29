@@ -561,7 +561,7 @@ function Field({
     <div className={className}>
       <Label
         htmlFor={id}
-        className="mb-1.5 text-xs font-semibold tracking-[.05em] text-stone-600 uppercase"
+        className="mb-1.5 text-label font-semibold tracking-label text-stone-600 uppercase"
       >
         {label}
       </Label>
@@ -579,14 +579,20 @@ function Field({
         <p
           id={messageId}
           className={cn(
-            'mt-1.5 text-xs leading-normal',
-            blocked ? 'text-error-500' : 'text-gold-600',
+            'mt-1.5 text-helper',
+            /*
+             * The ratio goes on the line that wraps, which is the gold one.
+             * Frame `22` draws the blockers as single lines with no ratio
+             * ("Needs 10 digits — you're two short.") and the costly warning,
+             * the longest message in the form, at `11.5px/1.5`.
+             */
+            blocked ? 'text-error-500' : 'text-gold-600 leading-normal',
           )}
         >
           {issue.message}
         </p>
       ) : hint ? (
-        <p className="mt-1.25 text-xs text-sage-600">{hint}</p>
+        <p className="mt-1.25 text-helper text-sage-600">{hint}</p>
       ) : null}
       {footer}
     </div>

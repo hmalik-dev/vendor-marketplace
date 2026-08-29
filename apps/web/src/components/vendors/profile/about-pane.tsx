@@ -110,7 +110,7 @@ export function AboutPane({
               so neither token fits and the value is stated.
             */
             <div key={tile.label} className="rounded-[12px] bg-stone-0 px-3.5 py-3">
-              <dt className="text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+              <dt className="text-label font-semibold tracking-label text-stone-600 uppercase">
                 {tile.label}
               </dt>
               <dd className="mt-0.75 font-display text-[22px] text-stone-900">{tile.value}</dd>

@@ -103,8 +103,8 @@ export function CategorySelect({
         >
           <span
             className={cn(
-              'font-semibold tracking-[.05em] text-stone-600 uppercase',
-              isHero ? 'text-[10.5px]' : 'text-[9.5px]',
+              'font-semibold tracking-label text-stone-600 uppercase',
+              isHero ? 'text-label' : 'text-[9.5px]',
             )}
           >
             Vendor type

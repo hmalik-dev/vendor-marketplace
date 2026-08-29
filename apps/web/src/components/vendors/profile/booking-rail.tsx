@@ -73,7 +73,7 @@ export function BookingRail({
           <div>
             <Label
               htmlFor={`${fieldId}-package`}
-              className="mb-1.25 text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase"
+              className="mb-1.25 text-label font-semibold tracking-label text-stone-600 uppercase"
             >
               Package
             </Label>
@@ -112,7 +112,7 @@ export function BookingRail({
           control unexplained, and still carries the frame's charge reassurance
           — which is true today and stays true when the buttons wake up.
         */}
-        <p className="mt-0.5 text-center text-[11.5px] leading-normal text-stone-600">
+        <p className="mt-0.5 text-center text-helper leading-normal text-stone-600">
           Messaging opens shortly. You won&rsquo;t be charged yet — {businessName} confirms the date
           first.
         </p>

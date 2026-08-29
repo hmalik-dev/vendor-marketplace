@@ -39,7 +39,7 @@ export function VendorSurface({
     >
       <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div className="max-w-prose">
-          <p className="text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+          <p className="text-label font-semibold tracking-label text-stone-600 uppercase">
             {eyebrow}
           </p>
           {/* App page titles cap at 26px — a display-lg heading in an app frame is a bug. */}

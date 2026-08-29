@@ -111,7 +111,7 @@ export function RequestSummaryRail({
         <div className="border-b border-stone-200 px-4.5 py-3.5">
           <Label
             htmlFor={customDetailsId}
-            className="mb-1.5 text-xs font-semibold tracking-[.05em] text-stone-600 uppercase"
+            className="mb-1.5 text-label font-semibold tracking-label text-stone-600 uppercase"
           >
             Describe what you need
           </Label>
