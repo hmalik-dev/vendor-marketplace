@@ -218,9 +218,14 @@ PARTIAL, containing **only** the §2 finding-1 fix: the pseudo-element swapped f
 a real in-flow 44px box, plus a `hasClass` exact-token helper used for that one
 assertion. Typecheck, lint, format and the 35 unit tests are green.
 
-**The 44px reach is NOT browser-verified** — the web dev server died on an EMFILE
-watcher cascade before it could be re-measured. **Findings 2 and 3 in §2 are
-untouched.**
+**`4aedac7` now looks VALIDATED.** A `browser-verifier` run that landed after the
+lane stopped measured **both nav buttons at exactly 44x44 via
+`getBoundingClientRect`** — a real in-flow box, not a clippable pseudo — and
+`elementFromPoint` 15px from the edge resolved to the button, after which a real
+click at that coordinate paged the window. Paging back re-disabled `‹`
+correctly. That is the shape §2 asked for, so the blocking finding appears
+closed; confirm once on your own stack before trusting it. **Findings 2 and 3 in
+§2 are still untouched.**
 
 To hand over the original state instead, `git revert 4aedac7` is clean. The ten
 commits through `cc10f50` are untouched beneath it.
@@ -293,3 +298,39 @@ transition settle before judging a ring.
 blocked or completed dates, so those four cell appearances were never measured on
 a rendered cell — they were resolved from compiled CSS with detached probes (all
 clear 4.5:1). Seed those states before trusting any future pass on frame 11.
+
+## 13. Frame 11's browser verification — what is proven and what is not
+
+**PASSED with evidence** (vendor role, 1440x900, lane 153's stack): page loads
+with three months side by side; single-day click flips `aria-pressed` and updates
+the rail; **drag-select** extends a range correctly (simulated with
+`mousedown` + `pointerover` + `pointerup` on real coordinates, since the MCP
+toolset has no drag primitive — `mousedown` alone selects only the anchor, which
+matches real drag semantics); **Block these** fires
+`PUT /vendor/availability 200`, cells become `Blocked by you` with `line-through`,
+and **Open these up** reverses it, one `PUT 200` each; `Clear` resets. **The lane
+database was restored to 0 booked / 0 blocked before the run ended.**
+
+**NEVER VERIFIED — do these first on any resumed lane 153 work:**
+
+- **Keyboard activation** (Tab + Enter/Space on a day cell and a month-nav glyph).
+- **Signed-out state** on `/vendor/availability` — whether it redirects or flashes
+  content.
+
+Both were blocked when the lane's web server wedged into an **app-wide 500 on
+every route including the public `/`**, with
+`Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware()`.
+Note this is a **third** presentation of that same error, distinct from the EMFILE
+and stale-`.next-dev` causes in §5 and §10 — and here `e2e:auth` does **not**
+recover it, because the app is already down. It needs `next dev` restarted.
+
+**Two things to settle, neither a defect:**
+
+- **Month paging advances a full 3-month window per click**, not one month, so an
+  intermediate window such as Sep–Nov is unreachable. A valid reading of "page
+  the window", but confirm it is the intended granularity.
+- **The `/events/stream` SSE endpoint is actively failing**, not merely held open:
+  repeated `net::ERR_CONNECTION_REFUSED` and one
+  `net::ERR_INCOMPLETE_CHUNKED_ENCODING` across the session. It did not visibly
+  break the UI, but §5's "SSE holds the connection open" is an incomplete
+  description of what is happening.

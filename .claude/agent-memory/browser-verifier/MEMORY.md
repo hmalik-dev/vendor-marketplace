@@ -1,0 +1,1 @@
+- [Clerk session lapse can 500 the whole app](clerk-session-lapse-can-500-whole-app.md) — not just a sign-in bounce; e2e:auth re-run won't fix a wedged dev server
