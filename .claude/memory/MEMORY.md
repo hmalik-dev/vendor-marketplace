@@ -17,3 +17,4 @@
 - [Global config repo: claude-workflow](claude-workflow-config-repo.md) — ~/.claude is git-tracked in a private repo; its .gitignore is deny-by-default
 - [Commit ticket changes immediately](commit-ticket-changes-immediately.md) — tracker edits go straight to main, never left dirty
 - [Worktree env copies drift](worktree-env-copies-drift.md) — .worktreeinclude snapshots .env at creation; a stale copy or stale dist fails tests only in the worktree
+- [Ticket = branch + worktree, merge immediately](ticket-worktree-merge-immediately.md) — no review wait; the merge is the signal to kill the worktree and start the next ticket

@@ -5280,79 +5280,6 @@ the same blind spot returns with the next revision.
 
 ---
 
-## Post-MVP Backlog
-
-**Nothing here is a missing piece of the MVP.** Each was considered and deferred, and
-each carries the condition that unblocks it. Source of truth is
-`design/design-plan/98-post-mvp.md` plus the `## Post-MVP` section of each screen file.
-**No MVP ticket may implement any of this.** Do not build it behind a flag, do not stub
-it, do not leave a half-built surface — a deferred feature is absent, not hidden.
-
-These are not tickets. They become tickets when their unblock condition is met.
-
-### P1 — blocked on real volume
-
-| Item | Was cut from | Unblock condition |
-| --- | --- | --- |
-| Vendor-count badge on the landing hero, scoped to the visitor's city | #6c / frame `01` | **~25+ live vendors** in the category and city being displayed |
-| Category-card counts and from-prices, computed per city | #6c / frame `01` | same |
-| Landing stats band (events booked · average rating · median reply) | #6c / frame `01` | same |
-| Sign-up marketing panel stats + the public stats endpoint that feeds them | #24 / frame `12` | same. Keep at least one mechanism line even then — it outperforms a number for a first-time visitor |
-| Counts on the confirmation cross-sell chips | #10 / frame `06` | same |
-| "People who booked X also booked" pairing framing | #10 / frame `06` | enough completed multi-vendor events to see real pairings |
-| Event templates / suggested-category rows | #22b / frame `07` | same — until then it is guesswork dressed as guidance |
-| Availability "Market note" panel ("Saturdays are 80% booked across Austin") | #4 / frame `11` | real market data. Until then omit it, or state only this vendor's own numbers |
-| Benchmark comparisons on the vendor dashboard ("vendors like you reply in 3h") | #22a / frame `08` | a cohort to compare against |
-
-**The rule that outlives all of these:** every number on a public page is read from the
-database at request time, or it does not ship. A hardcoded stat is a liability — it goes
-stale silently and it is a lie the moment it does.
-
-### P1 — blocked on a decision, not on data
-
-| Item | Note |
-| --- | --- |
-| Reply-time ranking | Screen `16` says "keep it under 4h to stay ranked", which implies a ranking signal. **The signal must exist before that copy ships** — either build it or soften the line to a plain nudge. Tracked as open question #2. This one blocks a line of copy already in an MVP ticket, so resolve it during #22a |
-
-### P2 — product scope
-
-- **Multi-vendor booking** — one request to several vendors at once. The hub's month grouping is the seed of it; revisit once request→quote→pay is proven.
-- **Events as a real entity** — a named container with a date, venue and guest count, its own page at `/events/[id]`, and bookings filed into it. **Cut on 2026-08-27**; `/bookings` groups by month derived from the booking date instead, and occasion and venue are plain fields on the booking. **Unblock:** enough customers with multiple bookings on the same date that month grouping stops being sufficient. Month grouping stays the default view even after events ship.
-- **Free-text and semantic search** — a text query over profile copy ("someone who shoots on film"), as an *additional* entry point beside the three pickers, never replacing them. **Unblock:** enough profile copy to index. Name search already exists as the referral-case link.
-- **Shared events** — co-planners on one event, with roles.
-- **Budget tracking** across an event's bookings.
-- **Saved event details** pre-filling every subsequent request for the same event.
-- **Vendor discovery beyond search** — recommendations, "similar vendors", a personalised home feed. All need behavioural data; in MVP, the category-first query plus the Refine bar is the whole discovery surface.
-- **"Similar vendors" strip** on the vendor profile and on an empty search result.
-- **Saved searches** and email alerts for a date + category. **Map view** alongside the search grid.
-
-### P2 — surface depth
-
-- Checkout: deposit + balance split payments, saved payment methods, instalment plans.
-- Messaging: canned replies, read receipts, non-image attachments, vendor-to-vendor referrals.
-- Availability: recurring blocks, two-way calendar sync, demand-based pricing suggestions.
-- Editor: AI-assisted bio drafting, portfolio bulk upload with auto-crop, package duplication, completeness scoring beyond the binary publish gate.
-- Vendor dashboard: earnings trend chart, payout history, calendar sync.
-- Profile: video in the portfolio lightbox, vendor response to a review.
-- Confirmation: add-to-calendar, shareable event summary.
-- Admin: cohort and retention analytics, automated flag triage, vendor quality scoring, bulk messaging to vendor segments.
-- Landing: city picker in the hero, once there is more than one live market.
-
-### Deferred from the states design (`40-states.md` § Not built yet)
-
-- **Upload failure detail view** — a per-file diagnostic screen beyond the inline row reason.
-- **Partial-refund dispute flow.**
-- **Vendor-side payout failure.**
-
-All three follow the same rules when they land: name the cause, state the money position, say whether the date survived, offer one action.
-
-### Deferred platform work
-
-- **Dark mode.** The warm cream identity is the brand; a true inversion is post-MVP.
-- **Vendor-doesn't-reply path** — open question #1, and the one I would resolve *inside* MVP. The 48-hour expiry is specified but the customer-side experience is not designed, and it is the most common failure path in a two-sided marketplace.
-
----
-
 ### #66: Unvalidated URL input crashes six ways into a 500
 
 **Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
@@ -9985,3 +9912,76 @@ onboarding from nothing and the quote path. **Where:** `/messages`, both roles.
 
 - [ ] A test asserting two requests from one customer to one vendor yield addressable threads.
 - [ ] A test asserting an inbound message increments the recipient's notification count.
+
+---
+
+## Post-MVP Backlog
+
+**Nothing here is a missing piece of the MVP.** Each was considered and deferred, and
+each carries the condition that unblocks it. Source of truth is
+`design/design-plan/98-post-mvp.md` plus the `## Post-MVP` section of each screen file.
+**No MVP ticket may implement any of this.** Do not build it behind a flag, do not stub
+it, do not leave a half-built surface — a deferred feature is absent, not hidden.
+
+These are not tickets. They become tickets when their unblock condition is met.
+
+### P1 — blocked on real volume
+
+| Item | Was cut from | Unblock condition |
+| --- | --- | --- |
+| Vendor-count badge on the landing hero, scoped to the visitor's city | #6c / frame `01` | **~25+ live vendors** in the category and city being displayed |
+| Category-card counts and from-prices, computed per city | #6c / frame `01` | same |
+| Landing stats band (events booked · average rating · median reply) | #6c / frame `01` | same |
+| Sign-up marketing panel stats + the public stats endpoint that feeds them | #24 / frame `12` | same. Keep at least one mechanism line even then — it outperforms a number for a first-time visitor |
+| Counts on the confirmation cross-sell chips | #10 / frame `06` | same |
+| "People who booked X also booked" pairing framing | #10 / frame `06` | enough completed multi-vendor events to see real pairings |
+| Event templates / suggested-category rows | #22b / frame `07` | same — until then it is guesswork dressed as guidance |
+| Availability "Market note" panel ("Saturdays are 80% booked across Austin") | #4 / frame `11` | real market data. Until then omit it, or state only this vendor's own numbers |
+| Benchmark comparisons on the vendor dashboard ("vendors like you reply in 3h") | #22a / frame `08` | a cohort to compare against |
+
+**The rule that outlives all of these:** every number on a public page is read from the
+database at request time, or it does not ship. A hardcoded stat is a liability — it goes
+stale silently and it is a lie the moment it does.
+
+### P1 — blocked on a decision, not on data
+
+| Item | Note |
+| --- | --- |
+| Reply-time ranking | Screen `16` says "keep it under 4h to stay ranked", which implies a ranking signal. **The signal must exist before that copy ships** — either build it or soften the line to a plain nudge. Tracked as open question #2. This one blocks a line of copy already in an MVP ticket, so resolve it during #22a |
+
+### P2 — product scope
+
+- **Multi-vendor booking** — one request to several vendors at once. The hub's month grouping is the seed of it; revisit once request→quote→pay is proven.
+- **Events as a real entity** — a named container with a date, venue and guest count, its own page at `/events/[id]`, and bookings filed into it. **Cut on 2026-08-27**; `/bookings` groups by month derived from the booking date instead, and occasion and venue are plain fields on the booking. **Unblock:** enough customers with multiple bookings on the same date that month grouping stops being sufficient. Month grouping stays the default view even after events ship.
+- **Free-text and semantic search** — a text query over profile copy ("someone who shoots on film"), as an *additional* entry point beside the three pickers, never replacing them. **Unblock:** enough profile copy to index. Name search already exists as the referral-case link.
+- **Shared events** — co-planners on one event, with roles.
+- **Budget tracking** across an event's bookings.
+- **Saved event details** pre-filling every subsequent request for the same event.
+- **Vendor discovery beyond search** — recommendations, "similar vendors", a personalised home feed. All need behavioural data; in MVP, the category-first query plus the Refine bar is the whole discovery surface.
+- **"Similar vendors" strip** on the vendor profile and on an empty search result.
+- **Saved searches** and email alerts for a date + category. **Map view** alongside the search grid.
+
+### P2 — surface depth
+
+- Checkout: deposit + balance split payments, saved payment methods, instalment plans.
+- Messaging: canned replies, read receipts, non-image attachments, vendor-to-vendor referrals.
+- Availability: recurring blocks, two-way calendar sync, demand-based pricing suggestions.
+- Editor: AI-assisted bio drafting, portfolio bulk upload with auto-crop, package duplication, completeness scoring beyond the binary publish gate.
+- Vendor dashboard: earnings trend chart, payout history, calendar sync.
+- Profile: video in the portfolio lightbox, vendor response to a review.
+- Confirmation: add-to-calendar, shareable event summary.
+- Admin: cohort and retention analytics, automated flag triage, vendor quality scoring, bulk messaging to vendor segments.
+- Landing: city picker in the hero, once there is more than one live market.
+
+### Deferred from the states design (`40-states.md` § Not built yet)
+
+- **Upload failure detail view** — a per-file diagnostic screen beyond the inline row reason.
+- **Partial-refund dispute flow.**
+- **Vendor-side payout failure.**
+
+All three follow the same rules when they land: name the cause, state the money position, say whether the date survived, offer one action.
+
+### Deferred platform work
+
+- **Dark mode.** The warm cream identity is the brand; a true inversion is post-MVP.
+- **Vendor-doesn't-reply path** — open question #1, and the one I would resolve *inside* MVP. The 48-hour expiry is specified but the customer-side experience is not designed, and it is the most common failure path in a two-sided marketplace.
