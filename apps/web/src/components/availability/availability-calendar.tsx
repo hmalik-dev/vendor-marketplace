@@ -333,7 +333,7 @@ export function AvailabilityCalendar({
     >
       <section className="app-pane flex min-h-0 flex-col pr-0 xl:pr-6">
         <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-3">
-          <h2 className="display-heading text-display-md text-stone-900">Availability</h2>
+          <h1 className="display-heading text-display-md text-stone-900">Availability</h1>
 
           <div className="flex items-center gap-3 text-base text-stone-700">
             <MonthNavButton

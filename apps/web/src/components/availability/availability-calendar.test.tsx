@@ -657,4 +657,25 @@ describe('frame 11 parity', () => {
 
     expect(screen.getByText('No dates selected yet.')).toBeDefined();
   });
+
+  /*
+   * `04-laws.md`: the document needs a top-level heading. The screen title was
+   * an `h2`, so the page had none and the rail's section headings sat at the
+   * same level as the thing they sit inside. Queried by role, so this asserts
+   * the accessibility tree rather than the tag.
+   */
+  it('gives the page a top-level heading', () => {
+    renderCalendar();
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Availability' })).toBeDefined();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('keeps the rail section headings below the page heading', () => {
+    renderCalendar();
+
+    for (const label of ['Selected', 'Legend', 'This quarter']) {
+      expect(screen.getByRole('heading', { level: 2, name: label })).toBeDefined();
+    }
+  });
 });
