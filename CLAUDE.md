@@ -52,13 +52,13 @@ Run from the repository root; Turborepo fans each task out across packages.
 
 Database:
 
-| Task                 | Command                                                        |
-| -------------------- | -------------------------------------------------------------- |
-| Start local services | `docker compose up -d` (MinIO; Postgres only for offline work) |
-| Generate a migration | `pnpm db:generate` (after editing `packages/db/src/schema`)    |
-| Apply migrations     | `pnpm db:migrate`                                              |
-| Seed reference data  | `pnpm db:seed`                                                 |
-| Browse data          | `pnpm db:studio`                                               |
+| Task                 | Command                                                      |
+| -------------------- | ------------------------------------------------------------ |
+| Start local services | `docker compose up -d` (Postgres + MinIO; both used locally) |
+| Generate a migration | `pnpm db:generate` (after editing `packages/db/src/schema`)  |
+| Apply migrations     | `pnpm db:migrate`                                            |
+| Seed reference data  | `pnpm db:seed`                                               |
+| Browse data          | `pnpm db:studio`                                             |
 
 Deployed web: `web-gules-eta-41.vercel.app` — the parity target after every push.
 
@@ -92,8 +92,9 @@ matching file. Do not duplicate it here.
   command, not in `.claude/settings*.json`, not in an agent, skill or rule. They
   live in `.env` files and are read from the environment. A `PreToolUse` hook
   blocks both routes.
-- **The application database is a Neon branch.** Never point local development at
-  `production`.
+- **Local development runs on the Docker Postgres; staging and production are
+  Neon branches.** Never point local development at `production`. The compose
+  image tracks the major version Neon runs, and a drift test enforces it.
 - **Never commit generated output.** `packages/db/drizzle/`, `.env.example` and
   `turbo.json`'s `globalPassThroughEnv` are all generated; edit the source and
   regenerate.
@@ -129,6 +130,6 @@ pre-commit gate) live in `~/.claude/CLAUDE.md` and
 
 ## Stack
 
-Next.js 15 · Fastify 5 · Drizzle ORM · PostgreSQL 16 (Neon) · Clerk ·
+Next.js 15 · Fastify 5 · Drizzle ORM · PostgreSQL 18 (Neon; Docker locally) · Clerk ·
 Stripe Connect · Cloudflare R2 · Resend · Tailwind CSS 4 + shadcn/ui · Zod ·
 Vitest · Playwright

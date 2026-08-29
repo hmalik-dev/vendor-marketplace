@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, production]
   pull_request:
-    branches: [main]
+    branches: [main, production]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -63,3 +63,90 @@ jobs:
       - run: pnpm build
 
       - run: pnpm test
+
+  # Migrations run from CI, never from a laptop. `resolveMigrationUrl()` prefers
+  # DATABASE_URL_UNPOOLED because Neon's pooled endpoint is PgBouncer in
+  # transaction mode: it does not pin a session, so the advisory lock the
+  # migrator takes and the DDL it issues are not guaranteed to see the same
+  # backend.
+  #
+  # Both jobs depend on `verify`, so a red tree never reaches a database, and
+  # both opt out of the workflow's cancel-in-progress: cancelling a migration
+  # mid-flight is how you get a half-applied schema.
+  migrate-staging:
+    name: Migrate staging
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+    concurrency:
+      group: migrate-staging
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Require the staging connection string
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          if [ -z "$DATABASE_URL_UNPOOLED" ]; then
+            echo "::error::DATABASE_URL_UNPOOLED is not set on the staging environment."
+            echo "Add it under Settings -> Environments -> staging. See ticket #204."
+            exit 1
+          fi
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: pnpm db:migrate
+
+  # Gated by the `production` GitHub Environment, which carries a required
+  # reviewer — the last deliberate step between a merge and real user data.
+  migrate-production:
+    name: Migrate production
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/production'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    concurrency:
+      group: migrate-production
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Require the production connection string
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          if [ -z "$DATABASE_URL_UNPOOLED" ]; then
+            echo "::error::DATABASE_URL_UNPOOLED is not set on the production environment."
+            echo "Add it under Settings -> Environments -> production. See ticket #204."
+            exit 1
+          fi
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: pnpm db:migrate

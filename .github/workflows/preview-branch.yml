@@ -1,0 +1,83 @@
+# Neon: a database branch per pull request
+#
+# Every PR gets a copy-on-write branch off `staging`, so its migrations run
+# against a full-fidelity copy in isolation and the branch is dropped when the
+# PR closes. Copy-on-write means this costs no storage until the PR writes.
+#
+# Inert until NEON_API_KEY and the NEON_PREVIEW_BRANCHES variable exist — see
+# ticket #205.
+#
+# The two Neon actions are pinned to commit SHAs rather than moving tags: both
+# receive NEON_API_KEY, so a retagged release would hand a project-wide
+# credential to whatever the new tag points at.
+name: Neon preview branch
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency:
+  group: neon-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: dark-surf-79137727
+  NEON_PARENT_BRANCH: staging
+
+jobs:
+  create:
+    name: Create or update the branch
+    if: github.event.action != 'closed' && vars.NEON_PREVIEW_BRANCHES == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # Belt and braces against the free plan's 10-branch ceiling: the delete
+      # job below is the normal path, but a workflow that never runs — a PR
+      # closed while Actions were disabled, say — would otherwise strand a
+      # branch forever.
+      - name: Compute a branch expiry
+        id: expiry
+        run: echo "at=$(date -u -d '+7 days' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Create the Neon branch
+        id: branch
+        uses: neondatabase/create-branch-action@72ed4f69a12b6be9c16aebfad893f6a21e9aba8b # v6.4.0
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: ${{ env.NEON_PARENT_BRANCH }}
+          branch_name: preview/pr-${{ github.event.pull_request.number }}
+          expires_at: ${{ steps.expiry.outputs.at }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The point of the branch: prove this PR's migrations apply cleanly to a
+      # copy of staging before they are ever pointed at staging itself.
+      - name: Apply this PR's migrations to the branch
+        env:
+          DATABASE_URL_UNPOOLED: ${{ steps.branch.outputs.db_url }}
+        run: pnpm db:migrate
+
+  delete:
+    name: Delete the branch
+    if: github.event.action == 'closed' && vars.NEON_PREVIEW_BRANCHES == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Delete the Neon branch
+        uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.pull_request.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}

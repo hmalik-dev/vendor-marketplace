@@ -36,7 +36,7 @@ Individual steps are available as `pnpm install`, `docker compose up -d`,
 **Locally: the Postgres service in `docker-compose.yml`.** **Staging and
 production: Neon branches.**
 
-Local development deliberately does *not* use Neon. `pnpm dev` holds a
+Local development deliberately does _not_ use Neon. `pnpm dev` holds a
 connection pool open, so a Neon compute never scales to zero and a day of
 development burns CU-hours against a per-project monthly cap — and exhausting
 that cap suspends the compute until the next billing period. Running locally is
@@ -57,7 +57,7 @@ branch deliberately.
 `production`, `main` or `master` branch.
 
 MinIO runs on every local run as the stand-in for Cloudflare R2 — that container
-*is* required.
+_is_ required.
 
 ### Environment variables
 
