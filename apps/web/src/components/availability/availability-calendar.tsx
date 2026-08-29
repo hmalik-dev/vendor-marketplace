@@ -442,7 +442,7 @@ export function AvailabilityCalendar({
               Click a date to select it, or drag across several.
             </p>
           ) : (
-            <div className="rounded-xl bg-clay-100 p-3.5">
+            <div className="rounded-[12px] bg-clay-100 p-[13px]">
               <p className="font-display text-[20px] text-stone-900">{formatRange(selection)}</p>
               <p className="mt-1 text-sm text-stone-700">
                 {selection.length} {selection.length === 1 ? 'day' : 'days'} · currently{' '}

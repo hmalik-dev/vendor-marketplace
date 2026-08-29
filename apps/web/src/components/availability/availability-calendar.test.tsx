@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -341,5 +343,97 @@ describe('AvailabilityCalendar', () => {
     renderCalendar([entry('2026-06-15', 'booked')]);
 
     expect(document.body.textContent).not.toMatch(/across Austin|%|average|median/i);
+  });
+});
+
+/*
+ * Frame `11 Availability` is the acceptance criterion for this screen. Every
+ * expected value below is read out of the frame at test time rather than
+ * written down here, so a design re-import that moves one fails this file
+ * instead of passing silently.
+ *
+ * jsdom has no layout, so these compare the utility the component asks for
+ * against the value the frame declares. The browser parity gate is the real
+ * check; this is what stops the two sides drifting apart in source between
+ * gates.
+ */
+const designDirectory = join(process.cwd(), '../../design');
+const framesFile = readdirSync(designDirectory).filter((entry) =>
+  entry.endsWith('Screens.dc.html'),
+);
+
+if (framesFile.length !== 1) {
+  throw new Error(`Expected exactly one screens frame file in design/, found ${framesFile.length}`);
+}
+
+const frames = readFileSync(join(designDirectory, framesFile[0] as string), 'utf8');
+
+/** Frame `11 Availability`, up to the frame that follows it. */
+const FRAME_11 = (() => {
+  const start = frames.indexOf('data-screen-label="11 Availability"');
+  const next = frames.indexOf('class="fr"', start + 1);
+
+  return frames.slice(start, next === -1 ? undefined : next);
+})();
+
+/** One `property:value` out of an inline `style` attribute, as the frame writes it. */
+function styleValue(markup: string, property: string): string {
+  const declaration = new RegExp(`(?:^|[;"])${property}:([^;"]+)`).exec(markup);
+
+  if (!declaration?.[1]) {
+    throw new Error(`Frame 11 does not set \`${property}\` on this element`);
+  }
+
+  return declaration[1].trim();
+}
+
+/*
+ * The rail — the frame's 300px right-hand column. The selected panel has to be
+ * found inside the rail rather than in the whole frame: the booked day cells
+ * carry the same `#F7E7E0` fill (booked *is* clay-100 by design), so a
+ * frame-wide search finds a 7px day cell instead of the 12px panel.
+ */
+const FRAME_11_RAIL = (() => {
+  const at = FRAME_11.indexOf('width:300px');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the 300px rail');
+  }
+
+  return FRAME_11.slice(at);
+})();
+
+/** The rail's "Selected" panel — the one clay-100 panel the rail draws. */
+const frameSelectedPanel = (() => {
+  const at = FRAME_11_RAIL.indexOf('background:#F7E7E0;border-radius:');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the selected panel this test measures');
+  }
+
+  return FRAME_11_RAIL.slice(at, FRAME_11_RAIL.indexOf('>', at));
+})();
+
+describe('frame 11 parity', () => {
+  afterEach(cleanup);
+
+  it('finds the frame and the elements these assertions measure', () => {
+    expect(FRAME_11).not.toBe('');
+    expect(FRAME_11).toContain('data-screen-label="11 Availability"');
+    expect(frameSelectedPanel).toContain('border-radius');
+  });
+
+  it('draws the selected panel at the frame radius and padding', async () => {
+    const user = userEvent.setup();
+    renderCalendar();
+
+    await user.click(cell('2026-06-18'));
+
+    const panel = screen.getByText('Jun 18').parentElement;
+
+    expect(panel?.className).toContain(
+      `rounded-[${styleValue(frameSelectedPanel, 'border-radius')}]`,
+    );
+    expect(panel?.className).toContain(`p-[${styleValue(frameSelectedPanel, 'padding')}]`);
   });
 });

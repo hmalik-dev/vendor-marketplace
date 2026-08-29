@@ -338,7 +338,7 @@ have been observed. Corrected in place.
 | ID | Axis | Expected | Observed | Re-run verdict |
 |----|------|----------|----------|----------------|
 | PB2-30 | Layout | Rail 341px footprint / 300px content | 300px / 260px — month columns absorb the 41px (852px content vs 786px; columns 271px vs 248.7px) | **PASS** — live now 341px/300px, months grid 786px, gap 20px, columns 248.656px, identical to frame. Fixed by shared chrome `43ce159` (#153) |
-| PB2-31 | Style | Selected panel radius 12 / padding 13 | 14 / 14 | **HOLDS** — re-measured live 14px/14px (`rounded-xl` = `--radius-xl: 14px`, `p-3.5`) |
+| PB2-31 | Style | Selected panel radius 12 / padding 13 | 14 / 14 | **PASS** — fixed in this lane (#154): panel is now `rounded-[12px] p-[13px]` |
 | PB2-32 | Style | Market-note panel radius 12 | 14 | **HOLDS** — re-measured live 14px |
 | PB2-33 | Style | `Block these` `padding:8px 14px` | `6px 12px` | **HOLDS** — re-measured live `6px 12px` (Button `size="sm"` = `px-3 py-1.5`) |
 | PB2-34 | Style | Month nav inline glyphs in `#6B6459` at 13px | ~~two 36px circular icon buttons~~ → **two 44x44 icon buttons**, `border-radius:10px`, `color:#A34A28` | **HOLDS** (observed value corrected — see note above) |
