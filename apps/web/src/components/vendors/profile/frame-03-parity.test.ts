@@ -365,3 +365,59 @@ describe('frame 03 — chip and tile radii (#109)', () => {
     expect(stripSource).not.toContain('rounded-xl');
   });
 });
+
+describe('frame 03 — the availability line on the From row (#112)', () => {
+  /*
+   * The literal and its colour are read out of the frame rather than copied,
+   * so the wording and the token stay tied to the contract.
+   */
+  // `#4B5940` is also the "Documentary style" chip's text colour, so the
+  // availability line is selected by its full declaration rather than by hue.
+  const lineStyle = styleContaining('font-size:12px', 'color:#4B5940', 'font-weight:600');
+  const literal = /<span style="font-size:12px;color:#4B5940;font-weight:600">([^<]*)<\/span>/.exec(
+    FRAME_03,
+  );
+
+  expect(literal, 'the frame no longer draws the availability line').not.toBeNull();
+  const [, text] = literal as RegExpExecArray;
+
+  const themeCss = readFileSync(
+    join(process.cwd(), '..', '..', 'packages', 'config', 'tailwind', 'theme.css'),
+    'utf8',
+  );
+  const railSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'booking-rail.tsx'),
+    'utf8',
+  );
+
+  it('reads the frame contract it is asserting against', () => {
+    expect(text as string).toMatch(/^Free on /);
+    expect(declaration(lineStyle, 'font-size')).toBe('12px');
+    expect(declaration(lineStyle, 'font-weight')).toBe('600');
+  });
+
+  it('renders the frame literal, not a paraphrase of it', () => {
+    // The date itself varies with what the customer picks; the two words in
+    // front of it are the contract.
+    const prefix = (text as string).slice(0, (text as string).indexOf(' ', 'Free '.length));
+
+    expect(prefix).toBe('Free on');
+    expect(railSource).toContain(`${prefix} {freeOn}`);
+  });
+
+  it('colours it with the theme token that equals the frame colour', () => {
+    const hex = declaration(lineStyle, 'color').toLowerCase();
+    const token = new RegExp(`--color-([a-z0-9-]+):\\s*${hex};`).exec(themeCss);
+
+    expect(token, `no theme token equals ${hex}`).not.toBeNull();
+    expect((token as RegExpExecArray)[1]).toBe('sage-600');
+    expect(railSource).toContain('text-sage-600');
+    expect(railSource).toContain(`text-[${declaration(lineStyle, 'font-size')}]`);
+  });
+
+  it('reads availability the way the request form reads it', () => {
+    // A vendor publishes only the days they are NOT free, so absence means
+    // available. Both surfaces must apply that rule or they will disagree.
+    expect(railSource).toContain("calendar[eventDate] ?? 'available'");
+  });
+});

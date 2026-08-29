@@ -1,6 +1,11 @@
 'use client';
 
-import { MAX_GUEST_COUNT, formatPrice, type ServicePackage } from '@vendor-marketplace/shared';
+import {
+  MAX_GUEST_COUNT,
+  formatPrice,
+  type AvailabilityStatus,
+  type ServicePackage,
+} from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +20,8 @@ export interface BookingRailProps {
   reviewCount: number;
   /** Today in the vendor's calendar, so a past date cannot be requested. */
   today: string;
+  /** The vendor's published availability, keyed by `YYYY-MM-DD`. */
+  calendar: Readonly<Record<string, AvailabilityStatus>>;
 }
 
 /**
@@ -34,6 +41,7 @@ export function BookingRail({
   packages,
   reviewCount,
   today,
+  calendar,
 }: BookingRailProps): React.ReactElement {
   const fieldId = useId();
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
@@ -54,14 +62,32 @@ export function BookingRail({
   const query = request.toString();
   const requestHref = query ? `/vendors/${slug}/request?${query}` : `/vendors/${slug}/request`;
 
+  /*
+   * Frame `03` draws this line for the searched date, so it appears once a date
+   * is chosen and the vendor is free on it. A vendor publishes only the days
+   * they are NOT free, so an absent date means available — the same rule the
+   * request form applies, deliberately, so the two can never disagree about a
+   * date. A date that is blocked, booked or already past draws nothing rather
+   * than a contradiction; naming that is the request form's job, in copy
+   * `40-states.md` has already approved.
+   */
+  const dateStatus = eventDate ? (calendar[eventDate] ?? 'available') : null;
+  const freeOn =
+    eventDate && eventDate >= today && dateStatus === 'available'
+      ? formatMonthDay(eventDate)
+      : null;
+
   return (
     <aside
       aria-label={`Book ${businessName}`}
       className="overflow-hidden rounded-[18px] bg-stone-0 shadow-[0_4px_18px_rgba(35,32,28,.09)]"
     >
       <div className="border-b border-stone-200 px-5 pt-4.5 pb-4">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline justify-between gap-3">
           <span className="text-[12.5px] text-stone-600">From</span>
+          {freeOn ? (
+            <span className="text-[12px] font-semibold text-sage-600">Free on {freeOn}</span>
+          ) : null}
         </div>
         {shownPriceCents === null ? (
           /*
@@ -196,3 +222,21 @@ const FIELD =
   'w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-base text-stone-900';
 
 const FIELD_LABEL = 'mb-1.25 text-label font-semibold tracking-label text-stone-600 uppercase';
+
+/**
+ * "June 14", the way the frame writes the availability date. Built from the
+ * parts rather than from `new Date(value)`, which reads a bare `YYYY-MM-DD` as
+ * UTC midnight and shows the day before in any western timezone.
+ */
+function formatMonthDay(value: string): string {
+  const [year, month, day] = value.split('-').map(Number);
+
+  if (!year || !month || !day) {
+    return '';
+  }
+
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+  });
+}

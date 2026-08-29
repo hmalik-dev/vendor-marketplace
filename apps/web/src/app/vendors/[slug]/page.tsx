@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { BRAND_NAME, pageTitle, todayDateString } from '@vendor-marketplace/shared';
+import {
+  BRAND_NAME,
+  pageTitle,
+  todayDateString,
+  type AvailabilityStatus,
+} from '@vendor-marketplace/shared';
 import { AboutPane } from '@/components/vendors/profile/about-pane';
 import { AvailabilityPane } from '@/components/vendors/profile/availability-pane';
 import { BookingRail } from '@/components/vendors/profile/booking-rail';
@@ -70,6 +75,13 @@ export default async function VendorProfilePage({
   const availability = await getPublicVendorAvailability(slug);
   const today = todayDateString();
 
+  /* The same keyed view of availability the request form takes, so the rail's
+     free-date line and that form read one source. */
+  const calendar: Record<string, AvailabilityStatus> = {};
+  for (const entry of availability) {
+    calendar[entry.date] = entry.status;
+  }
+
   /**
    * `LocalBusiness` rather than `Organization`, matching the landing page: a
    * vendor serves a metro, and the search result that matters is a local one.
@@ -132,6 +144,7 @@ export default async function VendorProfilePage({
             packages={vendor.packages}
             reviewCount={vendor.reviewCount}
             today={today}
+            calendar={calendar}
           />
         }
       >

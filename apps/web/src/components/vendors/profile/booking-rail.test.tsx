@@ -37,6 +37,7 @@ describe('BookingRail', () => {
         packages={[servicePackage()]}
         reviewCount={127}
         today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -57,6 +58,7 @@ describe('BookingRail', () => {
         packages={[servicePackage()]}
         reviewCount={0}
         today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -77,6 +79,7 @@ describe('BookingRail', () => {
         packages={[]}
         reviewCount={0}
         today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -94,6 +97,7 @@ describe('BookingRail', () => {
         packages={[servicePackage()]}
         reviewCount={0}
         today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -110,6 +114,7 @@ describe('BookingRail', () => {
         packages={[]}
         reviewCount={0}
         today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -129,6 +134,7 @@ describe('BookingRail', () => {
         ]}
         reviewCount={0}
         today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -146,10 +152,58 @@ describe('BookingRail', () => {
         packages={[servicePackage()]}
         reviewCount={0}
         today="2026-01-01"
+        calendar={{}}
       />,
     );
 
     expect(screen.getByText('Every review comes from a completed booking')).toBeDefined();
     expect(screen.queryByText(/0 reviews/)).toBeNull();
+  });
+
+  describe('the free-on line (#112)', () => {
+    /*
+     * A vendor publishes only the days they are NOT free, so a date absent from
+     * the calendar is available — the same rule the request form applies.
+     */
+    function renderRail(calendar: Record<string, 'blocked' | 'booked' | 'available' | 'pending'>) {
+      return render(
+        <BookingRail
+          businessName="Kessler & Co."
+          slug="kessler-and-co"
+          startingPriceCents={145_000}
+          packages={[servicePackage()]}
+          reviewCount={127}
+          today="2026-08-29"
+          calendar={calendar}
+        />,
+      );
+    }
+
+    it('names a future date the vendor has not blocked', async () => {
+      renderRail({});
+      await userEvent.type(screen.getByLabelText('Event date'), '2026-12-05');
+
+      expect(screen.getByText('Free on December 5')).toBeDefined();
+    });
+
+    it('says nothing about a date the vendor has blocked', async () => {
+      renderRail({ '2026-12-05': 'blocked' });
+      await userEvent.type(screen.getByLabelText('Event date'), '2026-12-05');
+
+      expect(screen.queryByText(/^Free on/)).toBeNull();
+    });
+
+    it('says nothing about a date already past', async () => {
+      renderRail({});
+      await userEvent.type(screen.getByLabelText('Event date'), '2026-06-14');
+
+      expect(screen.queryByText(/^Free on/)).toBeNull();
+    });
+
+    it('says nothing until a date is chosen', () => {
+      renderRail({});
+
+      expect(screen.queryByText(/^Free on/)).toBeNull();
+    });
   });
 });
