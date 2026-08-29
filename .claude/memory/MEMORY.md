@@ -11,7 +11,7 @@
 - [Playwright parity gate on every FE ticket](playwright-parity-gate-every-fe-ticket.md) — compare the live page to its new Orla frame at 1440x900 before Done
 - [Design re-imports are merges, not overwrites](orla-design-reimport-is-a-merge.md) — the remote design-plan lags local refinements, and the parity gate is a local-only guardrail to preserve
 - [Ad-hoc work commits as one](adhoc-work-single-commit.md) — don't isolate unrelated changes; the commit hook blocks on a dirty tree
-- [Vercel deployment URL](vendor-marketplace-vercel-deployment.md) — web-gules-eta-41.vercel.app; the parity target after every push
+- [Vercel deployment URL](vendor-marketplace-vercel-deployment.md) — web-gules-eta-41.vercel.app follows `production`, not `main`; parity is checked against localhost
 - [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; the tracker is the durable queue
 - [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; the Neon URL that leaked still needs rotating
 - [Global config repo: claude-workflow](claude-workflow-config-repo.md) — ~/.claude is git-tracked in a private repo; its .gitignore is deny-by-default
