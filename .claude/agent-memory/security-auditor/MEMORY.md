@@ -5,3 +5,5 @@
 - [Idempotency guards orphan their side effects](idempotency-guards-orphan-side-effects.md) — every ON CONFLICT DO NOTHING here fronts non-transactional follow-on writes; the retry absorbs the half-failed first attempt
 - [URL params are validated in the nuqs hook](url-params-validated-in-the-nuqs-hook.md) — nuqs types but never validates; the hook is the boundary, not the screen
 - [.env.lane mode is not repaired on rewrite](lane-env-file-mode-not-repaired.md) — writeFileSync's `mode` applies only on create, and no test asserts 0600
+- [`redirect_url` is Clerk's param, not ours](clerk-redirect-url-param-collision.md) — the raw search param outranks `fallbackRedirectUrl`, skipping our validator and `/after-sign-in`
+- [safeReturnPath validates a different string than it returns](validate-before-normalize-return-path.md) — returns the decoded value and checks the un-normalized pathname
