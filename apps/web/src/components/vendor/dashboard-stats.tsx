@@ -11,7 +11,14 @@ interface StatProps {
 
 function Stat({ label, value, delta, isPositive = false }: StatProps): React.ReactElement {
   return (
-    <li className="rounded-xl bg-stone-0 p-3.25 shadow-sm">
+    /*
+      12px, not `rounded-xl`. Frame `08` overrides `.card`'s 16px radius
+      on the stat row specifically, and the scale has no 12px step —
+      `--radius-lg` is 10px and `--radius-xl` 14px — so the value is
+      written literally rather than forced into a neighbouring token,
+      the same way `RoleChip` writes its 5px.
+    */
+    <li className="rounded-[12px] bg-stone-0 p-3.25 shadow-sm">
       <p className="text-label font-semibold tracking-label text-stone-600 uppercase">{label}</p>
       <p className="mt-1 font-display text-[30px] leading-none text-stone-900">{value}</p>
       <p className={`mt-1 text-xs ${isPositive ? 'text-sage-600' : 'text-stone-600'}`}>{delta}</p>
