@@ -347,7 +347,7 @@ have been observed. Corrected in place.
 | PB2-37 | Font | Title letter-spacing -0.26px | -0.65px (root cause) | **PASS** — live now `-0.26px`. Closed by #165 (`8a14155`) |
 | PB2-38 | Font | Month names letter-spacing normal | -0.45px | **PASS** — live now `normal`. Closed by #165 (`8a14155`) |
 | PB2-39 | Font | Rail micro-labels in Instrument Sans | **Instrument Serif** (root cause) — size/weight/tracking/colour all correct | **PASS** — all three rail labels now Instrument Sans 10.5px/600/0.525px/`#6B6459`/uppercase. Closed by #165 (`8a14155`) |
-| PB2-40 | Text | One instruction | **Contradictory copy 40px apart**: rail says `Click a date to select it, or drag across several.` while the pane sub-line says `Click a date to block it...`. Only one is true | **HOLDS** — both strings still present verbatim |
+| PB2-40 | Text | One instruction | **Contradictory copy 40px apart**: rail says `Click a date to select it, or drag across several.` while the pane sub-line says `Click a date to block it...`. Only one is true | **PARTIAL** — contradiction removed in this lane (#163); rail is now a status line. The frame full instruction still cannot ship until the `completed` state exists |
 | PB2-41 | Access | Page has an `h1` | **No `<h1>` on the page** — the title is an `h2`, so the document has no top-level heading | **HOLDS** — `document.querySelectorAll('h1').length === 0` |
 
 Recorded as plan-authorized, do not re-flag: the market note states this vendor's own numbers

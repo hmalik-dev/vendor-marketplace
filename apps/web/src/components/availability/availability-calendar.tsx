@@ -460,9 +460,13 @@ export function AvailabilityCalendar({
           </h2>
 
           {selection.length === 0 ? (
-            <p className="text-sm leading-normal text-stone-700">
-              Click a date to select it, or drag across several.
-            </p>
+            /*
+              A status line, not a second instruction. The frame draws no empty
+              state here, and the sentence that used to sit in this slot told
+              the vendor a click "selects" while the pane 40px away told them it
+              "blocks". Only the pane carries an instruction now.
+            */
+            <p className="text-sm leading-normal text-stone-700">No dates selected yet.</p>
           ) : (
             <div className="rounded-[12px] bg-clay-100 p-[13px]">
               <p className="font-display text-[20px] text-stone-900">{formatRange(selection)}</p>

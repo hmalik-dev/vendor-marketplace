@@ -499,6 +499,19 @@ const frameDayGrid = (() => {
   return dayGrid;
 })();
 
+/** The frame's one instruction line, HTML entities resolved. */
+const frameInstruction = (() => {
+  const at = FRAME_11.indexOf('Click a date');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the instruction this test measures');
+  }
+
+  return FRAME_11.slice(at, FRAME_11.indexOf('</div>', at))
+    .replace(/&mdash;/g, '\u2014')
+    .trim();
+})();
+
 /** The type-scale token whose size is this value, e.g. `12px` -> `meta`. */
 function fontSizeToken(px: string): string {
   const theme = readFileSync(
@@ -620,5 +633,28 @@ describe('frame 11 parity', () => {
 
     expect(token).toBe('meta');
     expect(cell('2026-06-18').className).toContain(`text-${token}`);
+  });
+
+  /*
+   * The screen used to tell the vendor two different things 40px apart: the
+   * rail said a click "selects", the pane said it "blocks". The frame draws one
+   * instruction, in the pane, so that is the one that survives.
+   */
+  it('carries exactly one instruction, opening the way the frame does', () => {
+    renderCalendar();
+
+    const instructions = screen.queryAllByText(/Click a date to/);
+
+    expect(instructions).toHaveLength(1);
+
+    const opening = `${frameInstruction.split('. ')[0]}.`;
+
+    expect(instructions[0]?.textContent?.trim().startsWith(opening)).toBe(true);
+  });
+
+  it('states the empty selection rather than instructing a second time', () => {
+    renderCalendar();
+
+    expect(screen.getByText('No dates selected yet.')).toBeDefined();
   });
 });
