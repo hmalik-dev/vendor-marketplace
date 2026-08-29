@@ -10,7 +10,7 @@ import {
 import { wireVendorSearchResultSchema } from '@/lib/wire-schemas';
 import { SlidersHorizontal, SearchX } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { ApiClientError, apiRequest } from '@/lib/api-client';
+import { apiRequest } from '@/lib/api-client';
 import type { WireTag } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,13 @@ import { SearchBar } from './search-bar';
 import { NearbyDatesBand } from './nearby-dates-band';
 import { useSearchStatus } from './search-status';
 import { noResultsDiagnosis, noResultsHeadline, relaxations } from './relaxations';
-import { activeRefineCount, toSearchQuery, useSearchState, type SearchState } from './search-state';
+import {
+  activeRefineCount,
+  clearedParamsLine,
+  toSearchQuery,
+  useSearchState,
+  type SearchState,
+} from './search-state';
 
 /**
  * How many skeletons stand in for a loading grid — two full rows of four, the
@@ -83,10 +89,15 @@ function searchingLine(state: SearchState): string {
 }
 
 function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElement {
-  const { state, setState, clearRefinements } = useSearchState();
+  const { state, dropped, setState, clearRefinements } = useSearchState();
   const [result, setResult] = useState<VendorSearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  /*
+   * Whether the search failed, not how. Every failure now reads the same
+   * approved sentence, so there is no per-failure string to carry — and the
+   * copy lives beside the headline it is half of, rather than in the catch.
+   */
+  const [hasFailed, setHasFailed] = useState(false);
   /** Below `lg` the Refine chips collapse into a sheet. The query never does. */
   const [isRefineSheetOpen, setIsRefineSheetOpen] = useState(false);
   /*
@@ -105,7 +116,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
 
     setIsLoading(true);
     setSearching(true);
-    setError(null);
+    setHasFailed(false);
 
     apiRequest(`/vendors?${query}`, {
       schema: wireVendorSearchResultSchema,
@@ -117,13 +128,17 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         setIsLoading(false);
         setSearching(false);
       })
-      .catch((cause: unknown) => {
+      .catch(() => {
         if (controller.signal.aborted) {
           return;
         }
-        setError(
-          cause instanceof ApiClientError ? cause.message : 'Could not load vendors just now.',
-        );
+        /*
+         * The API's own message is deliberately not read here. "Request
+         * validation failed" is written for whoever reads the logs, says
+         * nothing a customer can act on, and printing an upstream string on a
+         * public screen is what #72 forbids.
+         */
+        setHasFailed(true);
         setIsLoading(false);
         setSearching(false);
       });
@@ -157,6 +172,17 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
     // `setState` is a fresh closure each render; the date is what this watches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.date]);
+
+  /*
+   * The past-date line keeps its own wording — it can name the date, because
+   * that value parsed; a param that failed the schema has nothing quotable.
+   */
+  const clearedLines = [
+    droppedPastDate === null
+      ? null
+      : `${AVAILABILITY_DATE_FORMATTER.format(new Date(`${droppedPastDate}T00:00:00Z`))} has already passed, so the date was cleared — pick a new one to check availability.`,
+    clearedParamsLine(dropped),
+  ].filter((line): line is string => line !== null);
 
   const refineCount = activeRefineCount(state);
   const diagnosis = noResultsDiagnosis(state);
@@ -233,7 +259,12 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
 
       {/* Neither the query bar nor the Refine bar scrolls; only the grid does. */}
       <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 min-[90rem]:px-6.5">
-        <h1 className="font-display text-[22px] text-stone-900">
+        {/*
+          `min-w-0 break-words` because the heading interpolates the city, which
+          comes from the URL. It is capped at 100 characters, but 100 characters
+          with no space in them still overflow a column that has no rule for it.
+        */}
+        <h1 className="min-w-0 display-heading text-[22px] break-words text-stone-900">
           {isLoading ? searchingLine(state) : heading}
           {state.date ? (
             <span className="ml-2.5 font-sans text-[13px] text-stone-600">
@@ -250,17 +281,30 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           Prices are what they charge — no quotes needed
         </p>
 
-        {droppedPastDate !== null ? (
-          <p role="status" className="w-full text-[12.5px] text-stone-700">
-            {AVAILABILITY_DATE_FORMATTER.format(new Date(`${droppedPastDate}T00:00:00Z`))} has
-            already passed, so the date was cleared — pick a new one to check availability.
-          </p>
+        {/*
+          Everything the URL asked for that is not in effect, announced once.
+          A date that has passed and a param that could not be parsed are the
+          same event to the customer — the search that ran is narrower than the
+          link said — so they share one live region rather than stacking two.
+        */}
+        {clearedLines.length > 0 ? (
+          <div role="status" className="w-full">
+            {clearedLines.map((line) => (
+              <p key={line} className="text-[12.5px] text-stone-700">
+                {line}
+              </p>
+            ))}
+          </div>
         ) : null}
       </div>
 
       <div className="app-pane px-5 pb-20 min-[90rem]:px-6.5 lg:pb-4">
-        {error !== null ? (
-          <EmptyState icon={<SearchX />} headline="Something went wrong" description={error} />
+        {hasFailed ? (
+          <EmptyState
+            icon={<SearchX />}
+            headline="Something went wrong"
+            description="Could not load vendors just now."
+          />
         ) : isLoading ? (
           // Skeletons swap into the live grid; the bars stay put, and there is
           // never a full-page spinner beside them.

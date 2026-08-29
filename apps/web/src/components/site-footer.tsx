@@ -84,7 +84,9 @@ export function SiteFooter(): React.ReactElement {
             <Link href="/" className="inline-block transition-opacity hover:opacity-80">
               <Logo size={LOGO_SIZES.marketingFooter} tone="dark" />
             </Link>
-            <p className="mt-3.5 max-w-64 text-base text-stone-50/78">{BRAND_TAGLINE}</p>
+            <p className="mt-3.5 max-w-64 text-base leading-prose text-stone-50/78">
+              {BRAND_TAGLINE}
+            </p>
           </div>
 
           <nav aria-label="Footer" className="grid gap-10 sm:grid-cols-3 lg:col-span-3">

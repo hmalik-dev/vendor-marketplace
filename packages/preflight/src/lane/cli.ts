@@ -1,6 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
 import path from 'node:path';
-import { readRootEnv } from './env.js';
 import { laneDown, laneEnvFor, laneUp, parseLaneArgs } from './lane.js';
 
 /**
@@ -23,21 +22,6 @@ async function main(): Promise<void> {
   const worktree = process.cwd();
 
   if (parsed.kind === 'up') {
-    /*
-     * The one value `lane up` needs from the root `.env`, and only it.
-     * `baseDatabaseUrl()` reads `DATABASE_URL` from the environment, which a
-     * plain shell has never exported.
-     *
-     * Deliberately one key rather than the whole file. `pnpmInLane` forwards
-     * this process's environment to `pnpm install`, `build` and `migrate`, so
-     * merging the file wholesale would hand the Clerk, Stripe, R2 and Resend
-     * secrets to three build processes that have no use for them. Scoped to
-     * `up` for the same reason `exec` is left alone: `exec` overrides from the
-     * lane file, every app loads the root `.env` itself, and preloading it
-     * would put `NODE_ENV=development` in front of a production build.
-     */
-    process.env.DATABASE_URL ??= readRootEnv(worktree).DATABASE_URL;
-
     const manifest = await laneUp(mainCheckout(), worktree, parsed.ticket);
     process.stdout.write(
       `✓ Lane ${manifest.ticket} up\n` +

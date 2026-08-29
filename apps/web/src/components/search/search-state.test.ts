@@ -1,5 +1,13 @@
+import { MAX_PACKAGE_PRICE_CENTS } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
-import { activeRefineCount, toSearchQuery, hasQuery, type SearchState } from './search-state';
+import {
+  activeRefineCount,
+  clearedParamsLine,
+  parseSearchState,
+  toSearchQuery,
+  hasQuery,
+  type SearchState,
+} from './search-state';
 
 const EMPTY: SearchState = {
   name: '',
@@ -143,5 +151,116 @@ describe('hasQuery', () => {
 
   it('is true for a name search, which is also a question', () => {
     expect(hasQuery({ ...EMPTY, name: 'June Harlow' })).toBe(true);
+  });
+});
+
+/*
+ * The table IS the test. Every row is a URL a person can paste into Slack, and
+ * every one of them returned HTTP 500 before this boundary existed — an
+ * unparseable date reached `Intl.DateTimeFormat.format`, and a price above
+ * `int4` reached Postgres. A single-example test does not cover this class.
+ */
+describe('parseSearchState', () => {
+  it.each([
+    ['?date=not-a-date', { date: 'not-a-date' }, 'date'],
+    ['?date=2026-13-45', { date: '2026-13-45' }, 'date'],
+    ['?date=0000-00-00', { date: '0000-00-00' }, 'date'],
+    [
+      '?date=2026-08-28T12:00:00Z — a plausible ISO timestamp',
+      { date: '2026-08-28T12:00:00Z' },
+      'date',
+    ],
+    [
+      '?minPriceCents=2147483648 — one past int4',
+      { minPriceCents: 2_147_483_648 },
+      'minPriceCents',
+    ],
+    [
+      '?minPriceCents above the package cap',
+      { minPriceCents: MAX_PACKAGE_PRICE_CENTS + 1 },
+      'minPriceCents',
+    ],
+    ['?maxPriceCents below zero', { maxPriceCents: -500 }, 'maxPriceCents'],
+    ['?minRating=9 — above the five-star ceiling', { minRating: 9 }, 'minRating'],
+    ['?page=0 — pages are one-based', { page: 0 }, 'page'],
+    ['?category=NOT A SLUG', { category: 'NOT A SLUG' }, 'category'],
+    ['?city= a 300-character paste', { city: 'A'.repeat(300) }, 'city'],
+  ] as const)('clears %s and keeps the rest of the query', (_url, hostile, field) => {
+    const { state, dropped } = parseSearchState({ ...EMPTY, city: 'Austin', ...hostile });
+
+    expect(dropped).toContain(field);
+    expect(state[field]).toEqual(EMPTY[field]);
+    // The question the customer asked survives the param that could not be used.
+    if (field !== 'city') {
+      expect(state.city).toBe('Austin');
+    }
+  });
+
+  it('keeps every value a well-formed URL carries', () => {
+    const valid: SearchState = {
+      ...EMPTY,
+      category: 'photography',
+      city: 'Austin',
+      date: '2026-06-14',
+      minPriceCents: 50_000,
+      maxPriceCents: MAX_PACKAGE_PRICE_CENTS,
+      minRating: 4.5,
+      page: 3,
+    };
+
+    expect(parseSearchState(valid)).toEqual({ state: valid, dropped: [] });
+  });
+
+  it('clears both ends of a range whose floor is above its ceiling', () => {
+    const { state, dropped } = parseSearchState({
+      ...EMPTY,
+      minPriceCents: 900_000,
+      maxPriceCents: 100_000,
+    });
+
+    expect(state.minPriceCents).toBeNull();
+    expect(state.maxPriceCents).toBeNull();
+    expect(dropped).toEqual(['minPriceCents', 'maxPriceCents']);
+  });
+
+  /*
+   * "Today" is the viewer's local day and the server rendering this screen
+   * cannot know it, so a past date is judged by the client-only effect in the
+   * shell. Clearing it here would render one answer on the server and another
+   * after hydration.
+   */
+  it('leaves an already-past date alone, because that is not its judgement to make', () => {
+    const { state, dropped } = parseSearchState({ ...EMPTY, date: '2020-01-01' });
+
+    expect(state.date).toBe('2020-01-01');
+    expect(dropped).toEqual([]);
+  });
+});
+
+describe('clearedParamsLine', () => {
+  it('says nothing when the URL was entirely usable', () => {
+    expect(clearedParamsLine([])).toBeNull();
+  });
+
+  it('names the one param it cleared, in the customer’s words', () => {
+    expect(clearedParamsLine(['date'])).toBe(
+      "That date isn't one we can use, so it was cleared — the rest of your search still applies.",
+    );
+  });
+
+  it('names both ends of a price range once, not twice', () => {
+    expect(clearedParamsLine(['minPriceCents', 'maxPriceCents'])).toBe(
+      "That price range isn't one we can use, so it was cleared — the rest of your search still applies.",
+    );
+  });
+
+  it('lists several cleared params in one line', () => {
+    expect(clearedParamsLine(['date', 'minRating'])).toBe(
+      "The date and rating aren't ones we can use, so they were cleared — the rest of your search still applies.",
+    );
+  });
+
+  it('never names a URL parameter key', () => {
+    expect(clearedParamsLine(['minPriceCents'])).not.toContain('minPriceCents');
   });
 });

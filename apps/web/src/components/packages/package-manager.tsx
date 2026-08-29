@@ -262,7 +262,7 @@ export function PackageManager({
               <p className="font-display text-lg font-semibold text-stone-800">
                 {packages.length === 0 ? 'No packages yet' : 'Pick a package to edit'}
               </p>
-              <p className="max-w-sm text-sm text-stone-600">
+              <p className="max-w-sm text-sm leading-prose text-stone-600">
                 {packages.length === 0
                   ? 'A package is what a customer books. You need at least one bookable package before your profile can go live.'
                   : 'Choose one from the list, or add another.'}

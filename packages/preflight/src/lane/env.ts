@@ -1,32 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
+import { parse } from 'dotenv';
 import type { LaneManifest } from './manifest.js';
 
 /** Gitignored by the existing `.env.*` rule. Holds live credentials. */
 export const LANE_ENV_FILE = '.env.lane';
-
-/** The developer's own env file, which the lane database is derived from. */
-export const ROOT_ENV_FILE = '.env';
-
-/**
- * The root `.env`, parsed. `lane up` derives the lane database from
- * `DATABASE_URL`, which lives in this file and which a plain shell has never
- * exported — every other entry point in the repo reads it, so the lane CLI
- * must too. Returns empty when there is no file: the caller reports the
- * missing variable, which is the more useful error.
- *
- * Hand-parsed rather than delegated to `dotenv`, which this package does
- * depend on and which `context.ts` uses. `lane up` is the command that runs
- * `pnpm install`, and on a fresh worktree `packages/preflight/node_modules`
- * does not exist yet — `tsx` resolves from the repository root, but a package
- * dependency does not resolve at all until the install this function is
- * needed to reach.
- */
-export function readRootEnv(worktreePath: string): Record<string, string> {
-  const file = path.join(worktreePath, ROOT_ENV_FILE);
-
-  return existsSync(file) ? parseLaneEnv(readFileSync(file, 'utf8')) : {};
-}
 
 export function renderLaneEnv(manifest: LaneManifest, databaseUrl: string): string {
   return [
@@ -52,35 +28,18 @@ export function renderLaneEnv(manifest: LaneManifest, databaseUrl: string): stri
   ].join('\n');
 }
 
-/** `VALUE`, `"VALUE"` and `'VALUE'` all mean the same thing to dotenv. */
-function unquote(value: string): string {
-  const quote = value[0];
-
-  return (quote === '"' || quote === "'") && value.endsWith(quote) && value.length > 1
-    ? value.slice(1, -1)
-    : value;
-}
-
+/**
+ * Reads any env file this package touches — the generated lane file and the
+ * hand-written repository `.env` alike.
+ *
+ * `dotenv` rather than a hand-rolled splitter, so there is one reader in the
+ * package. The splitter this replaced did not strip quotes, which is invisible
+ * on the generated file (it is written unquoted) and broke on the repository
+ * `.env`, whose `DATABASE_URL="postgresql://…"` came back with the quotes
+ * attached and was rejected by `new URL`.
+ */
 export function parseLaneEnv(contents: string): Record<string, string> {
-  const values: Record<string, string> = {};
-
-  for (const line of contents.split('\n')) {
-    const trimmed = line.trim();
-
-    if (!trimmed || trimmed.startsWith('#')) {
-      continue;
-    }
-
-    const separator = trimmed.indexOf('=');
-
-    if (separator === -1) {
-      continue;
-    }
-
-    values[trimmed.slice(0, separator)] = unquote(trimmed.slice(separator + 1));
-  }
-
-  return values;
+  return parse(contents);
 }
 
 /**

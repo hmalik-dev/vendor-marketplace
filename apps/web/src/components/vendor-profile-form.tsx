@@ -385,8 +385,8 @@ export function VendorProfileForm({
       >
         <div className="app-pane min-h-0 flex-1 px-4 pt-5.5 sm:px-7">
           <div className="max-w-[65rem]">
-            <h1 className="font-display text-display-md text-stone-900">Your storefront</h1>
-            <p className="mt-0.5 mb-4.5 text-base text-stone-700">
+            <h1 className="display-heading text-display-md text-stone-900">Your storefront</h1>
+            <p className="mt-0.5 mb-4.5 text-base leading-prose text-stone-700">
               This is what a customer sees before they decide to message you.
             </p>
           </div>
@@ -639,7 +639,7 @@ export function VendorProfileForm({
 
             <section id={SECTION_IDS.tags} className="scroll-mt-6 py-6">
               <h2 className="font-display text-display-sm text-stone-900">Tags</h2>
-              <p className="mt-1 text-base text-stone-700">
+              <p className="mt-1 text-base leading-prose text-stone-700">
                 How customers find someone who fits their celebration.
               </p>
               <div className="mt-4">

@@ -1,9 +1,16 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseLaneEnv } from './env.js';
-import { laneDown, laneEnvFor, laneUp, type LaneUpDeps, parseLaneArgs } from './lane.js';
+import {
+  baseDatabaseUrl,
+  laneDown,
+  laneEnvFor,
+  laneUp,
+  type LaneUpDeps,
+  parseLaneArgs,
+} from './lane.js';
 import { readManifest } from './manifest.js';
 
 let root: string;
@@ -25,6 +32,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // These tests stub DATABASE_URL; leaving one set would make the next test
+  // read the previous test's value instead of the file it wrote.
+  vi.unstubAllEnvs();
   rmSync(root, { recursive: true, force: true });
   rmSync(worktree, { recursive: true, force: true });
 });
@@ -105,13 +115,97 @@ describe('laneUp', () => {
     expect(order).toEqual(['install', 'build', 'migrate']);
   });
 
+  /*
+   * `git clean -xdf` takes `.env` and `.env.lane` in the same pass, so a lane
+   * that needs the base `DATABASE_URL` to resume is one that cannot resume in
+   * the case the repair exists for. A lane whose file already agrees with its
+   * manifest needs no URL at all.
+   */
+  it('resumes a lane whose env file is already correct without needing DATABASE_URL', async () => {
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+    const first = await laneUp(root, worktree, '42', deps());
+
+    vi.stubEnv('DATABASE_URL', '');
+
+    await expect(laneUp(root, worktree, '42', deps())).resolves.toEqual(first);
+  });
+
   it('resumes an existing lane without creating a second database', async () => {
+    // Repairing a missing or stale file derives the lane URL from the
+    // developer's own, so that path does need the base value.
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+
     const d = deps();
     const first = await laneUp(root, worktree, '42', d);
     const second = await laneUp(root, worktree, '42', d);
 
     expect(second).toEqual(first);
     expect(d.createDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * The manifest lives in the main checkout and the env file in the worktree,
+   * so the two can part company: the env file is gitignored and a clean takes
+   * it while the manifest survives. Returning the manifest alone left the lane
+   * unable to run a single command — `lane:exec` refuses without the file — and
+   * a lane is only left in place because it is supposed to be resumable.
+   */
+  it('rebuilds a lane env file that went missing under an existing manifest', async () => {
+    // The rebuild derives the lane URL from the developer's own DATABASE_URL,
+    // which `lane:up` reads from the environment or the worktree's `.env`.
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+
+    const d = deps();
+    const first = await laneUp(root, worktree, '42', d);
+    rmSync(path.join(worktree, '.env.lane'));
+
+    const second = await laneUp(root, worktree, '42', d);
+
+    expect(second).toEqual(first);
+    expect(d.createDatabase).toHaveBeenCalledTimes(1);
+
+    const parsed = parseLaneEnv(readFileSync(path.join(worktree, '.env.lane'), 'utf8'));
+    expect(parsed.PORT).toBe(String(first.apiPort));
+    expect(parsed.DATABASE_URL).toContain(first.database);
+  });
+
+  /*
+   * Existence is not the invariant — agreement with the manifest is. A file
+   * left over from an earlier allocation points the lane at another lane's
+   * ports, and every check passes against the wrong process.
+   */
+  it('rewrites a lane env file whose ports disagree with the manifest', async () => {
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+
+    const first = await laneUp(root, worktree, '42', deps());
+    writeFileSync(path.join(worktree, '.env.lane'), 'PORT=4000\nWEB_PORT=3000\n');
+
+    await laneUp(root, worktree, '42', deps());
+
+    const parsed = parseLaneEnv(readFileSync(path.join(worktree, '.env.lane'), 'utf8'));
+    expect(parsed.PORT).toBe(String(first.apiPort));
+    expect(parsed.WEB_PORT).toBe(String(first.webPort));
+  });
+
+  /*
+   * `writeFileSync`'s `mode` applies only when it creates the file, so a
+   * `.env.lane` that already existed world-readable would have kept that mode
+   * through every repair — and it holds a live connection string.
+   */
+  it.each([
+    ['creating the file', false],
+    ['repairing one left world-readable', true],
+  ])('leaves the lane env file readable only by its owner when %s', async (_label, preexisting) => {
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+    const file = path.join(worktree, '.env.lane');
+
+    if (preexisting) {
+      writeFileSync(file, 'PORT=4000\n', { mode: 0o644 });
+    }
+
+    await laneUp(root, worktree, '42', deps());
+
+    expect(statSync(file).mode & 0o777).toBe(0o600);
   });
 
   it('marks a lane active only once install, build and migrate have all run', async () => {
@@ -199,5 +293,42 @@ describe('laneEnvFor', () => {
 
   it('refuses to run when the lane was never brought up', () => {
     expect(() => laneEnvFor(worktree, {})).toThrow(/lane:up/);
+  });
+});
+
+describe('baseDatabaseUrl', () => {
+  const exported = 'postgresql://localhost:5432/vendor_marketplace_exported';
+  const inFile = 'postgresql://localhost:5432/vendor_marketplace_from_file';
+
+  it('reads DATABASE_URL from the worktree .env when the shell exported none', () => {
+    writeFileSync(path.join(worktree, '.env'), `NODE_ENV=development\nDATABASE_URL=${inFile}\n`);
+    vi.stubEnv('DATABASE_URL', '');
+
+    expect(baseDatabaseUrl(worktree)).toBe(inFile);
+  });
+
+  /*
+   * The repository `.env` is hand-written and quotes its values. Reading it
+   * with the lane file's own parser returned a URL still wrapped in `"`, which
+   * `new URL` rejects — `lane:up` failed with a bare "Invalid URL".
+   */
+  it('strips the quotes a hand-written .env puts around its values', () => {
+    writeFileSync(path.join(worktree, '.env'), `DATABASE_URL="${inFile}"\n`);
+    vi.stubEnv('DATABASE_URL', '');
+
+    expect(baseDatabaseUrl(worktree)).toBe(inFile);
+  });
+
+  it('lets an exported DATABASE_URL win over the worktree .env', () => {
+    writeFileSync(path.join(worktree, '.env'), `DATABASE_URL=${inFile}\n`);
+    vi.stubEnv('DATABASE_URL', exported);
+
+    expect(baseDatabaseUrl(worktree)).toBe(exported);
+  });
+
+  it('names the file it looked in when neither source supplies one', () => {
+    vi.stubEnv('DATABASE_URL', '');
+
+    expect(() => baseDatabaseUrl(worktree)).toThrow(/\.env/);
   });
 });

@@ -1,8 +1,5 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { childEnv, parseLaneEnv, readRootEnv, renderLaneEnv, ROOT_ENV_FILE } from './env.js';
+import { childEnv, parseLaneEnv, renderLaneEnv } from './env.js';
 import type { LaneManifest } from './manifest.js';
 
 const manifest: LaneManifest = {
@@ -67,24 +64,5 @@ describe('childEnv', () => {
 
   it('preserves inherited variables the lane file does not mention', () => {
     expect(childEnv({ HOME: '/home/dev' }, 'PORT=4007').HOME).toBe('/home/dev');
-  });
-});
-
-describe('readRootEnv', () => {
-  it('reads the worktree root .env, so `lane up` can derive the lane database', () => {
-    const worktree = mkdtempSync(path.join(tmpdir(), 'lane-env-'));
-    writeFileSync(
-      path.join(worktree, ROOT_ENV_FILE),
-      '# comment\nDATABASE_URL="postgresql://localhost:5432/vendor_marketplace"\nPORT=4000\n',
-    );
-
-    expect(readRootEnv(worktree)).toEqual({
-      DATABASE_URL: 'postgresql://localhost:5432/vendor_marketplace',
-      PORT: '4000',
-    });
-  });
-
-  it('returns nothing when there is no .env, leaving the caller to report the variable', () => {
-    expect(readRootEnv(mkdtempSync(path.join(tmpdir(), 'lane-env-')))).toEqual({});
   });
 });

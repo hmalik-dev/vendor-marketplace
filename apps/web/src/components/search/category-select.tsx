@@ -174,7 +174,7 @@ export function CategorySelect({
                 <p className="text-base font-semibold text-stone-900">No matching type</p>
                 {suggestions.length > 0 ? (
                   <>
-                    <p className="mt-1 text-sm text-stone-600">Did you mean</p>
+                    <p className="mt-1 text-sm leading-normal text-stone-600">Did you mean</p>
                     <ul className="mt-2 flex flex-col gap-1">
                       {suggestions.map((category) => (
                         <li key={category.id}>
@@ -190,7 +190,7 @@ export function CategorySelect({
                     </ul>
                   </>
                 ) : (
-                  <p className="mt-1 text-sm text-stone-600">
+                  <p className="mt-1 text-sm leading-normal text-stone-600">
                     Pick a vendor type from the list to search.
                   </p>
                 )}

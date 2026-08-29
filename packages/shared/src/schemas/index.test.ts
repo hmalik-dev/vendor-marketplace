@@ -534,6 +534,20 @@ describe('vendorSearchQuerySchema', () => {
     ).toBe(false);
   });
 
+  /*
+   * `2147483647` was accepted and `2147483648` overflowed `int4` in Postgres —
+   * a 500 for a URL anyone can paste. The cap is the price ceiling, not the
+   * column's, so the refusal happens in the schema and never reaches the query.
+   */
+  it.each(['minPriceCents', 'maxPriceCents'])('rejects a %s above the package cap', (field) => {
+    expect(
+      vendorSearchQuerySchema.safeParse({ [field]: MAX_PACKAGE_PRICE_CENTS + 1 }).success,
+    ).toBe(false);
+    expect(vendorSearchQuerySchema.safeParse({ [field]: MAX_PACKAGE_PRICE_CENTS }).success).toBe(
+      true,
+    );
+  });
+
   it('rejects an unknown sort option', () => {
     expect(vendorSearchQuerySchema.safeParse({ sort: 'cheapest' }).success).toBe(false);
   });

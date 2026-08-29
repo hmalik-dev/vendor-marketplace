@@ -1,10 +1,19 @@
 'use client';
 
 import {
+  calendarDateSchema,
   DEFAULT_PAGE_SIZE,
+  MAX_BUSINESS_NAME_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PACKAGE_PRICE_CENTS,
+  REVIEW_RATING_MAX,
+  slugSchema,
+  uuidSchema,
   VENDOR_SORT_OPTIONS,
   type VendorSortOption,
 } from '@vendor-marketplace/shared';
+import { useMemo } from 'react';
+import { z } from 'zod';
 import {
   parseAsArrayOf,
   parseAsFloat,
@@ -62,11 +71,175 @@ export interface SearchState {
 
 export type SearchPatch = Partial<SearchState>;
 
+/**
+ * The screen's boundary schema — one field per URL param, and the only place
+ * that decides what a param is allowed to be.
+ *
+ * `nuqs` reads the URL; it does not validate it. `?date=not-a-date` and
+ * `?date=2026-13-45` both arrived here as plain strings, reached
+ * `new Date(...)` and then an `Intl` formatter, which throws
+ * `RangeError: Invalid time value` — HTTP 500 for a URL anyone can paste into
+ * Slack. `?minPriceCents=2147483648` passed straight through to the API and
+ * overflowed `int4`. Every bound below is the API's own bound, read from the
+ * same constants, so a value that clears this one is not refused downstream
+ * for being out of range.
+ *
+ * `date` is the one deliberate gap: the API additionally refuses a date that
+ * is past everywhere on Earth, which this schema allows through because
+ * "today" is the viewer's local day. The client-only effect in the shell
+ * clears that one and says so.
+ *
+ * See `.claude/rules/web-route-boundaries.md`.
+ */
+const searchStateSchema = z.object({
+  name: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+  category: z.union([z.literal(''), slugSchema]),
+  city: z.string().max(MAX_NAME_LENGTH),
+  state: z.string().max(MAX_NAME_LENGTH),
+  minPriceCents: z.number().int().min(0).max(MAX_PACKAGE_PRICE_CENTS).nullable(),
+  maxPriceCents: z.number().int().min(0).max(MAX_PACKAGE_PRICE_CENTS).nullable(),
+  date: z.union([z.literal(''), calendarDateSchema]),
+  minRating: z.number().min(0).max(REVIEW_RATING_MAX).nullable(),
+  // Tag ids, matching the API's own field. Validating these against nothing
+  // while every neighbour is bounded would leave `?tags=<anything>` the one
+  // param that still reaches the API and comes back as a failed search.
+  tags: z.array(uuidSchema),
+  sort: z.enum(VENDOR_SORT_OPTIONS),
+  page: z.number().int().min(1),
+});
+
+/**
+ * What "no value" looks like, per field — the value a dropped param falls to.
+ *
+ * Must mirror the defaults on `searchParsers` above. A value that disagrees
+ * would clear a param to something the URL layer would then write back out.
+ */
+const SEARCH_STATE_FALLBACKS: SearchState = {
+  name: '',
+  category: '',
+  city: '',
+  state: '',
+  minPriceCents: null,
+  maxPriceCents: null,
+  date: '',
+  minRating: null,
+  tags: [],
+  sort: 'relevance',
+  page: 1,
+};
+
+export type DroppedSearchField = keyof SearchState;
+
+export interface ParsedSearchState {
+  /** Safe to format, compare and query with. Never holds a rejected value. */
+  readonly state: SearchState;
+  /** Which params were rejected, so the screen can say they were cleared. */
+  readonly dropped: readonly DroppedSearchField[];
+}
+
+/**
+ * Validates the URL's params field by field, replacing each rejected one with
+ * its "no value" fallback.
+ *
+ * Field by field rather than whole-object on purpose: one unparseable date
+ * must not throw away the category and city the customer actually asked for.
+ * The question they asked is still a good question.
+ *
+ * The past-date rule is deliberately **not** here. "Today" is the viewer's
+ * local day, which the server rendering this screen cannot know, so it stays
+ * in the client-only effect that already handles it.
+ */
+export function parseSearchState(raw: SearchState): ParsedSearchState {
+  const result = searchStateSchema.safeParse(raw);
+
+  /*
+   * Zod reports one issue per failing field and each issue's path names it, so
+   * one whole-object parse tells us exactly which params to clear. Every issue
+   * here is top-level; a `tags` element failure still reports `tags`.
+   */
+  const dropped: DroppedSearchField[] = result.success
+    ? []
+    : [...new Set(result.error.issues.map((issue) => issue.path[0] as DroppedSearchField))];
+
+  const state: SearchState = { ...raw };
+
+  for (const field of dropped) {
+    // `Object.assign` rather than `state[field] = …`: assigning through a
+    // union-typed key widens the value to the union of every field's type,
+    // which TypeScript refuses. This form keeps `state` narrowed to
+    // `SearchState` without an `any` or a cast.
+    Object.assign(state, { [field]: SEARCH_STATE_FALLBACKS[field] });
+  }
+
+  /*
+   * A range whose floor is above its ceiling is refused by the API as a pair,
+   * so neither value alone is the culprit and both are cleared. Left in, the
+   * screen would render the incoherent `$21,474,836.48 – $10,000+` chip over a
+   * result set the API had refused to produce.
+   *
+   * Neither can already be in `dropped`: a cleared price is `null`, which this
+   * guard excludes.
+   */
+  if (
+    state.minPriceCents !== null &&
+    state.maxPriceCents !== null &&
+    state.minPriceCents > state.maxPriceCents
+  ) {
+    state.minPriceCents = null;
+    state.maxPriceCents = null;
+    dropped.push('minPriceCents', 'maxPriceCents');
+  }
+
+  return { state, dropped };
+}
+
+/** How a cleared param is named to a customer. Never the param's own key. */
+const DROPPED_FIELD_LABELS: Record<DroppedSearchField, string> = {
+  category: 'vendor type',
+  city: 'city',
+  state: 'state',
+  name: 'name',
+  date: 'date',
+  minPriceCents: 'price range',
+  maxPriceCents: 'price range',
+  minRating: 'rating',
+  tags: 'tags',
+  sort: 'sort order',
+  page: 'page',
+};
+
+/**
+ * The line the screen shows when a param was cleared — `null` when none was.
+ *
+ * It says what was dropped and what still holds, matching how an already-past
+ * date is announced today. Silently ignoring a filter the URL asked for would
+ * leave the customer reading a result set that answers a different question.
+ */
+export function clearedParamsLine(dropped: readonly DroppedSearchField[]): string | null {
+  // The common case by far, and the one every render of a well-formed URL
+  // takes: answer it before allocating anything.
+  if (dropped.length === 0) {
+    return null;
+  }
+
+  const labels = [...new Set(dropped.map((field) => DROPPED_FIELD_LABELS[field]))];
+
+  const subject =
+    labels.length === 1
+      ? `That ${labels[0]} isn't one we can use, so it was cleared`
+      : `The ${labels.slice(0, -1).join(', ')} and ${labels.at(-1)} aren't ones we can use, so they were cleared`;
+
+  return `${subject} — the rest of your search still applies.`;
+}
+
 /** The three values the search bar owns. Never rendered as Refine chips. */
 export type SearchQueryValues = Pick<SearchState, 'category' | 'city' | 'date'>;
 
 export interface UseSearchState {
+  /** Already validated: every consumer of this hook gets safe values. */
   state: SearchState;
+  /** Params the URL asked for that could not be used, so the screen can say so. */
+  dropped: readonly DroppedSearchField[];
   /** Applies a patch. Any change but paging returns to page 1. */
   setState: (patch: SearchPatch) => void;
   /** Clears the Refine bar only — the query stays, because it is the question. */
@@ -74,10 +247,24 @@ export interface UseSearchState {
 }
 
 export function useSearchState(): UseSearchState {
-  const [state, setQuery] = useQueryStates(searchParsers, { history: 'push' });
+  const [raw, setQuery] = useQueryStates(searchParsers, { history: 'push' });
+
+  /*
+   * Validated here rather than in the screen, because this hook is the only
+   * way the URL reaches the screen. A component that reads `state` can format
+   * it, compare it and query with it without checking it first — which is the
+   * whole point, since the checking is what nobody remembers to do.
+   *
+   * Memoized on `raw`, which `useQueryStates` keeps stable while the URL is
+   * unchanged. Parsing afresh each render would hand every consumer a new
+   * object identity on renders the URL had nothing to do with — cheap in CPU,
+   * but it makes `state` unusable as an effect dependency or a `memo` prop.
+   */
+  const { state, dropped } = useMemo(() => parseSearchState(raw as SearchState), [raw]);
 
   return {
-    state: state as SearchState,
+    state,
+    dropped,
     setState: (patch) => {
       /*
        * Changing a filter while on page 3 would otherwise ask for the third

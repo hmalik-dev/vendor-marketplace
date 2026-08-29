@@ -32,7 +32,7 @@ export function PortfolioStrip({
   return (
     <section className="mt-5.5 max-w-[680px]">
       <div className="flex items-baseline justify-between gap-4">
-        <h2 className="font-display text-[20px] text-stone-900">Recent work</h2>
+        <h2 className="display-heading text-[20px] text-stone-900">Recent work</h2>
         {items.length > STRIP_COUNT ? (
           <Link
             href={seeAllHref}

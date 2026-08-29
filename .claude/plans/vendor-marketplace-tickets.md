@@ -372,7 +372,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | 15 | Admin Portal + Sentry Integration | P3 | M6 | P1 High | Backlog | — | #12, #14 | `core` `auth` `sentry` | Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` |
 | 64 | Flaky test in `packages/preflight` under parallel Turbo runs | P1 | M1.5 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-28** while gating the #61 env-shape commit. `pnpm test --force` failed `@vendor-marketplace/preflight#test` at **1 failed / 131 passed (132)**; an immediate rerun and `pnpm --filter @vendor-marketplace/preflight test` in isolation both passed **132/132**. The failing test's name was **not captured** — the run was piped through `tail -20`, so only the summary survived. Reproduce with the full log: `pnpm test --force > /tmp/t.log 2>&1` in a loop. Suspect contention, not logic: the suite took **36s** inside the Turbo fan-out against **2.15s** isolated, a 17x stretch that points at a real-clock or filesystem assumption rather than a stable failure. Use `/debug-flaky-test`. Gating on a suite that fails ~1 run in 2 is the actual cost here |
 | **65** | **Vendor profile — the identity row overlaps the cover by 34px, not 16px (reported by the user)** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Reported by the user 2026-08-28**, on `/vendors/june-harlow`: the avatar circle is buried in the cover photo and the business name creeps into the image. **Measured at 1440x900 against frame `03`** — live overlaps the banner by **34px** where the frame overlaps by **16px**, and the name's box starts **11px inside** the image where the frame leaves it **7px clear**: an **18px** error. **Centering is not the defect** — name-mid minus avatar-mid is **+0.15px in both**; the whole row simply rides 18px too high, which is what makes the circle read as misaligned. **Cause:** frame `03` puts `padding-top: 18px` on the wrapper between the banner and the identity row and *then* pulls the row up `-34px` (net **-16**); [profile-header.tsx:80](apps/web/src/components/vendors/profile/profile-header.tsx) copied the `-34px` without the 18px. **Fix verified by injection:** `pt-[18px]` on that container reproduces the frame exactly — `overlap 16 · name 7px clear · centering 0.15`. **Why #53 and #56 missed it → see the ticket detail** |
-| **66** | **Unvalidated URL input crashes six ways into a 500** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` | **Adversarial sweep 2026-08-28.** 7 URLs anyone can paste return 500. Rule added: `.claude/rules/web-route-boundaries.md` |
+| **66** | **Unvalidated URL input crashes six ways into a 500** | **P1** | **M3** | **P0 Critical** | **In Progress** | `lane/66` | **None** | `core` | **Adversarial sweep 2026-08-28.** 7 URLs anyone can paste return 500. Rule added: `.claude/rules/web-route-boundaries.md` |
 | **67** | **`POST /booking-requests` has no idempotency — 3 clicks created 3 bookings** | **P1** | **M3** | **P0 Critical** | **In Progress** | `worktree-67` | **None** | `core` `auth` | **Adversarial sweep 2026-08-28.** Server-side; UI guard only covers a physical double-click. **Implemented 2026-08-29 on `worktree-67`.** Two unique partial indexes on `booking_requests` (`booking_requests_live_package_key`, `booking_requests_live_custom_key`), split because `package_id` is nullable and Postgres treats NULLs as distinct — one index would still admit two identical *custom* requests. Predicated on the **live** statuses, `pending` and `quoted`, not on `pending` alone: a vendor who quotes a custom request moves it out of `pending` without settling it, and the customer resubmitting would open a second thread for one date (found by `diff-reviewer`). `LIVE_BOOKING_REQUEST_STATUSES` is derived from `BOOKING_REQUEST_TRANSITIONS` so it cannot drift, and a test reads `pg_indexes` to hold the SQL predicate to it. `insertRequest` uses a **targeted** `ON CONFLICT DO NOTHING`; the service re-reads the natural key and returns the existing request with **200 and the original id**. All three create writes now run in one transaction with the live push after commit — without it a row that committed before a later write failed would be found by every retry, which skips the side effects by design, so the vendor would never be told (found by `security-auditor`; regression test forces the failure with a Postgres trigger, no mocks). Migration `0008` is a hand-written `--custom` data repair that clears pre-existing duplicates so `0009` can build the indexes; `0009` is `pnpm db:generate` output, unedited. Both applied cleanly to a **clone of the real dev database** (921 rows). Browser-verified end to end at 1440x900 on the final code with no shim: 9/9 items, bursts of 6 and 8 each yielding exactly one 201, 15 requests to 15 notifications 1:1, zero console errors. **Acceptance item 4 was already satisfied** — the dev database holds zero duplicate live requests; the ticket's prose was stale. The surviving junk row is `2999-12-31` (already `declined`, not `9999-12-31`) and belongs to #77 |
 | **68** | **An accepted, priced booking dead-ends — no detail, quote approval or checkout** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **#9, #10** | `core` `auth` `stripe` | Blocks parity on frames `05`, `06`, `21` — no live screen to compare |
 | **69** | **Filter popovers unreachable below 1440 and stay open after use** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Languages 719px tall, no `max-height`; clicks time out at 1024 and 390 |
@@ -380,7 +380,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **71** | **Long tokens are never broken — one pasted link overflows its bubble** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Invisible to the page-level overflow assertion; an ancestor clips it |
 | **72** | **Error and empty-state copy violates `40-states.md` in five places** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Raw API strings reaching users; an empty state names a filter that does not exist |
 | **73** | **The six accessibility laws are violated and nothing was checking them** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Sixth `Access` parity axis added 2026-08-28; card focus ring is 100% clipped |
-| **74** | **Adopt the frames' line-height — the app's type scale contradicts every frame** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **User ruling 2026-08-28: the frames win.** Blocks a clean parity verdict on every screen |
+| **74** | **Adopt the frames' line-height — the app's type scale contradicts every frame** | **P1** | **M3** | **P1 High** | **In Progress** | `worktree-74` | **None** | `core` | **User ruling 2026-08-28: the frames win.** **Criteria half-met — read before closing.** Every `--text-*--line-height` is now `normal`, `display-xl` corrected 1.08→1.04, `--leading-prose` added as the named exception. Browser-measured at 1440x900: **2 of the 5 acceptance controls closed** (landing pill 33→29.00 = frame; `Request booking` line-height component closed exactly, +2.00 residual is a stray transparent border). **3 did not** — category card +6.25, search chip +3.75, profile chip +3.25. Cause is **#235**, not this change: those controls are sized by arbitrary `text-[Npx]`, which emits no line-height and inherits Preflight's 1.5. Unblocks #198 and the 59 tickets gated on this one |
 | **75** | **Landing, Search and Vendor profile fail parity on 35 counts** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **#74** | `core` | Parity batch 1. Full `expected` vs `observed` tables in the sweep ledger |
 | **76** | **Sign-in redirect discards the destination** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `auth` | Drops the user at the moment of intent; fix must include an open-redirect test |
 | **77** | **Event date has no upper bound — a booking for the year 9999 goes through** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Lower bound is handled well, which makes this an oversight |
@@ -471,7 +471,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **162** | **11 Availability — Rail micro-labels render in Instrument Serif** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-39`, axis **Font** |
 | **163** | **11 Availability — Two instructions 40px apart contradict each other** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-40`, axis **Text** |
 | **164** | **11 Availability — The page has no `<h1>`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-41`, axis **Access** |
-| **165** | **One `globals.css` rule breaks the font axis on every screen in the product** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Root cause** of #89, #109, #119, #121 and every unswept frame. Highest-leverage fix in the sweep |
+| **165** | **One `globals.css` rule breaks the font axis on every screen in the product** | **P1** | **M3** | **P1 High** | **In Progress** | `worktree-165` | **None** | `core` | **Root cause** of #131, #150, #160, #161, #162 and every unswept frame (the row previously named #89/#109/#119/#121 — wrong numbers, corrected 2026-08-29). Highest-leverage fix in the sweep |
 | **166** | **Availability calendar — every cell state carries a shape, not just a fill** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order A1.** Booked/pending/blocked were within ~2 points of luminance — unreadable in greyscale or with CVD. Adds Completed + Today. Resolves #164 |
 | **167** | **Build the shared dropdown component — nothing rolls its own** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order A2** + `42-dropdowns.md` + frames `28`. **Supersedes #69.** Closes the unreachable-panel and stays-open findings |
 | **168** | **Replace the page loader with the mark's two converging rings** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | **Change order B3.** No wordmark — it renders before fonts are guaranteed |
@@ -526,6 +526,13 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **227** | **Unsaved profile edits are discarded silently** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **228** | **A newly onboarded vendor's public storefront shows placeholder copy** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **229** | **Messaging: one thread per pair, and new messages raise no notification in either direction** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **230** | **Avatar initials render Instrument Serif below the 16px floor at three of five sizes** | **P1** | **M3** | **P2 Medium** | **Blocked — needs a human** | - | **None** | `core` | Found 2026-08-29 implementing #165. Two parts of the design contract contradict each other; needs a ruling, not a guess |
+| **231** | **`pnpm dev` inside a lane binds the web app to the lane's API port** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 running lane 165. `next dev` reads `PORT`, which `lane:up` sets to the API port, so the API dies with EADDRINUSE |
+| **232** | **Every lane worktree gets `node_modules` as a symlink to the main checkout** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 by lanes 74 and 165 independently. A lane's `pnpm install` writes into the tree its peers are reading — the one thing the orchestration policy names as forbidden |
+| **233** | **The E2E vendor account has no vendor profile, so four vendor screens cannot be browser-verified** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 verifying #165. Dashboard, portfolio, packages and availability all redirect to the storefront editor |
+| **234** | **Clerk's own sign-in card reads `vendor-marketplace` to the user** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` `auth` | Found 2026-08-29 verifying #165. The one user-facing string that says the repo name instead of the brand. Dashboard setting, not code |
+| **236** | **The web search boundary re-declares the API's query schema instead of deriving from it** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `searchStateSchema` in `apps/web/src/components/search/search-state.ts` hand-copies every bound in `vendorSearchQuerySchema`. The constants are shared so values cannot disagree, but the composition can — `tags` was already more permissive on the client until #66 caught it. Export a field map from `packages/shared` that both build from. **Deliberately not done in #66:** that file was owned by a concurrent lane, which required additive changes only |
+| **237** | **`page` is bounded below but not above, on both sides of the boundary** | **P1** | **M3** | **P3 Low** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `paginationQuerySchema` and `vendorSearchQuerySchema` both cap `pageSize` and not `page`. Not a 500 — Zod's `.int()` caps at 2^53−1 and the offset stays inside `bigint` — but `?page=99999999` still makes Postgres sort the whole filtered set. Same class as #66's price cap. `tags` likewise has no array-length bound on either side |
 | **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
 | **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
 | **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. **Reconciliation 2026-08-29 — filed without reading `D10` or the plan.** The runtime split (web on Vercel, API on **Railway**) is decided in `vendor-marketplace-decisions.md` D10, and the release pipeline is already ticketed as **#20 Deploy Pipeline** (P0, blocked by #18, #19, #30). Treat this row as the git/branch-protection slice of #20, not a new ticket. **Done 2026-08-29.** Vercel Production Branch flipped `main` -> `production`, confirmed by reading `link.productionBranch: production` from the API. `production` branch exists and is protected alongside `main` (no deletions, no force pushes, linear history, CI required). `main` now produces previews; the live site advances only on a deliberate fast-forward. |
@@ -534,6 +541,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **205** | **[PLATFORM] Ephemeral Neon branch per pull request** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / environments.** Filed 2026-08-28. Wire Neon's Vercel integration or `neondatabase/create-branch-action` so each PR gets a copy-on-write branch off `staging`, deleted on merge. Gives every PR preview a full-fidelity database to run its migrations against in isolation — the capability self-managed Postgres cannot offer, and the strongest reason this stack is on Neon. Watch the **10 branches/project** free-plan ceiling; set a TTL so abandoned PRs do not hold slots **Human gate: an OAuth install.** Authorising Neon against the Vercel or GitHub account is an interactive consent screen. Once installed, configuration is agent-executable. **Done 2026-08-28:** `.github/workflows/preview-branch.yml` added — creates a branch off `staging` per PR, applies that PR's migrations to it, deletes on close, with a 7-day `expires_at` as a backstop against the 10-branch ceiling. Both Neon actions are **pinned to commit SHAs**, not tags: each receives `NEON_API_KEY`, so a retagged release would hand over a project-wide credential. Gated behind a repository variable so it stays inert. **Outstanding:** add the `NEON_API_KEY` secret and set `NEON_PREVIEW_BRANCHES=on`. **Done 2026-08-29 — proven end to end on PR #1, not asserted.** Project-scoped Neon key (id 3294733, Editor on this project only) piped straight into `gh secret set` so the value never touched a transcript; `NEON_PREVIEW_BRANCHES=on`. The first real run **failed** with `ERR_MODULE_NOT_FOUND` — `migrate.ts` imports the shared package's build output and the workflow never built it; fixed in 05c2c32, which also repaired the same defect in the CI jobs. Re-run: branch `preview/pr-1` created off `staging` (`creation_source: github`, 7-day TTL), `Migrations applied.`, and deleted on PR close. Both Neon actions pinned to commit SHAs because each receives `NEON_API_KEY`. |
 | **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P3 Low** | **Deferred — needs a human** | — | **Launch prep — not current work** | `core` | **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. **Reconciliation 2026-08-29:** overlaps **#19**, which already covers external-account provisioning and is `Deferred — needs a human`. The plan's launch checklist also requires the pooled string on Railway and the unpooled one on Railway *and* GitHub Actions. **Deferred to launch prep 2026-08-29 (user ruling).** Free is the correct plan while there is no real data — usage is **8.9 of 100 CU-hours**, 34 MB of 512 MB, 3 of 10 branches. Nothing here blocks development. **The checklist moved to `docs/pre-launch.md` §3.2**, which is where launch-gated work belongs; this row is a pointer, not a queue item. Do not re-surface it as active work. |
 | **207** | **`nearby-availability` computes "today" in two timezones — the suite fails every evening** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Found 2026-08-28** running the gate for #200; **pre-existing**, reproduced with that ticket's source changes stashed. `never suggests a past date when the wanted date is today` asserts `expected '2026-08-28' to be '2026-08-30'`: the test helper `dayFromToday` and the route disagree about which day it is once local time passes UTC midnight (failure observed at 22:26 local = 05:26 UTC the next day). Violates the deterministic-test law — the suite reads the real clock, so it is green all morning and red all evening. Fix by injecting a fixed clock rather than widening the assertion, and check `dayFromToday` against every other date-anchored suite. Use `/debug-flaky-test`. |
+| **235** | **The app's inherited line-height is 1.5, so every arbitrary `text-[Npx]` renders loose against its frame** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#165** | `core` | **Found by #74's browser measurement 2026-08-29, with compiled-CSS evidence.** #74 set every `--text-*--line-height` to `normal`, which only reaches elements sized by a named scale step. 96 sites across 40 files use an arbitrary `text-[Npx]`, which emits `font-size` and nothing else, so they inherit Preflight's `html{line-height:1.5}`. **Three of #74's five acceptance controls still fail because of this.** Owns the one-line fix #165 declined to absorb. Work before #198 |
 
 Rows are ordered by build sequence, not by ticket number. **207 rows — 50 Done, 1 In Progress, 150 Backlog, 4 Deferred, 2 Blocked.** Recounted 2026-08-28; the previous "56 rows — 25 Done" line had been stale for many batches.
 
@@ -5277,7 +5285,7 @@ the same blind spot returns with the next revision.
 
 ### #66: Unvalidated URL input crashes six ways into a 500
 
-**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 Found by adversarial sweep 2026-08-28, passes 1 and 2. **Every one of these is a URL a
@@ -5579,7 +5587,7 @@ was added 2026-08-28; these are what it and the sweep found first.
 
 ### #74: Adopt the frames' line-height — the app's type scale contradicts every frame
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 **Ruled by the user 2026-08-28: follow whichever matches the HTML screens most accurately.
@@ -5615,6 +5623,43 @@ verdict on **every screen in the product**.
 **Tests (required):**
 
 - [ ] A parity assertion comparing the rendered height of `.btnP`, `.pill`, `.lbl`, `.inp` and the card against the same class rendered from `Orla - Screens.dc.html`. Derive the expectation from the frame at test time rather than hard-coding pixels, so the test cannot drift from the contract.
+
+**Outcome 2026-08-29 — delivered, criteria half-met. Do not close as fully met.**
+
+Shipped: every `--text-*--line-height` is `normal`, matching the frames; `display-xl`
+corrected 1.08 → 1.04; `--leading-prose: 1.6` added as the one named exception, with
+`.tn`'s 1.5 left as Tailwind's existing `leading-normal` rather than given a second
+name; 21 long-form prose sites given an explicit measure; all 16 arbitrary
+`leading-[1.6]`/`leading-[1.5]` literals normalised.
+
+Browser-measured at 1440x900, frame vs live, `getBoundingClientRect`:
+
+| Control | Frame | Live | Verdict |
+| --- | --- | --- | --- |
+| Landing pill | 29.00 | 29.00 | closed (was 33) |
+| `Request booking` `.btnP` | 42.50 | 44.50 | line-height closed exactly; +2.00 is a transparent border the frame lacks |
+| Category card | 157.50 | 163.75 | **not closed, +6.25** |
+| Search refine chip | 31.00 | 34.75 | **not closed, +3.75** |
+| Vendor-profile chip | 24.00 | 27.25 | **not closed, +3.25** |
+
+**Every control that closed uses a named scale step; every one that did not uses an
+arbitrary `text-[Npx]`,** which emits `font-size` alone and inherits Preflight's
+`html{line-height:1.5}`. That is **#235**, filed with the compiled-CSS evidence, and
+it is the remainder of this ticket's third acceptance bullet. The hero was confirmed
+at exactly 1.040 and no prose collapsed — all measured at 1.600.
+
+**The required test was substituted, deliberately.** A rendered-height assertion is
+not reachable in CI: `ci.yml` installs no browsers, there is no Playwright runner in
+the repo, and the web suite is jsdom, which performs no layout. `apps/web/src/app/
+type-scale-parity.test.ts` instead derives every expectation from the frame file at
+test time — a stronger guard against design re-import drift than a pixel snapshot,
+but it does **not** discharge the acceptance bullet, which is why the browser
+measurement above is recorded rather than asserted. #235 should carry the
+call-site guard (`text-[<n>px]` must ship with a `leading-*`), which fails on 96
+sites today and so cannot land before the fix.
+
+**Frame `02 Search` was not parity-checked** — a lane CORS misconfiguration blocked
+the result grid. See `.claude/plans/lane-infrastructure-findings.md`.
 
 ---
 
@@ -8350,7 +8395,7 @@ Parity sweep 2026-08-28, finding `PB2-41`. Frame **`11 Availability`** vs `/vend
 
 ### #165: One `globals.css` rule breaks the font axis on every screen in the product
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 Found by parity batch 2, 2026-08-28. `apps/web/src/app/globals.css:162-166`:
@@ -8372,10 +8417,21 @@ every other screen in the product:
    only because it carries an explicit `tracking-[-.01em]` — which is the workaround this
    rule forces on every heading that wants the correct value.
 
-**This is the highest-leverage fix in the sweep.** It is the direct cause of #89 (dashboard
-rail label), #109 (tag group headings), #119 (availability title tracking) and #121
-(availability rail micro-labels), and it will be the cause of equivalent failures on every
-frame not yet swept.
+**This is the highest-leverage fix in the sweep.**
+
+**Correction, 2026-08-29, made while implementing this ticket.** The four dependent tickets
+were originally written here as #89, #109, #119 and #121. Those numbers are wrong — they are
+a hero focus ring, chip radii, sidebar border-box footprints and icon hit areas, none of
+which are on the font axis. The tickets this one actually causes, matched by their own
+descriptions against the board, are:
+
+- **#131** — 08 Vendor dashboard: rail label renders in Instrument Serif at 11px
+- **#150** — 09 Vendor profile editor: tag group headings render in Instrument Serif at 12.5px
+- **#160** — 11 Availability: page title carries `-0.65px` tracking against the frame's `-0.26px`
+- **#161** — 11 Availability: month names carry negative tracking the frame does not
+- **#162** — 11 Availability: rail micro-labels render in Instrument Serif
+
+It will be the cause of equivalent failures on every frame not yet swept.
 
 The defect is using element type as a styling hook. Heading *level* is document structure;
 serif display type is a *role*. A micro-label that is semantically an `h2` must not inherit
@@ -8386,13 +8442,47 @@ display type from its tag.
 - [ ] The blanket `h1, h2, h3` rule is removed; display type is applied by an explicit class or token, not by element type
 - [ ] No text node below 16px renders in Instrument Serif anywhere in the app
 - [ ] Headings compute the frames' `letter-spacing` without needing a per-element `tracking-[…]` override
-- [ ] The four dependent tickets above are re-measured after this lands, and any that now pass are closed as fixed-by-#165
+- [ ] The five dependent tickets above are re-measured after this lands, and any that now pass are closed as fixed-by-#165
 - [ ] Every screen already marked PASS in the sweep ledger is re-checked on the font axis
 
 **Tests (required):**
 
 - [ ] A test walking the rendered tree and asserting **no** element with `font-family` resolving to Instrument Serif has a `font-size` below 16px. This is a whole-class guard, not a per-element assertion, and it is what stops the next micro-label-as-heading from reintroducing it.
 - [ ] A parity assertion that heading `letter-spacing` matches the frame without a local override.
+
+**Implementation notes, 2026-08-29 (branch `worktree-165`).**
+
+The hook is `.display-heading` in `globals.css`, in `@layer components` so a `tracking-[…]`
+utility still beats it — that is what keeps the landing hero at `-.02em` and the error
+screens at `-.015em` without an `!important`. It carries the family and the tracking and
+leaves the size to the type scale, because **the frames apply `class="h2"` at 19, 20, 21, 22,
+23 and 26px** and hold `-.01em` at all six, while eight inline serif spans sit at exactly 26px
+with no tracking at all. Tracking follows the role, not the size step — which is also why
+`--text-*--letter-spacing` companions must **not** be added to the scale in #74/#198.
+
+A second defect was found and fixed in the same pass: `--font-heading: var(--font-display)`
+in `@theme inline` was a second name for the same face, and shadcn's `DialogTitle` used it —
+so **every dialog in the product rendered Instrument Serif at 13.5px**, below the floor and
+invisible to any guard looking for `font-display`. Alias deleted, `DialogTitle` is sans.
+
+**Measured in the browser at 1440x900**, ten screens, both auth states, by computed style
+rather than by eye:
+
+- **No element renders Instrument Serif below 16px** on any screen reached, except the 20
+  avatar-initial spans at 14.28px — filed as **#230**, which needs a design ruling.
+- Every `.display-heading` title computes exactly `-0.01em` (`-0.26px` at 26px, `-0.22px` at
+  22px, `-0.2px` at 20px). The hero computes `-0.02em`, the 404 `-0.015em`.
+- **Nothing computes `-0.025em` anywhere**, confirmed by walking the whole CSSOM, not just
+  the elements.
+- No horizontal overflow, no clipping, no new console errors.
+
+**Four vendor screens could not be measured** — dashboard, portfolio, packages and
+availability all redirect because the E2E vendor account has no vendor profile. Filed as
+**#233**. Those four surfaces are therefore **unreached, not verified**, and the availability
+rail micro-labels named in this ticket still want a look once #233 lands.
+
+Also filed from this pass: **#231**, **#232** (lane infrastructure) and **#234** (Clerk's card
+shows the repo name to users).
 
 ---
 
@@ -9909,6 +9999,367 @@ onboarding from nothing and the quote path. **Where:** `/messages`, both roles.
 - [ ] A test asserting an inbound message increments the recipient's notification count.
 
 ---
+### #235: The app's inherited line-height is 1.5, so every arbitrary `text-[Npx]` renders loose
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #165 (it owns `globals.css` this run; the file frees up when it merges)
+
+Found by #74's browser measurement, 2026-08-29. Filed at #165's request after it
+declined to absorb the fix — correctly, because the change needs a browser pass
+over every screen and #165's acceptance criteria say nothing about leading.
+
+**The mechanism, with compiled output rather than assertion.** #74 set every
+`--text-*--line-height` to `normal` to match the frames. That reaches an element
+only when its size comes from a **named scale step**, because Tailwind emits the
+size and the line-height on the same rule. An element sized with an **arbitrary**
+utility gets font-size and nothing else:
+
+```
+.text-\[10\.5px\]{font-size:10.5px}
+```
+
+So it inherits. `apps/web/node_modules/tailwindcss/preflight.css:28-30` sets
+`html, :host { line-height: 1.5 }`, and `apps/web/src/app/layout.tsx:95-99` sets
+no line-height on `<html>` or `<body>`. **96 arbitrary `text-[Npx]` occurrences
+across 40 files therefore render at 1.5 where the frames draw `normal`** — led by
+`text-[10.5px]` (20 sites) and `text-[12.5px]` (16).
+
+**Measured consequence at 1440x900** (frame vs live, `getBoundingClientRect`):
+
+| Control | Frame | Live | Delta |
+| --- | --- | --- | --- |
+| Category card (`01`) | 157.50 | 163.75 | **+6.25** |
+| — its `.sh` title, `text-[17px]` | 22.50 | 25.50 | +3.00 |
+| — its description, `text-[11.5px]` | 14.00 | 17.25 | +3.25 |
+| Search refine chip (`02`) | 31.00 | 34.75 | **+3.75** |
+| Vendor-profile chip (`03`) | 24.00 | 27.25 | **+3.25** |
+| `.lbl` micro-label, `text-[10.5px]` | 12.50 | 15.75 | +3.25 |
+| Rail price, `text-[36px]` | 46.50 | 54.00 | +7.50 |
+
+Every control that closed under #74 uses a scale step; every one that did not uses
+`text-[Npx]`. **These are three of #74's five acceptance controls**, which is why
+#74 shipped with its criteria recorded as half-met rather than claimed.
+
+The serif group is the highest-value target: `.h2` and `.sh` set no line-height in
+the frames, and the sites carrying `text-[26px]`, `[22px]`, `[20px]` and `[19px]`
+draw a ~39px line box against the frame's ~30px.
+
+**Acceptance:**
+
+- [ ] The inherited default agrees with the frames — one declaration,
+      `html { line-height: normal }` in `globals.css`'s base layer, rather than a
+      `leading-*` added to each of the 96 call sites. The per-call-site route
+      cannot close the class: an element with **no** text utility still inherits
+- [ ] The five controls #74 names all match their frame at 1440x900
+- [ ] Any prose that regresses is given an explicit measure (`leading-prose`,
+      `leading-normal`) rather than the default being widened back
+- [ ] Every screen is driven in a browser afterwards — this changes computed
+      leading product-wide, and #74's pass could not reach the four vendor
+      surfaces blocked by #233
+
+**Tests (required):**
+
+- [ ] A test asserting the app sets an inherited line-height that matches the
+      frames', so a future Tailwind upgrade reintroducing `1.5` fails here.
+- [ ] A guard asserting no `className` carrying `text-[<n>px]` ships without an
+      accompanying `leading-*`. It fails on 96 sites today, so it lands with the
+      fix, not before.
+
+**Sequencing.** Work **before #198**. Five sites use `text-[26px]` where
+`--text-display-md: 26px` already exists; collapsing them to the token is only
+safe once the inherited default is `normal`, otherwise it moves leading away from
+the frame rather than toward it.
+
+---
+
+
+
+### #230: Avatar initials render Instrument Serif below the 16px floor at three of five sizes
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Blocked — needs a human
+**Capabilities:** `core`
+**Blocked by:** None — blocked on a design ruling, not on code
+
+Found 2026-08-29 while implementing #165, which removed the blanket heading rule and added a
+whole-class guard for the serif floor. The guard cannot cover this one, because the size is
+not stated in a class.
+
+`apps/web/src/components/ui/avatar.tsx:120` sizes the initials fallback from the avatar
+diameter: `fontSize: ${pixels * 0.42}px`. Against `AVATAR_SIZES` that resolves to
+
+| Size | Diameter | Initials | Verdict |
+| ---- | -------- | -------- | ------- |
+| `xs` | 30px | **12.6px** | below the floor |
+| `sm` | 34px | **14.3px** | below the floor |
+| `md` | 38px | **16.0px** | exactly on it |
+| `lg` | 64px | 26.9px | fine |
+| `xl` | 82px | 34.4px | fine |
+
+`sm` is the default, so most avatars in the product are affected.
+
+**This is a conflict inside the design contract, which is why it is not simply fixed.**
+
+- `design/design-plan/01-foundations.md` states of Instrument Serif: **"Never below 16px."**
+- `design/design-plan/03-components.md` § Avatars states: **"Initials fallback: Instrument
+  Serif on `clay-100` (`clay-600` text) or `sage-100` (`sage-600`) — alternate by hash so a
+  list doesn't read as one colour. Sizes: 30 / 34 / 38 / 64 / 80."**
+
+Both cannot hold. Deciding one way silently would either put a rule in the foundations that
+the component vocabulary ignores, or change the look of every avatar in the product. Per
+`.claude/rules/web-design-parity.md`, where the frames and the plan disagree the frame wins —
+but here the disagreement is between two plan files, and the frames draw initials without
+stating a family, so they do not settle it.
+
+**The ruling needed, one of:**
+
+1. **Avatar initials are exempt from the floor.** Record the exemption in `01-foundations.md`
+   next to the rule, so the next reader does not re-file this. `#165`'s guard already carries
+   `avatar.tsx` in `SIZED_OUTSIDE_THE_CLASS_SYSTEM`; that list becomes the documented
+   exemption rather than a gap.
+2. **The floor wins.** Initials go to Instrument Sans below 16px — a visible change to every
+   `xs` and `sm` avatar, and `03-components.md` is corrected.
+3. **The ratio changes.** Raise `0.42` so `xs` clears 16px (0.54 would), which changes the
+   optical weight of every avatar and needs a parity pass of its own.
+
+**Tests (required, once ruled):** whichever option lands, assert it against `AVATAR_SIZES` so
+adding a sixth size cannot reintroduce the problem — the defect here is a ratio applied to a
+scale, not one bad value.
+
+---
+
+### #231: `pnpm dev` inside a lane binds the web app to the lane's API port
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 bringing up lane 165. `pnpm lane:up <n>` writes `.env.lane` with
+
+```
+PORT=4010
+WEB_PORT=3010
+```
+
+`PORT` is the API's port. But `next dev` reads `PORT` too, and nothing reads `WEB_PORT` — so
+`pnpm lane:exec 165 -- pnpm dev` starts **the web app on 4010** and the API then dies with
+`listen EADDRINUSE: address already in use 0.0.0.0:4010`. Observed exactly that; worked
+around by starting the two servers separately and passing `next dev --port 3010`.
+
+This defeats the purpose of the lane allocator. `pnpm lane:up` prints
+`Run everything through: pnpm lane:exec <ticket> -- <command>` and the documented next step is
+`pnpm dev`, so the first thing every lane is told to do is the thing that breaks it. The
+failure is also quiet in the wrong way: the web app comes up and answers, so a browser pass
+against `localhost:3010` gets connection-refused while `4010` serves the web app, and the
+obvious reading is "my change broke the app".
+
+**Fix:** have `apps/web` take its port from the lane rather than from the ambient `PORT` —
+either `"dev": "next dev --port ${WEB_PORT:-3000}"`, or drop `WEB_PORT` and let `lane:exec`
+set `PORT` per package. The second is cleaner but needs `laneEnvFor` to know which package it
+is spawning.
+
+**Two smaller defects found alongside it, same session, same file territory:**
+
+- **`laneUp` short-circuits on a manifest alone.** `readManifest` returning a row makes it
+  return early, so a lane whose manifest exists but whose `.env.lane`, `node_modules` and
+  database do not is reported as `✓ Lane up` and then fails on the next command with
+  `No .env.lane`. It should verify the artefacts it claims to have created, not just the
+  manifest. Recovering needed a `lane:down` followed by `lane:up`.
+- **`pnpm lane:up` requires `DATABASE_URL` in the ambient environment** and does not read the
+  repository's own `.env`, so it exits 1 with "DATABASE_URL is not set" in a shell that has
+  not sourced it — while every other command in the repo works fine. It should load the root
+  `.env` the way the apps do.
+- **The lane's API rejects the lane's own web origin, so every client-side fetch fails.**
+  `.env.lane` sets `PORT` and `NEXT_PUBLIC_API_URL` but not the API's allowed origin, which
+  stays at `http://localhost:3000`. Measured on lane 165:
+
+  ```
+  Origin: http://localhost:3010 → 200, no access-control-allow-origin header
+  Origin: http://localhost:3000 → 200, access-control-allow-origin: http://localhost:3000
+  ```
+
+  In the browser this means `GET /vendors?...` fails with `net::ERR_FAILED`, `/notifications`
+  fails, and the `/events/stream` SSE fails, on every signed-in screen of every lane. Search
+  renders its error boundary. **This is the most damaging of the four**, because a browser
+  pass in a lane sees a broken app and has to work out that the lane is broken rather than
+  the ticket. `lane:up` must write the web origin into the lane env too.
+
+**Tests (required).** The current `lane.test.ts` asserts the **manifest's contents** — the
+lane's *intent*. Nothing asserts the lane's *reality*, which is exactly why this passed
+review. So the test that matters is the reality one (lane 74's framing, and it is the right
+one): after `lane:up`, something is actually listening on both `manifest.webPort` and
+`manifest.apiPort`. Add alongside it a test that `laneUp` re-creates a lane whose `.env.lane`
+is missing rather than reporting success from the manifest alone.
+
+---
+
+### #232: Every lane worktree gets `node_modules` as a symlink to the main checkout
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 by lanes 74 and 165 independently, on the same fleet run. All four lane
+worktrees were created with:
+
+```
+$ ls -ld .claude/worktrees/<id>/node_modules
+lrwxr-xr-x  node_modules -> /Users/humza/Documents/vendor-marketplace/node_modules
+```
+
+**This is the one thing `~/.claude/orchestration-policy.md` names as forbidden:** "Do not
+symlink `node_modules` between lanes. A symlinked tree is shared mutable state, and the one
+command that repairs a lane's resolution writes through it into every other lane." A lane
+running `pnpm install` prints `Recreating /Users/humza/.../vendor-marketplace/node_modules`
+and only that path's mtime moves — so a lane repairing itself mutates what three peers are
+reading mid-run.
+
+It is also the root cause under several of the symptoms filed separately. Lane 67 fixed two
+of them — the `.gitignore` trailing slash (`node_modules/` matches a directory, and a symlink
+to a directory is not one, so `git status` showed `?? node_modules` and the link was
+stageable) and a missing `CI=true`. Both are real fixes, and neither stops a lane's install
+from writing into its peers.
+
+Lane 165 worked around it locally by deleting the link and running a real `pnpm install` in
+the worktree (7.1s, fully content-addressed from the store, so the cost of doing this
+properly is negligible).
+
+**Fix:** whatever creates the worktrees should let each one install its own `node_modules`,
+or `pnpm lane:up` should replace an inherited symlink with a real install before it does
+anything else. The store is content-addressed, so per-lane installs are cheap.
+
+**Tests (required):** assert that a lane worktree's `node_modules` is a directory and not a
+symlink — `lstat` on it, not `stat`, since `stat` follows the link and reports a directory
+either way. That distinction is why this was invisible.
+
+---
+
+### #233: The E2E vendor account has no vendor profile, so four vendor screens cannot be browser-verified
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 running the browser gate for #165.
+
+Signed in with `.auth/vendor.json`, all four of these return HTTP 200 but land on
+`/vendor/profile/edit`:
+
+- `/vendor/dashboard`
+- `/vendor/portfolio`
+- `/vendor/packages`
+- `/vendor/availability`
+
+`GET /vendor/profile` answers **404**, so `getOwnVendorProfile()` returns `null` and
+`apps/web/src/app/vendor/dashboard/page.tsx:37` redirects. Confirmed at the DOM level rather
+than inferred: every field in the storefront editor is empty — `0 / 80`, `0 / 1200`,
+`0 of 5 chosen`.
+
+`pnpm db:seed:marketing` seeds 16 vendors, but none of them is tied to the E2E vendor's Clerk
+id, so the account that browser verification signs in with is the one account with no
+storefront.
+
+**Why this matters more than it looks.** It is not a cosmetic fixture gap — it silently
+removes four of the product's five vendor surfaces from every browser pass, on every ticket.
+The availability rail micro-labels, the vendor dashboard rail label, and the portfolio and
+package confirmation dialogs could not be measured for #165 for exactly this reason, and a
+less careful pass would have reported them as clean rather than as unreached.
+
+**Fix:** seed a vendor profile (with packages, portfolio items and calendar dates) for the
+E2E vendor's Clerk id as part of `db:seed:marketing`, reading the id from `.env.e2e.local` —
+never from a literal in the repo.
+
+**Tests (required):** a check that the E2E vendor id resolves to a vendor profile after
+seeding. Better as a `pnpm preflight` check than a unit test — the same class as the existing
+"Demo data present" check, which passes today while the account that matters has nothing.
+
+---
+
+### #234: Clerk's own sign-in card reads `vendor-marketplace` to the user
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog
+**Capabilities:** `core` `auth`
+**Blocked by:** None
+
+Found 2026-08-29 running the browser gate for #165. On `/sign-in`, next to our own branded
+`h1`, Clerk renders its own card heading:
+
+> **Sign in to vendor-marketplace**
+
+Project law is that infrastructure and packages take the repo name, and **anything a user
+reads says Orla, from `BRAND_NAME`**. This is the one place the repo name reaches a user, and
+`brand-literals.test.ts` cannot see it because the string is not in this repository — it is
+the Clerk application name, served by Clerk.
+
+**Fix:** rename the Clerk application in the Clerk dashboard. **Human gate:** it is a setting
+in an external account, not a code change.
+
+Worth checking the same setting for every other place Clerk uses the application name —
+transactional email subjects and sender names most of all, since those reach a user outside
+the product entirely.
+
+---
+### #236: The web search boundary re-declares the API's query schema instead of deriving from it
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed from the #66 review, 2026-08-29. `searchStateSchema` in
+`apps/web/src/components/search/search-state.ts` hand-copies every field rule in
+`vendorSearchQuerySchema` (`packages/shared/src/schemas/index.ts`). The bounds
+read from the same constants, so the two cannot disagree on a *value* — but they
+can disagree on *composition*, and they already had: the client declared
+`tags: z.array(z.string())` against the API's `z.array(uuidSchema)`, so the one
+param with no bound was the one that still reached the API. #66 fixed that
+instance; nothing stops the next one.
+
+**Deliberately not done in #66.** `packages/shared/src/schemas/index.ts` was owned
+by a concurrent lane for the duration, which required changes there to stay
+additive and confined to a single hunk. Extracting a field map rewrites the file's
+core.
+
+**Acceptance:**
+
+- [ ] `packages/shared` exports the per-field shapes `vendorSearchQuerySchema` is built from
+- [ ] The web boundary derives its fields from that map rather than restating them
+- [ ] The two deliberate client-side differences survive and are commented: `''`/`null` for absent values instead of `undefined`, and no universally-past-date refusal (that judgement is the viewer's local day, so it stays in the client effect)
+
+**Tests (required):**
+
+- [ ] A test asserting a value the client boundary accepts is not rejected by `vendorSearchQuerySchema` for being out of range, driven over every field rather than one example.
+
+---
+
+### #237: `page` is bounded below but not above, on both sides of the boundary
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed from the #66 review, 2026-08-29. `paginationQuerySchema` and
+`vendorSearchQuerySchema` both cap `pageSize` at `MAX_PAGE_SIZE` and leave `page`
+at `.int().min(1)`. The web boundary mirrors that.
+
+**This is not a 500.** Zod's `.int()` caps at 2^53−1, and `page × pageSize` stays
+inside Postgres' `bigint`, so it cannot overflow the way `minPriceCents` did.
+What it costs is work: `OFFSET <huge>` still makes Postgres sort the whole
+filtered set before discarding it, which is amplification bounded by table size —
+identical to `?page=99999`, which a person can also type. Same class as #66's
+price cap, well below it in severity.
+
+`tags` has the same shape of gap: no array-length bound on either side. Node's
+16KB header limit caps a URL at roughly 380 tag params today, so the protection
+is the HTTP server's rather than the schema's.
+
+**Acceptance:**
+
+- [ ] `page` carries an upper bound alongside `pageSize`, in the shared schema and in the web boundary
+- [ ] `tags` carries a maximum array length on both sides
+- [ ] The bound is a named constant, not a literal
+
+**Tests (required):**
+
+- [ ] A shared-schema test asserting a `page` above the cap fails validation and the cap itself passes.
+- [ ] A test asserting a tag list longer than the cap fails validation.
+
+---
+
+
 
 ## Post-MVP Backlog
 

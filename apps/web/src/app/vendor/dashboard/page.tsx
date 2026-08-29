@@ -63,7 +63,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
     <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-5.5">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-          <h1 className="font-display text-[26px] tracking-[-.01em] text-stone-900">
+          <h1 className="display-heading text-[26px] text-stone-900">
             {waiting.length === 0
               ? `${greeting}, nothing is waiting on you`
               : `${greeting}, you have ${waiting.length} new ${

@@ -153,10 +153,8 @@ export function BookingsHub({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-5.5">
-      <div className="mb-0.5 flex items-baseline justify-between gap-4">
-        <h1 className="font-display text-[26px] tracking-[-.01em] text-stone-900">Your bookings</h1>
-      </div>
-      <p className="mb-4 text-md text-stone-700">
+      <h1 className="mb-0.5 display-heading text-[26px] text-stone-900">Your bookings</h1>
+      <p className="mb-4 text-md leading-prose text-stone-700">
         {summary ? (
           <>
             {summary.count} upcoming {summary.count === 1 ? 'booking' : 'bookings'}. Next up is{' '}
