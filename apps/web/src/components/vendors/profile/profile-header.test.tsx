@@ -28,8 +28,11 @@ function renderHeader(overrides: Partial<Parameters<typeof ProfileHeader>[0]> = 
       state="TX"
       categories={CATEGORIES}
       tags={[]}
+      rail={<div data-testid="rail-slot" />}
       {...overrides}
-    />,
+    >
+      <div data-testid="main-slot" />
+    </ProfileHeader>,
   );
 }
 

@@ -86,19 +86,68 @@ describe('frame 03 — the profile is full-bleed (#103)', () => {
   });
 
   it('sizes the rail column to the frame width', () => {
-    expect(source).toContain(`lg:grid-cols-[minmax(0,1fr)_${railWidth}px]`);
+    expect(headerSource).toContain(`lg:grid-cols-[minmax(0,1fr)_${railWidth}px]`);
   });
 
   it('pads the shell to the frame gutter instead of centring a max-width box', () => {
     // 40px === Tailwind's `10` step, 28px === `7`.
-    expect(source).toContain(`lg:px-${contentLeft / 4}`);
-    expect(source).toContain(`lg:gap-x-${contentRight / 4}`);
     expect(headerSource).toContain(`lg:px-${contentLeft / 4}`);
+    expect(headerSource).toContain(`lg:gap-x-${contentRight / 4}`);
   });
 
   it('leaves no centred container on either the shell or the identity block', () => {
     expect(source).not.toMatch(/max-w-7xl/);
     expect(headerSource).not.toMatch(/max-w-7xl/);
     expect(source).not.toMatch(/mx-auto grid/);
+  });
+});
+
+describe('frame 03 — the rail starts level with the identity row (#104)', () => {
+  /*
+   * In the frame both columns open directly under the banner: the rail's own
+   * `padding-top` is the entire gap between the banner's bottom edge and the
+   * rail card. Laying the identity block out first and the rail out afterwards
+   * — which is what shipped — dropped the card 102.8px below the banner
+   * instead of 20px.
+   */
+  const railStyle = styleContaining('width:380px', 'flex:none');
+  const [railTop] = pxParts(declaration(railStyle, 'padding'));
+
+  const headerSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'profile-header.tsx'),
+    'utf8',
+  );
+  const pageSource = readFileSync(
+    join(process.cwd(), 'src', 'app', 'vendors', '[slug]', 'page.tsx'),
+    'utf8',
+  );
+
+  it('reads the frame contract it is asserting against', () => {
+    expect(railTop).toBe(20);
+  });
+
+  it('offsets the rail column from the banner by the frame padding', () => {
+    // 20px === Tailwind's `5` step.
+    expect(headerSource).toContain(`lg:pt-${railTop / 4}`);
+  });
+
+  it('opens both columns inside the wrapper that also holds the banner', () => {
+    // The banner, the identity row and the rail slot are all one wrapper deep,
+    // which is both the frame's layout and the non-clipping guarantee the
+    // avatar overlap depends on.
+    const wrapper = headerSource.indexOf('relative overflow-visible');
+    const banner = headerSource.indexOf('data-testid="profile-cover"');
+    const row = headerSource.indexOf('lg:grid-cols-[minmax(0,1fr)_380px]');
+    const railSlot = headerSource.indexOf('{rail}');
+
+    expect(wrapper).toBeGreaterThan(-1);
+    expect(banner).toBeGreaterThan(wrapper);
+    expect(row).toBeGreaterThan(banner);
+    expect(railSlot).toBeGreaterThan(row);
+  });
+
+  it('no longer lays the rail out in a second row below the header', () => {
+    expect(pageSource).not.toMatch(/lg:grid-cols-/);
+    expect(pageSource).toContain('rail={');
   });
 });

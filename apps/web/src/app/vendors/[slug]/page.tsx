@@ -124,57 +124,7 @@ export default async function VendorProfilePage({
         state={vendor.state}
         categories={vendor.categories}
         tags={vendor.tags}
-      />
-
-      <div className="grid w-full gap-8 px-4 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-x-7 lg:px-10">
-        <div className="min-w-0">
-          <ProfileTabs
-            panes={{
-              about: (
-                <AboutPane
-                  bio={vendor.bio}
-                  tagline={vendor.tagline}
-                  yearsInBusiness={vendor.yearsInBusiness}
-                  completedEventCount={vendor.completedEventCount}
-                  serviceRadiusKm={vendor.serviceRadiusKm}
-                  portfolio={vendor.portfolio}
-                  onSeeAllHref={`/vendors/${vendor.slug}?tab=portfolio`}
-                />
-              ),
-              packages: (
-                <PackagesPane packages={vendor.packages} businessName={vendor.businessName} />
-              ),
-              portfolio: (
-                <PortfolioPane items={vendor.portfolio} businessName={vendor.businessName} />
-              ),
-              reviews: (
-                /* The tab and its empty state only — review content is #12. */
-                <EmptyState
-                  headline={vendor.reviewCount > 0 ? 'Reviews are on their way' : 'No reviews yet'}
-                  description={
-                    vendor.reviewCount > 0
-                      ? `${vendor.businessName} has ${vendor.reviewCount} reviews. We're building the page that shows them.`
-                      : `Every review here comes from a completed booking, so ${vendor.businessName} has none until they've worked an event.`
-                  }
-                />
-              ),
-              availability: (
-                <AvailabilityPane
-                  entries={availability}
-                  today={today}
-                  businessName={vendor.businessName}
-                />
-              ),
-            }}
-          />
-        </div>
-
-        {/*
-          Sticky through the whole page, offset by the header so it never slides
-          under it. `self-start` is what stops the grid stretching the rail to
-          the row height, which would make `sticky` a no-op.
-        */}
-        <div className="lg:sticky lg:top-[calc(var(--header-height)+16px)] lg:self-start">
+        rail={
           <BookingRail
             businessName={vendor.businessName}
             slug={vendor.slug}
@@ -182,8 +132,48 @@ export default async function VendorProfilePage({
             packages={vendor.packages}
             reviewCount={vendor.reviewCount}
           />
-        </div>
-      </div>
+        }
+      >
+        <ProfileTabs
+          panes={{
+            about: (
+              <AboutPane
+                bio={vendor.bio}
+                tagline={vendor.tagline}
+                yearsInBusiness={vendor.yearsInBusiness}
+                completedEventCount={vendor.completedEventCount}
+                serviceRadiusKm={vendor.serviceRadiusKm}
+                portfolio={vendor.portfolio}
+                onSeeAllHref={`/vendors/${vendor.slug}?tab=portfolio`}
+              />
+            ),
+            packages: (
+              <PackagesPane packages={vendor.packages} businessName={vendor.businessName} />
+            ),
+            portfolio: (
+              <PortfolioPane items={vendor.portfolio} businessName={vendor.businessName} />
+            ),
+            reviews: (
+              /* The tab and its empty state only — review content is #12. */
+              <EmptyState
+                headline={vendor.reviewCount > 0 ? 'Reviews are on their way' : 'No reviews yet'}
+                description={
+                  vendor.reviewCount > 0
+                    ? `${vendor.businessName} has ${vendor.reviewCount} reviews. We're building the page that shows them.`
+                    : `Every review here comes from a completed booking, so ${vendor.businessName} has none until they've worked an event.`
+                }
+              />
+            ),
+            availability: (
+              <AvailabilityPane
+                entries={availability}
+                today={today}
+                businessName={vendor.businessName}
+              />
+            ),
+          }}
+        />
+      </ProfileHeader>
     </>
   );
 }
