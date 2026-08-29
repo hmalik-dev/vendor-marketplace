@@ -511,7 +511,6 @@ export function VendorProfileForm({
                     className="mt-1.5 min-h-[140px] bg-stone-0"
                   />
                   <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
-                    <p className="text-stone-600">A couple of paragraphs is plenty.</p>
                     <p
                       // Warns before the cap rather than only on reaching it, so a
                       // vendor can finish the sentence instead of being cut off.
@@ -628,9 +627,6 @@ export function VendorProfileForm({
                     <span>{SERVICE_RADIUS_MIN_MILES} mi</span>
                     <span>{SERVICE_RADIUS_MAX_MILES} mi</span>
                   </div>
-                  <p className="mt-1 text-xs text-stone-600">
-                    How far you will travel for an event.
-                  </p>
                 </div>
 
                 {/*

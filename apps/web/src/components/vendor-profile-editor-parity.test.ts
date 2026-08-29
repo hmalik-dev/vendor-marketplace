@@ -552,3 +552,41 @@ describe('frame 09’s text reaches the screen (#151)', () => {
     expect(uploadSource).not.toContain('>portrait<');
   });
 });
+
+describe('helper lines the frame does not draw (#152)', () => {
+  /*
+   * Frame 09's form pane carries exactly one helper line: the gold
+   * `Required before you can publish` under the response-time field. Every
+   * other helper on the screen is the app's own.
+   */
+  it('draws one helper in the frame, and it is the publish blocker', () => {
+    expect(editorFrame).toContain('Required before you can publish');
+    expect(editorFrame.match(/color:#7A5A12/g)).toHaveLength(1);
+  });
+
+  it('keeps that blocker helper, which is sourced', () => {
+    expect(formSource).toContain('Required before you can publish');
+  });
+
+  /*
+   * Removed: the radius helper is superseded by the frame's own `5 mi` /
+   * `125 mi` bounds, which say the same thing in the frame's words, and the
+   * About helper is decoration the frame has no equivalent for.
+   */
+  it('drops the radius helper the frame replaces with its bounds', () => {
+    expect(formSource).not.toContain('How far you will travel for an event');
+  });
+
+  it('drops the decorative About helper', () => {
+    expect(formSource).not.toContain('A couple of paragraphs is plenty');
+  });
+
+  /*
+   * Kept on purpose. `40-states.md` requires this exact line: "Constraints,
+   * stated before the picker opens … The same line appears in the drop zone
+   * and the requirements rail." It is sourced, so it is not an offender.
+   */
+  it('keeps the upload constraint line, which 40-states.md mandates', () => {
+    expect(formSource).toContain('UPLOAD_CONSTRAINT_LINE');
+  });
+});
