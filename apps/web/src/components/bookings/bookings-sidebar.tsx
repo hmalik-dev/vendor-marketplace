@@ -53,7 +53,7 @@ export function BookingsSidebar({
 
       <div className="mt-auto rounded-xl bg-stone-150 p-3">
         <p className="mb-1 text-sm font-semibold text-stone-900">Booking for something new?</p>
-        <p className="mb-2.25 text-xs leading-[1.5] text-stone-700">
+        <p className="mb-2.25 text-xs leading-normal text-stone-700">
           Search by vendor type, city and date — availability is live.
         </p>
         <Link href="/search" className="text-xs font-semibold text-clay-500 hover:underline">

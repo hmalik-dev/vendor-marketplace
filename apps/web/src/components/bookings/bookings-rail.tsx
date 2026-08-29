@@ -52,7 +52,7 @@ export function BookingsRail({ needsYou }: BookingsRailProps): React.ReactElemen
                     <p className="text-base font-semibold text-stone-900">
                       {entry.vendorName} sent a quote
                     </p>
-                    <p className="mt-0.75 text-sm leading-[1.5] text-stone-700">{entry.subline}</p>
+                    <p className="mt-0.75 text-sm leading-normal text-stone-700">{entry.subline}</p>
                     {entry.vendorSlug ? (
                       <Link
                         href={`/vendors/${entry.vendorSlug}`}
@@ -72,7 +72,7 @@ export function BookingsRail({ needsYou }: BookingsRailProps): React.ReactElemen
       <h2 className="mb-3 text-xs font-semibold tracking-[.05em] text-stone-600 uppercase">
         How booking works here
       </h2>
-      <div className="flex flex-col gap-3.5 text-base leading-[1.6] text-stone-700">
+      <div className="flex flex-col gap-3.5 text-base leading-prose text-stone-700">
         {MECHANISM_PROMISES.map((promise, index) => (
           <div key={promise.title}>
             {index > 0 ? <span className="mb-3.5 block h-px bg-stone-200" /> : null}
