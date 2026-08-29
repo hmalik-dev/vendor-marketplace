@@ -414,6 +414,21 @@ const frameSelectedPanel = (() => {
   return FRAME_11_RAIL.slice(at, FRAME_11_RAIL.indexOf('>', at));
 })();
 
+/*
+ * The market-note panel at the foot of the rail. `lastIndexOf`, because the
+ * rail draws two `#F1ECE4` panels: the designer's note about the shape-first
+ * cell states at `border-radius:9px`, then this one last at 12px.
+ */
+const frameMarketNote = (() => {
+  const at = FRAME_11_RAIL.lastIndexOf('background:#F1ECE4');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the market-note panel this test measures');
+  }
+
+  return FRAME_11_RAIL.slice(at, FRAME_11_RAIL.indexOf('>', at));
+})();
+
 describe('frame 11 parity', () => {
   afterEach(cleanup);
 
@@ -435,5 +450,20 @@ describe('frame 11 parity', () => {
       `rounded-[${styleValue(frameSelectedPanel, 'border-radius')}]`,
     );
     expect(panel?.className).toContain(`p-[${styleValue(frameSelectedPanel, 'padding')}]`);
+  });
+
+  /*
+   * Only the radius. The frame's copy ("Saturdays in June and July are 80%
+   * booked across Austin") needs market data the product does not have, and
+   * `19-availability.md` defers it Post-MVP with an explicit instruction to
+   * state only this vendor's own numbers until then — so the wording
+   * deliberately differs and is not a Text finding.
+   */
+  it('draws the market-note panel at the frame radius', () => {
+    renderCalendar();
+
+    const note = screen.getByText(/Saturdays in these three months/);
+
+    expect(note.className).toContain(`rounded-[${styleValue(frameMarketNote, 'border-radius')}]`);
   });
 });

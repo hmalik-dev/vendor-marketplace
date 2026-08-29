@@ -522,7 +522,7 @@ export function AvailabilityCalendar({
           design/design-plan/98-post-mvp.md. Until then this panel says only
           what this vendor's own calendar says, which is true on day one.
         */}
-        <p className="rounded-xl bg-stone-150 p-3 text-sm leading-relaxed text-stone-700">
+        <p className="rounded-[12px] bg-stone-150 p-3 text-sm leading-relaxed text-stone-700">
           {quarter.openSaturdays === 0
             ? 'Every Saturday in these three months is already spoken for.'
             : `${quarter.openSaturdays} of your Saturdays in these three months are still open, alongside ${quarter.booked} booked and ${quarter.blocked} blocked dates.`}
