@@ -8,7 +8,7 @@ import {
   type TagCategory,
   type VendorSortOption,
 } from '@vendor-marketplace/shared';
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { TAG_CATEGORY_CHIP_LABELS, TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { WireTag } from '@/lib/wire-schemas';
@@ -79,7 +79,14 @@ interface ChipProps {
    * trigger would otherwise announce only the chosen value.
    */
   triggerName?: string;
-  children: React.ReactNode;
+  /**
+   * A render prop receives `close`, for a panel whose choice completes it.
+   *
+   * The multi-select panels stay open on purpose — you are still choosing —
+   * but a single-choice one has nothing left to offer once it is answered,
+   * and the panel sits over the results the choice just changed.
+   */
+  children: React.ReactNode | ((close: () => void) => React.ReactNode);
 }
 
 function Chip({
@@ -90,6 +97,8 @@ function Chip({
   children,
 }: ChipProps): React.ReactElement {
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
 
   return (
     <span
@@ -98,7 +107,7 @@ function Chip({
         CHIP_TONES[tone],
       )}
     >
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           ref={triggerRef}
           aria-label={triggerName}
@@ -132,7 +141,7 @@ function Chip({
             triggerRef.current?.focus();
           }}
         >
-          {children}
+          {typeof children === 'function' ? children(close) : children}
         </PopoverContent>
       </Popover>
 
@@ -390,25 +399,30 @@ export function RefineBar({
       <div className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
         Sort
         <Chip label={SORT_LABELS[state.sort]} triggerName={`Sort: ${SORT_LABELS[state.sort]}`}>
-          <fieldset>
-            <legend className="text-sm font-semibold text-stone-900">Sort by</legend>
-            <ul className="mt-2 flex flex-col gap-2">
-              {VENDOR_SORT_OPTIONS.map((option) => (
-                <li key={option}>
-                  <label className="flex cursor-pointer items-center gap-2.5 text-base text-stone-700">
-                    <input
-                      type="radio"
-                      name="sort"
-                      checked={state.sort === option}
-                      onChange={() => setState({ sort: option })}
-                      className="size-3.75 shrink-0 border-[1.4px] border-stone-400 accent-clay-400"
-                    />
-                    {SORT_LABELS[option]}
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </fieldset>
+          {(close) => (
+            <fieldset>
+              <legend className="text-sm font-semibold text-stone-900">Sort by</legend>
+              <ul className="mt-2 flex flex-col gap-2">
+                {VENDOR_SORT_OPTIONS.map((option) => (
+                  <li key={option}>
+                    <label className="flex cursor-pointer items-center gap-2.5 text-base text-stone-700">
+                      <input
+                        type="radio"
+                        name="sort"
+                        checked={state.sort === option}
+                        onChange={() => {
+                          setState({ sort: option });
+                          close();
+                        }}
+                        className="size-3.75 shrink-0 border-[1.4px] border-stone-400 accent-clay-400"
+                      />
+                      {SORT_LABELS[option]}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+          )}
         </Chip>
       </div>
     </div>

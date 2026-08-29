@@ -1,7 +1,45 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RefineBar } from './refine-bar';
 import type { SearchState } from './search-state';
+
+/*
+ * Frame `02 Search` draws the sort control, so its numbers are read out of the
+ * bundle at test time rather than written here — otherwise a design re-import
+ * moves the contract and this file still passes.
+ */
+const frameHtml = readFileSync(
+  join(process.cwd(), '..', '..', 'design', `${BRAND_NAME} - Screens.dc.html`),
+  'utf8',
+);
+
+/** The frame's sort chip: the `Top rated ▾` span in the Refine bar. */
+const frameSortChip = (() => {
+  const frame = frameHtml.slice(frameHtml.indexOf('data-screen-label="02 Search"'));
+  const chip = frame.indexOf('Top rated');
+  const open = frame.lastIndexOf('<span', chip);
+
+  return frame.slice(open, chip);
+})();
+
+function frameStyle(property: string): string {
+  const declaration = new RegExp(`[;"]${property}:([^;"]+)`).exec(frameSortChip);
+
+  if (!declaration?.[1]) {
+    throw new Error(`Frame 02's sort chip does not set \`${property}\``);
+  }
+
+  return declaration[1].trim();
+}
+
+/** px → the Tailwind spacing unit that renders it; the scale is 4px per unit. */
+function spacingUnit(px: string): string {
+  return String(Number.parseFloat(px) / 4);
+}
 
 function state(overrides: Partial<SearchState> = {}): SearchState {
   return {
@@ -76,21 +114,102 @@ describe('RefineBar layout', () => {
     expect(bar.querySelector('select')).toBeNull();
 
     const trigger = screen.getByRole('button', { name: 'Sort: Most relevant' });
-
-    // The frame's chip: `stone-0` fill, `stone-300` hairline, 8px radius,
-    // 12.5px semibold, 7px/13px padding — the resting tone, shared with the
-    // filter chips so the two cannot drift apart.
-    expect(trigger.textContent).toBe('Most relevant▾');
-    expect(trigger.className).toContain('py-1.75');
-    expect(trigger.className).toContain('pl-3.25');
-    expect(trigger.className).toContain('pr-3.25');
-
     const chip = trigger.parentElement as HTMLElement;
-    expect(chip.className).toContain('rounded-md');
-    expect(chip.className).toContain('border-stone-300');
-    expect(chip.className).toContain('bg-stone-0');
-    expect(chip.className).toContain('text-[12.5px]');
+
+    expect(trigger.textContent).toBe('Most relevant▾');
+
+    // Every number below is the frame's own, read at test time.
+    const [padY, padX] = frameStyle('padding').split(/\s+/) as [string, string];
+
+    expect(trigger.className).toContain(`py-${spacingUnit(padY)}`);
+    expect(trigger.className).toContain(`pl-${spacingUnit(padX)}`);
+    expect(trigger.className).toContain(`pr-${spacingUnit(padX)}`);
+    expect(chip.className).toContain(`text-[${frameStyle('font-size')}]`);
     expect(chip.className).toContain('font-semibold');
+    expect(frameStyle('font-weight')).toBe('600');
+
+    // 8px is `--radius-md`, and #E4DDD1 / #FFFDF9 are stone-300 / stone-0.
+    expect(frameStyle('border-radius')).toBe('8px');
+    expect(chip.className).toContain('rounded-md');
+    expect(frameStyle('border')).toBe('1px solid #E4DDD1');
+    expect(chip.className).toContain('border-stone-300');
+    expect(frameStyle('background')).toBe('#FFFDF9');
+    expect(chip.className).toContain('bg-stone-0');
+  });
+
+  /*
+   * The control this replaced was a native `<select>`, which came with its own
+   * behaviour. The replacement does not, so the behaviour is asserted here:
+   * without this, dropping the `onChange` still passes every other test.
+   */
+  it.each([
+    ['Top rated', 'rating'],
+    ['Price: low to high', 'price_asc'],
+    ['Price: high to low', 'price_desc'],
+    ['Newest', 'newest'],
+    ['Most relevant', 'relevance'],
+  ])('sorts by %s when it is chosen', async (label, expected) => {
+    const user = userEvent.setup();
+    const setState = vi.fn();
+    render(
+      <RefineBar
+        state={state({ sort: expected === 'relevance' ? 'rating' : 'relevance' })}
+        setState={setState}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /^Sort:/ }));
+    await user.click(screen.getByRole('radio', { name: label }));
+
+    expect(setState).toHaveBeenCalledWith({ sort: expected });
+  });
+
+  it('marks the current sort as the checked option', async () => {
+    const user = userEvent.setup();
+    render(
+      <RefineBar
+        state={state({ sort: 'price_desc' })}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Sort: Price: high to low' }));
+
+    expect(screen.getByRole('radio', { name: 'Price: high to low' })).toHaveProperty(
+      'checked',
+      true,
+    );
+    expect(screen.getByRole('radio', { name: 'Top rated' })).toHaveProperty('checked', false);
+  });
+
+  /* A single-choice panel is answered by the choice, and it covers the results. */
+  it('dismisses itself once a sort is chosen', async () => {
+    const user = userEvent.setup();
+    render(
+      <RefineBar
+        state={state()}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: /^Sort:/ });
+
+    await user.click(trigger);
+    expect(screen.getByRole('radio', { name: 'Top rated' })).toBeDefined();
+
+    await user.click(screen.getByRole('radio', { name: 'Top rated' }));
+
+    expect(screen.queryByRole('radio', { name: 'Top rated' })).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('keeps every chip and Clear inside the wrapping group', () => {
