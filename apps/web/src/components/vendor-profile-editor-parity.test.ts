@@ -342,3 +342,48 @@ describe('the submit-bar buttons match the frame’s .btnP / .btnS (#145)', () =
     expect(formSource).not.toContain('size="sm"');
   });
 });
+
+describe('the service-radius slider matches the frame (#146)', () => {
+  const themeCss = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+  const slider = themeCss.match(/@utility range-slider \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+  it('draws a 4px track in the frame, not the browser’s default', () => {
+    expect(editorFrame).toContain('height:4px;background:#EFE9E0;border-radius:999px');
+  });
+
+  it('fills the track to the value in clay-400', () => {
+    expect(editorFrame).toContain('width:46%;height:4px;background:#B4552F');
+  });
+
+  it('rings a 14px stone-0 thumb in 2px clay-400', () => {
+    expect(editorFrame).toContain(
+      'width:14px;height:14px;border-radius:50%;background:#FFFDF9;border:2px solid #B4552F',
+    );
+  });
+
+  it('defines a slider utility rather than leaning on accent-color', () => {
+    expect(slider).not.toBe('');
+    expect(formSource).toContain('className="range-slider mt-3.5"');
+    expect(formSource).not.toContain('accent-clay-400');
+  });
+
+  it('gives the utility the frame’s 4px track and clay fill', () => {
+    expect(slider).toContain('height: 4px');
+    expect(slider).toContain('var(--color-clay-400) var(--range-fill, 0%)');
+    expect(slider).toContain('var(--color-stone-200) var(--range-fill, 0%)');
+  });
+
+  it('gives the utility the frame’s 14px thumb and 2px ring', () => {
+    expect(slider).toContain('width: 14px');
+    expect(slider).toContain('background: var(--color-stone-0)');
+    expect(slider).toContain('border: 2px solid var(--color-clay-400)');
+  });
+
+  it('covers Firefox as well as Chromium', () => {
+    expect(slider).toContain('::-moz-range-thumb');
+    expect(slider).toContain('::-moz-range-progress');
+  });
+});

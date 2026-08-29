@@ -176,6 +176,25 @@ function toPayload(form: FormState): Record<string, unknown> {
 }
 
 /**
+ * How far along the track the slider's fill reaches, as a percentage.
+ *
+ * The frame draws the fill as a `width:46%` bar at 60 miles; this derives the
+ * same figure from the range instead of hard-coding it, so the two stay in step
+ * if the bounds ever move. `(60 - 5) / (125 - 5)` is 45.8%, which is the true
+ * position of 60 on the scale — the frame's 46% is that number rounded by hand,
+ * and the difference is 0.2px on the frame's own 502px track.
+ *
+ * Clamped because a stored radius can sit outside the slider's bounds: the
+ * column is kilometres and predates these limits.
+ */
+export function serviceRadiusFillPercent(miles: number): number {
+  const span = SERVICE_RADIUS_MAX_MILES - SERVICE_RADIUS_MIN_MILES;
+  const clamped = Math.min(Math.max(miles, SERVICE_RADIUS_MIN_MILES), SERVICE_RADIUS_MAX_MILES);
+
+  return Math.round(((clamped - SERVICE_RADIUS_MIN_MILES) / span) * 1000) / 10;
+}
+
+/**
  * Which blockers the form can still see for itself.
  *
  * The API stays the authority — its list is what survives a reload, and it is
@@ -258,6 +277,7 @@ export function VendorProfileForm({
   const isNew = profile === null;
   const slugPreview = form.slug.trim() || generateSlug(form.businessName || 'your-business');
   const isDirty = JSON.stringify(form) !== savedSnapshot;
+  const radiusFillPercent = serviceRadiusFillPercent(form.serviceRadiusMiles);
   const bioRemaining = MAX_VENDOR_BIO_LENGTH - form.bio.length;
 
   useEffect(() => {
@@ -583,7 +603,14 @@ export function VendorProfileForm({
                     step={SERVICE_RADIUS_STEP_MILES}
                     value={form.serviceRadiusMiles}
                     onChange={(event) => update('serviceRadiusMiles', Number(event.target.value))}
-                    className="mt-3 h-6 w-full accent-clay-400"
+                    className="range-slider mt-3.5"
+                    /*
+                     * The fill has to be a gradient stop on the track — a
+                     * native range has no element between track and thumb to
+                     * colour — so the current value is handed to CSS rather
+                     * than re-derived there.
+                     */
+                    style={{ '--range-fill': `${radiusFillPercent}%` } as React.CSSProperties}
                   />
                   <p className="mt-1 text-xs text-stone-600">
                     How far you will travel for an event.

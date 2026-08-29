@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { liveBlockers, mergeBlockers, type FormState } from './vendor-profile-form';
+import {
+  liveBlockers,
+  mergeBlockers,
+  serviceRadiusFillPercent,
+  type FormState,
+} from './vendor-profile-form';
 
 /** A form state with nothing outstanding, for each test to spoil one field of. */
 const COMPLETE: FormState = {
@@ -89,5 +94,35 @@ describe('the tagline and the experience figure never block publishing', () => {
 
   it('publishes with a vendor in their first year', () => {
     expect(liveBlockers({ ...COMPLETE, yearsInBusiness: '0' })).toEqual([]);
+  });
+});
+
+/**
+ * Frame `09` draws the radius fill as a `width:46%` bar with a 14px thumb on a
+ * 4px track. The percentage is derived rather than hard-coded, so these pin the
+ * arithmetic the frame's bar represents.
+ */
+describe('serviceRadiusFillPercent', () => {
+  it('puts the frame’s 60 miles at the frame’s 46% mark', () => {
+    expect(serviceRadiusFillPercent(60)).toBe(45.8);
+  });
+
+  it('empties the track at the minimum and fills it at the maximum', () => {
+    expect(serviceRadiusFillPercent(5)).toBe(0);
+    expect(serviceRadiusFillPercent(125)).toBe(100);
+  });
+
+  it('lands the midpoint halfway along', () => {
+    expect(serviceRadiusFillPercent(65)).toBe(50);
+  });
+
+  /*
+   * The stored column is kilometres and predates these bounds, so a converted
+   * radius can fall outside them. An unclamped value would paint a fill wider
+   * than the track or a negative one.
+   */
+  it('clamps a radius stored outside the slider’s bounds', () => {
+    expect(serviceRadiusFillPercent(0)).toBe(0);
+    expect(serviceRadiusFillPercent(400)).toBe(100);
   });
 });
