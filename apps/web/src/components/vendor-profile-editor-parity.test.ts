@@ -430,3 +430,29 @@ describe('the selected chip’s label is clay, not stone (#147)', () => {
     expect(themeCss).not.toContain('--color-stone-800:');
   });
 });
+
+describe('field labels take the frame’s label colour (#148)', () => {
+  const labelSource = read('src/components/ui/label.tsx');
+  const themeCss = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+  const lbl = frameRule('lbl');
+
+  it('reads #6B6459 off the frames’ `.lbl` rule', () => {
+    expect(declaration(lbl, 'color')).toBe('#6B6459');
+  });
+
+  it('maps that to stone-600, the ramp’s label minimum', () => {
+    expect(themeCss).toContain('--color-stone-600: #6b6459');
+  });
+
+  /*
+   * The label carried no colour at all, so it inherited whatever ink surrounded
+   * it — stone-900 in the editor. Inheriting is what made this a colour bug on
+   * every form at once rather than one screen's.
+   */
+  it('gives the shared label its own colour rather than inheriting ink', () => {
+    expect(labelSource).toContain('text-stone-600');
+  });
+});
