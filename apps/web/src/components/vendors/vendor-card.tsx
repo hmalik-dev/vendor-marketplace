@@ -157,7 +157,13 @@ export function VendorCard({
             {isReviewed ? (
               <>
                 <span aria-hidden="true">★ </span>
-                <span className="font-semibold text-stone-700">{vendor.avgRating.toFixed(1)}</span>
+                {/*
+                  One weight and one colour for the whole line. The frame sets
+                  the meta line once — `font-size:12px;color:#6B6459` — and
+                  draws `★ 4.9 (127) · Austin, TX` inside it with nothing
+                  emphasised, so the rating is not a second treatment.
+                */}
+                {vendor.avgRating.toFixed(1)}
                 <span className="sr-only"> out of 5, from {vendor.reviewCount} reviews</span> (
                 {vendor.reviewCount}){location ? ` · ${location}` : ''}
               </>

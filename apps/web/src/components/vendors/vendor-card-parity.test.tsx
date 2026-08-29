@@ -32,6 +32,9 @@ const frameCard = searchFrame.slice(searchFrame.indexOf('class="card"'));
 /** That card's monogram: the absolutely-placed circle overlapping the seam. */
 const frameAvatar = frameCard.slice(frameCard.indexOf('position:absolute;top:-16px'));
 
+/** The rating and location line under the business name. */
+const frameMeta = frameCard.slice(frameCard.indexOf('font-size:12px;color:'));
+
 /** One `property:value` out of an inline `style` attribute, as written. */
 function styleValue(markup: string, property: string): string {
   const declaration = new RegExp(`[;"]${property}:([^;"]+)`).exec(markup);
@@ -107,5 +110,29 @@ describe('VendorCard parity with frame 02 Search', () => {
     expect(screen.getByRole('img', { name: 'Kessler & Co.' }).style.fontSize).toBe(
       styleValue(frameAvatar, 'font-size'),
     );
+  });
+
+  it('draws the meta line in one weight and one colour, as the frame does', () => {
+    render(<VendorCard vendor={vendor()} density="compact" />);
+
+    const meta = screen.getByText(/Austin, TX/);
+
+    // The frame sets the meta line's colour once, on the line itself, and
+    // emphasises nothing inside it — so no descendant may restyle a part.
+    expect(styleValue(frameMeta, 'color')).toBe('#6B6459');
+    expect(meta.className).toContain('text-stone-600');
+    // The screen-reader expansion of the rating is not drawn, so it is taken
+    // out before comparing against the line the frame draws.
+    const visible = meta.cloneNode(true) as HTMLElement;
+
+    for (const hidden of visible.querySelectorAll('.sr-only')) {
+      hidden.remove();
+    }
+
+    expect(visible.textContent).toBe('★ 4.9 (127) · Austin, TX');
+
+    for (const child of meta.querySelectorAll('span:not(.sr-only)')) {
+      expect(child.className).not.toMatch(/font-(semibold|bold|medium)|text-stone-(700|900)/);
+    }
   });
 });
