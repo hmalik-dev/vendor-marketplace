@@ -13,7 +13,7 @@ export function EmptyStateGlyph(): React.ReactElement {
   return (
     <span aria-hidden="true" className="relative block h-9 w-[58px]">
       <span className="absolute top-0 left-0 size-9 rounded-full bg-stone-150" />
-      <span className="absolute top-0 left-[22px] size-9 rounded-full border border-dashed border-stone-400" />
+      <span className="absolute top-0 left-[22px] size-9 rounded-full border-[1.5px] border-dashed border-stone-400" />
     </span>
   );
 }
@@ -55,7 +55,10 @@ export function EmptyState({
     <div
       data-slot="empty-state"
       className={cn(
-        'flex flex-col items-center justify-center gap-3 text-center',
+        'flex flex-col items-center justify-center text-center',
+        // Frame 20 spaces the panel's stack 18 / 9 / 18, which the uniform
+        // 12px gap cannot express; everywhere else keeps the even rhythm.
+        panel ? 'gap-0' : 'gap-3',
         // The panel owns the pane it is given, so its padding is horizontal
         // only — frame `20` centres the content in the full height rather
         // than pushing it down from the top.
@@ -66,7 +69,10 @@ export function EmptyState({
       )}
     >
       {icon ? (
-        <span aria-hidden="true" className="text-stone-400 [&_svg]:size-8">
+        <span
+          aria-hidden="true"
+          className={cn('text-stone-400 [&_svg]:size-8', panel && 'mb-[18px]')}
+        >
           {icon}
         </span>
       ) : null}
@@ -80,9 +86,15 @@ export function EmptyState({
         backtick spans as template literals, so quoting a serif class name in a
         comment registers as a serif element with no size.
       */}
-      <h2 className="font-display text-display-md text-stone-900">{headline}</h2>
-      <p className="max-w-[420px] text-base leading-prose text-stone-700">{description}</p>
-      {action ? <div className="mt-2">{action}</div> : null}
+      <h2 className={cn('font-display text-display-md text-stone-900', panel && 'mb-2.25')}>
+        {headline}
+      </h2>
+      <p
+        className={cn('max-w-[420px] text-base leading-prose text-stone-700', panel && 'mb-[18px]')}
+      >
+        {description}
+      </p>
+      {action ? <div className={panel ? undefined : 'mt-2'}>{action}</div> : null}
     </div>
   );
 }

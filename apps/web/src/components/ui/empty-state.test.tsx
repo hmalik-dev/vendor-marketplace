@@ -49,6 +49,36 @@ describe('EmptyState', () => {
     expect(root?.className).toContain('px-10');
     expect(root?.className).not.toContain('py-12');
   });
+
+  it('spaces the panel stack to frame 20’s 18 / 9 / 18 rhythm', () => {
+    const { container } = render(
+      <EmptyState
+        panel
+        icon={<EmptyStateGlyph />}
+        headline="No requests yet"
+        description="Nothing has come in."
+        action={<button type="button">Preview my profile</button>}
+      />,
+    );
+    const root = container.querySelector('[data-slot="empty-state"]');
+
+    // The uniform 12px gap cannot express 18 / 9 / 18, so the panel drops it.
+    expect(root?.className).toContain('gap-0');
+    expect(root?.className).not.toContain('gap-3');
+    expect(root?.querySelector('[aria-hidden="true"]')?.className).toContain('mb-[18px]');
+    expect(root?.querySelector('h2')?.className).toContain('mb-2.25');
+    expect(root?.querySelector('p')?.className).toContain('mb-[18px]');
+  });
+
+  it('keeps the even rhythm when it is not a panel', () => {
+    const { container } = render(
+      <EmptyState headline="No requests yet" description="Nothing has come in." />,
+    );
+    const root = container.querySelector('[data-slot="empty-state"]');
+
+    expect(root?.className).toContain('gap-3');
+    expect(root?.querySelector('h2')?.className).not.toContain('mb-2.25');
+  });
 });
 
 describe('EmptyStateGlyph', () => {
@@ -64,6 +94,7 @@ describe('EmptyStateGlyph', () => {
     expect(circles).toHaveLength(2);
     expect(circles[0]?.className).toContain('bg-stone-150');
     expect(circles[0]?.className).toContain('size-9');
+    expect(circles[1]?.className).toContain('border-[1.5px]');
     expect(circles[1]?.className).toContain('border-dashed');
     expect(circles[1]?.className).toContain('border-stone-400');
     expect(circles[1]?.className).toContain('left-[22px]');
