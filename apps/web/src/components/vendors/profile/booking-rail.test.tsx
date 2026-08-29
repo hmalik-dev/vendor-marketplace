@@ -1,4 +1,6 @@
-import type { ServicePackage } from '@vendor-marketplace/shared';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BRAND_NAME, type ServicePackage } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -67,7 +69,9 @@ describe('BookingRail', () => {
 
     expect(request.getAttribute('href')).toBe('/vendors/kessler-and-co/request?package=pkg-1');
     expect(message).toHaveProperty('disabled', true);
-    expect(screen.getByText(/Messaging opens shortly/)).toBeDefined();
+    // The reassurance line carries the frame's sentence and nothing in front
+    // of it — see #114. The blocker's own explanation belongs on the button.
+    expect(screen.queryByText(/Messaging opens shortly/)).toBeNull();
   });
 
   it('omits the package when the vendor has none to choose from', () => {
@@ -204,6 +208,48 @@ describe('BookingRail', () => {
       renderRail({});
 
       expect(screen.queryByText(/^Free on/)).toBeNull();
+    });
+  });
+
+  describe('the charge reassurance (#114)', () => {
+    /*
+     * The sentence is read out of the frame rather than duplicated here, so a
+     * design re-import that rewords it fails this test instead of drifting.
+     * The frame writes a persona name where the app writes the real vendor.
+     */
+    const frameHtml = readFileSync(
+      join(process.cwd(), '..', '..', 'design', `${BRAND_NAME} - Screens.dc.html`),
+      'utf8',
+    );
+    const literal = /text-align:center;margin-top:2px">([^<]*)</.exec(frameHtml);
+
+    it('is exactly the frame sentence, with nothing in front of it', () => {
+      expect(literal).not.toBeNull();
+      const sentence = (literal as RegExpExecArray)[1] as string;
+
+      render(
+        <BookingRail
+          businessName="Kessler & Co."
+          slug="kessler-and-co"
+          startingPriceCents={145_000}
+          packages={[servicePackage()]}
+          reviewCount={127}
+          today="2026-08-29"
+          calendar={{}}
+        />,
+      );
+
+      const expected = sentence.replace(/Maya/, 'Kessler & Co.');
+      const rendered = screen.getByText(/be charged yet/).textContent ?? '';
+
+      /*
+       * Apostrophes are compared loosely here and strictly in #115, which is
+       * the ticket that owns straight-versus-curly punctuation.
+       */
+      const loose = (value: string) => value.replace(/[\u2018\u2019]/g, "'");
+
+      expect(loose(rendered)).toBe(loose(expected));
+      expect(rendered.startsWith('You won')).toBe(true);
     });
   });
 });

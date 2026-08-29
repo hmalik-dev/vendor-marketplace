@@ -189,13 +189,15 @@ export function BookingRail({
         </Button>
 
         {/*
-          The helper line explains the disabled pair rather than leaving a dead
-          control unexplained, and still carries the frame's charge reassurance
-          — which is true today and stays true when the buttons wake up.
+          The frame's charge reassurance, and only that. It previously carried
+          "Messaging opens shortly." in front, which frame `03` does not draw
+          and which wrapped a one-line helper onto two. That sentence was the
+          only explanation the disabled `Send a message` button had; naming the
+          blocker beside the control it blocks, as `40-states.md` requires, is
+          #110's job and is recorded there.
         */}
         <p className="mt-0.5 text-center text-helper leading-normal text-stone-600">
-          Messaging opens shortly. You won&rsquo;t be charged yet — {businessName} confirms the date
-          first.
+          You won&rsquo;t be charged yet — {businessName} confirms the date first.
         </p>
       </div>
 
