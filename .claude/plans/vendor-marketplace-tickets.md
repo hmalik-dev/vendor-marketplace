@@ -156,6 +156,45 @@ Work top to bottom. Take the next ticket only when the one above it is committed
 | --- | --- | --- |
 | 11 | **#9** | Stripe Connect. **Verified agent-executable 2026-08-29** — test keys present, Connect enabled. Build on **Accounts v2** (`POST /v2/core/accounts`); v1 is refused. Load `npx skills add stripe/ai` first. Unblocks #10, #68, #220, #221 |
 
+### Wave 5 — the change-order features, once Wave 1 has landed
+
+| Order | # | Note |
+| --- | --- | --- |
+| 12 | **#167** | The shared dropdown component. Closes #69 outright and several parity findings with it, so it earns its place before the per-finding tickets |
+| 13 | **#166** | Availability cell marks. Also resolves #164 and pairs with #212's mislabelling |
+| 14 | **#169** | 1024 as a real breakpoint — seven `27 …` frames depend on it |
+| 15 | **#186** | Landing hero scale ladder |
+| 16 | **#168** | Page loader |
+
+### Wave 6 — parity, but re-measured first
+
+**Do not work the 83 per-finding parity tickets one at a time, and do not assume they are
+still failing.** #74, #165 and #198 in Wave 1 change the computed metrics of most of them.
+
+1. **Re-measure before fixing.** Run `parity-checker` once per already-swept frame — `01`,
+   `02`, `03`, `08`, `09`, `11`, `12`, `04`, `07`. Close every ticket the pass now reports as
+   MATCH, with the evidence in Notes. Expect a large number to close for free.
+2. **Then batch what survives by frame, not by ticket.** One browser pass verifies a whole
+   screen; running one per ticket would mean ~80 passes on a single serial browser.
+3. **Only then sweep the 26 unswept frames** (`.claude/plans/parity-sweep-ledger.md` lists
+   them with route, auth state and viewport), filing findings as you go.
+
+### Wave 7 — everything else, until the queue is empty
+
+Fall back to **`/next-ticket`** and keep going until it returns `QUEUE_EMPTY`.
+
+By this point raw `/next-ticket` is safe: the ticket that made it unsafe (#9) is done, every
+genuine human gate is already marked `Deferred — needs a human` or `Blocked — needs a human`
+so eligibility skips it, and the 59 tickets blocked on #74 have been released by Wave 1.
+
+**Stop conditions.** Stop and leave a status record when any of these is true:
+
+- `/next-ticket` returns `QUEUE_EMPTY`
+- Three consecutive tickets return `BLOCKED` — that means the queue's remaining work needs a
+  human, not that the run should keep grinding
+- `pnpm preflight` fails twice in a row on the same check
+- The working tree cannot be made clean, or a commit is refused twice
+
 ### Rules for the unattended run
 
 1. **Work in a worktree.** Two sessions have already swept each other's in-flight files into
@@ -174,8 +213,23 @@ Work top to bottom. Take the next ticket only when the one above it is committed
    once, and never kill another session's browser.
 7. **Agents never type a password.** `pnpm e2e:auth`, then load `.auth/<role>.json` as
    `storageState`. See `.claude/rules/e2e-auth.md`.
-8. **Do not sweep parity.** Waves 1-3 are code. Parity re-verification happens after #74 and
-   #165 land, because most findings will move.
+8. **Do not sweep parity before Wave 6.** Waves 1-5 are code. Parity re-verification waits
+   until #74 and #165 have landed, because most findings will move.
+9. **Never mark a ticket Done without the evidence.** `CHECKS` lists checks whose output
+   was read, not checks that were intended. `BROWSER` is `verified` only when a browser
+   actually drove the flow.
+10. **One ticket per commit, and the commit message says what is in it.** If the staging hook
+    refuses a partial stage because a concurrent session left files dirty, say so in the
+    message rather than hiding it — and prefer a worktree so it cannot happen.
+11. **The Stripe and Clerk agent skills are available** — `connect-recommend`,
+    `connect-required-verification-information`, `stripe-best-practices`,
+    `clerk-nextjs-patterns`, `clerk-webhooks`, `clerk-testing`. Load the relevant one before
+    writing an integration rather than working from memory. They are symlinks from
+    `.agents/skills/` into `.claude/skills/`; if one is missing, re-link rather than
+    guessing at the API.
+12. **Stage in its own command.** `check-staging.mjs` is a `PreToolUse` hook, so chaining
+    `git add && git commit` blocks the whole call and nothing is ever staged.
+
 
 ## Beta gate — what blocks shipping to real users
 
@@ -2531,8 +2585,20 @@ assessment in this sweep claimed #9 needed a human to supply credentials. **That
 **Accounts v2** (`POST /v2/core/accounts`), which is what Stripe now recommends, rather than
 enabling v1 compatibility in the Dashboard (which would be a human action). Choose v2.
 
-Stripe also ships an agent skill for current best practice — `npx skills add stripe/ai` —
-worth loading before writing the integration rather than working from memory.
+**The Stripe and Clerk agent skills are installed and wired up** (2026-08-29). `npx skills`
+puts them in `.agents/skills/`, which **Claude Code does not read** — it loads
+`.claude/skills/`. The six the queue needs are symlinked across and are gitignored, so they
+are local-only and cost nothing in the repo:
+
+| Skill | For |
+| --- | --- |
+| `connect-recommend` | Connect configuration, charge types, account types — read this first |
+| `connect-required-verification-information` | What a connected account must supply before it can be paid |
+| `stripe-best-practices` | Current API idioms, in place of pre-trained memory |
+| `clerk-nextjs-patterns`, `clerk-webhooks`, `clerk-testing` | #46, #226 and the auth work |
+
+**Skills load at session start**, so a session that was already open when they were linked
+will not see them — start the overnight run in a fresh session.
 
 **This ticket is the critical path.** It unblocks #10, #68, #220 and #221 — the entire
 transaction half of the product, and the reason `accept` returns 402 for every vendor today.
