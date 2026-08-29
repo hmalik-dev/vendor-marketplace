@@ -21,6 +21,7 @@ const PROJECT_FONT_SIZES = [
   'label',
   'helper',
   'meta',
+  'action',
   'md',
   'display-sm',
   'display-md',

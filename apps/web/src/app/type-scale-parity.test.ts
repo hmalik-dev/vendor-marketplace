@@ -255,7 +255,7 @@ const STEP_FOR_FRAME_CLASS: Array<[string, string]> = [
  * The other 108 — the field-error lines of frame `22` among them — set no
  * line-height at all, so the ratio belongs to `.tn`'s call site, not the step.
  */
-const STEPS_AT_THE_FRAME_DEFAULT = ['sm', 'md', 'lg', 'meta', 'helper'];
+const STEPS_AT_THE_FRAME_DEFAULT = ['sm', 'md', 'lg', 'meta', 'helper', 'action'];
 
 /* The hero is the one place the frames set a ratio on a heading. */
 const HERO_STEPS: Array<[string, number]> = [
@@ -368,6 +368,52 @@ const CARD_META_PX = ((): number | undefined => {
   return [...tally.entries()].sort(([, a], [, b]) => b - a)[0]?.[0];
 })();
 
+/**
+ * The markup of one frame, by its `data-screen-label`. A size that only some
+ * frames draw has to be read from the frame that draws it: `action` and `cta`
+ * below are both anchored to `01 Landing`, because across the whole file the
+ * shapes that carry them appear at several sizes and the shape alone would not
+ * fix one.
+ */
+function frameMarkup(label: string): string {
+  const start = frameHtml.indexOf(`data-screen-label="${label}"`);
+
+  if (start < 0) {
+    throw new Error(`No frame labelled ${label}.`);
+  }
+
+  const next = frameHtml.indexOf('class="fr"', start);
+
+  return next < 0 ? frameHtml.slice(start) : frameHtml.slice(start, next);
+}
+
+const LANDING = frameMarkup('01 Landing');
+
+/** The font-size of the one inline style in `markup` matching every fragment. */
+function inlineSizeWhere(markup: string, ...fragments: string[]): number {
+  const sizes = new Set<number>();
+
+  for (const attribute of markup.matchAll(/style="([^"]*)"/g)) {
+    const style = attribute[1] as string;
+
+    if (!fragments.every((fragment) => style.includes(fragment))) {
+      continue;
+    }
+
+    const size = /font-size:\s*([\d.]+)px/.exec(style);
+
+    if (size) {
+      sizes.add(Number.parseFloat(size[1] as string));
+    }
+  }
+
+  if (sizes.size !== 1) {
+    throw new Error(`${sizes.size} sizes match [${fragments.join(', ')}] in the frame, wanted 1.`);
+  }
+
+  return [...sizes][0] as number;
+}
+
 describe('type scale font-size and letter-spacing parity with the design frames', () => {
   it.each(SIZE_STEP_FOR_FRAME_CLASS)(
     '--text-%s is the size the frames draw .%s at',
@@ -380,6 +426,22 @@ describe('type scale font-size and letter-spacing parity with the design frames'
     expect(STONE_600).toMatch(/^#[0-9a-f]{6}$/);
     expect(CARD_META_PX).toBeGreaterThan(0);
     expect(THEME_FONT_SIZES.get('meta')).toBe(CARD_META_PX);
+  });
+
+  /*
+   * #83, #86. `action` is the size frame `01 Landing` gives an action that is
+   * not a form control. It draws two, and they agree: the header's dark
+   * sign-up pill, and the plain `All N categories →` link that opens the
+   * category section. Both are read from the frame so neither side can drift.
+   */
+  it('--text-action is the size frame 01 Landing draws its header CTA pill at', () => {
+    expect(THEME_FONT_SIZES.get('action')).toBe(
+      inlineSizeWhere(LANDING, 'background:#23201C', 'border-radius:999px'),
+    );
+  });
+
+  it('--text-action is also the size that frame draws its section action link at', () => {
+    expect(THEME_FONT_SIZES.get('action')).toBe(inlineSizeWhere(LANDING, 'color:#A34A28'));
   });
 
   it('--tracking-label is the tracking the frame gives .lbl', () => {

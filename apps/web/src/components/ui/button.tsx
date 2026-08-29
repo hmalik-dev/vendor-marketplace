@@ -29,7 +29,19 @@ const buttonVariants = cva(
         // "View all ->" and other tertiary actions. No fill, no border.
         ghost: 'text-clay-500 hover:text-clay-600 hover:underline underline-offset-4',
         // "Join as a vendor" in the marketing header only.
-        ink: 'rounded-full bg-stone-900 text-stone-50 hover:bg-stone-700 motion-safe:hover:scale-[1.02] motion-safe:active:scale-[.98]',
+        /*
+         * `text-action` rather than the base `text-base`: frame `01 Landing`
+         * draws the sign-up pill at 13px (#83). `ink` is the marketing
+         * header's sign-up action and lives nowhere else, so the step lands on
+         * exactly the one control the frame measures.
+         *
+         * `border-0` for the last 2px in each axis. The frame draws a bare
+         * span, while the button base carries `border border-transparent` —
+         * invisible, but 1px on every side, which is the whole of the residual
+         * once the size is right. The text is identical either way: a range
+         * over it measures 46.05x16 in the frame and in the app.
+         */
+        ink: 'rounded-full border-0 bg-stone-900 text-stone-50 text-action hover:bg-stone-700 motion-safe:hover:scale-[1.02] motion-safe:active:scale-[.98]',
         // Irreversible only; always behind an AlertDialog, never the primary action.
         destructive:
           'bg-error-500 text-stone-0 hover:brightness-110 motion-safe:active:scale-[.98]',
