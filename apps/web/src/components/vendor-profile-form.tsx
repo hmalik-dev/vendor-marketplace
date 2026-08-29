@@ -385,7 +385,7 @@ export function VendorProfileForm({
       >
         <div className="app-pane min-h-0 flex-1 px-4 pt-5.5 sm:px-7">
           <div className="max-w-[65rem]">
-            <h1 className="font-display text-display-md text-stone-900">Your storefront</h1>
+            <h1 className="display-heading text-display-md text-stone-900">Your storefront</h1>
             <p className="mt-0.5 mb-4.5 text-base text-stone-700">
               This is what a customer sees before they decide to message you.
             </p>

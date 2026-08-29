@@ -471,7 +471,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **162** | **11 Availability — Rail micro-labels render in Instrument Serif** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-39`, axis **Font** |
 | **163** | **11 Availability — Two instructions 40px apart contradict each other** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-40`, axis **Text** |
 | **164** | **11 Availability — The page has no `<h1>`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-41`, axis **Access** |
-| **165** | **One `globals.css` rule breaks the font axis on every screen in the product** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Root cause** of #89, #109, #119, #121 and every unswept frame. Highest-leverage fix in the sweep |
+| **165** | **One `globals.css` rule breaks the font axis on every screen in the product** | **P1** | **M3** | **P1 High** | **In Progress** | `worktree-165` | **None** | `core` | **Root cause** of #131, #150, #160, #161, #162 and every unswept frame (the row previously named #89/#109/#119/#121 — wrong numbers, corrected 2026-08-29). Highest-leverage fix in the sweep |
 | **166** | **Availability calendar — every cell state carries a shape, not just a fill** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order A1.** Booked/pending/blocked were within ~2 points of luminance — unreadable in greyscale or with CVD. Adds Completed + Today. Resolves #164 |
 | **167** | **Build the shared dropdown component — nothing rolls its own** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order A2** + `42-dropdowns.md` + frames `28`. **Supersedes #69.** Closes the unreachable-panel and stays-open findings |
 | **168** | **Replace the page loader with the mark's two converging rings** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | **Change order B3.** No wordmark — it renders before fonts are guaranteed |
@@ -526,6 +526,11 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **227** | **Unsaved profile edits are discarded silently** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **228** | **A newly onboarded vendor's public storefront shows placeholder copy** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **229** | **Messaging: one thread per pair, and new messages raise no notification in either direction** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **230** | **Avatar initials render Instrument Serif below the 16px floor at three of five sizes** | **P1** | **M3** | **P2 Medium** | **Blocked — needs a human** | - | **None** | `core` | Found 2026-08-29 implementing #165. Two parts of the design contract contradict each other; needs a ruling, not a guess |
+| **231** | **`pnpm dev` inside a lane binds the web app to the lane's API port** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 running lane 165. `next dev` reads `PORT`, which `lane:up` sets to the API port, so the API dies with EADDRINUSE |
+| **232** | **Every lane worktree gets `node_modules` as a symlink to the main checkout** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 by lanes 74 and 165 independently. A lane's `pnpm install` writes into the tree its peers are reading — the one thing the orchestration policy names as forbidden |
+| **233** | **The E2E vendor account has no vendor profile, so four vendor screens cannot be browser-verified** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 verifying #165. Dashboard, portfolio, packages and availability all redirect to the storefront editor |
+| **234** | **Clerk's own sign-in card reads `vendor-marketplace` to the user** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` `auth` | Found 2026-08-29 verifying #165. The one user-facing string that says the repo name instead of the brand. Dashboard setting, not code |
 | **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
 | **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
 | **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. **Reconciliation 2026-08-29 — filed without reading `D10` or the plan.** The runtime split (web on Vercel, API on **Railway**) is decided in `vendor-marketplace-decisions.md` D10, and the release pipeline is already ticketed as **#20 Deploy Pipeline** (P0, blocked by #18, #19, #30). Treat this row as the git/branch-protection slice of #20, not a new ticket. **Done 2026-08-29.** Vercel Production Branch flipped `main` -> `production`, confirmed by reading `link.productionBranch: production` from the API. `production` branch exists and is protected alongside `main` (no deletions, no force pushes, linear history, CI required). `main` now produces previews; the live site advances only on a deliberate fast-forward. |
@@ -8350,7 +8355,7 @@ Parity sweep 2026-08-28, finding `PB2-41`. Frame **`11 Availability`** vs `/vend
 
 ### #165: One `globals.css` rule breaks the font axis on every screen in the product
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 Found by parity batch 2, 2026-08-28. `apps/web/src/app/globals.css:162-166`:
@@ -8372,10 +8377,21 @@ every other screen in the product:
    only because it carries an explicit `tracking-[-.01em]` — which is the workaround this
    rule forces on every heading that wants the correct value.
 
-**This is the highest-leverage fix in the sweep.** It is the direct cause of #89 (dashboard
-rail label), #109 (tag group headings), #119 (availability title tracking) and #121
-(availability rail micro-labels), and it will be the cause of equivalent failures on every
-frame not yet swept.
+**This is the highest-leverage fix in the sweep.**
+
+**Correction, 2026-08-29, made while implementing this ticket.** The four dependent tickets
+were originally written here as #89, #109, #119 and #121. Those numbers are wrong — they are
+a hero focus ring, chip radii, sidebar border-box footprints and icon hit areas, none of
+which are on the font axis. The tickets this one actually causes, matched by their own
+descriptions against the board, are:
+
+- **#131** — 08 Vendor dashboard: rail label renders in Instrument Serif at 11px
+- **#150** — 09 Vendor profile editor: tag group headings render in Instrument Serif at 12.5px
+- **#160** — 11 Availability: page title carries `-0.65px` tracking against the frame's `-0.26px`
+- **#161** — 11 Availability: month names carry negative tracking the frame does not
+- **#162** — 11 Availability: rail micro-labels render in Instrument Serif
+
+It will be the cause of equivalent failures on every frame not yet swept.
 
 The defect is using element type as a styling hook. Heading *level* is document structure;
 serif display type is a *role*. A micro-label that is semantically an `h2` must not inherit
@@ -8386,13 +8402,47 @@ display type from its tag.
 - [ ] The blanket `h1, h2, h3` rule is removed; display type is applied by an explicit class or token, not by element type
 - [ ] No text node below 16px renders in Instrument Serif anywhere in the app
 - [ ] Headings compute the frames' `letter-spacing` without needing a per-element `tracking-[…]` override
-- [ ] The four dependent tickets above are re-measured after this lands, and any that now pass are closed as fixed-by-#165
+- [ ] The five dependent tickets above are re-measured after this lands, and any that now pass are closed as fixed-by-#165
 - [ ] Every screen already marked PASS in the sweep ledger is re-checked on the font axis
 
 **Tests (required):**
 
 - [ ] A test walking the rendered tree and asserting **no** element with `font-family` resolving to Instrument Serif has a `font-size` below 16px. This is a whole-class guard, not a per-element assertion, and it is what stops the next micro-label-as-heading from reintroducing it.
 - [ ] A parity assertion that heading `letter-spacing` matches the frame without a local override.
+
+**Implementation notes, 2026-08-29 (branch `worktree-165`).**
+
+The hook is `.display-heading` in `globals.css`, in `@layer components` so a `tracking-[…]`
+utility still beats it — that is what keeps the landing hero at `-.02em` and the error
+screens at `-.015em` without an `!important`. It carries the family and the tracking and
+leaves the size to the type scale, because **the frames apply `class="h2"` at 19, 20, 21, 22,
+23 and 26px** and hold `-.01em` at all six, while eight inline serif spans sit at exactly 26px
+with no tracking at all. Tracking follows the role, not the size step — which is also why
+`--text-*--letter-spacing` companions must **not** be added to the scale in #74/#198.
+
+A second defect was found and fixed in the same pass: `--font-heading: var(--font-display)`
+in `@theme inline` was a second name for the same face, and shadcn's `DialogTitle` used it —
+so **every dialog in the product rendered Instrument Serif at 13.5px**, below the floor and
+invisible to any guard looking for `font-display`. Alias deleted, `DialogTitle` is sans.
+
+**Measured in the browser at 1440x900**, ten screens, both auth states, by computed style
+rather than by eye:
+
+- **No element renders Instrument Serif below 16px** on any screen reached, except the 20
+  avatar-initial spans at 14.28px — filed as **#230**, which needs a design ruling.
+- Every `.display-heading` title computes exactly `-0.01em` (`-0.26px` at 26px, `-0.22px` at
+  22px, `-0.2px` at 20px). The hero computes `-0.02em`, the 404 `-0.015em`.
+- **Nothing computes `-0.025em` anywhere**, confirmed by walking the whole CSSOM, not just
+  the elements.
+- No horizontal overflow, no clipping, no new console errors.
+
+**Four vendor screens could not be measured** — dashboard, portfolio, packages and
+availability all redirect because the E2E vendor account has no vendor profile. Filed as
+**#233**. Those four surfaces are therefore **unreached, not verified**, and the availability
+rail micro-labels named in this ticket still want a look once #233 lands.
+
+Also filed from this pass: **#231**, **#232** (lane infrastructure) and **#234** (Clerk's card
+shows the repo name to users).
 
 ---
 
@@ -9907,6 +9957,228 @@ onboarding from nothing and the quote path. **Where:** `/messages`, both roles.
 
 - [ ] A test asserting two requests from one customer to one vendor yield addressable threads.
 - [ ] A test asserting an inbound message increments the recipient's notification count.
+
+---
+
+### #230: Avatar initials render Instrument Serif below the 16px floor at three of five sizes
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Blocked — needs a human
+**Capabilities:** `core`
+**Blocked by:** None — blocked on a design ruling, not on code
+
+Found 2026-08-29 while implementing #165, which removed the blanket heading rule and added a
+whole-class guard for the serif floor. The guard cannot cover this one, because the size is
+not stated in a class.
+
+`apps/web/src/components/ui/avatar.tsx:120` sizes the initials fallback from the avatar
+diameter: `fontSize: ${pixels * 0.42}px`. Against `AVATAR_SIZES` that resolves to
+
+| Size | Diameter | Initials | Verdict |
+| ---- | -------- | -------- | ------- |
+| `xs` | 30px | **12.6px** | below the floor |
+| `sm` | 34px | **14.3px** | below the floor |
+| `md` | 38px | **16.0px** | exactly on it |
+| `lg` | 64px | 26.9px | fine |
+| `xl` | 82px | 34.4px | fine |
+
+`sm` is the default, so most avatars in the product are affected.
+
+**This is a conflict inside the design contract, which is why it is not simply fixed.**
+
+- `design/design-plan/01-foundations.md` states of Instrument Serif: **"Never below 16px."**
+- `design/design-plan/03-components.md` § Avatars states: **"Initials fallback: Instrument
+  Serif on `clay-100` (`clay-600` text) or `sage-100` (`sage-600`) — alternate by hash so a
+  list doesn't read as one colour. Sizes: 30 / 34 / 38 / 64 / 80."**
+
+Both cannot hold. Deciding one way silently would either put a rule in the foundations that
+the component vocabulary ignores, or change the look of every avatar in the product. Per
+`.claude/rules/web-design-parity.md`, where the frames and the plan disagree the frame wins —
+but here the disagreement is between two plan files, and the frames draw initials without
+stating a family, so they do not settle it.
+
+**The ruling needed, one of:**
+
+1. **Avatar initials are exempt from the floor.** Record the exemption in `01-foundations.md`
+   next to the rule, so the next reader does not re-file this. `#165`'s guard already carries
+   `avatar.tsx` in `SIZED_OUTSIDE_THE_CLASS_SYSTEM`; that list becomes the documented
+   exemption rather than a gap.
+2. **The floor wins.** Initials go to Instrument Sans below 16px — a visible change to every
+   `xs` and `sm` avatar, and `03-components.md` is corrected.
+3. **The ratio changes.** Raise `0.42` so `xs` clears 16px (0.54 would), which changes the
+   optical weight of every avatar and needs a parity pass of its own.
+
+**Tests (required, once ruled):** whichever option lands, assert it against `AVATAR_SIZES` so
+adding a sixth size cannot reintroduce the problem — the defect here is a ratio applied to a
+scale, not one bad value.
+
+---
+
+### #231: `pnpm dev` inside a lane binds the web app to the lane's API port
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 bringing up lane 165. `pnpm lane:up <n>` writes `.env.lane` with
+
+```
+PORT=4010
+WEB_PORT=3010
+```
+
+`PORT` is the API's port. But `next dev` reads `PORT` too, and nothing reads `WEB_PORT` — so
+`pnpm lane:exec 165 -- pnpm dev` starts **the web app on 4010** and the API then dies with
+`listen EADDRINUSE: address already in use 0.0.0.0:4010`. Observed exactly that; worked
+around by starting the two servers separately and passing `next dev --port 3010`.
+
+This defeats the purpose of the lane allocator. `pnpm lane:up` prints
+`Run everything through: pnpm lane:exec <ticket> -- <command>` and the documented next step is
+`pnpm dev`, so the first thing every lane is told to do is the thing that breaks it. The
+failure is also quiet in the wrong way: the web app comes up and answers, so a browser pass
+against `localhost:3010` gets connection-refused while `4010` serves the web app, and the
+obvious reading is "my change broke the app".
+
+**Fix:** have `apps/web` take its port from the lane rather than from the ambient `PORT` —
+either `"dev": "next dev --port ${WEB_PORT:-3000}"`, or drop `WEB_PORT` and let `lane:exec`
+set `PORT` per package. The second is cleaner but needs `laneEnvFor` to know which package it
+is spawning.
+
+**Two smaller defects found alongside it, same session, same file territory:**
+
+- **`laneUp` short-circuits on a manifest alone.** `readManifest` returning a row makes it
+  return early, so a lane whose manifest exists but whose `.env.lane`, `node_modules` and
+  database do not is reported as `✓ Lane up` and then fails on the next command with
+  `No .env.lane`. It should verify the artefacts it claims to have created, not just the
+  manifest. Recovering needed a `lane:down` followed by `lane:up`.
+- **`pnpm lane:up` requires `DATABASE_URL` in the ambient environment** and does not read the
+  repository's own `.env`, so it exits 1 with "DATABASE_URL is not set" in a shell that has
+  not sourced it — while every other command in the repo works fine. It should load the root
+  `.env` the way the apps do.
+- **The lane's API rejects the lane's own web origin, so every client-side fetch fails.**
+  `.env.lane` sets `PORT` and `NEXT_PUBLIC_API_URL` but not the API's allowed origin, which
+  stays at `http://localhost:3000`. Measured on lane 165:
+
+  ```
+  Origin: http://localhost:3010 → 200, no access-control-allow-origin header
+  Origin: http://localhost:3000 → 200, access-control-allow-origin: http://localhost:3000
+  ```
+
+  In the browser this means `GET /vendors?...` fails with `net::ERR_FAILED`, `/notifications`
+  fails, and the `/events/stream` SSE fails, on every signed-in screen of every lane. Search
+  renders its error boundary. **This is the most damaging of the four**, because a browser
+  pass in a lane sees a broken app and has to work out that the lane is broken rather than
+  the ticket. `lane:up` must write the web origin into the lane env too.
+
+**Tests (required).** The current `lane.test.ts` asserts the **manifest's contents** — the
+lane's *intent*. Nothing asserts the lane's *reality*, which is exactly why this passed
+review. So the test that matters is the reality one (lane 74's framing, and it is the right
+one): after `lane:up`, something is actually listening on both `manifest.webPort` and
+`manifest.apiPort`. Add alongside it a test that `laneUp` re-creates a lane whose `.env.lane`
+is missing rather than reporting success from the manifest alone.
+
+---
+
+### #232: Every lane worktree gets `node_modules` as a symlink to the main checkout
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 by lanes 74 and 165 independently, on the same fleet run. All four lane
+worktrees were created with:
+
+```
+$ ls -ld .claude/worktrees/<id>/node_modules
+lrwxr-xr-x  node_modules -> /Users/humza/Documents/vendor-marketplace/node_modules
+```
+
+**This is the one thing `~/.claude/orchestration-policy.md` names as forbidden:** "Do not
+symlink `node_modules` between lanes. A symlinked tree is shared mutable state, and the one
+command that repairs a lane's resolution writes through it into every other lane." A lane
+running `pnpm install` prints `Recreating /Users/humza/.../vendor-marketplace/node_modules`
+and only that path's mtime moves — so a lane repairing itself mutates what three peers are
+reading mid-run.
+
+It is also the root cause under several of the symptoms filed separately. Lane 67 fixed two
+of them — the `.gitignore` trailing slash (`node_modules/` matches a directory, and a symlink
+to a directory is not one, so `git status` showed `?? node_modules` and the link was
+stageable) and a missing `CI=true`. Both are real fixes, and neither stops a lane's install
+from writing into its peers.
+
+Lane 165 worked around it locally by deleting the link and running a real `pnpm install` in
+the worktree (7.1s, fully content-addressed from the store, so the cost of doing this
+properly is negligible).
+
+**Fix:** whatever creates the worktrees should let each one install its own `node_modules`,
+or `pnpm lane:up` should replace an inherited symlink with a real install before it does
+anything else. The store is content-addressed, so per-lane installs are cheap.
+
+**Tests (required):** assert that a lane worktree's `node_modules` is a directory and not a
+symlink — `lstat` on it, not `stat`, since `stat` follows the link and reports a directory
+either way. That distinction is why this was invisible.
+
+---
+
+### #233: The E2E vendor account has no vendor profile, so four vendor screens cannot be browser-verified
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 running the browser gate for #165.
+
+Signed in with `.auth/vendor.json`, all four of these return HTTP 200 but land on
+`/vendor/profile/edit`:
+
+- `/vendor/dashboard`
+- `/vendor/portfolio`
+- `/vendor/packages`
+- `/vendor/availability`
+
+`GET /vendor/profile` answers **404**, so `getOwnVendorProfile()` returns `null` and
+`apps/web/src/app/vendor/dashboard/page.tsx:37` redirects. Confirmed at the DOM level rather
+than inferred: every field in the storefront editor is empty — `0 / 80`, `0 / 1200`,
+`0 of 5 chosen`.
+
+`pnpm db:seed:marketing` seeds 16 vendors, but none of them is tied to the E2E vendor's Clerk
+id, so the account that browser verification signs in with is the one account with no
+storefront.
+
+**Why this matters more than it looks.** It is not a cosmetic fixture gap — it silently
+removes four of the product's five vendor surfaces from every browser pass, on every ticket.
+The availability rail micro-labels, the vendor dashboard rail label, and the portfolio and
+package confirmation dialogs could not be measured for #165 for exactly this reason, and a
+less careful pass would have reported them as clean rather than as unreached.
+
+**Fix:** seed a vendor profile (with packages, portfolio items and calendar dates) for the
+E2E vendor's Clerk id as part of `db:seed:marketing`, reading the id from `.env.e2e.local` —
+never from a literal in the repo.
+
+**Tests (required):** a check that the E2E vendor id resolves to a vendor profile after
+seeding. Better as a `pnpm preflight` check than a unit test — the same class as the existing
+"Demo data present" check, which passes today while the account that matters has nothing.
+
+---
+
+### #234: Clerk's own sign-in card reads `vendor-marketplace` to the user
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog
+**Capabilities:** `core` `auth`
+**Blocked by:** None
+
+Found 2026-08-29 running the browser gate for #165. On `/sign-in`, next to our own branded
+`h1`, Clerk renders its own card heading:
+
+> **Sign in to vendor-marketplace**
+
+Project law is that infrastructure and packages take the repo name, and **anything a user
+reads says Orla, from `BRAND_NAME`**. This is the one place the repo name reaches a user, and
+`brand-literals.test.ts` cannot see it because the string is not in this repository — it is
+the Clerk application name, served by Clerk.
+
+**Fix:** rename the Clerk application in the Clerk dashboard. **Human gate:** it is a setting
+in an external account, not a code change.
+
+Worth checking the same setting for every other place Clerk uses the application name —
+transactional email subjects and sender names most of all, since those reach a user outside
+the product entirely.
 
 ---
 

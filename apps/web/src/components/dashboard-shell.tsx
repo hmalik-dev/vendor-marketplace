@@ -40,7 +40,7 @@ export function DashboardShell({
           App page titles cap at display-md. A display-lg heading inside an app
           frame is a bug — see design/design-plan/04-laws.md.
         */}
-        <h1 className="mt-2 font-display text-display-md text-stone-900">{heading}</h1>
+        <h1 className="mt-2 display-heading text-display-md text-stone-900">{heading}</h1>
         <p className="mt-3 text-base text-stone-700">{description}</p>
       </header>
 
