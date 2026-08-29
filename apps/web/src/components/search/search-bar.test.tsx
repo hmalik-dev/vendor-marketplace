@@ -260,6 +260,23 @@ describe('SearchBar — pill and circle discipline', () => {
     expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
   });
 
+  /*
+   * #84. Frame `01 Landing` draws the hero submit 102.2x44 at `padding:13px
+   * 28px`; the app drew it 92.55x38 from `px-6 py-2.75 text-base`. The bar's
+   * height follows its tallest child, so this is also what puts the bar back
+   * on the frame's 58px — it had dropped to 52 when the button shrank.
+   */
+  it('draws the hero submit at the padding and size frame 01 Landing measures', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    const submit = screen.getByRole('button', { name: 'Search' });
+
+    expect(submit.className).toContain('sm:px-7');
+    expect(submit.className).toContain('sm:py-3.25');
+    expect(submit.className).toContain('sm:text-cta');
+    expect(submit.className).not.toContain('sm:text-base');
+  });
+
   it('drops the visible label in the compact header, never the accessible one', () => {
     render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
 

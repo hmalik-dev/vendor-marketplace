@@ -22,6 +22,7 @@ const PROJECT_FONT_SIZES = [
   'helper',
   'meta',
   'action',
+  'cta',
   'md',
   'display-sm',
   'display-md',

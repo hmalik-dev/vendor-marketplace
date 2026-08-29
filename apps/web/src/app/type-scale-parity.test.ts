@@ -255,7 +255,7 @@ const STEP_FOR_FRAME_CLASS: Array<[string, string]> = [
  * The other 108 — the field-error lines of frame `22` among them — set no
  * line-height at all, so the ratio belongs to `.tn`'s call site, not the step.
  */
-const STEPS_AT_THE_FRAME_DEFAULT = ['sm', 'md', 'lg', 'meta', 'helper', 'action'];
+const STEPS_AT_THE_FRAME_DEFAULT = ['sm', 'md', 'lg', 'meta', 'helper', 'action', 'cta'];
 
 /* The hero is the one place the frames set a ratio on a heading. */
 const HERO_STEPS: Array<[string, number]> = [
@@ -442,6 +442,18 @@ describe('type scale font-size and letter-spacing parity with the design frames'
 
   it('--text-action is also the size that frame draws its section action link at', () => {
     expect(THEME_FONT_SIZES.get('action')).toBe(inlineSizeWhere(LANDING, 'color:#A34A28'));
+  });
+
+  /*
+   * #84, #86. `cta` is the size frame `01 Landing` draws its hero submit at —
+   * the filled clay pill in the search bar. The shape is no more decisive here
+   * than it is for `action`: the frames draw a clay 999px pill at 10, 11,
+   * 12.5, 13 and 14px, so the size is read from this frame.
+   */
+  it('--text-cta is the size frame 01 Landing draws its hero submit at', () => {
+    expect(THEME_FONT_SIZES.get('cta')).toBe(
+      inlineSizeWhere(LANDING, 'background:#B4552F', 'border-radius:999px'),
+    );
   });
 
   it('--tracking-label is the tracking the frame gives .lbl', () => {

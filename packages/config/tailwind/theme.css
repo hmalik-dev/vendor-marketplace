@@ -123,6 +123,14 @@
   --text-action--line-height: normal;
   --text-base: 13.5px;
   --text-base--line-height: normal;
+  /*
+   * The size the frames give the primary submit inside a search bar — the one
+   * control on the hero that is a filled clay pill. Read from frame
+   * `01 Landing` for the same reason `action` is: across all frames a clay
+   * 999px pill is drawn at 10, 11, 12.5, 13 and 14px.
+   */
+  --text-cta: 14px;
+  --text-cta--line-height: normal;
   --text-md: 15px;
   --text-md--line-height: normal;
   --text-lg: 16px;
