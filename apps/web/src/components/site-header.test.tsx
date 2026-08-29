@@ -41,12 +41,25 @@ vi.mock('@/components/messaging/notification-bell', () => ({
   NotificationBell: () => <button type="button">Notifications</button>,
 }));
 
+/*
+ * The role decides whether the header carries the vendor chip. It comes from
+ * the local account record rather than Clerk, so it is mocked separately from
+ * the signed-in/signed-out state above — the two can disagree, and the chip
+ * must follow the record.
+ */
+let currentUser: { role: 'customer' | 'vendor' | 'admin' } | null = null;
+
+vi.mock('@/lib/current-user', () => ({
+  getCurrentUser: async () => currentUser,
+}));
+
 const { SiteHeader } = await import('./site-header');
 
 describe('SiteHeader', () => {
   beforeEach(() => {
     authState = 'signed-out';
     pathname = '/';
+    currentUser = null;
   });
 
   afterEach(() => {
@@ -162,5 +175,34 @@ describe('SiteHeader', () => {
     expect(screen.getByRole('button', { name: 'Open user button' })).toBeDefined();
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+  });
+
+  /*
+   * Frames `08`, `09`, `10` and `11` all draw a `Vendor` chip beside the
+   * wordmark — it is shared chrome, not one screen's decoration, so it is
+   * asserted on the header rather than on any single vendor surface.
+   */
+  it('carries the vendor chip when the account is a vendor', async () => {
+    authState = 'signed-in';
+    currentUser = { role: 'vendor' };
+
+    render(await SiteHeader());
+
+    expect(screen.getByText('Vendor')).toBeDefined();
+  });
+
+  it('withholds the vendor chip from a customer', async () => {
+    authState = 'signed-in';
+    currentUser = { role: 'customer' };
+
+    render(await SiteHeader());
+
+    expect(screen.queryByText('Vendor')).toBeNull();
+  });
+
+  it('withholds the vendor chip from a signed-out visitor', async () => {
+    render(await SiteHeader());
+
+    expect(screen.queryByText('Vendor')).toBeNull();
   });
 });

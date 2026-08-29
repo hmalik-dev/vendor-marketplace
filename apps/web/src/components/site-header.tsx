@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Show, UserButton } from '@clerk/nextjs';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
+import { RoleChip } from '@/components/brand/role-chip';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { MarketingNav } from '@/components/marketing-nav';
 import { SignedInDrawer, SignedOutDrawer } from '@/components/header-drawer';
@@ -8,6 +9,7 @@ import { HeaderQuery } from '@/components/search/header-query';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
+import { getCurrentUser } from '@/lib/current-user';
 
 /**
  * Global site header. Server Component — Clerk's control components resolve
@@ -21,7 +23,13 @@ import { getCategories } from '@/lib/vendor-data';
  * costs one API call per revalidate window rather than one per page view.
  */
 export async function SiteHeader(): Promise<React.ReactElement> {
-  const categories = await getCategories();
+  /*
+   * The role decides whether the header carries the vendor chip, and it is
+   * read from the local account record rather than Clerk metadata — the same
+   * rule `current-user.ts` states. Signed out, `getCurrentUser` returns before
+   * it makes a request, so a marketing page pays nothing for this.
+   */
+  const [categories, user] = await Promise.all([getCategories(), getCurrentUser()]);
 
   return (
     // The height sits on the header, not the nav inside it, so the bottom
@@ -36,10 +44,19 @@ export async function SiteHeader(): Promise<React.ReactElement> {
       >
         {/* 34px from the wordmark to the nav — frame `01`. */}
         <div className="flex min-w-0 flex-none items-center gap-8.5">
-          <Link href="/" className="transition-opacity hover:opacity-80">
-            {/* The wordmark reads BRAND_NAME — never a literal. */}
-            <Logo size={LOGO_SIZES.desktopHeader} />
-          </Link>
+          {/*
+            The chip sits inside the wordmark's own row so the cluster's 34px
+            gap stays between the logo and the nav, exactly as the frames draw
+            it — the chip's own offset is its 4px margin, not the cluster gap.
+          */}
+          <div className="flex items-center">
+            <Link href="/" className="transition-opacity hover:opacity-80">
+              {/* The wordmark reads BRAND_NAME — never a literal. */}
+              <Logo size={LOGO_SIZES.desktopHeader} />
+            </Link>
+
+            {user?.role === 'vendor' ? <RoleChip label="Vendor" /> : null}
+          </div>
 
           <Show when="signed-out">
             <MarketingNav />
