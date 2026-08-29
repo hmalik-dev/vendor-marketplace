@@ -205,7 +205,7 @@ The layout axis fails hardest.
 | PB1-32 | Text | Rail price row shows `· 6 hour coverage` | **absent** |
 | PB1-33 | Text | `You won't be charged yet — <vendor> confirms the date first.` | prefixed with `Messaging opens shortly.` — copy the frame does not carry — **PASS** (#114, 2026-08-29): exact frame sentence, one line, measured live |
 | PB1-34 | Text | Straight quotes | curly `" "` and `'` — **PASS** (#115, 2026-08-29): zero curly characters in rendered text, pull-quote opens U+0022, measured live |
-| PB1-35 | Interaction | Signed-out `Request booking` preserves the destination | redirects to `/sign-in` with **no `redirect_url`** (`location.search === ""`) — the booking in progress is lost |
+| PB1-35 | Interaction | Signed-out `Request booking` preserves the destination | redirects to `/sign-in` with **no `redirect_url`** (`location.search === ""`) — the booking in progress is lost — **PASS** (#116, 2026-08-29): 307 to /sign-in?redirect_url=<full destination>, measured live signed out; open-redirect vectors rejected |
 
 Also: `Send a message` is dead by design, and the blocker is explained only inside
 the shared payment reassurance sentence. `40-states.md` wants the blocker named

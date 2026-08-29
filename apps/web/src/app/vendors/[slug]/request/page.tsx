@@ -50,7 +50,19 @@ export default async function BookingRequestPage({
    * A vendor cannot request their own listing, and has no customer identity to
    * do it with — sending them to their dashboard is more use than a 403 page.
    */
-  const user = await requireCurrentUser();
+  /*
+   * Signing in comes back here, with the package and date the customer already
+   * chose in the rail — losing them meant starting the booking over.
+   */
+  const returnQuery = new URLSearchParams();
+  if (query.package) returnQuery.set('package', query.package);
+  if (query.date) returnQuery.set('date', query.date);
+  if (query.guests) returnQuery.set('guests', query.guests);
+  const returnSuffix = returnQuery.toString();
+
+  const user = await requireCurrentUser(
+    `/vendors/${slug}/request${returnSuffix ? `?${returnSuffix}` : ''}`,
+  );
   if (user.role === 'vendor') {
     redirect('/vendor/dashboard');
   }
