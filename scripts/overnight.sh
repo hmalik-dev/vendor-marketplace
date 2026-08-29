@@ -37,7 +37,7 @@ LANES="${LANES:-3}"          # /orchestrate's own ceiling is 5
 MAX_BATCHES="${MAX_BATCHES:-30}"
 MODEL="${MODEL:-opus}"
 DRY_RUN="${DRY_RUN:-0}"
-LANE_TIMEOUT_MIN="${LANE_TIMEOUT_MIN:-90}"
+LANE_TIMEOUT_MIN="${LANE_TIMEOUT_MIN:-75}"
 TRACKER=".claude/plans/vendor-marketplace-tickets.md"
 LOGDIR=".claude/logs/overnight-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$LOGDIR"
@@ -86,22 +86,89 @@ eligible_tickets() {
   rm -f "$rows"
 }
 
+# Tickets marked Done on the board. This is the progress metric.
+done_count() {
+  awk '/^## Status Board/,/^## Build Order/' "$TRACKER" 2>/dev/null \
+    | grep -E '^\|' \
+    | awk -F'|' '{ id=$2; st=$7
+        gsub(/[*`[:space:]]/, "", id)
+        gsub(/[*`]/, "", st); gsub(/^[[:space:]]+|[[:space:]]+$/, "", st)
+        if (id ~ /^[0-9]+[a-z]?$/ && st == "Done") n++
+      } END { print n+0 }'
+}
+
 # Background lane sessions still running under this checkout.
+# Only lanes with a LIVE pid count. A finished or crashed lane can linger in the
+# registry with `pid: null`; counting those makes every wait below time out, which
+# on 2026-08-29 burned 4 x 90 minutes waiting on a session that had already died.
 running_lanes() {
   claude agents --json 2>/dev/null \
-    | python3 -c 'import sys,json
-try: d=json.load(sys.stdin)
-except Exception: d=[]
-print(sum(1 for a in d if a.get("kind")!="interactive"))' 2>/dev/null || echo 0
+    | python3 -c 'import sys, json, os
+try: d = json.load(sys.stdin)
+except Exception: d = []
+n = 0
+for a in d:
+    if a.get("kind") == "interactive":
+        continue
+    pid = a.get("pid")
+    if not pid:
+        continue
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, ValueError):
+        continue
+    n += 1
+print(n)' 2>/dev/null || echo 0
+}
+
+# PIDs of live lanes, for the timeout path.
+lane_pids() {
+  claude agents --json 2>/dev/null \
+    | python3 -c 'import sys, json, os
+try: d = json.load(sys.stdin)
+except Exception: d = []
+for a in d:
+    if a.get("kind") == "interactive": continue
+    pid = a.get("pid")
+    if not pid: continue
+    try: os.kill(int(pid), 0)
+    except (OSError, ValueError): continue
+    print(pid)' 2>/dev/null
 }
 
 # /orchestrate dispatches lanes as detached background sessions and may return
 # before they finish. Never start a second batch on top of a live one.
+open_prs() { gh pr list --state open --json number --jq 'length' 2>/dev/null || echo 0; }
+
+# $1 = how many lanes were dispatched this batch.
 wait_for_lanes() {
-  local waited=0
+  local waited=0 expect="${1:-$LANES}"
   while [ "$(running_lanes)" -gt 0 ]; do
+    # A lane delivers by opening a PR and exiting at PENDING_MERGE — but the
+    # session itself can stay alive long after. On 2026-08-29 four lanes shipped
+    # their tickets by 03:48 and were still running at 12:00, so waiting on
+    # process exit burned 4.5 hours on work that was already done. Once every
+    # dispatched lane has a PR open, the batch has delivered: land it.
+    if [ "$(open_prs)" -ge "$expect" ]; then
+      log "  all $expect lane(s) have opened PRs — landing without waiting for exit"
+      for p in $(lane_pids); do kill "$p" 2>/dev/null; done
+      sleep 5
+      for p in $(lane_pids); do kill -9 "$p" 2>/dev/null; done
+      return 0
+    fi
     if [ "$waited" -ge "$((LANE_TIMEOUT_MIN * 60))" ]; then
-      log "  WARNING: lanes still running after ${LANE_TIMEOUT_MIN}m; continuing to land"
+      # Never fall through to /land-lanes with lanes still live. Landing tears
+      # down worktrees and lane databases, and on 2026-08-29 it did exactly that
+      # underneath four running lanes, destroying their working directories
+      # mid-ticket. A lane past the deadline is stuck; stop it, then land.
+      log "  WARNING: lanes still running after ${LANE_TIMEOUT_MIN}m — stopping them before landing"
+      for p in $(lane_pids); do
+        kill "$p" 2>/dev/null && log "    stopped lane pid $p"
+      done
+      sleep 10
+      for p in $(lane_pids); do
+        kill -9 "$p" 2>/dev/null && log "    force-stopped lane pid $p"
+      done
       return 0
     fi
     sleep 60
@@ -111,6 +178,7 @@ wait_for_lanes() {
 }
 
 start_count=$(eligible_tickets | wc -l | tr -d ' ')
+start_done=$(done_count)
 log "Overnight run -> $LOGDIR"
 log "Lanes: $LANES | Model: $MODEL | Max batches: $MAX_BATCHES"
 log "Eligible tickets now: $start_count"
@@ -136,6 +204,7 @@ while [ "$batch" -lt "$MAX_BATCHES" ]; do
   fi
 
   batch=$((batch + 1))
+  done_before=$(done_count)
   log "=== batch $batch — $before eligible, dispatching up to $LANES lanes ==="
 
   # Fresh supervisor. Exits when the batch is dispatched and supervised.
@@ -154,7 +223,7 @@ Order the batch by the '## Overnight queue' section of .claude/plans/vendor-mark
     >"$LOGDIR/orchestrate-$batch.log" 2>&1
   log "  orchestrate exit $?"
 
-  wait_for_lanes
+  wait_for_lanes "$LANES"
 
   # Lanes exit at PENDING_MERGE without merging; this reconciles them.
   claude -p "/land-lanes" \
@@ -168,13 +237,18 @@ Order the batch by the '## Overnight queue' section of .claude/plans/vendor-mark
   git pull --ff-only --quiet 2>/dev/null
 
   after=$(eligible_tickets | wc -l | tr -d ' ')
-  log "  eligible: $before -> $after"
+  done_after=$(done_count)
+  landed=$((done_after - done_before))
+  log "  eligible: $before -> $after | Done: $done_before -> $done_after (+$landed)"
 
-  # Two batches that move nothing means the queue needs a human, not more grinding.
-  if [ "$after" -ge "$before" ]; then
+  # Progress is tickets DONE, never the eligible count. Eligibility legitimately
+  # GROWS when work lands: on 2026-08-29 finishing #74 and #165 released ~60
+  # parity tickets behind them and lanes filed 6 more, so 4 completed tickets
+  # showed up as "cleared: -62" and read like a failure. Count what landed.
+  if [ "$landed" -le 0 ]; then
     stalled=$((stalled + 1))
     if [ "$stalled" -ge 2 ]; then
-      log "STOP: two consecutive batches cleared no tickets. Remaining work needs a human."
+      log "STOP: two consecutive batches landed no tickets. Remaining work needs a human."
       break
     fi
   else
@@ -186,7 +260,7 @@ done
 end_count=$(eligible_tickets | wc -l | tr -d ' ')
 log "=== summary ==="
 log "  batches run:        $batch"
+log "  tickets landed:     $(($(done_count) - start_done))"
 log "  eligible at start:  $start_count"
-log "  eligible at end:    $end_count"
-log "  cleared:            $((start_count - end_count))"
+log "  eligible at end:    $end_count  (grows when landed work unblocks more)"
 log "  logs:               $LOGDIR"
