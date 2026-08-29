@@ -43,7 +43,7 @@ export function PackagesPane({ packages, businessName }: PackagesPaneProps): Rea
             </span>
           </div>
 
-          <p className="mt-1.5 text-[13.5px] leading-[1.6] text-stone-700">
+          <p className="mt-1.5 text-[13.5px] leading-prose text-stone-700">
             {servicePackage.description}
           </p>
 
@@ -62,7 +62,7 @@ export function PackagesPane({ packages, businessName }: PackagesPaneProps): Rea
               {servicePackage.inclusions.map((inclusion) => (
                 <li
                   key={inclusion}
-                  className="flex items-start gap-2 text-[13px] leading-[1.5] text-stone-700"
+                  className="flex items-start gap-2 text-[13px] leading-normal text-stone-700"
                 >
                   <Check aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-clay-400" />
                   {inclusion}

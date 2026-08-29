@@ -92,17 +92,47 @@ nothing else.
 
 ### Scale (two densities)
 
-| Token       | Size / line-height | Marketing use         | App use                               |
-| ----------- | ------------------ | --------------------- | ------------------------------------- |
-| `text-xs`   | 11px / 1.4         | badges, timestamps    | pill labels, helper text              |
-| `text-sm`   | 12.5px / 1.5       | metadata              | the default for labels and metadata   |
-| `text-base` | 13.5px / 1.6       | —                     | body, inputs, buttons, table cells    |
-| `text-md`   | 15px / 1.6         | body                  | hero search values                    |
-| `text-lg`   | 16px / 1.6         | hero sub-line         | —                                     |
-| display-sm  | 21px Serif         | card titles           | pane headings (`.sh`)                 |
-| display-md  | 26px Serif         | section headings      | page titles (`.h2`) — the app ceiling |
-| display-lg  | 33–36px Serif      | profile names, totals | confirmation only                     |
-| display-xl  | 54px Serif         | landing hero          | never                                 |
+| Token       | Size / line-height    | Marketing use         | App use                               |
+| ----------- | --------------------- | --------------------- | ------------------------------------- |
+| `text-xs`   | 11px / `normal`       | badges, timestamps    | pill labels, helper text              |
+| `text-sm`   | 12.5px / `normal`     | metadata              | the default for labels and metadata   |
+| `text-base` | 13.5px / `normal`     | —                     | body, inputs, buttons, table cells    |
+| `text-md`   | 15px / `normal`       | body                  | hero search values                    |
+| `text-lg`   | 16px / `normal`       | hero sub-line         | —                                     |
+| display-sm  | 21px Serif / `normal` | card titles           | pane headings (`.sh`)                 |
+| display-md  | 26px Serif / `normal` | section headings      | page titles (`.h2`) — the app ceiling |
+| display-lg  | 33–36px Serif / 1.15† | profile names, totals | confirmation only                     |
+| display-xl  | 54px Serif / 1.04     | landing hero          | never                                 |
+
+**Line-height was derived from the frame markup in `Orla - Screens.dc.html` on
+2026-08-28** (#74), replacing the ratios this table previously carried. The frames
+set no `line-height` on any UI class, so every control computes `normal`; the only
+ratios they set are inline, on wrapping prose and on the hero headline. The old
+ratios made every pill, chip, button and card 3–7px taller than its frame
+counterpart.
+
+† **`display-lg` is the one derived value, not a read one.** The frames never draw
+34px, and the neighbouring sizes disagree — 33px at 1.1, 36px at 1.06, 32px and
+38px at 1.15. 1.15 is the ratio the frames use most often across display type
+(≥27px), which is what `type-scale-parity.test.ts` asserts. Every other row in
+this table is read directly off a frame class or an inline declaration.
+
+**This table describes the tokens, which is not the whole app.** A size written as
+an arbitrary utility — `text-[26px]` rather than `text-display-md` — emits no
+line-height and inherits `1.5` from Tailwind's Preflight instead. 96 such sites
+exist; **#235** owns making the inherited default agree with the frames.
+
+**Named exceptions.** A ratio belongs to the element that wraps, not to the scale
+step, so text that wraps asks for a measure by name:
+
+| Class            | Ratio | Derived from                                        | Use                                                |
+| ---------------- | ----- | --------------------------------------------------- | -------------------------------------------------- |
+| `leading-normal` | 1.5   | frame `.tn`, the one UI class that sets a ratio     | helper and hint lines under a control              |
+| `leading-prose`  | 1.6   | the ratio the frames set most often on inline prose | body copy, descriptions, review and message bodies |
+
+`leading-normal` is Tailwind's own step and already equals 1.5, so it gets no
+second name. `leading-prose` is a new `--leading-*` token because no built-in
+step is 1.6 — `relaxed` is 1.625.
 
 **A display-lg heading inside an app frame is a bug.** App page titles cap at 26px.
 

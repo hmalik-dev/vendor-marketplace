@@ -151,7 +151,7 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
                       </span>
                     </span>
                     {item.body ? (
-                      <span className="mt-0.5 block text-sm leading-[1.5] text-stone-700">
+                      <span className="mt-0.5 block text-sm leading-normal text-stone-700">
                         {item.body}
                       </span>
                     ) : null}

@@ -277,7 +277,7 @@ export function MessagesScreen({
 
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5.5 py-4.5">
               {messages.length === 0 ? (
-                <p className="m-auto max-w-90 text-center text-base leading-[1.6] text-stone-600">
+                <p className="m-auto max-w-90 text-center text-base leading-prose text-stone-600">
                   Start the conversation — say what you need and when, and the reply lands here.
                 </p>
               ) : (
@@ -302,7 +302,7 @@ export function MessagesScreen({
                         */}
                         <p
                           className={cn(
-                            'px-3.75 py-3 text-base leading-[1.6] whitespace-pre-wrap text-stone-900',
+                            'px-3.75 py-3 text-base leading-prose whitespace-pre-wrap text-stone-900',
                             isOwn
                               ? 'rounded-[14px_14px_4px_14px] bg-clay-100'
                               : 'rounded-[14px_14px_14px_4px] bg-stone-0',

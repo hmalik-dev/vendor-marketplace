@@ -324,7 +324,7 @@ export function AvailabilityCalendar({
           </div>
         </div>
 
-        <p className="mt-1 shrink-0 text-base text-stone-700">
+        <p className="mt-1 shrink-0 text-base leading-normal text-stone-700">
           Click a date to block it, or drag across several. Booked dates are locked.
         </p>
 
@@ -428,7 +428,7 @@ export function AvailabilityCalendar({
           </h2>
 
           {selection.length === 0 ? (
-            <p className="text-sm text-stone-700">
+            <p className="text-sm leading-normal text-stone-700">
               Click a date to select it, or drag across several.
             </p>
           ) : (

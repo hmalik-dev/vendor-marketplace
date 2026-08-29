@@ -380,7 +380,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **71** | **Long tokens are never broken — one pasted link overflows its bubble** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Invisible to the page-level overflow assertion; an ancestor clips it |
 | **72** | **Error and empty-state copy violates `40-states.md` in five places** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Raw API strings reaching users; an empty state names a filter that does not exist |
 | **73** | **The six accessibility laws are violated and nothing was checking them** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Sixth `Access` parity axis added 2026-08-28; card focus ring is 100% clipped |
-| **74** | **Adopt the frames' line-height — the app's type scale contradicts every frame** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **User ruling 2026-08-28: the frames win.** Blocks a clean parity verdict on every screen |
+| **74** | **Adopt the frames' line-height — the app's type scale contradicts every frame** | **P1** | **M3** | **P1 High** | **In Progress** | `worktree-74` | **None** | `core` | **User ruling 2026-08-28: the frames win.** **Criteria half-met — read before closing.** Every `--text-*--line-height` is now `normal`, `display-xl` corrected 1.08→1.04, `--leading-prose` added as the named exception. Browser-measured at 1440x900: **2 of the 5 acceptance controls closed** (landing pill 33→29.00 = frame; `Request booking` line-height component closed exactly, +2.00 residual is a stray transparent border). **3 did not** — category card +6.25, search chip +3.75, profile chip +3.25. Cause is **#235**, not this change: those controls are sized by arbitrary `text-[Npx]`, which emits no line-height and inherits Preflight's 1.5. Unblocks #198 and the 59 tickets gated on this one |
 | **75** | **Landing, Search and Vendor profile fail parity on 35 counts** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **#74** | `core` | Parity batch 1. Full `expected` vs `observed` tables in the sweep ledger |
 | **76** | **Sign-in redirect discards the destination** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `auth` | Drops the user at the moment of intent; fix must include an open-redirect test |
 | **77** | **Event date has no upper bound — a booking for the year 9999 goes through** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Lower bound is handled well, which makes this an oversight |
@@ -539,6 +539,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **205** | **[PLATFORM] Ephemeral Neon branch per pull request** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / environments.** Filed 2026-08-28. Wire Neon's Vercel integration or `neondatabase/create-branch-action` so each PR gets a copy-on-write branch off `staging`, deleted on merge. Gives every PR preview a full-fidelity database to run its migrations against in isolation — the capability self-managed Postgres cannot offer, and the strongest reason this stack is on Neon. Watch the **10 branches/project** free-plan ceiling; set a TTL so abandoned PRs do not hold slots **Human gate: an OAuth install.** Authorising Neon against the Vercel or GitHub account is an interactive consent screen. Once installed, configuration is agent-executable. **Done 2026-08-28:** `.github/workflows/preview-branch.yml` added — creates a branch off `staging` per PR, applies that PR's migrations to it, deletes on close, with a 7-day `expires_at` as a backstop against the 10-branch ceiling. Both Neon actions are **pinned to commit SHAs**, not tags: each receives `NEON_API_KEY`, so a retagged release would hand over a project-wide credential. Gated behind a repository variable so it stays inert. **Outstanding:** add the `NEON_API_KEY` secret and set `NEON_PREVIEW_BRANCHES=on`. **Done 2026-08-29 — proven end to end on PR #1, not asserted.** Project-scoped Neon key (id 3294733, Editor on this project only) piped straight into `gh secret set` so the value never touched a transcript; `NEON_PREVIEW_BRANCHES=on`. The first real run **failed** with `ERR_MODULE_NOT_FOUND` — `migrate.ts` imports the shared package's build output and the workflow never built it; fixed in 05c2c32, which also repaired the same defect in the CI jobs. Re-run: branch `preview/pr-1` created off `staging` (`creation_source: github`, 7-day TTL), `Migrations applied.`, and deleted on PR close. Both Neon actions pinned to commit SHAs because each receives `NEON_API_KEY`. |
 | **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P3 Low** | **Deferred — needs a human** | — | **Launch prep — not current work** | `core` | **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. **Reconciliation 2026-08-29:** overlaps **#19**, which already covers external-account provisioning and is `Deferred — needs a human`. The plan's launch checklist also requires the pooled string on Railway and the unpooled one on Railway *and* GitHub Actions. **Deferred to launch prep 2026-08-29 (user ruling).** Free is the correct plan while there is no real data — usage is **8.9 of 100 CU-hours**, 34 MB of 512 MB, 3 of 10 branches. Nothing here blocks development. **The checklist moved to `docs/pre-launch.md` §3.2**, which is where launch-gated work belongs; this row is a pointer, not a queue item. Do not re-surface it as active work. |
 | **207** | **`nearby-availability` computes "today" in two timezones — the suite fails every evening** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Found 2026-08-28** running the gate for #200; **pre-existing**, reproduced with that ticket's source changes stashed. `never suggests a past date when the wanted date is today` asserts `expected '2026-08-28' to be '2026-08-30'`: the test helper `dayFromToday` and the route disagree about which day it is once local time passes UTC midnight (failure observed at 22:26 local = 05:26 UTC the next day). Violates the deterministic-test law — the suite reads the real clock, so it is green all morning and red all evening. Fix by injecting a fixed clock rather than widening the assertion, and check `dayFromToday` against every other date-anchored suite. Use `/debug-flaky-test`. |
+| **235** | **The app's inherited line-height is 1.5, so every arbitrary `text-[Npx]` renders loose against its frame** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#165** | `core` | **Found by #74's browser measurement 2026-08-29, with compiled-CSS evidence.** #74 set every `--text-*--line-height` to `normal`, which only reaches elements sized by a named scale step. 96 sites across 40 files use an arbitrary `text-[Npx]`, which emits `font-size` and nothing else, so they inherit Preflight's `html{line-height:1.5}`. **Three of #74's five acceptance controls still fail because of this.** Owns the one-line fix #165 declined to absorb. Work before #198 |
 
 Rows are ordered by build sequence, not by ticket number. **207 rows — 50 Done, 1 In Progress, 150 Backlog, 4 Deferred, 2 Blocked.** Recounted 2026-08-28; the previous "56 rows — 25 Done" line had been stale for many batches.
 
@@ -5584,7 +5585,7 @@ was added 2026-08-28; these are what it and the sweep found first.
 
 ### #74: Adopt the frames' line-height — the app's type scale contradicts every frame
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 **Ruled by the user 2026-08-28: follow whichever matches the HTML screens most accurately.
@@ -5620,6 +5621,43 @@ verdict on **every screen in the product**.
 **Tests (required):**
 
 - [ ] A parity assertion comparing the rendered height of `.btnP`, `.pill`, `.lbl`, `.inp` and the card against the same class rendered from `Orla - Screens.dc.html`. Derive the expectation from the frame at test time rather than hard-coding pixels, so the test cannot drift from the contract.
+
+**Outcome 2026-08-29 — delivered, criteria half-met. Do not close as fully met.**
+
+Shipped: every `--text-*--line-height` is `normal`, matching the frames; `display-xl`
+corrected 1.08 → 1.04; `--leading-prose: 1.6` added as the one named exception, with
+`.tn`'s 1.5 left as Tailwind's existing `leading-normal` rather than given a second
+name; 21 long-form prose sites given an explicit measure; all 16 arbitrary
+`leading-[1.6]`/`leading-[1.5]` literals normalised.
+
+Browser-measured at 1440x900, frame vs live, `getBoundingClientRect`:
+
+| Control | Frame | Live | Verdict |
+| --- | --- | --- | --- |
+| Landing pill | 29.00 | 29.00 | closed (was 33) |
+| `Request booking` `.btnP` | 42.50 | 44.50 | line-height closed exactly; +2.00 is a transparent border the frame lacks |
+| Category card | 157.50 | 163.75 | **not closed, +6.25** |
+| Search refine chip | 31.00 | 34.75 | **not closed, +3.75** |
+| Vendor-profile chip | 24.00 | 27.25 | **not closed, +3.25** |
+
+**Every control that closed uses a named scale step; every one that did not uses an
+arbitrary `text-[Npx]`,** which emits `font-size` alone and inherits Preflight's
+`html{line-height:1.5}`. That is **#235**, filed with the compiled-CSS evidence, and
+it is the remainder of this ticket's third acceptance bullet. The hero was confirmed
+at exactly 1.040 and no prose collapsed — all measured at 1.600.
+
+**The required test was substituted, deliberately.** A rendered-height assertion is
+not reachable in CI: `ci.yml` installs no browsers, there is no Playwright runner in
+the repo, and the web suite is jsdom, which performs no layout. `apps/web/src/app/
+type-scale-parity.test.ts` instead derives every expectation from the frame file at
+test time — a stronger guard against design re-import drift than a pixel snapshot,
+but it does **not** discharge the acceptance bullet, which is why the browser
+measurement above is recorded rather than asserted. #235 should carry the
+call-site guard (`text-[<n>px]` must ship with a `leading-*`), which fails on 96
+sites today and so cannot land before the fix.
+
+**Frame `02 Search` was not parity-checked** — a lane CORS misconfiguration blocked
+the result grid. See `.claude/plans/lane-infrastructure-findings.md`.
 
 ---
 
@@ -9959,6 +9997,80 @@ onboarding from nothing and the quote path. **Where:** `/messages`, both roles.
 - [ ] A test asserting an inbound message increments the recipient's notification count.
 
 ---
+### #235: The app's inherited line-height is 1.5, so every arbitrary `text-[Npx]` renders loose
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #165 (it owns `globals.css` this run; the file frees up when it merges)
+
+Found by #74's browser measurement, 2026-08-29. Filed at #165's request after it
+declined to absorb the fix — correctly, because the change needs a browser pass
+over every screen and #165's acceptance criteria say nothing about leading.
+
+**The mechanism, with compiled output rather than assertion.** #74 set every
+`--text-*--line-height` to `normal` to match the frames. That reaches an element
+only when its size comes from a **named scale step**, because Tailwind emits the
+size and the line-height on the same rule. An element sized with an **arbitrary**
+utility gets font-size and nothing else:
+
+```
+.text-\[10\.5px\]{font-size:10.5px}
+```
+
+So it inherits. `apps/web/node_modules/tailwindcss/preflight.css:28-30` sets
+`html, :host { line-height: 1.5 }`, and `apps/web/src/app/layout.tsx:95-99` sets
+no line-height on `<html>` or `<body>`. **96 arbitrary `text-[Npx]` occurrences
+across 40 files therefore render at 1.5 where the frames draw `normal`** — led by
+`text-[10.5px]` (20 sites) and `text-[12.5px]` (16).
+
+**Measured consequence at 1440x900** (frame vs live, `getBoundingClientRect`):
+
+| Control | Frame | Live | Delta |
+| --- | --- | --- | --- |
+| Category card (`01`) | 157.50 | 163.75 | **+6.25** |
+| — its `.sh` title, `text-[17px]` | 22.50 | 25.50 | +3.00 |
+| — its description, `text-[11.5px]` | 14.00 | 17.25 | +3.25 |
+| Search refine chip (`02`) | 31.00 | 34.75 | **+3.75** |
+| Vendor-profile chip (`03`) | 24.00 | 27.25 | **+3.25** |
+| `.lbl` micro-label, `text-[10.5px]` | 12.50 | 15.75 | +3.25 |
+| Rail price, `text-[36px]` | 46.50 | 54.00 | +7.50 |
+
+Every control that closed under #74 uses a scale step; every one that did not uses
+`text-[Npx]`. **These are three of #74's five acceptance controls**, which is why
+#74 shipped with its criteria recorded as half-met rather than claimed.
+
+The serif group is the highest-value target: `.h2` and `.sh` set no line-height in
+the frames, and the sites carrying `text-[26px]`, `[22px]`, `[20px]` and `[19px]`
+draw a ~39px line box against the frame's ~30px.
+
+**Acceptance:**
+
+- [ ] The inherited default agrees with the frames — one declaration,
+      `html { line-height: normal }` in `globals.css`'s base layer, rather than a
+      `leading-*` added to each of the 96 call sites. The per-call-site route
+      cannot close the class: an element with **no** text utility still inherits
+- [ ] The five controls #74 names all match their frame at 1440x900
+- [ ] Any prose that regresses is given an explicit measure (`leading-prose`,
+      `leading-normal`) rather than the default being widened back
+- [ ] Every screen is driven in a browser afterwards — this changes computed
+      leading product-wide, and #74's pass could not reach the four vendor
+      surfaces blocked by #233
+
+**Tests (required):**
+
+- [ ] A test asserting the app sets an inherited line-height that matches the
+      frames', so a future Tailwind upgrade reintroducing `1.5` fails here.
+- [ ] A guard asserting no `className` carrying `text-[<n>px]` ships without an
+      accompanying `leading-*`. It fails on 96 sites today, so it lands with the
+      fix, not before.
+
+**Sequencing.** Work **before #198**. Five sites use `text-[26px]` where
+`--text-display-md: 26px` already exists; collapsing them to the token is only
+safe once the inherited default is `normal`, otherwise it moves leading away from
+the frame rather than toward it.
+
+---
+
+
 
 ### #230: Avatar initials render Instrument Serif below the 16px floor at three of five sizes
 

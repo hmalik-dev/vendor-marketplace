@@ -46,7 +46,7 @@ export function PublishChecklist({ dashboard, today }: PublishChecklistProps): R
           {SCHEDULE_DATE.format(new Date(`${today}T00:00:00Z`))}
         </h2>
         {dashboard.todaysBookings.length === 0 ? (
-          <p className="text-base leading-[1.6] text-stone-700">
+          <p className="text-base leading-prose text-stone-700">
             Nothing booked today. Your calendar is what customers search against, so keeping it
             current is what brings the next one in.
           </p>
