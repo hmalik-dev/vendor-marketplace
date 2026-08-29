@@ -68,6 +68,10 @@ skills-lock.json
 # untracked files in the main tree.
 .claude/worktrees/
 
+# Lane manifests. Runtime state for an in-flight lane, created by /orchestrate
+# and deleted by /land-lanes; the durable record is the ticket tracker.
+.claude/lanes/
+
 # Overnight run logs. One directory per run, full transcripts of every lane.
 .claude/logs/
 
