@@ -57,6 +57,20 @@
       "when": 1787909694091,
       "tag": "0007_aromatic_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787984574291,
+      "tag": "0008_dedupe_live_booking_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787987152693,
+      "tag": "0009_cold_human_torch",
+      "breakpoints": true
     }
   ]
 }

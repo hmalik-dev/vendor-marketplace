@@ -24,6 +24,13 @@ describe('renderLaneEnv', () => {
     expect(parsed.WEB_PORT).toBe('3007');
   });
 
+  it('lets the API accept this lane own web origin, so a browser can drive it', () => {
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    // `allowedOrigins()` splits WEB_URL; without it the lane refuses its own
+    // web app and every client-side call fails CORS.
+    expect(parsed.WEB_URL).toBe('http://localhost:3007');
+  });
+
   it('points the database at this lane own database', () => {
     const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
     expect(parsed.DATABASE_URL).toBe(databaseUrl);

@@ -139,6 +139,19 @@ export const BOOKING_REQUEST_TRANSITIONS: Record<
 /** Statuses a lazy expiry sweep may still move to `expired`. */
 export const EXPIRABLE_BOOKING_REQUEST_STATUSES = ['pending', 'quoted'] as const;
 
+/**
+ * A request still awaiting a decision from someone — derived from the state
+ * machine rather than listed, so it cannot drift from it: a status is live
+ * exactly while it still has somewhere to go.
+ *
+ * This is what the `booking_requests_live_*` unique indexes cover. `pending`
+ * alone would not: a vendor who quotes a custom request moves it out of
+ * `pending` without settling it, and the customer resubmitting the same form
+ * would then open a second thread for one date.
+ */
+export const LIVE_BOOKING_REQUEST_STATUSES: readonly BookingRequestStatus[] =
+  BOOKING_REQUEST_STATUSES.filter((status) => BOOKING_REQUEST_TRANSITIONS[status].length > 0);
+
 /** Longest "anything else we should know" note on a request — frame `04`. */
 export const BOOKING_REQUEST_NOTES_MAX_LENGTH = 600;
 

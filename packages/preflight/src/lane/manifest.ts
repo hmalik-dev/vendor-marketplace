@@ -11,7 +11,12 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
-export type LaneState = 'active' | 'pending-merge' | 'failed';
+/**
+ * `provisioning` is the state a lane is claimed in and stays in until install,
+ * build and migrate have all succeeded. Nothing but `lane up` should ever see
+ * it: it exists so a retry can tell a half-built lane from a usable one.
+ */
+export type LaneState = 'provisioning' | 'active' | 'pending-merge' | 'failed';
 
 export interface LaneManifest {
   readonly ticket: string;

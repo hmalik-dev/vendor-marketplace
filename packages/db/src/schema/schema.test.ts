@@ -1,13 +1,24 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  BOOKING_REQUEST_STATUSES,
   BUDGET_TIERS,
   CATEGORY_SEEDS,
+  LIVE_BOOKING_REQUEST_STATUSES,
   TAG_CATEGORIES,
   USER_ROLES,
 } from '@vendor-marketplace/shared';
 import { eq, sql } from 'drizzle-orm';
+import { seedBookingActors } from '../testing/booking-actors.js';
 import { createTestDatabase, type TestDatabase } from '../testing/test-db.js';
-import { categories, tagSuggestions, tags, users, vendorProfiles, vendorTags } from './index.js';
+import {
+  bookingRequests,
+  categories,
+  tagSuggestions,
+  tags,
+  users,
+  vendorProfiles,
+  vendorTags,
+} from './index.js';
 
 const EXPECTED_TABLES = [
   'availability',
@@ -356,5 +367,113 @@ describe('constraints', () => {
     expect(after).toBeDefined();
     expect(after!.resolvedTagId).toBeNull();
     expect(after!.status).toBe('approved');
+  });
+});
+
+describe('the live booking request indexes', () => {
+  let customerId: string;
+  let vendorId: string;
+  let packageId: string;
+  let counter = 0;
+
+  beforeAll(async () => {
+    ({ customerId, vendorId, packageId } = await seedBookingActors(testDb.db, 'dedupe'));
+  });
+
+  /** A distinct date per test, so the cases cannot collide with each other. */
+  function nextDate(): string {
+    counter += 1;
+    return `2027-03-${String(counter).padStart(2, '0')}`;
+  }
+
+  async function send(eventDate: string, withPackage: boolean): Promise<string> {
+    const [row] = await testDb.db
+      .insert(bookingRequests)
+      .values({
+        customerId,
+        vendorId,
+        packageId: withPackage ? packageId : null,
+        eventDate,
+        status: 'pending',
+      })
+      .returning({ id: bookingRequests.id });
+
+    return row!.id;
+  }
+
+  it('rejects a second live request for the same customer, vendor, date and package', async () => {
+    const eventDate = nextDate();
+    await send(eventDate, true);
+
+    await expect(send(eventDate, true)).rejects.toThrow();
+  });
+
+  it('rejects a second live custom request, where the package is null on both', async () => {
+    const eventDate = nextDate();
+    await send(eventDate, false);
+
+    // Postgres treats NULLs as distinct, so this is the case a single combined
+    // index would let through.
+    await expect(send(eventDate, false)).rejects.toThrow();
+  });
+
+  it('admits a custom request alongside a package request on the same date', async () => {
+    const eventDate = nextDate();
+    await send(eventDate, true);
+
+    await expect(send(eventDate, false)).resolves.toEqual(expect.any(String));
+  });
+
+  it('covers only live requests, so the same date can be asked for again after a cancellation', async () => {
+    const eventDate = nextDate();
+    const first = await send(eventDate, true);
+
+    await testDb.db
+      .update(bookingRequests)
+      .set({ status: 'cancelled' })
+      .where(eq(bookingRequests.id, first));
+
+    const second = await send(eventDate, true);
+    expect(second).not.toBe(first);
+  });
+
+  it('does not constrain a different date for the same customer, vendor and package', async () => {
+    await send(nextDate(), true);
+
+    await expect(send(nextDate(), true)).resolves.toEqual(expect.any(String));
+  });
+
+  it('still covers a request the vendor has quoted, which is awaiting a decision', async () => {
+    const eventDate = nextDate();
+    const first = await send(eventDate, false);
+
+    await testDb.db
+      .update(bookingRequests)
+      .set({ status: 'quoted' })
+      .where(eq(bookingRequests.id, first));
+
+    // A quote moves the request out of `pending` without settling it. Covering
+    // only `pending` would let the customer's next submission open a second
+    // live thread for the same date.
+    await expect(send(eventDate, false)).rejects.toThrow();
+  });
+
+  it('is predicated on exactly the statuses the shared constant calls live', async () => {
+    // The SQL cannot import the constant, so this is what keeps the two from
+    // drifting when the lifecycle gains or loses a non-terminal status.
+    const result = await testDb.db.execute<{ indexname: string; indexdef: string }>(
+      sql`SELECT indexname, indexdef FROM pg_indexes
+          WHERE tablename = 'booking_requests' AND indexname LIKE 'booking_requests_live_%'
+          ORDER BY indexname`,
+    );
+
+    expect(result.rows).toHaveLength(2);
+
+    for (const row of result.rows) {
+      const mentioned = [...new Set(BOOKING_REQUEST_STATUSES)].filter((status) =>
+        row.indexdef.includes(`'${status}'`),
+      );
+      expect(mentioned.sort(), row.indexname).toEqual([...LIVE_BOOKING_REQUEST_STATUSES].sort());
+    }
   });
 });

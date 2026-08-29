@@ -10,6 +10,14 @@ export function renderLaneEnv(manifest: LaneManifest, databaseUrl: string): stri
     `PORT=${manifest.apiPort}`,
     `WEB_PORT=${manifest.webPort}`,
     `NEXT_PUBLIC_API_URL=http://localhost:${manifest.apiPort}`,
+    /*
+     * The API derives its CORS allowlist from `WEB_URL`. Without this line a
+     * lane inherits the root `.env`'s `http://localhost:3000`, so the lane's
+     * own web origin is refused and every client-side call fails as
+     * `net::ERR_FAILED` — which makes browser verification of a lane
+     * impossible, and looks like the change under test being broken.
+     */
+    `WEB_URL=http://localhost:${manifest.webPort}`,
     `DATABASE_URL=${databaseUrl}`,
     /*
      * DATABASE_URL_UNPOOLED and NEON_BRANCH are deliberately absent. They

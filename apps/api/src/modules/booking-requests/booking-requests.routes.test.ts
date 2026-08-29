@@ -9,7 +9,7 @@ import {
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import { addDays, BOOKING_REQUEST_EXPIRY_DAYS, toDateString } from '@vendor-marketplace/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -258,6 +258,193 @@ describe('/booking-requests', () => {
         .from(notifications);
 
       expect(rows.map((row) => row.type)).toEqual(['new_request']);
+    });
+
+    it('creates one request when three identical submissions race', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+
+      /*
+       * These three interleave at their `await` points, which is what the
+       * sequential cases below do not do. They are not truly parallel: the
+       * harness runs one in-process PGlite on a single connection, so the
+       * inserts serialize and each conflict resolves against a committed row
+       * rather than a blocking one. What settles the genuinely parallel case
+       * is the unique index itself, which `schema.test.ts` exercises directly.
+       */
+      const responses = await Promise.all([
+        createRequest(vendorId, { packageId }),
+        createRequest(vendorId, { packageId }),
+        createRequest(vendorId, { packageId }),
+      ]);
+
+      const ids = responses.map((response) => response.json<RequestBody>().id);
+      expect(new Set(ids).size).toBe(1);
+      expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 200, 201]);
+
+      const rows = await harness.database.db
+        .select({ id: bookingRequests.id })
+        .from(bookingRequests);
+      expect(rows).toHaveLength(1);
+    });
+
+    it('answers a repeat submission with the existing request, not a second one', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+
+      const first = await createRequest(vendorId, { packageId });
+      const second = await createRequest(vendorId, { packageId });
+
+      expect(first.statusCode).toBe(201);
+      // The constraint violation surfaces as the record that already exists.
+      expect(second.statusCode).toBe(200);
+      expect(second.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
+      expect(second.headers.location).toBe(`/booking-requests/${first.json<RequestBody>().id}`);
+    });
+
+    it('does not notify the vendor a second time about the same request', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+
+      await createRequest(vendorId, { packageId });
+      await createRequest(vendorId, { packageId });
+
+      const rows = await harness.database.db
+        .select({ type: notifications.type })
+        .from(notifications);
+
+      expect(rows.map((row) => row.type)).toEqual(['new_request']);
+    });
+
+    it('dedupes two custom requests, where neither carries a package', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Wren & Field');
+
+      const first = await createRequest(vendorId, {
+        customDetails: 'A two-hour engagement shoot in the botanical garden.',
+      });
+      const second = await createRequest(vendorId, {
+        customDetails: 'A two-hour engagement shoot in the botanical garden.',
+      });
+
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(200);
+      expect(second.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
+    });
+
+    it('lets the customer ask again once the first request is no longer live', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+
+      const first = await createRequest(vendorId, { packageId });
+      const withdrawn = await post(
+        CUSTOMER,
+        `/booking-requests/${first.json<RequestBody>().id}/cancel`,
+      );
+      expect(withdrawn.statusCode).toBe(200);
+
+      const second = await createRequest(vendorId, { packageId });
+
+      expect(second.statusCode).toBe(201);
+      expect(second.json<RequestBody>().id).not.toBe(first.json<RequestBody>().id);
+    });
+
+    it('keeps two customers asking the same vendor for the same date apart', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+
+      const mine = await createRequest(vendorId, { packageId });
+      const theirs = await createRequest(vendorId, { packageId }, OTHER_CUSTOMER);
+
+      expect(theirs.statusCode).toBe(201);
+      expect(theirs.json<RequestBody>().id).not.toBe(mine.json<RequestBody>().id);
+    });
+
+    it('leaves no request behind when a later write in the same create fails', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+
+      // A real failure from the engine rather than a mocked DAO: the
+      // notification insert is the last of the three writes a create makes.
+      await harness.database.db.execute(
+        sql`CREATE OR REPLACE FUNCTION refuse_notification() RETURNS trigger AS $$
+            BEGIN RAISE EXCEPTION 'notification storage is down'; END;
+            $$ LANGUAGE plpgsql`,
+      );
+      await harness.database.db.execute(
+        sql`CREATE TRIGGER refuse_notification_trigger BEFORE INSERT ON notifications
+            FOR EACH ROW EXECUTE FUNCTION refuse_notification()`,
+      );
+
+      try {
+        expect((await createRequest(vendorId, { packageId })).statusCode).toBe(500);
+
+        /*
+         * The row must not survive the failure. A committed request whose
+         * conversation and notification never happened would be found by
+         * every retry, which then takes the dedupe branch and skips those
+         * side effects deliberately — so the vendor would never be told, and
+         * no later request could repair it.
+         */
+        const orphans = await harness.database.db
+          .select({ id: bookingRequests.id })
+          .from(bookingRequests);
+        expect(orphans).toEqual([]);
+      } finally {
+        await harness.database.db.execute(
+          sql`DROP TRIGGER refuse_notification_trigger ON notifications`,
+        );
+        await harness.database.db.execute(sql`DROP FUNCTION refuse_notification()`);
+      }
+
+      // And the retry creates it for real, with the vendor told exactly once.
+      const retried = await createRequest(vendorId, { packageId });
+      expect(retried.statusCode).toBe(201);
+
+      const told = await harness.database.db
+        .select({ type: notifications.type })
+        .from(notifications);
+      expect(told.map((row) => row.type)).toEqual(['new_request']);
+    });
+
+    it('dedupes against a request the vendor has already quoted', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Wren & Field');
+      const first = await createRequest(vendorId, {
+        customDetails: 'A two-hour engagement shoot in the botanical garden.',
+      });
+
+      const quoted = await post(VENDOR, `/booking-requests/${first.json<RequestBody>().id}/quote`, {
+        quotedPriceCents: 90_000,
+        quoteNote: 'Two hours, one photographer, gallery in three weeks.',
+      });
+      expect(quoted.statusCode).toBe(200);
+
+      // A quote takes the request out of `pending` without settling it, and it
+      // is still the vendor's to answer. Resubmitting must not open a second.
+      const second = await createRequest(vendorId, {
+        customDetails: 'A two-hour engagement shoot in the botanical garden.',
+      });
+
+      expect(second.statusCode).toBe(200);
+      expect(second.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
+    });
+
+    it('returns the stored request unchanged when a resubmission carries edited details', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+      const first = await createRequest(vendorId, { packageId, eventLocation: 'Barr Mansion' });
+
+      const edited = await createRequest(vendorId, {
+        packageId,
+        eventLocation: 'The Vista',
+        guestCount: 40,
+      });
+
+      /*
+       * The natural key does not include the detail fields, so this is read as
+       * a repeat submission and the edit is NOT applied — the response carries
+       * the stored request, venue and all. Pinned deliberately rather than
+       * left to chance: the server cannot tell a retry from a correction
+       * without an idempotency key, and letting a resubmission overwrite is a
+       * product decision that belongs with the customer-side edit surface in
+       * #68. Filed as #232.
+       */
+      expect(edited.statusCode).toBe(200);
+      expect(edited.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
+      expect(edited.json<RequestBody>().eventLocation).toBe('Barr Mansion');
+      expect(edited.json<RequestBody>().guestCount).toBe(120);
     });
 
     it('refuses an unpublished vendor', async () => {

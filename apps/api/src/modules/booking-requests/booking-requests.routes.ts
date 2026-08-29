@@ -27,17 +27,28 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
     REQUESTS_PATH,
     {
       preHandler: requireRole('customer'),
-      schema: { body: createBookingRequestSchema, response: { 201: bookingRequestDetailSchema } },
+      schema: {
+        body: createBookingRequestSchema,
+        response: {
+          200: bookingRequestDetailSchema,
+          201: bookingRequestDetailSchema,
+        },
+      },
     },
     async (request, reply) => {
-      const created = await createBookingRequest(
+      const outcome = await createBookingRequest(
         app.db,
         app.events,
         authenticated(request.auth),
         request.body,
       );
 
-      return reply.status(201).header('location', `${REQUESTS_PATH}/${created.id}`).send(created);
+      // 200 for a repeat submission: nothing was created, and this is the id
+      // of the request that already exists.
+      return reply
+        .status(outcome.created ? 201 : 200)
+        .header('location', `${REQUESTS_PATH}/${outcome.request.id}`)
+        .send(outcome.request);
     },
   );
 

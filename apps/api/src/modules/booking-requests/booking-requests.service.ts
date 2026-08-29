@@ -15,6 +15,7 @@ import {
 import type {
   BookingRequestRow,
   NewBookingRequestRow,
+  NotificationRow,
   ServicePackageRow,
   VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
@@ -29,6 +30,7 @@ import {
   findActivePackage,
   findAvailabilityOn,
   findBookings,
+  findLiveRequest,
   findPackagesByIds,
   findRequestById,
   findRequests,
@@ -188,19 +190,31 @@ interface NotificationCopy {
   body: string;
 }
 
-/** Addresses the notification at a person, given which side of the request they are. */
-async function notifyParty(
+/** A stored notification and the person it is addressed to. */
+interface Delivery {
+  userId: string;
+  stored: NotificationRow;
+}
+
+/**
+ * Writes the notification row, and nothing else.
+ *
+ * Split from the live push so a caller inside a transaction can record the
+ * notification with the rest of its writes and push only once those have
+ * committed — a bell that rings for a row the transaction then rolls back is
+ * worse than a bell that rings a moment late.
+ */
+async function recordNotification(
   db: AppDatabase,
   row: BookingRequestRow,
   party: 'customer' | 'vendor',
   type: NotificationType,
   copy: NotificationCopy,
-  hub?: EventHub,
-): Promise<void> {
+): Promise<Delivery | null> {
   const userId = party === 'customer' ? row.customerId : await findVendorUserId(db, row.vendorId);
 
   if (!userId) {
-    return;
+    return null;
   }
 
   const stored = await insertNotification(db, {
@@ -211,24 +225,42 @@ async function notifyParty(
     data: { bookingRequestId: row.id, vendorId: row.vendorId },
   });
 
-  /*
-   * Pushed live where a stream is open, so the bell moves the moment the row
-   * exists. The row is the source of truth either way — a user with no stream
-   * open sees it on their next load, which is why this is best-effort.
-   */
-  if (hub && stored) {
-    hub.publish(userId, {
-      type: 'new_notification',
-      notification: {
-        id: stored.id,
-        type: stored.type,
-        title: stored.title,
-        body: stored.body,
-        href: notificationHref(stored),
-        readAt: stored.readAt,
-        createdAt: stored.createdAt,
-      },
-    });
+  return stored ? { userId, stored } : null;
+}
+
+/**
+ * Pushed live where a stream is open, so the bell moves the moment the row
+ * exists. The row is the source of truth either way — a user with no stream
+ * open sees it on their next load, which is why this is best-effort.
+ */
+function publishNotification(hub: EventHub, { userId, stored }: Delivery): void {
+  hub.publish(userId, {
+    type: 'new_notification',
+    notification: {
+      id: stored.id,
+      type: stored.type,
+      title: stored.title,
+      body: stored.body,
+      href: notificationHref(stored),
+      readAt: stored.readAt,
+      createdAt: stored.createdAt,
+    },
+  });
+}
+
+/** Addresses the notification at a person, given which side of the request they are. */
+async function notifyParty(
+  db: AppDatabase,
+  row: BookingRequestRow,
+  party: 'customer' | 'vendor',
+  type: NotificationType,
+  copy: NotificationCopy,
+  hub?: EventHub,
+): Promise<void> {
+  const delivery = await recordNotification(db, row, party, type, copy);
+
+  if (hub && delivery) {
+    publishNotification(hub, delivery);
   }
 }
 
@@ -261,13 +293,23 @@ async function requireParticipant(
   throw notFound('That request does not exist');
 }
 
+/**
+ * A created request, or the live one an identical repeat submission matched.
+ * The route needs to tell them apart: 201 says a request was made, 200 says
+ * this is the request you already made.
+ */
+export interface BookingRequestOutcome {
+  readonly request: BookingRequestDetail;
+  readonly created: boolean;
+}
+
 export async function createBookingRequest(
   db: AppDatabase,
   hub: EventHub,
   user: AuthenticatedUser,
   input: CreateBookingRequestInput,
   now: Date = new Date(),
-): Promise<BookingRequestDetail> {
+): Promise<BookingRequestOutcome> {
   const vendor = await findVendorById(db, input.vendorId);
 
   if (!vendor || vendor.isDeleted || !vendor.isPublished) {
@@ -318,27 +360,70 @@ export async function createBookingRequest(
     expiresAt: addDays(now, BOOKING_REQUEST_EXPIRY_DAYS),
   };
 
-  const row = await insertRequest(db, values);
+  /*
+   * All three writes or none of them.
+   *
+   * Without the transaction, a request row that committed before a later
+   * write failed would be found by every retry — which then takes the
+   * dedupe branch below and deliberately skips the side effects, so the
+   * vendor is never told and the thread is never opened, permanently. The
+   * retry has to be able to re-create the row, and that means the row must
+   * not survive a half-finished attempt.
+   */
+  const created = await db.transaction(async (tx) => {
+    const row = await insertRequest(tx, values);
 
-  await ensureConversation(db, {
-    customerId: row.customerId,
-    vendorId: row.vendorId,
-    bookingRequestId: row.id,
-  });
+    if (!row) {
+      return null;
+    }
 
-  await notifyParty(
-    db,
-    row,
-    'vendor',
-    'new_request',
-    {
+    await ensureConversation(tx, {
+      customerId: row.customerId,
+      vendorId: row.vendorId,
+      bookingRequestId: row.id,
+    });
+
+    const delivery = await recordNotification(tx, row, 'vendor', 'new_request', {
       title: 'New booking request',
       body: `A customer asked about ${readableDate(row.eventDate)}. You have a week to reply.`,
-    },
-    hub,
-  );
+    });
 
-  return toDetail(row, vendor, servicePackage, await nameOf(db, row.customerId));
+    return { row, delivery };
+  });
+
+  if (!created) {
+    /*
+     * A repeat submission. Return the request that already exists and none of
+     * the side effects: the vendor has been told about it once, and telling
+     * them again is the visible half of the defect. `values` is the lookup
+     * key as well as the insert, so the two cannot drift apart.
+     */
+    const existing = await findLiveRequest(db, values);
+
+    if (!existing) {
+      throw conflict('That request could not be sent. Try again.');
+    }
+
+    return {
+      request: toDetail(existing, vendor, servicePackage, await nameOf(db, existing.customerId)),
+      created: false,
+    };
+  }
+
+  // After the commit, so the bell never rings for a row that was rolled back.
+  if (created.delivery) {
+    publishNotification(hub, created.delivery);
+  }
+
+  return {
+    request: toDetail(
+      created.row,
+      vendor,
+      servicePackage,
+      await nameOf(db, created.row.customerId),
+    ),
+    created: true,
+  };
 }
 
 export async function getBookingRequest(

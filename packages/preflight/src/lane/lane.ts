@@ -9,6 +9,7 @@ import {
   readManifest,
   readManifests,
   removeManifest,
+  updateManifest,
   withLock,
 } from './manifest.js';
 import {
@@ -88,7 +89,13 @@ async function pnpmInLane(worktreePath: string, args: readonly string[]): Promis
     'pnpm',
     ['-C', worktreePath, ...args],
     LANE_COMMAND_TIMEOUT_MS,
-    laneEnvFor(worktreePath),
+    /*
+     * A lane has no TTY, and pnpm refuses to replace an existing
+     * `node_modules` without one — which is exactly what a fresh worktree
+     * needs. `CI` also pins the install to the committed lockfile, which is
+     * what a lane should be building against anyway.
+     */
+    { ...laneEnvFor(worktreePath), CI: 'true' },
   );
 
   if (outcome.status !== 'ok') {
@@ -234,13 +241,22 @@ export async function laneUp(
    * resume is what keeps a failed lane resumable with `/ticket <id>`, which is
    * the whole reason a lane is left in place.
    */
-  if (alreadyUp) {
+  /*
+   * `state` records whether install, build and migrate have all run. The
+   * manifest's existence is not enough on its own: a `lane up` that dies in
+   * the install leaves one behind, and returning it would hand back a lane
+   * with no `node_modules`, no `dist` and an empty database. The env file
+   * cannot answer this either — it has to be written *before* install and
+   * migrate so both reach this lane's own database, so it is present during
+   * every failure it would be asked to detect.
+   */
+  if (alreadyUp?.state === 'active') {
     ensureLaneEnv(worktreePath, alreadyUp, () => laneUrl(worktreePath, alreadyUp));
 
     return alreadyUp;
   }
 
-  let claimedNow = false;
+  let provisionHere = false;
 
   /*
    * The lock covers only read-claimed-ports through write-manifest. Creating
@@ -251,6 +267,9 @@ export async function laneUp(
     const raced = readManifest(mainCheckout, ticket);
 
     if (raced) {
+      // Keeps the ports this ticket already claimed, and finishes the
+      // provisioning an earlier attempt did not get through.
+      provisionHere = raced.state !== 'active';
       return raced;
     }
 
@@ -265,17 +284,17 @@ export async function laneUp(
       webPort: WEB_BASE + offset,
       database: laneDatabaseName(ticket),
       prUrl: null,
-      state: 'active',
+      state: 'provisioning',
       createdAt: new Date().toISOString(),
     };
 
     claimManifest(mainCheckout, next);
-    claimedNow = true;
+    provisionHere = true;
 
     return next;
   });
 
-  if (!claimedNow) {
+  if (!provisionHere) {
     // Lost the race: another caller owns the setup below, but this one still
     // has to leave with a usable lane.
     ensureLaneEnv(worktreePath, manifest, () => laneUrl(worktreePath, manifest));
@@ -293,7 +312,8 @@ export async function laneUp(
   await deps.build(worktreePath);
   await deps.migrate(worktreePath);
 
-  return manifest;
+  // Last, and only on success: this is the flag every retry reads.
+  return updateManifest(mainCheckout, ticket, { state: 'active' });
 }
 
 export interface LaneDownDeps {

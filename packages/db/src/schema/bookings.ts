@@ -58,6 +58,30 @@ export const bookingRequests = pgTable(
     index('booking_requests_expires_at_idx')
       .on(table.expiresAt)
       .where(sql`${table.status} = 'pending'`),
+    /*
+     * One live request per natural key, so a repeat submission — a client
+     * retry, a mobile touch-and-click double fire, a network-level retry —
+     * is settled by the database rather than by application timing.
+     *
+     * Partial on the *live* statuses, which is `pending` and `quoted`: those
+     * are the ones still awaiting a decision and still sitting in the vendor's
+     * queue. `pending` alone would leave the hole open, because a vendor who
+     * quotes a custom request moves it out of `pending` without settling it.
+     * Once a request is accepted, declined, expired or cancelled the customer
+     * may legitimately ask the same vendor for the same date again.
+     * `LIVE_BOOKING_REQUEST_STATUSES` is the same list, and `schema.test.ts`
+     * holds the two together.
+     *
+     * Two indexes rather than one because `package_id` is nullable and
+     * Postgres treats NULLs as distinct, which would let two identical
+     * *custom* requests through a single combined index.
+     */
+    uniqueIndex('booking_requests_live_package_key')
+      .on(table.customerId, table.vendorId, table.eventDate, table.packageId)
+      .where(sql`${table.status} in ('pending', 'quoted') and ${table.packageId} is not null`),
+    uniqueIndex('booking_requests_live_custom_key')
+      .on(table.customerId, table.vendorId, table.eventDate)
+      .where(sql`${table.status} in ('pending', 'quoted') and ${table.packageId} is null`),
   ],
 );
 
