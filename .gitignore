@@ -85,3 +85,8 @@ skills-lock.json
 # directory, so a directory rule would make the negation below unreachable.
 /uploads/*
 !/uploads/soundtrack-license.md
+# Added by `vercel link`. The `.env*` line it also appends is dropped: lines
+# 12-14 already ignore every .env variant and re-admit .env.example, and a
+# blanket trailing rule risks re-ignoring the generated example that must stay
+# tracked.
+.vercel
