@@ -12,6 +12,20 @@
  */
 export const RETURN_PATH_PARAM = 'returnTo';
 
+/**
+ * Request header carrying the path the visitor actually asked for.
+ *
+ * Set by `middleware.ts` on every matched request, overwriting anything the
+ * client sent under the same name. It exists for the redirects a *layout* has
+ * to perform — `/customer` and `/vendor` gate their whole subtree, and a layout
+ * renders above the page, so it is never told which child URL it is guarding.
+ * A page that knows its own destination passes it explicitly instead.
+ *
+ * Reading it is still an untrusted read: `safeReturnPath` runs on the value
+ * before it reaches a redirect, exactly as it does for a query parameter.
+ */
+export const REQUEST_PATH_HEADER = 'x-orla-request-path';
+
 /** Paths that must never be a destination, because landing on one loops. */
 const LOOPING_PREFIXES = ['/sign-in', '/sign-up', '/after-sign-in'] as const;
 

@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
-import { signInPathReturningTo } from './return-path';
+import { requestedPath } from './requested-path';
+import { RETURN_PATH_PARAM, safeReturnPath, signInPathReturningTo } from './return-path';
 import { wireUserSchema, type WireUser } from './wire-schemas';
 
 /** Where each role's own dashboard lives. */
@@ -15,7 +16,15 @@ export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
    */
   customer: '/bookings',
   vendor: '/vendor/dashboard',
-  admin: '/bookings',
+  /*
+   * **Not `/bookings`.** That route is gated by `requireRole('customer')`, and
+   * the mismatch branch below redirects here — so pointing an admin at it made
+   * the bounce land on a route that bounces again, forever. Once sign-in
+   * started carrying a destination, every protected route funnelled into that
+   * loop rather than just a typed URL. `/` is terminal for an admin: the root
+   * page only redirects vendors.
+   */
+  admin: '/',
 };
 
 /**
@@ -66,14 +75,14 @@ export async function requireCurrentUser(returnTo?: string): Promise<WireUser> {
   if (!user) {
     /*
      * The destination travels with the redirect so signing in resumes the
-     * thing the customer was doing. It is passed in by the caller rather than
-     * sniffed from a header: the page knows its own URL exactly, including the
-     * query that carries a chosen package and date, and a header would have to
-     * be trusted and reassembled. `signInPathReturningTo` drops anything that
-     * is not a same-origin path, so a caller cannot widen this into an open
-     * redirect by accident.
+     * thing the customer was doing. A caller that knows its own URL exactly —
+     * including the query carrying a chosen package and date — passes it, and
+     * that wins; everything else falls back to the path the middleware stamped
+     * on the request, which is the only thing a *layout* can go on.
+     * `signInPathReturningTo` drops anything that is not a same-origin path, so
+     * neither route can widen this into an open redirect by accident.
      */
-    redirect(signInPathReturningTo(returnTo));
+    redirect(signInPathReturningTo(returnTo ?? (await requestedPath())));
   }
 
   return user;
@@ -99,9 +108,13 @@ async function getCurrentUserOrSuspend(): Promise<WireUser | null> {
 /**
  * Loads the caller and bounces them to their own dashboard if they hold a
  * different role, so `/vendor/*` and `/customer/*` stay separated.
+ *
+ * The role bounce deliberately ignores `returnTo`: a customer who reached a
+ * vendor-only route does not become entitled to it by signing in, so they land
+ * on their own home rather than back on the route they were refused.
  */
-export async function requireRole(role: UserRole): Promise<WireUser> {
-  const user = await requireCurrentUser();
+export async function requireRole(role: UserRole, returnTo?: string): Promise<WireUser> {
+  const user = await requireCurrentUser(returnTo);
 
   if (user.role !== role) {
     redirect(DASHBOARD_PATH_BY_ROLE[user.role]);
@@ -114,13 +127,25 @@ export async function requireRole(role: UserRole): Promise<WireUser> {
  * Guards the authentication pages. Somebody who already holds a session has
  * nothing to do on sign-in or sign-up, so send them to `/after-sign-in`, which
  * resolves the role from the local record and forwards on.
+ *
+ * The destination has to travel with them. Signing in in another tab and then
+ * reloading a `/sign-in?returnTo=…` page takes this branch rather than the
+ * form, and dropping the parameter here put the visitor on their role's
+ * default start with the thing they were doing lost — the exact failure the
+ * `returnTo` round trip exists to prevent.
  */
-export async function redirectIfSignedIn(): Promise<void> {
+export async function redirectIfSignedIn(returnTo?: string | null): Promise<void> {
   const { userId } = await auth();
 
-  if (userId) {
-    redirect('/after-sign-in');
+  if (!userId) {
+    return;
   }
+
+  const safe = safeReturnPath(returnTo);
+
+  redirect(
+    safe ? `/after-sign-in?${RETURN_PATH_PARAM}=${encodeURIComponent(safe)}` : '/after-sign-in',
+  );
 }
 
 /**

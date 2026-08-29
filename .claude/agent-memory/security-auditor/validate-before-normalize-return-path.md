@@ -1,37 +1,40 @@
 ---
 name: validate-before-normalize-return-path
-description: safeReturnPath decodes then returns the decoded string and checks the un-normalized pathname, so the value validated is not the value redirected to
+description: safeReturnPath's validate-vs-return mismatch was FIXED by #76 via parse-then-reserialise; 894k-case chain fuzz found zero origin escapes — do not re-report
 metadata:
   type: project
 ---
 
-`apps/web/src/lib/return-path.ts` (`safeReturnPath`, added by #116) validates a
-string that is **not** the string the redirect finally uses. Two separate gaps,
-same root cause: it hand-rolls string checks instead of parsing with the WHATWG
-URL parser and re-serialising.
+**Status: FIXED as of ticket #76 (2026-08-29). Do not re-report.**
 
-1. **Returns the decoded value.** `decodeURIComponent(value)` promotes encoded
-   `&`, `=` and `#` inside the destination's query into structural delimiters
-   _after_ the check passed. `?package=a%26foo%3Dbar` becomes
-   `?package=a&foo=bar` in the final target — query-parameter injection into a
-   destination the validator called safe.
-2. **Checks the un-normalized pathname.** The `LOOPING_PREFIXES` test runs on
-   `candidate.split(/[?#]/)[0]` before `new URL(target, request.url)` in
-   `/after-sign-in` collapses dot segments. `/x/../sign-in`, `/./sign-in`,
-   `/a/b/../../sign-up` and `/x/%252e%252e/sign-in` all pass the guard and land
-   on the auth flow anyway.
+`apps/web/src/lib/return-path.ts` (`safeReturnPath`) once validated a string that
+was **not** the string the redirect finally used — it returned
+`decodeURIComponent(value)` and ran the loop guard on `candidate.split(/[?#]/)[0]`
+before dot segments collapsed. That let `?package=a%26foo%3Dbar` inject query
+delimiters and `/x/../sign-in` walk past `LOOPING_PREFIXES`.
 
-**Why:** the origin check itself is sound — 400k-case fuzzing at both the direct
-and the through-a-query-decode entry points produced zero foreign origins, because
-`startsWith('/')` + `!startsWith('//')` + no backslash + no control character is
-enough for the WHATWG parser (it leaves path state only for `//`, `\` on a special
-scheme, or a scheme; it strips only tab/LF/CR and leading/trailing C0-or-space;
-U+2044 and U+FF0F are not normalised to `/`). The defects are in what it _returns_,
-not what it _rejects_.
+It now does parse-then-reserialise, which is the shape that fixes both:
+reject control chars and `//`/`\` on the raw string, `new URL(value,
+'https://return-path.invalid')`, reject unless `url.origin` is unchanged,
+**re-check `startsWith('//')` on the normalized string** (because `/x/..//evil`
+resolves into a scheme-relative path), run the loop guard on `url.pathname`,
+return `url.pathname + url.search + url.hash`.
 
-**How to apply:** the shape that fixes both at once is parse-then-reserialise —
-`new URL(value, 'https://placeholder.invalid')`, reject unless `url.origin` is
-unchanged, run the loop check on `url.pathname`, return
-`url.pathname + url.search + url.hash`. Do not add more string predicates.
+**Why:** verified 2026-08-29 by fuzzing the _whole chain_ — caller/header value
+-> `signInPathReturningTo` -> `/sign-in?returnTo=` -> the sign-in page's
+`safeReturnPath` -> `/after-sign-in?returnTo=` -> `safeReturnPath` -> `new
+URL(target, request.url)` — over 894,419 cases built from `//`, `\`, `%2e%2e`,
+`%2f`, `%5c`, `@`, `:`, scheme prefixes, CR/LF/TAB, NUL, U+2044/U+FF0F/U+2215,
+U+202E, zero-width, lone surrogates and double-encoding. **Zero** origin escapes,
+zero loop-guard evasions, zero non-idempotent returns
+(`safeReturnPath(safeReturnPath(v)) === safeReturnPath(v)` holds throughout).
 
-Related: [[clerk-redirect-url-param-collision]], [[url-params-validated-in-the-nuqs-hook]]
+**How to apply:** the open-redirect boundary itself is settled. Spend audit time
+on the _callers_ that assemble a candidate (`/vendors/${slug}/request...`,
+`/messages?...`, `/bookings?tab=...`) and on where the destination lands after
+sign-in, not on the validator. If a caller ever stops routing through
+`safeReturnPath`, that is the finding.
+
+Related: [[middleware-request-path-header-trust]],
+[[role-bounce-self-loop-admin-bookings]], [[clerk-redirect-url-param-collision]],
+[[url-params-validated-in-the-nuqs-hook]]

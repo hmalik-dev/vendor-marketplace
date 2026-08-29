@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UserRole } from '@vendor-marketplace/shared';
 import { ApiClientError } from './api-client';
 
 const getToken = vi.fn<() => Promise<string | null>>();
@@ -16,7 +17,16 @@ const redirect = vi.fn((path: string) => {
   throw signal;
 });
 
+/*
+ * The path the middleware stamps on every request. It is the fallback the
+ * layout-gated routes depend on, so it has to be steerable from a test.
+ */
+let requestPath: string | null = null;
+
 vi.mock('@clerk/nextjs/server', () => ({ auth: async () => ({ getToken, userId }) }));
+vi.mock('next/headers', () => ({
+  headers: async () => ({ get: () => requestPath }),
+}));
 vi.mock('next/navigation', () => ({ redirect: (path: string) => redirect(path) }));
 vi.mock('./api-client', async () => {
   const actual = await vi.importActual<typeof import('./api-client')>('./api-client');
@@ -49,7 +59,25 @@ describe('DASHBOARD_PATH_BY_ROLE', () => {
   });
 
   it('covers every role so the lookup can never return undefined', () => {
-    expect(DASHBOARD_PATH_BY_ROLE.admin).toBe('/bookings');
+    expect(DASHBOARD_PATH_BY_ROLE.admin).toBe('/');
+  });
+
+  /*
+   * The role bounce redirects to this map, so a role whose entry is a route
+   * that role is refused bounces forever. `/bookings` is gated by
+   * `requireRole('customer')`, which is why `admin` cannot point at it — an
+   * admin signing in from any protected route hit ERR_TOO_MANY_REDIRECTS.
+   */
+  it('never sends a role to a route that role is refused', () => {
+    const GATED_BY: Record<string, UserRole> = {
+      '/bookings': 'customer',
+      '/vendor/dashboard': 'vendor',
+    };
+
+    for (const [role, path] of Object.entries(DASHBOARD_PATH_BY_ROLE)) {
+      const gate = GATED_BY[path];
+      expect(gate === undefined || gate === role).toBe(true);
+    }
   });
 });
 
@@ -373,5 +401,156 @@ describe('readRoleForChrome', () => {
     apiRequest.mockRejectedValue(signal);
 
     await expect(readRoleForChrome()).rejects.toBe(signal);
+  });
+});
+
+/**
+ * #76 — signing in used to discard where the visitor was going, so a customer
+ * who was half way through a booking landed on `/` with the booking gone.
+ */
+describe('the destination survives the sign-in round trip', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+    redirect.mockClear();
+    requestPath = null;
+    getToken.mockResolvedValue(null);
+  });
+
+  /** The `/sign-in` URL the gate redirected to, or `null` if it did not. */
+  async function signInTargetOf(call: Promise<unknown>): Promise<string | null> {
+    await expect(call).rejects.toThrow(/NEXT_REDIRECT/);
+    const target = redirect.mock.calls.at(-1)?.[0] ?? null;
+    return target;
+  }
+
+  /*
+   * The routes gated by a **layout**, which is the case the stamped header
+   * exists for: `app/customer/layout.tsx` and `app/vendor/layout.tsx` render
+   * above the page and are never told which child URL they are guarding, so
+   * the header is the only thing they can go on. These rows are the ones that
+   * genuinely exercise the fallback.
+   */
+  it.each([
+    ['/customer/profile', '/customer/profile'],
+    ['/customer/profile with a query', '/customer/profile?tab=reviews'],
+    ['/vendor/packages', '/vendor/packages?filter=active'],
+    ['/vendor/dashboard', '/vendor/dashboard'],
+  ])('%s falls back to the stamped path', async (_route, path) => {
+    requestPath = path;
+
+    expect(await signInTargetOf(requireCurrentUser())).toBe(
+      `/sign-in?returnTo=${encodeURIComponent(path)}`,
+    );
+  });
+
+  /*
+   * The routes that pass their own destination. These assert the argument is
+   * honoured verbatim — the pages build these strings themselves, and the
+   * stamped header is deliberately not consulted.
+   */
+  it.each([
+    ['/bookings', '/bookings?tab=history'],
+    ['/messages', '/messages?conversation=c1'],
+    ['a booking request', '/vendors/june-harlow/request?package=p1&date=2026-09-01'],
+  ])('%s carries the destination its page passed', async (_route, path) => {
+    requestPath = '/somewhere-else';
+
+    expect(await signInTargetOf(requireCurrentUser(path))).toBe(
+      `/sign-in?returnTo=${encodeURIComponent(path)}`,
+    );
+  });
+
+  /*
+   * A page knows its own URL exactly — including which of its query values it
+   * actually honoured — so what it passes beats what the request happened to
+   * carry.
+   */
+  it('prefers the destination a caller passes over the stamped path', async () => {
+    requestPath = '/bookings?tab=nonsense';
+
+    expect(await signInTargetOf(requireCurrentUser('/bookings?tab=upcoming'))).toBe(
+      `/sign-in?returnTo=${encodeURIComponent('/bookings?tab=upcoming')}`,
+    );
+  });
+
+  /*
+   * The open-redirect boundary, exercised through the gate rather than only
+   * through the validator: a destination that names another origin is dropped,
+   * and sign-in still happens.
+   */
+  it.each(['https://evil.example', '//evil.example', '/\\evil.example', '/x/..//evil.example'])(
+    'refuses to bounce to %s',
+    async (hostile) => {
+      requestPath = hostile;
+
+      expect(await signInTargetOf(requireCurrentUser())).toBe('/sign-in');
+    },
+  );
+
+  it('refuses a destination a caller passes that would leave the origin', async () => {
+    expect(await signInTargetOf(requireCurrentUser('https://evil.example'))).toBe('/sign-in');
+  });
+
+  it('carries the destination through requireRole too', async () => {
+    requestPath = '/vendor/packages';
+
+    expect(await signInTargetOf(requireRole('vendor'))).toBe(
+      `/sign-in?returnTo=${encodeURIComponent('/vendor/packages')}`,
+    );
+  });
+
+  /*
+   * Signing in does not make a customer entitled to a vendor route, so the role
+   * bounce ignores the destination and sends them to their own home instead.
+   */
+  it('sends a customer on a vendor route to their own home, not back to it', async () => {
+    requestPath = '/vendor/packages';
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(CUSTOMER);
+
+    expect(await signInTargetOf(requireRole('vendor'))).toBe('/bookings');
+  });
+});
+
+/**
+ * #76 — the other way into the sign-in page. Signing in in a second tab and
+ * reloading the first took this branch, and dropping the destination here put
+ * the visitor on their role's default start with their work lost.
+ */
+describe('redirectIfSignedIn', () => {
+  beforeEach(() => {
+    redirect.mockClear();
+    requestPath = null;
+    userId = 'clerk_123';
+  });
+
+  async function targetOf(call: Promise<unknown>): Promise<string> {
+    await expect(call).rejects.toThrow(/NEXT_REDIRECT/);
+    return redirect.mock.calls.at(-1)?.[0] as string;
+  }
+
+  it('forwards the destination it was given', async () => {
+    expect(await targetOf(redirectIfSignedIn('/bookings?tab=history'))).toBe(
+      `/after-sign-in?returnTo=${encodeURIComponent('/bookings?tab=history')}`,
+    );
+  });
+
+  it('goes to the bare handler when there is no destination', async () => {
+    expect(await targetOf(redirectIfSignedIn())).toBe('/after-sign-in');
+  });
+
+  it.each(['https://evil.example', '//evil.example', '/x/..//evil.example'])(
+    'drops %s rather than forwarding it',
+    async (hostile) => {
+      expect(await targetOf(redirectIfSignedIn(hostile))).toBe('/after-sign-in');
+    },
+  );
+
+  it('does nothing at all when nobody is signed in', async () => {
+    userId = null;
+
+    await expect(redirectIfSignedIn('/bookings')).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

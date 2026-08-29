@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
-  searchParams: Promise<{ conversation?: string }>;
+  searchParams: Promise<{ conversation?: string | string[] }>;
 }
 
 /**
@@ -25,14 +25,26 @@ interface PageProps {
 export default async function MessagesPage({
   searchParams,
 }: PageProps): Promise<React.ReactElement> {
-  const [user, query] = await Promise.all([requireCurrentUser(), searchParams]);
+  const query = await searchParams;
+
+  /*
+   * A notification links straight at one thread, so the thread has to survive
+   * the sign-in round trip or the link only works for a session that is
+   * already open. `signInPathReturningTo` re-validates what is built here.
+   */
+  // Next yields an array for `?conversation=a&conversation=b`; take the first.
+  const raw = query.conversation;
+  const conversation = Array.isArray(raw) ? raw[0] : raw;
+  const user = await requireCurrentUser(
+    conversation ? `/messages?${new URLSearchParams({ conversation }).toString()}` : '/messages',
+  );
   const conversations = await getOwnConversations();
 
   return (
     <MessagesScreen
       initialConversations={conversations}
       viewerId={user.id}
-      initialConversationId={query.conversation ?? null}
+      initialConversationId={conversation ?? null}
     />
   );
 }

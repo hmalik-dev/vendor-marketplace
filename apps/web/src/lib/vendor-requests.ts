@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
+import { signInPathReturningHere } from './requested-path';
 import { wireBookingRequestListSchema, type WireBookingRequest } from './wire-schemas';
 
 /**
@@ -15,7 +16,7 @@ export async function getOwnBookingRequests(): Promise<WireBookingRequest[]> {
   const token = await getToken();
 
   if (!token) {
-    redirect('/sign-in');
+    redirect(await signInPathReturningHere());
   }
 
   try {

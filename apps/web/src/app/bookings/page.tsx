@@ -38,8 +38,16 @@ function isTab(value: string | undefined): value is BookingTab {
 export default async function BookingsPage({
   searchParams,
 }: PageProps): Promise<React.ReactElement> {
-  const [user, query] = await Promise.all([requireRole('customer'), searchParams]);
+  const query = await searchParams;
   const tab: BookingTab = isTab(query.tab) ? query.tab : 'upcoming';
+
+  /*
+   * The tab travels through sign-in, so a link to a specific tab still lands on
+   * that tab afterwards. Only the validated value is carried — an unrecognised
+   * `?tab=` is already dropped above and must not be reintroduced by the
+   * return trip.
+   */
+  const user = await requireRole('customer', `/bookings?tab=${tab}`);
 
   const [requests, bookings] = await Promise.all([getOwnBookingRequests(), getOwnBookings()]);
   const entries = toEntries(requests, bookings);

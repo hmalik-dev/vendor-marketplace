@@ -12,8 +12,6 @@ interface PageProps {
 }
 
 export default async function SignInPage({ searchParams }: PageProps): Promise<React.ReactElement> {
-  await redirectIfSignedIn();
-
   /*
    * Where the customer was going before they were asked to sign in. Untrusted:
    * `safeReturnPath` keeps it to a same-origin path, so this cannot be used to
@@ -27,6 +25,13 @@ export default async function SignInPage({ searchParams }: PageProps): Promise<R
    */
   const raw = (await searchParams)[RETURN_PATH_PARAM];
   const returnTo = safeReturnPath(Array.isArray(raw) ? raw[0] : raw);
+
+  /*
+   * Read *before* the signed-in guard runs, so somebody who signed in in
+   * another tab and reloaded this page is forwarded to where they were going
+   * rather than to their role's default start.
+   */
+  await redirectIfSignedIn(returnTo);
 
   return (
     <AuthScreen headline="Welcome back" subhead="Pick up where you left off.">

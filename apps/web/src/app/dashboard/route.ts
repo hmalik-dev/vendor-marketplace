@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ApiClientError } from '@/lib/api-client';
 import { DASHBOARD_PATH_BY_ROLE, getCurrentUser } from '@/lib/current-user';
+import { signInPathReturningTo } from '@/lib/return-path';
 
 /**
  * "Take me to my dashboard" — the header's signed-in link, which cannot know
@@ -21,7 +22,12 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   try {
     const user = await getCurrentUser();
-    target = user ? DASHBOARD_PATH_BY_ROLE[user.role] : '/sign-in';
+    /*
+     * A signed-out caller comes back to `/dashboard` rather than to a role's
+     * dashboard directly: this handler is the thing that knows how to resolve
+     * a role, and it has not been able to do that yet.
+     */
+    target = user ? DASHBOARD_PATH_BY_ROLE[user.role] : signInPathReturningTo('/dashboard');
   } catch (error) {
     if (error instanceof ApiClientError && error.statusCode === 403) {
       target = '/suspended';

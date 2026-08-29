@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
+import { signInPathReturningHere } from './requested-path';
 import {
   wireBookingListSchema,
   wireBookingRequestListSchema,
@@ -21,7 +22,7 @@ async function customerToken(): Promise<string> {
   const token = await getToken();
 
   if (!token) {
-    redirect('/sign-in');
+    redirect(await signInPathReturningHere());
   }
 
   return token;
@@ -41,7 +42,7 @@ async function degradeToEmpty<T>(read: () => Promise<T[]>): Promise<T[]> {
       throw error;
     }
     if (error instanceof ApiClientError && error.statusCode === 401) {
-      redirect('/sign-in');
+      redirect(await signInPathReturningHere());
     }
 
     return [];

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { slugSchema, type Category } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
+import { signInPathReturningHere } from './requested-path';
 import {
   wireAvailabilityListSchema,
   wireCategoryListSchema,
@@ -29,29 +30,45 @@ import {
  * the browser.
  */
 
-/** The Clerk session token for a vendor read, or a redirect to sign-in. */
-async function vendorToken(): Promise<string> {
+interface VendorSession {
+  /** The Clerk session token for a vendor read. */
+  token: string;
+  /** Where to send this reader if the session turns out not to work. */
+  signInPath: string;
+}
+
+/**
+ * The session a vendor read needs, or a redirect to sign-in.
+ *
+ * The sign-in path is resolved here rather than at the point of failure so
+ * that `rethrowUnlessSessionFailure` can stay synchronous: TypeScript only
+ * treats a call as terminating control flow when the callee is declared
+ * `never`, and an `await`ed `Promise<never>` does not qualify — every caller
+ * would fall through to a missing return.
+ */
+async function vendorSession(): Promise<VendorSession> {
+  const signInPath = await signInPathReturningHere();
   const { getToken } = await auth();
   const token = await getToken();
 
   if (!token) {
-    redirect('/sign-in');
+    redirect(signInPath);
   }
 
-  return token;
+  return { token, signInPath };
 }
 
 /**
  * Turns the two session failures every protected read shares into the same
  * redirects, so an expired session never surfaces as a raw 500 mid-render.
  */
-function rethrowUnlessSessionFailure(error: unknown): never {
+function rethrowUnlessSessionFailure(error: unknown, signInPath: string): never {
   if (!(error instanceof ApiClientError)) {
     throw error;
   }
 
   if (error.statusCode === 401) {
-    redirect('/sign-in');
+    redirect(signInPath);
   }
   if (error.statusCode === 403) {
     redirect('/suspended');
@@ -62,7 +79,7 @@ function rethrowUnlessSessionFailure(error: unknown): never {
 
 /** `null` when the vendor has not created a profile yet, which is not an error. */
 export async function getOwnVendorProfile(): Promise<WireVendorProfile | null> {
-  const token = await vendorToken();
+  const { token, signInPath } = await vendorSession();
 
   try {
     return await apiRequest('/vendor/profile', { schema: wireVendorProfileSchema, token });
@@ -76,7 +93,7 @@ export async function getOwnVendorProfile(): Promise<WireVendorProfile | null> {
       return null;
     }
 
-    rethrowUnlessSessionFailure(error);
+    rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
@@ -87,7 +104,7 @@ export async function getOwnVendorProfile(): Promise<WireVendorProfile | null> {
  * been described yet.
  */
 export async function getOwnPackages(): Promise<WireServicePackage[]> {
-  const token = await vendorToken();
+  const { token, signInPath } = await vendorSession();
 
   try {
     return await apiRequest('/vendor/packages', {
@@ -98,13 +115,13 @@ export async function getOwnPackages(): Promise<WireServicePackage[]> {
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return [];
     }
-    rethrowUnlessSessionFailure(error);
+    rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
 /** The vendor's own dashboard figures — recomputed server-side on every read. */
 export async function getVendorDashboard(): Promise<WireVendorDashboard | null> {
-  const token = await vendorToken();
+  const { token, signInPath } = await vendorSession();
 
   try {
     return await apiRequest('/vendor/dashboard', { schema: wireVendorDashboardSchema, token });
@@ -112,12 +129,12 @@ export async function getVendorDashboard(): Promise<WireVendorDashboard | null> 
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return null;
     }
-    rethrowUnlessSessionFailure(error);
+    rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
 export async function getOwnPortfolio(): Promise<WirePortfolioItem[]> {
-  const token = await vendorToken();
+  const { token, signInPath } = await vendorSession();
 
   try {
     return await apiRequest('/vendor/portfolio', { schema: wirePortfolioListSchema, token });
@@ -125,12 +142,12 @@ export async function getOwnPortfolio(): Promise<WirePortfolioItem[]> {
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return [];
     }
-    rethrowUnlessSessionFailure(error);
+    rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
 export async function getOwnAvailability(): Promise<WireAvailability[]> {
-  const token = await vendorToken();
+  const { token, signInPath } = await vendorSession();
 
   try {
     return await apiRequest('/vendor/availability', {
@@ -141,7 +158,7 @@ export async function getOwnAvailability(): Promise<WireAvailability[]> {
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return [];
     }
-    rethrowUnlessSessionFailure(error);
+    rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 

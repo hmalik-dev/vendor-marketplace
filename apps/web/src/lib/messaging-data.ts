@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
+import { signInPathReturningHere } from './requested-path';
 import {
   wireConversationListSchema,
   wireNotificationPageSchema,
@@ -14,7 +15,7 @@ async function sessionToken(): Promise<string> {
   const token = await getToken();
 
   if (!token) {
-    redirect('/sign-in');
+    redirect(await signInPathReturningHere());
   }
 
   return token;
