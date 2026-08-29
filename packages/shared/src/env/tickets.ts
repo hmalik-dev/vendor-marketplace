@@ -269,6 +269,17 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   227: [],
   228: [],
   229: [],
+  /*
+   * Lane-infrastructure and review findings filed 2026-08-29. All `core` only,
+   * except #234, which changes a Clerk dashboard setting the sign-in card reads.
+   */
+  230: [],
+  231: [],
+  232: [],
+  233: [],
+  234: ['auth'],
+  235: [],
+  236: [],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
