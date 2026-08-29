@@ -257,3 +257,64 @@ describe('frame 03 — the rail pairs Event date with Guests above Package (#107
     expect(railSource).toContain("request.set('guests', guestCount)");
   });
 });
+
+describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
+  /*
+   * `.inp` is a shared frame class, so it is read straight out of the frame's
+   * own stylesheet rather than transcribed. The shipped package select drew a
+   * `stone-0` card fill on an input, which is the one colour the token exists
+   * to prevent — and the sweep ledger recorded its height as 39px where the
+   * frame renders 38.
+   */
+  const inp = /\.inp\{([^}]*)\}/.exec(frameHtml);
+  expect(inp, '`.inp` is missing from the design file').not.toBeNull();
+  const rule = (inp as RegExpExecArray)[1] as string;
+
+  const themeCss = readFileSync(
+    join(process.cwd(), '..', '..', 'packages', 'config', 'tailwind', 'theme.css'),
+    'utf8',
+  );
+
+  /** The theme token whose value is this hex, e.g. `#f1ece4` -> `stone-150`. */
+  function tokenFor(hex: string): string {
+    const found = new RegExp(`--color-([a-z0-9-]+):\\s*${hex.toLowerCase()};`).exec(themeCss);
+    expect(found, `no theme token equals ${hex}`).not.toBeNull();
+    return (found as RegExpExecArray)[1] as string;
+  }
+
+  const railSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'booking-rail.tsx'),
+    'utf8',
+  );
+
+  it('reads the frame contract it is asserting against', () => {
+    expect(declaration(rule, 'background')).toBe('#F1ECE4');
+    expect(declaration(rule, 'padding')).toBe('10px 13px');
+    expect(declaration(rule, 'border-radius')).toBe('10px');
+  });
+
+  it('fills every rail control with the frame token, not the card colour', () => {
+    const fill = tokenFor(declaration(rule, 'background'));
+
+    expect(fill).toBe('stone-150');
+    expect(railSource).toContain(`bg-${fill}`);
+    expect(railSource).not.toContain('bg-stone-0 px-');
+  });
+
+  it('pads and rounds them to the frame', () => {
+    const [vertical, horizontal] = pxParts(declaration(rule, 'padding'));
+
+    // 10px === Tailwind's `2.5` step; 13px has no step and is written exact.
+    expect(railSource).toContain(`py-${(vertical as number) / 4}`);
+    expect(railSource).toContain(`px-[${horizontal}px]`);
+    expect(railSource).toContain('rounded-lg');
+  });
+
+  it('keeps a native select while replacing only its arrow', () => {
+    // The element stays a real `<select>` — appearance is all that changes —
+    // so the keyboard, the screen reader and the mobile picker are untouched.
+    expect(railSource).toContain('<select');
+    expect(railSource).toContain('appearance-none');
+    expect(railSource).toContain('aria-hidden="true"');
+  });
+});

@@ -127,18 +127,31 @@ export function BookingRail({
             <Label htmlFor={`${fieldId}-package`} className={FIELD_LABEL}>
               Package
             </Label>
-            <select
-              id={`${fieldId}-package`}
-              value={packageId}
-              onChange={(event) => setPackageId(event.target.value)}
-              className={FIELD}
-            >
-              {packages.map((servicePackage) => (
-                <option key={servicePackage.id} value={servicePackage.id}>
-                  {servicePackage.name} — {formatPrice(servicePackage.priceCents)}
-                </option>
-              ))}
-            </select>
+            {/*
+              A real `<select>` — the element stays native so the keyboard, the
+              screen reader and the mobile picker all behave — with only the
+              OS-drawn arrow replaced by the frame's own glyph.
+            */}
+            <div className="relative">
+              <select
+                id={`${fieldId}-package`}
+                value={packageId}
+                onChange={(event) => setPackageId(event.target.value)}
+                className={`${FIELD} appearance-none`}
+              >
+                {packages.map((servicePackage) => (
+                  <option key={servicePackage.id} value={servicePackage.id}>
+                    {servicePackage.name} — {formatPrice(servicePackage.priceCents)}
+                  </option>
+                ))}
+              </select>
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 right-[13px] flex items-center text-base text-stone-600"
+              >
+                ▾
+              </span>
+            </div>
           </div>
         ) : null}
 
@@ -180,6 +193,6 @@ export function BookingRail({
 
 /** The frame's `.inp` token, shared by all three rail controls. */
 const FIELD =
-  'w-full rounded-lg border border-stone-300 bg-stone-0 px-3.5 py-2.5 text-base text-stone-900';
+  'w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-base text-stone-900';
 
 const FIELD_LABEL = 'mb-1.25 text-label font-semibold tracking-label text-stone-600 uppercase';
