@@ -5,6 +5,18 @@ import { EmptyState, EmptyStateGlyph } from './empty-state';
 afterEach(cleanup);
 
 describe('EmptyState', () => {
+  it('renders the headline at the frames’ 26px display step, not 21px', () => {
+    render(<EmptyState headline="No requests yet" description="Nothing has come in." />);
+
+    const heading = screen.getByRole('heading', { name: 'No requests yet' });
+
+    // `40-states.md`: Instrument Serif at 26px in-app. The role carries no
+    // tracking, so `font-display` rather than `.display-heading`.
+    expect(heading.className).toContain('font-display');
+    expect(heading.className).toContain('text-display-md');
+    expect(heading.className).not.toContain('text-display-sm');
+  });
+
   it('sets the sentence to the frame’s 420px measure', () => {
     render(<EmptyState headline="No requests yet" description="Nothing has come in." />);
 

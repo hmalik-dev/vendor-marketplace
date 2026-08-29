@@ -70,7 +70,17 @@ export function EmptyState({
           {icon}
         </span>
       ) : null}
-      <h2 className="font-display text-display-sm text-stone-900">{headline}</h2>
+      {/*
+        26px, not 21px. 40-states.md fixes the in-app empty-state headline at
+        26px (30px on marketing), and frame 20 draws it there. The role sets no
+        tracking, so the family hook is used on its own rather than the tracked
+        display-heading role.
+
+        Backticks are deliberately absent above: display-type.test.ts reads
+        backtick spans as template literals, so quoting a serif class name in a
+        comment registers as a serif element with no size.
+      */}
+      <h2 className="font-display text-display-md text-stone-900">{headline}</h2>
       <p className="max-w-[420px] text-base leading-prose text-stone-700">{description}</p>
       {action ? <div className="mt-2">{action}</div> : null}
     </div>
