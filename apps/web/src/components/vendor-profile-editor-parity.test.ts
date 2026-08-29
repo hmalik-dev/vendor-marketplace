@@ -42,6 +42,23 @@ const editorFrame = frameBlock('09 Vendor profile editor');
 
 const read = (path: string): string => readFileSync(join(process.cwd(), path), 'utf8');
 const formSource = read('src/components/vendor-profile-form.tsx');
+const inputSource = read('src/components/ui/input.tsx');
+
+/** One of the frames' shared component rules, e.g. `.inp{...}`. */
+function frameRule(name: string): string {
+  const match = frames.match(new RegExp(`\\.${name}\\{([^}]*)\\}`));
+  expect(match).not.toBeNull();
+
+  return match?.[1] ?? '';
+}
+
+/** A single declaration out of a frame rule, e.g. `padding` from `.inp`. */
+function declaration(rule: string, property: string): string {
+  const match = rule.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`));
+  expect(match).not.toBeNull();
+
+  return (match?.[1] ?? '').trim();
+}
 
 describe('frame 09 gives the form pane one visible heading', () => {
   /*
@@ -109,5 +126,70 @@ describe('the editor matches that: section headings are visually hidden', () => 
 
   it('keeps Your storefront as the one visible heading, an h1', () => {
     expect(formSource).toContain('<h1 className="display-heading text-display-md text-stone-900">');
+  });
+});
+
+describe('the text inputs match the frame’s `.inp` box (#142)', () => {
+  const inp = frameRule('inp');
+
+  /*
+   * The frame states padding and border; the 38px height follows from them.
+   * 10px top + 10px bottom padding + a 16px line box for 13.5px text + 2 x 1px
+   * border = 38px, which is what the frame's `.inp` nodes measure in a browser
+   * at 1440x900. jsdom cannot lay that out, so the arithmetic is asserted from
+   * the frame's own declarations and the height is pinned as a constant.
+   */
+  const FRAME_INPUT_HEIGHT_PX = 38;
+
+  it('reads 10px 13px padding off the frame', () => {
+    expect(declaration(inp, 'padding')).toBe('10px 13px');
+  });
+
+  it('reads a 1px border and a 10px radius off the frame', () => {
+    expect(declaration(inp, 'border')).toBe('1px solid #E4DDD1');
+    expect(declaration(inp, 'border-radius')).toBe('10px');
+  });
+
+  it('reads 13.5px text off the frame, which is the `text-base` token', () => {
+    expect(declaration(inp, 'font-size')).toBe('13.5px');
+  });
+
+  it('gives the input the frame’s height rather than the old 32px', () => {
+    expect(inputSource).toContain(`h-[${FRAME_INPUT_HEIGHT_PX}px]`);
+    expect(inputSource).not.toMatch(/'h-8 w-full/);
+  });
+
+  it('gives the input the frame’s horizontal and vertical padding', () => {
+    // `px-[13px]` is the frame's 13px; `py-2.5` is its 10px on the 4px scale.
+    expect(inputSource).toContain('px-[13px]');
+    expect(inputSource).toContain('py-2.5');
+    expect(inputSource).not.toContain('px-2.5 py-1');
+  });
+
+  it('keeps the touch variant agreeing with the pointer-width height', () => {
+    expect(inputSource).toContain(`INPUT_TOUCH_HEIGHT = 'h-11 lg:h-[${FRAME_INPUT_HEIGHT_PX}px]'`);
+  });
+
+  /*
+   * Background is deliberately NOT set on the shared primitive. Across the
+   * frames `.inp` is `#F1ECE4` by default and overridden to `#FFFDF9` on 26 of
+   * its 38 instances — it tracks the surface underneath, not the control. Frame
+   * 09 overrides all seven of its inputs, so the editor sets it at the call
+   * site and frames 03/04/23/26 keep the filled default.
+   */
+  it('leaves the shared primitive’s background to the surface', () => {
+    expect(inputSource).toContain('bg-transparent');
+  });
+
+  it('paints frame 09’s own fields stone-0, as every input in that frame is', () => {
+    const frameInputs = editorFrame.match(/<div class="inp"[^>]*>/g) ?? [];
+
+    expect(frameInputs).toHaveLength(7);
+    for (const input of frameInputs) {
+      expect(input).toContain('background:#FFFDF9');
+    }
+
+    // `--color-stone-0: #fffdf9`, so the editor's fields carry `bg-stone-0`.
+    expect(formSource.match(/className="mt-1\.5 bg-stone-0"/g)).toHaveLength(6);
   });
 });

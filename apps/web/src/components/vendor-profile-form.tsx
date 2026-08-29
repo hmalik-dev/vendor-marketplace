@@ -424,7 +424,7 @@ export function VendorProfileForm({
                     onChange={(event) => update('businessName', event.target.value)}
                     required
                     maxLength={200}
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                 </div>
 
@@ -435,7 +435,7 @@ export function VendorProfileForm({
                     value={form.slug}
                     onChange={(event) => update('slug', event.target.value)}
                     placeholder={generateSlug(form.businessName || 'your-business')}
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                   <p className="mt-1 truncate text-xs text-stone-600">
                     {BRAND_DOMAIN}/vendors/{slugPreview}
@@ -450,7 +450,7 @@ export function VendorProfileForm({
                     onChange={(event) => update('tagline', event.target.value)}
                     placeholder="Quiet, documentary, never asks you to pose."
                     maxLength={MAX_TAGLINE_LENGTH}
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                   <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
                     <p className="text-stone-600">
@@ -473,7 +473,7 @@ export function VendorProfileForm({
                     value={form.yearsInBusiness}
                     onChange={(event) => update('yearsInBusiness', event.target.value)}
                     placeholder="10"
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                   <p className="mt-1 text-xs text-stone-600">
                     Counted from when you started, not when you joined here.
@@ -488,7 +488,7 @@ export function VendorProfileForm({
                     onChange={(event) => update('bio', event.target.value)}
                     placeholder="What you do, who you do it for, and what makes a day with you feel different."
                     maxLength={MAX_VENDOR_BIO_LENGTH}
-                    className="mt-1.5 min-h-[140px]"
+                    className="mt-1.5 min-h-[140px] bg-stone-0"
                   />
                   <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
                     <p className="text-stone-600">A couple of paragraphs is plenty.</p>
@@ -534,7 +534,7 @@ export function VendorProfileForm({
                     id="address"
                     value={form.address}
                     onChange={(event) => update('address', event.target.value)}
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                 </div>
 
@@ -545,7 +545,7 @@ export function VendorProfileForm({
                     value={form.city}
                     onChange={(event) => update('city', event.target.value)}
                     required
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                 </div>
 
@@ -554,7 +554,7 @@ export function VendorProfileForm({
                   <Select value={form.state} onValueChange={(value) => update('state', value)}>
                     <SelectTrigger
                       id="state"
-                      className="mt-1.5 w-full data-[size=default]:h-11 sm:data-[size=default]:h-9"
+                      className="mt-1.5 w-full bg-stone-0 data-[size=default]:h-11 sm:data-[size=default]:h-[38px]"
                     >
                       <SelectValue placeholder="Choose a state" />
                     </SelectTrigger>
@@ -607,7 +607,7 @@ export function VendorProfileForm({
                       id="responseTime"
                       aria-describedby="responseTime-help"
                       className={cn(
-                        'mt-1.5 w-full data-[size=default]:h-11 sm:data-[size=default]:h-9',
+                        'mt-1.5 w-full bg-stone-0 data-[size=default]:h-11 sm:data-[size=default]:h-[38px]',
                         responseTimeBlocks && 'border-gold-400',
                       )}
                     >
