@@ -7,18 +7,20 @@ secure payment via Stripe Connect, and messaging in booking context.
 
 ## Getting started
 
-Prerequisites: Node 20+, pnpm 10+, Docker, and the [Neon CLI](https://neon.com/docs/reference/neon-cli).
+Prerequisites: Node 20+, pnpm 10+, and Docker. The [Neon CLI](https://neon.com/docs/reference/neon-cli)
+is only needed for staging and production work, not to run the app locally.
 
 ```bash
 cp .env.example .env          # once — fill in keys as integrations come online
 
-neon branches create --name dev            # never develop against `production`
-neon connection-string dev                 # → DATABASE_URL
-neon connection-string dev --pooled false  # → DATABASE_URL_UNPOOLED
-
 pnpm preflight                # tells you what is still missing, and the fix
 pnpm start                    # install, start Docker, migrate, seed, run dev servers
 ```
+
+Set `DATABASE_URL` to the local Postgres described in `docker-compose.yml` —
+user, password and database name are all declared on the `postgres` service —
+and leave `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` unset. Nothing needs
+provisioning before the first run.
 
 `pnpm start` is idempotent, so it is also the right command after a `git pull`
 or whenever you just want the servers back. Web runs on
@@ -31,15 +33,31 @@ Individual steps are available as `pnpm install`, `docker compose up -d`,
 
 ### Where the database lives
 
-The application database is a **Neon branch**, not the Postgres service in
-`docker-compose.yml`. Branches are copy-on-write, so a personal `dev` branch is
-a full-fidelity copy that resets instantly, and pooled-connection and SSL
-behaviour match production — which is where connection-level bugs hide.
-Compose still provides Postgres for fully offline work, and MinIO on every run
-as the local stand-in for Cloudflare R2.
+**Locally: the Postgres service in `docker-compose.yml`.** **Staging and
+production: Neon branches.**
 
-`preflight` refuses to start a ticket while `DATABASE_URL` points at the
-`production` branch.
+Local development deliberately does *not* use Neon. `pnpm dev` holds a
+connection pool open, so a Neon compute never scales to zero and a day of
+development burns CU-hours against a per-project monthly cap — and exhausting
+that cap suspends the compute until the next billing period. Running locally is
+also faster, since no query crosses the network.
+
+The compose image tracks the major version Neon runs (**18**); a drift test in
+`packages/preflight` fails if the two disagree, because a version gap is
+invisible locally and surfaces only in production. Note that Postgres 18+ images
+require the data volume mounted at `/var/lib/postgresql`, one level above the
+pre-18 path.
+
+Neon still backs every deployed environment, and its copy-on-write branching is
+what gives each pull request an isolated, full-fidelity database. The Neon
+connection strings are kept commented in `.env` for when you need to point at a
+branch deliberately.
+
+`preflight` refuses to start a ticket while `DATABASE_URL` points at a
+`production`, `main` or `master` branch.
+
+MinIO runs on every local run as the stand-in for Cloudflare R2 — that container
+*is* required.
 
 ### Environment variables
 

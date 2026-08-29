@@ -55,6 +55,16 @@ export interface EnvVariable {
   /** Stricter syntax applied only by `--env production`. Defaults to `shape`. */
   readonly productionShape?: RegExp;
   /**
+   * Targets where absence is correct rather than missing.
+   *
+   * Distinct from `defaultValue`, which means "the apps fall back to this".
+   * These rows have no fallback and need none: they describe a Neon deployment,
+   * and local development runs on the Docker Postgres in `docker-compose.yml`,
+   * where there is no pooler to bypass and no branch to name. Production still
+   * requires them — see ticket #200.
+   */
+  readonly optionalFor?: readonly ShapeTarget[];
+  /**
    * What each target's mode is called, for a credential that carries one in its
    * prefix. Preflight reports "is a live key" instead of printing a regex — an
    * operator shown a regex pastes the same key back.
@@ -268,7 +278,8 @@ export const ENV_REGISTRY = [
     environments: 'per-environment',
     shape: POSTGRES_URL,
     placeholder: 'postgresql://...',
-    description: 'Pooled Neon connection (PgBouncer) — application query traffic.',
+    description:
+      'Postgres for this environment — the local Docker service in development, a pooled Neon branch in staging and production.',
     setup: NEON_SETUP,
   },
   {
@@ -276,10 +287,12 @@ export const ENV_REGISTRY = [
     capability: 'core',
     audience: 'server',
     consumers: ['tooling'],
+    optionalFor: ['baseline', 'local'],
     environments: 'per-environment',
     shape: POSTGRES_URL,
     placeholder: 'postgresql://...',
-    description: 'Direct Neon connection — migrations, drizzle-kit, pg_dump.',
+    description:
+      'Direct unpooled connection for migrations, drizzle-kit and pg_dump. Neon only; leave unset locally, where there is no PgBouncer to bypass.',
     setup: NEON_SETUP,
   },
   {
@@ -287,6 +300,7 @@ export const ENV_REGISTRY = [
     capability: 'core',
     audience: 'server',
     consumers: ['tooling'],
+    optionalFor: ['baseline', 'local'],
     environments: 'per-environment',
     shape: /^[A-Za-z0-9][A-Za-z0-9\-_/.]*$/,
     productionShape: /^production$/,
@@ -295,7 +309,7 @@ export const ENV_REGISTRY = [
     // how local work ends up writing to production data.
     placeholder: '<your-neon-branch>',
     description:
-      'Neon branch the connection strings point at. Local development must never be `production`.',
+      'Neon branch the connection strings point at, when they point at Neon at all. Unset for local Docker development; never `production`.',
     setup: NEON_SETUP,
   },
 
@@ -613,6 +627,10 @@ export type RegistryKey<TConsumer extends Consumer, TCapability extends Capabili
  * and web schemas all derive from this one rule.
  */
 export function requiresExplicitValue(variable: EnvVariable, target: ShapeTarget): boolean {
+  if (variable.optionalFor?.includes(target) === true) {
+    return false;
+  }
+
   return (
     variable.defaultValue === undefined ||
     (target === 'production' && variable.environments === 'per-environment')

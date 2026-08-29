@@ -53,7 +53,13 @@ export function evaluateVariable(variable: EnvVariable, context: CheckContext): 
 
   if (value === undefined || value.length === 0) {
     if (!requiresExplicitValue(variable, context.target)) {
-      return pass(variable.capability, variable.key, `unset, defaults to ${variable.defaultValue}`);
+      return pass(
+        variable.capability,
+        variable.key,
+        variable.defaultValue !== undefined
+          ? `unset, defaults to ${variable.defaultValue}`
+          : `unset, and not required for the ${context.target} target`,
+      );
     }
 
     const fix = context.envFileFound

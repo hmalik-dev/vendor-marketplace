@@ -267,3 +267,37 @@ describe('loadContext', () => {
     expect(context.env.DATABASE_URL).toBeUndefined();
   });
 });
+
+/*
+ * Ticket #200 moved local development onto the Docker Postgres, which has no
+ * pooler to bypass and no Neon branch to name. Both rows stayed *required*, so
+ * a correctly configured laptop failed the gate on two variables it must not
+ * set. Production is unchanged: staging and prod are Neon and still need them.
+ */
+describe('Neon-only rows are optional off Neon', () => {
+  const unpooled = findVariable('DATABASE_URL_UNPOOLED')!;
+  const branch = findVariable('NEON_BRANCH')!;
+
+  it('passes locally when the Neon-only rows are unset', () => {
+    for (const variable of [unpooled, branch]) {
+      const result = evaluateVariable(variable, contextWith({}, 'local'));
+
+      expect(result.ok).toBe(true);
+      expect(result.detail).toBe('unset, and not required for the local target');
+    }
+  });
+
+  it('still fails production when they are unset', () => {
+    for (const variable of [unpooled, branch]) {
+      const result = evaluateVariable(variable, contextWith({}, 'production'));
+
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it('leaves a row without the marker required locally', () => {
+    const result = evaluateVariable(findVariable('DATABASE_URL')!, contextWith({}, 'local'));
+
+    expect(result.ok).toBe(false);
+  });
+});

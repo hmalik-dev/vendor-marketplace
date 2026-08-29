@@ -62,3 +62,31 @@ describe('the repository agrees on one Node floor', () => {
     expect(Number.parseInt(declared ?? '', 10)).toBeGreaterThanOrEqual(floor);
   });
 });
+
+/*
+ * The compose Postgres sat at 16 while Neon ran 18 for the life of the project.
+ * That gap is invisible locally and only surfaces as a production-only failure,
+ * because local never exercises the newer engine. Ticket #200 closed it; these
+ * assertions fail if either side drifts again.
+ *
+ * The mount assertion is not hypothetical: Postgres 18+ images store data in a
+ * major-version subdirectory and abort startup when the volume is mounted at
+ * `/var/lib/postgresql/data`, which is exactly how the service was configured
+ * for 16. See docker-library/postgres#1259.
+ */
+describe('the local Postgres tracks the hosted major', () => {
+  const NEON_POSTGRES_MAJOR = 18;
+  const compose = read('docker-compose.yml');
+
+  it('pins the compose service to the Postgres major Neon runs', () => {
+    const declared = /image: postgres:(\d+)-alpine/.exec(compose)?.[1];
+
+    expect(declared).toBeDefined();
+    expect(Number.parseInt(declared ?? '', 10)).toBe(NEON_POSTGRES_MAJOR);
+  });
+
+  it('mounts the data volume where an 18+ image expects it', () => {
+    expect(compose).toContain('vendor-marketplace-pgdata:/var/lib/postgresql\n');
+    expect(compose).not.toContain('vendor-marketplace-pgdata:/var/lib/postgresql/data');
+  });
+});
