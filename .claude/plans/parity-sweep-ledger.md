@@ -248,13 +248,13 @@ other screen in the sweep. Highest-leverage fix found so far.
 
 | ID | Axis | Expected (frame) | Observed |
 |----|------|------------------|----------|
-| PB2-S1 | Text | Header carries a `Vendor` chip (`#EDF0E9` / `#4B5940`, 11px/600/uppercase/.06em, radius 5) | **absent on all three screens** |
-| PB2-S2 | Layout | Header padding `0 32px`, logo 23px | `0 40px`, logo 24px |
-| PB2-S3 | Layout | `.side` footprint 265px (240 + 24 padding + 1 border), content column starts x=290 | 240px total, content starts x=264. Frame rails likewise: 08 is 381px (340 inner) vs live 340px (300 inner); 11 is 341px (300 inner) vs live 300px (260 inner) |
-| PB2-S4 | Access | Focus ring on every interactive element | Header `Messages` and `Dashboard` links focus with **every box-shadow layer transparent and `outline-style:none`** — no visible ring. Clerk's `Open user menu` likewise |
-| PB2-S5 | Access | Icon-only controls >=44x44 | `Open user menu` **28x28**; `Notifications, 1 unread` **36x36**; `Show earlier months` / `Show later months` **36x36**. All four carry `aria-label`; all four fail the hit area |
-| PB2-S6 | Access | Overlays close on Escape | Notifications popover keeps `aria-expanded="true"` on Escape (outside-click works) |
-| PB2-S7 | Text | Dates formatted at the display boundary | Notification copy renders raw ISO: `"A customer asked about 2026-12-19."` |
+| PB2-S1 | Text | Header carries a `Vendor` chip (`#EDF0E9` / `#4B5940`, 11px/600/uppercase/.06em, radius 5) | ~~absent on all three screens~~ **PASS 2026-08-29 (#117, `7c9c689`+`53ce575`)** — chip renders for the vendor role only; measured 11px/600/.66px/uppercase, `rgb(75,89,64)` on `rgb(237,240,233)`, radius 5, padding 4px 8px, box **67.3 x 22** against the frame's **67.33 x 22** |
+| PB2-S2 | Layout | Header padding `0 32px`, logo 23px | ~~`0 40px`, logo 24px~~ **PASS 2026-08-29 (#118, `668cb0f`)** — padding **32px**, wordmark **23px**. The wordmark ratio was the wrong constant, not a one-frame slip: 1.6 rendered 24px here, 22.4px on mobile and 30.4px on sign-up, where the frames draw 23/21/29 |
+| PB2-S3 | Layout | `.side` footprint 265px (240 + 24 padding + 1 border), content column starts x=290 | ~~240px total, content starts x=264~~ **PASS 2026-08-29 (#119, `eb03fb3`+`c33e00d`)** — sidebar **265**, content column **x=265**, first heading **x=289**, dashboard rail **381**, availability rail **341**. One cause: the frames are content-box, Tailwind is border-box |
+| PB2-S4 | Access | Focus ring on every interactive element | **PARTLY SELF-CLOSED, then PASS 2026-08-29 (#120, `33e03db`+`16a5426`)** — re-measuring found the `Messages`/`Dashboard` links already correct: a global `:focus-visible` rule landed between the sweep and this lane. Clerk's `Open user menu` had not, and drew a single 4px clay at 50% with no offset ring |
+| PB2-S5 | Access | Icon-only controls >=44x44 | ~~28x28 / 36x36 / 36x36 / 36x36~~ **PASS 2026-08-29 (#121, `10d7ee3`+`16a5426`)** — all four measure **44x44**. The button's 36px `icon-sm` variant was the root of three and is retired, not resized: every one of its callers was an icon-only control that could never satisfy the law |
+| PB2-S6 | Access | Overlays close on Escape | ~~keeps `aria-expanded="true"` on Escape~~ **PASS 2026-08-29 (#122, `ad0396b`)** — there was no `keydown` handler at all, only a `mousedown` outside-click. Escape now closes it and returns focus to the trigger; driven in the browser |
+| PB2-S7 | Text | Dates formatted at the display boundary | **SELF-CLOSED, guarded 2026-08-29 (#123, `c002aae`)** — all three notification bodies already route through `readableDate` (named month, UTC). No production change needed. **Still UNVERIFIED in the browser**: the e2e vendor has zero notification rows, so the panel is empty and proves nothing. Regression guard added and confirmed to go red on the original `${row.eventDate}` |
 
 Console: **zero errors** across all three screens and every interaction.
 
