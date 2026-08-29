@@ -1,4 +1,12 @@
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { runCommand } from '../exec.js';
 import { ENV_FILES } from '../context.js';
@@ -225,6 +233,39 @@ const defaultUpDeps: LaneUpDeps = {
   migrate: (worktreePath) => pnpmInLane(worktreePath, ['db:migrate']),
 };
 
+/**
+ * Gives a worktree its own `node_modules` by dropping a symlink it inherited
+ * from another checkout. Returns whether there was one to drop.
+ *
+ * A symlinked tree is shared mutable state, and `pnpm install` follows the link
+ * and recreates the **target** — so a lane repairing its own resolution writes
+ * through into every peer reading that tree. `orchestration-policy.md` names
+ * this as the one thing a lane must never do; #232 found four lanes sharing a
+ * single `node_modules` on one fleet run.
+ *
+ * `lstat`, never `stat`: `stat` follows the link and reports a directory either
+ * way, which is why this stayed invisible. Only the link itself is removed —
+ * `unlink`, not a recursive delete — so the tree it pointed at is untouched and
+ * the peers reading it never notice. The install that follows repopulates this
+ * worktree from the content-addressed store, which is cheap.
+ */
+export function adoptOwnModules(worktreePath: string): boolean {
+  const modules = path.join(worktreePath, 'node_modules');
+
+  try {
+    if (!lstatSync(modules).isSymbolicLink()) {
+      return false;
+    }
+  } catch {
+    // Nothing there at all, which is what a fresh worktree should look like.
+    return false;
+  }
+
+  unlinkSync(modules);
+
+  return true;
+}
+
 export async function laneUp(
   mainCheckout: string,
   worktreePath: string,
@@ -307,6 +348,10 @@ export async function laneUp(
   // The env file must exist before install and migrate, so both run against
   // this lane's own database rather than the developer's shared one.
   ensureLaneEnv(worktreePath, manifest, () => databaseUrl);
+
+  // Before the install, never after: the whole failure is `pnpm` following an
+  // inherited link and writing into the tree this lane's peers are reading.
+  adoptOwnModules(worktreePath);
 
   await deps.install(worktreePath);
   await deps.build(worktreePath);

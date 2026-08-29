@@ -9,7 +9,7 @@
   "scripts": {
     "build": "turbo run build",
     "preflight": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run preflight",
-    "lane:up": "tsx packages/preflight/src/lane/cli.ts up",
+    "lane:up": "node scripts/lane-bootstrap.mjs && tsx packages/preflight/src/lane/cli.ts up",
     "lane:exec": "tsx packages/preflight/src/lane/cli.ts exec",
     "lane:down": "tsx packages/preflight/src/lane/cli.ts down",
     "secrets:scan": "pnpm --filter @vendor-marketplace/preflight run secrets:scan",
@@ -21,7 +21,7 @@
     "dev": "turbo run dev",
     "test": "turbo run test",
     "e2e:auth": "node scripts/e2e-auth.mjs",
-    "test:agents": "for f in .claude/workflows/*.test.mjs .claude/hooks/*.test.mjs; do echo \"== $f\"; node \"$f\" || exit 1; done",
+    "test:agents": "for f in .claude/workflows/*.test.mjs .claude/hooks/*.test.mjs scripts/*.test.mjs; do echo \"== $f\"; node \"$f\" || exit 1; done",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml,css}\"",

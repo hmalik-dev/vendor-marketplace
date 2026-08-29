@@ -11,8 +11,7 @@
     ]
   },
   "worktree": {
-    "baseRef": "fresh",
-    "symlinkDirectories": ["node_modules"]
+    "baseRef": "fresh"
   },
   "hooks": {
     "PostToolUse": [

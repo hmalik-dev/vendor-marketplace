@@ -1,9 +1,20 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseLaneEnv } from './env.js';
 import {
+  adoptOwnModules,
   baseDatabaseUrl,
   laneDown,
   laneEnvFor,
@@ -330,5 +341,107 @@ describe('baseDatabaseUrl', () => {
     vi.stubEnv('DATABASE_URL', '');
 
     expect(() => baseDatabaseUrl(worktree)).toThrow(/\.env/);
+  });
+});
+
+/*
+ * #232. Every lane worktree was created with `node_modules` symlinked into the
+ * main checkout, which is the one thing `~/.claude/orchestration-policy.md`
+ * forbids outright: `pnpm install` follows the link and recreates the *target*,
+ * so a lane repairing its own resolution writes through into every peer reading
+ * that tree. Four lanes on one fleet run shared a single `node_modules`.
+ *
+ * The setting that created it is gone from `.claude/settings.json`, but the
+ * link is repaired here as well, because a worktree can be made without that
+ * setting and the ones already on disk still carry it.
+ */
+describe('adoptOwnModules', () => {
+  const target = (): string => path.join(root, 'node_modules');
+  const inWorktree = (): string => path.join(worktree, 'node_modules');
+
+  it('removes an inherited symlink and leaves the tree it pointed at intact', () => {
+    mkdirSync(path.join(target(), '.pnpm'), { recursive: true });
+    writeFileSync(path.join(target(), 'marker.txt'), 'peer data');
+    symlinkSync(target(), inWorktree(), 'dir');
+
+    expect(adoptOwnModules(worktree)).toBe(true);
+
+    expect(existsSync(inWorktree())).toBe(false);
+    // The point of the fix: the peers' tree is untouched.
+    expect(readFileSync(path.join(target(), 'marker.txt'), 'utf8')).toBe('peer data');
+    expect(existsSync(path.join(target(), '.pnpm'))).toBe(true);
+  });
+
+  /*
+   * `lstat`, never `stat`. `stat` follows the link and reports a directory
+   * either way, which is exactly why this stayed invisible through four lanes.
+   */
+  it('sees a symlink pointing at a directory as a symlink', () => {
+    mkdirSync(target(), { recursive: true });
+    symlinkSync(target(), inWorktree(), 'dir');
+
+    expect(statSync(inWorktree()).isDirectory()).toBe(true);
+    expect(lstatSync(inWorktree()).isSymbolicLink()).toBe(true);
+    expect(adoptOwnModules(worktree)).toBe(true);
+  });
+
+  it('leaves a real node_modules directory alone', () => {
+    mkdirSync(path.join(inWorktree(), 'left-alone'), { recursive: true });
+
+    expect(adoptOwnModules(worktree)).toBe(false);
+
+    expect(lstatSync(inWorktree()).isDirectory()).toBe(true);
+    expect(existsSync(path.join(inWorktree(), 'left-alone'))).toBe(true);
+  });
+
+  it('does nothing when the worktree has no node_modules yet', () => {
+    expect(adoptOwnModules(worktree)).toBe(false);
+    expect(existsSync(inWorktree())).toBe(false);
+  });
+
+  it('runs before the install, so the install cannot write through the link', async () => {
+    mkdirSync(target(), { recursive: true });
+    symlinkSync(target(), inWorktree(), 'dir');
+    writeFileSync(path.join(worktree, '.env'), `DATABASE_URL=${databaseUrl}\n`);
+
+    const seen: boolean[] = [];
+    const upDeps = deps();
+    const install = vi.fn(async (worktreePath: string) => {
+      seen.push(existsSync(path.join(worktreePath, 'node_modules')));
+    });
+
+    await laneUp(root, worktree, '232', { ...upDeps, install });
+
+    expect(install).toHaveBeenCalledTimes(1);
+    // The link is gone by the time pnpm runs, so it installs here, not there.
+    expect(seen).toEqual([false]);
+    expect(existsSync(path.join(target(), 'node_modules'))).toBe(false);
+  });
+});
+
+/*
+ * The other half of #232, and the half a written rule cannot hold. The symlink
+ * was not something the lane code did — `.claude/settings.json` asked Claude
+ * Code for it with `worktree.symlinkDirectories`, so every worktree arrived
+ * with one before `lane:up` ran at all. `adoptOwnModules` repairs that, but
+ * repairing it on every lane forever is worse than not asking for it.
+ */
+describe('.claude/settings.json', () => {
+  const settings = (): Record<string, unknown> =>
+    JSON.parse(
+      readFileSync(path.join(process.cwd(), '..', '..', '.claude', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+  it('does not ask for node_modules to be symlinked into worktrees', () => {
+    const worktree = settings().worktree as { symlinkDirectories?: string[] } | undefined;
+
+    expect(worktree?.symlinkDirectories ?? []).toEqual([]);
+  });
+
+  /* The lanes still need their own branch point, so this must survive. */
+  it('still branches every worktree from the remote default', () => {
+    const worktree = settings().worktree as { baseRef?: string } | undefined;
+
+    expect(worktree?.baseRef).toBe('fresh');
   });
 });
