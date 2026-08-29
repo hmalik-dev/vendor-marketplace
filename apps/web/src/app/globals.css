@@ -163,6 +163,14 @@ body:has([data-auth-screen]) > footer {
   .cl-userButtonTrigger:focus-visible {
     @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
   }
+  /*
+   * `04-laws.md`: an icon-only control carries a 44x44 hit area. Clerk renders
+   * its trigger at 28x28, and the avatar inside it keeps its own size — only
+   * the target grows, so the control still *looks* the way the frames draw it.
+   */
+  .cl-userButtonTrigger {
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center;
+  }
   body {
     @apply bg-background text-foreground;
   }

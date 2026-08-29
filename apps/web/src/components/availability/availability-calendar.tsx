@@ -309,7 +309,7 @@ export function AvailabilityCalendar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               aria-label="Show earlier months"
               disabled={!canPageBack}
               onClick={() => setPageStart((previous) => Math.max(0, previous - MONTHS_PER_PAGE))}
@@ -320,7 +320,7 @@ export function AvailabilityCalendar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               aria-label="Show later months"
               disabled={!canPageForward}
               onClick={() =>

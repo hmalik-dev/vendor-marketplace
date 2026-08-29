@@ -40,8 +40,13 @@ const buttonVariants = cva(
         default: 'gap-2 px-5 py-2.5',
         sm: "gap-1.5 rounded-md px-3 py-1.5 text-sm [&_svg:not([class*='size-'])]:size-3.5",
         lg: 'gap-2 px-6 py-3 text-md',
+        /*
+         * 44px, the hit area `04-laws.md` requires of an icon-only control.
+         * There is deliberately no smaller icon size: the `icon-sm` variant
+         * this replaced was 36px, which no caller could make compliant, and
+         * all three of its uses were icon-only controls that had to grow.
+         */
         icon: 'size-11',
-        'icon-sm': 'size-9',
       },
     },
     /*

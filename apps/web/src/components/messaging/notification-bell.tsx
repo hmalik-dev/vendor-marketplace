@@ -103,7 +103,7 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
         onClick={() => setOpen((current) => !current)}
         aria-label={unread === 0 ? 'Notifications' : `Notifications, ${unread} unread`}
         aria-expanded={open}
-        className="relative flex size-9 items-center justify-center rounded-full text-stone-700 hover:bg-stone-150 hover:text-stone-900"
+        className="relative flex size-11 items-center justify-center rounded-full text-stone-700 hover:bg-stone-150 hover:text-stone-900"
       >
         <Bell aria-hidden="true" className="size-4.5" />
         {unread > 0 ? (
