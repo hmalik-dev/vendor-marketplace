@@ -1438,8 +1438,10 @@ pnpm install
 # Create a personal Neon development branch off `production`.
 # Never point local development at the `production` branch — preflight rejects it.
 neon branches create --name dev
-neon connection-string dev            # → DATABASE_URL (pooled)
-neon connection-string dev --pooled false   # → DATABASE_URL_UNPOOLED
+# `--pooled` defaults to FALSE, so the bare command returns the DIRECT string.
+# Both lines here previously omitted the flag and so returned the same value.
+neon connection-string dev --pooled   # → DATABASE_URL (pooled, PgBouncer)
+neon connection-string dev            # → DATABASE_URL_UNPOOLED (direct)
 
 cp .env.example .env                  # then fill in the values preflight asks for
 
