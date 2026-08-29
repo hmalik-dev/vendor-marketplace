@@ -5,6 +5,7 @@ import { RoleChip } from '@/components/brand/role-chip';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { MarketingNav } from '@/components/marketing-nav';
 import { SignedInDrawer, SignedOutDrawer } from '@/components/header-drawer';
+import { HeaderNav } from '@/components/header-nav';
 import { HeaderQuery } from '@/components/search/header-query';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
@@ -38,10 +39,11 @@ export async function SiteHeader(): Promise<React.ReactElement> {
     // the page scroll. The token is 64px, and 56px below `md` per
     // `30-responsive.md`; nothing here restates either number.
     <header className="sticky top-0 z-(--z-header) box-border h-(--header-height) border-b border-stone-300 bg-stone-0">
-      <nav
-        aria-label="Main"
-        className="flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"
-      >
+      {/*
+        The inset is per-route, not one number: the frames set it per screen and
+        `HeaderNav` holds that choice.
+      */}
+      <HeaderNav>
         {/* 34px from the wordmark to the nav — frame `01`. */}
         <div className="flex min-w-0 flex-none items-center gap-8.5">
           {/*
@@ -123,7 +125,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             <SignedInDrawer />
           </Show>
         </div>
-      </nav>
+      </HeaderNav>
     </header>
   );
 }

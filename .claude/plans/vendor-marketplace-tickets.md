@@ -396,19 +396,19 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **87** | **01 Landing — Category card titles carry negative tracking the frame does not** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-6`, axis **Font** |
 | **88** | **01 Landing — Hero City field shows a placeholder where the frame has a literal** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-7`, axis **Text** |
 | **89** | **01 Landing — Hero search segments share one bar-level focus ring, so the focused segment is unidentifiable** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-8`, axis **Access** |
-| **90** | **02 Search — Header is inset 40px while everything below it is inset 26px** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-9`, axis **Layout** |
-| **91** | **02 Search — Header search bar is undersized** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-10`, axis **Layout** |
-| **92** | **02 Search — The `Style` filter chip is missing from the Refine bar** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-11`, axis **Layout** |
-| **93** | **02 Search — The 4-column result grid only exists at exactly ≥1440** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-12`, axis **Layout** |
-| **94** | **02 Search — Header submit is a 32x32 icon button where the frame specifies a text pill** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-13`, axis **Style** |
-| **95** | **02 Search — Header bar border and shadow are off-token** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-14`, axis **Style** |
-| **96** | **02 Search — Vendor card radius is 18px, not 16px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-15`, axis **Style** |
-| **97** | **02 Search — Card avatar is 34px where the frame is 32px + a 2px ring** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-16`, axis **Style** |
-| **98** | **02 Search — Sort is a native select where the frame specifies a chip** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-17`, axis **Style** |
-| **99** | **02 Search — Vendor-card clay monogram is off-token** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-18`, axis **Colour** |
-| **100** | **02 Search — Card meta line is small and splits the rating into a second weight** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-19`, axis **Font** |
-| **101** | **02 Search — Header date label reads `DATE`, not `EVENT DATE`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-20`, axis **Text** |
-| **102** | **02 Search — Header values render raw instead of formatted** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-21`, axis **Text** |
+| **90** | **02 Search — Header is inset 40px while everything below it is inset 26px** | **P1** | **M3** | **P1 High** | **Done** | `worktree-90` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-9`, axis **Layout** — Done in lane `worktree-90`, commit `91a9f96`. `parity-checker` re-measured at 1440x900 in a guest context 2026-08-29: `nav[aria-label="Main"]` computes `padding: 0px 26px` and the logo rect is `x=26`, against frame `02`'s `.hd padding:0 26px` and logo `x=26` — was 40px/`x=40`. Frames `17` and `18` draw the same 26px; the landing header is untouched at 40px, asserted. Checks read: typecheck 7/7, eslint clean, web suite 787/787 |
+| **91** | **02 Search — Header search bar is undersized** | **P1** | **M3** | **P2 Medium** | **Done** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-10`, axis **Layout** — **Closed 2026-08-29 as superseded — no code written.** Measured live at 1440x900: the compact bar rect is **560x42**, against frame `02`'s 582x45. But frames `17 Search loading` and `18 Search no results` both draw `height:42px` on this bar, and the three 1024 search frames draw 40px — the live 42px is exactly what five frames specify. Filed against a frame already ruled stale: superseded by #57's recorded ruling, `3324a79`, restated at `search-bar.tsx:224` — *"five against one is a stale frame, not a decision to escalate"* |
+| **92** | **02 Search — The `Style` filter chip is missing from the Refine bar** | **P1** | **M3** | **P1 High** | **Blocked** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-11`, axis **Layout** — **BLOCKED 2026-08-29 by lane `worktree-90` — duplicate of #25, and not a rendering change.** `refine-bar.tsx:320-328` already records this as a named deviation from the frame and names #25 (`Style Tags — Category-Specific Refine Chip`) as its owner. `11-search.md:123` defines `Style ▾` as *category-specific* tags whose option set changes with the selected vendor type; `tagCategoryEnum` is a Postgres enum with no `style` member and no tag→vendor-category link, so this needs an enum migration plus a style taxonomy invented for eleven categories. **Question: close as a duplicate of #25, or is #92 meant to be the rendering half once #25 has seeded the data?** |
+| **93** | **02 Search — The 4-column result grid only exists at exactly ≥1440** | **P1** | **M3** | **P1 High** | **Done** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-12`, axis **Layout** — Re-measured 2026-08-29 by `parity-checker` against current main (#74/#165/#198 landed). At exactly 1440x900 the results grid computes `grid-template-columns: 335px 335px 335px 335px`, `gap: 16px`, grid rect `{x:26, w:1388}` — identical to frame `02 Search`, whose grid computes the same from `repeat(4,1fr)`. MATCH at the 1440 acceptance viewport. `GRID_COLUMNS` in `search-shell.tsx` is unchanged (`lg:grid-cols-3 min-[90rem]:grid-cols-4`) and 1439px still yields 3 columns at `457px`/`gap:14px`, but `search-shell.tsx:38-46` cites frame `25 Search results — 1024` for that behaviour, so the sub-1440 column count is a plan question, not a 1440 parity failure. **Closed by re-measurement — no code written** |
+| **94** | **02 Search — Header submit is a 32x32 icon button where the frame specifies a text pill** | **P1** | **M3** | **P1 High** | **Done** | `worktree-90` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-13`, axis **Style** — **Re-scoped and half-closed 2026-08-29.** The *style/text* half — the frame `02` text pill versus the 32px clay circle — is **closed as superseded**: superseded by #57's recorded ruling, `3324a79`, restated at `search-bar.tsx:224` — *"five against one is a stale frame, not a decision to escalate"*, and #57 implemented the circle to the five frames (30px at 1024, 32px from 1280). The circle stays. The **Access half was never settled by #57 and is the half that was built**: `04-laws.md:133` requires an icon-only control to carry a 44x44 hit area with no exemption, and it is independent of which frame wins the shape. Commit `0674d19`. The paint is unchanged at `size-7.5`/`xl:size-8`; a centred `after:size-11` pseudo-element grows the target to 44x44 past the circle, verified in the browser at 1440x900: the painted circle is still 32x32 at (629.7, 15.5), `::after` computes 44x44, and `elementFromPoint` resolves to the button at all four corners of the target and at its centre, while 23.5px out resolves to the nav. At 1440 the target's left edge and the date field's right edge both sit at 623.7, abutting with **0px overlap**, and both inputs remain clickable at their centres and edges. `diff-reviewer` then showed that clearance is exact rather than general — (44 − 32) / 2 is precisely the `ml-1.5` gap, so it holds only where the circle is 32px. Between `lg` and `xl` the circle is 30px and the target covers the date label's last pixel column. One pixel, and the 44x44 law is the harder constraint, so the hit area stands; the comment was corrected to record the overlap rather than claim clearance at every width (`0a9a1f1`, `b5ad1aa`) The separate `ring-offset-0` defect on the same control is **#240** |
+| **95** | **02 Search — Header bar border and shadow are off-token** | **P1** | **M3** | **P2 Medium** | **Done** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-14`, axis **Style** — **Closed 2026-08-29 as superseded — no code written.** Measured live at 1440x900: border `rgb(228,221,209)` = `#E4DDD1` = `stone-300`, shadow `rgba(35,32,28,0.06) 0 2px 10px` = `--shadow-sm`. Frames `17` and `18` draw `border:1px solid #E4DDD1` and `box-shadow:0 2px 10px rgba(35,32,28,.04)`'s sibling `0 2px 10px rgba(35,32,28,.06)` — i.e. the live values are byte-exact to the five ruled frames, and it is frame `02`'s `#DDD5C7` / `0 1px 3px rgba(35,32,28,.04)` that is the outlier. `#DDD5C7` appears twice in the whole bundle and has no token. Filed against a frame already ruled stale: superseded by #57's recorded ruling, `3324a79`, restated at `search-bar.tsx:224` — *"five against one is a stale frame, not a decision to escalate"* |
+| **96** | **02 Search — Vendor card radius is 18px, not 16px** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-90` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-15`, axis **Style** — Done in lane `worktree-90`, commit `636c1a8`. `article.group/card` computes `border-radius: 16px` on all 11 rendered cards, against frame `02`'s `.card border-radius:16px` — was 18px. `--radius-2xl` is left at 18px deliberately: the frames genuinely draw 18px on modals, panels and three overridden cards, so repointing the token would have moved those to fix this. Web suite 787/787 |
+| **97** | **02 Search — Card avatar is 34px where the frame is 32px + a 2px ring** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-90` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-16`, axis **Style** — Done in lane `worktree-90`, commit `070bb16`. The card `[role=img]` computes 36x36 with `border: 2px solid rgb(255,253,249)` and `font-size: 13px`, at `(40, 388.08)` against the frame's `(40, 388)` — pixel-exact on all 11 cards. The frame is content-box, so its 32px circle plus a 2px ring occupies 36; the app is border-box, so `sm` becomes 36 and the fill comes out at the frame's 32. Was 34x34 with a 30px fill and a 14.28px glyph. `sm` is the vendor card's size and nothing else uses it. Web suite 787/787 |
+| **98** | **02 Search — Sort is a native select where the frame specifies a chip** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-90` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-17`, axis **Style** — Done in lane `worktree-90`, commit `9d0e398`. No `<select>` remains on the screen (`querySelectorAll("select").length === 0`); the control is now a `Chip` whose trigger is `button[aria-label="Sort: Most relevant"]` with `padding: 7px 13px`, `font-size 12.5px`, `font-weight 600`, `color rgb(35,32,28)`, on a chip with `border-radius: 8px`, `border 1px solid rgb(228,221,209)`, `background rgb(255,253,249)` — every token the frame sets, and its right edge lands on 1414.0 against the frame's 1414. Options are a radio group, single-choice like the control they replace. The two residual deltas are other tickets: height 34.75 vs 31 is #235, width 120.28 vs 92 is the `Most relevant`/`Top rated` label in #102. **Three defects in this work were then found and fixed.** `browser-verifier` found that tabbing out of the open panel stranded focus on `<body>`, so the next Tab restarted at "Skip to content" — the panel is portalled to the end of `<body>` and only a single-tab-stop panel reaches that boundary, so the fix went into the shared `Chip` (`938bf3b`) and covers every chip; re-verified in the browser, Tab now lands on the trigger and the Tab after it on `/vendors/kessler-co`. `diff-reviewer` found the behaviour had **no test at all** — replacing the radio `onChange` with a no-op passed all 121 tests — and that the parity assertions were hardcoded while citing the frame. Both fixed in `4a176a0`: all five options now assert the state they write, the panel dismisses on choice as the `<select>` did, and the parity numbers are read from frame `02` at test time. The same mutation now fails five tests. Web suite 795/795 |
+| **99** | **02 Search — Vendor-card clay monogram is off-token** | **P1** | **M3** | **P2 Medium** | **Blocked** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-18`, axis **Colour** — **BLOCKED 2026-08-29 by lane `worktree-90` — needs a palette decision.** The frame draws `#EADCCB` and does so systematically: 19 of its 30 uses are `border-radius:50%;background:#EADCCB`, i.e. the clay avatar fill across the whole file. But `03-components.md:99-103` says the opposite — *"Initials fallback: Instrument Serif on `clay-100` (`clay-600` text) or `sage-100`"* — and `clay-100` **is** the `#F7E7E0` now rendering, so the plan endorses the current code. `#EADCCB` has no token: `theme.css:19-25` runs `clay-50 #fdf4ef → clay-100 #f7e7e0 → clay-200 #efd8cc`, and it is not on that ramp. The codebase contains **zero** arbitrary hex colours, so this cannot be a class swap. The sage variant is already byte-exact (`#E4E9DE`/`#4B5940`), so only clay is in question. **Question: add a token for `#EADCCB` — and under what name, since it is not a step on the clay ramp — or correct the plan and keep `clay-100`?** |
+| **100** | **02 Search — Card meta line is small and splits the rating into a second weight** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-90` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-19`, axis **Font** — Done in lane `worktree-90`, commit `a39608a`. With the sr-only expansion stripped the visible line is byte-identical to the frame — `★ 4.9 (127) · Austin, TX` — and every part computes `font-weight: 400` and `rgb(107,100,89)` on a `font-size: 12px` / `line-height: normal` line. The `font-semibold text-stone-700` span carried nothing else, so it was removed rather than emptied. Web suite 787/787 |
+| **101** | **02 Search — Header date label reads `DATE`, not `EVENT DATE`** | **P1** | **M3** | **P2 Medium** | **Done** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-20`, axis **Text** — **Closed 2026-08-29 as superseded — no code written.** Measured live at 1440x900: the third micro-label renders `DATE` (source `Date` plus `uppercase`). Frames `17` and `18` and all three 1024 search frames draw `Date`; only frame `02` draws `Event date`. `search-bar.tsx:218-226` already carries the ruling in a comment. Filed against a frame already ruled stale: superseded by #57's recorded ruling, `3324a79`, restated at `search-bar.tsx:224` — *"five against one is a stale frame, not a decision to escalate"* |
+| **102** | **02 Search — Header values render raw instead of formatted** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-21`, axis **Text** — **Re-scoped 2026-08-29, not blocked.** Two of the three reported halves are dropped as real-content differences, which the parity gate permits: the sort reading `Most relevant` where frame `02` drew `Top rated`, and the city reading `Austin` where it drew `Austin, TX`, are frame *states*, not defects. **What survives is the date alone**, and it survives against the ruled frames rather than frame `02`: the segment renders the browser's native picker (`09/13/2026`), and **every** search frame draws a formatted value — `Jun 14, 2026` in `17` and `18`, `Jun 14` in the three at 1024, `Sun, Jun 14` in `02`. None draws a picker, so this is not a frame-02-only finding and #57 does not cover it. **Target format is the five ruled frames': `Jun 14, 2026` at 1440, `Jun 14` at 1024.** `search-bar.tsx` already overlays a prompt on the transparent native input while it is empty; the fix extends that to the filled state. Not implemented by lane `worktree-90` |
 | **103** | **03 Vendor profile — Profile uses a centred `max-w-7xl` container where the frame is full-bleed** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-22`, axis **Layout** |
 | **104** | **03 Vendor profile — Booking rail starts 82px too low** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-23`, axis **Layout** |
 | **105** | **03 Vendor profile — Avatar overlaps the cover by 34px instead of 14px** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-24`, axis **Layout** |
@@ -534,6 +534,16 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **236** | **The web search boundary re-declares the API's query schema instead of deriving from it** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `searchStateSchema` in `apps/web/src/components/search/search-state.ts` hand-copies every bound in `vendorSearchQuerySchema`. The constants are shared so values cannot disagree, but the composition can — `tags` was already more permissive on the client until #66 caught it. Export a field map from `packages/shared` that both build from. **Deliberately not done in #66:** that file was owned by a concurrent lane, which required additive changes only |
 | **237** | **`page` is bounded below but not above, on both sides of the boundary** | **P1** | **M3** | **P3 Low** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `paginationQuerySchema` and `vendorSearchQuerySchema` both cap `pageSize` and not `page`. Not a 500 — Zod's `.int()` caps at 2^53−1 and the offset stays inside `bigint` — but `?page=99999999` still makes Postgres sort the whole filtered set. Same class as #66's price cap. `tags` likewise has no array-length bound on either side |
 | **238** | **The lane support tooling still hardcodes ports 3000 and 4000** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` `auth` | Filed from #231 review 2026-08-29. `preflight`, `hunt-bugs` and `e2e:auth` all assume the shared dev ports, so inside a lane they check, gate on, and authenticate against the wrong process |
+| **239** | **02 Search — Four header controls render no focus ring at all** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. Tab-focused, the vendor-type button, the city input, the date input and the `Sign up` link each compute every `box-shadow` layer at 0px spread — and `Sign up` also computes its ring colour as `oklab(0 0 0 / 0)`. The parent `form` does not pick the ring up either: its `box-shadow` is unchanged while a child is focused. Four of 28 tab stops on the screen have no keyboard indicator; the other 24 compute the law correctly |
+| **240** | **02 Search — The header submit is a 32x32 icon-only control with no 44x44 hit area** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. Focused, `button[aria-label="Search"]` computes `ring-2` with its offset layer at **0px** — `search-bar.tsx` sets `focus-visible:ring-offset-0` on it, where `04-laws.md:133` asks for `ring-offset-2` and every other correct stop on the screen renders it. **Narrowed 2026-08-29: the 44x44 hit-area half of this finding moved to #94**, which was re-scoped to the Access axis and built it. This ticket is the focus offset only |
+| **241** | **02 Search — The Rating popover stays open after a value is chosen** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. Choosing a rating leaves `[role=dialog]` open at rect `{157,113,280,139}`, where it occludes the `<h1>` and the first result card — the two things the customer needs in order to see whether the filter did what they wanted |
+| **242** | **02 Search — `free on …` sits inside the `<h1>`, so the accessible name runs together** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. The `free on …` span is nested **inside** the `<h1>`, so the heading's accessible name concatenates with no separator: `10 photographers in Austinfree on Sun, Sep 13`. The frame draws them as siblings. The same nesting also makes the span inherit the heading's `letter-spacing: -0.22px` where the frame computes `normal` |
+| **243** | **02 Search — The availability chip has one tone where the frame draws three** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. `vendor-card.tsx:179-190` renders exactly one availability tone, `bg-sage-50 text-sage-600`. Frame `02` draws three: sage `Free Jun 14`, **gold `2 dates left`** (`#F5EEDC`/`#7A5A12`) and stone `New` (`#F0EAE1`/`#4A443C`). This is a missing semantic, not a missing string |
+| **244** | **02 Search — The header logo lockup is a pixel large and a pixel and a half tight** | **P1** | **M3** | **P3 Low** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. Three small divergences that compound in the same direction: mark→wordmark `gap: 7.5px` vs the frame's `9px`, wordmark `font-size: 24px` vs `23px`, and the mark's outline circle 15x15 vs the frame's 17x17. The wordmark lands at `x=55.25` against the frame's `x=57` |
+| **245** | **02 Search — The active-filter `✕` is under the 44x44 hit area** | **P1** | **M3** | **P3 Low** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. With a rating filter applied, the clear affordance inside the chip measures **24.5 x 32.8**. Its only visible content is a glyph, so `04-laws.md:133`'s 44x44 rule applies. It is correctly named — `✕` plus an sr-only `Clear 4★ & up` |
+| **246** | **02 Search — The second row of results has fallen below the 900 fold** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. `11-search.md:158` requires every second-row card's **price row** to be above the fold. The frame meets it by 2px (top 898 of 900). Live, the second-row price row starts at **904.08** and ends at 939.58 — entirely below it. The cause is accumulated line-height inflation, not any single element |
+| **247** | **The `text-[Npx]` line-height defect also hits the `h1`, card `h3` and price span** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`. #235 covers the refine chip. The identical defect — an arbitrary `text-[Npx]` emitting `font-size` and inheriting Preflight's `html{line-height:1.5}` — is also on the search `h1` (33px vs `normal` 29px), the card `h3` (28.5 vs 25) and the price span (25.5 vs 20). Those three are unowned, and together they are what pushes #246 over the fold |
+| **248** | **[DESIGN] Frame `02 Search` contradicts five sibling frames on the compact search bar** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed by lane `worktree-90`, 2026-08-29. Frame `02 Search` draws the compact search bar in a way five sibling frames contradict — a labelled `Search` pill vs a 32px clay circle, `Event date` vs `Date`, 582x45 vs 42px, `#DDD5C7`/`0 1px 3px` vs `#E4DDD1`/`0 2px 10px`. #57 ruled the five correct and the code follows them, but **frame 02 itself was never updated**, so every fresh parity sweep of that frame re-files the same three findings. #91/#95/#101 have now been filed and closed twice |
 | **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
 | **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
 | **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. **Reconciliation 2026-08-29 — filed without reading `D10` or the plan.** The runtime split (web on Vercel, API on **Railway**) is decided in `vendor-marketplace-decisions.md` D10, and the release pipeline is already ticketed as **#20 Deploy Pipeline** (P0, blocked by #18, #19, #30). Treat this row as the git/branch-protection slice of #20, not a new ticket. **Done 2026-08-29.** Vercel Production Branch flipped `main` -> `production`, confirmed by reading `link.productionBranch: production` from the API. `production` branch exists and is protected alongside `main` (no deletions, no force pushes, linear history, CI required). `main` now produces previews; the live site advances only on a deliberate fast-forward. |
@@ -10449,6 +10459,337 @@ downstream ignores the allocation — which is why it is one ticket rather than 
 
 ---
 
+### #239: Four header controls render no focus ring at all
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context — the frame rendered from `design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Access**
+
+Measured by tabbing and reading `box-shadow` at each stop, at 1440x900, guest.
+
+| Element | `box-shadow` when focused |
+| --- | --- |
+| `button[aria-label="Vendor type"]` | all five layers **0px spread** |
+| city `<input>` | all layers 0px spread |
+| date `<input>` | all layers 0px spread |
+| `a` "Sign up" | ring colour `oklab(0 0 0 / 0)` at 0px spread |
+
+The three bar segments suppress their own ring on purpose — `search-bar.tsx` sets `focus-visible:ring-0 focus-visible:ring-offset-0` and delegates to a bar-level `has-[:focus-visible]:ring-3` — but that delegation is **not firing here**: the `form`'s computed `box-shadow` stays at its resting `rgba(35,32,28,.06) 0 2px 10px` while each child is focused. So the segments end up with neither their own ring nor the bar's.
+
+This is the search-header sibling of #89, which covers the same suppression on the landing hero. #89 is about *which* control the one ring identifies; this is about **no ring rendering at all**, which is a different failure and a harder one.
+
+The law is `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50` (`04-laws.md:133`). The 24 correct stops compute `rgb(248,245,239) 0 0 0 2px, oklab(0.560981 0.100727 0.0885573 / 0.3) 0 0 0 4px`.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] A browser assertion that tabs to each of the four controls and asserts a **rendered** ring — the computed value is what already passes while nothing is drawn.
+- [ ] An assertion that the bar-level `has-[:focus-visible]` ring actually applies to the `form` when a segment holds focus.
+
+---
+
+### #240: The header submit renders its focus ring with no offset
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context.
+
+**Axis: Access**
+
+Focused, `button[aria-label="Search"]` computes
+`oklab(0.560981 0.100727 0.0885573 / 0.3) 0 0 0 2px` — the ring is present, but its offset layer has 0px spread. `search-bar.tsx` sets `focus-visible:ring-offset-0` on the control explicitly.
+
+The law is `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50` (`04-laws.md:133`), and the 24 correct tab stops on this screen render both layers:
+`rgb(248,245,239) 0 0 0 2px, oklab(0.560981 0.100727 0.0885573 / 0.3) 0 0 0 4px`.
+
+**Scope note.** This finding was originally filed with the control's 44x44 hit-area breach. That half moved to **#94**, which was re-scoped to the Access axis and implemented it — the circle keeps the size #57 settled and a centred `after:size-11` grows the target. Only the focus offset is left here. The ring sits on a control whose paint is 32px inside a 42px bar, so an offset ring needs somewhere to go: check it does not clip against the bar's rounded edge.
+
+**Acceptance:**
+
+- [ ] The control renders both ring layers when focused, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] A browser assertion that the focus ring **renders** with its offset, not merely that the class is present.
+
+---
+
+### #241: The Rating popover stays open after a value is chosen
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context — the frame rendered from `design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+A single-select popover has no reason to stay open: the choice is complete the moment it is made, and the result of the choice is behind the panel. The panel covers the count heading and card 1, so the customer has to dismiss it to read the outcome of their own action.
+
+The rating popover is also, separately, three plain `<button>`s with no `role="radiogroup"` / `role="radio"` / `aria-checked` and no roving tabindex, so it announces as three unrelated buttons rather than one single-choice control. `04-laws.md` asks for a radio-group pattern for star ratings. Fix both together — they are the same control.
+
+Focus handling itself is correct and should not regress: `Escape` closes the panel and returns focus to the `Rating ▾` trigger, and ten consecutive `Tab`s stay inside the dialog.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] A browser assertion that choosing a rating closes the panel and returns focus to the trigger.
+- [ ] An assertion that the options expose a radio-group pattern with `aria-checked`.
+
+---
+
+### #242: `free on …` sits inside the `<h1>`, so the accessible name runs together
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context — the frame rendered from `design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Access**
+
+Frame `02` draws two sibling spans inside the count row:
+
+```html
+<div><span class="h2" style="font-size:22px">24 photographers in Austin</span><span style="font-size:13px;color:#6B6459;margin-left:10px">free on Sun, Jun 14</span></div>
+```
+
+Live, the second span is a **child of the `h1`**. Two consequences, both measured:
+
+1. **The heading's accessible name is `10 photographers in Austinfree on Sun, Sep 13`** — the two strings abut with no space, because accessible-name computation concatenates text nodes without inserting separators across inline boundaries. This is what a screen reader announces for the page's only `h1`.
+2. **It inherits `-0.01em` tracking** from the heading, computing `letter-spacing: -0.22px` against the frame's `normal`. Everything else about the span already matches exactly: `13px`, weight `400`, `rgb(107,100,89)`, `margin-left: 10px`.
+
+Moving the span out of the `h1` to be its sibling — which is what the frame draws — fixes both at once, which is why they are one ticket rather than two.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] An assertion on the `h1`'s computed accessible name, not its `textContent`.
+- [ ] A parity assertion that the sub-line's `letter-spacing` matches the frame's span.
+
+---
+
+### #243: The availability chip has one tone where the frame draws three
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context — the frame rendered from `design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Colour**
+
+The three the frame draws, with the tokens they resolve to:
+
+| Frame chip | Fill | Text | Token | Means |
+| --- | --- | --- | --- | --- |
+| `Free Jun 14` | `#EDF0E9` | `#4B5940` | `sage-50` / `sage-600` | settled — the date is open |
+| `2 dates left` | `#F5EEDC` | `#7A5A12` | `gold-50` / `gold-600` | running out |
+| `New` | `#F0EAE1` | `#4A443C` | — / `stone-700` | no signal either way |
+
+`40-states.md` is a law and it makes gold correct here: **gold is waiting on someone / running out**, and scarcity is exactly that. `03-components.md:56-57` says the same in so many words — *"Availability chip is sage when free on the searched date, gold when scarce (\"2 dates left\"), absent when no date is in the query"* — so the sage and gold tones are settled contract and only the stone `New` tone is undocumented.
+
+**Scarcity is a query result, not an invented number.** `11-search.md`'s no-invented-numbers rule is satisfied as long as the count comes from the vendor's real calendar; the data is already there (`112 calendar dates` in the marketing seed). The open question is only the threshold at which sage becomes gold.
+
+Note the plan defines **two** tones and the frame draws **three**. The stone `New` tone needs a ruling before it ships.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Colour** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] A test per tone, asserting the fill and text token against the frame at test time.
+- [ ] A test that a vendor with no date in the query renders no chip at all.
+
+---
+
+### #244: The header logo lockup is a pixel large and a pixel and a half tight
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context — the frame rendered from `design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+Measured at 1440x900 after #90 put the header inset at the frame's 26px, which is what made these visible — the lockup's left edge is now correct, so everything downstream of it is comparable for the first time.
+
+| | Frame | Live |
+| --- | --- | --- |
+| mark → wordmark gap | `9px` | `7.5px` (`gap-8.5`) |
+| wordmark | `23px` Instrument Serif, span width 34.0 | `24px`, `line-height 24px`, width 35.45 |
+| outline circle | 15px content-box + 1.2px border = **17x17** | `box-border` 15x15 with a 1px border = **15x15** |
+| mark overall span | 27px | 22px |
+| wordmark x | 57 | 55.25 |
+
+The circle is the content-box/border-box trap again: the frame has no `box-sizing` reset, so its border adds to the 15; `box-border` takes it out instead. Same shape of error as #97, and the same fix — declare the footprint, not the fill.
+
+**Header chrome is #117–#123's territory**, so this is filed rather than fixed, and whoever takes it should check the logo against frame `01` too — the lockup is shared.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] A parity assertion deriving the gap, wordmark size and circle footprint from the frame at test time.
+
+---
+
+### #245: The active-filter `✕` is under the 44x44 hit area
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context — the frame rendered from `design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Access**
+
+The `✕` is a real button (`refine-bar.tsx`), correctly labelled, and it is the only way to clear a single filter without clearing all of them — so it is a primary affordance rendered at roughly a third of the required hit area.
+
+It sits inside the chip, which is itself only 34.75px tall (#235), so the height cannot be fixed independently of that ticket: the chip has to grow, or the hit area has to extend beyond the chip's painted box. The frame draws the chip at 31px, which is **shorter** still — so satisfying both the frame and the law needs a hit area larger than the painted control, not a bigger chip.
+
+Same class as #240, and the two should probably be resolved with one approach to hit areas that exceed their paint.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] An assertion on the hit area rather than the painted box, for both the `✕` and the chip.
+
+---
+
+### #246: The second row of results has fallen below the 900 fold
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context — the frame rendered from `design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+Band-by-band, measured against the frame at 1440x900:
+
+| Band | Frame h | Live h | Δ | Cause |
+| --- | --- | --- | --- | --- |
+| header | 65 | 64 | −1 | frame `.hd` is content-box 64 + 1px border; live is `box-border` 64 |
+| Refine bar | 54 | 57.75 | +3.75 | chip `line-height: 18.75px` vs `normal` (#235) |
+| count row | 55 | 59 | +4 | `h1` `line-height: 33px` vs `normal` (29px) |
+| card title | 25 | 28.5 | +3.5 | `text-[19px]` `line-height: 28.5px` |
+| price row | 30 | 35.5 | +5.5 | `text-[17px]` `line-height: 25.5px` |
+| cover | 230 | 223.33 | −6.67 | allowed — true 3:2 vs the frame's padded placeholder |
+
+Net: the second-row card top sits at 575.08 against the frame's 566, and its price row at 904.08 against 898.
+
+**This ticket is the fold criterion, not the line-heights.** #247 owns the three `line-height` rows; fixing those three is expected to reclaim ~13px and put the price row back above 900 on its own. File this so the criterion is verified after #247 lands rather than assumed — the frame only clears it by 2px, so it is genuinely marginal and deserves its own check.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] A browser assertion at exactly 1440x900 that the second-row price row's bottom is ≤ 900, derived from the frame rather than hardcoded.
+
+---
+
+### #247: The `text-[Npx]` line-height defect also hits the `h1`, card `h3` and price span
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90` from the 2026-08-29 `parity-checker` pass over frame `02 Search`, at 1440x900 from computed DOM styles in a guest context — the frame rendered from `design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+Measured on `/search` at 1440x900:
+
+| Element | Live `line-height` | Frame |
+| --- | --- | --- |
+| `h1` count heading | `33px` | `normal` (29px) |
+| card `h3` title (`text-[19px]`) | `28.5px` | `normal` (25px) |
+| price span (`text-[17px]`) | `25.5px` | `normal` (20px) |
+| refine chips (`text-[12.5px]`) | `18.75px` | `normal` (15px) — **already #235** |
+
+Same root cause #235 documents: #74 set every `--text-*--line-height` to `normal`, which only reaches elements sized by a named scale step; an arbitrary `text-[Npx]` emits `font-size` alone and inherits 1.5.
+
+#235's title and body scope it to the chip, so a reader taking #235 would fix the chip and stop. Either widen #235 to every `text-[Npx]` site on this screen, or take this ticket — but the three rows above must be owned by one of them. They are the direct cause of #246, and #235's own note says 96 sites across 40 files are affected, so the general fix probably belongs there and this is the search-screen verification of it.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] A parity assertion that each of the three elements computes the frame's `line-height`, derived from the frame at test time.
+
+---
+
+### #248: [DESIGN] Frame `02 Search` contradicts five sibling frames on the compact search bar
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane `worktree-90`, 2026-08-29. **This is a change to the design bundle, not to the application.** No ticket in this run may edit `design/`, so it is for the bundle's owner.
+
+#57 (`3324a79`) ruled on the compact search bar: *"five against one is a stale frame, not a decision to escalate"*, and implemented the bar to frames `17 Search loading`, `18 Search no results` and the three 1024 search frames. The application is correct. **Frame `02 Search` was never brought into line**, so the contradiction is still sitting in the contract.
+
+What frame `02` draws, against what the other five draw and the app implements:
+
+| Property | Frame `02 Search` | Frames `17`, `18`, three at 1024 | App |
+| --- | --- | --- | --- |
+| submit | `Search` text pill, 81.25x35, `padding:10px 20px` | 32px clay circle | circle |
+| third label | `Event date` | `Date` | `Date` |
+| bar height | 45 (560 content-box + padding + border) | `height:42px` (40 at 1024) | 42 |
+| border | `#DDD5C7` | `#E4DDD1` (`stone-300`) | `stone-300` |
+| shadow | `0 1px 3px rgba(35,32,28,.04)` | `0 2px 10px rgba(35,32,28,.06)` | `--shadow-sm` |
+
+**The cost is recurring, which is why this is a ticket rather than a note.** #91, #95 and #101 were filed from a sweep of frame `02`, closed by #57, filed again by the 2026-08-28 sweep, and closed again by lane `worktree-90` on 2026-08-29. A third sweep of the unchanged frame will file them a third time. The ruling lives in a commit message, a board row and a source comment — none of which a parity sweep reads, because a sweep reads the frame.
+
+Note `#DDD5C7` appears exactly twice in the whole bundle (this bar, and a dashed upload box in frame `07`) and has no token on the stone ramp, which is corroborating evidence that the frame `02` values are the stale ones rather than an intended deviation.
+
+**Acceptance:**
+
+- [ ] Frame `02 Search` draws the same compact search bar as frames `17` and `18`
+- [ ] A sweep of frame `02` no longer reports the submit, the date label, the bar box, the border or the shadow
+- [ ] `11-search.md` is reconciled too — it still names `Event date` at :9 and :21, and a labelled `[ Search ]`
+
+**Test (required):**
+
+- [ ] Not applicable — this changes the design bundle. The existing parity assertions in `apps/web/src/components/` derive their expectations from the frame at test time, so they will fail if the reconciliation moves a value the app relies on, which is the check that matters.
+
+---
 
 
 ## Post-MVP Backlog

@@ -1,6 +1,6 @@
 ---
 name: lane-manifest-branch-drifts
-description: "Fixed 2026-08-29: the manifest now reads its branch from git and records its PR via `pnpm lane:pr`. Manifests written before that still lie — verify old ones against git and gh"
+description: "A lane is homed wherever `lane:up` is invoked — cli.ts takes the worktree from process.cwd(). Run it from inside the worktree, or the lane lands on main in the shared checkout"
 metadata:
   type: project
 ---
@@ -25,9 +25,31 @@ landable:
   through the same atomic `updateManifest` every other change uses. Run it at
   delivery; never hand-edit `.claude/lanes/<n>.json`.
 
-**How to apply:** a manifest written on or after 2026-08-29 can be trusted for
-`branch` and `prUrl`. One written before cannot — those still say `lane/<n>` and
-`"prUrl": null` — so when landing an older lane, resolve its real state from
-`git -C <worktree> symbolic-ref --short HEAD` and
-`gh pr list --state all --json number,headRefName,state`, matching on the branch
-name. See [[ticket-worktree-merge-immediately]] and [[worktree-env-copies-drift]].
+## The fix is real but its input is cwd — this still bites (2026-08-29, parity run)
+
+`packages/preflight/src/lane/cli.ts:22` is `const worktree = process.cwd()`.
+Every lane command resolves the worktree from **where you invoked it**, not from
+the manifest. So the branch really is read from git — but read in whatever
+checkout you happened to be standing in.
+
+Consequences seen in one run of four parallel lanes:
+
+- A lane bootstrapped from the repo root recorded `"branch": "main"` and
+  `worktreePath` = the repo root, and was **genuinely unisolated** — it had no
+  worktree at all, so its commits would have landed on `main` in the shared
+  checkout, sweeping up whatever else was dirty there. That is the failure
+  `b1b8e7c` and `1bd37ab` already caused once.
+- `laneDown` (`cli.ts:48`) takes cwd the same way, so `rmSync(cwd/.env.lane)`
+  deletes the env of whichever lane is homed there. One lane's `.env.lane`
+  vanished mid-run; its API then read a stale copy, bound another lane's port
+  and died with `EADDRINUSE`.
+
+**How to apply:** always `cd` into the lane's worktree before `pnpm lane:up
+<n>` / `lane:down <n>`, and verify afterwards that the manifest names a real
+worktree, not the repo root — `jq -r '.branch + " @ " + .worktreePath'
+.claude/lanes/<n>.json` against `git worktree list`. A manifest pointing at the
+repo root means that lane is not isolated; fix it before it commits, not after.
+A manually created worktree also gets none of `.worktreeinclude`'s gitignored
+files, so copy `.env*` and `.auth/` in before `lane:up`, or it fails deriving
+the lane database. See [[ticket-worktree-merge-immediately]] and
+[[worktree-env-copies-drift]].

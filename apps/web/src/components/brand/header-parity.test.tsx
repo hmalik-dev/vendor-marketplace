@@ -46,7 +46,13 @@ describe('the shared header matches the frame on the Layout axis', () => {
    * is the step the class must name. Deriving the class this way means a
    * change to the frame fails the test rather than silently disagreeing.
    */
-  it('sets the desktop header’s horizontal padding to the frame’s value', () => {
+  /*
+   * The inset is per-route and lives in `HeaderNav`, not on the header itself:
+   * `.hd` defaults to 32px, but 15 of the 36 frames override it inline — four
+   * to 40px, three to 26px, the rest at smaller widths. The vendor chrome
+   * frames take the bare class, so they get the default the rule states.
+   */
+  it('gives the vendor chrome the frame’s default header inset', () => {
     const padding = headerRule.match(/padding:0 (\d+)px/);
 
     expect(padding).not.toBeNull();
@@ -54,8 +60,11 @@ describe('the shared header matches the frame on the Layout axis', () => {
     const px = Number(padding?.[1]);
     expect(px).toBeGreaterThan(0);
 
-    const header = readFileSync(join(process.cwd(), 'src/components/site-header.tsx'), 'utf8');
-    expect(header).toContain(`lg:px-${px / 4}`);
+    const nav = readFileSync(join(process.cwd(), 'src/components/header-nav.tsx'), 'utf8');
+    expect(nav).toContain(`const VENDOR_INSET = 'lg:px-${px / 4}'`);
+    // Frame `10 Messaging` draws the same chrome, down to the chip.
+    expect(nav).toContain("'/vendor'");
+    expect(nav).toContain("'/messages'");
   });
 
   it('keeps the header the frame’s height', () => {

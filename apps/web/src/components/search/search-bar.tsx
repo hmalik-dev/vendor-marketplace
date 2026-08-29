@@ -303,7 +303,28 @@ export function SearchBar({
           aria-label="Search"
           className={cn(
             // 30px at 1024, 32px from 1280 — the circle follows the bar.
-            'flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 xl:size-8',
+            'relative flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 xl:size-8',
+            /*
+              `04-laws.md:133`: an icon-only control carries a 44x44 hit area.
+              The circle keeps the size the frames draw — #57 settled that it is
+              a circle rather than a labelled pill — so the target grows past the
+              paint instead of the paint growing. A hit area may exceed its own
+              control; what it may not be is 32px.
+
+              Centred on the circle, so what it gains on the left lands on the
+              bar's own `ml-1.5` gap rather than on a neighbour. Measured at
+              1440, where the circle is 32px: the target's left edge and the
+              date field's right edge both sit at 623.7, abutting with 0px
+              overlap, and the date field's own edge stays clickable.
+
+              That margin is exact rather than generous, and it is the 32px
+              circle that makes it so — (44 - 32) / 2 is precisely the 6px gap.
+              Between `lg` and `xl` the circle is 30px, so the target reaches
+              7px and covers the date label's last pixel column. One pixel, and
+              the law is the harder constraint of the two, so it stands — but it
+              is a real overlap and not a claim of clearance at every width.
+            */
+            "after:absolute after:top-1/2 after:left-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']",
             'ml-1.5 focus-visible:ring-offset-0',
           )}
         >

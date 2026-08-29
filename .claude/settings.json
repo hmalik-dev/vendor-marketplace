@@ -1,6 +1,26 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "PLAYWRIGHT_MCP_ISOLATED": "true",
+    "PLAYWRIGHT_MCP_HEADLESS": "true"
+  },
   "permissions": {
+    "allow": [
+      "Bash(pnpm lane:exec 82 -- pnpm db:seed)",
+      "Bash(pnpm lane:exec 82 -- pnpm db:seed:marketing)",
+      "Bash(pnpm lane:exec 90 -- pnpm db:seed)",
+      "Bash(pnpm lane:exec 90 -- pnpm db:seed:marketing)",
+      "Bash(pnpm lane:exec 103 -- pnpm db:seed)",
+      "Bash(pnpm lane:exec 103 -- pnpm db:seed:marketing)",
+      "Bash(pnpm lane:exec 117 -- pnpm db:seed)",
+      "Bash(pnpm lane:exec 117 -- pnpm db:seed:marketing)",
+      "Bash(pnpm lane:exec 124 -- pnpm db:seed)",
+      "Bash(pnpm lane:exec 124 -- pnpm db:seed:marketing)",
+      "Bash(pnpm lane:exec 137 -- pnpm db:seed)",
+      "Bash(pnpm lane:exec 137 -- pnpm db:seed:marketing)",
+      "Bash(pnpm lane:exec 153 -- pnpm db:seed)",
+      "Bash(pnpm lane:exec 153 -- pnpm db:seed:marketing)"
+    ],
     "deny": [
       "Read(./**/dist/**)",
       "Read(./**/.next/**)",

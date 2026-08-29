@@ -8,6 +8,7 @@ import {
   type TagCategory,
   type VendorSortOption,
 } from '@vendor-marketplace/shared';
+import { useCallback, useRef, useState } from 'react';
 import { TAG_CATEGORY_CHIP_LABELS, TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { WireTag } from '@/lib/wire-schemas';
@@ -72,10 +73,33 @@ interface ChipProps {
   tone?: ChipTone;
   /** Present only on an `active` chip; renders the `✕` that clears it. */
   onClear?: () => void;
-  children: React.ReactNode;
+  /**
+   * What the trigger is called, where the visible label is not enough on its
+   * own. `Sort` draws its name beside the chip rather than inside it, so the
+   * trigger would otherwise announce only the chosen value.
+   */
+  triggerName?: string;
+  /**
+   * A render prop receives `close`, for a panel whose choice completes it.
+   *
+   * The multi-select panels stay open on purpose — you are still choosing —
+   * but a single-choice one has nothing left to offer once it is answered,
+   * and the panel sits over the results the choice just changed.
+   */
+  children: React.ReactNode | ((close: () => void) => React.ReactNode);
 }
 
-function Chip({ label, tone = 'resting', onClear, children }: ChipProps): React.ReactElement {
+function Chip({
+  label,
+  tone = 'resting',
+  onClear,
+  triggerName,
+  children,
+}: ChipProps): React.ReactElement {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+
   return (
     <span
       className={cn(
@@ -83,8 +107,10 @@ function Chip({ label, tone = 'resting', onClear, children }: ChipProps): React.
         CHIP_TONES[tone],
       )}
     >
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
+          ref={triggerRef}
+          aria-label={triggerName}
           className={cn(
             'flex items-center gap-1.5 py-1.75 pl-3.25',
             onClear ? 'pr-1.5' : 'pr-3.25',
@@ -93,8 +119,29 @@ function Chip({ label, tone = 'resting', onClear, children }: ChipProps): React.
           {label}
           {onClear ? null : <span aria-hidden="true">▾</span>}
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-70">
-          {children}
+        <PopoverContent
+          align="start"
+          className="w-70"
+          /*
+            Closing by tabbing out of the panel must not lose the keyboard.
+
+            The panel is portalled to the end of `<body>`, so when Radix moves
+            focus *onward* past it there is nothing after it to receive focus
+            and `document.activeElement` becomes `<body>` — the next Tab then
+            restarts at "Skip to content". It only bites a panel that is a
+            single tab stop, which is why the sort chip's radio group surfaced
+            it while the price and tag chips, with several stops each, never
+            reach the boundary.
+
+            Returning focus to the trigger keeps the next Tab going to whatever
+            follows the chip. Escape already landed here; this makes Tab agree.
+          */
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            triggerRef.current?.focus();
+          }}
+        >
+          {typeof children === 'function' ? children(close) : children}
         </PopoverContent>
       </Popover>
 
@@ -338,20 +385,46 @@ export function RefineBar({
         ) : null}
       </div>
 
-      <label className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
+      {/*
+        A chip, not a native `select`. Frame `02` draws the word `Sort` in
+        `stone-600` beside a resting chip carrying the chosen option and a `▾`
+        — the same object as every other control on this bar, which a native
+        select cannot be: the platform sizes and positions it itself, so it
+        rendered 148x33 where the frame draws 92x31 and sat 56px left of where
+        the frame puts it.
+
+        The name lives outside the chip, so the trigger is named explicitly
+        rather than announcing a bare value.
+      */}
+      <div className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
         Sort
-        <select
-          value={state.sort}
-          onChange={(event) => setState({ sort: event.target.value as VendorSortOption })}
-          className="rounded-md border border-stone-300 bg-stone-0 px-3.25 py-1.75 text-[12.5px] font-semibold text-stone-900"
-        >
-          {VENDOR_SORT_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {SORT_LABELS[option]}
-            </option>
-          ))}
-        </select>
-      </label>
+        <Chip label={SORT_LABELS[state.sort]} triggerName={`Sort: ${SORT_LABELS[state.sort]}`}>
+          {(close) => (
+            <fieldset>
+              <legend className="text-sm font-semibold text-stone-900">Sort by</legend>
+              <ul className="mt-2 flex flex-col gap-2">
+                {VENDOR_SORT_OPTIONS.map((option) => (
+                  <li key={option}>
+                    <label className="flex cursor-pointer items-center gap-2.5 text-base text-stone-700">
+                      <input
+                        type="radio"
+                        name="sort"
+                        checked={state.sort === option}
+                        onChange={() => {
+                          setState({ sort: option });
+                          close();
+                        }}
+                        className="size-3.75 shrink-0 border-[1.4px] border-stone-400 accent-clay-400"
+                      />
+                      {SORT_LABELS[option]}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+          )}
+        </Chip>
+      </div>
     </div>
   );
 }
