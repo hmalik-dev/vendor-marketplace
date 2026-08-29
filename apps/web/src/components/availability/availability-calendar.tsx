@@ -425,7 +425,7 @@ export function AvailabilityCalendar({
                                 // 7px padding at the 1440 reference; a 44px
                                 // touch target below `sm`, where the input is
                                 // a finger rather than a pointer.
-                                'min-h-11 w-full rounded-[7px] py-[7px] text-center text-xs tabular-nums transition-colors duration-(--duration-fast) sm:min-h-0',
+                                'min-h-11 w-full rounded-[7px] py-[7px] text-center text-meta tabular-nums transition-colors duration-(--duration-fast) sm:min-h-0',
                                 // Exactly one of these, never layered: a
                                 // `hover:` utility outranks a plain one at the
                                 // same specificity, so an available cell's

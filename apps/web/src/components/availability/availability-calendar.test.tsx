@@ -484,6 +484,36 @@ function colourToken(hex: string): string {
   return found[1];
 }
 
+/*
+ * The frame's day grid. `[1]`, not `[0]`: each month draws two 7-column grids,
+ * the weekday initials first and the day numerals second.
+ */
+const frameDayGrid = (() => {
+  const grids = [...FRAME_11.matchAll(/<div style="([^"]*repeat\(7,1fr\)[^"]*)"/g)];
+  const dayGrid = grids[1]?.[1];
+
+  if (!dayGrid) {
+    throw new Error('Frame 11 no longer draws the day grid this test measures');
+  }
+
+  return dayGrid;
+})();
+
+/** The type-scale token whose size is this value, e.g. `12px` -> `meta`. */
+function fontSizeToken(px: string): string {
+  const theme = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+  const found = new RegExp(`--text-([a-z0-9-]+):\\s*${px}\\s*;`).exec(theme);
+
+  if (!found?.[1]) {
+    throw new Error(`No type-scale token has the size ${px}`);
+  }
+
+  return found[1];
+}
+
 /** px -> the Tailwind spacing unit that renders it; the scale is 4px per unit. */
 function spacingUnit(px: string): string {
   return String(Number.parseFloat(px) / 4);
@@ -581,5 +611,14 @@ describe('frame 11 parity', () => {
     const token = colourToken(styleValue(frameSpanFor('Clear'), 'color'));
 
     expect(screen.getByRole('button', { name: 'Clear' }).className).toContain(`text-${token}`);
+  });
+
+  it('sets day numerals at the frame size, from the type scale', () => {
+    renderCalendar();
+
+    const token = fontSizeToken(styleValue(frameDayGrid, 'font-size'));
+
+    expect(token).toBe('meta');
+    expect(cell('2026-06-18').className).toContain(`text-${token}`);
   });
 });
