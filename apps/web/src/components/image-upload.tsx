@@ -124,8 +124,16 @@ export function ImageUpload({
           }
         }}
         className={cn(
-          'relative flex w-full items-center justify-center overflow-hidden border-2 border-dashed border-stone-200 bg-stone-50 transition-colors',
-          rounded ? 'size-24 rounded-full sm:size-40' : cn(aspectClassName, 'rounded-lg'),
+          /*
+           * The frames draw every drop zone as a 1px `stone-400` dash over the
+           * hatched placeholder, not a 2px `stone-200` dash over flat
+           * `stone-50`. `placeholder-hatch` is the frames' own gradient, and
+           * the uploaded image covers it once there is one.
+           */
+          'relative flex w-full items-center justify-center overflow-hidden border border-dashed border-stone-400 transition-colors',
+          value ? 'bg-stone-50' : 'placeholder-hatch',
+          // 128px circle from `sm`, the size frame 09 draws the profile photo.
+          rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-lg'),
           isDragging && 'border-clay-400 bg-clay-100',
           isBusy && 'opacity-70',
         )}

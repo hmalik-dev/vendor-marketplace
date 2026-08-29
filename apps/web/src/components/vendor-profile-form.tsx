@@ -402,7 +402,7 @@ export function VendorProfileForm({
                * sits first in the portfolio is the cover, and the portfolio
                * editor says so on the tile.
                */}
-              <div className="mt-4 w-24 sm:w-40">
+              <div className="mt-4 w-24 sm:w-32">
                 <ImageUpload
                   label="Profile photo"
                   prefix="vendor-profile"

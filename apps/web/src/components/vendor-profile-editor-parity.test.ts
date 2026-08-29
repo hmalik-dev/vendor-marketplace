@@ -193,3 +193,44 @@ describe('the text inputs match the frame’s `.inp` box (#142)', () => {
     expect(formSource.match(/className="mt-1\.5 bg-stone-0"/g)).toHaveLength(6);
   });
 });
+
+describe('the profile photo drop zone matches the frame (#143)', () => {
+  const uploadSource = read('src/components/image-upload.tsx');
+
+  /** The frame's own photo zone: a 128px circle with a 1px dashed edge. */
+  const photoZone = editorFrame.match(
+    /<div style="width:128px;height:128px;border-radius:50%;([^"]*)"/,
+  );
+
+  it('draws the photo zone at 128px in the frame', () => {
+    expect(photoZone).not.toBeNull();
+  });
+
+  it('gives that zone a 1px dashed stone-400 edge in the frame', () => {
+    // `--color-stone-400: #d5cec2`, and 17-vendor-profile-editor.md says
+    // "dashed `stone-400` border" in words as well.
+    expect(photoZone?.[1]).toContain('border:1px dashed #D5CEC2');
+  });
+
+  it('hatches the empty zone in the frame rather than filling it flat', () => {
+    expect(photoZone?.[1]).toContain('repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF');
+  });
+
+  it('drops the 2px stone-200 edge the app shipped', () => {
+    expect(uploadSource).toContain('border border-dashed border-stone-400');
+    expect(uploadSource).not.toContain('border-2 border-dashed border-stone-200');
+  });
+
+  it('uses the frames’ own hatch utility while the zone is empty', () => {
+    // `@utility placeholder-hatch` in theme.css carries exactly the frame's
+    // gradient, so the two cannot drift.
+    expect(uploadSource).toContain("value ? 'bg-stone-50' : 'placeholder-hatch'");
+  });
+
+  it('sizes the circle 128px from `sm`, not 160px', () => {
+    expect(uploadSource).toContain('size-24 rounded-full sm:size-32');
+    expect(uploadSource).not.toContain('sm:size-40');
+    // The editor's wrapper has to agree or it re-crops the circle.
+    expect(formSource).toContain('className="mt-4 w-24 sm:w-32"');
+  });
+});
