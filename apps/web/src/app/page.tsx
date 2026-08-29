@@ -272,7 +272,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
               <div className="mb-3.5 flex items-baseline justify-between gap-4">
                 <h2
                   id="categories-heading"
-                  className="font-display text-display-md tracking-[-.01em] text-stone-900"
+                  className="display-heading text-display-md text-stone-900"
                 >
                   Browse by category
                 </h2>
@@ -330,7 +330,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
       {featuredVendors.length > 0 ? (
         <section aria-labelledby="featured-heading" className={`${CONTAINER} py-14`}>
           <div className="mb-5 flex items-baseline justify-between gap-4">
-            <h2 id="featured-heading" className="font-display text-display-md text-stone-900">
+            <h2 id="featured-heading" className="display-heading text-display-md text-stone-900">
               Featured vendors
             </h2>
             <Button variant="ghost" size="sm" asChild>
@@ -357,7 +357,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
         className="scroll-mt-(--header-height) bg-stone-100 py-16"
       >
         <div className={CONTAINER}>
-          <h2 id="how-it-works-heading" className="font-display text-display-md text-stone-900">
+          <h2 id="how-it-works-heading" className="display-heading text-display-md text-stone-900">
             How it works
           </h2>
 
@@ -414,7 +414,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
           className={`${CONTAINER} grid divide-stone-0/12 py-16 max-sm:divide-y sm:grid-cols-2 sm:divide-x`}
         >
           <div className="max-sm:pb-10 sm:pr-12">
-            <h3 className="font-display text-display-md text-stone-50">Planning an event?</h3>
+            <h3 className="display-heading text-display-md text-stone-50">Planning an event?</h3>
             <p className="mt-2 max-w-90 text-base text-stone-50/78">
               Tell us the vendor type, the city and the date. You will see prices and open dates
               before you speak to anyone.
@@ -425,7 +425,9 @@ export default async function HomePage(): Promise<React.ReactElement> {
           </div>
 
           <div className="max-sm:pt-10 sm:pl-12">
-            <h3 className="font-display text-display-md text-stone-50">Booking events yourself?</h3>
+            <h3 className="display-heading text-display-md text-stone-50">
+              Booking events yourself?
+            </h3>
             <p className="mt-2 max-w-90 text-base text-stone-50/78">
               Publish your prices and your open dates, and take bookings without the phone tag.
               Payouts run through Stripe.

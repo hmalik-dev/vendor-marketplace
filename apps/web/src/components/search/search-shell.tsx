@@ -233,7 +233,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
 
       {/* Neither the query bar nor the Refine bar scrolls; only the grid does. */}
       <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 min-[90rem]:px-6.5">
-        <h1 className="font-display text-[22px] text-stone-900">
+        <h1 className="display-heading text-[22px] text-stone-900">
           {isLoading ? searchingLine(state) : heading}
           {state.date ? (
             <span className="ml-2.5 font-sans text-[13px] text-stone-600">
