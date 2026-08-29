@@ -9,6 +9,9 @@
   "scripts": {
     "build": "turbo run build",
     "preflight": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run preflight",
+    "lane:up": "tsx packages/preflight/src/lane/cli.ts up",
+    "lane:exec": "tsx packages/preflight/src/lane/cli.ts exec",
+    "lane:down": "tsx packages/preflight/src/lane/cli.ts down",
     "secrets:scan": "pnpm --filter @vendor-marketplace/preflight run secrets:scan",
     "secrets:scan:all": "pnpm --filter @vendor-marketplace/preflight run secrets:scan -- --tracked",
     "smoke": "pnpm --filter @vendor-marketplace/preflight run smoke",
@@ -33,6 +36,7 @@
   "devDependencies": {
     "playwright": "1.62.1",
     "prettier": "3.9.6",
+    "tsx": "4.23.12",
     "turbo": "2.10.12",
     "typescript": "5.9.3"
   },

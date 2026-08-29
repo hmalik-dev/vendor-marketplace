@@ -1,4 +1,6 @@
+import { isRegisteredTicket } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
+
 import { ArgumentError, parseArgs, resolveCapabilities } from './args.js';
 
 describe('parseArgs', () => {
@@ -53,7 +55,20 @@ describe('resolveCapabilities', () => {
     ]);
   });
 
-  it('never silently checks nothing for an unknown ticket', () => {
-    expect(() => resolveCapabilities(parseArgs(['--ticket', '999']))).toThrow(/Unknown ticket/);
+  // This used to throw. The registry then fell 192 rows behind the status board,
+  // which turned every ticket filed since #37 into an unrunnable gate — the stop
+  // punished the operator, not the stale data. An unregistered ticket now falls
+  // back to the baseline, and `isRegisteredTicket` is what the CLI warns on.
+  it('falls back to the baseline for an unregistered ticket, and never to nothing', () => {
+    const resolved = resolveCapabilities(parseArgs(['--ticket', '999']));
+
+    expect(isRegisteredTicket(999)).toBe(false);
+    expect(resolved).toEqual(['core', 'e2e']);
+  });
+
+  it('still narrows to the declared capabilities for a registered ticket', () => {
+    expect(isRegisteredTicket(165)).toBe(true);
+    expect(resolveCapabilities(parseArgs(['--ticket', '165']))).toEqual(['core', 'e2e']);
+    expect(resolveCapabilities(parseArgs(['--ticket', '170']))).toEqual(['core', 'storage', 'e2e']);
   });
 });

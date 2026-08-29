@@ -10,5 +10,13 @@
 .env.local
 .env.e2e.local
 
+# Signed-in Playwright storage state, one file per role. Agents never type a
+# password (`.claude/rules/e2e-auth.md`); they load these as `storageState`.
+# Without them a lane's browser verification starts signed out and every
+# authenticated flow fails, which is indistinguishable from the ticket's own
+# change breaking. Shared across lanes on purpose: the file is a Clerk session
+# for a role, while the data each lane sees lives in that lane's own database.
+.auth/
+
 # Neon CLI/integration local state — without it the lane re-prompts for a branch.
 .neon
