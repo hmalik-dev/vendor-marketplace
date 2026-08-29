@@ -66,6 +66,9 @@ skills-lock.json
 # untracked files in the main tree.
 .claude/worktrees/
 
+# Overnight run logs. One directory per run, full transcripts of every lane.
+.claude/logs/
+
 # Session-local scheduler state, not configuration.
 .claude/scheduled_tasks.lock
 
