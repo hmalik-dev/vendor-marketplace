@@ -19,6 +19,11 @@ export default async function SignInPage({ searchParams }: PageProps): Promise<R
    * `safeReturnPath` keeps it to a same-origin path, so this cannot be used to
    * bounce anyone off our origin. Anything it rejects falls back to the plain
    * post-sign-in routing, which is where a bare `/sign-in` visit already goes.
+   *
+   * The key is the app's own (`returnTo`), never Clerk's reserved
+   * `redirect_url`: clerk-js prefers that param over `fallbackRedirectUrl` and
+   * would redirect straight to it, skipping `/after-sign-in` and with it the
+   * role resolution, the suspended-account branch and the re-validation.
    */
   const raw = (await searchParams)[RETURN_PATH_PARAM];
   const returnTo = safeReturnPath(Array.isArray(raw) ? raw[0] : raw);

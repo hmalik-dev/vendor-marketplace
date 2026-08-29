@@ -1,13 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import {
-  MAX_GUEST_COUNT,
-  pageTitle,
-  todayDateString,
-  type AvailabilityStatus,
-} from '@vendor-marketplace/shared';
+import { pageTitle, todayDateString, type AvailabilityStatus } from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
 import { requireCurrentUser } from '@/lib/current-user';
+import { parseGuestCountParam } from '@/lib/guest-count';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
 interface PageProps {
@@ -82,17 +78,10 @@ export default async function BookingRequestPage({
 
   /*
    * `?guests=` arrives from the profile rail and is attacker-controlled like
-   * every other URL value: parsed here, and dropped rather than rendered if it
-   * is not a whole number inside the same bounds the form itself enforces.
+   * every other URL value: parsed at the boundary, and dropped rather than
+   * rendered when it is not a whole number inside the bounds the form enforces.
    */
-  const parsedGuests = Number.parseInt(query.guests ?? '', 10);
-  const initialGuestCount =
-    Number.isInteger(parsedGuests) &&
-    String(parsedGuests) === query.guests &&
-    parsedGuests > 0 &&
-    parsedGuests <= MAX_GUEST_COUNT
-      ? String(parsedGuests)
-      : '';
+  const initialGuestCount = parseGuestCountParam(query.guests);
 
   const leadCategory = vendor.categories[0]?.name ?? null;
 
