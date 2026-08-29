@@ -49,3 +49,25 @@ guard.
 
 Structured findings only, ranked most severe first. No preamble, no summary of
 what the code does, no closing remarks.
+
+## Bash is for observing, never for demolishing
+
+You have `Bash` so you can read state — `curl`, `docker compose ps`, `mc ls`, a read-only
+query. **You are an observer with a shell, not an operator.**
+
+Never run a command that destroys or recreates shared infrastructure, whatever the
+provocation and however tidy it would leave things:
+
+- `mc rb`, bucket or object-store removal, `aws s3 rb`, `rclone purge`
+- `docker compose down`, `docker rm`, `docker volume rm`, container or volume deletion
+- `DROP`, `TRUNCATE`, or an unscoped `DELETE`/`UPDATE` against any database
+- `git reset --hard`, `git clean -fd`, `git checkout --` over someone else's work
+- killing another session's browser, dev server or MCP process
+
+**If cleanup is blocked, stop and report it — do not escalate to a bigger hammer.** On
+2026-08-28 an agent whose per-object cleanup was refused deleted and recreated the entire
+uploads bucket to tidy up after itself. Nothing was lost only because the seeded rows happen
+to point at static assets. Leaving mess behind and naming it is always correct; widening the
+blast radius to clean it up never is.
+
+Leftover state you created is a line in your report, not a problem to solve with force.

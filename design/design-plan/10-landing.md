@@ -133,7 +133,10 @@ The hero's photo cluster and the trust signals carry the proof instead. See
 - [ ] Vendor type is a select over categories — no free-text query field on this page
 - [ ] Category row's top edge visible in the first 836px
 - [ ] Total document height ≤ 4 viewports
-- [ ] Hero is two columns at ≥1024; the cluster never stacks above that
+- [ ] Hero is two columns at ≥768; the cluster sits beside the headline at every
+      width that has one, and never stacks under it
+- [ ] At 390 the cluster is gone entirely — no hero photography above or below
+      the search card
 - [ ] **No number on this page that isn't read from the database** — and in MVP that means no platform stats at all
 - [ ] Category cards describe the category; they do not count vendors
 - [ ] Every category card carries its photograph — no glyph circle remains

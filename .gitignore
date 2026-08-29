@@ -41,6 +41,12 @@ coverage/
 # 1.7MB. The repo has no legitimate PNG at its root, so this cannot hide one.
 /*.png
 
+# Parity measurement dumps — the element geometry a parity sweep reads out of a
+# frame, written to the root as `f01.json`, `f02.json` and so on. Same class of
+# scratch artifact as the screenshots above. Deliberately not `/*.json`, which
+# would swallow package.json and tsconfig.json.
+/f[0-9][0-9].json
+
 # Tool-managed skill packs installed into the repo (see skills-lock.json).
 # Note `.claude/skills/*`, not `.claude/skills/`: git does not descend into an
 # ignored directory, so a directory rule would make the negations below

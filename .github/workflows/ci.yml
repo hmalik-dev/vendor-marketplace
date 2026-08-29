@@ -64,6 +64,13 @@ jobs:
 
       - run: pnpm test
 
+      # The orchestration machinery under .claude/ (the hunt-bugs workflow, the
+      # schema-migration guard) has its own tests. They are plain node scripts,
+      # so `turbo run test` — which only fans out across packages — never saw
+      # them. Without this step a regression in a hook or a workflow ships green.
+      - name: Test agent workflows and hooks
+        run: pnpm test:agents
+
   # Migrations run from CI, never from a laptop. `resolveMigrationUrl()` prefers
   # DATABASE_URL_UNPOOLED because Neon's pooled endpoint is PgBouncer in
   # transaction mode: it does not pin a session, so the advisory lock the
@@ -78,7 +85,7 @@ jobs:
     needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: staging
+    environment: db-staging
     timeout-minutes: 10
     concurrency:
       group: migrate-staging
@@ -102,7 +109,7 @@ jobs:
         run: |
           if [ -z "$DATABASE_URL_UNPOOLED" ]; then
             echo "::error::DATABASE_URL_UNPOOLED is not set on the staging environment."
-            echo "Add it under Settings -> Environments -> staging. See ticket #204."
+            echo "Add it under Settings -> Environments -> db-staging. See ticket #204."
             exit 1
           fi
 
@@ -111,14 +118,19 @@ jobs:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: pnpm db:migrate
 
-  # Gated by the `production` GitHub Environment, which carries a required
+  # Gated by the `db-production` GitHub Environment, which carries a required
   # reviewer — the last deliberate step between a merge and real user data.
+  #
+  # The name is deliberately not `production`: Vercel already owns an
+  # environment called `Production`, GitHub treats environment names as
+  # case-insensitive, and writing to that one would put an approval gate in
+  # front of every Vercel deployment. These two gate migrations, not deploys.
   migrate-production:
     name: Migrate production
     needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/production'
     runs-on: ubuntu-latest
-    environment: production
+    environment: db-production
     timeout-minutes: 10
     concurrency:
       group: migrate-production
@@ -142,7 +154,7 @@ jobs:
         run: |
           if [ -z "$DATABASE_URL_UNPOOLED" ]; then
             echo "::error::DATABASE_URL_UNPOOLED is not set on the production environment."
-            echo "Add it under Settings -> Environments -> production. See ticket #204."
+            echo "Add it under Settings -> Environments -> db-production. See ticket #204."
             exit 1
           fi
 

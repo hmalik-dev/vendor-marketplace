@@ -108,7 +108,7 @@ the main pane (the booking rail, the vendor checklist, the messaging context).
 Search filters aren't: you set them, then you read results.
 
 Grid: **3 columns at 1024–1439** (310px cards, 3:2 cover 207px tall — frame
-`25 Search results — 1024`), **4 at ≥1440**, 5 at ≥1728. Two columns belong to
+`27 Search results — 1024`), **4 at ≥1440**, 5 at ≥1728. Two columns belong to
 768, not to 1024.
 
 ## Refine bar

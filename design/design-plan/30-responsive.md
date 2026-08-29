@@ -8,7 +8,7 @@ they must not break, and they never dictate the desktop layout.
 | Large desktop           | 1728 × 1080    | Gains **density** — columns and rail width, not margins                                          |
 | **Desktop — reference** | **1440 × 900** | Every spec in this folder describes this                                                         |
 | Laptop                  | 1280 × 800     | Narrowest full-desktop layout: rails and panes still present                                     |
-| **Small laptop**        | **1024 × 640** | **A standard design viewport, drawn in section 25.** Height is the binding constraint, not width |
+| **Small laptop**        | **1024 × 640** | **A standard design viewport, drawn in section 27.** Height is the binding constraint, not width |
 | Tablet                  | 768 × 1024     | Rails become drawers; master–detail becomes navigation                                           |
 | Mobile                  | 390 × 844      | Single column, bottom sheets, back-arrow navigation                                              |
 
@@ -17,7 +17,7 @@ they must not break, and they never dictate the desktop layout.
 | Screen                | 1440 (design target)                             | 1280                     | 1024                                                                                                                                     | 768                                                                       | 390                                                                                 |
 | --------------------- | ------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | Header                | Full nav, never hides                            | Same                     | Full nav, labels intact; the query bar sits in the header and must still fit its three inputs in full                                    | Hamburger → drawer                                                        | Hamburger, 56px tall                                                                |
-| Landing               | Hero 56/44 split                                 | Same                     | **Drawn.** Hero split kept; both portraits stay _beside_ the headline at 124px, 3:4; category row visible at 640                         | Stacked, cluster → 2 photos                                               | Stacked, search becomes a stacked card                                              |
+| Landing               | Hero 56/44 split                                 | Same                     | **Drawn.** Hero split kept; all **three** photo cards stay _beside_ the headline at 0.73 scale; category row visible at 640              | Hero split kept; cluster scales to **0.65**, still beside the headline    | Stacked; **cluster removed entirely**, search becomes a stacked card                |
 | Search                | 3-input query bar + horizontal Refine bar, 4 col | 3 col                    | **Drawn. 3 col** — 310px cards, 3:2 cover 207px. Refine stays **one row**; Sort is the only right-aligned item                           | Query bar keeps 3 inputs; Refine wraps to 2 rows, 2 col                   | Query bar stacks to a 3-row card; sticky bottom "Filters · 3" + "Sort", 1 col       |
 | Vendor profile        | Content + 380px sticky rail, tabs                | 340px rail               | Rail narrows to **340px, still sticky — never stacks**                                                                                   | Rail → inline card above the tabs                                         | Stacked; **rail becomes a sticky bottom bar** with from-price + Request booking     |
 | Booking request       | Form + 400px rail                                | Same                     | Rail narrows to **340px**, never stacks                                                                                                  | Rail → summary card above the form                                        | Summary accordion, sticky Continue                                                  |
@@ -123,31 +123,51 @@ price row lands underneath it.
 
 ## Landing hero imagery (added)
 
-The desktop hero's two vendor portraits are **desktop-only**. Below 1024 they
-are removed, not stacked: once they fall under the headline instead of beside it
-they stop being a composition and become two more screens of vertical scroll
-ahead of the search bar — which is the one thing the landing page exists to
-reach. Tablet and mobile lead with headline, sub-line, search, then categories.
+The desktop hero's photo cluster — **three** overlapping cards, per
+`10-landing.md` — is a composition, and a composition only works beside the
+headline. So the rule is binary: **the cluster sits beside the text, or it does
+not ship.** It never falls underneath.
+
+That gives one threshold, at 390. The hero keeps its two-column split from 1728
+all the way down to **768**, and the cluster scales uniformly at each step
+rather than shedding a card:
+
+| Width   | Hero  | Cluster scale | Cluster box |
+| ------- | ----- | ------------- | ----------- |
+| 1440    | 56/44 | 1.0           | 444 × 392   |
+| 1024    | 56/44 | **0.73**      | 324 × 286   |
+| 768     | 56/44 | **0.65**      | 289 × 255   |
+| **390** | 1 col | **removed**   | —           |
+
+At 390 there is no column to sit beside, so the cluster goes. **Removed means
+removed — not reduced to a stacked pair.** Two photographs under the search card
+are the same failure as three: a screen of photography between the search the
+visitor came for and the categories that let them start. The 390 frame carries
+**no hero imagery at all** and reads headline → sub-line → search card →
+categories, which puts the first category card's bottom edge at 612px inside the
+844 viewport.
+
+**768 is specified here but not yet drawn.** Section 14 has no landing frame at
+768, so these numbers are the spec, not a measured frame; a parity check at 768
+compares against this table until a frame exists.
 
 ## 1024 — small laptop (added, real breakpoint)
 
-Frames live in section 25 of `Orla - Screens.dc.html` at **1024 × 640**
-(note: the source file uses the number `25` twice — see `40-states.md`; reference
-frames by their full `data-screen-label`) — a 13"
+Frames live in section 27 of `Orla - Screens.dc.html` at **1024 × 640** — a 13"
 laptop's usable area once browser chrome is subtracted. **Height is the binding
 constraint at this width, not width**, which is why it earns its own rules rather
 than inheriting a squeezed 1440.
 
 ### Rules
 
-| Element        | At 1024                                                       |
-| -------------- | ------------------------------------------------------------- |
-| Page padding   | 40 → 24–28px                                                  |
-| Sidebars       | stay 220px **with labels** — no icon rail                     |
-| Right rails    | narrow 420 → **340px**, never stack                           |
-| Grids          | lose a column before a card loses information (results 4 → 3) |
-| Hero portraits | stay beside the text at 124px, 3:4                            |
-| Display type   | 54 → 40px; body 15 → 13.5px; nothing below 11px               |
+| Element      | At 1024                                                       |
+| ------------ | ------------------------------------------------------------- |
+| Page padding | 40 → 24–28px                                                  |
+| Sidebars     | stay 220px **with labels** — no icon rail                     |
+| Right rails  | narrow 420 → **340px**, never stack                           |
+| Grids        | lose a column before a card loses information (results 4 → 3) |
+| Hero cluster | all three cards stay beside the text, uniform **0.73 scale**  |
+| Display type | 54 → 40px; body 15 → 13.5px; nothing below 11px               |
 
 An icon rail was considered and rejected: it returns ~150px of width on screens
 whose problem is vertical, and costs label recognition on a product a vendor uses
@@ -161,17 +181,19 @@ dashboard** — plus three states (search loading, no results, empty dashboard).
 The seven drawn frames carry these `data-screen-label`s, which are what a parity
 check names:
 
-`25 Landing — 1024` · `25 Search results — 1024` · `25 Checkout — 1024` ·
-`25 Vendor dashboard — 1024` · `25 Search — loading · 1024` ·
-`25 Search — no results · 1024` · `25 Vendor dashboard — empty · 1024`
+`27 Landing — 1024` · `27 Search results — 1024` · `27 Checkout — 1024` ·
+`27 Vendor dashboard — 1024` · `27 Search — loading · 1024` ·
+`27 Search — no results · 1024` · `27 Vendor dashboard — empty · 1024`
 Everything else inherits the 1440 composition with padding reduced; if a screen
-is not in section 25, it has no 1024-specific rules.
+is not in section 27, it has no 1024-specific rules.
 
 ### Per-screen notes
 
-- **Landing** — both portraits kept beside the headline (they only fail when they
-  fall _below_ it, which is why tablet and mobile drop them entirely). The
-  category row is the fold marker: it must be visible at 640.
+- **Landing** — all three photo cards kept beside the headline at 0.73 scale:
+  236×292 → 172×213, 254×316 → 185×231, 188×150 → 137×110, cluster 392 → 286px,
+  rotations unchanged. Cards only fail when they fall _below_ the headline, which
+  is why tablet and mobile drop the cluster entirely rather than shrinking it
+  further. The category row is the fold marker: it must be visible at 640.
 - **Search** — 3 columns at 14px gaps = 310px cards, 3:2 cover 207px tall. One
   full row plus the next row's top edge shows, which is the scroll affordance.
 - **Checkout** — the 340px rail must keep **Due today above the fold**. This is

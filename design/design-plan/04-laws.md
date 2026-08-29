@@ -48,10 +48,16 @@ The implementation must match its frame in `../Orla - Screens.dc.html`. Not
 The frame is the acceptance criterion, and it is checked in a real browser, not
 by reading the diff.
 
-Parity is checked on five axes and **all five are hard gates**: **layout**,
-**style**, **colour**, **font**, and **the literal text**. A screen whose copy
-paraphrases the frame has failed just as surely as one whose composition differs
-— the words are part of the design.
+Parity is checked on six axes and **all six are hard gates**: **layout**,
+**style**, **colour**, **font**, **the literal text**, and **access**. A screen
+whose copy paraphrases the frame has failed just as surely as one whose
+composition differs — the words are part of the design.
+
+**Access** is the sixth gate: the accessibility laws below and the contrast table
+in `01-foundations.md`. They were written as law and then left with no checker,
+which is how a focus ring can compute correctly and render invisibly, or a
+heading can be drawn over a photograph with no scrim. The parity pass is the only
+place either is caught, so it is checked there, on the same footing as colour.
 
 **Precedence when sources disagree:**
 
@@ -72,7 +78,7 @@ implementer doesn't rediscover the same conflict.
 2. Drive the real implementation with Playwright at the same viewport, signed in
    as the role the screen belongs to, on data that populates it — an empty
    surface proves nothing.
-3. Screenshot both. Compare them side by side across all five axes.
+3. Screenshot both. Compare them side by side across all six axes.
 4. **Diff the strings.** Pull the frame's visible text out of its markup and
    compare it to the live DOM's text content. Headings, field labels, button
    copy, helper lines, micro-labels, empty states and count sentences must read
@@ -80,8 +86,8 @@ implementer doesn't rediscover the same conflict.
    `31-content-voice.md` records the approved strings.
 5. Run the desktop review checklist below against the live page, then the
    adaptation checklist in `30-responsive.md` at 1280 / **1024** / 768 / 390.
-   A screen drawn in section 25 is additionally compared 1:1 against its own
-   **1024 × 640** frame, on the same five axes.
+   A screen drawn in section 27 is additionally compared 1:1 against its own
+   **1024 × 640** frame, on the same six axes.
 
 ### What parity means, concretely
 

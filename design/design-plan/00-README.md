@@ -32,8 +32,9 @@ text and nothing else.
 | `03-components.md`     | The shared component vocabulary every screen composes from.                                                                                                             |
 | `04-laws.md`           | Layout laws, scroll budgets, and the review checklist each screen must pass.                                                                                            |
 | `10`–`22`              | One file per screen. Each is self-contained and buildable. Every screen file is titled **MVP** and carries a **Post-MVP** section where work was deliberately deferred. |
-| `30-responsive.md`     | How every screen degrades to 1280 / 1024 / 768 / 390. **1024 × 640 is a standard design viewport** with its own drawn frames in section 25.                             |
+| `30-responsive.md`     | How every screen degrades to 1280 / 1024 / 768 / 390. **1024 × 640 is a standard design viewport** with its own drawn frames in section 27.                             |
 | `31-content-voice.md`  | Copywriting rules and the real strings used in the mockups.                                                                                                             |
+| `40`–`42`              | Cross-screen specs: error/loading/empty states, film and audio, and the shared dropdown and picker component.                                                           |
 | `98-post-mvp.md`       | **Everything deliberately deferred, with the condition that unblocks each.** Read before adding anything not in a screen file.                                          |
 | `99-open-questions.md` | Unresolved design decisions, plus resolved ones with their reasoning.                                                                                                   |
 

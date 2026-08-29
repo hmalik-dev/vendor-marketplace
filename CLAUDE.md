@@ -112,7 +112,7 @@ Claiming a change works is not verifying it. Use the agents:
 | `diff-reviewer`       | Adversarial read of the finished diff, in fresh context                            |
 | `security-auditor`    | Any diff touching auth, input, data access, uploads, redirects, secrets or logging |
 | `browser-verifier`    | Every user-reachable change, driven end to end at both auth states                 |
-| `parity-checker`      | Every screen carrying an Orla frame, at 1440x900, on all five axes                 |
+| `parity-checker`      | Every screen carrying an Orla frame, at 1440x900, on all six axes                  |
 | `Explore`             | File discovery and symbol tracing, so results stay out of this context             |
 | `bug-hunter`          | Read-only defect hunt along one dimension, inside a sweep                          |
 | `unhappy-path-hunter` | Driving one flow in the browser trying to break it                                 |

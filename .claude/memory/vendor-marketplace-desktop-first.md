@@ -17,7 +17,7 @@ frames of its own. Height is the binding constraint there, not width. Its three
 rules: sidebars keep their labels (220px, no icon rail), right rails narrow
 420 -> 340px but never stack, and grids lose a column before a card loses
 information. Only landing, search, checkout and the vendor dashboard are drawn;
-anything not in section 25 inherits 1440 with padding reduced 40 -> 24px. `design/design-plan/04-laws.md` carries the layout laws, the scroll budgets (app
+anything not in section 27 inherits 1440 with padding reduced 40 -> 24px. `design/design-plan/04-laws.md` carries the layout laws, the scroll budgets (app
 shells 1.0x — panes scroll, not the page), the desktop review checklist and the
 design parity gate; `30-responsive.md` carries the degradation table.
 

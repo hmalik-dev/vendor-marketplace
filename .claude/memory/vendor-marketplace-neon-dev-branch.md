@@ -1,34 +1,38 @@
 ---
 name: vendor-marketplace-neon-dev-branch
-description: "The app database is a Neon branch; the pre-#17 Docker working data was deleted in the 2026-08-26 rename"
-metadata: 
+description: 'Local dev runs on Docker Postgres 18 to stop Neon burning CU-hours; Neon holds production and the dev/staging/prod split is in progress'
+metadata:
   node_type: memory
   type: project
   originSessionId: f28db367-56b4-4c7c-8109-9f5fab513cb3
-  modified: 2026-08-26T18:50:36.423Z
+  modified: 2026-08-29T00:00:00.000Z
 ---
 
-The application database is **Neon**, project `dark-surf-79137727`.
-Local development runs on the `dev` branch (created 2026-08-26 off `production`);
-`pnpm preflight` fails if `DATABASE_URL` resolves to `production` while
-`NODE_ENV` is not `production`.
+**Local development runs on the Docker Postgres, `postgres:18-alpine`, port 5432.**
+Confirmed by the user 2026-08-28 and implemented in platform ticket #200.
 
-The Postgres service in `docker-compose.yml` is **not** the app database — it is
-kept only for offline work. MinIO in the same compose file *is* used on every
-run, as the local stand-in for Cloudflare R2.
+**Why it moved off Neon.** `pnpm dev` holds a connection pool open, so the Neon
+`dev` branch never scaled to zero: it logged **103,692s active over 2.4 days**,
+pacing ~375h/month against a **100 CU-hour** free cap. Exhausting that allowance
+suspends the compute until the next billing period — local work causing a
+production outage. The allowance is **per project**, and `dev` and `production`
+shared one.
 
-**Gone:** the working data from tickets #2 and #3 (6 users, the "Sunlit Studio"
-vendor profile) lived in the Docker Postgres volume, never in Neon — those
-tickets were browser-verified against Docker before `.env` was switched, and
-nothing noticed the data did not follow. On 2026-08-26 the `vendorhub-*` volumes
-were deleted as part of the rename, at the user's explicit instruction. It is
-not recoverable. Neon `dev` has migrations plus reference seed only — 11
-categories, 43 tags, zero users.
+**PG18 moved the data mount.** Images 18+ abort when the volume is at
+`/var/lib/postgresql/data`, so it is now `/var/lib/postgresql`
+(docker-library/postgres#1259). The old volume was recreated. **A compose
+recreate therefore wipes local data** — that is how the dev database was emptied
+mid-sweep on 2026-08-28. Restore with `pnpm db:migrate` (schema + reference
+data) then `pnpm db:seed:marketing` (16 vendors, 48 packages, 918 bookings, 918
+reviews). Reference seed alone leaves zero vendors and a 404 on every profile.
 
-**Why:** this is exactly the failure [[vendor-marketplace-local-ticket-tracker]]'s
-ticket #17 was built to prevent, and it is why the branch-safety check exists.
+**Neon still holds production**, project `dark-surf-79137727`. `pnpm preflight`
+still fails if `DATABASE_URL` resolves to `production` while `NODE_ENV` is not.
+The environment split into **dev / staging / production** is in progress —
+platform tickets #201-#206 own it. Do not re-derive that plan; read those tickets.
 
-**How to apply:** do not assume vendor/user fixtures exist on the Neon `dev`
-branch — create whatever a flow needs. There is no longer any older data to
-migrate from. Related: [[vendor-marketplace-no-docker]],
-[[vendor-marketplace-playwright-verification]].
+**How to apply:** for local work assume Docker Postgres and that its data is
+disposable. Never assume vendor or user fixtures exist — seed them. The E2E
+vendor account's own profile is **not** in the marketing seed, so it must be
+recreated through the app after any wipe. Related: [[vendor-marketplace-no-docker]],
+[[vendor-marketplace-e2e-credentials]], [[credentials-env-files-only]].

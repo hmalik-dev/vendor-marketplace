@@ -3,12 +3,11 @@
 Frames 15–26 in `Orla - Screens.dc.html`. Every state is a designed screen, not a
 fallback. If a state isn't here, it isn't built.
 
-**Section number 25 is used twice in the source file** — once for the 1024
-small-laptop set (`30-responsive.md`) and once for `25 Upload failures` below.
-Every frame's `data-screen-label` is still unique, so **always reference a frame
-by its full label**, never by its section number alone. The three 1024 state
-frames are `25 Search — loading · 1024`, `25 Search — no results · 1024` and
-`25 Vendor dashboard — empty · 1024`; they are the 1024 renderings of 17, 18
+The 1024 small-laptop set was renumbered from 25 to **27** on 2026-08-28, which
+resolved the section-number collision with `25 Upload failures` below. Reference
+a frame by its full `data-screen-label` regardless. The three 1024 state frames
+are `27 Search — loading · 1024`, `27 Search — no results · 1024` and
+`27 Vendor dashboard — empty · 1024`; they are the 1024 renderings of 17, 18
 and 20 below.
 
 ## The four questions every error must answer

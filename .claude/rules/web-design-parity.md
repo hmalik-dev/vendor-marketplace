@@ -13,11 +13,14 @@ frame are not spec; read the markup.
 
 Design passes edit the plan. Tickets write the code. Never the reverse.
 
-## Parity is 1:1 on five axes
+## Parity is 1:1 on six axes
 
 No screen carrying a frame ships until it has been driven in a real browser at
-1440x900 and compared on **layout, style, colour, font and text**. Text means the
-literal strings — same wording, capitalisation and punctuation. The approved
+1440x900 and compared on **layout, style, colour, font, text and access**. Text
+means the literal strings — same wording, capitalisation and punctuation. Access
+means the six accessibility laws in `04-laws.md` and the contrast table in
+`01-foundations.md`: nothing else in this repository verifies either, so the
+parity pass is their only gate. The approved
 strings are in `design/design-plan/31-content-voice.md`; the full procedure is in
 `design/design-plan/04-laws.md`.
 

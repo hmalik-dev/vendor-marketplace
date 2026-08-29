@@ -20,6 +20,9 @@ weekday initials in 10px `stone-600`; day cells 12px, 7px vertical padding,
 | Selecting         | `clay-400` / white                       | drag range                             |
 | Out of month      | `stone-500`, no background               | no                                     |
 
+This is the original five-fill legend. It is superseded by **Cell states —
+shape first, colour second** at the foot of this file, which is what ships.
+
 Click toggles; click-and-drag selects a range. Today carries a `clay-400` ring.
 
 ## The past is a record, not a setting
@@ -48,8 +51,10 @@ the grid cannot disagree.
 **Selected** — the range in Serif ("Jul 17 — 19"), what it currently is, then
 "Block these" (primary) and Clear.
 
-**Legend** — all five states with swatches. Colour is never the only signal:
-booked cells are bold, blocked cells are struck through.
+**Legend** — every state from the revised table below, rendered as the actual
+mark rather than a flat colour chip. Colour is never the only signal: booked
+carries a dot, pending a dashed border, blocked a hatch and a strikethrough,
+completed a check, today an ink outline.
 
 **This quarter** — booked / blocked / open-Saturdays counts. The last one is in
 `clay-600` because it's the number that drives behaviour.
@@ -74,3 +79,43 @@ data or it doesn't ship.
 - Recurring blocks (every Sunday, holidays)
 - Two-way calendar sync
 - Dynamic pricing suggestions by demand — the "Saturdays are 80% booked" panel needs real market data before it ships; until then either omit it or state only this vendor's own numbers
+
+## Cell states — shape first, colour second (revised)
+
+The original legend encoded five states in five fills. Three of them —
+booked `clay-100`, pending `gold-50`, blocked `stone-200` — sit within about
+two points of luminance of one another: indistinguishable in greyscale, at a
+glance, on a dim screen, or to the ~8% of men with red-green deficiency. Colour
+was carrying the whole signal and could not.
+
+**Every state now carries a shape as well as a fill. The fill is reinforcement.**
+
+| State                | Fill                                                   | Shape                                                       | Interactive                      |
+| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------- |
+| Available            | `stone-0`, hairline `stone-300`                        | none — absence reads as open once everything else is marked | click / drag to block            |
+| Booked — locked      | `clay-100`, ink-clay number                            | **solid clay dot**, centred under the number                | opens the booking                |
+| Pending request      | `gold-50`                                              | **1.5px dashed `gold-500` border**                          | opens the request                |
+| Blocked by you       | `stone-200` + 45° hatch (`stone-200`/`stone-250`, 3px) | **strikethrough** on the number                             | click to unblock                 |
+| Completed            | `sage-50`, `sage-600` number                           | **check glyph**                                             | **yes — opens the past booking** |
+| Selecting now        | solid `clay-500`, cream number                         | fill is the signal (unambiguous at full saturation)         | drag continues                   |
+| Today                | `stone-0`, 1.5px solid ink border                      | ink outline                                                 | normal for its state             |
+| Past, nothing booked | `stone-50`, `stone-400` number                         | none, dimmed                                                | inert                            |
+
+Notes that matter to the build:
+
+- **No ✕ for blocked.** A cross means "close / dismiss" everywhere else in the
+  product. Hatch plus strikethrough says "unavailable by choice" without
+  borrowing another control's meaning.
+- **Dashed = provisional** is the strongest available pairing: gold already means
+  "waiting on someone" in the state rules, and dashed borders read as
+  not-yet-settled in every calendar people have used.
+- **Completed is sage and clickable.** Sage already means "settled". Delivered
+  work should not vanish from the vendor's calendar — it is their record, and
+  the click opens the past booking. It gets a hover state; other past dates do not.
+- The legend renders the **actual marks**, not plain colour chips. A legend of
+  flat swatches is the one place the distinction would be invisible.
+- The dot and check need vertical room: those cells are `padding: 5px 0 10px`
+  against `7px 0` elsewhere, so the number stays optically centred.
+
+The customer-side date picker (section 42) inherits these marks exactly — one
+visual language for dates on both sides of the product.

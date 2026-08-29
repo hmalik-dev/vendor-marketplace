@@ -115,6 +115,60 @@ verification (`e2e`) is implicit on every ticket.
 
 ---
 
+
+## Beta gate — what blocks shipping to real users
+
+Added 2026-08-28 after five adversarial passes (136 findings). This separates **defective**
+from **off-spec**. Parity matters, but a cosmetic delta does not harm a real user and a
+broken transaction does.
+
+### Tier 1 — the product does not work end to end
+
+**Updated 2026-08-28 after the two-sided functional pass.** The vendor half is worse than
+the customer half: **#210** (a vendor cannot see a booking they accepted — `GET /bookings`
+returns `[]` with their own token) and **#211** (the vendor never learns who the customer is;
+every surface reads `A customer`). A vendor who accepts a wedding cannot find it and cannot
+contact anyone. Add **#215** — the session JWT travels in a URL query string on every
+authenticated page load.
+
+
+| # | Blocker |
+| --- | --- |
+| **#68, #9, #10** | **The core transaction cannot complete.** A customer can send a request; there is no route to a booking detail, no way to approve a quote, and no checkout. Every booking card links to the vendor's *marketing profile*. The shipped copy already promises "Payment is held" and "you approve before any card is charged" — neither is reachable. Stripe onboarding (#9) is deferred and the payment lifecycle (#10) is backlog |
+| **#67** | Three clicks in one tick create **three real bookings**. No server-side dedupe, and no customer-side withdraw, so duplicates sit in the vendor's queue permanently |
+| **#170** | Customer profile photo upload **403s every time** and shows the user `This endpoint requires the vendor role` |
+| **#171** | A successful upload renders a **broken image and a 500** while the toast reads "Profile photo updated." |
+
+### Tier 2 — a real user will hit these and watch the app break
+
+| # | Blocker |
+| --- | --- |
+| **#66** | Six URL shapes return **HTTP 500**, including an uppercased vendor slug and a pasted ISO timestamp |
+| **#69 / #167** | Filter options are **unreachable** at 1024 and 390 — real clicks time out |
+| **#70** | Below 768px `/messages` shows one thread with **no way to reach the others**; the notifications panel renders at `x = -80` and the held date is the part clipped off |
+| **#71** | A pasted gallery link **overflows its own bubble** — the single most likely message in this product |
+| **#76** | Sign-in **discards the destination**, dropping the user at the moment of booking intent |
+| **#172** | The image format allow-list is **bypassed by renaming the file** |
+
+### Tier 3 — visibly wrong, not blocking
+
+#72 (error and empty-state copy), #73 (the six accessibility laws), #77 (no date upper
+bound — year 9999 bookings), and the uploads P2 set (#174–#180).
+
+### Explicitly NOT beta blockers
+
+The 83 per-finding parity tickets (#82–#164) and the design-fidelity work (#74, #165, #166,
+#169, #186). These decide whether the product looks like Orla, not whether it works.
+
+### The untested half
+
+**The vendor side of the transaction has never been driven.** The seeded vendor account has
+**0 pending requests and 0 bookings**, so accepting a request, declining one, sending a quote,
+and the vendor's view of a booking were all unobservable in every pass so far — as was the
+publish-checklist rail on frame 08. A two-sided functional pass is required before any beta
+claim: customer creates a request -> vendor accepts -> customer sees the change.
+
+
 ## Status Board
 
 | # | Ticket | Phase | Milestone | Priority | Status | Branch | Blocked By | Capabilities | Notes |
@@ -185,16 +239,160 @@ verification (`e2e`) is implicit on every ticket.
 | 15 | Admin Portal + Sentry Integration | P3 | M6 | P1 High | Backlog | — | #12, #14 | `core` `auth` `sentry` | Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` |
 | 64 | Flaky test in `packages/preflight` under parallel Turbo runs | P1 | M1.5 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-28** while gating the #61 env-shape commit. `pnpm test --force` failed `@vendor-marketplace/preflight#test` at **1 failed / 131 passed (132)**; an immediate rerun and `pnpm --filter @vendor-marketplace/preflight test` in isolation both passed **132/132**. The failing test's name was **not captured** — the run was piped through `tail -20`, so only the summary survived. Reproduce with the full log: `pnpm test --force > /tmp/t.log 2>&1` in a loop. Suspect contention, not logic: the suite took **36s** inside the Turbo fan-out against **2.15s** isolated, a 17x stretch that points at a real-clock or filesystem assumption rather than a stable failure. Use `/debug-flaky-test`. Gating on a suite that fails ~1 run in 2 is the actual cost here |
 | **65** | **Vendor profile — the identity row overlaps the cover by 34px, not 16px (reported by the user)** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Reported by the user 2026-08-28**, on `/vendors/june-harlow`: the avatar circle is buried in the cover photo and the business name creeps into the image. **Measured at 1440x900 against frame `03`** — live overlaps the banner by **34px** where the frame overlaps by **16px**, and the name's box starts **11px inside** the image where the frame leaves it **7px clear**: an **18px** error. **Centering is not the defect** — name-mid minus avatar-mid is **+0.15px in both**; the whole row simply rides 18px too high, which is what makes the circle read as misaligned. **Cause:** frame `03` puts `padding-top: 18px` on the wrapper between the banner and the identity row and *then* pulls the row up `-34px` (net **-16**); [profile-header.tsx:80](apps/web/src/components/vendors/profile/profile-header.tsx) copied the `-34px` without the 18px. **Fix verified by injection:** `pt-[18px]` on that container reproduces the frame exactly — `overlap 16 · name 7px clear · centering 0.15`. **Why #53 and #56 missed it → see the ticket detail** |
-| **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **In Progress** | **chore/local-postgres-18** | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. Committed on `chore/local-postgres-18` (5ca9a5f), verified in an isolated worktree: preflight 21/21, typecheck/lint/build forced green (0 cached), **1541 tests passing**. Awaiting merge to main. |
-| **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Backlog** | — | **None — agent-executable, confirm first** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. |
-| **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **Deferred — needs a human** | — | **Vercel Production Branch setting + GitHub branch protection** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. |
-| **203** | **[PLATFORM] Create the Neon `staging` branch and point the staging deploy at it** | **INFRA** | **M-OPS** | **P0 Critical** | **Backlog** | — | **#202 + one Vercel env-var change** | `core` | **Platform / environments.** Filed 2026-08-28. Gives `main` a database that is not production. Branch `staging` off `production`, seed it, point the staging deploy's `DATABASE_URL` at it. Establishes the intended lineage: `production` (root) → `staging` → per-PR branches (#205). Define and document the reset cadence — staging is refreshed **from** production, never the reverse. Anonymise on reset once real user data exists **Human gate: one env-var change.** Branch creation runs through the Neon MCP; setting the staging deployment `DATABASE_URL` is a Vercel dashboard/CLI action, and per project law the value is never pasted into a command or Claude config. |
-| **204** | **[PLATFORM] Run migrations from CI, with production behind a required approval** | **INFRA** | **M-OPS** | **P0 Critical** | **Deferred — needs a human** | — | **#202, #203 + GitHub Environment secrets** | `core` | **Platform / safety.** Filed 2026-08-28. **The single largest risk in the current setup:** no workflow in `.github/workflows/` runs `db:migrate`, so schema changes reach any database only when a human runs it from a laptop against whatever `DATABASE_URL` sits in their `.env`. That is the literal mechanism by which local tinkering can alter production. Add: merge to `main` → migrate **staging**; merge to `production` → migrate **prod**, gated behind a **GitHub Environment with a required reviewer**. `resolveMigrationUrl()` already prefers the unpooled endpoint and is correct for this — it is simply never invoked by CI. Store the two connection strings as GitHub Environment secrets (never in the repo, per project law). Document **expand/contract** in the decisions file: add + backfill, then stop writing, then drop — three releases, never one, because rollback is a redeploy of the previous version and that version still expects the column **Human gate: secrets entry.** The two connection strings must be added by the account owner as GitHub Environment secrets, and the `production` environment given a required reviewer. **The agent must never handle these values** — project law. Workflow YAML is agent-executable; the secrets and the reviewer rule are not. |
-| **205** | **[PLATFORM] Ephemeral Neon branch per pull request** | **INFRA** | **M-OPS** | **P1 High** | **Deferred — needs a human** | — | **Neon↔Vercel/GitHub integration install (OAuth)** | `core` | **Platform / environments.** Filed 2026-08-28. Wire Neon's Vercel integration or `neondatabase/create-branch-action` so each PR gets a copy-on-write branch off `staging`, deleted on merge. Gives every PR preview a full-fidelity database to run its migrations against in isolation — the capability self-managed Postgres cannot offer, and the strongest reason this stack is on Neon. Watch the **10 branches/project** free-plan ceiling; set a TTL so abandoned PRs do not hold slots **Human gate: an OAuth install.** Authorising Neon against the Vercel or GitHub account is an interactive consent screen. Once installed, configuration is agent-executable. |
+| **66** | **Unvalidated URL input crashes six ways into a 500** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` | **Adversarial sweep 2026-08-28.** 7 URLs anyone can paste return 500. Rule added: `.claude/rules/web-route-boundaries.md` |
+| **67** | **`POST /booking-requests` has no idempotency — 3 clicks created 3 bookings** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` `payments` | **Adversarial sweep 2026-08-28.** Server-side; UI guard only covers a physical double-click. Highest-severity finding |
+| **68** | **An accepted, priced booking dead-ends — no detail, quote approval or checkout** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **#9, #10** | `core` `payments` | Blocks parity on frames `05`, `06`, `21` — no live screen to compare |
+| **69** | **Filter popovers unreachable below 1440 and stay open after use** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Languages 719px tall, no `max-height`; clicks time out at 1024 and 390 |
+| **70** | **The app is broken below 768px — messaging dead end, notifications off-screen** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | 390 is a designed breakpoint; notif panel renders at x=-80 |
+| **71** | **Long tokens are never broken — one pasted link overflows its bubble** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Invisible to the page-level overflow assertion; an ancestor clips it |
+| **72** | **Error and empty-state copy violates `40-states.md` in five places** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Raw API strings reaching users; an empty state names a filter that does not exist |
+| **73** | **The six accessibility laws are violated and nothing was checking them** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Sixth `Access` parity axis added 2026-08-28; card focus ring is 100% clipped |
+| **74** | **Adopt the frames' line-height — the app's type scale contradicts every frame** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **User ruling 2026-08-28: the frames win.** Blocks a clean parity verdict on every screen |
+| **75** | **Landing, Search and Vendor profile fail parity on 35 counts** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **#74** | `core` | Parity batch 1. Full `expected` vs `observed` tables in the sweep ledger |
+| **76** | **Sign-in redirect discards the destination** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `auth` | Drops the user at the moment of intent; fix must include an open-redirect test |
+| **77** | **Event date has no upper bound — a booking for the year 9999 goes through** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Lower bound is handled well, which makes this an oversight |
+| **78** | **`DrizzleQueryError` is logged without its cause** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | 7 occurrences during the sweep, none diagnosable |
+| **79** | **Vendor nav labels and order diverge from frame 08** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | `Edit profile` vs `Business profile`; missing entries may be deferred scope |
+| **80** | **Five live routes have no design frame, so parity is unprovable on them** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | 38 frames vs 15 routes; `/customer/profile` and `/suspended` have no coverage at all |
+| **81** | **Nine smaller defects found in the adversarial sweep** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Grouped; split any that grows |
+| **82** | **01 Landing — `All 11 categories →` is rendered as a padded pill, not a plain span** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-1`, axis **Style** |
+| **83** | **01 Landing — Header `Sign up` pill is 8px too tall** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-2`, axis **Style** |
+| **84** | **01 Landing — Hero `Search` button has the wrong box and padding** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-3`, axis **Style** |
+| **85** | **01 Landing — Hero badge renders 11px instead of 12px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-4`, axis **Font** |
+| **86** | **01 Landing — Hero `Search` and `All 11 categories →` are a half-step small** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-5`, axis **Font** |
+| **87** | **01 Landing — Category card titles carry negative tracking the frame does not** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-6`, axis **Font** |
+| **88** | **01 Landing — Hero City field shows a placeholder where the frame has a literal** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-7`, axis **Text** |
+| **89** | **01 Landing — Hero search segments share one bar-level focus ring, so the focused segment is unidentifiable** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-8`, axis **Access** |
+| **90** | **02 Search — Header is inset 40px while everything below it is inset 26px** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-9`, axis **Layout** |
+| **91** | **02 Search — Header search bar is undersized** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-10`, axis **Layout** |
+| **92** | **02 Search — The `Style` filter chip is missing from the Refine bar** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-11`, axis **Layout** |
+| **93** | **02 Search — The 4-column result grid only exists at exactly ≥1440** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-12`, axis **Layout** |
+| **94** | **02 Search — Header submit is a 32x32 icon button where the frame specifies a text pill** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-13`, axis **Style** |
+| **95** | **02 Search — Header bar border and shadow are off-token** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-14`, axis **Style** |
+| **96** | **02 Search — Vendor card radius is 18px, not 16px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-15`, axis **Style** |
+| **97** | **02 Search — Card avatar is 34px where the frame is 32px + a 2px ring** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-16`, axis **Style** |
+| **98** | **02 Search — Sort is a native select where the frame specifies a chip** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-17`, axis **Style** |
+| **99** | **02 Search — Vendor-card clay monogram is off-token** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-18`, axis **Colour** |
+| **100** | **02 Search — Card meta line is small and splits the rating into a second weight** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-19`, axis **Font** |
+| **101** | **02 Search — Header date label reads `DATE`, not `EVENT DATE`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-20`, axis **Text** |
+| **102** | **02 Search — Header values render raw instead of formatted** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-21`, axis **Text** |
+| **103** | **03 Vendor profile — Profile uses a centred `max-w-7xl` container where the frame is full-bleed** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-22`, axis **Layout** |
+| **104** | **03 Vendor profile — Booking rail starts 82px too low** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-23`, axis **Layout** |
+| **105** | **03 Vendor profile — Avatar overlaps the cover by 34px instead of 14px** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-24`, axis **Layout** |
+| **106** | **03 Vendor profile — `See all 34 →` is missing from the `Recent work` header** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-25`, axis **Layout** |
+| **107** | **03 Vendor profile — Booking rail is missing the `Event date` + `Guests` field pair** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-26`, axis **Layout** |
+| **108** | **03 Vendor profile — Package control uses stone-0 where the frame specifies the `.inp` token** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-27`, axis **Style** |
+| **109** | **03 Vendor profile — Attribute chips and portfolio tiles are 2px over-rounded** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-28`, axis **Style** |
+| **110** | **03 Vendor profile — `Send a message` is disabled where the frame shows it enabled** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-29`, axis **Style** |
+| **111** | **03 Vendor profile — Vendor name and `Recent work` carry excess negative tracking** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB1-30`, axis **Font** |
+| **112** | **03 Vendor profile — Rail is missing the `Free on <date>` availability line** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-31`, axis **Text** |
+| **113** | **03 Vendor profile — Rail is missing the `· N hour coverage` duration suffix** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-32`, axis **Text** |
+| **114** | **03 Vendor profile — Reassurance line is prefixed with copy the frame does not carry** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-33`, axis **Text** |
+| **115** | **03 Vendor profile — Curly quotes where the frame uses straight** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-34`, axis **Text** |
+| **116** | **03 Vendor profile — Signed-out `Request booking` loses the destination** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB1-35`, axis **Interaction** |
+| **117** | **08/09/11 shared — Header is missing the `Vendor` chip on every vendor screen** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-S1`, axis **Text** |
+| **118** | **08/09/11 shared — Header padding and logo size differ from the frame** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-S2`, axis **Layout** |
+| **119** | **08/09/11 shared — Sidebar and rail footprints are short because the frame boxes are not border-box** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-S3`, axis **Layout** |
+| **120** | **08/09/11 shared — Header `Messages` / `Dashboard` links and the Clerk user button focus with no visible ring** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-S4`, axis **Access** |
+| **121** | **08/09/11 shared — Four icon-only controls are under the 44x44 hit area** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-S5`, axis **Access** |
+| **122** | **08/09/11 shared — Notifications popover does not close on Escape** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-S6`, axis **Access** |
+| **123** | **08/09/11 shared — Notification copy renders a raw ISO date** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-S7`, axis **Text** |
+| **124** | **08 Vendor dashboard — `View my public profile` moved out of the header into the content column** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-1`, axis **Layout** |
+| **125** | **08 Vendor dashboard — Dashboard rail is 41px narrow** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-2`, axis **Layout** |
+| **126** | **08 Vendor dashboard — Empty request pane has no panel, glyph or CTA** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-3`, axis **Layout** |
+| **127** | **08 Vendor dashboard — `See all N →` is missing beside `Requests waiting on you`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-4`, axis **Layout** |
+| **128** | **08 Vendor dashboard — Stat card radius is 14px, not 12px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-5`, axis **Style** |
+| **129** | **08 Vendor dashboard — Stat micro-labels use `text-xs` instead of the 10.5px micro-label** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-6`, axis **Font** |
+| **130** | **08 Vendor dashboard — Stat delta line is 11px, not 11.5px** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-7`, axis **Font** |
+| **131** | **08 Vendor dashboard — Rail label renders in Instrument Serif at 11px** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-8`, axis **Font** |
+| **132** | **08 Vendor dashboard — Empty-state headline is 21px, not 26px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-9`, axis **Font** |
+| **133** | **08 Vendor dashboard — `Requests waiting on you` carries tracking the frame does not** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-10`, axis **Font** |
+| **134** | **08 Vendor dashboard — `Vendor` chip string absent** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-11`, axis **Text** |
+| **135** | **08 Vendor dashboard — `See all 4 →` string absent** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-12`, axis **Text** |
+| **136** | **08 Vendor dashboard — `Bookings this month` shows a wrong-month statement instead of a delta** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-13`, axis **Text** |
+| **137** | **09 Vendor profile editor — The cover image drop zone is missing entirely** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-14`, axis **Layout** |
+| **138** | **09 Vendor profile editor — Two undocumented fields inserted into the form** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-15`, axis **Layout** |
+| **139** | **09 Vendor profile editor — Three section headings inserted into a pane the frame gives none** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-16`, axis **Layout** |
+| **140** | **09 Vendor profile editor — Section nav is missing `Payouts` and its gold dot** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-17`, axis **Layout** |
+| **141** | **09 Vendor profile editor — Form pane exceeds its scroll budget** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-18`, axis **Layout** |
+| **142** | **09 Vendor profile editor — Inputs are 7px short, unpadded and transparent** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-19`, axis **Style** |
+| **143** | **09 Vendor profile editor — Profile photo zone is oversized with the wrong dashed border** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-20`, axis **Style** |
+| **144** | **09 Vendor profile editor — Category chips have the wrong border weight, padding and icon circle** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-21`, axis **Style** |
+| **145** | **09 Vendor profile editor — Submit-bar buttons are a size class below the frame** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-22`, axis **Style** |
+| **146** | **09 Vendor profile editor — Service radius is an unstyled native range input** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-23`, axis **Style** |
+| **147** | **09 Vendor profile editor — Selected category chip label is stone-900, not clay-600** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-24`, axis **Colour** |
+| **148** | **09 Vendor profile editor — Field labels are stone-900, not stone-600** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-25`, axis **Colour** |
+| **149** | **09 Vendor profile editor — Field labels are sentence-case 12.5px/500 instead of uppercase micro-labels** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-26`, axis **Font** |
+| **150** | **09 Vendor profile editor — Tag group headings render in Instrument Serif at 12.5px** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-27`, axis **Font** |
+| **151** | **09 Vendor profile editor — Six frame strings are missing and the slug preview has an extra path segment** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-28`, axis **Text** |
+| **152** | **09 Vendor profile editor — Eight helper strings appear with no frame or content-voice source** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-29`, axis **Text** |
+| **153** | **11 Availability — Availability rail is 41px narrow and the month columns absorb it** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-30`, axis **Layout** |
+| **154** | **11 Availability — Selected panel radius and padding are both 2px/1px over** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-31`, axis **Style** |
+| **155** | **11 Availability — Market-note panel radius is 14px, not 12px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-32`, axis **Style** |
+| **156** | **11 Availability — `Block these` button is under-padded** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-33`, axis **Style** |
+| **157** | **11 Availability — Month nav uses circular icon buttons where the frame uses inline glyphs** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-34`, axis **Style** |
+| **158** | **11 Availability — `Clear` is clay where the frame is stone** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-35`, axis **Colour** |
+| **159** | **11 Availability — Calendar day cells render 11px, not 12px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-36`, axis **Font** |
+| **160** | **11 Availability — Page title carries `-0.65px` tracking against the frame's `-0.26px`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-37`, axis **Font** |
+| **161** | **11 Availability — Month names carry negative tracking the frame does not** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-38`, axis **Font** |
+| **162** | **11 Availability — Rail micro-labels render in Instrument Serif** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-39`, axis **Font** |
+| **163** | **11 Availability — Two instructions 40px apart contradict each other** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-40`, axis **Text** |
+| **164** | **11 Availability — The page has no `<h1>`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-41`, axis **Access** |
+| **165** | **One `globals.css` rule breaks the font axis on every screen in the product** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Root cause** of #89, #109, #119, #121 and every unswept frame. Highest-leverage fix in the sweep |
+| **166** | **Availability calendar — every cell state carries a shape, not just a fill** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order A1.** Booked/pending/blocked were within ~2 points of luminance — unreadable in greyscale or with CVD. Adds Completed + Today. Resolves #164 |
+| **167** | **Build the shared dropdown component — nothing rolls its own** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order A2** + `42-dropdowns.md` + frames `28`. **Supersedes #69.** Closes the unreachable-panel and stays-open findings |
+| **168** | **Replace the page loader with the mark's two converging rings** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | **Change order B3.** No wordmark — it renders before fonts are guaranteed |
+| **169** | **Treat 1024 as a real breakpoint, height-constrained** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order B4.** Seven `27 …` frames. "Due today" above the fold is a hard constraint |
+| **170** | **Uploads — Customer profile photo upload is dead, and leaks an internal role message to the user** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **171** | **Uploads — A successful upload renders a broken image and a 500, while the toast says it worked** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **172** | **Uploads — The image format allow-list is bypassed by renaming the file** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **173** | **Uploads — No Cancel control exists during an upload** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **174** | **Uploads — Size refusal contradicts itself at the byte boundary** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **175** | **Uploads — Below-minimum width is red on one uploader and gold on the other** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **176** | **Uploads — The aggregate progress line counts bytes that are never sent** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **177** | **Uploads — The failure banner claims "Everything else saved" while the batch is still queued** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **178** | **Uploads — Deleting or replacing an image leaves its storage objects orphaned forever** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **179** | **Uploads — Upload route validates before authenticating, leaking the prefix enum** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **180** | **Uploads — The uploads bucket permits anonymous ListObjects** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **181** | **Uploads — Batch-overflow banner has a grammar error** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **182** | **Uploads — Failure sentence starts lowercase for an extensionless file** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **183** | **Uploads — Header photo count goes stale after an upload but corrects after a delete** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **184** | **Uploads — A hard refresh mid-upload silently drops the in-flight file** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **185** | **Uploads — Sizes are reported in MB where the OS reports MiB** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **186** | **Landing hero cluster — one scale ladder, and removed means removed at 390** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Design update 2026-08-28. `14 Landing mobile` now carries **0** photo blocks. 768 is spec, not a drawn frame |
+| **187** | **Bookings hub — `All categories` and `Soonest first` are dead controls** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Functional** |
+| **188** | **Bookings hub — the notifications bell opens nothing** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Functional** |
+| **189** | **Bookings hub renders the EMPTY-state rail on a hub with 11 bookings** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Functional** |
+| **190** | **Bookings hub — the count sentence contradicts the tab it sits above** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Functional** |
+| **191** | **Booking cards have no focus ring and link to the vendor profile, not the booking** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Functional** |
+| **192** | **Booking request — a marketing footer is appended below the app shell** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Functional** |
+| **193** | **Booking request — a form field was moved into the context rail** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Functional** |
+| **194** | **Sign up — the primary action reads `Continue`, not `Create my account`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Functional** |
+| **195** | **Sign up — the two primary inputs have no focus ring** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Accessibility** |
+| **196** | **Sign up — the `Sign in` link reintroduces a banned colour pair** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Accessibility** |
+| **197** | **Sign up — panel text over photography is not contrast-guaranteed** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Accessibility** |
+| **198** | **The app systematically renders five type steps off the frames' scale** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Parity** |
+| **199** | **Two frame colours are absent from the foundations and were substituted, one at an accessibility cost** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity batch 3, 2026-08-28. **Parity** |
+| **210** | **The vendor has no surface anywhere that shows a confirmed booking** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **211** | **The vendor never learns who the customer is, before or after accepting** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **212** | **Accepting a booking labels the date `Pending request` on the vendor's own calendar, and the Booked counter stays at 0** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **213** | **Decline is one click, irreversible, with no confirmation and no undo** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **214** | **A customer cannot cancel, or even review, a request they sent** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **215** | **The Clerk session JWT is sent in a URL query string** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **216** | **Four different expiry promises for the same deadline, and the one shown at commitment is wrong** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **217** | **The two sides disagree about whether there is a platform fee** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **218** | **`Send quote` is dead on the default path, contradicting what the customer was promised** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **219** | **A new request opens no message thread, and the profile's message button is permanently dead** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
+| **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
+| **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **In Progress** | main | **Vercel Production Branch setting** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. |
+| **203** | **[PLATFORM] Create the Neon `staging` branch and point the staging deploy at it** | **INFRA** | **M-OPS** | **P0 Critical** | **In Progress** | — | **Vercel staging DATABASE_URL** | `core` | **Platform / environments.** Filed 2026-08-28. Gives `main` a database that is not production. Branch `staging` off `production`, seed it, point the staging deploy's `DATABASE_URL` at it. Establishes the intended lineage: `production` (root) → `staging` → per-PR branches (#205). Define and document the reset cadence — staging is refreshed **from** production, never the reverse. Anonymise on reset once real user data exists **Human gate: one env-var change.** Branch creation runs through the Neon MCP; setting the staging deployment `DATABASE_URL` is a Vercel dashboard/CLI action, and per project law the value is never pasted into a command or Claude config. **Done 2026-08-28:** Neon `staging` branch created off `production` (`br-weathered-voice-axipsv3f`, compute 0.25-1 CU). **Outstanding:** point a staging deployment at it. |
+| **204** | **[PLATFORM] Run migrations from CI, with production behind a required approval** | **INFRA** | **M-OPS** | **P0 Critical** | **In Progress** | main | **GitHub Environment secrets** | `core` | **Platform / safety.** Filed 2026-08-28. **The single largest risk in the current setup:** no workflow in `.github/workflows/` runs `db:migrate`, so schema changes reach any database only when a human runs it from a laptop against whatever `DATABASE_URL` sits in their `.env`. That is the literal mechanism by which local tinkering can alter production. Add: merge to `main` → migrate **staging**; merge to `production` → migrate **prod**, gated behind a **GitHub Environment with a required reviewer**. `resolveMigrationUrl()` already prefers the unpooled endpoint and is correct for this — it is simply never invoked by CI. Store the two connection strings as GitHub Environment secrets (never in the repo, per project law). Document **expand/contract** in the decisions file: add + backfill, then stop writing, then drop — three releases, never one, because rollback is a redeploy of the previous version and that version still expects the column **Human gate: secrets entry.** The two connection strings must be added by the account owner as GitHub Environment secrets, and the `production` environment given a required reviewer. **The agent must never handle these values** — project law. Workflow YAML is agent-executable; the secrets and the reviewer rule are not. **Done 2026-08-28:** migrate-staging and migrate-production jobs added to `ci.yml`, both `needs: verify` and both opting out of cancel-in-progress; GitHub Environments **`db-staging`** and **`db-production`** created, the latter with a required reviewer. **Named `db-*` deliberately:** Vercel owns an environment called `Production` and GitHub matches environment names case-insensitively — writing to `production` put a reviewer and an empty branch policy on Vercel's environment, which would have blocked every deploy. Caught and reverted the same session; `Production` is back to zero protection rules and its latest deploy reports `success`. **Outstanding:** add `DATABASE_URL_UNPOOLED` to both environments. |
+| **205** | **[PLATFORM] Ephemeral Neon branch per pull request** | **INFRA** | **M-OPS** | **P1 High** | **Deferred — needs a human** | — | **NEON_API_KEY + NEON_PREVIEW_BRANCHES** | `core` | **Platform / environments.** Filed 2026-08-28. Wire Neon's Vercel integration or `neondatabase/create-branch-action` so each PR gets a copy-on-write branch off `staging`, deleted on merge. Gives every PR preview a full-fidelity database to run its migrations against in isolation — the capability self-managed Postgres cannot offer, and the strongest reason this stack is on Neon. Watch the **10 branches/project** free-plan ceiling; set a TTL so abandoned PRs do not hold slots **Human gate: an OAuth install.** Authorising Neon against the Vercel or GitHub account is an interactive consent screen. Once installed, configuration is agent-executable. **Done 2026-08-28:** `.github/workflows/preview-branch.yml` added — creates a branch off `staging` per PR, applies that PR's migrations to it, deletes on close, with a 7-day `expires_at` as a backstop against the 10-branch ceiling. Both Neon actions are **pinned to commit SHAs**, not tags: each receives `NEON_API_KEY`, so a retagged release would hand over a project-wide credential. Gated behind a repository variable so it stays inert. **Outstanding:** add the `NEON_API_KEY` secret and set `NEON_PREVIEW_BRANCHES=on`. |
 | **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P0 Critical** | **Deferred — needs a human** | — | **Neon plan upgrade — billing decision, account owner** | `core` | **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. |
 | **207** | **`nearby-availability` computes "today" in two timezones — the suite fails every evening** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Found 2026-08-28** running the gate for #200; **pre-existing**, reproduced with that ticket's source changes stashed. `never suggests a past date when the wanted date is today` asserts `expected '2026-08-28' to be '2026-08-30'`: the test helper `dayFromToday` and the route disagree about which day it is once local time passes UTC midnight (failure observed at 22:26 local = 05:26 UTC the next day). Violates the deterministic-test law — the suite reads the real clock, so it is green all morning and red all evening. Fix by injecting a fixed clock rather than widening the assertion, and check `dayFromToday` against every other date-anchored suite. Use `/debug-flaky-test`. |
 
-Rows are ordered by build sequence, not by ticket number. **56 rows — 25 Done, 31 open.** Every open ticket is MVP; the Post-MVP Backlog at the foot of this file holds what is deliberately *not* being built.
+Rows are ordered by build sequence, not by ticket number. **207 rows — 50 Done, 1 In Progress, 150 Backlog, 4 Deferred, 2 Blocked.** Recounted 2026-08-28; the previous "56 rows — 25 Done" line had been stale for many batches.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -207,23 +405,30 @@ their `P0`–`P3` phases and `M0`–`M6` milestones.
 
 ### Human gates on the `M-OPS` sequence
 
-Every manual step in #200–206, in dependency order. A `Deferred — needs a human`
-row above stays deferred until its gate here is cleared; the agent can then take
-the ticket the rest of the way. **No credential in this list is ever pasted into a
-command, an agent prompt, or any file under `.claude/`** — project law, enforced by
-a `PreToolUse` hook.
+Updated 2026-08-28 after the CLI/MCP pass. Everything reachable through `gh`,
+the Neon MCP and the repo has been done; what remains needs a dashboard, a
+secret or a card. **No credential below is ever pasted into a command, an agent
+prompt or any file under `.claude/`** — project law, enforced by a `PreToolUse`
+hook, which is why the secret rows are yours and not mine.
 
-| Order | Ticket | What only you can do | Where |
+| # | Ticket | What only you can do | Where |
 | --- | --- | --- | --- |
-| 1 | #200 | *Nothing.* Fully agent-executable | — |
-| 2 | #201 | Approve creating a second Neon project | ask-first, then Neon MCP |
-| 3 | #202 | Set **Production Branch** `main` → `production` | Vercel → Settings → Git |
-| 4 | #202 | Protect `production`: no direct pushes, fast-forward only | GitHub → Branch protection |
-| 5 | #203 | Set the staging deployment's `DATABASE_URL` | Vercel env vars |
-| 6 | #204 | Add prod + staging connection strings as **Environment secrets** | GitHub → Environments |
-| 7 | #204 | Add a **required reviewer** on the `production` environment | GitHub → Environments |
-| 8 | #205 | Authorise the Neon integration (OAuth consent) | Neon ↔ Vercel/GitHub |
-| 9 | #206 | Enter payment details, select **Launch** | Neon console → Billing |
+| 1 | #203 | Point a staging deployment's `DATABASE_URL` at the `staging` branch | Vercel env vars |
+| 2 | #202 | Flip **Production Branch** `main` -> `production` | Vercel -> Settings -> Git |
+| 3 | #204 | Add `DATABASE_URL_UNPOOLED` to the **`db-staging`** environment | GitHub -> Environments |
+| 4 | #204 | Add `DATABASE_URL_UNPOOLED` to the **`db-production`** environment | GitHub -> Environments |
+| 5 | #205 | Add the `NEON_API_KEY` secret and set variable `NEON_PREVIEW_BRANCHES=on` | GitHub -> Secrets and variables |
+| 6 | #206 | Enter payment details, select **Launch** | Neon console -> Billing |
+
+**Cleared already:** the `production` branch exists and is protected against
+deletion and force pushes alongside `main`; the Neon `staging` branch exists;
+the migration and preview workflows are written; the `db-staging` and
+`db-production` environments exist, the latter with a required reviewer.
+
+**Do not create a GitHub environment named `production` or `staging`.** Vercel
+owns `Production` and GitHub matches environment names case-insensitively, so
+writing to that name silently reconfigures Vercel's deployment gate. The
+migration environments are `db-`prefixed for exactly this reason.
 
 Everything else — compose and `.env` changes, branch creation, workflow YAML,
 protected-branch and history-window settings, backup schedules, spending
@@ -4953,3 +5158,4368 @@ All three follow the same rules when they land: name the cause, state the money 
 
 - **Dark mode.** The warm cream identity is the brand; a true inversion is post-MVP.
 - **Vendor-doesn't-reply path** — open question #1, and the one I would resolve *inside* MVP. The 48-hour expiry is specified but the customer-side experience is not designed, and it is the most common failure path in a two-sided marketplace.
+
+---
+
+### #66: Unvalidated URL input crashes six ways into a 500
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found by adversarial sweep 2026-08-28, passes 1 and 2. **Every one of these is a URL a
+person can paste into Slack**, and every one returns HTTP 500 with the generic "Something
+broke on our end" page.
+
+| URL | Status | Root cause |
+| --- | --- | --- |
+| `/search?date=not-a-date` | **500** | `search-shell.tsx:240` |
+| `/search?date=2026-13-45` | **500** | same |
+| `/search?date=0000-00-00` | **500** | same |
+| `/search?date=2026-08-28T12:00:00Z` | **500** | same — a plausible ISO timestamp |
+| `/vendors/JUNE-HARLOW` | **500** | `vendor-data.ts:256` — uppercase alone |
+| `/vendors/<script>`, `/vendors/%00`, `/vendors/..%2F..%2Fetc`, 300-char slug | **500** | same |
+| `/search?minPriceCents=2147483648` | **500** | int4 overflow; `2147483647` returns 200 |
+
+**Cause 1 — date.** `search-shell.tsx:240` runs
+`AVAILABILITY_DATE_FORMATTER.format(new Date(\`${state.date}T00:00:00Z\`))`. An unparseable
+string yields `Invalid Date` and `Intl.DateTimeFormat.format` throws
+`RangeError: Invalid time value`. Line 255 repeats the pattern for `droppedPastDate`.
+
+**Cause 2 — slug.** `vendor-data.ts:256` maps only `statusCode === 404` to `null`. The API
+returns **400** for a slug that fails its schema, which rethrows into the error boundary.
+An identifier that cannot exist is a 404, not a 500.
+
+**Cause 3 — price.** Zod bounds `minPriceCents` below (`-500` gives a clean 400) but not
+above, so the value reaches Postgres and overflows `int4`. The filter chip also renders the
+incoherent `$21,474,836.48 – $10,000+`.
+
+The governing rule is now `.claude/rules/web-route-boundaries.md`, added 2026-08-28.
+
+**Acceptance:**
+
+- [ ] Every URL in the table above returns **200** (or 404 for a genuinely absent vendor), never 500
+- [ ] `searchParams` and `params` are parsed with the screen's Zod schema **before** any component formats, compares or queries with them
+- [ ] An invalid filter value is **dropped and the screen renders without it**, with a line saying it was cleared — matching how a past date is already handled correctly today
+- [ ] A 400 caused by an identifier that cannot exist maps to `notFound()`; decided in the data function, not the page
+- [ ] `minPriceCents` / `maxPriceCents` are bounded above by `MAX_PACKAGE_PRICE_CENTS` in the shared schema, so the API returns 400 rather than 500
+- [ ] The heading is derived from the **same parsed value** the body used — no more "0 vendors free on Mon, Mar 2" above "the request failed"
+- [ ] No raw upstream error string reaches the user (see #72)
+
+**Tests (required):**
+
+- [ ] A table-driven route test asserting the **status code** for every hostile input above. This is the class of defect no happy-path test covers, so the test must be the table, not one example.
+- [ ] A unit test for the date guard: `Invalid Date` never reaches an `Intl` formatter.
+- [ ] A unit test asserting a 400 from `getPublicVendorProfile` returns `null` (→ `notFound()`), and a 500 still throws.
+- [ ] A shared-schema test asserting `minPriceCents` above the cap fails validation.
+
+---
+
+### #67: `POST /booking-requests` has no idempotency — three clicks created three bookings
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `payments`
+**Blocked by:** None
+
+Found by adversarial sweep 2026-08-28, pass 2 (H1). On
+`/vendors/wren-field/request?package=…`, three `click()` calls in a single tick produced
+**three `POST /booking-requests` → three `201`**, and `/bookings` then rendered
+`MARCH 2027 · 3 bookings` with three byte-identical cards.
+
+**The existing mitigation and its exact limit.** The submit button unmounts synchronously on
+first click, so a *physical* double-click is safe — verified: a 40ms `clickCount:2` and, with
+the POST delayed 1.5s, a 400ms-apart two-click both produced exactly **one** POST. **The
+defect is entirely server-side.** Nothing dedupes, so any client retry, a mobile
+touch+click double-fire, or a network-level retry creates duplicates. There is no
+customer-side withdraw route (see #68), so all three sit in the vendor's queue permanently.
+
+This is the highest-severity finding in the sweep: it is silent, it is user-visible on the
+vendor side, and it corrupts the vendor's most important surface.
+
+**Acceptance:**
+
+- [ ] `POST /booking-requests` is idempotent. Prefer a natural key — one pending request per `(customerId, vendorId, eventDate, packageId)` — enforced by a **unique partial index**, so concurrency is settled by the database rather than by application timing
+- [ ] A duplicate returns the **existing** request (200 with the original id), not a second 201 and not a 500 from a constraint violation
+- [ ] The unique index is added in a Drizzle migration generated with `pnpm db:generate`, never hand-edited
+- [ ] The three duplicate Wren & Field bookings and the `9999-12-31` booking created during testing are cleared from the dev database
+
+**Tests (required):**
+
+- [ ] An API test firing **concurrent** identical requests with `Promise.all` and asserting exactly one row is created and every response carries the same id. A sequential test does not exercise the race and does not count.
+- [ ] A test asserting the constraint violation surfaces as the existing record, not a 500.
+- [ ] A DAO test asserting the partial index only covers pending requests, so a customer may legitimately rebook the same vendor for the same date after a withdrawal.
+
+---
+
+### #68: An accepted, priced booking dead-ends — no detail, no quote approval, no checkout
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `payments`
+**Blocked by:** #9, #10
+
+Found by adversarial sweep 2026-08-28, pass 2 (M5). On `/bookings`, the `ACCEPTED`
+Northgate Sound booking (`$1,200 · Fair Market`) links to `/vendors/northgate-sound` — the
+**marketing profile**. All 11 booking cards link to `/vendors/<slug>`; the only other links
+on the page are `?tab=`, `/customer/profile` and `/search`.
+
+The product promises, in copy already shipped: "**Payment is held.** Your money reaches the
+vendor after the event" and "you approve before any card is charged". **There is no
+affordance anywhere in the customer surface to view a booking, approve a quote, or pay.**
+
+Consequence for the sweep: frames `05 Checkout`, `06 Booking confirmed` and
+`21 Checkout declined` have **no live screen to compare against**, so parity on three
+frames is currently unprovable. Also blocks any customer-side withdraw, which is why #67's
+duplicates cannot be cleaned up from the UI.
+
+This is feature work that #9 and #10 already own. Filed so the **dead end on an accepted,
+priced booking is tracked as a user-visible state today**, not only as unbuilt scope.
+
+**Acceptance:**
+
+- [ ] A booking detail route exists and every booking card links to it rather than to the vendor's marketing profile
+- [ ] From detail, a customer can approve a quote and reach checkout
+- [ ] A customer can withdraw a pending request
+- [ ] Frames `05`, `06` and `21` become drivable and are added to the parity sweep ledger
+
+**Tests (required):**
+
+- [ ] A route test asserting a booking card's `href` resolves to the booking detail route, not `/vendors/<slug>`.
+- [ ] An authorization test: a customer cannot open another customer's booking detail.
+- [ ] A browser pass driving request → accept → approve → checkout → confirmed.
+
+---
+
+### #69: Filter popovers are unreachable below 1440 and stay open after use
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found by adversarial sweep 2026-08-28, passes 1, 2 and parity batch 1. The Languages
+popover is **719px tall with no `max-height` and no internal scroll** (`overflow: visible`,
+zero scrollable descendants), and `/search` sets `overflow: hidden` on both `html` and
+`body`, so there is no page scroll to compensate.
+
+| Viewport | Behaviour | Measured |
+| --- | --- | --- |
+| **1024x768** | Bottom-clipped | Panel spans y=113→832 in a 768px viewport. `Haitian Creole` bottom 793, `ASL/Sign Language` bottom 822 — both below the fold. Wheel does nothing (`scrollY` stays 0). A real `click()` on `ASL/Sign Language` **times out**; the URL never changes |
+| **390x844** | Top-clipped | Radix flips the panel to **y=-77**; `English` measures y=-40/bottom=-19. Clicking it **times out**. First legible row is a half-cut "Spanish" |
+| **1440x900** | Fits (832 < 900) | Any browser chrome eating 70px reproduces the 1024 failure at desktop size |
+
+The landing page's vendor-type combobox already does this correctly (`max-h-72`,
+`overflow-y: auto`), so the fix is to apply the existing pattern.
+
+**Separately** (parity batch 1): choosing a value in the **Rating** or **Price** popover
+applies it but **leaves the panel open**, and the 280x147 panel then occludes the results
+heading and the first result card.
+
+**Acceptance:**
+
+- [ ] Every popover caps its height against the viewport and scrolls internally — same idiom as the vendor-type combobox
+- [ ] Every option in every filter is clickable at **1440, 1024, 768 and 390**
+- [ ] A single-select popover closes on selection; a multi-select stays open deliberately and says so
+- [ ] No popover renders with a negative `x` or `y`
+
+**Tests (required):**
+
+- [ ] A component test asserting the panel's `max-height` is bounded and `overflow-y` is `auto`.
+- [ ] A browser assertion, at all four viewports, that every filter option's rect is fully inside the viewport and a real click changes the URL. Assert the **rect**, not merely that the element exists — every one of these options existed in the DOM while being unclickable.
+
+---
+
+### #70: The app is broken below 768px — messaging is a dead end, notifications render off-screen
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found by adversarial sweep 2026-08-28, pass 2 (H4, H5). 390x844 is a **designed
+breakpoint** — frames `14 Landing mobile`, `14 Search mobile`, `14 Vendor profile mobile`,
+`14 Vendor dashboard mobile` all exist.
+
+**H4 — `/messages` locks the customer into one thread.** The conversation list is
+`<aside class="… max-md:hidden">` with `display: none`. All three conversation buttons
+measure `width: 0` and `offsetParent === null`. There is no back button and no thread
+switcher; the hamburger opens the Clerk account menu, not the list. Boundary confirmed: at
+767px `convClickable: 0`, at 768px `convClickable: 2`.
+
+**H5 — notifications panel renders at `x = -80`.** A fixed 360px panel right-aligned to a
+trigger whose right edge is at x=280. Measured clipped nodes at x=-63: title renders as
+**"ons"**, item as **"ccepted"**, body as **"is held. Payment confirms the booking."** —
+**the date is the part cut off**, so the user is told a date is held without being told
+which. Fits at 768, 1024, 1440.
+
+**Acceptance:**
+
+- [ ] Below 768px `/messages` offers a thread list or a back affordance — no state is reachable with no way out
+- [ ] The notifications panel is constrained to the viewport (`max-width`, collision-aware placement) and never renders at negative `x`
+- [ ] Every designed mobile frame is driven and no content is clipped off any edge
+
+**Tests (required):**
+
+- [ ] A browser assertion at 390x844 that every interactive element's rect is fully within `[0, innerWidth] x [0, innerHeight]`. This catches both defects and the whole class.
+- [ ] A test asserting `/messages` at 390 exposes a control that reaches a second thread.
+
+---
+
+### #71: Long tokens are never broken — one pasted link overflows its bubble
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found by adversarial sweep 2026-08-28, passes 1 and 2 (H6, P1-8).
+
+**Message bubbles.** Computed style is `overflow-wrap: normal; word-break: normal`.
+- A 160-char Google-Photos share URL: the `<p>` measures `clientWidth 680 / scrollWidth 768` — it overflows its own bubble by 88px and visibly runs past the rounded edge.
+- 5000 `Q`s: `<p>` `scrollWidth 53677` in a 680px bubble; the ancestor with `overflow-x: auto` reports `clientWidth 1140 / scrollWidth 54116`.
+
+**Pasting a gallery link to a photographer is the single most likely message in this
+product.**
+
+**Search heading.** A 600-char `?city=` produces an `h1` measuring **5386.13px wide** in a
+1440px viewport, with no `word-break` or truncation.
+
+**Both are invisible to a page-level overflow assertion** — `document.scrollWidth` stays
+1440 because an ancestor clips them. That is why the existing checks never caught either.
+
+**Acceptance:**
+
+- [ ] Message bubbles set `overflow-wrap: anywhere` (or `break-words`) so no content escapes its bubble at any length
+- [ ] Any user- or URL-supplied string rendered into a heading has a truncation or wrapping rule
+- [ ] The composer has a `maxLength` matching `MESSAGE_MAX_LENGTH` (5000), a visible counter, and a server-side cap — today it has none of the three, and the textarea grows to 907px, taller than a 900px viewport
+
+**Tests (required):**
+
+- [ ] A component test asserting `scrollWidth <= clientWidth` on the bubble for a 5000-char unbroken token **and** for a long URL. Assert on the **element**, not the document — the page-level assertion passes while the bubble is broken.
+- [ ] An API test asserting a message over `MESSAGE_MAX_LENGTH` is rejected with 400.
+
+---
+
+### #72: Error and empty-state copy violates `40-states.md` in five places
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found by adversarial sweep 2026-08-28, passes 1 and 2. `40-states.md` requires every error
+to say **what happened in the user's words — not the exception**, to say **how to fix it**,
+and to offer **one primary action**.
+
+| # | Where | Observed | Required |
+| --- | --- | --- | --- |
+| 1 | `/search` with any invalid filter | Raw API string **"Request validation failed"**, no action, under a heading claiming success | Approved copy from `31-content-voice.md` + one action |
+| 2 | `/search?minPriceCents=2147483648` | **"Internal server error"** verbatim, no Retry, no "clear filters" | ditto |
+| 3 | Tag/language/dietary empty state | Names a **"style" filter that does not exist** on the screen (chip reads "Languages · 2") | Name the filter actually at fault, as city/price/rating/date already do correctly |
+| 4 | `?name=` no results | **"No vendors listed yet"** — false, 17 exist — blames vendor type and city, which the user never touched, and offers **no CTA at all** | Name the name filter, offer one-tap relaxation. Same gap on `?category=` |
+| 5 | `/customer/profile` City > 100 chars | Bare **`Invalid input`** at the submit bar, after the Guests fields, no field named, no counter, no `maxLength` | A counted summary linking to the field — the same form's guest-range message ("The smaller number goes first — swap them and this will save.") is exemplary and shows the intended standard |
+
+Also: the notifications panel renders a **raw ISO date** — "`2026-12-19` is held" — where
+every other date in the product is formatted ("Sat, Dec 19").
+
+**Acceptance:**
+
+- [ ] No upstream error string reaches a user-facing surface; the detail is logged instead
+- [ ] Every empty state names the filter actually responsible and offers at least one recovery action
+- [ ] Every validation message names its field and says how to fix it
+- [ ] Every user-facing date is formatted
+- [ ] `City` carries a `maxLength` matching the API's 100-char cap, so the error cannot be reached by typing
+
+**Tests (required):**
+
+- [ ] A test asserting no rendered error string matches the upstream shapes (`/^Request validation failed$/`, `/^Internal server error$/`, `/^Invalid input$/`).
+- [ ] A test per empty state asserting the named filter matches the filter actually applied.
+- [ ] A test asserting no user-facing node matches `/\d{4}-\d{2}-\d{2}/`.
+
+---
+
+### #73: The six accessibility laws are violated and nothing was checking them
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+`04-laws.md` fixes six accessibility laws and `01-foundations.md` carries a contrast table
+headed *"these were failures we already fixed, do not regress"*. **Neither had any
+checker** — `parity-checker` covered five axes, none of them access. A sixth `Access` axis
+was added 2026-08-28; these are what it and the sweep found first.
+
+| # | Law | Violation |
+| --- | --- | --- |
+| 1 | Focus ring `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50` | **Invisible on every vendor card**, landing and search. The ring is entirely outward on an `<a>` that exactly fills an `overflow:hidden` `<article>` (both rects `331.25 x 357.23`), so it is 100% clipped. `:focus-visible` is `true` and nothing renders — the primary interaction of the whole app has no keyboard indicator |
+| 2 | Focus ring | Hero search segments **suppress their own ring** (`focus-visible:ring-0`) for one bar-level `ring-3 clay/0.2 offset-0`. A keyboard user cannot tell which of Vendor type / City / Event date has focus |
+| 3 | Icon-only controls carry `aria-label` **and a 44x44 hit area** | `/search` header submit is **32x32**. It is the query's submit, and the frame specifies a text pill reading `Search`, so this is one fix across Access, Style and Text |
+| 4 | Modals trap focus, close on Escape, restore focus | **Escape dismisses neither** the Filters drawer nor the Notifications panel (verified at 1440, 1024, 768, 390). The drawer has no `role="dialog"`, no focus trap and no in-panel close; focus never enters it |
+| 5 | Contrast ≥ 4.5:1 | Landing `How it works` numerals are `clay-200 #EFD8CC` on `stone-100 #F4F0E8` = **1.20:1**. They are `aria-hidden` and `10-landing.md:116` specifies clay-200, but `04-laws.md` grants no decorative exemption — **needs an explicit ruling, then either an exemption clause or a token change** |
+| 6 | Tabs | Vendor profile tablist is not a roving tabstop: all five `role="tab"` buttons are individual Tab stops |
+
+**Acceptance:**
+
+- [ ] The card focus ring is visible — inset ring, ring on the `overflow:hidden` element itself, or clearance for the outward ring
+- [ ] Each hero search segment shows its own focus ring at the law's exact value
+- [ ] Every icon-only control is ≥44x44 with an `aria-label`
+- [ ] Escape closes the Filters drawer and the Notifications panel; the drawer gets `role="dialog"`, a focus trap and a close control
+- [ ] `04-laws.md` states explicitly whether `aria-hidden` decorative text is exempt from 4.5:1 — and the numerals then either comply or are covered by the written exemption
+- [ ] The tablist is a roving tabstop with arrow-key navigation
+
+**Tests (required):**
+
+- [ ] A browser assertion that a focused element's ring is **within its nearest `overflow:hidden` ancestor's rect**. Computing the correct `box-shadow` is what already passes today while rendering nothing, so the test must assert visibility, not the value.
+- [ ] A test asserting every element with an `aria-label` and no text has a rect ≥ 44x44.
+- [ ] A test per overlay asserting Escape closes it and focus returns to the trigger.
+- [ ] A contrast test over the rendered tree asserting every non-`aria-hidden` text node clears 4.5:1, seeded with the exact pairs in `01-foundations.md` that already failed once.
+
+---
+
+### #74: Adopt the frames' line-height — the app's type scale contradicts every frame
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Ruled by the user 2026-08-28: follow whichever matches the HTML screens most accurately.
+The frames win.**
+
+The frames set no `line-height` on any UI class, so every control computes `normal`. The app
+applies the `01-foundations.md` scale ratios. Measured from the frame's `<style>` block:
+
+| Frame class | font-size | line-height |
+| --- | --- | --- |
+| `.inp` `.nav` `.btnP` `.btnS` | 13.5px | **normal** |
+| `.pill` | 10px | **normal** |
+| `.lbl` `.tl` | 10.5px | **normal** |
+| `.h2` | 26px | **normal** |
+| `.sh` | 21px | **normal** |
+| `.tn` | 11.5px | 1.5 |
+
+Of the frame's UI classes only `.tn` sets a line-height. (`.sc-t` 1.2 and `.sc-d` 1.4 are
+canvas chrome — the screen title and description outside the frames — not UI.)
+
+Consequence today: every pill, chip, button and card is **3–7px taller than its frame
+counterpart** — landing pills 33 vs 29, category cards 164 vs 158, search chips 35 vs 31,
+`Request booking` 50 vs 43, profile chip 27 vs 24. This currently blocks a clean parity
+verdict on **every screen in the product**.
+
+**Acceptance:**
+
+- [ ] `01-foundations.md`'s scale table records the frames' values, `.tn`'s 1.5 included, and notes it was derived from the frame markup on 2026-08-28
+- [ ] The Tailwind/theme type scale matches, so control heights equal their frame counterparts
+- [ ] The five measured controls above match the frame exactly at 1440x900
+- [ ] Long-form prose keeps a readable measure — if any body copy needs a ratio the frames do not set, it is recorded as a named exception with its reason, not applied silently
+
+**Tests (required):**
+
+- [ ] A parity assertion comparing the rendered height of `.btnP`, `.pill`, `.lbl`, `.inp` and the card against the same class rendered from `Orla - Screens.dc.html`. Derive the expectation from the frame at test time rather than hard-coding pixels, so the test cannot drift from the contract.
+
+---
+
+### #75: ROLLUP — Landing, Search and Vendor profile parity (35 findings)
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+**This is a rollup, not a unit of work.** Each of the 35 findings is now its own ticket with
+its own acceptance criterion and test: **#82 – #116**. Fix those; close this when they are all
+closed. Full `expected` vs `observed` tables are in `.claude/plans/parity-sweep-ledger.md`.
+
+Verdicts from parity batch 1, six axes at 1440x900 signed out:
+`01 Landing` **FAIL (8)** — #82–#89 · `02 Search` **FAIL (13)** — #90–#102 ·
+`03 Vendor profile` **FAIL (14)** — #103–#116.
+
+**Acceptance:**
+
+- [ ] #82 – #116 are all closed
+- [ ] `parity-checker` returns PASS on all six axes for frames `01`, `02`, `03`
+- [ ] Only real content, real data volume and real photography differ
+
+---
+
+### #76: Sign-in redirect discards the destination
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+Found by pass 2 (L5) and parity batch 1 (PB1-35). Signed out, `Request booking` on a vendor
+profile → `/vendors/june-harlow/request?package=…` → redirects to **`/sign-in` with no
+`redirect_url`** (verified `location.search === ""`). After authenticating the visitor lands
+on `/` and the booking they started is gone. Same for `/bookings`, `/messages`,
+`/customer/profile` and `/dashboard`.
+
+Requesting a booking is the vendor profile's entire purpose per `12-vendor-profile.md`, and
+this drops the user at the exact moment of intent.
+
+**Acceptance:**
+
+- [ ] Every auth redirect carries the originating path **and its query string**, and returns there after sign-in
+- [ ] The return target is validated as a relative in-app path — an absolute or protocol-relative URL is rejected, never used as an open redirect
+- [ ] A customer landing on a vendor-only route still redirects by role, not to the attempted path
+
+**Tests (required):**
+
+- [ ] A test per guarded route asserting the redirect preserves path + query.
+- [ ] **An open-redirect test**: `?redirect_url=https://evil.example` and `//evil.example` must not be honoured. This is a security boundary, so it is not optional.
+
+---
+
+### #77: Event date has no upper bound — a booking for the year 9999 goes through
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found by pass 2 (M3). Setting Event date `9999-12-31` on
+`/vendors/june-harlow/request?package=…`: the form asserts "**June Harlow is free on this
+date**", the review step reads "December 31, 9999", the request is created (**201**), and it
+now sits in `/bookings` under a `DECEMBER 9999` group and in the vendor's queue. The hub
+then offers "Search Dec 31" → `/search?date=9999-12-31` → "**17 vendors free on Fri, Dec
+31**" — every vendor claimed available 7,973 years out.
+
+The lower bound is handled well by contrast (`min="2026-08-28"` on the input; a past date in
+the URL is cleared with good copy), which is what makes the missing upper bound an
+oversight rather than a design choice.
+
+**Acceptance:**
+
+- [ ] The event date is bounded above in the **shared Zod schema**, so the API rejects it regardless of client — derive the horizon from a named constant (e.g. `MAX_BOOKING_HORIZON_DAYS`), not a literal
+- [ ] The input carries the matching `max` attribute
+- [ ] Availability copy never claims a vendor is free beyond the horizon
+- [ ] The `9999-12-31` booking created during testing is cleared from the dev database
+
+**Tests (required):**
+
+- [ ] A shared-schema test asserting a date beyond the horizon fails validation, and the day before it passes — assert both sides of the boundary.
+- [ ] An API test asserting `POST /booking-requests` rejects it with 400.
+
+---
+
+### #78: `DrizzleQueryError` is logged without its cause
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Observed 2026-08-28 during the sweep: seven `"level":50` entries on `GET /vendors` and the
+category-facet query. Every one logs `err.message` — the SQL text — and **`cause` is
+absent**, so the actual Postgres error is discarded. The queries succeed on retry, so the
+failures look transient; there is currently **no way to find out what they were**.
+
+This is the `async-and-errors` defect class: the handler catches, logs something, and throws
+away the half that would let anyone diagnose it.
+
+**Acceptance:**
+
+- [ ] The error serializer records `cause` — its `code`, `detail`, `constraint` and `message` — for any wrapped driver error
+- [ ] A wrapped error's chain is logged to full depth, not just the outermost layer
+- [ ] No credential or connection string can reach the log through the cause
+
+**Tests (required):**
+
+- [ ] A unit test on the serializer: given an error wrapping a cause, the output contains the cause's `code` and `detail`.
+- [ ] A test asserting a cause carrying a connection string is redacted.
+
+---
+
+### #79: Vendor nav labels and order diverge from frame 08
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+| | Entries |
+| --- | --- |
+| Frame `08` | `Dashboard, Requests, Bookings, Messages, Availability, Packages, Edit profile, Payments` |
+| Live (`vendor-nav.tsx:23-27`) | `Dashboard, Business profile, Packages, Portfolio, Availability` |
+
+**`Edit profile` vs `Business profile` is a text-axis failure** and the ordering is a
+layout-axis failure — both are in scope now. The **missing** entries (Requests, Bookings,
+Messages, Payments) map to deferred work (#9 Stripe, #10 payments, #12 reviews), so their
+absence may be correct; `Portfolio` is live but appears in the frame only as a tab inside
+frame `09`.
+
+**Acceptance:**
+
+- [ ] The label reads exactly what frame `08` says
+- [ ] Present entries appear in the frame's relative order
+- [ ] Each frame entry with no route is recorded against its deferring ticket, or added
+- [ ] `Portfolio` as a separate route rather than a tab in the editor is either ruled an approved deviation or aligned to frame `09`
+
+**Tests (required):**
+
+- [ ] A component test asserting the rendered nav labels and their order equal the expected list, derived from frame `08`'s markup rather than hard-coded.
+
+---
+
+### #80: Five live routes have no design frame, so parity is unprovable on them
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Frame-to-route mapping, 2026-08-28: **38 frames against 15 routes**. These five ship to
+users with **no acceptance criterion at all**:
+
+`/customer/profile` · `/sign-in` · `/suspended` · `/vendor/packages` · `/vendor/portfolio`
+
+`/vendor/packages` and `/vendor/portfolio` do appear as **tabs inside frame `09`** — the app
+split them into routes, which is itself a composition divergence (see #79). `/sign-in` may
+be legitimately Clerk-hosted. `/customer/profile` and `/suspended` have no coverage of any
+kind, and `/customer/profile` already produced a finding (#72 item 5).
+
+Frame `13 Admin` correctly has no route — that is ticket #15.
+
+**Acceptance:**
+
+- [ ] Each of the five is given a frame, or recorded in the design plan as deliberately unframed with the reason
+- [ ] `.claude/plans/parity-sweep-ledger.md` reaches full coverage in both directions — no live route without a frame, no frame without a route or a ticket
+- [ ] The ledger's route column is regenerated so the mapping is checked, not assumed
+
+**Tests (required):**
+
+- [ ] A test enumerating `apps/web/src/app/**/page.tsx` and asserting each route appears in the ledger with a frame or a recorded exemption. This makes the next unframed route fail CI instead of shipping unnoticed.
+
+---
+
+### #81: Nine smaller defects found in the adversarial sweep
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Grouped because each is a few lines; split any that grows. All found 2026-08-28.
+
+| # | Where | Defect |
+| --- | --- | --- |
+| 1 | `/vendors/[slug]` | Price panel keeps the **`From`** qualifier after a specific package is chosen — reads "From $3,900" while the search card says "From $1,450" for the same vendor. Once a package is selected the price is exact |
+| 2 | `/bookings` | Every card renders `<span aria-hidden class="size-9.5 rounded-[9px] bg-stone-150">` — a **blank grey swatch never populated**, on all 11 cards. `coverImageUrl` exists in the API response and initials avatars already render on `/search` and `/messages`. `40-states.md`: "a generic grey box is a bug" |
+| 3 | `/messages` | **One thread per vendor**, subtitled with one arbitrary booking. A customer asking about their Jun 11 fundraiser sends it into a thread the vendor reads as "Mar 15 birthday" |
+| 4 | `/search?page=2` | Blank results pane, HTTP 200, while `h1` claims "17 vendors". 17 vendors, `pageSize=20`, and **no pagination control exists** |
+| 5 | `/customer/profile` | **State accepts `ZZZZZZZZZZ`** (10 chars, placeholder "TX"); `PUT /users/me` returns 200 and it survives reload |
+| 6 | `/vendors/[slug]` | Tabs use history **`replace`** — one Back skips the whole page. `/search`'s Sort control correctly pushes, so this is inconsistent within the app |
+| 7 | Signed-out 500 page | Secondary CTA is **"Go to my bookings"**, offered to a visitor who by definition has none |
+| 8 | `/search` | Results `h1` accessible text runs on: **"17 vendorsfree on Fri, Dec 31"** — `<span>` separated only by `ml-2.5` |
+| 9 | `/bookings` | Rail's `aria-label="What needs your attention"` but its content is the static "How booking works here" copy |
+
+Also: `/search?date=2020-01-01` recovers with excellent copy but **still fires the request**,
+landing a 400 in the console; and "Wed, Jan 1" omits the year for a date six years past.
+
+**Acceptance:**
+
+- [ ] Each row above is fixed or explicitly closed with a reason
+- [ ] Seed data uses one location format — "Austin, TX" and "Austin, Texas" currently appear in one grid
+
+**Tests (required):**
+
+- [ ] Item 1: a test asserting the qualifier disappears once a package is selected.
+- [ ] Item 2: a test asserting the card renders the vendor's image or initials, never an empty node.
+- [ ] Item 4: a test asserting an out-of-range page renders an empty state whose heading agrees with the body.
+- [ ] Item 5: a schema test bounding `state`.
+- [ ] Item 8: a test asserting the heading's `textContent` contains a separator.
+
+---
+
+### #82: 01 Landing — `All 11 categories →` is rendered as a padded pill, not a plain span
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-1`. Frame **`01 Landing`** vs `/`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | plain span, `110x16`, no padding, no radius |
+| **Observed** (live) | `<a>` `134x33`, `padding 6px 12px`, `border-radius 8px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `01 Landing`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-1` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #83: 01 Landing — Header `Sign up` pill is 8px too tall
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-2`. Frame **`01 Landing`** vs `/`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `82x36`, `padding 10px 18px` |
+| **Observed** (live) | `86x44`, same padding — the box is taller |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `01 Landing`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-2` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #84: 01 Landing — Hero `Search` button has the wrong box and padding
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-3`. Frame **`01 Landing`** vs `/`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `102x43`, `padding 13px 28px` |
+| **Observed** (live) | `93x44`, `padding 11px 24px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `01 Landing`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-3` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #85: 01 Landing — Hero badge renders 11px instead of 12px
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-4`. Frame **`01 Landing`** vs `/`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `12px` |
+| **Observed** (live) | `11px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `01 Landing`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-4` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #86: 01 Landing — Hero `Search` and `All 11 categories →` are a half-step small
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-5`. Frame **`01 Landing`** vs `/`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `14px` and `13px` |
+| **Observed** (live) | `13.5px` and `12.5px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `01 Landing`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-5` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #87: 01 Landing — Category card titles carry negative tracking the frame does not
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-6`. Frame **`01 Landing`** vs `/`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `letter-spacing: normal` |
+| **Observed** (live) | `-0.425px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `01 Landing`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-6` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #88: 01 Landing — Hero City field shows a placeholder where the frame has a literal
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-7`. Frame **`01 Landing`** vs `/`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | the literal `Austin, TX` (frame markup line 96) |
+| **Observed** (live) | placeholder `Anywhere` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `01 Landing`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-7` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #89: 01 Landing — Hero search segments share one bar-level focus ring, so the focused segment is unidentifiable
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-8`. Frame **`01 Landing`** vs `/`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Access**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | per-segment `ring-2 ring-clay-400/30 ring-offset-2` |
+| **Observed** (live) | segments set `focus-visible:ring-0`; one bar-level `ring-3 clay/0.2 offset-0`. **A keyboard user cannot tell which of Vendor type / City / Event date has focus** |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `01 Landing`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-8` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a browser assertion covering this law directly — and asserting the *rendered* result, not the computed value, since a correct computed value is exactly what passes today while rendering wrong.
+
+---
+
+### #90: 02 Search — Header is inset 40px while everything below it is inset 26px
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-9`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | header padding `26px` (logo x=26, search bar x=107) |
+| **Observed** (live) | `40px` (logo x=40, bar x=121). The Refine bar and results pane correctly use 26px |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-9` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #91: 02 Search — Header search bar is undersized
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-10`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `582x45` |
+| **Observed** (live) | `560x42` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-10` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #92: 02 Search — The `Style` filter chip is missing from the Refine bar
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-11`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `Price · Rating · **Style** · Languages · Cultural · Dietary` |
+| **Observed** (live) | `Style` absent |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-11` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #93: 02 Search — Confirm the 4→3 column transition width (NOT a defect — sanctioned by B4)
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Corrected 2026-08-28 after the design change order landed.** Originally filed as a P1
+layout failure ("the 4-column grid only exists at exactly ≥1440"). `CHANGE-ORDER-2026-08-28.md`
+Part B4 explicitly sanctions this:
+
+> Grids lose a column before a card loses information (results 4 → 3, 14px gaps)
+
+So dropping to three columns below the 1440 frame is **correct behaviour**, not drift. The
+frame shows 4 at 1440 and the 1024 frame shows 3; the app's `lg:grid-cols-3` up to
+`min-[90rem]` produces exactly that.
+
+**What is still worth confirming** is only the *transition width* and the gap value — B4
+specifies 14px gaps at 1024, and the sweep measured gap 16 at 1440.
+
+**Acceptance:**
+
+- [ ] The grid is 4 columns at 1440 and 3 at 1024, matching frames `02` and `27 Search results — 1024`
+- [ ] Gap is 16px at 1440 and **14px** at 1024 per B4
+- [ ] No card loses information at either width
+
+**Test (required):**
+
+- [ ] A responsive assertion at 1440 and 1024 checking column count and computed `gap` against the two frames.
+
+---
+
+### #94: 02 Search — Header submit is a 32x32 icon button where the frame specifies a text pill
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-13`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | clay pill `81x35`, `padding 10px 20px`, radius-full, literal text `Search` |
+| **Observed** (live) | icon-only circle **32x32**, no text. Also breaches the 44x44 icon-only law |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-13` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #95: 02 Search — Header bar border and shadow are off-token
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-14`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | border `1px #DDD5C7`, shadow `0 1px 3px rgba(35,32,28,.04)` |
+| **Observed** (live) | `1px #E4DDD1`, `0 2px 10px rgba(35,32,28,.06)` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-14` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #96: 02 Search — Vendor card radius is 18px, not 16px
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-15`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `16px` (inline override on `.card`) |
+| **Observed** (live) | `18px` (`rounded-2xl`) |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-15` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #97: 02 Search — Card avatar is 34px where the frame is 32px + a 2px ring
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-16`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `32x32` + 2px `#FFFDF9` ring = 36 outer |
+| **Observed** (live) | `34x34` outer |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-16` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #98: 02 Search — Sort is a native select where the frame specifies a chip
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-17`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | chip: `bg #FFFDF9`, `1px #E4DDD1`, radius 8, `92x31` |
+| **Observed** (live) | native `<select>` `148x33` with the browser chevron |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-17` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #99: 02 Search — Vendor-card clay monogram is off-token
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-18`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Colour**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `#EADCCB` |
+| **Observed** (live) | `#F7E7E0` (clay-100). The sage variant `#E4E9DE` matches exactly, so only the clay branch is wrong |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Colour** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-18` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion resolving the element's computed colour and comparing it to the frame's token value. Assert the resolved `rgb()`, not the class name.
+
+---
+
+### #100: 02 Search — Card meta line is small and splits the rating into a second weight
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-19`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `12px`, weight 400, uniform `#6B6459` |
+| **Observed** (live) | `11px`, rating split to weight 600 `#4A443C` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-19` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #101: 02 Search — Header date label reads `DATE`, not `EVENT DATE`
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-20`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `EVENT DATE` |
+| **Observed** (live) | `DATE` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-20` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #102: 02 Search — Header values render raw instead of formatted
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-21`. Frame **`02 Search`** vs `/search`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | date `Sun, Jun 14`; city `Austin, TX`; sort default `Top rated` |
+| **Observed** (live) | native `09/19/2026`; raw param `Austin`; `Most relevant` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `02 Search`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-21` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #103: 03 Vendor profile — Profile uses a centred `max-w-7xl` container where the frame is full-bleed
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-22`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | full-bleed: main column `x=0 w=1020`, content 40→992 (952px), rail `380px` at `x=1021..1401`, right gutter 39px |
+| **Observed** (live) | `mx-auto max-w-7xl px-8` → **1216px centred, 112px gutters**; main content `112..916` (**804px**), rail `948..1328`. Everything shifts ~72px inward on both sides |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-22` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #104: 03 Vendor profile — Booking rail starts 82px too low
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-23`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | rail card `y=282`, level with the avatar row |
+| **Observed** (live) | `y=364`, level with the tab bar |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-23` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #105: 03 Vendor profile — Avatar overlaps the cover by 34px instead of 14px
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-24`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | avatar `y=246` — a 14px overlap of the 196px cover |
+| **Observed** (live) | `y=226` — a 34px overlap. (The frame's own caption says 34px; its markup renders 14px, and per precedence the markup wins) |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-24` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+**Superseded target, 2026-08-28.** `CHANGE-ORDER-2026-08-28.md` Part B2 fixes the intended
+value explicitly: the avatar overlaps the banner by **16px (20%)**, produced by
+`margin-top:-34px` against the content column's **18px `padding-top`**. The clipping ancestor
+must be `overflow: visible` with the banner at `z-index:0` and the header row at `z-index:2`,
+keeping `overflow:hidden` on the inner tab pane. Name block offset **23px**.
+
+**This is the same defect as #65** — fix it there and close this as a duplicate. Use B2's
+16px, not the 14px the pre-change frame markup rendered.
+
+---
+
+### #106: 03 Vendor profile — `See all 34 →` is missing from the `Recent work` header
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-25`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `See all 34 →` at `x=651`, `12.5px/600`, `#A34A28` |
+| **Observed** (live) | absent |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-25` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #107: 03 Vendor profile — Booking rail is missing the `Event date` + `Guests` field pair
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-26`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | the two fields paired on one row above `Package` (frame lines 225-227) |
+| **Observed** (live) | **both absent**; the rail has only `Package` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-26` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #108: 03 Vendor profile — Package control uses stone-0 where the frame specifies the `.inp` token
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-27`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `.inp`: `bg #F1ECE4` (stone-150), `1px #E4DDD1`, radius 10, `padding 10px 13px`, h39 |
+| **Observed** (live) | native `<select>`: `bg #FFFDF9` (stone-0), `padding 10px 14px`, h41 |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-27` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #109: 03 Vendor profile — Attribute chips and portfolio tiles are 2px over-rounded
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-28`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | chips radius `6px`; portfolio tiles `12px` |
+| **Observed** (live) | `8px`; `14px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-28` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #110: 03 Vendor profile — `Send a message` is disabled where the frame shows it enabled
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-29`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | enabled `.btnS` |
+| **Observed** (live) | `disabled`, `opacity .5`, `pointer-events: none`. The blocker is explained only inside the shared payment reassurance sentence — `40-states.md` wants it named next to the control it blocks |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-29` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #111: 03 Vendor profile — Vendor name and `Recent work` carry excess negative tracking
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB1-30`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | name `letter-spacing: normal`; `Recent work` `-0.2px` |
+| **Observed** (live) | `-0.825px`; `-0.5px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-30` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #112: 03 Vendor profile — Rail is missing the `Free on <date>` availability line
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-31`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `Free on June 14` in `#4B5940` on the `From` row |
+| **Observed** (live) | absent |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-31` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #113: 03 Vendor profile — Rail is missing the `· N hour coverage` duration suffix
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-32`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `· 6 hour coverage` beside the price |
+| **Observed** (live) | absent |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-32` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #114: 03 Vendor profile — Reassurance line is prefixed with copy the frame does not carry
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-33`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `You won't be charged yet — <vendor> confirms the date first.` |
+| **Observed** (live) | prefixed with `Messaging opens shortly.`, turning a one-line helper into two |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-33` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #115: 03 Vendor profile — Curly quotes where the frame uses straight
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-34`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | straight `"` and `'` |
+| **Observed** (live) | curly `“ ”` and `’` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-34` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #116: 03 Vendor profile — Signed-out `Request booking` loses the destination
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB1-35`. Frame **`03 Vendor profile`** vs `/vendors/[slug]`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Interaction**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | redirect preserves the intended path + query |
+| **Observed** (live) | redirects to `/sign-in` with **no `redirect_url`** (`location.search === ""`); the booking in progress is lost |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Interaction** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB1-35` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a browser test driving the interaction end to end and asserting the resulting URL and DOM state.
+
+---
+
+### #117: 08/09/11 shared — Header is missing the `Vendor` chip on every vendor screen
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-S1`. Frame **`08/09/11 shared`** vs `vendor screens`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `Vendor` chip: `#EDF0E9` fill, `#4B5940` text, 11px/600/uppercase/.06em, `4px 8px`, radius 5 |
+| **Observed** (live) | absent on all three vendor screens |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `08/09/11 shared`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-S1` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #118: 08/09/11 shared — Header padding and logo size differ from the frame
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-S2`. Frame **`08/09/11 shared`** vs `vendor screens`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | padding `0 32px`, logo 23px |
+| **Observed** (live) | `0 40px`, logo 24px |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `08/09/11 shared`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-S2` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #119: 08/09/11 shared — Sidebar and rail footprints are short because the frame boxes are not border-box
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-S3`. Frame **`08/09/11 shared`** vs `vendor screens`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `.side` = 240 + 24 padding + 1 border = **265px**, content column starts x=290. Frame 08 rail = 381px (340 inner); frame 11 rail = 341px (300 inner) |
+| **Observed** (live) | nav **240px** total, content starts x=264. Rail 08 = 340px (300 inner); rail 11 = 300px (260 inner) |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `08/09/11 shared`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-S3` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #120: 08/09/11 shared — Header `Messages` / `Dashboard` links and the Clerk user button focus with no visible ring
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-S4`. Frame **`08/09/11 shared`** vs `vendor screens`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Access**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50` |
+| **Observed** (live) | tabbed with a real keyboard: **every box-shadow layer transparent and `outline-style:none`** on both header links; Clerk's `Open user menu` computes `box-shadow: oklab(0 0 0 / 0) 0 0 0 0` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `08/09/11 shared`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-S4` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a browser assertion covering this law directly — and asserting the *rendered* result, not the computed value, since a correct computed value is exactly what passes today while rendering wrong.
+
+---
+
+### #121: 08/09/11 shared — Four icon-only controls are under the 44x44 hit area
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-S5`. Frame **`08/09/11 shared`** vs `vendor screens`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Access**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | every icon-only control >=44x44 |
+| **Observed** (live) | `Open user menu` **28x28**; `Notifications, 1 unread` **36x36**; `Show earlier months` **36x36**; `Show later months` **36x36**. All carry `aria-label`; all fail the hit area |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `08/09/11 shared`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-S5` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a browser assertion covering this law directly — and asserting the *rendered* result, not the computed value, since a correct computed value is exactly what passes today while rendering wrong.
+
+---
+
+### #122: 08/09/11 shared — Notifications popover does not close on Escape
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-S6`. Frame **`08/09/11 shared`** vs `vendor screens`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Access**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | Escape closes it and restores focus |
+| **Observed** (live) | keeps `aria-expanded="true"` on Escape; outside-click works |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `08/09/11 shared`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-S6` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a browser assertion covering this law directly — and asserting the *rendered* result, not the computed value, since a correct computed value is exactly what passes today while rendering wrong.
+
+---
+
+### #123: 08/09/11 shared — Notification copy renders a raw ISO date
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-S7`. Frame **`08/09/11 shared`** vs `vendor screens`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | a locale-formatted date at the display boundary |
+| **Observed** (live) | `"A customer asked about 2026-12-19. You have a week to reply."` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `08/09/11 shared`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-S7` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #124: 08 Vendor dashboard — `View my public profile` moved out of the header into the content column
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-1`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | in the header, 13.5px/500 `#4A443C` |
+| **Observed** (live) | in the content column at `x=947,y=101`, 12.5px/600 `#A34A28` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-1` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #125: 08 Vendor dashboard — Dashboard rail is 41px narrow
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-2`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | 381px footprint / 340px content |
+| **Observed** (live) | 340px / 300px |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-2` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #126: 08 Vendor dashboard — Empty request pane has no panel, glyph or CTA
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-3`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | frame `20`: flex-filled panel, `1px dashed #D5CEC2`, radius 18, a two-circle glyph (36px `#F1ECE4` + 36px dashed `#D5CEC2`), and a `.btnS` CTA |
+| **Observed** (live) | `flex flex-col items-center gap-3 px-6 py-12` — no panel, no glyph, no CTA, leaving **~470px of undrawn space** in an 812x594 region |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-3` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #127: 08 Vendor dashboard — `See all N →` is missing beside `Requests waiting on you`
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-4`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `See all 4 →` |
+| **Observed** (live) | absent from the markup |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-4` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #128: 08 Vendor dashboard — Stat card radius is 14px, not 12px
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-5`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `12px` (the frame overrides `.card`'s 16px) |
+| **Observed** (live) | `14px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-5` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #129: 08 Vendor dashboard — Stat micro-labels use `text-xs` instead of the 10.5px micro-label
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-6`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `.lbl` = 10.5px/600/`0.525px`/uppercase/`#6B6459` |
+| **Observed** (live) | **11px**/600/`0.55px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-6` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #130: 08 Vendor dashboard — Stat delta line is 11px, not 11.5px
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-7`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `11.5px` |
+| **Observed** (live) | `11px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-7` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #131: 08 Vendor dashboard — Rail label renders in Instrument Serif at 11px
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-8`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `Friday, August 28` as `.lbl`, Instrument **Sans** 10.5px |
+| **Observed** (live) | `<h2>` in **Instrument Serif** 11px — serif below the 16px floor. Caused by `globals.css:162-166` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-8` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #132: 08 Vendor dashboard — Empty-state headline is 21px, not 26px
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-9`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | 26px serif (`40-states.md`: "Instrument Serif headline at 26px in-app") |
+| **Observed** (live) | 21px (`text-display-sm`) |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-9` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #133: 08 Vendor dashboard — `Requests waiting on you` carries tracking the frame does not
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-10`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `letter-spacing: normal` |
+| **Observed** (live) | `-0.525px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-10` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #134: 08 Vendor dashboard — `Vendor` chip string absent
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-11`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | see PB2-S1 |
+| **Observed** (live) | absent |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-11` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #135: 08 Vendor dashboard — `See all 4 →` string absent
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-12`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `See all 4 →` |
+| **Observed** (live) | absent |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-12` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #136: 08 Vendor dashboard — `Bookings this month` shows a wrong-month statement instead of a delta
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-13`. Frame **`08 Vendor dashboard`** vs `/vendor/dashboard`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | a delta, as the frame's `+2 vs April` |
+| **Observed** (live) | `None in July` on an **August 28** dashboard — a statement about the wrong month, and not a delta |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `08 Vendor dashboard`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-13` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #137: 09 Vendor profile editor — The cover image drop zone is missing entirely
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-14`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | a `grid-template-columns:158px 1fr; gap:20px` media row — a 128px circle then a 128px-tall 21:9 cover drop zone |
+| **Observed** (live) | `display:block`, a single **160x160** circle with nothing beside it. **There is no cover image control at all.** Breaks law 9 and `17-vendor-profile-editor.md`'s "Media pair on one row" |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-14` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #138: 09 Vendor profile editor — Two undocumented fields inserted into the form
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-15`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | fields as the frame and `17-vendor-profile-editor.md` list them |
+| **Observed** (live) | `Your line` (span-2) and `Years in business` (half) inserted between `Profile link` and `About your business` — in neither source |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-15` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #139: 09 Vendor profile editor — Three section headings inserted into a pane the frame gives none
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-16`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | no section headings in the pane |
+| **Observed** (live) | `Business`, `Location & service area` (sr-only 1x1) and a visible serif `Tags` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-16` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #140: 09 Vendor profile editor — Section nav is missing `Payouts` and its gold dot
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-17`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | seven items including `Payouts` |
+| **Observed** (live) | six items; `Payouts` absent (scope-deferrable, but the gold dot is unbuilt) |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-17` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #141: 09 Vendor profile editor — Form pane exceeds its scroll budget
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-18`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | <=1.5x (`17-vendor-profile-editor.md`) |
+| **Observed** (live) | **1.92x** (`scrollHeight 1487 / clientHeight 774`) |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-18` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #142: 09 Vendor profile editor — Inputs are 7px short, unpadded and transparent
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-19`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `.inp`: `padding:10px 13px`, bg `#FFFDF9`, radius 10, ~39px tall |
+| **Observed** (live) | `padding:4px 10px`, **transparent** over `#F8F5EF`, **32px** tall |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-19` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #143: 09 Vendor profile editor — Profile photo zone is oversized with the wrong dashed border
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-20`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | 128x128, `1px dashed #D5CEC2`, hatched placeholder |
+| **Observed** (live) | **160x160**, `2px dashed #EFE9E0` (stone-200 not stone-400), flat `#F8F5EF` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-20` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #144: 09 Vendor profile editor — Category chips have the wrong border weight, padding and icon circle
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-21`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | selected `1.5px solid #B4552F` on `#F7E7E0`, `padding:7px 13px 7px 8px`, 22px `#F3D6C8` icon circle; unselected `1px solid #E4DDD1` |
+| **Observed** (live) | selected `1px solid #B4552F`, `padding:6px 16px 6px 6px`; unselected border `#EFE9E0` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-21` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #145: 09 Vendor profile editor — Submit-bar buttons are a size class below the frame
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-22`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `.btnP` 13.5px/600 `padding:11px 20px` radius 10; `.btnS` `padding:10px 20px` radius 10 |
+| **Observed** (live) | `Save changes` and `Preview` both 12.5px/600, `padding:6px 12px`, **radius 8**, 33px tall |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-22` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #146: 09 Vendor profile editor — Service radius is an unstyled native range input
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-23`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | 4px `#EFE9E0` track, 46% `#B4552F` fill, 14px `#FFFDF9` thumb ringed `2px #B4552F` |
+| **Observed** (live) | native `input[type=range]` styled only by `accent-color`, 24px tall |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-23` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #147: 09 Vendor profile editor — Selected category chip label is stone-900, not clay-600
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-24`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Colour**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `#8E3F20` |
+| **Observed** (live) | `oklch(0.268 0.007 34.298)` ≈ stone-900 |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Colour** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-24` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion resolving the element's computed colour and comparing it to the frame's token value. Assert the resolved `rgb()`, not the class name.
+
+---
+
+### #148: 09 Vendor profile editor — Field labels are stone-900, not stone-600
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-25`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Colour**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `.lbl` `#6B6459` |
+| **Observed** (live) | `rgb(35,32,28)` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Colour** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-25` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion resolving the element's computed colour and comparing it to the frame's token value. Assert the resolved `rgb()`, not the class name.
+
+---
+
+### #149: 09 Vendor profile editor — Field labels are sentence-case 12.5px/500 instead of uppercase micro-labels
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-26`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | 10.5px/600/uppercase/`.05em` |
+| **Observed** (live) | **12.5px/500/sentence case** |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-26` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #150: 09 Vendor profile editor — Tag group headings render in Instrument Serif at 12.5px
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-27`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | sans |
+| **Observed** (live) | `<h3>` in **Instrument Serif at 12.5px** — serif below the 16px floor. Caused by `globals.css:162-166` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-27` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #151: 09 Vendor profile editor — Six frame strings are missing and the slug preview has an extra path segment
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-28`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `Cover image` label, `cover 21:9 — 1600x686 min` mono placeholder, `Drop an image or browse`, photo zone `portrait` + `Replace`, `Service radius — 60 miles`, slug `orla.com/kessler-co`, and `Saved 30 seconds ago` in the submit bar |
+| **Observed** (live) | all missing. Photo zone reads `Add photo`; the radius value is split into a separate span plus an unsourced helper; slug renders `orla.com/vendors/northgate-sound` — the `/vendors/` segment is in **neither** source; `Saved N ago` exists in **no** state |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-28` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #152: 09 Vendor profile editor — Eight helper strings appear with no frame or content-voice source
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-29`. Frame **`09 Vendor profile editor`** vs `/vendor/profile/edit`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | copy drawn from the frame or `31-content-voice.md` |
+| **Observed** (live) | unsourced: `One sentence, in your own words. It opens your profile.`, `Counted from when you started, not when you joined here.`, `A couple of paragraphs is plenty.`, `How quickly customers can expect to hear back.`, `How customers find someone who fits their celebration.`, `1 of 5 chosen.`, `0 / 80`, `57 / 1200` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `09 Vendor profile editor`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-29` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #153: 11 Availability — Availability rail is 41px narrow and the month columns absorb it
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-30`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Layout**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | rail 341px footprint / 300px content; content column 786px; month columns 248.7px |
+| **Observed** (live) | 300px / 260px; content column 852px; month columns 271px |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Layout** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-30` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's `getBoundingClientRect()` against the same element rendered from `Orla - Screens.dc.html`. Derive the expected box from the frame at test time so the test cannot drift from the contract.
+
+---
+
+### #154: 11 Availability — Selected panel radius and padding are both 2px/1px over
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-31`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | radius 12, padding 13 |
+| **Observed** (live) | radius 14, padding 14 |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-31` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #155: 11 Availability — Market-note panel radius is 14px, not 12px
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-32`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | radius 12 |
+| **Observed** (live) | radius 14 |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-32` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #156: 11 Availability — `Block these` button is under-padded
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-33`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `padding:8px 14px` |
+| **Observed** (live) | `padding:6px 12px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-33` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #157: 11 Availability — Month nav uses circular icon buttons where the frame uses inline glyphs
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-34`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Style**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | inline `‹` / `›` in `#6B6459` at 13px |
+| **Observed** (live) | two 36px circular icon buttons (which also fail the 44x44 law — see PB2-S5) |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Style** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-34` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing the element's computed `border-radius` / `padding` / `border` / `box-shadow` against the same element in the frame. Read both from the DOM; never assert a hard-coded pixel value.
+
+---
+
+### #158: 11 Availability — `Clear` is clay where the frame is stone
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-35`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Colour**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `#4A443C` |
+| **Observed** (live) | `#A34A28` |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Colour** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-35` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion resolving the element's computed colour and comparing it to the frame's token value. Assert the resolved `rgb()`, not the class name.
+
+---
+
+### #159: 11 Availability — Calendar day cells render 11px, not 12px
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-36`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `12px` |
+| **Observed** (live) | `11px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-36` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #160: 11 Availability — Page title carries `-0.65px` tracking against the frame's `-0.26px`
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-37`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `-0.26px` |
+| **Observed** (live) | `-0.65px`. Caused by `globals.css:162-166` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-37` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #161: 11 Availability — Month names carry negative tracking the frame does not
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-38`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `letter-spacing: normal` |
+| **Observed** (live) | `-0.45px` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-38` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #162: 11 Availability — Rail micro-labels render in Instrument Serif
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #74
+
+Parity sweep 2026-08-28, finding `PB2-39`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Font**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | `SELECTED` / `LEGEND` / `THIS QUARTER` in Instrument **Sans** |
+| **Observed** (live) | **Instrument Serif** — size, weight, tracking and colour are all otherwise correct. Caused by `globals.css:162-166` |
+
+Blocked by #74: the line-height ruling changes this element's expected metrics, so fixing it first would mean measuring twice.
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Font** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-39` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a parity assertion comparing computed `font-family`, `font-size`, `font-weight` and `letter-spacing` against the frame's values for the same element.
+
+---
+
+### #163: 11 Availability — Two instructions 40px apart contradict each other
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-40`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Text**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | one instruction |
+| **Observed** (live) | rail says `Click a date to select it, or drag across several.` while the pane sub-line says `Click a date to block it...`. **Only one is true** (a click selects). Neither string is in the frame |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Text** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-40` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a test asserting the rendered literal equals the frame's literal, with the expected string read out of `Orla - Screens.dc.html` rather than duplicated into the test.
+
+---
+
+### #164: 11 Availability — The page has no `<h1>`
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity sweep 2026-08-28, finding `PB2-41`. Frame **`11 Availability`** vs `/vendor/availability`, measured at
+1440x900 from computed styles on both sides — the frame rendered from
+`design/Orla - Screens.dc.html`, the live screen in the same browser.
+
+**Axis: Access**
+
+| | Value |
+| --- | --- |
+| **Expected** (frame) | a top-level heading |
+| **Observed** (live) | the title is an `<h2>`, so the document has **no `<h1>`** |
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+- [ ] The row for `PB2-41` in `.claude/plans/parity-sweep-ledger.md` is updated to PASS
+
+**Test (required):**
+
+- [ ] a browser assertion covering this law directly — and asserting the *rendered* result, not the computed value, since a correct computed value is exactly what passes today while rendering wrong.
+
+---
+
+### #165: One `globals.css` rule breaks the font axis on every screen in the product
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found by parity batch 2, 2026-08-28. `apps/web/src/app/globals.css:162-166`:
+
+```css
+h1, h2, h3 { @apply font-display tracking-tight; }
+```
+
+Two consequences, both measured on all three vendor screens and almost certainly present on
+every other screen in the product:
+
+1. **Any `h2`/`h3` used as a micro-label renders in Instrument Serif** — observed at 10.5px,
+   11px and 12.5px. `01-foundations.md` states Instrument Serif is **"Never below 16px"**.
+   Confirmed hits: the dashboard rail label `Friday, August 28`; the editor's
+   `Languages spoken` / `Cultural specialties` / `Dietary` group headings; the availability
+   rail's `SELECTED` / `LEGEND` / `THIS QUARTER` micro-labels.
+2. **`tracking-tight` (-0.025em) overrides the frames' `.h2` `letter-spacing: -.01em`**, so
+   titles compute `-0.65px` where the frame computes `-0.26px`. The dashboard `h1` escapes
+   only because it carries an explicit `tracking-[-.01em]` — which is the workaround this
+   rule forces on every heading that wants the correct value.
+
+**This is the highest-leverage fix in the sweep.** It is the direct cause of #89 (dashboard
+rail label), #109 (tag group headings), #119 (availability title tracking) and #121
+(availability rail micro-labels), and it will be the cause of equivalent failures on every
+frame not yet swept.
+
+The defect is using element type as a styling hook. Heading *level* is document structure;
+serif display type is a *role*. A micro-label that is semantically an `h2` must not inherit
+display type from its tag.
+
+**Acceptance:**
+
+- [ ] The blanket `h1, h2, h3` rule is removed; display type is applied by an explicit class or token, not by element type
+- [ ] No text node below 16px renders in Instrument Serif anywhere in the app
+- [ ] Headings compute the frames' `letter-spacing` without needing a per-element `tracking-[…]` override
+- [ ] The four dependent tickets above are re-measured after this lands, and any that now pass are closed as fixed-by-#165
+- [ ] Every screen already marked PASS in the sweep ledger is re-checked on the font axis
+
+**Tests (required):**
+
+- [ ] A test walking the rendered tree and asserting **no** element with `font-family` resolving to Instrument Serif has a `font-size` below 16px. This is a whole-class guard, not a per-element assertion, and it is what stops the next micro-label-as-heading from reintroducing it.
+- [ ] A parity assertion that heading `letter-spacing` matches the frame without a local override.
+
+---
+
+### #166: Availability calendar — every cell state carries a shape, not just a fill (change order A1)
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+`design/design-plan/CHANGE-ORDER-2026-08-28.md` Part A1. **Problem being fixed:** booked,
+pending and blocked were three pale fills within ~2 points of luminance of one another —
+indistinguishable in greyscale, at a glance, or with red-green colour deficiency.
+
+**Rule: every cell state carries a shape as well as a fill. Fill alone is never the signal.**
+
+| State | Fill | Shape | Number | Interactive |
+| --- | --- | --- | --- | --- |
+| Available | `#FFFDF9`, 1px `#E4DDD1` | none | `#23201C` | click / drag to block |
+| Booked — locked | `#F7E7E0` | **4px solid `#B4552F` dot**, centred below the number | `#8E3F20`, 600 | opens the booking |
+| Pending request | `#F5EEDC` | **1.5px dashed `#C99A2E` border** | `#7A5A12`, 600 | opens the request |
+| Blocked by you | 45° hatch `repeating-linear-gradient(-45deg,#EFE9E0 0 3px,#E0D8CA 3px 6px)` | **line-through** on the number | `#6B6459` | click to unblock |
+| **Completed** (new) | `#EDF0E9` | **check glyph** `#5E6B4F`, centred below the number | `#4B5940`, 600 | **yes — opens the past booking** |
+| Selecting now | `#B4552F` | fill is the signal | `#FFFDF9`, 600 | drag continues |
+| **Today** (new) | `#FFFDF9`, **1.5px solid `#23201C`** | ink outline | `#23201C`, 600 | normal for its state |
+| Past, nothing booked | `#F8F5EF` | none | `#C9C1B5` | inert, no hover |
+
+Implementation notes, verbatim from the change order:
+
+- Cells carrying a dot or check need `padding: 5px 0 10px` (against `7px 0` elsewhere) so the number stays optically centred. Cells with a 1.5px border use `padding: 5.5px 0` to avoid a 3px height shift.
+- Dot: `position:absolute; left:50%; bottom:4px; margin-left:-2px; width:4px; height:4px; border-radius:50%`
+- Check: `position:absolute; left:50%; bottom:5px; margin-left:-4px; width:7px; height:4px; border-left:1.6px solid #5E6B4F; border-bottom:1.6px solid #5E6B4F; transform:rotate(-45deg)`
+- **Do not use ✕ for blocked** — a cross means "close / dismiss" elsewhere in the product.
+- **Completed cells are clickable and get a hover state.** Other past dates do not.
+- The **legend must render the real marks**, not flat colour chips, and gains rows for Completed and Today. Caption: "Every state carries a shape as well as a colour, so the calendar still reads in greyscale and for colour-blind vendors."
+- Sidebar summary splits "Booked" into **Booked ahead** and **Completed** (completed counted in `#4B5940`).
+- Helper text becomes: "Click a date to block it, or drag across several. Booked dates are locked, and completed events stay on the calendar — click one to open it."
+
+Screen 11 has no separate tablet/mobile frame; the same cell component serves every width.
+Do not restyle other calendars (e.g. the dashboard week strip).
+
+**This also resolves #164** (the contradictory rail/pane instruction), since the new helper
+text replaces both strings.
+
+**Acceptance:**
+
+- [ ] All eight states render their specified fill **and** shape
+- [ ] `Completed` and `Today` exist as states; completed cells are clickable with a hover state and open the past booking
+- [ ] Padding compensations applied so no state shifts cell height
+- [ ] Legend renders the real marks, gains Completed and Today rows, and carries the caption
+- [ ] Sidebar splits Booked into Booked ahead and Completed
+- [ ] Helper text replaces both current contradictory strings
+- [ ] No ✕ used for blocked
+
+**Tests (required):**
+
+- [ ] A component test per state asserting **both** the fill and the presence of the shape element. Asserting fill alone reproduces the exact bug this ticket fixes.
+- [ ] A greyscale assertion: with colour removed, every state remains distinguishable by shape.
+- [ ] A test asserting completed cells are clickable and other past dates are inert.
+- [ ] A test asserting cell height is identical across all eight states.
+
+---
+
+### #167: Build the shared dropdown component — nothing rolls its own (change order A2)
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+`CHANGE-ORDER-2026-08-28.md` Part A2 plus the new `design/design-plan/42-dropdowns.md`, and
+two new frames: **`28 Dropdown open — hero`** and **`28 Dropdown variants`**.
+
+**Currently every select is undesigned.** Build **one** component; nothing rolls its own.
+**This supersedes #69** — that ticket described the symptoms (oversized, unreachable, stays
+open); this is the specification that fixes them.
+
+**Mounts** — ≥640px: anchored popover, 8px below the field, aligned to the field's **left
+edge**. <640px: **bottom sheet** — full width, 48px rows, 34×4px grab handle, explicit
+"Close", dismissing scrim, max **70% of viewport height**.
+
+**Shell** — `#FFFDF9` fill, 1px `#E4DDD1`, **12px radius**, `0 14px 44px rgba(35,40,38,.20)`,
+6px inner padding. Rows **44px** (38px from the compact header bar, 48px in the sheet), 8px
+radius. Hover `#F1ECE4`; selected `#F7E7E0` with a clay check, label weight 600, colour
+`#8E3F20`. Width **330px** from the hero bar, **258px** from the compact header bar; never
+narrower than its field. **Max height 360px, scrolls, cut row left half-visible so the scroll
+is legible.** Flips above the field when the field is within 380px of the viewport bottom.
+
+**Bodies** — (1) **Single-select** (vendor type, city, event type): commits and closes on
+click, **no search field**. (2) **Multi-select** (style, any "pick any" filter):
+**checkboxes, not checkmarks**, 15px square, 4px radius, `#B4552F` when checked; footer
+**Apply · n** + Clear. (3) **Range** (price): preset chips first, min/max inputs below,
+slider as a *readout of the inputs* rather than the only control; footer Apply + Clear.
+(4) **Date**: single-month popover reusing the **A1 cell marks**, mini legend, Clear.
+
+**Multi-select and range panels never auto-apply** — a filter firing per keystroke makes the
+results grid flicker under the user's hand.
+
+**Behaviour** — dismiss on outside click, `Esc`, or select. **Scroll repositions, never
+dismisses.** Keyboard: ↑↓ move, ↵ commits, type-ahead jumps to first letter, `Tab` closes and
+moves on, focus returns to the field on close. Open field: value turns clay, caret flips; in
+the compact header bar the open segment is the only clay element. Scrim `rgba(35,32,28,.16)`
+desktop / `.34` mobile on **hero and mobile only** — never in the compact header. Empty body:
+one row of `#6B6459` copy explaining why plus a single action, never a blank panel.
+
+**Applies to:** hero search (landing), compact header bar, Refine bar filters,
+booking-request event type, and vendor profile editor selects.
+
+**Closes these sweep findings:** the 719px Languages panel unreachable at 1024 and 390 (max
+height 360 + scroll), Rating/Price staying open (single-select closes; multi/range get an
+explicit Apply), Escape not dismissing, and the Refine bar's inconsistent auto-apply.
+
+**Acceptance:**
+
+- [ ] One component; every select in the five named surfaces uses it
+- [ ] Popover ≥640, bottom sheet <640, with every shell value above
+- [ ] All four body types built to spec; multi-select uses checkboxes, not checkmarks
+- [ ] Multi-select and range require an explicit Apply — no auto-apply
+- [ ] Dismiss on outside click, Esc and select; **scroll repositions, never dismisses**
+- [ ] Full keyboard model including type-ahead and focus return
+- [ ] Max height 360px with a half-visible cut row; flips when within 380px of the viewport bottom
+- [ ] Scrim on hero and mobile only
+- [ ] Matches frames `28 Dropdown open — hero` and `28 Dropdown variants` on all six axes
+
+**Tests (required):**
+
+- [ ] At 1440, 1024, 768 and 390: every option's rect is fully inside the viewport and a real click changes state. Assert the **rect** — every unreachable option in the sweep existed in the DOM while being unclickable.
+- [ ] A test asserting scroll repositions rather than dismisses.
+- [ ] A test asserting multi-select and range do not apply until Apply is pressed.
+- [ ] A keyboard test: ↑↓, ↵, type-ahead, Tab-closes, and focus returns to the field.
+- [ ] A test asserting the bottom sheet appears below 640 and the popover at/above it.
+
+---
+
+### #168: Replace the page loader with the mark's two converging rings (change order B3)
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+`CHANGE-ORDER-2026-08-28.md` Part B3. Replace the wordmark pulse with the **mark's two rings
+converging**: 30px circles, filled `#B4552F` and 2px `#23201C` outline, translating
+−9px→+7px and +9px→−7px on a **1.9s `cubic-bezier(.45,0,.55,1)`** loop so they cross past
+each other at mid-cycle.
+
+**No wordmark** — this renders before fonts are guaranteed, which is the reason for the
+change. Page loader is for **first paint and auth redirects only**.
+
+**Acceptance:**
+
+- [ ] Two 30px rings with the specified fill and outline, animating to the stated translations and timing
+- [ ] No wordmark and no webfont dependency in the loader
+- [ ] Used only for first paint and auth redirects — not as a general spinner
+- [ ] Respects `prefers-reduced-motion` per `04-laws.md`
+
+**Tests (required):**
+
+- [ ] A test asserting the loader renders no text node and references no webfont family.
+- [ ] A test asserting the animation is suppressed under `prefers-reduced-motion`.
+
+---
+
+### #169: Treat 1024 as a real breakpoint, height-constrained (change order B4)
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+`CHANGE-ORDER-2026-08-28.md` Part B4. **1024 is a real breakpoint, not compressed desktop;
+the binding constraint at this width is height (640px usable), not width.** Seven frames
+cover it, renumbered `27 …` in the current bundle.
+
+- Page padding 40 → **24–28px**
+- Sidebars stay **220px with labels** — no icon rail
+- Right rails narrow 420 → **340px**, never stack
+- Grids lose a column before a card loses information (results 4 → 3, **14px gaps**)
+- Landing hero keeps **all three** overlapping photo cards beside the text at **0.73 scale**; display type 54 → **40px**
+- **Checkout: "Due today" must stay above the fold. Hard constraint.**
+- Vendor dashboard: right column **300px**, calendar shows the **booking week**, not the month
+
+Related: B1's 3:2 card covers are already built, and B1 notes the consequence — **any pane
+with a fixed bottom action bar needs bottom padding equal to the bar's height** (76px on
+mobile search) or the last card's price row lands under it.
+
+**Acceptance:**
+
+- [ ] Every value above holds at 1024x768, measured from the DOM
+- [ ] All seven `27 …` frames pass `parity-checker` on all six axes
+- [ ] "Due today" is above the fold on checkout at 1024 — asserted, not eyeballed
+- [ ] No pane with a fixed bottom bar clips its last row
+- [ ] Height, not width, is treated as the binding constraint — no scroll budget regressions
+
+**Tests (required):**
+
+- [ ] A responsive assertion at 1024x768 for padding, sidebar width, rail width, grid columns and gap, hero photo scale and display size.
+- [ ] A test asserting the checkout "Due today" element's rect bottom is ≤640.
+- [ ] A test asserting the last card in a pane with a fixed bottom bar is fully above that bar.
+
+---
+
+### #170: Uploads — Customer profile photo upload is dead, and leaks an internal role message to the user
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/customer/profile`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | the photo uploads — the API defines a `customer-profile` storage prefix and the page ships an uploader for it |
+| **Observed** | **every** upload fails. `403 POST /upload/image?prefix=customer-profile`. The failure line renders the server's internal message verbatim: `This endpoint requires the vendor role  JPG or PNG · under 12 MB · at least 1200px wide.` The advice is also wrong — the file met every stated constraint. Confirmed at API level: a customer token gets 403 `"This endpoint requires the vendor role"` on **all four** prefixes including `customer-profile` |
+
+**Cause.** `apps/api/src/modules/uploads/uploads.routes.ts` gates the whole route with `preHandler: requireRole('vendor')`, so the `customer-profile` prefix it declares is unreachable by the only role that would use it. Consumer: `apps/web/src/components/customer/customer-profile-form.tsx`
+
+**Acceptance:**
+
+- [ ] The upload route authorizes **per prefix**, not per route — a customer may upload to `customer-profile` and to nothing else
+- [ ] A vendor may upload to `vendor-profile`, `vendor-cover` and `portfolio`, and not to `customer-profile`
+- [ ] No internal authorization message ever reaches a user-facing surface (see #72)
+- [ ] The failure copy names the real reason and a real fix
+
+**Tests (required):**
+
+- [ ] An API test per (role, prefix) pair asserting the allowed matrix — this is a table, not one example, because the bug is a whole missing dimension.
+- [ ] A test asserting no rendered upload error contains the string `requires the vendor role`.
+- [ ] A browser test uploading a valid photo as a customer and asserting it persists across reload.
+
+---
+
+### #171: Uploads — A successful upload renders a broken image and a 500, while the toast says it worked
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/profile/edit`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | the preview shows the uploaded photo immediately, using the resolved URL the upload returns |
+| **Observed** | the API returns `201` with `imageUrl: "http://localhost:9000/vendor-marketplace-uploads/vendor-profile/<uuid>.webp"`, but the `<img>` renders the **storage key resolved against the current page path**: `src = http://localhost:3000/vendor/profile/vendor-profile/<uuid>.webp` → `naturalWidth = 0`, `500 GET`. The toast simultaneously reads **"Profile photo updated."** The circle goes blank — the `Add photo` invitation disappears because `value` is truthy, and nothing replaces it, so the vendor cannot tell whether it worked. **Reproduced 4/4** with different files |
+
+**Cause.** `apps/web/src/components/image-upload.tsx` uses the returned **key** where it needs the resolved **URL**
+
+**Acceptance:**
+
+- [ ] The preview renders the resolved absolute URL the upload returns
+- [ ] A failed image load is surfaced, never reported as success
+- [ ] The success toast fires only after the image actually loads
+
+**Tests (required):**
+
+- [ ] A component test asserting the rendered `src` equals the API's `imageUrl`, not the key.
+- [ ] A browser test asserting `naturalWidth > 0` after an upload completes — `complete === true` is true for a broken image and is the check that would pass today.
+
+---
+
+### #172: Uploads — The image format allow-list is bypassed by renaming the file
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio` and `/vendor/profile/edit`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | refused. `ACCEPTED_IMAGE_MIME_TYPES = ['image/jpeg','image/png']`, and `images.ts` documents that the client type "is not trusted: `sharp` decodes the actual bytes, so a `.png` full of something else fails here" |
+| **Observed** | a TIFF, a GIF and an SVG renamed `tif-renamed.jpg`, `fake-png-really-gif.png` and `evil-svg-as.jpg` were **all accepted, `201`, stored and persisted as portfolio rows**. The same bytes with honest extensions are correctly refused client-side. **The check is on the declared type only — the bytes are never compared to it**, so any format `sharp` can decode passes |
+
+**Cause.** Mitigations confirmed present: output is re-encoded to WebP so an SVG `<script>` does not survive, and an SVG with `<image xlink:href="http://127.0.0.1:8899/ssrf-probe"/>` produced **no** outbound request — no SSRF. The gap is the allow-list itself, which the code's own comment claims is enforced and is not
+
+**Acceptance:**
+
+- [ ] The **decoded** format is compared against `ACCEPTED_IMAGE_MIME_TYPES`, not the declared one — `sharp().metadata().format` must be `jpeg` or `png`
+- [ ] A renamed TIFF, GIF, SVG, BMP or AVIF is refused with the same message as an honest one
+- [ ] `sharp` is configured to refuse SVG input outright
+- [ ] The comment in `images.ts` describes what the code actually does
+
+**Tests (required):**
+
+- [ ] A test per disguised format asserting rejection — TIFF, GIF, SVG, BMP, AVIF, each renamed `.jpg` and `.png`. This is the exact class the current code claims to cover and does not.
+- [ ] A test asserting `sharp` refuses SVG input.
+- [ ] Keep the existing SSRF probe as a regression test.
+
+---
+
+### #173: Uploads — No Cancel control exists during an upload
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | frame `24 Image upload` draws **`Cancel`** directly under the aggregate progress line |
+| **Observed** | zero matches for a cancel button or link anywhere on the page while `Uploading 2 of 6 — 0.7 MB of 2 MB` was on screen. Once a batch starts, the only way to stop it is to leave the page |
+
+**Acceptance:**
+
+- [ ] A `Cancel` control sits under the aggregate line while any upload is in flight, per frame 24
+- [ ] Cancelling stops queued files and leaves already-completed ones saved — partial success is preserved
+- [ ] The control disappears when the batch finishes
+
+**Tests (required):**
+
+- [ ] A browser test starting a batch, cancelling mid-flight, and asserting queued files stopped while completed files persisted across a reload.
+
+---
+
+### #174: Uploads — Size refusal contradicts itself at the byte boundary
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio` and `/vendor/profile/edit`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | a refusal naming a size clearly over the limit |
+| **Observed** | a JPG of exactly **12,587,008 bytes** (`MAX_UPLOAD_BYTES` + 4 KB) is refused with **`12 MB is over the 12 MB limit.`** — `formatMegabytes` rounds 12.0039 to one decimal. The vendor is told 12 MB is over a 12 MB limit and given no actionable number. The rule itself is correct: exactly 12,582,912 bytes is accepted, +4 KB refused |
+
+**Cause.** `apps/web/src/lib/uploads.ts` (`tooLargeFailure` / `formatMegabytes`)
+
+**Acceptance:**
+
+- [ ] A refusal never states a size equal to the limit — round up, add a decimal, or state the excess
+- [ ] The message gives the vendor a number they can act on
+
+**Tests (required):**
+
+- [ ] A unit test on the formatter at `MAX_UPLOAD_BYTES + 1`, `+ 4KB` and `+ 1MB` asserting the rendered sentence is never self-contradictory.
+
+---
+
+### #175: Uploads — Below-minimum width is red on one uploader and gold on the other
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/profile/edit` vs `/vendor/portfolio`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | gold. `40-states.md`: "Below minimum dimensions | gold | **Replace file** — explains it would look soft, not that it's 'invalid'" |
+| **Observed** | **red** on the profile photo. Measured: `class="text-xs text-error-500"`, computed `color = rgb(178, 58, 48)` — identical to the unsupported-format message. `/vendor/portfolio` gets it right: the same 680x450 file is gold there |
+
+**Cause.** The profile uploader skips the client-side width screen, so the failure returns as the server's generic 400 and is classified as a red rejection
+
+**Acceptance:**
+
+- [ ] A below-minimum-width file is gold with a Replace action on **every** uploader
+- [ ] Red is reserved for failures, per `40-states.md`'s colour semantics
+- [ ] Both uploaders classify failures through the same path
+
+**Tests (required):**
+
+- [ ] A component test per uploader asserting the resolved colour token for each of the four failure modes in frame 25.
+
+---
+
+### #176: Uploads — The aggregate progress line counts bytes that are never sent
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | `Uploading 4 of 8 — 18.2 MB of 29.4 MB` describes the batch actually going up (frame 24) |
+| **Observed** | selecting 3 valid ~0.34 MB JPGs plus one 66.8 MB JPG refused client-side produced **`Uploading 4 of 4 — 1 MB of 67.8 MB`**. The denominator includes the file refused before a byte left the browser, so the readout tops out near 1.5% and then vanishes |
+
+**Acceptance:**
+
+- [ ] The denominator counts only files actually being uploaded
+- [ ] Client-side refusals are excluded from both numerator and denominator
+- [ ] The percentage reaches 100% on success
+
+**Tests (required):**
+
+- [ ] A test with a mixed batch asserting the aggregate denominator equals the summed size of the accepted files only.
+
+---
+
+### #177: Uploads — The failure banner claims "Everything else saved" while the batch is still queued
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | the banner describes the state at the moment it is read |
+| **Observed** | with 10 files where 2 fail client-side, the banner read **`2 photos didn't upload. Everything else saved.`** at ~800 ms — at that instant one file was uploading and **seven were still `Queued`**. Nothing had been saved |
+
+**Acceptance:**
+
+- [ ] The banner distinguishes in-flight from saved, and only claims saved once files are persisted
+- [ ] The count updates as the batch progresses
+
+**Tests (required):**
+
+- [ ] A test asserting the banner text at a mid-batch checkpoint does not claim completion while any tile is `Queued` or `Uploading`.
+
+---
+
+### #178: Uploads — Deleting or replacing an image leaves its storage objects orphaned forever
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** storage lifecycle, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | the stored objects go with the row |
+| **Observed** | 55 photos uploaded then deleted through the API (`204` on all 55, gallery back to seeded rows) left **114 keys** under `portfolio/` — each row leaks an image plus a `-thumb`. Nothing reaps them. Replacing a profile photo does the same: 5 successive picks accumulated 5 distinct `vendor-profile/<uuid>.webp` keys with only the last referenced |
+
+**Cause.** Confirmed live: the bucket currently holds exactly 2 orphans from the sweep's final verification upload
+
+**Acceptance:**
+
+- [ ] Deleting a portfolio row deletes its image and its thumbnail
+- [ ] Replacing a profile or cover image deletes the object it replaced
+- [ ] Deletion failure is logged and retried, never silently dropped
+- [ ] A reaper or a migration clears existing orphans
+
+**Tests (required):**
+
+- [ ] An integration test asserting the object count returns to baseline after create-then-delete.
+- [ ] A test asserting replacement removes the prior key.
+
+---
+
+### #179: Uploads — Upload route validates before authenticating, leaking the prefix enum
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `POST /upload/image`, unauthenticated.
+
+| | |
+| --- | --- |
+| **Expected** | `401` for any unauthenticated request |
+| **Observed** | `curl -X POST "http://localhost:4000/upload/image?prefix=../../etc"` with **no credentials** returns **`400`** with the full enum `"expected one of \"vendor-profile\"|\"vendor-cover\"|\"portfolio\"|\"customer-profile\""`. A *valid* prefix with no credentials correctly returns 401 — so the ordering leaks internal structure to anonymous callers |
+
+**Acceptance:**
+
+- [ ] Authentication runs before schema validation on every route, so an anonymous caller cannot distinguish a valid parameter from an invalid one
+- [ ] No validation error enumerates internal values to an unauthenticated caller
+
+**Tests (required):**
+
+- [ ] An API test asserting an unauthenticated request with an invalid parameter returns 401, not 400.
+- [ ] A sweep test across every authenticated route asserting the same ordering.
+
+---
+
+### #180: Uploads — The uploads bucket permits anonymous ListObjects
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** MinIO locally; verify the production R2 policy.
+
+| | |
+| --- | --- |
+| **Expected** | read access to individual objects without the ability to enumerate them |
+| **Observed** | `GET http://localhost:9000/vendor-marketplace-uploads?list-type=2` returns **every object key unauthenticated**. Anonymous `PUT` and `DELETE` are correctly `403`. This comes from `mc anonymous set download` in `docker-compose.yml` |
+
+**Cause.** Local MinIO is not production, but the same policy shape is easy to carry over. Object keys are UUIDs so enumeration leaks no filenames — it does leak volume, timing and the full inventory
+
+**Acceptance:**
+
+- [ ] The production R2 policy grants public **read** without **list**
+- [ ] The local MinIO policy matches production's shape so the difference is never discovered in production
+- [ ] The policy is asserted, not assumed
+
+**Tests (required):**
+
+- [ ] A preflight check asserting the configured bucket policy denies anonymous list.
+- [ ] An integration test asserting an anonymous list request is refused against the configured storage.
+
+---
+
+### #181: Uploads — Batch-overflow banner has a grammar error
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | agreeing subject and verb |
+| **Observed** | selecting 21 files gives `20 files upload at a time, so 1 file were held back: b21.jpg. Add them next.` — noun singular, verb plural. The cap behaviour itself is correct (20 accepted, 1 named and held back) |
+
+**Acceptance:**
+
+- [ ] The sentence agrees for 1 and for n held-back files
+
+**Tests (required):**
+
+- [ ] A test rendering the banner with 1 and with 3 held-back files and asserting both read correctly.
+
+---
+
+### #182: Uploads — Failure sentence starts lowercase for an extensionless file
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | a sentence beginning with a capital |
+| **Observed** | a valid JPG renamed `noextension` gives `file isn't a format we can publish.` |
+
+**Acceptance:**
+
+- [ ] Every failure sentence begins with a capital, including the extensionless branch
+
+**Tests (required):**
+
+- [ ] A test asserting every string returned by the failure-sentence helper starts uppercase.
+
+---
+
+### #183: Uploads — Header photo count goes stale after an upload but corrects after a delete
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | the count tracks the gallery |
+| **Observed** | 49 tiles / header `49 photos` → upload one → **50 tiles, header still `49 photos`**. Removing a photo calls `router.refresh()` and the count corrects; uploading does not |
+
+**Acceptance:**
+
+- [ ] The count refreshes on upload as it does on delete
+
+**Tests (required):**
+
+- [ ] A test asserting the header count equals the tile count after both an upload and a delete.
+
+---
+
+### #184: Uploads — A hard refresh mid-upload silently drops the in-flight file
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | either the file survives, or the vendor is warned |
+| **Observed** | a 3-file batch refreshed at ~1.2 s saved 2 and lost 1, with **no warning and no `beforeunload` prompt**. Soft navigation is fine — frame 24's "you can leave this page" promise holds for in-app navigation, verified |
+
+**Acceptance:**
+
+- [ ] A hard refresh during an upload warns via `beforeunload`, or the upload resumes
+
+**Tests (required):**
+
+- [ ] A test asserting `beforeunload` is registered while any upload is in flight and removed when the batch drains.
+
+---
+
+### #185: Uploads — Sizes are reported in MB where the OS reports MiB
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+Uploads adversarial pass, 2026-08-28. **Where:** all uploaders.
+
+| | |
+| --- | --- |
+| **Expected** | a number matching what the vendor sees in their file manager |
+| **Observed** | a 70,062,643-byte file is reported as `66.8 MB`; Finder calls it 70.1 MB. Internally consistent but off by 4.8% against the number the vendor is looking at |
+
+**Acceptance:**
+
+- [ ] Displayed sizes use the same convention as the platform, or the unit is labelled unambiguously
+
+**Tests (required):**
+
+- [ ] A unit test pinning the chosen convention so it cannot drift.
+
+---
+
+### #186: Landing hero cluster — one scale ladder, and removed means removed at 390
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Design update 2026-08-28 (third merge of the day): `30-responsive.md` gained a
+**Landing hero imagery** section, `10-landing.md:136` moved its acceptance criterion, and the
+**two-photo row was deleted from the `14 Landing mobile` frame**. Verified against the
+bundle: `01 Landing` carries **3** `.ph` blocks, `14 Landing mobile` now carries **0**.
+
+**The rule is binary:** the cluster sits *beside* the headline, or it does not ship. It never
+falls underneath. That gives exactly one threshold, at 390 — the hero keeps its two-column
+split from 1728 all the way down to 768, and the cluster **scales uniformly rather than
+shedding a card**.
+
+| Width | Hero | Cluster scale | Cluster box |
+| --- | --- | --- | --- |
+| 1440 | 56/44 | 1.0 | 444 x 392 |
+| 1024 | 56/44 | **0.73** | 324 x 286 |
+| 768 | 56/44 | **0.65** | 289 x 255 |
+| **390** | 1 col | **removed** | — |
+
+> "Removed means removed — not reduced to a stacked pair. Two photographs under the search
+> card are the same failure as three: a screen of photography between the search the visitor
+> came for and the categories that let them start."
+
+At 390 the frame reads **headline → sub-line → search card → categories**, putting the first
+category card's bottom edge at **612px** inside the 844 viewport.
+
+**Note on 768:** `30-responsive.md` says it plainly — *"768 is specified here but not yet
+drawn."* Section 14 has no landing frame at 768, so those numbers are **the spec, not a
+measured frame**. A parity check at 768 asserts against the table above, not against a frame.
+
+This refines #169's B4 line ("all three cards at 0.73 scale" at 1024) rather than replacing
+it — 1024 is unchanged; 768 and 390 are new.
+
+**Acceptance:**
+
+- [ ] Hero is two columns at **≥768** (the criterion moved from ≥1024)
+- [ ] The cluster keeps all three cards at every width that has a second column, scaling uniformly — never shedding a card
+- [ ] Cluster box measures 444x392 at 1440, 324x286 at 1024, 289x255 at 768
+- [ ] At 390 there is **no hero photography above or below the search card** — not a reduced pair, not one photo
+- [ ] At 390 the order is headline → sub-line → search card → categories, with the first category card's bottom edge at 612px in an 844 viewport
+- [ ] The cluster never renders underneath the headline at any width
+
+**Tests (required):**
+
+- [ ] A responsive assertion at 1440, 1024, 768 and 390 measuring the cluster's bounding box against the table. Derive 1440/1024/390 from the frames; assert 768 against the table, since no frame exists at that width.
+- [ ] A test at 390 asserting **zero** hero image elements between the headline and the category row — count them, do not check the first one is absent, because the failure this replaces was a *reduced* pair rather than none.
+- [ ] A test asserting the cluster's left edge is always to the right of the headline block at every width that has one.
+
+---
+
+### #187: Bookings hub — `All categories` and `Soonest first` are dead controls
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Functional** finding. **Where:** `/bookings`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | working filter and sort controls, per `42-dropdowns.md` |
+| **Observed** | both are bare `<span>` elements with `cursor: auto`, **no `<button>`/`<a>`/`<select>` ancestor and no `role`**. The page contains **zero `<select>` elements**. They are unreachable by keyboard, invisible to assistive tech, and clicking does nothing |
+
+**Cause / context.** They render as chips and read as controls, so a user will click them and conclude the page is broken. `42-dropdowns.md` (added 2026-08-28) exists for exactly these.
+
+**Acceptance:**
+
+- [ ] Both are real controls built on the shared dropdown component (#167)
+- [ ] Both are keyboard reachable and expose a role and an accessible name
+- [ ] Filtering by category and changing sort both change the result set and the URL
+
+**Tests (required):**
+
+- [ ] A test asserting each control is focusable, has a role, and changes the URL on selection.
+- [ ] A test asserting the rendered list changes when a category filter is applied.
+
+---
+
+### #188: Bookings hub — the notifications bell opens nothing
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Functional** finding. **Where:** `/bookings`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | clicking the bell opens the notifications panel |
+| **Observed** | `button[aria-label="Notifications, 1 unread"]` (36x36) produces **no `[role=dialog]`, no `[role=menu]`, no popper wrapper and no `[data-state=open]`**. Nothing opens at all |
+
+**Cause / context.** On other routes the panel opens but ignores Escape (#73). On this route there is no panel, so this is either a regression or a route-specific wiring gap — the badge still advertises `1 unread`, so the user is told they have a notification they cannot read.
+
+**Acceptance:**
+
+- [ ] The bell opens the panel on every route that renders it
+- [ ] The unread badge is only shown where the panel can actually be opened
+- [ ] Escape closes it and returns focus (shared with #73)
+
+**Tests (required):**
+
+- [ ] A test per route rendering the bell asserting a click opens a panel containing the notification text.
+- [ ] A test asserting the badge count matches the number of items the panel renders.
+
+---
+
+### #189: Bookings hub renders the EMPTY-state rail on a hub with 11 bookings
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Functional** finding. **Where:** `/bookings`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | frame `07`'s `Needs you` rail: a `#F7E7E0` action card (clay dot, **`Review quote`** / **`Decline`**), a `#F5EEDC` gold card, then a `Recent messages` list of three avatar rows |
+| **Observed** | the four mechanism paragraphs under `HOW BOOKING WORKS HERE` — **the empty-state rail from frame `19 Bookings hub empty`** — rendered on a hub carrying 11 bookings |
+
+**Cause / context.** This is not only a parity failure. `Review quote` and `Decline` are the customer's only route to act on a quote, and they are absent — so this is part of why the transaction cannot complete (#68). The `Recent messages` list is missing too.
+
+**Acceptance:**
+
+- [ ] The populated hub renders frame `07`'s rail; the empty rail renders only when there are no bookings
+- [ ] `Review quote` and `Decline` are present and functional on a quoted booking
+- [ ] `Recent messages` renders the three most recent threads
+
+**Tests (required):**
+
+- [ ] A test rendering the hub with 0 bookings and with n>0 asserting a different rail in each case.
+- [ ] A test asserting a quoted booking exposes both `Review quote` and `Decline`.
+
+---
+
+### #190: Bookings hub — the count sentence contradicts the tab it sits above
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Functional** finding. **Where:** `/bookings?tab=history`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | a sentence describing the view being shown |
+| **Observed** | on `?tab=history` the line still reads **`10 upcoming bookings. Next up is June Harlow in 78 days.`** above a single withdrawn October booking |
+
+**Acceptance:**
+
+- [ ] The count sentence is derived from the active tab's result set
+- [ ] Each tab has approved copy for its empty and populated states
+
+**Tests (required):**
+
+- [ ] A test per tab asserting the sentence's numbers equal the rendered row count.
+
+---
+
+### #191: Booking cards have no focus ring and link to the vendor profile, not the booking
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Functional** finding. **Where:** `/bookings`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | a visible focus ring, and a link to the booking |
+| **Observed** | the whole card is an `<a>` (261x175) whose focused `box-shadow` is **entirely transparent** — no ring at all, and its ancestor is `overflow-y: auto` so even a correct outward ring would clip. Every card links to `/vendors/<slug>` |
+
+**Cause / context.** The destination half is #68; the missing ring is a distinct a11y defect on the hub's primary interaction.
+
+**Acceptance:**
+
+- [ ] Cards show the law's focus ring, unclipped by the scrolling ancestor
+- [ ] Cards link to the booking detail (#68)
+
+**Tests (required):**
+
+- [ ] A browser assertion that the focused card's ring is visible and within its clipping ancestor's rect.
+
+---
+
+### #192: Booking request — a marketing footer is appended below the app shell
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Functional** finding. **Where:** `/vendors/[slug]/request`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | the frame is `overflow:hidden` with nothing after the grid; the app shell does not scroll |
+| **Observed** | a 4-column dark footer (`Browse` / `Company` / `Account`) is appended, pushing `document.documentElement.scrollHeight` to **938** against a 900 viewport |
+
+**Cause / context.** An app-shell screen inheriting the marketing footer. `04-laws.md`'s app-shell budget is 1.0x.
+
+**Acceptance:**
+
+- [ ] Signed-in app-shell routes do not render the marketing footer
+- [ ] `scrollHeight` equals `innerHeight` at 1440x900 on this route
+
+**Tests (required):**
+
+- [ ] A test asserting the app-shell routes render no marketing footer and do not exceed a 1.0x scroll budget.
+
+---
+
+### #193: Booking request — a form field was moved into the context rail
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Functional** finding. **Where:** `/vendors/[slug]/request`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | the rail holds five stacked sections including the package block; the form lives in the main pane |
+| **Observed** | a `Describe what you need` label + 364x96 textarea (`#…-customDetails`) occupies the package block's slot **in the rail** |
+
+**Cause / context.** `04-laws.md` law 4 says the rail holds what is *referenced while working in the main pane*; law 5 says forms are grids. An input in the rail is neither.
+
+**Acceptance:**
+
+- [ ] The field returns to the form grid in the main pane
+- [ ] The rail renders the package block: name, price, and the detail line
+
+**Tests (required):**
+
+- [ ] A test asserting no form control renders inside the rail region.
+
+---
+
+### #194: Sign up — the primary action reads `Continue`, not `Create my account`
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Functional** finding. **Where:** `/sign-up`, signed out.
+
+| | |
+| --- | --- |
+| **Expected** | the frame's literal **`Create my account`** |
+| **Observed** | Clerk's default **`Continue`** with a trailing chevron glyph. This is the primary action on the screen |
+
+**Acceptance:**
+
+- [ ] The submit button renders the frame's literal
+- [ ] The Clerk appearance override covers the submit label
+
+**Tests (required):**
+
+- [ ] A test asserting the submit button's accessible name equals the frame's string.
+
+---
+
+### #195: Sign up — the two primary inputs have no focus ring
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Accessibility** finding. **Where:** `/sign-up`, signed out.
+
+| | |
+| --- | --- |
+| **Expected** | `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50` |
+| **Observed** | focused `#emailAddress-field` / `#password-field` compute `box-shadow: oklab(…/0.11) 0 0 0 1px, oklab(…/0.07) 0 0 1px 0` and `outline: rgba(0,0,0,0) solid 2px` — Clerk's own style, **no clay ring, no offset**. The submit button gets a 1px opaque clay-400 hairline rather than a 2px 30%-alpha ring. Role cards resolve their offset to **white** instead of `stone-50 #F8F5EF` |
+
+**Cause / context.** Clerk's default appearance is not themed to the design system on this screen. The skip link and `Sign in` on the same page do compute the correct offset, so this is inconsistent rather than global.
+
+**Acceptance:**
+
+- [ ] Clerk's appearance config themes inputs, submit and cards to the law's ring
+- [ ] Ring offset resolves to `stone-50`, never white
+- [ ] Every focusable element on the screen shows the same ring
+
+**Tests (required):**
+
+- [ ] A test tabbing every focusable element on `/sign-up` and asserting the computed ring equals the law's value.
+
+---
+
+### #196: Sign up — the `Sign in` link reintroduces a banned colour pair
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Accessibility** finding. **Where:** `/sign-up`, signed out.
+
+| | |
+| --- | --- |
+| **Expected** | `#A34A28` (clay-500), weight 600 |
+| **Observed** | **`rgb(180,85,47)` = `#B4552F` (clay-400)**, weight 500 — measured **4.51:1** on `stone-50` |
+
+**Cause / context.** `01-foundations.md` lists clay-400-as-text-on-cream in its *"failures we already fixed, do not regress"* table. It clears 4.5:1 by 0.01, so it is a regression that a threshold test would only just catch.
+
+**Acceptance:**
+
+- [ ] The link uses `clay-500 #A34A28` at weight 600
+- [ ] No banned pair from the contrast table appears anywhere on the screen
+
+**Tests (required):**
+
+- [ ] Extend the contrast test to fail on the five banned pairs **by value**, not only on the 4.5:1 threshold — this one passes the threshold and is still forbidden.
+
+---
+
+### #197: Sign up — panel text over photography is not contrast-guaranteed
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Accessibility** finding. **Where:** `/sign-up`, signed out.
+
+| | |
+| --- | --- |
+| **Expected** | text over an image guarantees 4.5:1 regardless of what the image contains |
+| **Observed** | the overlap band is the **full 600x900 panel**, with text occupying a **348px** band (y=504–852). Against a worst-case bright pixel: body line `stone-0/82` **4.24 FAIL**, `BOOKING` `#F3C98B` **4.41 FAIL**, `VENDING` `#A8C08E` **3.68 FAIL**, `BOTH` `stone-0/55` **3.59 FAIL** |
+
+**Cause / context.** The current seed photo is dark in that band so it reads fine today — but the vendor supplies this image and nothing constrains its luminance. **`VENDING` is a live-only regression**: the frame's `#C4D6A8` scores **4.70** at the same point; the substituted `sage-200 #A8C08E` scores **3.68**.
+
+**Acceptance:**
+
+- [ ] The scrim guarantees 4.5:1 for every text node at its darkest legal stop, or the text sits on a solid plate
+- [ ] `VENDING` uses a value that clears 4.5:1 over the scrim
+- [ ] A bright image cannot drop any node below 4.5:1
+
+**Tests (required):**
+
+- [ ] A contrast test modelling each panel text node against the scrim over a **white** backdrop — the worst case — not against the seed photo.
+
+---
+
+### #198: The app systematically renders five type steps off the frames' scale
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Parity** finding. **Where:** every screen.
+
+| | |
+| --- | --- |
+| **Expected** | the frames' values: `.lbl` 10.5px / `.05em`, `.inp` 13.5px, helper 11.5px, card meta 12px, sub-heading 14px |
+| **Observed** | the app applies `01-foundations.md`'s `text-xs` / `text-sm` / `text-md` where the frames use off-scale intermediates: `.lbl` renders **11px / 0.55px**, `.inp` **12.5px**, helper **11px**, card meta **11px**, sub-heading **15px** |
+
+**Cause / context.** Raised by parity batch 3 as a consolidation: this single mapping decision accounts for roughly thirty individual findings across `12`, `04` and `07`, and will account for more on every unswept frame. It is **one decision about five mappings**, not thirty edits. Related to but distinct from #74 (line-height) and #165 (the heading rule).
+
+**Acceptance:**
+
+- [ ] The five mappings are decided once and recorded in `01-foundations.md`
+- [ ] Either the scale gains the frames' intermediate steps, or the components stop using the token where the frame uses an intermediate
+- [ ] Every screen already swept is re-measured on the font axis afterwards
+
+**Tests (required):**
+
+- [ ] A parity assertion comparing computed `font-size` and `letter-spacing` for `.lbl`, `.inp`, helper, card meta and sub-heading against the frame, on at least three screens.
+
+---
+
+### #199: Two frame colours are absent from the foundations and were substituted, one at an accessibility cost
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Parity batch 3, 2026-08-28 — **Parity** finding. **Where:** `12 Sign up`, `04 Booking request`.
+
+| | |
+| --- | --- |
+| **Expected** | `#C4D6A8` on the sign-up panel's `VENDING` label and `#5C4A18` on the booking-request gold reassurance line |
+| **Observed** | the app substituted the nearest token: `sage-200 #A8C08E` and `gold-600 #7A5A12`. The gold substitution is harmless (both clear AA; live is 5.50:1 and is the sanctioned token). **The sage substitution drops `VENDING` from 4.70:1 to 3.68:1** over a bright photo |
+
+**Cause / context.** `04-laws.md` precedence says the frame wins and the plan gets corrected — so these belong in the plan, not silently in the components. Also noted: the frame's own disabled-submit colour `#9A9184` is **on the banned list** in `01-foundations.md`, so that one must be corrected in the frame rather than adopted.
+
+**Acceptance:**
+
+- [ ] `#C4D6A8` and `#5C4A18` are either added to `01-foundations.md` or the frames are corrected to sanctioned tokens
+- [ ] `VENDING` clears 4.5:1 over the scrim either way
+- [ ] The frame's `#9A9184` disabled colour is corrected in the frame, not adopted into the app
+
+**Tests (required):**
+
+- [ ] A test asserting every colour used in a component resolves to a token defined in the foundations.
+
+---
+
+### #210: The vendor has no surface anywhere that shows a confirmed booking
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** `/vendor/dashboard`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | an accepted booking appears somewhere the vendor can find it |
+| **Observed** | the card **vanishes** from `Requests waiting on you` and appears nowhere else. The dashboard has exactly two sections — the pending queue and `FRIDAY, AUGUST 28 · Nothing booked today`. `/bookings` as a vendor **302s to `/vendor/dashboard`**. `GET /bookings` with the vendor's own bearer token returns **`200 []`** *after* the accept. `GET /booking-requests` as vendor returns only still-pending rows — accepted and declined disappear from the vendor's list entirely |
+
+**Context.** The customer sees the same booking correctly as `ACCEPTED · $1,200 · Zilker Park Clubhouse`. **The vendor has no way to answer "what am I booked for?"** The first real vendor to accept a booking will ask exactly that and there is no answer.
+
+**Acceptance:**
+
+- [ ] A vendor bookings surface exists and lists accepted bookings
+- [ ] `GET /bookings` returns the vendor's accepted bookings when called with a vendor token
+- [ ] Accepted and declined requests remain retrievable by the vendor, filtered by status rather than dropped
+- [ ] Frame `08`'s sidebar `Bookings` entry (#79) points at it
+
+**Tests (required):**
+
+- [ ] An API test asserting `GET /bookings` as the vendor returns the booking immediately after accept.
+- [ ] A two-sided browser test: customer requests, vendor accepts, vendor sees it listed.
+
+---
+
+### #211: The vendor never learns who the customer is, before or after accepting
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** `/vendor/dashboard` and `/messages`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | the vendor can contact the customer they just committed to |
+| **Observed** | every request card reads **`AC / A customer`**. After accepting a wedding, the message thread header still reads `A customer`, and `GET /conversations` returns `"otherPartyName":"A customer"`. **There is no name, email or phone anywhere** |
+
+**Context.** A vendor who accepts a wedding has a date, a venue string and a guest count, and no idea who to contact. This makes the accepted booking unusable even once #210 gives them a place to see it.
+
+**Acceptance:**
+
+- [ ] The customer's name is shown on the request card and in the thread once a request exists
+- [ ] Contact details are exposed at the point the booking is accepted, per whatever privacy rule the product wants — but the rule is explicit, not an accident
+- [ ] `otherPartyName` resolves to a real name
+
+**Tests (required):**
+
+- [ ] An API test asserting `otherPartyName` is the customer's name, not a placeholder.
+- [ ] A test asserting the accepted-booking view exposes a contact route.
+
+---
+
+### #212: Accepting a booking labels the date `Pending request` on the vendor's own calendar, and the Booked counter stays at 0
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** `/vendor/availability`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | `2027-02-13 — Booked — locked` (the string is in the page's own legend), and `Booked 1 date` |
+| **Observed** | `aria-label="2027-02-13 — Pending request"`. The cell is correctly `disabled`, so the lock works — but the summary reads **`11 of your Saturdays … alongside 0 booked and 0 blocked dates`**. The open count dropped by one while the booked count stayed at zero, so **the sentence contradicts itself**. The same mislabel appears on the pre-existing Dec 19 booking, which the customer sees as `ACCEPTED` and holds a notification for. Conversely the three genuinely *pending* requests showed as `— Available` |
+
+**Context.** The label is one state out of step **in both directions** — accepted reads as pending, pending reads as available.
+
+**Acceptance:**
+
+- [ ] An accepted date reads `Booked — locked` and counts in `Booked`
+- [ ] A pending request reads `Pending request`, not `Available`
+- [ ] The summary sentence's numbers are derived from the same source as the cells
+- [ ] This is verified together with #166, which restyles these states
+
+**Tests (required):**
+
+- [ ] A test per state asserting the cell's accessible name and the summary counters agree with the underlying row.
+- [ ] A test asserting open + booked + blocked equals the total for the period.
+
+---
+
+### #213: Decline is one click, irreversible, with no confirmation and no undo
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** `/vendor/dashboard`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | a destructive, customer-visible action is confirmed before it fires |
+| **Observed** | clicking **Decline** fires `POST /booking-requests/<id>/decline → 200` immediately. No dialog, no undo. `POST …/accept` afterwards returns `409 INVALID_STATE_TRANSITION — "A declined request cannot become accepted"`, so **the vendor cannot recover from a misclick** — and the customer has already been notified (`Northgate Sound declined — The date is free again`) |
+
+**Context.** The 409 guard is correct and should stay; the missing confirmation is the defect.
+
+**Acceptance:**
+
+- [ ] Decline requires a confirmation naming the customer and date
+- [ ] Either an undo window exists, or the confirmation states plainly that it cannot be undone
+- [ ] Accept and Decline are visually distinguished by weight, so the destructive one is not the easy misclick
+
+**Tests (required):**
+
+- [ ] A test asserting the decline POST does not fire until the confirmation is accepted.
+
+---
+
+### #214: A customer cannot cancel, or even review, a request they sent
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** `/bookings`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | a customer can open the request they sent and withdraw it |
+| **Observed** | every booking card is a bare anchor to `/vendors/<slug>`. **There is no detail view, no cancel, and no "message about this booking".** The notes, time, guest count and venue the customer typed are unrecoverable. `POST /booking-requests/:id/cancel` **exists in the API and no UI reaches it** |
+
+**Context.** This is why the junk row dated **31 Dec 9999** can never be removed by its owner, and it compounds #67 — duplicate requests cannot be withdrawn either. Overlaps #68's booking-detail route.
+
+**Acceptance:**
+
+- [ ] A booking detail view exists and shows everything the customer submitted
+- [ ] A pending request can be cancelled from it, reaching the existing `/cancel` endpoint
+- [ ] Cancelling notifies the vendor and frees the date
+
+**Tests (required):**
+
+- [ ] An API + browser test asserting a customer can cancel their own pending request and cannot cancel anyone else's.
+
+---
+
+### #215: The Clerk session JWT is sent in a URL query string
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** every authenticated page load, both roles.
+
+| | |
+| --- | --- |
+| **Expected** | a bearer token travels in a header, never in a URL |
+| **Observed** | every authenticated page load opens `GET http://localhost:4000/events/stream?token=<824-char JWT>`. Reproduced on both roles — one SSE request per page load, single param `token`, prefix `eyJhbGciOiJS` |
+
+**Context.** Query strings land in access logs, proxy logs, browser history and `Referer` headers. EventSource cannot set headers, which is presumably why it was done — the fix is a short-lived single-use stream ticket exchanged for the session, not the session JWT itself.
+
+**Acceptance:**
+
+- [ ] The SSE stream authenticates with a short-lived, single-use ticket scoped to that stream, or with a cookie — never the session JWT
+- [ ] The ticket is not reusable and expires in minutes
+- [ ] No credential appears in any URL the server or a proxy logs
+
+**Tests (required):**
+
+- [ ] A test asserting no request URL in an authenticated session contains a JWT-shaped value.
+- [ ] A test asserting a stream ticket cannot be replayed after use or after expiry.
+
+---
+
+### #216: Four different expiry promises for the same deadline, and the one shown at commitment is wrong
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** request flow, `/bookings`, notifications.
+
+| | |
+| --- | --- |
+| **Expected** | one deadline, stated consistently |
+| **Observed** | `/vendors/<slug>/request` review rail: **"48 hours to confirm or send a revised quote"** · success screen: **"closes on its own after a week"** · `/bookings` card: **"expires in 7d"** · vendor notification: **"You have a week to reply"**. The API is authoritative: `createdAt → expiresAt` is exactly **7 days**. **The 48-hour claim is the wrong one, and it is the one shown at the moment of commitment** |
+
+**Acceptance:**
+
+- [ ] Every surface derives the deadline from `expiresAt`, never from a literal
+- [ ] The review rail states the real window
+- [ ] `31-content-voice.md` carries one approved phrasing
+
+**Tests (required):**
+
+- [ ] A test asserting no user-facing string contains a hard-coded duration for this deadline.
+- [ ] A test asserting the rendered deadline matches the row's `expiresAt`.
+
+---
+
+### #217: The two sides disagree about whether there is a platform fee
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** `/bookings` (customer) vs `/vendor/dashboard` (vendor).
+
+| | |
+| --- | --- |
+| **Expected** | one consistent fee story |
+| **Observed** | customer: **"No service fee. The price you're quoted is the price you pay."** Vendor: **"EARNINGS THIS MONTH · $0 · Your share, after the platform fee."** |
+
+**Context.** Both may be literally true — a vendor-side commission with no customer-side markup — but as written they read as a contradiction, and the commission is 12% per the settled constraints. A beta user comparing notes with their vendor will notice.
+
+**Acceptance:**
+
+- [ ] One fee model is stated, and both surfaces describe it compatibly
+- [ ] The vendor's share and the customer's total are both explained where each is shown
+
+**Tests (required):**
+
+- [ ] A test asserting the two strings are drawn from one shared source.
+
+---
+
+### #218: `Send quote` is dead on the default path, contradicting what the customer was promised
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** `/vendor/dashboard`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | the vendor can send a revised quote, as the customer's review screen promises |
+| **Observed** | the button renders `disabled` with `title="This request is already priced by its package"` — a **native tooltip is the only explanation**. The API agrees (`POST …/quote` → `400`), so it is consistent. But the vendor profile's only CTA is `Request booking` carrying `?package=<uuid>`, so **the default path every customer takes produces a request that can never be quoted** |
+
+**Context.** The customer's review rail explicitly says the vendor may "send a revised quote". Either the promise or the restriction has to go.
+
+**Acceptance:**
+
+- [ ] Either a package-priced request can be re-quoted, or the customer is never promised it can
+- [ ] The disabled reason is visible copy, not a native `title`
+- [ ] The quote flow is drivable end to end and gets its own test
+
+**Tests (required):**
+
+- [ ] A browser test driving vendor quote -> customer approve on a request that supports it.
+- [ ] A test asserting the customer-facing copy matches the actual capability.
+
+---
+
+### #219: A new request opens no message thread, and the profile's message button is permanently dead
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
+customer** across account switches. **Where:** `/vendors/<slug>` and `/messages`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | a customer who just sent a request can reach the vendor |
+| **Observed** | `Send a message` on the profile is `disabled` under the caption **"Messaging opens shortly"**, while `/messages` is fully functional for pre-existing threads. After creating three requests, `/messages` still listed the same three threads and `GET /conversations` returned one row. **A customer who just sent a request has no way to reach the vendor on either surface** |
+
+**Acceptance:**
+
+- [ ] Creating a request opens (or links to) a thread for it
+- [ ] The profile's message control is either enabled or replaced by copy that says what to do instead
+- [ ] The thread is attributed to the booking it belongs to (see #193)
+
+**Tests (required):**
+
+- [ ] A test asserting a conversation exists and is reachable immediately after a request is created.

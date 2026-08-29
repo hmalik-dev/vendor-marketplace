@@ -108,6 +108,39 @@ nothing else.
 
 Uppercase micro-labels: 10.5px, weight 600, `letter-spacing: .05em`, `stone-600`.
 
+### Rendering details
+
+The frame and the live app are rendered by the same browser, so any text-rendering
+property applied to one and not the other shows up as a **font-axis parity
+failure** even when every token matches.
+
+- **Do not add `-webkit-font-smoothing: antialiased`.** The frames do not set it.
+  Applying it to the app alone changes glyph weight and fails the font axis
+  against every frame. If it is ever wanted, it goes in `Orla - Screens.dc.html`
+  and the app in the same change, or in neither.
+- **`font-variant-numeric: tabular-nums` on numbers that update in place** —
+  availability counts, quarter totals, timers, any figure that re-renders while
+  the user is looking at it. Proportional digits change width as the value
+  changes and the row jitters. It is already applied ad hoc in
+  `vendor-profile-form.tsx` and `availability-calendar.tsx`; those are correct,
+  and the rule is now written down so the next one matches. Static prices in a
+  card do not need it — the frames set them proportional, and the frame wins.
+- **`text-wrap: balance` on display headings, `text-wrap: pretty` on body,
+  captions and helper text.** Both only affect where lines break, never metrics,
+  so neither moves a parity axis. Never on code, `JetBrains Mono` labels, or
+  long prose.
+- **Nested rounded surfaces: `outer radius = inner radius + padding`.** A
+  `--radius-2xl` card with 14px padding wants `--radius-lg` on the control inside
+  it, not another `2xl`. Where the padding is large enough that the maths gives
+  something absurd, treat the two as separate surfaces instead. Optical
+  coherence is the goal, not the formula.
+- **Optically centre asymmetric glyphs.** Play triangles, chevrons, send arrows
+  and stars are not visually centred by geometric centring. Correct the SVG
+  where possible; a sub-pixel padding nudge otherwise.
+- **Any user-supplied string in a heading needs a wrapping or truncation rule.**
+  See `.claude/rules/web-route-boundaries.md` — an unbounded value produced a
+  5386px `h1` in a 1440px viewport.
+
 ## Spacing, radius, shadow
 
 4px grid. Spend width freely; ration height.

@@ -66,7 +66,7 @@ it is what the 280px filter rail used to make impossible.
 
 **On the cover's aspect ratio.** Every vendor-card cover declares
 **`aspect-ratio: 3/2`** and never a fixed height — frames `02`, `14`, `18` and
-`25 Search results — 1024` all label it "cover 3:2", and the markup declares the
+`27 Search results — 1024` all label it "cover 3:2", and the markup declares the
 ratio directly. A fixed height against a fluid card width crops the same vendor's
 photo differently at every breakpoint, which a vendor cannot design a cover
 against; 3:2 is also the native ratio of essentially every camera, so an uploaded

@@ -17,6 +17,7 @@
     "start": "pnpm install && docker compose up -d && docker compose up -d --wait postgres storage && pnpm db:migrate && pnpm db:seed && pnpm dev",
     "dev": "turbo run dev",
     "test": "turbo run test",
+    "test:agents": "for f in .claude/workflows/*.test.mjs .claude/hooks/*.test.mjs; do echo \"== $f\"; node \"$f\" || exit 1; done",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml,css}\"",
