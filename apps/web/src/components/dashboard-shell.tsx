@@ -33,7 +33,7 @@ export function DashboardShell({
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <header className="max-w-2xl">
-        <p className="text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+        <p className="text-label font-semibold tracking-label text-stone-600 uppercase">
           {eyebrow}
         </p>
         {/*
@@ -55,7 +55,7 @@ export function DashboardShell({
             >
               <h2 className="font-display text-display-sm text-stone-900">{section.title}</h2>
               <p className="mt-2 text-base leading-prose text-stone-700">{section.description}</p>
-              <p className="mt-4 text-[10.5px] font-semibold tracking-[.05em] text-clay-500 uppercase">
+              <p className="mt-4 text-label font-semibold tracking-label text-clay-500 uppercase">
                 Open
               </p>
             </Link>

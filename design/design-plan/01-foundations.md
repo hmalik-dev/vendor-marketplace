@@ -92,17 +92,20 @@ nothing else.
 
 ### Scale (two densities)
 
-| Token       | Size / line-height    | Marketing use         | App use                               |
-| ----------- | --------------------- | --------------------- | ------------------------------------- |
-| `text-xs`   | 11px / `normal`       | badges, timestamps    | pill labels, helper text              |
-| `text-sm`   | 12.5px / `normal`     | metadata              | the default for labels and metadata   |
-| `text-base` | 13.5px / `normal`     | —                     | body, inputs, buttons, table cells    |
-| `text-md`   | 15px / `normal`       | body                  | hero search values                    |
-| `text-lg`   | 16px / `normal`       | hero sub-line         | —                                     |
-| display-sm  | 21px Serif / `normal` | card titles           | pane headings (`.sh`)                 |
-| display-md  | 26px Serif / `normal` | section headings      | page titles (`.h2`) — the app ceiling |
-| display-lg  | 33–36px Serif / 1.15† | profile names, totals | confirmation only                     |
-| display-xl  | 54px Serif / 1.04     | landing hero          | never                                 |
+| Token         | Size / line-height    | Marketing use         | App use                                     |
+| ------------- | --------------------- | --------------------- | ------------------------------------------- |
+| `text-label`  | 10.5px / `normal`     | column headings       | uppercase micro-labels (`.lbl`, `.tl`)      |
+| `text-xs`     | 11px / `normal`       | badges, timestamps    | pill labels, chips                          |
+| `text-helper` | 11.5px / `normal`     | —                     | helper and hint lines, field errors (`.tn`) |
+| `text-meta`   | 12px / `normal`       | —                     | card meta: rating, location, `From`         |
+| `text-sm`     | 12.5px / `normal`     | metadata              | secondary controls, the profile rail        |
+| `text-base`   | 13.5px / `normal`     | —                     | body, inputs, buttons, table cells (`.inp`) |
+| `text-md`     | 15px / `normal`       | body                  | hero search values                          |
+| `text-lg`     | 16px / `normal`       | hero sub-line         | —                                           |
+| display-sm    | 21px Serif / `normal` | card titles           | pane headings (`.sh`)                       |
+| display-md    | 26px Serif / `normal` | section headings      | page titles (`.h2`) — the app ceiling       |
+| display-lg    | 33–36px Serif / 1.15† | profile names, totals | confirmation only                           |
+| display-xl    | 54px Serif / 1.04     | landing hero          | never                                       |
 
 **Line-height was derived from the frame markup in `Orla - Screens.dc.html` on
 2026-08-28** (#74), replacing the ratios this table previously carried. The frames
@@ -117,10 +120,40 @@ counterpart.
 (≥27px), which is what `type-scale-parity.test.ts` asserts. Every other row in
 this table is read directly off a frame class or an inline declaration.
 
+**Font size was reconciled with the frames on 2026-08-29** (#198). The frames draw
+three roles at sizes no t-shirt step covered, so the scale gained a step for each
+rather than the components rounding to the nearest one they already had. They are
+named for the role because they sit _between_ steps — a scale cannot say "half a
+step below `xs`" — and each is read from a frame class, which is what
+`type-scale-parity.test.ts` compares it against:
+
+| Step          | Frame source               | What it replaced                                    |
+| ------------- | -------------------------- | --------------------------------------------------- |
+| `text-label`  | `.lbl` / `.tl`, 10.5px     | `text-xs` (11px) at 11 sites, `text-[10.5px]` at 13 |
+| `text-helper` | `.tn`, 11.5px              | `text-xs` (11px) on hints and errors                |
+| `text-meta`   | the card rating line, 12px | `text-xs` and `text-sm` on the vendor card          |
+
+`.inp` needed no new step — `text-base` was already 13.5px. What broke it at 1440
+was shadcn's stock `md:text-sm` on the shared `Input` and `Textarea`, which took
+every field to 12.5px at exactly the width the parity gate measures. Removed.
+
+**Card meta is 12px, and the frames contradict themselves about it.** `02 Search &
+browse` and `04 Booking request` draw the rating line at 12px; `14 Adaptations —
+tablet 768 & mobile 390` draws it at 12.5px. The parity gate measures 1440x900, so
+the desktop value is the token, and the tablet size belongs to the responsive work.
+The `From` label is 12px in the card at every width, and 12.5px in `03`'s profile
+rail, which is a different control and keeps `text-sm`.
+
+**A fifth mapping was reported and does not exist.** #198 asked for a 14px
+sub-heading against the app's 15px. The frames have no 14px sub-heading: `.sh` is
+21px Serif with inline overrides at 17, 18 and 19px, and the 33 places 14px appears
+are buttons, body copy, labels and avatar initials. No token was invented for it.
+
 **This table describes the tokens, which is not the whole app.** A size written as
 an arbitrary utility — `text-[26px]` rather than `text-display-md` — emits no
-line-height and inherits `1.5` from Tailwind's Preflight instead. 96 such sites
-exist; **#235** owns making the inherited default agree with the frames.
+line-height and inherits `1.5` from Tailwind's Preflight instead. #198 removed 27
+of them by giving three roles a token; 76 remain, and **#235** owns making the
+inherited default agree with the frames.
 
 **Named exceptions.** A ratio belongs to the element that wraps, not to the scale
 step, so text that wraps asks for a measure by name:
@@ -136,7 +169,16 @@ step is 1.6 — `relaxed` is 1.625.
 
 **A display-lg heading inside an app frame is a bug.** App page titles cap at 26px.
 
-Uppercase micro-labels: 10.5px, weight 600, `letter-spacing: .05em`, `stone-600`.
+Uppercase micro-labels: `text-label` (10.5px), weight 600, `tracking-label`
+(`.05em`), `stone-600`.
+
+**Tracking is named for the role, never bolted onto a size step.** The frames hold
+`.h2` at `-.01em` across six different sizes and give eight inline serif spans at
+26px no tracking at all, so a `--text-*--letter-spacing` companion would bind
+tracking to the size instead of to the thing that wants it. #165 ruled those out;
+#198 added `--tracking-label` in the `--tracking-*` namespace instead, and
+`type-scale-parity.test.ts` asserts no scale step carries a letter-spacing
+companion.
 
 ### Rendering details
 

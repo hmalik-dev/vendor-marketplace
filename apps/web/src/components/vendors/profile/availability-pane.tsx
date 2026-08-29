@@ -41,7 +41,7 @@ export function AvailabilityPane({
                   // Weekday initials repeat (S, T), so the index is the key.
                   key={`${label}-${index}`}
                   aria-hidden="true"
-                  className="pb-1 text-[10.5px] font-semibold text-stone-600"
+                  className="pb-1 text-label font-semibold text-stone-600"
                 >
                   {label}
                 </span>

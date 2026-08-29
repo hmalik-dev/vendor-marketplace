@@ -342,9 +342,9 @@ body:has([data-auth-screen]) > footer {
  * ink sentence case, which reads as a second heading above every input.
  */
 [data-auth-screen] .cl-formFieldLabel {
-  font-size: 0.65625rem;
+  font-size: var(--text-label);
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--color-stone-600);
 }

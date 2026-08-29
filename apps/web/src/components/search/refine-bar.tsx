@@ -221,7 +221,12 @@ export function RefineBar({
       )}
     >
       <div className="flex flex-wrap items-center gap-2 lg:min-w-0 lg:flex-1">
-        <span className="mr-0.5 text-[11px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+        {/*
+          `text-xs`, not `text-label`: frame `02` draws this one inline at 11px
+          rather than through `.lbl`, and it is the 1440 parity target. The
+          `.lbl`-based `Refine` at 10px belongs to `27 Small laptop — 1024`.
+        */}
+        <span className="mr-0.5 text-xs font-semibold tracking-label text-stone-600 uppercase">
           Refine
         </span>
 

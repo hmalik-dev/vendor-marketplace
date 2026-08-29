@@ -423,7 +423,7 @@ export function AvailabilityCalendar({
       */}
       <aside className="app-pane flex min-h-0 flex-col gap-4 border-stone-300 bg-stone-0 p-5 xl:border-l">
         <section>
-          <h2 className="mb-2.5 text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+          <h2 className="mb-2.5 text-label font-semibold tracking-label text-stone-600 uppercase">
             Selected
           </h2>
 
@@ -469,7 +469,7 @@ export function AvailabilityCalendar({
         </section>
 
         <section>
-          <h2 className="mb-2.5 text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+          <h2 className="mb-2.5 text-label font-semibold tracking-label text-stone-600 uppercase">
             Legend
           </h2>
           <ul className="flex flex-col gap-2.25 text-sm text-stone-700">
@@ -486,7 +486,7 @@ export function AvailabilityCalendar({
         </section>
 
         <section>
-          <h2 className="mb-2.5 text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+          <h2 className="mb-2.5 text-label font-semibold tracking-label text-stone-600 uppercase">
             This quarter
           </h2>
           <dl className="flex flex-col gap-2 text-base text-stone-700">

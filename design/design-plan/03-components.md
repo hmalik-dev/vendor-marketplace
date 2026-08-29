@@ -42,11 +42,16 @@ Copy is imperative and specific, 2–4 words: "Request booking", "Send a message
 [ cover 3:2 ]                                  full-bleed to the card's top corners
   (avatar 34px, circle, 2px stone-0 border, overlapping the seam by 17px)
   Business name                                Instrument Serif 21px
-  ★ 4.9 (127) · Austin, TX                     12.5px, rating bold in stone-700
+  ★ 4.9 (127) · Austin, TX                     text-meta 12px, rating bold in stone-700
   [Photography] [Free June 14]                 chips: stone-150/stone-700, sage-50/sage-600
   ─────────────────────────────                1px stone-200
-  From                     $1,450              12.5px stone-600 / 18px bold ink
+  From                     $1,450              text-meta 12px stone-600 / 18px bold ink
 ```
+
+Both meta lines read **12.5px** here until 2026-08-29. The frames draw them at
+12px on `02` and `04`, and `04-laws.md` gives the frame precedence, so the plan
+was corrected rather than the card (#198). 12.5px is the `14 Adaptations` size,
+for tablet and mobile.
 
 Availability chip is sage when free on the searched date, gold when scarce
 ("2 dates left"), absent when no date is in the query.

@@ -86,10 +86,26 @@
    * `apps/web/src/app/type-scale-parity.test.ts` reads these values and the
    * frame file, so neither side can drift from the other.
    *
-   * Font sizes below are untouched by #74 and are #198's to reconcile.
+   * #198 reconciled the font sizes. Three roles the frames draw sit *between*
+   * the t-shirt steps, so they are named for the role rather than the position:
+   * a scale cannot say "half a step below `xs`". Each answers to a frame class,
+   * which is where its value is read from and what the parity test compares it
+   * against — `.lbl`/`.tl`, `.tn`, and the inline card meta line.
    */
+  --text-label: 10.5px; /* `.lbl`, `.tl` — uppercase micro-labels */
+  --text-label--line-height: normal;
   --text-xs: 11px;
   --text-xs--line-height: normal;
+  --text-helper: 11.5px; /* `.tn` — form helper, hints, field errors */
+  /*
+   * `normal`, like every other body step. `.tn` is the one frame class with a
+   * ratio, but it is 7 of the 118 places the frames draw 11.5px: the other 108
+   * — field errors included — set none. The ratio belongs to `.tn`'s call site,
+   * which asks for it with `leading-normal`.
+   */
+  --text-helper--line-height: normal;
+  --text-meta: 12px; /* card meta — rating, location, the `From` price label */
+  --text-meta--line-height: normal;
   --text-sm: 12.5px;
   --text-sm--line-height: normal;
   --text-base: 13.5px;
@@ -123,6 +139,15 @@
    * `leading-normal`, so it does not get a second name here.
    */
   --leading-prose: 1.6; /* body copy, descriptions, review and message bodies */
+
+  /*
+   * Tracking is named for the role, never bolted onto a size step: the frames
+   * hold `.h2` at `-.01em` across six different sizes, and give eight inline
+   * serif spans at 26px no tracking at all. A `--text-*--letter-spacing`
+   * companion would bind it to the size instead, which is why #165 ruled those
+   * out and the parity test asserts none exist.
+   */
+  --tracking-label: 0.05em; /* `.lbl`, `.tl` — the uppercase micro-label */
 
   /* Radius: five steps, varied on purpose, not 8px everywhere. */
   --radius-sm: 6px; /* badges, category chips, small pills */

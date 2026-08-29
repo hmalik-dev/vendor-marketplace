@@ -71,7 +71,7 @@ export function ProfileHeader({
         }
       >
         {coverImageUrl ? null : (
-          <span className="p-3 text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+          <span className="p-3 text-label font-semibold tracking-label text-stone-600 uppercase">
             cover · full-bleed banner
           </span>
         )}
@@ -152,4 +152,4 @@ export function ProfileHeader({
   );
 }
 
-const CHIP = 'inline-block rounded-md px-2.5 py-1.25 text-[11.5px] font-semibold';
+const CHIP = 'inline-block rounded-md px-2.5 py-1.25 text-helper font-semibold';

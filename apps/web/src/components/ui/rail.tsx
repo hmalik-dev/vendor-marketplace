@@ -36,9 +36,7 @@ export interface RailSectionProps {
 export function RailSection({ label, children, className }: RailSectionProps): React.ReactElement {
   return (
     <section className={cn('flex flex-col gap-2.5', className)}>
-      <h2 className="text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
-        {label}
-      </h2>
+      <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">{label}</h2>
       {children}
     </section>
   );

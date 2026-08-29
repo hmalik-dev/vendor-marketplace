@@ -27,7 +27,7 @@ export interface CustomerProfileFormProps {
 const FIELD =
   'h-auto w-full rounded-[10px] border border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900 focus-visible:border-clay-400 focus-visible:ring-3 focus-visible:ring-clay-400/15';
 
-const LABEL = 'mb-1.5 text-xs font-semibold tracking-[.05em] text-stone-600 uppercase';
+const LABEL = 'mb-1.5 text-label font-semibold tracking-label text-stone-600 uppercase';
 
 /**
  * What a customer chooses to tell vendors about themselves.

@@ -22,7 +22,7 @@ export default function NotFound(): React.ReactElement {
     <div className="mx-auto flex min-h-[620px] w-full max-w-3xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
       <BrokenMark className="mb-6.5" />
 
-      <p className="font-mono text-[10.5px] font-medium tracking-[.16em] text-stone-600 uppercase">
+      <p className="font-mono text-label font-medium tracking-[.16em] text-stone-600 uppercase">
         404 · Not found
       </p>
 
@@ -49,7 +49,7 @@ export default function NotFound(): React.ReactElement {
       </div>
 
       <div className="mt-10 w-full max-w-[620px] border-t border-stone-300 pt-5.5">
-        <p className="text-[10.5px] font-semibold tracking-[.05em] text-stone-600 uppercase">
+        <p className="text-label font-semibold tracking-label text-stone-600 uppercase">
           Or start with a category
         </p>
         <ul className="mt-3 flex flex-wrap justify-center gap-2">

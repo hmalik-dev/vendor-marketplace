@@ -223,7 +223,7 @@ export function MessagesScreen({
                   {row.bookingContext ? (
                     <span
                       className={cn(
-                        'mt-1.25 block text-xs font-semibold tracking-[.05em] uppercase',
+                        'mt-1.25 block text-label font-semibold tracking-label uppercase',
                         row.id === activeId ? 'text-clay-600' : 'text-stone-600',
                       )}
                     >
