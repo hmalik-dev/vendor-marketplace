@@ -277,6 +277,23 @@ describe('SearchBar — pill and circle discipline', () => {
     expect(submit.className).not.toContain('sm:text-base');
   });
 
+  /*
+   * #89. The halo is on the pill, so it is identical whichever segment holds
+   * focus — focusing `Vendor type` and focusing `City` rendered pixel-
+   * identically and a keyboard user could not tell which was active. Each
+   * segment now tints while the control inside it has focus. Asserted on the
+   * class because jsdom resolves neither `:focus-visible` nor `has-()`.
+   */
+  it('marks which segment has focus, not just that the bar has it', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    for (const name of ['City', 'Event date']) {
+      expect(screen.getByText(name).closest('label')?.className).toContain(
+        'has-[:focus-visible]:bg-clay-400/10',
+      );
+    }
+  });
+
   it('drops the visible label in the compact header, never the accessible one', () => {
     render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
 
