@@ -17,6 +17,7 @@
     "start": "pnpm install && docker compose up -d && docker compose up -d --wait postgres storage && pnpm db:migrate && pnpm db:seed && pnpm dev",
     "dev": "turbo run dev",
     "test": "turbo run test",
+    "e2e:auth": "node scripts/e2e-auth.mjs",
     "test:agents": "for f in .claude/workflows/*.test.mjs .claude/hooks/*.test.mjs; do echo \"== $f\"; node \"$f\" || exit 1; done",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
@@ -30,6 +31,7 @@
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
+    "playwright": "1.62.1",
     "prettier": "3.9.6",
     "turbo": "2.10.12",
     "typescript": "5.9.3"
