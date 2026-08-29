@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_BUSINESS_NAME_LENGTH } from '@vendor-marketplace/shared';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,6 +72,9 @@ export function NameSearch({ value, onSubmit }: NameSearchProps): React.ReactEle
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Kessler &amp; Co."
               autoComplete="off"
+              // The API's own cap, so a long paste is refused at the keyboard
+              // rather than cleared out from under the customer later.
+              maxLength={MAX_BUSINESS_NAME_LENGTH}
             />
           </div>
 

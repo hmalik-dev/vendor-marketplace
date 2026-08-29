@@ -997,8 +997,15 @@ export const vendorSearchQuerySchema = z
     category: slugSchema.optional(),
     city: z.string().trim().max(MAX_NAME_LENGTH).optional(),
     state: z.string().trim().max(MAX_NAME_LENGTH).optional(),
-    minPriceCents: z.coerce.number().int().min(0).optional(),
-    maxPriceCents: z.coerce.number().int().min(0).optional(),
+    /**
+     * Bounded above as well as below. Without the cap a pasted
+     * `?minPriceCents=2147483648` passed validation, reached Postgres and
+     * overflowed `int4` — a 500 for a URL anyone can share. No package may
+     * cost more than the cap, so a query above it cannot match anything and
+     * 400 is the honest answer.
+     */
+    minPriceCents: z.coerce.number().int().min(0).max(MAX_PACKAGE_PRICE_CENTS).optional(),
+    maxPriceCents: z.coerce.number().int().min(0).max(MAX_PACKAGE_PRICE_CENTS).optional(),
     /**
      * Excludes vendors whose calendar is booked or blocked on this date.
      *

@@ -123,3 +123,44 @@ after any build/dev overlap, clear `.next` before believing anything it says.
 Check for it with `grep 'invalid stored block lengths'` in the dev log and by
 timing a known-good route; a healthy lane serves its landing page in well under a
 second once warm.
+
+## The false green: `pnpm test` can pass on a commit CI then fails
+
+**Every ticket in this fleet edits the Status Board, so this affects every
+ticket.** Found by lane 66 on 2026-08-29, and hit independently by lane 74 in the
+same hour.
+
+Two tests in `packages/shared` read
+`.claude/plans/vendor-marketplace-tickets.md` from disk:
+`tickets.board.test.ts` requires a `TICKET_CAPABILITIES` row in
+`packages/shared/src/env/tickets.ts` for every ticket on the board, and
+`registry.test.ts` requires those ids to form a dense `0..N` sequence.
+
+**That markdown file is not an input to the turbo task hash.** Editing the
+tracker therefore does not invalidate the cached test result, so `pnpm test`
+replays the previous run and reports green. Lane 66 saw `shared 262/262 passing`
+locally and a failing `@vendor-marketplace/shared#test` in CI **on the same
+commit**; lane 74 saw `1630 passing` after adding a board row that had no
+registry row.
+
+**`pnpm test --force` is the only trustworthy local run once the tracker has been
+touched.** A non-forced run is evidence about the previous commit.
+
+This is worse-shaped than an ordinary flake. A flake is noisy and gets
+investigated; this produces a *confident, specific green* that CI then
+contradicts, so the natural reading is "CI is wrong" or "someone else broke
+main". Both lanes reached for that explanation first.
+
+### The rule the false green was hiding
+
+Ticket ids must be **contiguous from 0**, so an id cannot be chosen to dodge a
+concurrent lane — the usual "pick the next free number" instinct produces a gap,
+and the gap fails `registers a contiguous ticket range with no gaps`. Filing a
+ticket therefore means, in one commit: the board row, the `tickets.ts` row (the
+board's `Capabilities` column verbatim — `234` is `['auth']`, not `[]`), and a
+bump to the hardcoded `expect(HIGHEST_REGISTERED_TICKET).toBe(N)`.
+
+Concurrent lanes cannot allocate ids independently under this rule. What makes it
+survivable is that two lanes adding rows collide on the *same lines* of
+`tickets.ts` and fail loudly at merge, rather than silently double-allocating —
+worth preserving if this is ever redesigned.

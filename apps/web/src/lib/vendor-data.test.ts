@@ -24,7 +24,8 @@ vi.mock('./api-client', async (importOriginal) => ({
   apiRequest: (path: string, options: unknown) => apiRequest(path, options),
 }));
 
-const { getActiveTags, getCategories, getFeaturedVendors } = await import('./vendor-data');
+const { getActiveTags, getCategories, getFeaturedVendors, getPublicVendorProfile } =
+  await import('./vendor-data');
 
 const upstream500 = new ApiClientError(
   500,
@@ -105,6 +106,46 @@ describe('reference reads', () => {
       apiRequest.mockRejectedValue(apiUnreachable);
 
       await expect(getFeaturedVendors()).resolves.toEqual([]);
+    });
+  });
+
+  /*
+   * The slug is this endpoint's only input, so a 400 means the path segment
+   * could not be a slug at all. Rethrowing it turned `/vendors/JUNE-HARLOW`
+   * into a 500 page; it is a 404, and the page reaches that through `null`.
+   */
+  describe('getPublicVendorProfile', () => {
+    it.each([
+      ['a 404 for a slug that is absent, unpublished or deleted', 404, ERROR_CODES.NOT_FOUND],
+      ['a 400 for a slug the API refuses to parse', 400, ERROR_CODES.VALIDATION_ERROR],
+    ])('returns null on %s', async (_label, statusCode, code) => {
+      apiRequest.mockRejectedValue(new ApiClientError(statusCode, code, 'Request failed'));
+
+      await expect(getPublicVendorProfile('JUNE-HARLOW')).resolves.toBeNull();
+    });
+
+    it('still propagates a 500 so the error boundary reports the outage', async () => {
+      apiRequest.mockRejectedValue(upstream500);
+
+      await expect(getPublicVendorProfile('june-harlow')).rejects.toBe(upstream500);
+    });
+
+    /*
+     * Asked before the request, so the answer does not depend on which status
+     * the transport happens to pick. The API answers a 300-character slug with
+     * **414**, not the 400 its schema gives a malformed one — a status list
+     * would have let that one through to the error boundary as a 500.
+     */
+    it.each([
+      ['an uppercased slug', 'JUNE-HARLOW'],
+      ['a slug longer than the column', 'a'.repeat(300)],
+      ['a script tag', '<script>alert(1)</script>'],
+      ['a null byte', '\u0000'],
+      ['a traversal attempt', '../../etc'],
+      ['an empty segment', ''],
+    ])('returns null for %s without asking the API', async (_label, slug) => {
+      await expect(getPublicVendorProfile(slug)).resolves.toBeNull();
+      expect(apiRequest).not.toHaveBeenCalled();
     });
   });
 

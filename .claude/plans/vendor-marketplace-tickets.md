@@ -372,7 +372,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | 15 | Admin Portal + Sentry Integration | P3 | M6 | P1 High | Backlog | — | #12, #14 | `core` `auth` `sentry` | Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` |
 | 64 | Flaky test in `packages/preflight` under parallel Turbo runs | P1 | M1.5 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-28** while gating the #61 env-shape commit. `pnpm test --force` failed `@vendor-marketplace/preflight#test` at **1 failed / 131 passed (132)**; an immediate rerun and `pnpm --filter @vendor-marketplace/preflight test` in isolation both passed **132/132**. The failing test's name was **not captured** — the run was piped through `tail -20`, so only the summary survived. Reproduce with the full log: `pnpm test --force > /tmp/t.log 2>&1` in a loop. Suspect contention, not logic: the suite took **36s** inside the Turbo fan-out against **2.15s** isolated, a 17x stretch that points at a real-clock or filesystem assumption rather than a stable failure. Use `/debug-flaky-test`. Gating on a suite that fails ~1 run in 2 is the actual cost here |
 | **65** | **Vendor profile — the identity row overlaps the cover by 34px, not 16px (reported by the user)** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Reported by the user 2026-08-28**, on `/vendors/june-harlow`: the avatar circle is buried in the cover photo and the business name creeps into the image. **Measured at 1440x900 against frame `03`** — live overlaps the banner by **34px** where the frame overlaps by **16px**, and the name's box starts **11px inside** the image where the frame leaves it **7px clear**: an **18px** error. **Centering is not the defect** — name-mid minus avatar-mid is **+0.15px in both**; the whole row simply rides 18px too high, which is what makes the circle read as misaligned. **Cause:** frame `03` puts `padding-top: 18px` on the wrapper between the banner and the identity row and *then* pulls the row up `-34px` (net **-16**); [profile-header.tsx:80](apps/web/src/components/vendors/profile/profile-header.tsx) copied the `-34px` without the 18px. **Fix verified by injection:** `pt-[18px]` on that container reproduces the frame exactly — `overlap 16 · name 7px clear · centering 0.15`. **Why #53 and #56 missed it → see the ticket detail** |
-| **66** | **Unvalidated URL input crashes six ways into a 500** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` | **Adversarial sweep 2026-08-28.** 7 URLs anyone can paste return 500. Rule added: `.claude/rules/web-route-boundaries.md` |
+| **66** | **Unvalidated URL input crashes six ways into a 500** | **P1** | **M3** | **P0 Critical** | **In Progress** | `lane/66` | **None** | `core` | **Adversarial sweep 2026-08-28.** 7 URLs anyone can paste return 500. Rule added: `.claude/rules/web-route-boundaries.md` |
 | **67** | **`POST /booking-requests` has no idempotency — 3 clicks created 3 bookings** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Adversarial sweep 2026-08-28.** Server-side; UI guard only covers a physical double-click. Highest-severity finding |
 | **68** | **An accepted, priced booking dead-ends — no detail, quote approval or checkout** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **#9, #10** | `core` `auth` `stripe` | Blocks parity on frames `05`, `06`, `21` — no live screen to compare |
 | **69** | **Filter popovers unreachable below 1440 and stay open after use** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Languages 719px tall, no `max-height`; clicks time out at 1024 and 390 |
@@ -531,6 +531,8 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **232** | **Every lane worktree gets `node_modules` as a symlink to the main checkout** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 by lanes 74 and 165 independently. A lane's `pnpm install` writes into the tree its peers are reading — the one thing the orchestration policy names as forbidden |
 | **233** | **The E2E vendor account has no vendor profile, so four vendor screens cannot be browser-verified** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 verifying #165. Dashboard, portfolio, packages and availability all redirect to the storefront editor |
 | **234** | **Clerk's own sign-in card reads `vendor-marketplace` to the user** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` `auth` | Found 2026-08-29 verifying #165. The one user-facing string that says the repo name instead of the brand. Dashboard setting, not code |
+| **236** | **The web search boundary re-declares the API's query schema instead of deriving from it** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `searchStateSchema` in `apps/web/src/components/search/search-state.ts` hand-copies every bound in `vendorSearchQuerySchema`. The constants are shared so values cannot disagree, but the composition can — `tags` was already more permissive on the client until #66 caught it. Export a field map from `packages/shared` that both build from. **Deliberately not done in #66:** that file was owned by a concurrent lane, which required additive changes only |
+| **237** | **`page` is bounded below but not above, on both sides of the boundary** | **P1** | **M3** | **P3 Low** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `paginationQuerySchema` and `vendorSearchQuerySchema` both cap `pageSize` and not `page`. Not a 500 — Zod's `.int()` caps at 2^53−1 and the offset stays inside `bigint` — but `?page=99999999` still makes Postgres sort the whole filtered set. Same class as #66's price cap. `tags` likewise has no array-length bound on either side |
 | **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
 | **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
 | **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. **Reconciliation 2026-08-29 — filed without reading `D10` or the plan.** The runtime split (web on Vercel, API on **Railway**) is decided in `vendor-marketplace-decisions.md` D10, and the release pipeline is already ticketed as **#20 Deploy Pipeline** (P0, blocked by #18, #19, #30). Treat this row as the git/branch-protection slice of #20, not a new ticket. **Done 2026-08-29.** Vercel Production Branch flipped `main` -> `production`, confirmed by reading `link.productionBranch: production` from the API. `production` branch exists and is protected alongside `main` (no deletions, no force pushes, linear history, CI required). `main` now produces previews; the live site advances only on a deliberate fast-forward. |
@@ -5283,7 +5285,7 @@ the same blind spot returns with the next revision.
 
 ### #66: Unvalidated URL input crashes six ways into a 500
 
-**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 Found by adversarial sweep 2026-08-28, passes 1 and 2. **Every one of these is a URL a
@@ -10293,6 +10295,71 @@ transactional email subjects and sender names most of all, since those reach a u
 the product entirely.
 
 ---
+### #236: The web search boundary re-declares the API's query schema instead of deriving from it
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed from the #66 review, 2026-08-29. `searchStateSchema` in
+`apps/web/src/components/search/search-state.ts` hand-copies every field rule in
+`vendorSearchQuerySchema` (`packages/shared/src/schemas/index.ts`). The bounds
+read from the same constants, so the two cannot disagree on a *value* — but they
+can disagree on *composition*, and they already had: the client declared
+`tags: z.array(z.string())` against the API's `z.array(uuidSchema)`, so the one
+param with no bound was the one that still reached the API. #66 fixed that
+instance; nothing stops the next one.
+
+**Deliberately not done in #66.** `packages/shared/src/schemas/index.ts` was owned
+by a concurrent lane for the duration, which required changes there to stay
+additive and confined to a single hunk. Extracting a field map rewrites the file's
+core.
+
+**Acceptance:**
+
+- [ ] `packages/shared` exports the per-field shapes `vendorSearchQuerySchema` is built from
+- [ ] The web boundary derives its fields from that map rather than restating them
+- [ ] The two deliberate client-side differences survive and are commented: `''`/`null` for absent values instead of `undefined`, and no universally-past-date refusal (that judgement is the viewer's local day, so it stays in the client effect)
+
+**Tests (required):**
+
+- [ ] A test asserting a value the client boundary accepts is not rejected by `vendorSearchQuerySchema` for being out of range, driven over every field rather than one example.
+
+---
+
+### #237: `page` is bounded below but not above, on both sides of the boundary
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed from the #66 review, 2026-08-29. `paginationQuerySchema` and
+`vendorSearchQuerySchema` both cap `pageSize` at `MAX_PAGE_SIZE` and leave `page`
+at `.int().min(1)`. The web boundary mirrors that.
+
+**This is not a 500.** Zod's `.int()` caps at 2^53−1, and `page × pageSize` stays
+inside Postgres' `bigint`, so it cannot overflow the way `minPriceCents` did.
+What it costs is work: `OFFSET <huge>` still makes Postgres sort the whole
+filtered set before discarding it, which is amplification bounded by table size —
+identical to `?page=99999`, which a person can also type. Same class as #66's
+price cap, well below it in severity.
+
+`tags` has the same shape of gap: no array-length bound on either side. Node's
+16KB header limit caps a URL at roughly 380 tag params today, so the protection
+is the HTTP server's rather than the schema's.
+
+**Acceptance:**
+
+- [ ] `page` carries an upper bound alongside `pageSize`, in the shared schema and in the web boundary
+- [ ] `tags` carries a maximum array length on both sides
+- [ ] The bound is a named constant, not a literal
+
+**Tests (required):**
+
+- [ ] A shared-schema test asserting a `page` above the cap fails validation and the cap itself passes.
+- [ ] A test asserting a tag list longer than the cap fails validation.
+
+---
+
+
 
 ## Post-MVP Backlog
 

@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { type Category } from '@vendor-marketplace/shared';
+import { slugSchema, type Category } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import {
@@ -244,16 +244,30 @@ export async function getFeaturedVendors(): Promise<WireVendorCard[]> {
  * gets the designed 404 with its category recovery rather than a raw error.
  * Any other failure propagates to the error boundary — a vendor page that
  * silently renders empty is worse than one that says it broke.
+ *
+ * **A path segment that is not a slug gets the same answer, without a request.**
+ * `/vendors/JUNE-HARLOW`, `/vendors/%00`, a 300-character string: none of them
+ * can name a vendor, so an identifier that cannot exist is a 404 rather than
+ * the 500 that rethrowing produced. Asking first is what makes that true for
+ * every rejection and not just the ones worth enumerating — the API answers an
+ * over-long slug with **414**, not the 400 its schema gives a malformed one,
+ * and a status list would have missed it. The decision belongs here rather
+ * than in the page, so every caller gets it.
  */
 export async function getPublicVendorProfile(
   slug: string,
 ): Promise<WirePublicVendorProfile | null> {
+  if (!slugSchema.safeParse(slug).success) {
+    return null;
+  }
+
   try {
     return await apiRequest(`/vendors/${encodeURIComponent(slug)}`, {
       schema: wirePublicVendorProfileSchema,
     });
   } catch (error) {
-    if (error instanceof ApiClientError && error.statusCode === 404) {
+    // A well-formed slug the API still refuses: it names nothing either.
+    if (error instanceof ApiClientError && (error.statusCode === 404 || error.statusCode === 400)) {
       return null;
     }
 
