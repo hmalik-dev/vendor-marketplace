@@ -16,7 +16,13 @@ import {
   findVariable,
   shapeFor,
 } from './registry.js';
-import { BASELINE_CAPABILITIES, TICKET_CAPABILITIES, capabilitiesForTicket } from './tickets.js';
+import {
+  BASELINE_CAPABILITIES,
+  HIGHEST_REGISTERED_TICKET,
+  TICKET_CAPABILITIES,
+  capabilitiesForTicket,
+  isRegisteredTicket,
+} from './tickets.js';
 import { registryKeys, registrySchemaShape } from './schema.js';
 
 /**
@@ -306,8 +312,32 @@ describe('capabilitiesForTicket', () => {
     expect(numbers).toEqual(Array.from({ length: numbers.length }, (_value, index) => index));
   });
 
-  it('fails loudly on an unknown ticket rather than checking nothing', () => {
-    expect(() => capabilitiesForTicket(999)).toThrow(/Unknown ticket #999/);
+  // Unknown numbers used to throw. That turned a stale registry into a hard stop
+  // on starting any work, which is how it fell 192 rows behind the board without
+  // anyone being forced to fix it. The fallback is the baseline — never nothing —
+  // and `tickets.board.test.ts` is what now fails when a row is genuinely missing.
+  it('falls back to the baseline on an unregistered ticket rather than throwing', () => {
+    expect(isRegisteredTicket(999)).toBe(false);
+    expect(capabilitiesForTicket(999)).toEqual(['core', 'e2e']);
+  });
+
+  it('reports a registered ticket as registered and keeps its declared capabilities', () => {
+    expect(isRegisteredTicket(165)).toBe(true);
+    expect(isRegisteredTicket(229)).toBe(true);
+    expect(capabilitiesForTicket(68)).toEqual(['core', 'auth', 'stripe', 'e2e']);
+    expect(capabilitiesForTicket(170)).toEqual(['core', 'storage', 'e2e']);
+  });
+
+  it('never returns fewer than the baseline, for any registered ticket', () => {
+    for (const key of Object.keys(TICKET_CAPABILITIES)) {
+      const resolved = capabilitiesForTicket(Number(key));
+      expect(resolved, `ticket ${key}`).toContain('core');
+      expect(resolved, `ticket ${key}`).toContain('e2e');
+    }
+  });
+
+  it('tracks the highest registered ticket', () => {
+    expect(HIGHEST_REGISTERED_TICKET).toBe(229);
   });
 
   it('declares only known capabilities for every ticket', () => {

@@ -1,3 +1,5 @@
+import { isRegisteredTicket } from '@vendor-marketplace/shared/env';
+
 import { USAGE, parseArgs, resolveCapabilities } from './args.js';
 import { capabilityList, renderReport } from './report.js';
 import { runChecks } from './run.js';
@@ -21,6 +23,17 @@ async function main(): Promise<number> {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n\n${USAGE}\n`);
     return 2;
+  }
+
+  // An unregistered ticket resolves to the baseline instead of throwing, so say
+  // so — the whole failure mode this replaced was a registry nobody noticed was
+  // stale. Not fatal: the check still runs, it just cannot narrow to the ticket.
+  if (args.ticket !== undefined && !isRegisteredTicket(args.ticket)) {
+    process.stderr.write(
+      `Warning: ticket #${args.ticket} has no row in TICKET_CAPABILITIES, so only the ` +
+        `baseline is checked.\nAdd it to packages/shared/src/env/tickets.ts, mirroring ` +
+        `the Capabilities column of the status board.\n\n`,
+    );
   }
 
   const scope = args.ticket === undefined ? 'baseline' : `ticket #${args.ticket}`;
