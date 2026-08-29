@@ -1,3 +1,4 @@
+import { parse } from 'dotenv';
 import type { LaneManifest } from './manifest.js';
 
 /** Gitignored by the existing `.env.*` rule. Holds live credentials. */
@@ -19,26 +20,18 @@ export function renderLaneEnv(manifest: LaneManifest, databaseUrl: string): stri
   ].join('\n');
 }
 
+/**
+ * Reads any env file this package touches — the generated lane file and the
+ * hand-written repository `.env` alike.
+ *
+ * `dotenv` rather than a hand-rolled splitter, so there is one reader in the
+ * package. The splitter this replaced did not strip quotes, which is invisible
+ * on the generated file (it is written unquoted) and broke on the repository
+ * `.env`, whose `DATABASE_URL="postgresql://…"` came back with the quotes
+ * attached and was rejected by `new URL`.
+ */
 export function parseLaneEnv(contents: string): Record<string, string> {
-  const values: Record<string, string> = {};
-
-  for (const line of contents.split('\n')) {
-    const trimmed = line.trim();
-
-    if (!trimmed || trimmed.startsWith('#')) {
-      continue;
-    }
-
-    const separator = trimmed.indexOf('=');
-
-    if (separator === -1) {
-      continue;
-    }
-
-    values[trimmed.slice(0, separator)] = trimmed.slice(separator + 1);
-  }
-
-  return values;
+  return parse(contents);
 }
 
 /**

@@ -1,6 +1,11 @@
 'use client';
 
-import { isPastDate, todayDateString, type Category } from '@vendor-marketplace/shared';
+import {
+  isPastDate,
+  MAX_NAME_LENGTH,
+  todayDateString,
+  type Category,
+} from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
@@ -188,6 +193,10 @@ export function SearchBar({
           value={draft.city}
           onChange={(event) => setDraft((previous) => ({ ...previous, city: event.target.value }))}
           placeholder="Anywhere"
+          // The API's own cap. Without it a long paste is accepted here and
+          // then silently cleared at the URL boundary, which reads to the
+          // customer as the field losing what they typed.
+          maxLength={MAX_NAME_LENGTH}
           className={field}
         />
       </label>

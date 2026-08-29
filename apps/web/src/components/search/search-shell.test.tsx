@@ -1,6 +1,8 @@
+import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { ApiClientError } from '@/lib/api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SearchPatch, SearchState } from './search-state';
+import { clearedParamsLine, type SearchPatch, type SearchState } from './search-state';
 
 const apiRequest = vi.fn();
 
@@ -13,10 +15,21 @@ let state: SearchState;
 const setState = vi.fn<(patch: SearchPatch) => void>();
 const clearRefinements = vi.fn();
 
-vi.mock('./search-state', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./search-state')>()),
-  useSearchState: () => ({ state, setState, clearRefinements }),
-}));
+/*
+ * `state` stands in for what the URL carries, and the mock runs it through the
+ * real `parseSearchState` — the same boundary `useSearchState` applies in the
+ * app. Handing the shell a pre-validated state instead would test a path no
+ * visitor takes, and the hostile-URL cases below are exactly the ones that get
+ * past a hook that only ever sees clean values.
+ */
+vi.mock('./search-state', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./search-state')>();
+
+  return {
+    ...actual,
+    useSearchState: () => ({ ...actual.parseSearchState(state), setState, clearRefinements }),
+  };
+});
 
 const { SearchShell } = await import('./search-shell');
 
@@ -203,5 +216,109 @@ describe('SearchShell no results — frame 18', () => {
     await waitFor(() => expect(screen.getByText('No photographers listed yet')).toBeDefined());
     expect(screen.getByText('Try a different vendor type or city.')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Any date' })).toBeNull();
+  });
+});
+
+/*
+ * Each row is a URL that returned HTTP 500. The screen formats the date into
+ * its heading, and `Intl.DateTimeFormat.format(Invalid Date)` throws
+ * `RangeError: Invalid time value` — which in a Server Component is the 500
+ * page. Rendering at all is the assertion; the heading check proves the head
+ * and the body read the one parsed value rather than two different sources.
+ */
+describe('SearchShell against a hostile URL', () => {
+  beforeEach(() => {
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue(emptyResult());
+    setState.mockReset();
+    state = baseState();
+  });
+
+  afterEach(() => cleanup());
+
+  it.each([
+    'not-a-date',
+    '2026-13-45',
+    '0000-00-00',
+    '2026-08-28T12:00:00Z',
+    '<script>alert(1)</script>',
+    'A'.repeat(300),
+  ])('renders rather than throwing for ?date=%s', async (date) => {
+    state = baseState({ category: 'photography', date });
+
+    expect(() => render(<SearchShell categories={CATEGORIES} tags={[]} />)).not.toThrow();
+
+    const heading = await screen.findByRole('heading', { level: 1 });
+    // No "free on …" clause, because there is no date the screen could honour.
+    expect(heading.textContent).not.toContain('free on');
+    expect(heading.textContent).toContain('photographers');
+  });
+
+  it('never sends a rejected value on to the API', async () => {
+    state = baseState({ date: 'not-a-date', minPriceCents: 2_147_483_648 });
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+    const [path] = apiRequest.mock.calls[0] as [string];
+
+    expect(path).not.toContain('date=');
+    expect(path).not.toContain('minPriceCents');
+  });
+
+  it('tells the customer the value was cleared instead of silently ignoring it', async () => {
+    state = baseState({ date: 'not-a-date' });
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    // The sentence itself is asserted once, in `search-state.test.ts`; here
+    // the claim is only that the screen renders it.
+    expect(screen.getByText(clearedParamsLine(['date']) ?? '')).toBeDefined();
+  });
+
+  /*
+   * The API's top-level message is "Request validation failed" — written for
+   * whoever reads the logs. Printing an upstream string on a public screen is
+   * what `.claude/rules/web-route-boundaries.md` and #72 forbid, and without
+   * this test the whole catch branch is unreached by the suite.
+   */
+  it('never prints the upstream error string when the search fails', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(400, ERROR_CODES.VALIDATION_ERROR, 'Request validation failed'),
+    );
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await waitFor(() => expect(screen.getByText('Something went wrong')).toBeDefined());
+    expect(screen.getByText('Could not load vendors just now.')).toBeDefined();
+    expect(screen.queryByText(/Request validation failed/)).toBeNull();
+  });
+
+  it('says nothing about cleared params when the URL was entirely usable', async () => {
+    state = baseState({ date: '2099-06-14' });
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    expect(screen.queryByText(/so it was cleared/)).toBeNull();
+  });
+
+  /*
+   * A date that parses but has already passed keeps its own wording — it can
+   * name the day, which a param that failed the schema cannot. Both now render
+   * through one live region, so both branches need holding down.
+   */
+  it('names the day when clearing a date that has already passed', async () => {
+    state = baseState({ date: '2020-01-01' });
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Wed, Jan 1 has already passed, so the date was cleared — pick a new one to check availability.',
+        ),
+      ).toBeDefined(),
+    );
+    expect(setState).toHaveBeenCalledWith({ date: '' });
   });
 });
