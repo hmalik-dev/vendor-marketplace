@@ -209,7 +209,17 @@ Experience tile), #140 (blocked on **#9** — no `/vendor/payouts` route and no
 `vendor_marketplace_lane_137` — `Kessler & Co.`, slug **`kessler-co-2`** (the
 `-2` because a donor slug already existed), created through the form. Response
 time is deliberately left unset so the gold publish blocker matches the frame.
-Its servers are still up: web **3023**, api **4023**.
+**Its web server on 3023 is DOWN**; api **4023** is still up (pid 74116). To
+resume, restart web from inside the worktree:
+
+```
+cd /Users/humza/Documents/vendor-marketplace/.claude/worktrees/137
+pnpm lane:exec 137 -- pnpm --filter @vendor-marketplace/web exec next dev --port 3023
+```
+
+Then refresh auth immediately before driving (`E2E_BASE_URL=http://localhost:3023
+pnpm lane:exec 137 -- pnpm e2e:auth`). If routes 500 with the Clerk middleware
+error, delete `apps/web/.next-dev` — **not** `.next`.
 
 ## 11. `worktree-153` — a PARTIAL fix now sits on top
 
