@@ -527,12 +527,13 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **228** | **A newly onboarded vendor's public storefront shows placeholder copy** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **229** | **Messaging: one thread per pair, and new messages raise no notification in either direction** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **230** | **Avatar initials render Instrument Serif below the 16px floor at three of five sizes** | **P1** | **M3** | **P2 Medium** | **Blocked — needs a human** | - | **None** | `core` | Found 2026-08-29 implementing #165. Two parts of the design contract contradict each other; needs a ruling, not a guess |
-| **231** | **`pnpm dev` inside a lane binds the web app to the lane's API port** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 running lane 165. `next dev` reads `PORT`, which `lane:up` sets to the API port, so the API dies with EADDRINUSE |
+| **231** | **`pnpm dev` inside a lane binds the web app to the lane's API port** | **P1.5** | **M4.5** | **P1 High** | **Done** | `worktree-231` | **None** | `core` | Found 2026-08-29 running lane 165. `next dev` reads `PORT`, which `lane:up` sets to the API port, so the API dies with EADDRINUSE. **Implemented 2026-08-29 on `worktree-231`.** `apps/web`'s dev script now passes `--port` only when `WEB_PORT` is set (`next dev ${WEB_PORT:+--port $WEB_PORT}`); an unconditional flag would have cost Next's retry-past-a-busy-3000 outside a lane. `WEB_PORT` added to the env registry, which is what puts it in `globalPassThroughEnv` — Turborepo strips anything absent from that array. `packages/preflight/turbo.json` names the five repository files this package's tests read from outside it, so a revert cannot come back a cache HIT. **Three of the four defects filed here were already fixed out of band**; only the port one was live. Verified: lane serves web 3018 / api 4018 both 200 with no EADDRINUSE, and outside a lane Next still steps 3000 -> 3001. **Merged 2026-08-29 (`0d53340`, PR #15), CI green.** Follow-up **#238** filed for the support tooling that still hardcodes 3000/4000. Lane worktree left in place for `/land-lanes` to tear down. |
 | **232** | **Every lane worktree gets `node_modules` as a symlink to the main checkout** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 by lanes 74 and 165 independently. A lane's `pnpm install` writes into the tree its peers are reading — the one thing the orchestration policy names as forbidden |
 | **233** | **The E2E vendor account has no vendor profile, so four vendor screens cannot be browser-verified** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` | Found 2026-08-29 verifying #165. Dashboard, portfolio, packages and availability all redirect to the storefront editor |
 | **234** | **Clerk's own sign-in card reads `vendor-marketplace` to the user** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` `auth` | Found 2026-08-29 verifying #165. The one user-facing string that says the repo name instead of the brand. Dashboard setting, not code |
 | **236** | **The web search boundary re-declares the API's query schema instead of deriving from it** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `searchStateSchema` in `apps/web/src/components/search/search-state.ts` hand-copies every bound in `vendorSearchQuerySchema`. The constants are shared so values cannot disagree, but the composition can — `tags` was already more permissive on the client until #66 caught it. Export a field map from `packages/shared` that both build from. **Deliberately not done in #66:** that file was owned by a concurrent lane, which required additive changes only |
 | **237** | **`page` is bounded below but not above, on both sides of the boundary** | **P1** | **M3** | **P3 Low** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `paginationQuerySchema` and `vendorSearchQuerySchema` both cap `pageSize` and not `page`. Not a 500 — Zod's `.int()` caps at 2^53−1 and the offset stays inside `bigint` — but `?page=99999999` still makes Postgres sort the whole filtered set. Same class as #66's price cap. `tags` likewise has no array-length bound on either side |
+| **238** | **The lane support tooling still hardcodes ports 3000 and 4000** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` `auth` | Filed from #231 review 2026-08-29. `preflight`, `hunt-bugs` and `e2e:auth` all assume the shared dev ports, so inside a lane they check, gate on, and authenticate against the wrong process |
 | **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
 | **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
 | **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. **Reconciliation 2026-08-29 — filed without reading `D10` or the plan.** The runtime split (web on Vercel, API on **Railway**) is decided in `vendor-marketplace-decisions.md` D10, and the release pipeline is already ticketed as **#20 Deploy Pipeline** (P0, blocked by #18, #19, #30). Treat this row as the git/branch-protection slice of #20, not a new ticket. **Done 2026-08-29.** Vercel Production Branch flipped `main` -> `production`, confirmed by reading `link.productionBranch: production` from the API. `production` branch exists and is protected alongside `main` (no deletions, no force pushes, linear history, CI required). `main` now produces previews; the live site advances only on a deliberate fast-forward. |
@@ -10148,7 +10149,7 @@ scale, not one bad value.
 
 ### #231: `pnpm dev` inside a lane binds the web app to the lane's API port
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
 
 Found 2026-08-29 bringing up lane 165. `pnpm lane:up <n>` writes `.env.lane` with
@@ -10174,6 +10175,13 @@ obvious reading is "my change broke the app".
 either `"dev": "next dev --port ${WEB_PORT:-3000}"`, or drop `WEB_PORT` and let `lane:exec`
 set `PORT` per package. The second is cleaner but needs `laneEnvFor` to know which package it
 is spawning.
+
+**Verified against the repository 2026-08-29 while implementing this ticket: three of the four
+defects described here had already been fixed out of band, with tests.** `laneUp` no longer
+short-circuits on a manifest alone — it gates on `state === 'active'` and reconciles the env file
+through `ensureLaneEnv`. `baseDatabaseUrl` reads the worktree's own `.env` when the shell exported
+none. `renderLaneEnv` writes `WEB_URL`, so the lane's API accepts the lane's own web origin. Only
+the headline port defect was still live. The text below is left as filed, for the record.
 
 **Two smaller defects found alongside it, same session, same file territory:**
 
@@ -10375,6 +10383,69 @@ is the HTTP server's rather than the schema's.
 
 - [ ] A shared-schema test asserting a `page` above the cap fails validation and the cap itself passes.
 - [ ] A test asserting a tag list longer than the cap fails validation.
+
+---
+
+### #238: The lane support tooling still hardcodes ports 3000 and 4000
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+Filed from the #231 review, 2026-08-29. #231 fixed the app: `pnpm lane:exec <n> -- pnpm dev`
+now brings the web app up on the lane's `WEB_PORT` and the API on its `PORT`. The tooling
+*around* the app was not fixed, and three places still assume the shared dev ports. Each one
+fails quietly, and each one makes a working lane look like a broken ticket.
+
+**1. Preflight never checks the lane's ports.** `packages/preflight/src/checks/ports.ts`:
+
+```ts
+export const DEV_PORTS = [
+  { port: 3000, service: 'apps/web' },
+  { port: 4000, service: 'apps/api' },
+];
+```
+
+`pnpm lane:exec 231 -- pnpm preflight --ticket 231` runs with `PORT=4018` and `WEB_PORT=3018`
+in its own environment and still evaluates 3000 and 4000. So an abandoned server on the
+lane's real port passes the gate and surfaces as `EADDRINUSE` mid-ticket, while the two
+lines preflight *does* print describe ports the lane will never touch. Read `PORT` and
+`WEB_PORT` from the environment, falling back to 3000/4000.
+
+**2. `hunt-bugs` skips its whole browser phase inside a lane.** `.claude/workflows/hunt-bugs.js`
+asks the readiness agent, verbatim: *"Is the web app serving on port 3000? Is the API serving
+on port 4000? curl both"*, and returns `ready:true` only if both answer. Run in a lane with
+the servers correctly on 3018/4018 the gate returns `ready:false`, and
+`.claude/workflows/hunt-bugs.test.mjs` confirms a not-ready verdict skips the browser phase —
+so seven flows are silently not driven and the sweep still reports as having run. `.env.lane`
+already carries `WEB_PORT` and `WEB_URL`; the prompt should read them.
+
+**3. `pnpm e2e:auth` in a lane signs in against the main checkout.** `scripts/e2e-auth.mjs`:
+
+```js
+const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+```
+
+Neither `WEB_PORT` nor `WEB_URL` is consulted, so a lane's `e2e:auth` drives the developer's
+port-3000 server — backed by the *shared* database — and writes `.auth/customer.json` and
+`.auth/vendor.json` into the lane's worktree. Every later browser pass in that lane then loads
+a storage state minted against the wrong origin and the wrong data. If nothing is on 3000 it
+instead fails at `page.goto` with a connection error that reads as a broken lane.
+
+**This is the same class of defect as #231** — a lane allocates ports correctly and something
+downstream ignores the allocation — which is why it is one ticket rather than three.
+
+**Acceptance:**
+
+- [ ] Preflight's port check reads `PORT` and `WEB_PORT` from the environment, defaulting to 4000/3000
+- [ ] `hunt-bugs`' readiness gate resolves the ports from the environment rather than naming 3000/4000
+- [ ] `scripts/e2e-auth.mjs` derives its base URL from `WEB_URL`/`WEB_PORT` before falling back to 3000
+- [ ] No remaining hardcoded 3000/4000 in tooling a lane runs
+
+**Tests (required):**
+
+- [ ] A preflight test asserting the checked ports follow `PORT`/`WEB_PORT` when set, and default when unset.
+- [ ] A test asserting `e2e-auth`'s base URL resolves from the lane environment, and still defaults to 3000 without one.
+- [ ] Extend `hunt-bugs.test.mjs` to assert the readiness prompt names no literal port.
 
 ---
 

@@ -22,6 +22,21 @@ which is how `main` ends up diverged across concurrent sessions — exactly what
 had to be untangled on 2026-08-29, when two sessions held unpushed commits on the
 same local `main`.
 
+**Every merge is followed by landing it, in the same session** — stated by the
+user 2026-08-29 after #231 merged and was left half-landed: bring the default
+branch up to date, and move the ticket to **Done** in the tracker. Not "later",
+not "`/land-lanes` will". A merged PR whose row still reads `Backlog` or
+`In Progress` on `origin/main` is work the next unattended batch will start over.
+
+The main checkout is routinely diverged at that moment: the lane branched before
+the session's own tracker commit, so local `main` holds an unpushed transition
+while the remote holds the squash. `git rebase origin/main` — `git pull
+--ff-only` just fails there, and `reset --hard` drops the local commit silently.
+Squash a superseded `In Progress` commit into the landing commit instead of
+pushing both. Finish by checking `git rev-list --left-right --count
+main...origin/main` reads `0 0`. Encoded in `~/.claude/skills/ticket/references/workflow.md`
+section 7 and the status-record rules in `~/.claude/orchestration-policy.md`.
+
 **How to apply:**
 
 - One ticket, one branch, one worktree under `.claude/worktrees/<name>`.
