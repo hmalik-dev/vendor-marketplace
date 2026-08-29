@@ -100,7 +100,14 @@ export function ProfileHeader({
         the avatar.
       */}
       <div className="grid w-full gap-8 overflow-visible px-4 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-x-7 lg:px-10">
-        <div className="min-w-0 overflow-visible">
+        {/*
+          The frame's content column carries `padding-top: 18px`, and it is
+          that padding the identity row's `-34px` is pulled against — net, the
+          avatar overlaps the banner by 16px, not 34. Shipping the negative
+          margin without the padding is what buried the avatar in the cover and
+          pushed the business name 11px inside the photograph.
+        */}
+        <div className="min-w-0 overflow-visible pt-[18px]">
           {/*
           Lifted out of the banner. `relative` and `z-index` are what put the
           avatar over the banner rather than under it — without them the

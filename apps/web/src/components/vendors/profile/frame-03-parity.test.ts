@@ -151,3 +151,54 @@ describe('frame 03 — the rail starts level with the identity row (#104)', () =
     expect(pageSource).toContain('rail={');
   });
 });
+
+describe('frame 03 — the avatar overlaps the banner by 16px (#105)', () => {
+  /*
+   * The overlap is the SUM of two frame declarations, which is what made it
+   * easy to get wrong: the content column is padded 18px from the top and the
+   * identity row is then pulled up 34px against that padding. Net, 16px.
+   *
+   * The shipped page copied the -34px and dropped the 18px, so the avatar sank
+   * to a 34px overlap and the business name rendered 11px inside the cover
+   * photograph — text over arbitrary vendor-supplied imagery at a contrast
+   * nothing can guarantee. Note that the sweep ledger recorded this as a 14px
+   * overlap; rendering the frame gives 16px, and the frame is the contract.
+   */
+  const contentStyle = styleContaining('padding:18px 28px 0 40px');
+  const identityStyle = styleContaining('margin-top:-34px');
+
+  const [contentTop] = pxParts(declaration(contentStyle, 'padding'));
+  const identityPull = Number.parseFloat(declaration(identityStyle, 'margin-top'));
+  const overlap = -(contentTop + identityPull);
+
+  const headerSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'profile-header.tsx'),
+    'utf8',
+  );
+
+  it('reads the frame contract it is asserting against', () => {
+    expect(contentTop).toBe(18);
+    expect(identityPull).toBe(-34);
+    expect(overlap).toBe(16);
+  });
+
+  it('pads the content column so the pull nets the frame overlap', () => {
+    expect(headerSource).toContain(`pt-[${contentTop}px]`);
+    expect(headerSource).toContain(`-mt-[${Math.abs(identityPull)}px]`);
+  });
+
+  it('leaves the business name clear of the banner', () => {
+    /*
+     * The row is 82px of avatar and the name block is pushed 23px down inside
+     * it, so with a 16px overlap the name starts 7px BELOW the banner. That is
+     * the whole reason the frame's number matters: at 34px it starts inside the
+     * photograph.
+     */
+    const nameOffset = Number.parseFloat(
+      declaration(styleContaining('margin-top:23px'), 'margin-top'),
+    );
+
+    expect(nameOffset - overlap).toBeGreaterThan(0);
+    expect(headerSource).toContain(`mt-[${nameOffset}px]`);
+  });
+});

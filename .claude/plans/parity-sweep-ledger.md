@@ -194,7 +194,7 @@ The layout axis fails hardest.
 |----|------|----------|----------|
 | PB1-22 | Layout | Full-bleed: main column x=0 w=1020, content 40->992, rail 380px at x=1021..1401 | `mx-auto max-w-7xl px-8` -> **1216px centred, 112px gutters**; main content 112..916 (**804px vs 952px**), rail 948..1328 — **PASS** (#103, 2026-08-29): content 40..992, rail 1020..1400 measured live |
 | PB1-23 | Layout | Rail card y=282, level with the avatar row | y=364 — **82px lower**, level with the tab bar — **PASS** (#104, 2026-08-29): rail card top = cover bottom + 20 measured live |
-| PB1-24 | Layout | Avatar y=246 (14px cover overlap) | y=226 (34px overlap) |
+| PB1-24 | Layout | Avatar y=246 (14px cover overlap) | y=226 (34px overlap) — **PASS** (#105, 2026-08-29): overlap 16px measured live; ledger's "14px" corrected to 16px from the rendered frame |
 | PB1-25 | Layout | `See all 34 ->` in the `Recent work` header at x=651 | **absent** |
 | PB1-26 | Layout+Text | Rail pairs `Event date` + `Guests` above `Package` | **both fields absent** |
 | PB1-27 | Style+Colour | Package control `.inp`: `bg #F1ECE4` (stone-150), h39 | native `<select>` `bg #FFFDF9` (stone-0), h41 |
