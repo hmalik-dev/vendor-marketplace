@@ -62,11 +62,18 @@ export function DashboardStats({ dashboard, today }: DashboardStatsProps): React
       <Stat
         label="Bookings this month"
         value={String(dashboard.bookingsThisMonth)}
-        delta={
-          dashboard.bookingsLastMonth === 0 && dashboard.bookingsThisMonth === 0
-            ? `None in ${MONTH.format(previous)}`
-            : `${change >= 0 ? '+' : ''}${change} vs ${MONTH.format(previous)}`
-        }
+        /*
+          Always a delta, in the frame's `+2 vs April` shape.
+
+          There used to be a `None in <previous month>` branch for a vendor
+          with no bookings in either month. It named the right month — the
+          month is derived correctly — but it is a statement about last month
+          under a label that reads `Bookings this month`, and it is the line
+          every new vendor sees. The frame draws a delta in every state, so
+          the special case is deleted rather than reworded: with both months
+          at zero this reads `+0 vs April`, which is still a comparison.
+        */
+        delta={`${change >= 0 ? '+' : ''}${change} vs ${MONTH.format(previous)}`}
         isPositive={change > 0}
       />
       <Stat
