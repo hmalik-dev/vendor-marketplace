@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import path from 'node:path';
-import { laneDown, laneEnvFor, laneUp, parseLaneArgs } from './lane.js';
+import { laneDown, laneEnqueued, laneEnvFor, laneUp, parseLaneArgs } from './lane.js';
 
 /**
  * Lane manifests live in the MAIN checkout so lanes can see each other's
@@ -29,6 +29,17 @@ async function main(): Promise<void> {
         `  api    http://localhost:${manifest.apiPort}\n` +
         `  db     ${manifest.database}\n\n` +
         `Run everything through: pnpm lane:exec ${manifest.ticket} -- <command>\n`,
+    );
+    return;
+  }
+
+  if (parsed.kind === 'pr') {
+    const manifest = laneEnqueued(mainCheckout(), parsed.ticket, parsed.url);
+    process.stdout.write(
+      `✓ Lane ${manifest.ticket} enqueued\n` +
+        `  branch ${manifest.branch}\n` +
+        `  pr     ${manifest.prUrl ?? ''}\n\n` +
+        `\`/land-lanes\` can resolve this lane now if the session ends first.\n`,
     );
     return;
   }

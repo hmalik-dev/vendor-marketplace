@@ -11,6 +11,7 @@
     "preflight": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run preflight",
     "lane:up": "node scripts/lane-bootstrap.mjs && tsx packages/preflight/src/lane/cli.ts up",
     "lane:exec": "tsx packages/preflight/src/lane/cli.ts exec",
+    "lane:pr": "tsx packages/preflight/src/lane/cli.ts pr",
     "lane:down": "tsx packages/preflight/src/lane/cli.ts down",
     "secrets:scan": "pnpm --filter @vendor-marketplace/preflight run secrets:scan",
     "secrets:scan:all": "pnpm --filter @vendor-marketplace/preflight run secrets:scan -- --tracked",

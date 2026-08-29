@@ -19,6 +19,7 @@ import {
   baseDatabaseUrl,
   currentBranch,
   laneDown,
+  laneEnqueued,
   laneEnvFor,
   laneUp,
   type LaneUpDeps,
@@ -489,5 +490,57 @@ describe('currentBranch', () => {
     });
 
     expect(currentBranch(worktree)).toBe('worktree-232');
+  });
+});
+
+/*
+ * `verify-and-ship` step 5 says to write the PR url into the manifest, and
+ * until now nothing could: it was hand-edited JSON, which is how lane 198 left
+ * a null `prUrl` behind. `/land-lanes` resolves a lane through that field, so
+ * a lane without one reads as work nobody delivered.
+ */
+describe('laneEnqueued', () => {
+  const enqueue = async (): Promise<void> => {
+    writeFileSync(path.join(worktree, '.env'), `DATABASE_URL=${databaseUrl}\n`);
+    await laneUp(root, worktree, '42', deps());
+  };
+
+  it('records the pr url and moves the lane to pending-merge', async () => {
+    await enqueue();
+
+    const updated = laneEnqueued(root, '42', 'https://github.com/o/r/pull/16');
+
+    expect(updated.prUrl).toBe('https://github.com/o/r/pull/16');
+    expect(updated.state).toBe('pending-merge');
+  });
+
+  it('persists it, so a later session can resolve the lane', async () => {
+    await enqueue();
+    laneEnqueued(root, '42', 'https://github.com/o/r/pull/16');
+
+    const reread = readManifest(root, '42');
+
+    expect(reread?.prUrl).toBe('https://github.com/o/r/pull/16');
+    expect(reread?.state).toBe('pending-merge');
+    // The branch has to survive too: land-lanes needs both to find the PR.
+    expect(reread?.branch).toBe('worktree-42');
+  });
+
+  it('refuses a ticket with no lane rather than inventing one', () => {
+    expect(() => laneEnqueued(root, '999', 'https://github.com/o/r/pull/1')).toThrow(/999/);
+  });
+});
+
+describe('parseLaneArgs pr', () => {
+  it('parses the ticket and the url', () => {
+    expect(parseLaneArgs(['pr', '42', 'https://github.com/o/r/pull/16'])).toEqual({
+      kind: 'pr',
+      ticket: '42',
+      url: 'https://github.com/o/r/pull/16',
+    });
+  });
+
+  it('names what it needs when the url is missing', () => {
+    expect(() => parseLaneArgs(['pr', '42'])).toThrow(/url/);
   });
 });

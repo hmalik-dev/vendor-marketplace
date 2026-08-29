@@ -37,13 +37,14 @@ import { allocateOffset, API_BASE, type PortProbe, WEB_BASE } from './ports.js';
 export type LaneCommand =
   | { readonly kind: 'up'; readonly ticket: string }
   | { readonly kind: 'down'; readonly ticket: string }
+  | { readonly kind: 'pr'; readonly ticket: string; readonly url: string }
   | { readonly kind: 'exec'; readonly ticket: string; readonly command: readonly string[] };
 
 export function parseLaneArgs(argv: readonly string[]): LaneCommand {
   const [kind, ticket, ...rest] = argv;
 
-  if (kind !== 'up' && kind !== 'down' && kind !== 'exec') {
-    throw new Error(`Unknown lane subcommand: ${kind ?? '(none)'}. Expected up, down or exec.`);
+  if (kind !== 'up' && kind !== 'down' && kind !== 'exec' && kind !== 'pr') {
+    throw new Error(`Unknown lane subcommand: ${kind ?? '(none)'}. Expected up, down, pr or exec.`);
   }
 
   if (!ticket) {
@@ -56,6 +57,16 @@ export function parseLaneArgs(argv: readonly string[]): LaneCommand {
 
   if (kind === 'down') {
     return { kind: 'down', ticket };
+  }
+
+  if (kind === 'pr') {
+    const [url] = rest;
+
+    if (!url) {
+      throw new Error('lane pr requires the PR url, for example `lane:pr 42 https://…/pull/16`.');
+    }
+
+    return { kind: 'pr', ticket, url };
   }
 
   // `--` is optional: pnpm swallows one separator before the script's own args.
@@ -386,6 +397,20 @@ export async function laneUp(
 
   // Last, and only on success: this is the flag every retry reads.
   return updateManifest(mainCheckout, ticket, { state: 'active' });
+}
+
+/**
+ * Records the PR a lane was delivered through, and moves it to `pending-merge`.
+ *
+ * `/land-lanes` resolves a lane to its PR through `prUrl`, so a lane that never
+ * writes one reads as work nobody delivered and is left alone. The delivery
+ * step used to say "write the URL into the manifest" with nothing to do it, so
+ * it was hand-edited JSON — which is how lane 198 ended up with a null `prUrl`
+ * and a branch name nothing created. This goes through `updateManifest`, so the
+ * write is the same atomic one every other manifest change uses.
+ */
+export function laneEnqueued(mainCheckout: string, ticket: string, prUrl: string): LaneManifest {
+  return updateManifest(mainCheckout, ticket, { prUrl, state: 'pending-merge' });
 }
 
 export interface LaneDownDeps {
