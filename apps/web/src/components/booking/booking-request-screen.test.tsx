@@ -62,6 +62,7 @@ function renderScreen(
       }}
       calendar={CALENDAR}
       initialDate={FREE_DATE}
+      initialGuestCount=""
       today={TODAY}
       {...overrides}
     />,

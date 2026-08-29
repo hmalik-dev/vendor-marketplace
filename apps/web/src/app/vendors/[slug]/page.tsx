@@ -131,6 +131,7 @@ export default async function VendorProfilePage({
             startingPriceCents={vendor.startingPriceCents}
             packages={vendor.packages}
             reviewCount={vendor.reviewCount}
+            today={today}
           />
         }
       >

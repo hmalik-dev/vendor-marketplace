@@ -1,6 +1,6 @@
 'use client';
 
-import { formatPrice, type ServicePackage } from '@vendor-marketplace/shared';
+import { MAX_GUEST_COUNT, formatPrice, type ServicePackage } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ export interface BookingRailProps {
   startingPriceCents: number | null;
   packages: readonly ServicePackage[];
   reviewCount: number;
+  /** Today in the vendor's calendar, so a past date cannot be requested. */
+  today: string;
 }
 
 /**
@@ -31,12 +33,26 @@ export function BookingRail({
   startingPriceCents,
   packages,
   reviewCount,
+  today,
 }: BookingRailProps): React.ReactElement {
   const fieldId = useId();
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
+  const [eventDate, setEventDate] = useState('');
+  const [guestCount, setGuestCount] = useState('');
 
   const selected = packages.find((servicePackage) => servicePackage.id === packageId);
   const shownPriceCents = selected?.priceCents ?? startingPriceCents;
+
+  /*
+   * Only answered fields travel. An empty `?date=` is not the same as no date,
+   * and the request page drops anything it cannot parse anyway.
+   */
+  const request = new URLSearchParams();
+  if (packageId) request.set('package', packageId);
+  if (eventDate) request.set('date', eventDate);
+  if (guestCount) request.set('guests', guestCount);
+  const query = request.toString();
+  const requestHref = query ? `/vendors/${slug}/request?${query}` : `/vendors/${slug}/request`;
 
   return (
     <aside
@@ -69,19 +85,53 @@ export function BookingRail({
       </div>
 
       <div className="flex flex-col gap-2.5 px-5 pt-3.5 pb-4">
+        {/*
+          Frame `03` pairs the date and the guest count on one row above the
+          package, at `flex: 1` and `flex: .7`. Both carry straight through to
+          the request form in the query string, so what the customer answers
+          here is not asked again on the next screen.
+        */}
+        <div className="flex gap-2.5">
+          <div className="flex-1">
+            <Label htmlFor={`${fieldId}-date`} className={FIELD_LABEL}>
+              Event date
+            </Label>
+            <input
+              id={`${fieldId}-date`}
+              type="date"
+              value={eventDate}
+              min={today}
+              onChange={(event) => setEventDate(event.target.value)}
+              className={FIELD}
+            />
+          </div>
+          <div className="flex-[0.7]">
+            <Label htmlFor={`${fieldId}-guests`} className={FIELD_LABEL}>
+              Guests
+            </Label>
+            <input
+              id={`${fieldId}-guests`}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_GUEST_COUNT}
+              value={guestCount}
+              onChange={(event) => setGuestCount(event.target.value)}
+              className={FIELD}
+            />
+          </div>
+        </div>
+
         {packages.length > 0 ? (
           <div>
-            <Label
-              htmlFor={`${fieldId}-package`}
-              className="mb-1.25 text-label font-semibold tracking-label text-stone-600 uppercase"
-            >
+            <Label htmlFor={`${fieldId}-package`} className={FIELD_LABEL}>
               Package
             </Label>
             <select
               id={`${fieldId}-package`}
               value={packageId}
               onChange={(event) => setPackageId(event.target.value)}
-              className="w-full rounded-lg border border-stone-300 bg-stone-0 px-3.5 py-2.5 text-base text-stone-900"
+              className={FIELD}
             >
               {packages.map((servicePackage) => (
                 <option key={servicePackage.id} value={servicePackage.id}>
@@ -93,15 +143,7 @@ export function BookingRail({
         ) : null}
 
         <Button asChild variant="primary" className="mt-1 w-full justify-center py-3.25">
-          <Link
-            href={
-              packageId
-                ? `/vendors/${slug}/request?package=${packageId}`
-                : `/vendors/${slug}/request`
-            }
-          >
-            Request booking
-          </Link>
+          <Link href={requestHref}>Request booking</Link>
         </Button>
         <Button variant="secondary" disabled className="w-full justify-center py-3">
           Send a message
@@ -135,3 +177,9 @@ export function BookingRail({
     </aside>
   );
 }
+
+/** The frame's `.inp` token, shared by all three rail controls. */
+const FIELD =
+  'w-full rounded-lg border border-stone-300 bg-stone-0 px-3.5 py-2.5 text-base text-stone-900';
+
+const FIELD_LABEL = 'mb-1.25 text-label font-semibold tracking-label text-stone-600 uppercase';

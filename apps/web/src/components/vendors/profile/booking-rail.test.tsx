@@ -36,6 +36,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={127}
+        today="2026-01-01"
       />,
     );
 
@@ -55,6 +56,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
+        today="2026-01-01"
       />,
     );
 
@@ -74,6 +76,7 @@ describe('BookingRail', () => {
         startingPriceCents={null}
         packages={[]}
         reviewCount={0}
+        today="2026-01-01"
       />,
     );
 
@@ -90,6 +93,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
+        today="2026-01-01"
       />,
     );
 
@@ -105,6 +109,7 @@ describe('BookingRail', () => {
         startingPriceCents={null}
         packages={[]}
         reviewCount={0}
+        today="2026-01-01"
       />,
     );
 
@@ -123,6 +128,7 @@ describe('BookingRail', () => {
           servicePackage({ id: 'pkg-2', name: 'Full day', priceCents: 320_000 }),
         ]}
         reviewCount={0}
+        today="2026-01-01"
       />,
     );
 
@@ -139,6 +145,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
+        today="2026-01-01"
       />,
     );
 

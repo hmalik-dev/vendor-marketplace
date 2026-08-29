@@ -1,13 +1,18 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import { pageTitle, todayDateString, type AvailabilityStatus } from '@vendor-marketplace/shared';
+import {
+  MAX_GUEST_COUNT,
+  pageTitle,
+  todayDateString,
+  type AvailabilityStatus,
+} from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
 import { requireCurrentUser } from '@/lib/current-user';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ package?: string; date?: string }>;
+  searchParams: Promise<{ package?: string; date?: string; guests?: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -63,6 +68,20 @@ export default async function BookingRequestPage({
 
   const initialDate = query.date && query.date >= today ? query.date : '';
 
+  /*
+   * `?guests=` arrives from the profile rail and is attacker-controlled like
+   * every other URL value: parsed here, and dropped rather than rendered if it
+   * is not a whole number inside the same bounds the form itself enforces.
+   */
+  const parsedGuests = Number.parseInt(query.guests ?? '', 10);
+  const initialGuestCount =
+    Number.isInteger(parsedGuests) &&
+    String(parsedGuests) === query.guests &&
+    parsedGuests > 0 &&
+    parsedGuests <= MAX_GUEST_COUNT
+      ? String(parsedGuests)
+      : '';
+
   const leadCategory = vendor.categories[0]?.name ?? null;
 
   return (
@@ -91,6 +110,7 @@ export default async function BookingRequestPage({
       }
       calendar={calendar}
       initialDate={initialDate}
+      initialGuestCount={initialGuestCount}
       today={today}
     />
   );

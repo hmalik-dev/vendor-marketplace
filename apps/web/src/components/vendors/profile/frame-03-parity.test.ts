@@ -202,3 +202,58 @@ describe('frame 03 — the avatar overlaps the banner by 16px (#105)', () => {
     expect(headerSource).toContain(`mt-[${nameOffset}px]`);
   });
 });
+
+describe('frame 03 — the rail pairs Event date with Guests above Package (#107)', () => {
+  /*
+   * The frame's rail asks three questions in a fixed order, and the first two
+   * share a row at `flex: 1` and `flex: .7` with a 10px gap. The shipped rail
+   * asked only for the package, so the two answers the booking form needs most
+   * were collected a screen later.
+   */
+  const pairRow = styleContaining('display:flex', 'gap:10px');
+  const gap = Number.parseFloat(declaration(pairRow, 'gap'));
+
+  const flexValues = [...FRAME_03.matchAll(/style="flex:(1|\.7)"/g)].map(
+    (match) => match[1] as string,
+  );
+
+  const railSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'booking-rail.tsx'),
+    'utf8',
+  );
+
+  /** Where a rail label sits in a body of source, by its literal. */
+  const at = (source: string, label: string): number => source.indexOf(label);
+
+  it('reads the frame contract it is asserting against', () => {
+    expect(gap).toBe(10);
+    expect(flexValues).toEqual(['1', '.7']);
+    /*
+     * Matched as whole `.lbl` elements: the bare word "Package" also appears
+     * in the tab bar, 3000 characters earlier, and would order these wrongly.
+     */
+    expect(at(FRAME_03, '>Event date</div>')).toBeGreaterThan(-1);
+    expect(at(FRAME_03, '>Guests</div>')).toBeGreaterThan(at(FRAME_03, '>Event date</div>'));
+    expect(at(FRAME_03, '>Package</div>')).toBeGreaterThan(at(FRAME_03, '>Guests</div>'));
+  });
+
+  it('renders both fields, in the frame order, above the package', () => {
+    expect(at(railSource, '>\n              Event date\n            </Label>')).toBeGreaterThan(-1);
+    expect(at(railSource, 'Guests')).toBeGreaterThan(at(railSource, 'Event date'));
+    expect(at(railSource, '>\n              Package\n            </Label>')).toBeGreaterThan(
+      at(railSource, 'Guests'),
+    );
+  });
+
+  it('splits the row at the frame ratio and gap', () => {
+    // 10px === Tailwind's `2.5` step.
+    expect(railSource).toContain(`gap-${gap / 4}`);
+    expect(railSource).toContain('flex-1');
+    expect(railSource).toContain(`flex-[0${flexValues[1] as string}]`);
+  });
+
+  it('carries both answers through to the booking request', () => {
+    expect(railSource).toContain("request.set('date', eventDate)");
+    expect(railSource).toContain("request.set('guests', guestCount)");
+  });
+});

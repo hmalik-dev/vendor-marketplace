@@ -196,7 +196,7 @@ The layout axis fails hardest.
 | PB1-23 | Layout | Rail card y=282, level with the avatar row | y=364 — **82px lower**, level with the tab bar — **PASS** (#104, 2026-08-29): rail card top = cover bottom + 20 measured live |
 | PB1-24 | Layout | Avatar y=246 (14px cover overlap) | y=226 (34px overlap) — **PASS** (#105, 2026-08-29): overlap 16px measured live; ledger's "14px" corrected to 16px from the rendered frame |
 | PB1-25 | Layout | `See all 34 ->` in the `Recent work` header at x=651 | **absent** |
-| PB1-26 | Layout+Text | Rail pairs `Event date` + `Guests` above `Package` | **both fields absent** |
+| PB1-26 | Layout+Text | Rail pairs `Event date` + `Guests` above `Package` | **both fields absent** — **PASS** (#107, 2026-08-29): 194.13 + 135.88 with 10px gap, above Package, measured live |
 | PB1-27 | Style+Colour | Package control `.inp`: `bg #F1ECE4` (stone-150), h39 | native `<select>` `bg #FFFDF9` (stone-0), h41 |
 | PB1-28 | Style | Attribute chips radius 6px; portfolio tiles 12px | 8px; 14px |
 | PB1-29 | Style | `Send a message` enabled `.btnS` | **disabled, opacity .5, pointer-events:none** |
