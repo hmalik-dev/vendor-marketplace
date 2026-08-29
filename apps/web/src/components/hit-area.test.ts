@@ -68,7 +68,9 @@ describe('icon-only controls carry the law’s hit area', () => {
         } else if (entry.name.endsWith('.tsx')) {
           // `input-group.tsx` has an unrelated variant of the same name; this
           // is about what callers pass to `Button`.
-          if (/<Button[^>]*size="icon-sm"/s.test(readFileSync(path, 'utf8'))) {
+          // No dotAll flag: `[^>]*` already spans newlines, and `s` needs a
+          // lib target this package does not set.
+          if (/<Button[^>]*size="icon-sm"/.test(readFileSync(path, 'utf8'))) {
             offenders.push(path);
           }
         }
