@@ -211,5 +211,52 @@ const check = (name, cond, detail = '') => {
   check('args can disable the browser phase', state.phases.indexOf('Drive') === -1);
 }
 
+// --- Case 7: #238 — the readiness gate follows the lane's ports ------------
+// Naming 3000/4000 made the gate report not-ready inside a lane serving
+// correctly on its own ports, and Case 1 proves a not-ready verdict skips the
+// whole browser phase. The prompt has to name the origins the lane will bind.
+{
+  const laneEnv = {
+    WEB_URL: 'http://localhost:3031',
+    WEB_PORT: '3031',
+    NEXT_PUBLIC_API_URL: 'http://localhost:4031',
+    PORT: '4031',
+  };
+  const saved = {};
+  for (const [key, value] of Object.entries(laneEnv)) {
+    saved[key] = process.env[key];
+    process.env[key] = value;
+  }
+
+  let readinessPrompt = '';
+  try {
+    await run({
+      argsValue: { drive: false, dimensions: ['authorization'] },
+      agentImpl: async (p, o) => {
+        if (o.schema && o.schema.properties.ready) {
+          readinessPrompt = p;
+          return { ready: true, blockers: [] };
+        }
+        if (o.schema === undefined && o.label && o.label.startsWith('map:')) return 'map';
+        if (o.agentType === 'bug-hunter') return { findings: [] };
+        return 'report';
+      },
+    });
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  check('lane ports: readiness prompt names the lane web origin', readinessPrompt.includes('3031'));
+  check('lane ports: readiness prompt names the lane API origin', readinessPrompt.includes('4031'));
+  check(
+    'lane ports: readiness prompt names no shared dev port',
+    !readinessPrompt.includes('3000') && !readinessPrompt.includes('4000'),
+    readinessPrompt.split('\n').find((l) => l.includes('3000') || l.includes('4000')) || '',
+  );
+}
+
 console.log(fails === 0 ? '\nAll control-flow checks pass.' : `\n${fails} FAILING`);
 process.exit(fails ? 1 : 0);

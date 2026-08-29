@@ -23,3 +23,12 @@ scenario rather than a guess.
 
 Relevant project rule: `.claude/rules/env-registry.md` — "Assert the production
 branch in a test; a default is exactly the code no test covers."
+
+**The extract-a-helper variant (#238).** A diff that replaces an inline constant
+with a new exported resolver (`DEV_PORTS` → `devPorts(env)`, `?? 'http://localhost:3000'`
+→ `resolveBaseUrl(env)`) usually ships tests for the resolver only. Those tests
+still pass if the call site is reverted to the old literal. Same mechanical check:
+re-hardcode the call site, run the owning package's suite. In #238
+`packages/preflight` stayed 234/234 green with `portsCheck.run` back on a
+hardcoded `[3000, 4000]`, and nothing at all covered `scripts/e2e-auth.mjs`
+consuming `resolveBaseUrl`.

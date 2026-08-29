@@ -262,11 +262,29 @@ const VERDICT_SCHEMA = {
 // ---------------------------------------------------------------------------
 phase('Preflight');
 
+/*
+ * The origins to probe, which a lane moves. `pnpm lane:exec <n> --` puts
+ * `WEB_URL`, `WEB_PORT`, `NEXT_PUBLIC_API_URL` and `PORT` in the child
+ * environment. Naming 3000/4000 here made the gate return ready:false inside a
+ * lane whose servers were correctly on their own ports — and a not-ready
+ * verdict silently skips the entire browser phase, so seven flows went undriven
+ * while the sweep still reported as having run.
+ */
+// `WEB_URL` doubles as the API's CORS allow-list and so is comma-separated;
+// only its first origin is a URL anything can curl.
+const firstOrigin = (value) => value.split(',')[0].trim();
+const webOrigin = process.env.WEB_URL
+  ? firstOrigin(process.env.WEB_URL)
+  : `http://localhost:${process.env.WEB_PORT || 3000}`;
+const apiOrigin = process.env.NEXT_PUBLIC_API_URL
+  ? firstOrigin(process.env.NEXT_PUBLIC_API_URL)
+  : `http://localhost:${process.env.PORT || 4000}`;
+
 const ready = await agent(
   `Check whether this repository's development stack is ready for a browser sweep.
 Do not start anything and do not modify anything. Report only what you observe:
 
-1. Is the web app serving on port 3000? Is the API serving on port 4000? curl both.
+1. Is the web app serving at ${webOrigin}? Is the API serving at ${apiOrigin}? curl both.
 2. Does the API's health endpoint report a database connection?
 3. Read the DATABASE_URL currently in use WITHOUT printing its value, and report
    only whether the branch name contains "production". This must be false.
