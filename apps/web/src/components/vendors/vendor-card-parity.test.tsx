@@ -29,6 +29,9 @@ const searchFrame = (() => {
 /** The first vendor card the frame draws — every card in the grid repeats it. */
 const frameCard = searchFrame.slice(searchFrame.indexOf('class="card"'));
 
+/** That card's monogram: the absolutely-placed circle overlapping the seam. */
+const frameAvatar = frameCard.slice(frameCard.indexOf('position:absolute;top:-16px'));
+
 /** One `property:value` out of an inline `style` attribute, as written. */
 function styleValue(markup: string, property: string): string {
   const declaration = new RegExp(`[;"]${property}:([^;"]+)`).exec(markup);
@@ -78,5 +81,31 @@ describe('VendorCard parity with frame 02 Search', () => {
     // `rounded-2xl` is 18px in the theme, which the frames do use elsewhere —
     // so the assertion is against the frame's own number, not against a token.
     expect(card().className).toContain(`rounded-[${styleValue(frameCard, 'border-radius')}]`);
+  });
+
+  /*
+   * The frames carry no `box-sizing` reset, so an element there is content-box
+   * and its ring adds to the declared size. The app is border-box, so the same
+   * footprint is written as one number with the ring taken out of it — which
+   * is why the comparison is against the frame's fill *plus* its two edges.
+   */
+  it('gives the monogram the footprint the frame draws', () => {
+    render(<VendorCard vendor={vendor()} density="compact" />);
+
+    const frameFill = Number.parseFloat(styleValue(frameAvatar, 'width'));
+    const frameEdge = Number.parseFloat(styleValue(frameAvatar, 'border'));
+    const monogram = screen.getByRole('img', { name: 'Kessler & Co.' });
+
+    expect(monogram.style.width).toBe(`${frameFill + frameEdge * 2}px`);
+    expect(monogram.style.height).toBe(`${frameFill + frameEdge * 2}px`);
+    expect(monogram.className).toContain('border-2');
+  });
+
+  it('sets the monogram glyph at the size the frame draws', () => {
+    render(<VendorCard vendor={vendor()} density="compact" />);
+
+    expect(screen.getByRole('img', { name: 'Kessler & Co.' }).style.fontSize).toBe(
+      styleValue(frameAvatar, 'font-size'),
+    );
   });
 });
