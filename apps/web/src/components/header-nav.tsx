@@ -29,6 +29,28 @@ import { cn } from '@/lib/utils';
 /** `min-[90rem]` is 1440, the viewport every desktop frame is drawn at. */
 const SEARCH_INSET = 'min-[90rem]:px-6.5';
 
+/**
+ * 32px — the `.hd` default itself, which the vendor chrome frames take
+ * unmodified (`08`, `09`, `10`, `11`). Counted across the bundle: 21 of the 36
+ * headers use the bare class, and only 4 override it to the 40px `BASE` below.
+ * So 40px is the exception the frames spell out, not the rule.
+ *
+ * `BASE` is nonetheless left at 40px rather than corrected to 32px, because
+ * frames `15 404` and `16 Server error` are two of the four that draw 40px and
+ * neither has a stable pathname to key off — a 404 answers any unmatched URL.
+ * Narrowing the default would silently move both. The other 17 base-`.hd`
+ * frames are still on 40px and that is a real finding, but it belongs to the
+ * lanes that own those screens rather than to this one.
+ */
+const VENDOR_INSET = 'lg:px-8';
+
+/**
+ * The routes carrying the vendor chrome — frames `08`, `09` and `11` under
+ * `/vendor`, and frame `10 Messaging` at `/messages`, which draws the same
+ * header down to the `Vendor` chip.
+ */
+const VENDOR_ROUTES = ['/vendor', '/messages'] as const;
+
 const BASE = 'flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-10';
 
 export interface HeaderNavProps {
@@ -38,8 +60,20 @@ export interface HeaderNavProps {
 export function HeaderNav({ children }: HeaderNavProps): React.ReactElement {
   const pathname = usePathname();
 
+  const isVendorChrome = VENDOR_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+
   return (
-    <nav aria-label="Main" className={cn(BASE, pathname === '/search' && SEARCH_INSET)}>
+    <nav
+      aria-label="Main"
+      className={cn(
+        BASE,
+        pathname === '/search' && SEARCH_INSET,
+        // Last, so it overrides `BASE`'s own `lg` step rather than racing it.
+        isVendorChrome && VENDOR_INSET,
+      )}
+    >
       {children}
     </nav>
   );

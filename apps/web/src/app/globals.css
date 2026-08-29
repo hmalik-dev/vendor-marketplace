@@ -161,6 +161,34 @@ body:has([data-auth-screen]) > footer {
 }
 
 /*
+ * Clerk's user button, corrected against the same tokens the rest of the
+ * product uses. Never a brand hex — `layout.tsx` says why.
+ *
+ * Deliberately **outside** `@layer base`. Clerk injects its own styles into a
+ * later cascade layer, and a later layer beats an earlier one whatever the
+ * selector's specificity, so neither restating the rule nor doubling the class
+ * moved it: the trigger measured 44x28 because Clerk sets `min-height` and no
+ * `min-width`, so only the half it did not claim took effect. Unlayered rules
+ * outrank every layer, which is the one thing that reaches it.
+ *
+ * Two corrections, both on the Access axis:
+ *
+ * 1. The product's focus ring. Clerk drew a single 4px clay at 50% alpha with
+ *    no offset layer, where `04-laws.md` asks for 2px at 30% over a 2px
+ *    stone-50 offset.
+ * 2. A 44x44 hit area. Clerk renders the trigger at 28x28. Only the target
+ *    grows — the avatar keeps the size Clerk gives it, so the control still
+ *    looks the way the frames draw it.
+ */
+.cl-userButtonTrigger {
+  @apply inline-flex min-h-11 min-w-11 items-center justify-center;
+}
+
+.cl-userButtonTrigger:focus-visible {
+  @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
+}
+
+/*
  * Display type is a role, not a document level. Serif is opted into here, never
  * inherited from a tag: `font-display` is the family on its own, and
  * `.display-heading` is the frames' tracked heading role.

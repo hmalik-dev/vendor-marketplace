@@ -20,7 +20,16 @@ const OFFSET_RATIO = 0.45;
 const STROKE_RATIO = 0.08;
 /** Gap between the mark and the wordmark, as a fraction of the diameter. */
 const WORDMARK_GAP_RATIO = 0.5;
-/** Wordmark font size, as a multiple of the diameter. */
+/**
+ * Wordmark font size, as a multiple of the diameter.
+ *
+ * `design-plan/02-brand-and-logo.md` states this as a law — "wordmark size
+ * 1.60 D" — so it is not a ticket's to change. Frames `08`/`09`/`10`/`11` pair
+ * a 15px mark with a 23px wordmark, which is 1.533 and renders 24px here; ten
+ * desktop frames do the same, while frame `01 Landing` draws the 24px that 1.6
+ * produces. The frames and the plan therefore disagree, and adjudicating that
+ * is a design pass rather than a parity fix. Recorded against #118.
+ */
 const WORDMARK_SIZE_RATIO = 1.6;
 /**
  * The diameters the design calls for, by context. Named so no surface picks a

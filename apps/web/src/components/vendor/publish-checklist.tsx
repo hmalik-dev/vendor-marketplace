@@ -40,7 +40,7 @@ export function PublishChecklist({ dashboard, today }: PublishChecklistProps): R
     return (
       <aside
         aria-label="Today"
-        className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-stone-300 bg-stone-0 p-5 xl:block"
+        className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-stone-300 bg-stone-0 p-5 xl:box-content xl:block"
       >
         <h2 className="mb-2.5 text-label font-semibold tracking-label text-stone-600 uppercase">
           {SCHEDULE_DATE.format(new Date(`${today}T00:00:00Z`))}
@@ -71,7 +71,7 @@ export function PublishChecklist({ dashboard, today }: PublishChecklistProps): R
   return (
     <aside
       aria-label="Publish checklist"
-      className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-stone-300 bg-stone-0 p-5 xl:block"
+      className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-stone-300 bg-stone-0 p-5 xl:box-content xl:block"
     >
       <div className="mb-2.75 flex items-baseline justify-between">
         <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">

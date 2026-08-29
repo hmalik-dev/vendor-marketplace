@@ -30,6 +30,13 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
   const [items, setItems] = useState<WireNotification[]>([...initial]);
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
+  /*
+   * Escape has to put focus back where it came from, so the trigger is held
+   * rather than found: `document.querySelector` would break the moment a
+   * second bell rendered, and closing the panel unmounts everything inside it,
+   * which would otherwise drop focus onto `<body>`.
+   */
+  const trigger = useRef<HTMLButtonElement>(null);
 
   const unread = items.filter((item) => item.readAt === null).length;
 
@@ -76,6 +83,38 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, [open]);
 
+  /*
+   * Escape closes it too — `04-laws.md` requires an overlay to close on Escape
+   * and restore focus. Clicking outside was the only dismissal that worked,
+   * which left a keyboard user with no way out of the panel at all.
+   */
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      setOpen(false);
+
+      /*
+       * Only reclaim focus if it is still inside the panel. Someone who tabbed
+       * out and pressed Escape on another control should keep it there — the
+       * overlay owes focus back to the trigger, not away from wherever the
+       * person actually is.
+       */
+      if (panel.current?.contains(document.activeElement)) {
+        trigger.current?.focus();
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   async function markRead(id: string): Promise<void> {
     setItems((current) =>
       current.map((item) => (item.id === id ? { ...item, readAt: new Date() } : item)),
@@ -99,11 +138,12 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
   return (
     <div ref={panel} className="relative">
       <button
+        ref={trigger}
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-label={unread === 0 ? 'Notifications' : `Notifications, ${unread} unread`}
         aria-expanded={open}
-        className="relative flex size-9 items-center justify-center rounded-full text-stone-700 hover:bg-stone-150 hover:text-stone-900"
+        className="relative flex size-11 items-center justify-center rounded-full text-stone-700 hover:bg-stone-150 hover:text-stone-900"
       >
         <Bell aria-hidden="true" className="size-4.5" />
         {unread > 0 ? (

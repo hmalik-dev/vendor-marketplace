@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Show, UserButton } from '@clerk/nextjs';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
+import { RoleChip } from '@/components/brand/role-chip';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { MarketingNav } from '@/components/marketing-nav';
 import { SignedInDrawer, SignedOutDrawer } from '@/components/header-drawer';
@@ -9,6 +10,7 @@ import { HeaderQuery } from '@/components/search/header-query';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
+import { readRoleForChrome } from '@/lib/current-user';
 
 /**
  * Global site header. Server Component — Clerk's control components resolve
@@ -22,7 +24,17 @@ import { getCategories } from '@/lib/vendor-data';
  * costs one API call per revalidate window rather than one per page view.
  */
 export async function SiteHeader(): Promise<React.ReactElement> {
-  const categories = await getCategories();
+  /*
+   * The role decides whether the header carries the vendor chip, and it is
+   * read from the local account record rather than Clerk metadata — the same
+   * rule `current-user.ts` states. Signed out, the read returns before it
+   * makes a request, so a marketing page pays nothing for it.
+   *
+   * `readRoleForChrome` never throws. This header is in the root layout, where
+   * a throw escapes every `error.tsx` and takes the whole document to the
+   * global error screen — see the note on that function.
+   */
+  const [categories, role] = await Promise.all([getCategories(), readRoleForChrome()]);
 
   return (
     // The height sits on the header, not the nav inside it, so the bottom
@@ -32,17 +44,26 @@ export async function SiteHeader(): Promise<React.ReactElement> {
     // `30-responsive.md`; nothing here restates either number.
     <header className="sticky top-0 z-(--z-header) box-border h-(--header-height) border-b border-stone-300 bg-stone-0">
       {/*
-        The inset is per-route, not one number: frame `01` draws 40px and the
-        three search frames draw 26px, which is what the search page already
-        insets its own content by. `HeaderNav` holds that choice.
+        The inset is per-route, not one number: the frames set it per screen and
+        `HeaderNav` holds that choice.
       */}
       <HeaderNav>
         {/* 34px from the wordmark to the nav — frame `01`. */}
         <div className="flex min-w-0 flex-none items-center gap-8.5">
-          <Link href="/" className="transition-opacity hover:opacity-80">
-            {/* The wordmark reads BRAND_NAME — never a literal. */}
-            <Logo size={LOGO_SIZES.desktopHeader} />
-          </Link>
+          {/*
+            The chip is a child of the wordmark's own row, not a sibling of it,
+            so it takes that row's 9px gap *and* its own 4px margin — 13px from
+            the wordmark, as the frames draw it. Keeping it in this row also
+            leaves the cluster's 34px gap between the logo and the nav.
+          */}
+          <div className="flex items-center gap-[9px]">
+            <Link href="/" className="transition-opacity hover:opacity-80">
+              {/* The wordmark reads BRAND_NAME — never a literal. */}
+              <Logo size={LOGO_SIZES.desktopHeader} />
+            </Link>
+
+            {role === 'vendor' ? <RoleChip label="Vendor" /> : null}
+          </div>
 
           <Show when="signed-out">
             <MarketingNav />

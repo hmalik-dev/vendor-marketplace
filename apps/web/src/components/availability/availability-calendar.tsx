@@ -290,7 +290,17 @@ export function AvailabilityCalendar({
   const selectionIsBlocked = selectionStatuses.size === 1 && selectionStatuses.has('blocked');
 
   return (
-    <div className="grid min-h-0 gap-6 xl:h-full xl:grid-cols-[1fr_var(--list-pane)] xl:gap-0">
+    <div
+      /*
+       * The rail is a grid track, so `box-content` cannot reach it the way it
+       * does the sidebar: the track sizes the aside, not its own `width`. The
+       * frame draws 300px of content inside 20px gutters and a 1px left
+       * border, so the track carries all 341px. `--list-pane` stays at its
+       * 300px content value because the messaging list, which has neither
+       * gutters nor a border, is sized from the same token.
+       */
+      className="grid min-h-0 gap-6 xl:h-full xl:grid-cols-[1fr_calc(var(--list-pane)+41px)] xl:gap-0"
+    >
       <section className="app-pane flex min-h-0 flex-col pr-0 xl:pr-6">
         <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-3">
           <h2 className="display-heading text-display-md text-stone-900">Availability</h2>
@@ -299,7 +309,7 @@ export function AvailabilityCalendar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               aria-label="Show earlier months"
               disabled={!canPageBack}
               onClick={() => setPageStart((previous) => Math.max(0, previous - MONTHS_PER_PAGE))}
@@ -310,7 +320,7 @@ export function AvailabilityCalendar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               aria-label="Show later months"
               disabled={!canPageForward}
               onClick={() =>

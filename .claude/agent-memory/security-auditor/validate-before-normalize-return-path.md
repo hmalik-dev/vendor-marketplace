@@ -12,7 +12,7 @@ URL parser and re-serialising.
 
 1. **Returns the decoded value.** `decodeURIComponent(value)` promotes encoded
    `&`, `=` and `#` inside the destination's query into structural delimiters
-   *after* the check passed. `?package=a%26foo%3Dbar` becomes
+   _after_ the check passed. `?package=a%26foo%3Dbar` becomes
    `?package=a&foo=bar` in the final target — query-parameter injection into a
    destination the validator called safe.
 2. **Checks the un-normalized pathname.** The `LOOPING_PREFIXES` test runs on
@@ -26,8 +26,8 @@ and the through-a-query-decode entry points produced zero foreign origins, becau
 `startsWith('/')` + `!startsWith('//')` + no backslash + no control character is
 enough for the WHATWG parser (it leaves path state only for `//`, `\` on a special
 scheme, or a scheme; it strips only tab/LF/CR and leading/trailing C0-or-space;
-U+2044 and U+FF0F are not normalised to `/`). The defects are in what it *returns*,
-not what it *rejects*.
+U+2044 and U+FF0F are not normalised to `/`). The defects are in what it _returns_,
+not what it _rejects_.
 
 **How to apply:** the shape that fixes both at once is parse-then-reserialise —
 `new URL(value, 'https://placeholder.invalid')`, reject unless `url.origin` is
