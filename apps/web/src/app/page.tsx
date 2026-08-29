@@ -295,7 +295,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 */}
                 <Link
                   href="/search"
-                  className="text-sm font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+                  className="text-action font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
                 >
                   All {categories.length} categories →
                 </Link>

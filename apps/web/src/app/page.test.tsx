@@ -283,6 +283,19 @@ describe('HomePage', () => {
     expect(link.className).toContain('focus-visible:ring-2');
   });
 
+  /*
+   * #86. Frame `01 Landing` draws this link at 13px; it rendered at 12.5px
+   * (`text-sm`) because the scale had no 13px step until `--text-action`.
+   */
+  it('sizes the categories link on the 13px step the frame draws it at', async () => {
+    render(await HomePage());
+
+    const link = screen.getByRole('link', { name: 'All 11 categories →' });
+
+    expect(link.className).toContain('text-action');
+    expect(link.className).not.toContain('text-sm');
+  });
+
   it('counts nothing in the badge or on a category card', async () => {
     render(await HomePage());
 
