@@ -440,6 +440,50 @@ function frameSpanFor(label: string): string {
   return FRAME_11_RAIL.slice(FRAME_11_RAIL.lastIndexOf('<span', at), at + 1);
 }
 
+/*
+ * The frame's month-nav glyphs. They sit in the pane, not the rail, and the
+ * `‹` span is the first thing the title row draws after the heading.
+ */
+const frameNavGlyphs = (() => {
+  const at = FRAME_11.indexOf('June — August 2026');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the month range this test measures');
+  }
+
+  return FRAME_11.slice(FRAME_11.lastIndexOf('<div', at), FRAME_11.indexOf('</div>', at));
+})();
+
+/*
+ * The `‹` glyph's own style. It has to be read off the span rather than the row
+ * that holds it: the row is `#4A443C` and the glyphs are the muted `#6B6459`,
+ * so reading the row silently measures the wrong colour.
+ */
+const frameNavGlyphStyle = (() => {
+  const found = /<span style="([^"]*)">\u2039</.exec(frameNavGlyphs);
+
+  if (!found?.[1]) {
+    throw new Error('Frame 11 no longer styles the month-nav glyph this test measures');
+  }
+
+  return found[1];
+})();
+
+/** The theme token whose value is this hex, e.g. `#6B6459` -> `stone-600`. */
+function colourToken(hex: string): string {
+  const theme = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+  const found = new RegExp(`--color-([a-z0-9-]+):\\s*${hex}\\s*;`, 'i').exec(theme);
+
+  if (!found?.[1]) {
+    throw new Error(`No theme colour token has the value ${hex}`);
+  }
+
+  return found[1];
+}
+
 /** px -> the Tailwind spacing unit that renders it; the scale is 4px per unit. */
 function spacingUnit(px: string): string {
   return String(Number.parseFloat(px) / 4);
@@ -497,5 +541,30 @@ describe('frame 11 parity', () => {
 
     expect(action.className).toContain(`py-${spacingUnit(padY)}`);
     expect(action.className).toContain(`px-${spacingUnit(padX)}`);
+  });
+
+  it('pages the months with the frame glyphs, in the frame colour', () => {
+    renderCalendar();
+
+    const back = screen.getByRole('button', { name: 'Show earlier months' });
+    const forward = screen.getByRole('button', { name: 'Show later months' });
+
+    // The literal glyphs, read out of the frame rather than duplicated here.
+    const glyphs = [...frameNavGlyphs.matchAll(/>([\u2039\u203a])</g)].map((hit) => hit[1]);
+
+    expect(glyphs).toEqual(['\u2039', '\u203a']);
+    expect(back.textContent).toBe(glyphs[0]);
+    expect(forward.textContent).toBe(glyphs[1]);
+
+    // Muted, not the clay an action would use.
+    const token = colourToken(styleValue(frameNavGlyphStyle, 'color'));
+
+    expect(back.className).toContain(`text-${token}`);
+    expect(forward.className).toContain(`text-${token}`);
+
+    // `04-laws.md`: an icon-only control keeps a 44x44 target. jsdom has no
+    // layout, so this asserts the mechanism that provides it.
+    expect(back.className).toContain('before:size-11');
+    expect(forward.className).toContain('before:size-11');
   });
 });

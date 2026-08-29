@@ -341,7 +341,7 @@ have been observed. Corrected in place.
 | PB2-31 | Style | Selected panel radius 12 / padding 13 | 14 / 14 | **PASS** — fixed in this lane (#154): panel is now `rounded-[12px] p-[13px]` |
 | PB2-32 | Style | Market-note panel radius 12 | 14 | **PASS** — fixed in this lane (#155): now `rounded-[12px]` |
 | PB2-33 | Style | `Block these` `padding:8px 14px` | `6px 12px` | **PASS** — fixed in this lane (#156): `px-3.5 py-2` at the call site |
-| PB2-34 | Style | Month nav inline glyphs in `#6B6459` at 13px | ~~two 36px circular icon buttons~~ → **two 44x44 icon buttons**, `border-radius:10px`, `color:#A34A28` | **HOLDS** (observed value corrected — see note above) |
+| PB2-34 | Style | Month nav inline glyphs in `#6B6459` at 13px | ~~two 36px circular icon buttons~~ → **two 44x44 icon buttons**, `border-radius:10px`, `color:#A34A28` | **PASS** — fixed in this lane (#157): bare `‹`/`›` at `text-action` / `text-stone-600`, 44x44 target kept via `before:size-11` |
 | PB2-35 | Colour | `Clear` `#4A443C` | `#A34A28` | **HOLDS** — re-measured live `rgb(163,74,40)` = `#A34A28` (Button `variant="ghost"` = `text-clay-500`) |
 | PB2-36 | Font | Day cells 12px | **11px** | **HOLDS** — re-measured live 11px (`text-xs` = `--text-xs: 11px`) |
 | PB2-37 | Font | Title letter-spacing -0.26px | -0.65px (root cause) | **PASS** — live now `-0.26px`. Closed by #165 (`8a14155`) |

@@ -6,7 +6,6 @@ import {
   LOCKED_AVAILABILITY_STATUSES,
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';
@@ -79,6 +78,37 @@ export function cellAppearance(
     return SELECTING_STYLE;
   }
   return STATUS_STYLES[status];
+}
+
+/*
+ * Frame `11 Availability` draws month paging as bare `‹` / `›` glyphs at 13px in
+ * `stone-600` on the heading baseline — not as filled icon buttons. It is still
+ * an icon-only control, so `04-laws.md` requires a 44x44 hit area: the glyph
+ * keeps the frame's size and colour while a centred pseudo-element carries the
+ * target, so the law is met without the frame's composition moving.
+ */
+function MonthNavButton({
+  label,
+  glyph,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  glyph: string;
+  disabled: boolean;
+  onClick: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="relative rounded-sm text-action text-stone-600 outline-none transition-colors duration-(--duration-fast) before:absolute before:top-1/2 before:left-1/2 before:size-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] hover:text-stone-900 focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 disabled:pointer-events-none disabled:opacity-50"
+    >
+      <span aria-hidden="true">{glyph}</span>
+    </button>
+  );
 }
 
 const RANGE_FORMATTER = new Intl.DateTimeFormat('en-US', {
@@ -306,31 +336,23 @@ export function AvailabilityCalendar({
           <h2 className="display-heading text-display-md text-stone-900">Availability</h2>
 
           <div className="flex items-center gap-3 text-base text-stone-700">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Show earlier months"
+            <MonthNavButton
+              label="Show earlier months"
+              glyph="‹"
               disabled={!canPageBack}
               onClick={() => setPageStart((previous) => Math.max(0, previous - MONTHS_PER_PAGE))}
-            >
-              <ChevronLeft aria-hidden="true" />
-            </Button>
+            />
             <span className="tabular-nums">{rangeLabel}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Show later months"
+            <MonthNavButton
+              label="Show later months"
+              glyph="›"
               disabled={!canPageForward}
               onClick={() =>
                 setPageStart((previous) =>
                   Math.min(allMonths.length - MONTHS_PER_PAGE, previous + MONTHS_PER_PAGE),
                 )
               }
-            >
-              <ChevronRight aria-hidden="true" />
-            </Button>
+            />
           </div>
         </div>
 
