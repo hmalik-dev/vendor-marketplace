@@ -456,3 +456,66 @@ describe('field labels take the frame’s label colour (#148)', () => {
     expect(labelSource).toContain('text-stone-600');
   });
 });
+
+describe('field labels are the frame’s uppercase micro-label (#149)', () => {
+  const labelSource = read('src/components/ui/label.tsx');
+  const themeCss = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+  const lbl = frameRule('lbl');
+
+  it('reads weight 600 at 10.5px off the frames’ `.lbl`', () => {
+    expect(declaration(lbl, 'font')).toBe("600 10.5px 'Instrument Sans',sans-serif");
+  });
+
+  it('reads .05em uppercase off the frames’ `.lbl`', () => {
+    expect(declaration(lbl, 'letter-spacing')).toBe('.05em');
+    expect(declaration(lbl, 'text-transform')).toBe('uppercase');
+  });
+
+  it('has tokens for both, already named after this rule', () => {
+    expect(themeCss).toContain('--text-label: 10.5px');
+    expect(themeCss).toContain('--tracking-label: 0.05em');
+  });
+
+  it('dresses the shared label in all four', () => {
+    expect(labelSource).toContain('text-label');
+    expect(labelSource).toContain('font-semibold');
+    expect(labelSource).toContain('tracking-label');
+    expect(labelSource).toContain('uppercase');
+  });
+
+  /*
+   * What shipped: `text-sm font-medium`, i.e. 12.5px/500 in sentence case —
+   * a size up, a weight down, and not a micro-label at all.
+   */
+  it('drops the 12.5px/500 sentence-case treatment', () => {
+    expect(labelSource).not.toContain('text-sm leading-none font-medium');
+  });
+
+  /*
+   * The same four classes are the app's standing micro-label idiom, so the
+   * primitive now agrees with the places that hand-rolled it.
+   */
+  it('matches the idiom the rest of the app already uses', () => {
+    const rail = read('src/components/ui/rail.tsx');
+
+    expect(rail).toContain('text-label font-semibold tracking-label text-stone-600 uppercase');
+  });
+
+  /*
+   * The photo zone labels a file input it owns, so it is a bare `<label>`
+   * rather than the primitive — but frame 09 draws `Profile photo` as a `.lbl`
+   * like every other field label, so it takes the same treatment.
+   */
+  it('gives the photo zone’s own label the same treatment', () => {
+    const uploadSource = read('src/components/image-upload.tsx');
+
+    expect(editorFrame).toContain('<div class="lbl" style="margin-bottom:6px">Profile photo</div>');
+    expect(uploadSource).toContain(
+      'block text-label font-semibold tracking-label text-stone-600 uppercase',
+    );
+    expect(uploadSource).not.toContain('block text-sm font-medium text-stone-800');
+  });
+});

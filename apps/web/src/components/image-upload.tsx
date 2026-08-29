@@ -105,7 +105,15 @@ export function ImageUpload({
 
   return (
     <div className="space-y-2">
-      <label htmlFor={inputId} className="block text-sm font-medium text-stone-800">
+      {/*
+        The frames draw this one as a `.lbl` like every other field label, so
+        it takes the same micro-label treatment. It is a bare `<label>` rather
+        than the `Label` primitive because it labels a file input it owns.
+      */}
+      <label
+        htmlFor={inputId}
+        className="block text-label font-semibold tracking-label text-stone-600 uppercase"
+      >
         {label}
       </label>
       <div
