@@ -71,6 +71,11 @@ jobs:
       - name: Test agent workflows and hooks
         run: pnpm test:agents
 
+  # Both jobs stay inert until the repository variable DB_MIGRATIONS is set to
+  # `on`, so the pipeline is green before its secrets exist. Once it is on, a
+  # missing connection string is a hard failure rather than a silent skip —
+  # migrations that quietly stop running are worse than a red build.
+  #
   # Migrations run from CI, never from a laptop. `resolveMigrationUrl()` prefers
   # DATABASE_URL_UNPOOLED because Neon's pooled endpoint is PgBouncer in
   # transaction mode: it does not pin a session, so the advisory lock the
@@ -83,7 +88,7 @@ jobs:
   migrate-staging:
     name: Migrate staging
     needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DB_MIGRATIONS == 'on'
     runs-on: ubuntu-latest
     environment: db-staging
     timeout-minutes: 10
@@ -128,7 +133,7 @@ jobs:
   migrate-production:
     name: Migrate production
     needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/production'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/production' && vars.DB_MIGRATIONS == 'on'
     runs-on: ubuntu-latest
     environment: db-production
     timeout-minutes: 10

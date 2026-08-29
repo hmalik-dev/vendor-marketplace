@@ -417,8 +417,9 @@ hook, which is why the secret rows are yours and not mine.
 | 2 | #202 | Flip **Production Branch** `main` -> `production` | Vercel -> Settings -> Git |
 | 3 | #204 | Add `DATABASE_URL_UNPOOLED` to the **`db-staging`** environment | GitHub -> Environments |
 | 4 | #204 | Add `DATABASE_URL_UNPOOLED` to the **`db-production`** environment | GitHub -> Environments |
-| 5 | #205 | Add the `NEON_API_KEY` secret and set variable `NEON_PREVIEW_BRANCHES=on` | GitHub -> Secrets and variables |
-| 6 | #206 | Enter payment details, select **Launch** | Neon console -> Billing |
+| 5 | #204 | Set variable **`DB_MIGRATIONS=on`** once both secrets are in | GitHub -> Secrets and variables |
+| 6 | #205 | Add the `NEON_API_KEY` secret and set variable `NEON_PREVIEW_BRANCHES=on` | GitHub -> Secrets and variables |
+| 7 | #206 | Enter payment details, select **Launch** | Neon console -> Billing |
 
 **Cleared already:** the `production` branch exists and is protected against
 deletion and force pushes alongside `main`; the Neon `staging` branch exists;
