@@ -20,4 +20,4 @@
 - [Ticket = branch + worktree, merge immediately](ticket-worktree-merge-immediately.md) — **hard gate every invoke: merge, close the lane, bring main up**; PENDING_MERGE is not terminal and /land-lanes is not a handoff
 - [Filing a ticket is a three-file change](filing-a-ticket-is-a-three-file-change.md) — ids must be contiguous from 0; `pnpm test` caches a green over tracker edits, use --force
 - [Dev and build contend over .next](dev-and-build-contend-over-next.md) — a stray `pnpm build` silently kills the web dev server; start the two apps separately
-- [Lane manifests drift from reality](lane-manifest-branch-drifts.md) — prUrl null and branch `lane/<n>` when the truth is `worktree-<n>`; resolve from git and gh
+- [Lane manifests drift from reality](lane-manifest-branch-drifts.md) — **fixed 2026-08-29**; use `pnpm lane:pr`, never hand-edit. Manifests written before that still lie

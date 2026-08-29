@@ -1,6 +1,6 @@
 ---
 name: lane-manifest-branch-drifts
-description: .claude/lanes/<n>.json can name a branch and PR that don't exist — trust git and gh, not the manifest
+description: "Fixed 2026-08-29: the manifest now reads its branch from git and records its PR via `pnpm lane:pr`. Manifests written before that still lie — verify old ones against git and gh"
 metadata:
   type: project
 ---
@@ -16,8 +16,18 @@ value, a null `prUrl` classifies a merged lane as "abandoned work" and leaves
 its worktree and database to accumulate — the exact unbounded growth the skill
 exists to prevent.
 
-**How to apply:** when landing lanes, resolve each lane's real state from
-`git -C <worktree> rev-parse --abbrev-ref HEAD` and
+**Fixed at the source on 2026-08-29**, after lane 198 hand-edited the JSON to be
+landable:
+
+- `laneUp` reads the branch from `git symbolic-ref --short HEAD` in the worktree
+  instead of composing `lane/<ticket>`, a name nothing creates.
+- **`pnpm lane:pr <ticket> <url>`** records the PR and sets `pending-merge`
+  through the same atomic `updateManifest` every other change uses. Run it at
+  delivery; never hand-edit `.claude/lanes/<n>.json`.
+
+**How to apply:** a manifest written on or after 2026-08-29 can be trusted for
+`branch` and `prUrl`. One written before cannot — those still say `lane/<n>` and
+`"prUrl": null` — so when landing an older lane, resolve its real state from
+`git -C <worktree> symbolic-ref --short HEAD` and
 `gh pr list --state all --json number,headRefName,state`, matching on the branch
-name. Use the manifest only for `worktreePath` and `database`. See
-[[ticket-worktree-merge-immediately]] and [[worktree-env-copies-drift]].
+name. See [[ticket-worktree-merge-immediately]] and [[worktree-env-copies-drift]].
