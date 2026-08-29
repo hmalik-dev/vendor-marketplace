@@ -40,10 +40,15 @@ describe('CategoryIcon', () => {
 });
 
 describe('CategoryIconBadge', () => {
-  it('sizes the badge at 28px', () => {
+  /*
+   * 22px, which is what frame `09` draws inside each category chip and what
+   * makes the chip 38px tall with its 7px vertical padding. It was 28px, which
+   * pushed the chip to 42px.
+   */
+  it('sizes the badge at 22px', () => {
     const inline = render(<CategoryIconBadge icon="music" />);
 
-    expect(inline.container.firstElementChild?.className).toContain('size-7');
+    expect(inline.container.firstElementChild?.className).toContain('size-[22px]');
   });
 
   it('puts the glyph in the primary circle the icon spec calls for', () => {

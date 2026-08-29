@@ -357,6 +357,70 @@
 }
 
 /*
+ * The service-radius slider, drawn as frame `09` draws it: a 4px `stone-200`
+ * track, a `clay-400` fill to the current value, and a 14px `stone-0` thumb
+ * ringed 2px in `clay-400` — 18px across once the ring is counted.
+ *
+ * Applied to a native `input[type=range]` rather than a custom widget, so the
+ * keyboard behaviour, the value announcement and the step arithmetic stay the
+ * browser's. `accent-color` alone cannot express this: it tints the control but
+ * leaves the browser's own track height and thumb.
+ *
+ * The fill is a gradient stop rather than a second element, because a native
+ * range has no element between the track and the thumb to colour. The caller
+ * sets `--range-fill` from the value.
+ */
+@utility range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px; /* the thumb's box; the 4px track is centred inside it */
+  background: transparent;
+  cursor: pointer;
+
+  &::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      var(--color-clay-400) var(--range-fill, 0%),
+      var(--color-stone-200) var(--range-fill, 0%)
+    );
+  }
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--color-stone-0);
+    border: 2px solid var(--color-clay-400);
+    /* Centres the 18px thumb on the 4px track: (4 - 18) / 2. */
+    margin-top: -7px;
+  }
+
+  &::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-stone-200);
+  }
+
+  &::-moz-range-progress {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-clay-400);
+  }
+
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--color-stone-0);
+    border: 2px solid var(--color-clay-400);
+  }
+}
+
+/*
  * A loading skeleton. The 200ms delay on both animations is the point: a load
  * that resolves faster than that never paints a skeleton at all, so a quick
  * response reads as instant rather than as a flash of grey.

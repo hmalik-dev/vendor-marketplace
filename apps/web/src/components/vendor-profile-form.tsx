@@ -176,6 +176,25 @@ function toPayload(form: FormState): Record<string, unknown> {
 }
 
 /**
+ * How far along the track the slider's fill reaches, as a percentage.
+ *
+ * The frame draws the fill as a `width:46%` bar at 60 miles; this derives the
+ * same figure from the range instead of hard-coding it, so the two stay in step
+ * if the bounds ever move. `(60 - 5) / (125 - 5)` is 45.8%, which is the true
+ * position of 60 on the scale — the frame's 46% is that number rounded by hand,
+ * and the difference is 0.2px on the frame's own 502px track.
+ *
+ * Clamped because a stored radius can sit outside the slider's bounds: the
+ * column is kilometres and predates these limits.
+ */
+export function serviceRadiusFillPercent(miles: number): number {
+  const span = SERVICE_RADIUS_MAX_MILES - SERVICE_RADIUS_MIN_MILES;
+  const clamped = Math.min(Math.max(miles, SERVICE_RADIUS_MIN_MILES), SERVICE_RADIUS_MAX_MILES);
+
+  return Math.round(((clamped - SERVICE_RADIUS_MIN_MILES) / span) * 1000) / 10;
+}
+
+/**
  * Which blockers the form can still see for itself.
  *
  * The API stays the authority — its list is what survives a reload, and it is
@@ -258,6 +277,7 @@ export function VendorProfileForm({
   const isNew = profile === null;
   const slugPreview = form.slug.trim() || generateSlug(form.businessName || 'your-business');
   const isDirty = JSON.stringify(form) !== savedSnapshot;
+  const radiusFillPercent = serviceRadiusFillPercent(form.serviceRadiusMiles);
   const bioRemaining = MAX_VENDOR_BIO_LENGTH - form.bio.length;
 
   useEffect(() => {
@@ -402,7 +422,7 @@ export function VendorProfileForm({
                * sits first in the portfolio is the cover, and the portfolio
                * editor says so on the tile.
                */}
-              <div className="mt-4 w-24 sm:w-40">
+              <div className="mt-4 w-24 sm:w-32">
                 <ImageUpload
                   label="Profile photo"
                   prefix="vendor-profile"
@@ -424,7 +444,7 @@ export function VendorProfileForm({
                     onChange={(event) => update('businessName', event.target.value)}
                     required
                     maxLength={200}
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                 </div>
 
@@ -435,7 +455,7 @@ export function VendorProfileForm({
                     value={form.slug}
                     onChange={(event) => update('slug', event.target.value)}
                     placeholder={generateSlug(form.businessName || 'your-business')}
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                   <p className="mt-1 truncate text-xs text-stone-600">
                     {BRAND_DOMAIN}/vendors/{slugPreview}
@@ -450,7 +470,7 @@ export function VendorProfileForm({
                     onChange={(event) => update('tagline', event.target.value)}
                     placeholder="Quiet, documentary, never asks you to pose."
                     maxLength={MAX_TAGLINE_LENGTH}
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                   <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
                     <p className="text-stone-600">
@@ -473,7 +493,7 @@ export function VendorProfileForm({
                     value={form.yearsInBusiness}
                     onChange={(event) => update('yearsInBusiness', event.target.value)}
                     placeholder="10"
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                   <p className="mt-1 text-xs text-stone-600">
                     Counted from when you started, not when you joined here.
@@ -488,10 +508,9 @@ export function VendorProfileForm({
                     onChange={(event) => update('bio', event.target.value)}
                     placeholder="What you do, who you do it for, and what makes a day with you feel different."
                     maxLength={MAX_VENDOR_BIO_LENGTH}
-                    className="mt-1.5 min-h-[140px]"
+                    className="mt-1.5 min-h-[140px] bg-stone-0"
                   />
                   <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
-                    <p className="text-stone-600">A couple of paragraphs is plenty.</p>
                     <p
                       // Warns before the cap rather than only on reaching it, so a
                       // vendor can finish the sentence instead of being cut off.
@@ -534,7 +553,7 @@ export function VendorProfileForm({
                     id="address"
                     value={form.address}
                     onChange={(event) => update('address', event.target.value)}
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                 </div>
 
@@ -545,7 +564,7 @@ export function VendorProfileForm({
                     value={form.city}
                     onChange={(event) => update('city', event.target.value)}
                     required
-                    className="mt-1.5"
+                    className="mt-1.5 bg-stone-0"
                   />
                 </div>
 
@@ -554,7 +573,7 @@ export function VendorProfileForm({
                   <Select value={form.state} onValueChange={(value) => update('state', value)}>
                     <SelectTrigger
                       id="state"
-                      className="mt-1.5 w-full data-[size=default]:h-11 sm:data-[size=default]:h-9"
+                      className="mt-1.5 w-full bg-stone-0 data-[size=default]:h-11 sm:data-[size=default]:h-[38px]"
                     >
                       <SelectValue placeholder="Choose a state" />
                     </SelectTrigger>
@@ -569,12 +588,15 @@ export function VendorProfileForm({
                 </div>
 
                 <div>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <Label htmlFor="serviceRadius">Service radius</Label>
-                    <span className="text-sm font-medium text-stone-700">
-                      {form.serviceRadiusMiles} miles
-                    </span>
-                  </div>
+                  {/*
+                    The frame carries the value inside the label —
+                    "Service radius — 60 miles" — rather than in a second
+                    element beside it, so the label reads as one phrase and the
+                    number is announced with the control it belongs to.
+                  */}
+                  <Label htmlFor="serviceRadius">
+                    Service radius — {form.serviceRadiusMiles} miles
+                  </Label>
                   <input
                     id="serviceRadius"
                     type="range"
@@ -583,11 +605,28 @@ export function VendorProfileForm({
                     step={SERVICE_RADIUS_STEP_MILES}
                     value={form.serviceRadiusMiles}
                     onChange={(event) => update('serviceRadiusMiles', Number(event.target.value))}
-                    className="mt-3 h-6 w-full accent-clay-400"
+                    className="range-slider mt-3.5"
+                    /*
+                     * The fill has to be a gradient stop on the track — a
+                     * native range has no element between track and thumb to
+                     * colour — so the current value is handed to CSS rather
+                     * than re-derived there.
+                     */
+                    style={{ '--range-fill': `${radiusFillPercent}%` } as React.CSSProperties}
                   />
-                  <p className="mt-1 text-xs text-stone-600">
-                    How far you will travel for an event.
-                  </p>
+                  {/*
+                    The frame ends the slider with its two bounds rather than a
+                    sentence, which is what tells the vendor how far the track
+                    actually reaches. `aria-hidden` because the input already
+                    announces its own min and max.
+                  */}
+                  <div
+                    aria-hidden="true"
+                    className="mt-[7px] flex justify-between text-xs text-stone-600"
+                  >
+                    <span>{SERVICE_RADIUS_MIN_MILES} mi</span>
+                    <span>{SERVICE_RADIUS_MAX_MILES} mi</span>
+                  </div>
                 </div>
 
                 {/*
@@ -607,7 +646,7 @@ export function VendorProfileForm({
                       id="responseTime"
                       aria-describedby="responseTime-help"
                       className={cn(
-                        'mt-1.5 w-full data-[size=default]:h-11 sm:data-[size=default]:h-9',
+                        'mt-1.5 w-full bg-stone-0 data-[size=default]:h-11 sm:data-[size=default]:h-[38px]',
                         responseTimeBlocks && 'border-gold-400',
                       )}
                     >
@@ -638,7 +677,16 @@ export function VendorProfileForm({
             </section>
 
             <section id={SECTION_IDS.tags} className="scroll-mt-6 py-6">
-              <h2 className="font-display text-display-sm text-stone-900">Tags</h2>
+              {/*
+               * Visually hidden, like the Business and Location headings above.
+               * Frame `09`'s form pane carries exactly one visible heading —
+               * `Your storefront` — and no section headings under it; the
+               * section names live in the nav rail instead. The heading stays
+               * in the accessibility tree because the nav's anchors target
+               * these sections, and a landmark a screen reader cannot name is
+               * a worse trade than a heading a sighted vendor never sees.
+               */}
+              <h2 className="sr-only">Tags</h2>
               <p className="mt-1 text-base leading-prose text-stone-700">
                 How customers find someone who fits their celebration.
               </p>
@@ -710,11 +758,11 @@ export function VendorProfileForm({
                 {isSaving ? 'Saving…' : justSaved ? 'Saved' : isDirty ? 'Unsaved changes' : ''}
               </span>
               {profile !== null ? (
-                <Button type="button" variant="secondary" size="sm" asChild>
+                <Button type="button" variant="secondary" asChild>
                   <a href={`/vendors/${profile.slug}`}>Preview</a>
                 </Button>
               ) : null}
-              <Button type="submit" variant="primary" size="sm" disabled={isSaving}>
+              <Button type="submit" variant="primary" disabled={isSaving}>
                 {isNew ? 'Create profile' : 'Save changes'}
               </Button>
             </div>
