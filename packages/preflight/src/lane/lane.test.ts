@@ -11,11 +11,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseLaneEnv } from './env.js';
 import {
   adoptOwnModules,
   baseDatabaseUrl,
+  currentBranch,
   laneDown,
   laneEnvFor,
   laneUp,
@@ -32,6 +34,7 @@ const databaseUrl = 'postgresql://localhost:5432/vendor_marketplace_lane_42';
 const deps = (): LaneUpDeps => ({
   createDatabase: vi.fn().mockResolvedValue(databaseUrl),
   probe: vi.fn().mockResolvedValue(true),
+  branchOf: vi.fn().mockReturnValue('worktree-42'),
   install: vi.fn().mockResolvedValue(undefined),
   build: vi.fn().mockResolvedValue(undefined),
   migrate: vi.fn().mockResolvedValue(undefined),
@@ -117,6 +120,7 @@ describe('laneUp', () => {
     await laneUp(root, worktree, '42', {
       createDatabase: vi.fn().mockResolvedValue(databaseUrl),
       probe: vi.fn().mockResolvedValue(true),
+      branchOf: vi.fn().mockReturnValue('worktree-42'),
       install: record('install'),
       build: record('build'),
       migrate: record('migrate'),
@@ -443,5 +447,47 @@ describe('.claude/settings.json', () => {
     const worktree = settings().worktree as { baseRef?: string } | undefined;
 
     expect(worktree?.baseRef).toBe('fresh');
+  });
+});
+
+/*
+ * The manifest recorded `lane/<ticket>`, a branch name nothing creates —
+ * `EnterWorktree` names it `worktree-<ticket>`. `/land-lanes` resolves a lane
+ * to its PR through this field, so the wrong name reads as a lane whose branch
+ * is gone: abandoned work it correctly refuses to touch, leaving a finished
+ * ticket on the board. Lane 198 had to hand-edit the JSON to be landable.
+ */
+describe('manifest branch', () => {
+  it('records the branch the worktree is really on', async () => {
+    writeFileSync(path.join(worktree, '.env'), `DATABASE_URL=${databaseUrl}\n`);
+
+    const upDeps = deps();
+    const manifest = await laneUp(root, worktree, '42', upDeps);
+
+    expect(manifest.branch).toBe('worktree-42');
+    expect(readManifest(root, '42')?.branch).toBe('worktree-42');
+    expect(upDeps.branchOf).toHaveBeenCalledWith(worktree);
+  });
+
+  it('does not invent a branch name from the ticket', async () => {
+    writeFileSync(path.join(worktree, '.env'), `DATABASE_URL=${databaseUrl}\n`);
+
+    const manifest = await laneUp(root, worktree, '42', {
+      ...deps(),
+      branchOf: vi.fn().mockReturnValue('some-other-branch'),
+    });
+
+    expect(manifest.branch).toBe('some-other-branch');
+    expect(manifest.branch).not.toBe('lane/42');
+  });
+});
+
+describe('currentBranch', () => {
+  it('reads the checked-out branch out of git', () => {
+    execFileSync('git', ['-C', worktree, 'init', '--initial-branch=worktree-232'], {
+      stdio: 'ignore',
+    });
+
+    expect(currentBranch(worktree)).toBe('worktree-232');
   });
 });

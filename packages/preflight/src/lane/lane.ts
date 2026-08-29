@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { runCommand } from '../exec.js';
 import { ENV_FILES } from '../context.js';
 import { childEnv, LANE_ENV_FILE, parseLaneEnv, renderLaneEnv } from './env.js';
@@ -213,14 +214,40 @@ export interface LaneUpDeps {
    */
   readonly createDatabase: (ticket: string, worktreePath: string) => Promise<string>;
   readonly probe?: PortProbe;
+  /** The branch the worktree is really on — see `currentBranch`. */
+  readonly branchOf: (worktreePath: string) => string;
   readonly install: (worktreePath: string) => Promise<void>;
   readonly build: (worktreePath: string) => Promise<void>;
   readonly migrate: (worktreePath: string) => Promise<void>;
 }
 
+/**
+ * The branch the worktree is actually on.
+ *
+ * The manifest used to record `lane/<ticket>`, a name nothing ever creates:
+ * `EnterWorktree` names the branch `worktree-<ticket>`. `/land-lanes` resolves
+ * a lane to its PR through this field, so the wrong name reads as a lane whose
+ * branch is gone — abandoned work it correctly refuses to touch, leaving a
+ * finished ticket sitting on the board. Read it from git instead of composing
+ * it from a convention the branch does not follow.
+ */
+export function currentBranch(worktreePath: string): string {
+  /*
+   * `symbolic-ref`, not `rev-parse --abbrev-ref`: the latter resolves HEAD to a
+   * commit first, so it fails outright on a branch with no commits yet. It also
+   * answers the literal string `HEAD` on a detached checkout, which would be
+   * written into the manifest as if it were a branch name. This reads the ref,
+   * so an unborn branch gives its name and a detached HEAD raises instead.
+   */
+  return execFileSync('git', ['-C', worktreePath, 'symbolic-ref', '--short', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim();
+}
+
 const defaultUpDeps: LaneUpDeps = {
   createDatabase: (ticket, worktreePath) =>
     createLaneDatabase(ticket, baseDatabaseUrl(worktreePath)),
+  branchOf: currentBranch,
   install: (worktreePath) => pnpmInLane(worktreePath, ['install']),
   /*
    * A fresh worktree has no `dist/` for the workspace packages, so every
@@ -319,7 +346,7 @@ export async function laneUp(
 
     const next: LaneManifest = {
       ticket,
-      branch: `lane/${ticket}`,
+      branch: deps.branchOf(worktreePath),
       worktreePath,
       apiPort: API_BASE + offset,
       webPort: WEB_BASE + offset,
