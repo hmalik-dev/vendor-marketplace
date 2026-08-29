@@ -20,8 +20,17 @@ const OFFSET_RATIO = 0.45;
 const STROKE_RATIO = 0.08;
 /** Gap between the mark and the wordmark, as a fraction of the diameter. */
 const WORDMARK_GAP_RATIO = 0.5;
-/** Wordmark font size, as a multiple of the diameter. */
-const WORDMARK_SIZE_RATIO = 1.6;
+/**
+ * Wordmark font size, as a multiple of the diameter.
+ *
+ * Read off the frames rather than chosen: they pair a 15px mark with a 23px
+ * wordmark in **24** desktop headers, a 14px mark with 21px on mobile, and a
+ * 19px mark with 29px on the sign-up panel — all three are 23/15 to within
+ * half a pixel. Frame `01 Landing` alone draws 24px, so it is the outlier and
+ * not the rule. At 1.6 every one of those surfaces rendered a pixel or two
+ * over: 24px in the app header, 22.4px on mobile, 30.4px on sign-up.
+ */
+const WORDMARK_SIZE_RATIO = 23 / 15;
 /**
  * The diameters the design calls for, by context. Named so no surface picks a
  * logo size by eye.

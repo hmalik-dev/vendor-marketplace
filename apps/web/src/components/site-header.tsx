@@ -40,7 +40,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
     <header className="sticky top-0 z-(--z-header) box-border h-(--header-height) border-b border-stone-300 bg-stone-0">
       <nav
         aria-label="Main"
-        className="flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-10"
+        className="flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"
       >
         {/* 34px from the wordmark to the nav — frame `01`. */}
         <div className="flex min-w-0 flex-none items-center gap-8.5">

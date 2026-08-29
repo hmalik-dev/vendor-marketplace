@@ -44,11 +44,12 @@ describe('Logo', () => {
     cleanup();
   });
 
-  it('sets the wordmark at 1.6x the diameter and gaps it by half', () => {
+  it('sets the wordmark at the frame’s ratio of the diameter and gaps it by half', () => {
     const size = LOGO_SIZES.marketingFooter;
     render(<Logo size={size} />);
 
-    expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe(`${size * 1.6}px`);
+    // 23/15 — the pairing the frames draw. See `logo.tsx`.
+    expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe(`${(size * 23) / 15}px`);
     expect(screen.getByTestId('logo').style.gap).toBe(`${size * 0.5}px`);
   });
 
