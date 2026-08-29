@@ -260,3 +260,5 @@ tracker for detail.
    something, not by assuming.
 9. Rotate every credential touched during setup (§2.1).
 10. Unfreeze.
+
+<!-- Preview-branch smoke test: verifies the per-PR Neon branch workflow. -->
