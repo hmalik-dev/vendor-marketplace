@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "booking_requests_live_package_key" ON "booking_requests" USING btree ("customer_id","vendor_id","event_date","package_id") WHERE "booking_requests"."status" in ('pending', 'quoted') and "booking_requests"."package_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "booking_requests_live_custom_key" ON "booking_requests" USING btree ("customer_id","vendor_id","event_date") WHERE "booking_requests"."status" in ('pending', 'quoted') and "booking_requests"."package_id" is null;

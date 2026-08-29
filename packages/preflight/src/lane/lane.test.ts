@@ -114,6 +114,45 @@ describe('laneUp', () => {
     expect(d.createDatabase).toHaveBeenCalledTimes(1);
   });
 
+  it('marks a lane active only once install, build and migrate have all run', async () => {
+    const failing: LaneUpDeps = {
+      ...deps(),
+      migrate: vi.fn().mockRejectedValue(new Error('migrate exploded')),
+    };
+
+    await expect(laneUp(root, worktree, '42', failing)).rejects.toThrow(/exploded/);
+
+    expect(readManifest(root, '42')?.state).toBe('provisioning');
+  });
+
+  it('finishes provisioning a lane whose first attempt claimed ports and then failed', async () => {
+    const failing: LaneUpDeps = {
+      ...deps(),
+      install: vi.fn().mockRejectedValue(new Error('pnpm install exploded')),
+    };
+
+    await expect(laneUp(root, worktree, '42', failing)).rejects.toThrow(/exploded/);
+
+    /*
+     * Nothing is cleaned up between the attempts, because nothing cleans up in
+     * real life either. `.env.lane` is written before the install so that the
+     * install and the migration reach this lane's own database, so it is
+     * present during exactly the failures the retry has to detect — which is
+     * why the manifest state, not the file, is what the retry reads.
+     */
+    expect(existsSync(path.join(worktree, '.env.lane'))).toBe(true);
+
+    const retry = deps();
+    const manifest = await laneUp(root, worktree, '42', retry);
+
+    // The retry keeps the ports already claimed and does the work that never ran.
+    expect(manifest.apiPort).toBe(readManifest(root, '42')?.apiPort);
+    expect(manifest.state).toBe('active');
+    expect(retry.install).toHaveBeenCalledTimes(1);
+    expect(retry.build).toHaveBeenCalledTimes(1);
+    expect(retry.migrate).toHaveBeenCalledTimes(1);
+  });
+
   it('never hands two lanes the same ports', async () => {
     const first = await laneUp(root, worktree, '42', deps());
     const second = await laneUp(root, worktree, '43', deps());

@@ -17,8 +17,6 @@ import { bearer, createTestHarness, type TestHarness } from '../../testing/test-
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
 
-const EVENT_DATE = toDateString(addDays(new Date(), 30));
-
 interface DashboardBody {
   newRequestCount: number;
   bookingsThisMonth: number;
@@ -90,12 +88,22 @@ describe('/vendor/dashboard', () => {
       .where(eq(vendorProfiles.id, vendorId));
   }
 
-  async function request(vendorId: string, packageId: string): Promise<string> {
+  /**
+   * One request per event date. A repeat submission for a date this customer
+   * already has a live request on is deduped by the API, so a test that wants
+   * two distinct requests has to ask about two distinct days.
+   */
+  async function request(vendorId: string, packageId: string, dayOffset: number): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
       url: '/booking-requests',
       headers: bearer(CUSTOMER),
-      payload: { vendorId, packageId, eventDate: EVENT_DATE, eventType: 'wedding' },
+      payload: {
+        vendorId,
+        packageId,
+        eventDate: toDateString(addDays(new Date(), dayOffset)),
+        eventType: 'wedding',
+      },
     });
     expect(created.statusCode).toBe(201);
 
@@ -174,8 +182,8 @@ describe('/vendor/dashboard', () => {
     const vendorId = await createProfile();
     const packageId = await addPackage();
     await publish(vendorId);
-    await request(vendorId, packageId);
-    await request(vendorId, packageId);
+    await request(vendorId, packageId, 30);
+    await request(vendorId, packageId, 31);
 
     expect(((await read()).json() as DashboardBody).newRequestCount).toBe(2);
   });
@@ -184,7 +192,7 @@ describe('/vendor/dashboard', () => {
     const vendorId = await createProfile();
     const packageId = await addPackage();
     await publish(vendorId);
-    const requestId = await request(vendorId, packageId);
+    const requestId = await request(vendorId, packageId, 30);
 
     await harness.app.inject({
       method: 'POST',
@@ -202,9 +210,9 @@ describe('/vendor/dashboard', () => {
     const vendorId = await createProfile();
     const packageId = await addPackage();
     await publish(vendorId);
-    const answered = await request(vendorId, packageId);
-    await request(vendorId, packageId);
-    const withdrawn = await request(vendorId, packageId);
+    const answered = await request(vendorId, packageId, 30);
+    await request(vendorId, packageId, 31);
+    const withdrawn = await request(vendorId, packageId, 32);
 
     await harness.app.inject({
       method: 'POST',
@@ -226,7 +234,7 @@ describe('/vendor/dashboard', () => {
     const vendorId = await createProfile();
     const packageId = await addPackage();
     await publish(vendorId);
-    const requestId = await request(vendorId, packageId);
+    const requestId = await request(vendorId, packageId, 30);
 
     const customer = await harness.database.db
       .select({ id: users.id })

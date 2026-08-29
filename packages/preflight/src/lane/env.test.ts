@@ -1,5 +1,8 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { childEnv, parseLaneEnv, renderLaneEnv } from './env.js';
+import { childEnv, parseLaneEnv, readRootEnv, renderLaneEnv, ROOT_ENV_FILE } from './env.js';
 import type { LaneManifest } from './manifest.js';
 
 const manifest: LaneManifest = {
@@ -22,6 +25,13 @@ describe('renderLaneEnv', () => {
     expect(parsed.NEXT_PUBLIC_API_URL).toBe('http://localhost:4007');
     expect(parsed.PORT).toBe('4007');
     expect(parsed.WEB_PORT).toBe('3007');
+  });
+
+  it('lets the API accept this lane own web origin, so a browser can drive it', () => {
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    // `allowedOrigins()` splits WEB_URL; without it the lane refuses its own
+    // web app and every client-side call fails CORS.
+    expect(parsed.WEB_URL).toBe('http://localhost:3007');
   });
 
   it('points the database at this lane own database', () => {
@@ -57,5 +67,24 @@ describe('childEnv', () => {
 
   it('preserves inherited variables the lane file does not mention', () => {
     expect(childEnv({ HOME: '/home/dev' }, 'PORT=4007').HOME).toBe('/home/dev');
+  });
+});
+
+describe('readRootEnv', () => {
+  it('reads the worktree root .env, so `lane up` can derive the lane database', () => {
+    const worktree = mkdtempSync(path.join(tmpdir(), 'lane-env-'));
+    writeFileSync(
+      path.join(worktree, ROOT_ENV_FILE),
+      '# comment\nDATABASE_URL="postgresql://localhost:5432/vendor_marketplace"\nPORT=4000\n',
+    );
+
+    expect(readRootEnv(worktree)).toEqual({
+      DATABASE_URL: 'postgresql://localhost:5432/vendor_marketplace',
+      PORT: '4000',
+    });
+  });
+
+  it('returns nothing when there is no .env, leaving the caller to report the variable', () => {
+    expect(readRootEnv(mkdtempSync(path.join(tmpdir(), 'lane-env-')))).toEqual({});
   });
 });

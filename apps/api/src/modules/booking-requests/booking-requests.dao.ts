@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -16,7 +16,10 @@ import {
   type ServicePackageRow,
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
-import type { BookingRequestStatus } from '@vendor-marketplace/shared';
+import {
+  LIVE_BOOKING_REQUEST_STATUSES,
+  type BookingRequestStatus,
+} from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /** Newest first — both hubs read a request queue, and the queue is a stack. */
@@ -66,18 +69,98 @@ export async function findRequests(
     .orderBy(...newestFirst);
 }
 
+/**
+ * The natural key the `booking_requests_live_*` indexes are built on. Shaped
+ * so a `NewBookingRequestRow` satisfies it, which is what lets the insert and
+ * the lookup share one object instead of deriving the key twice.
+ */
+export interface LiveRequestKey {
+  customerId: string;
+  vendorId: string;
+  eventDate: string;
+  /** Absent and null both mean a custom request the vendor must quote. */
+  packageId?: string | null;
+}
+
+/**
+ * The live request a repeat submission would duplicate, if there is one.
+ *
+ * Mirrors the indexes exactly — same columns, same `pending` predicate, and
+ * the same reading of a null `package_id` as a value rather than an unknown.
+ */
+export async function findLiveRequest(
+  db: AppDatabase,
+  key: LiveRequestKey,
+): Promise<BookingRequestRow | null> {
+  const rows = await db
+    .select()
+    .from(bookingRequests)
+    .where(
+      and(
+        eq(bookingRequests.customerId, key.customerId),
+        eq(bookingRequests.vendorId, key.vendorId),
+        eq(bookingRequests.eventDate, key.eventDate),
+        key.packageId === null || key.packageId === undefined
+          ? isNull(bookingRequests.packageId)
+          : eq(bookingRequests.packageId, key.packageId),
+        inArray(bookingRequests.status, [...LIVE_BOOKING_REQUEST_STATUSES]),
+      ),
+    )
+    .limit(1);
+
+  return rows?.[0] ?? null;
+}
+
+/** The live-request predicate, shared by the two indexes and this module. */
+const stillLive = sql`${bookingRequests.status} in ('pending', 'quoted')`;
+
+/**
+ * Which of the two partial unique indexes governs a request.
+ *
+ * `ON CONFLICT` admits one arbiter, and there are two indexes — but never two
+ * that apply, because they are partitioned on whether `package_id` is null.
+ * The option is `where`, not the `targetWhere` that belongs to `DO UPDATE`;
+ * pass the wrong one and drizzle emits `on conflict (...) do nothing` with no
+ * predicate, which matches neither partial index and fails with 42P10.
+ */
+function liveRequestArbiter(packageId: string | null | undefined) {
+  return packageId === null || packageId === undefined
+    ? {
+        target: [bookingRequests.customerId, bookingRequests.vendorId, bookingRequests.eventDate],
+        where: sql`${stillLive} and ${bookingRequests.packageId} is null`,
+      }
+    : {
+        target: [
+          bookingRequests.customerId,
+          bookingRequests.vendorId,
+          bookingRequests.eventDate,
+          bookingRequests.packageId,
+        ],
+        where: sql`${stillLive} and ${bookingRequests.packageId} is not null`,
+      };
+}
+
+/**
+ * Inserts, or returns `null` when a live request already holds the natural
+ * key. The database is the arbiter, so two simultaneous submissions cannot
+ * both win however their reads interleave — a read-then-insert in the service
+ * could only narrow that window, never close it.
+ *
+ * The conflict names its index, like `ensureConversation` below, so a future
+ * constraint on this table raises rather than being read as a repeat
+ * submission.
+ */
 export async function insertRequest(
   db: AppDatabase,
   values: NewBookingRequestRow,
-): Promise<BookingRequestRow> {
-  const inserted = await db.insert(bookingRequests).values(values).returning();
-  const row = inserted?.[0];
+): Promise<BookingRequestRow | null> {
+  const inserted = await db
+    .insert(bookingRequests)
+    .values(values)
+    .onConflictDoNothing(liveRequestArbiter(values.packageId))
+    .returning();
 
-  if (!row) {
-    throw new Error('Booking request insert returned no row');
-  }
-
-  return row;
+  return inserted?.[0] ?? null;
 }
 
 /**
