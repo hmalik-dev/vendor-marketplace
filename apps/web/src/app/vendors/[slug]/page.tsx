@@ -126,7 +126,7 @@ export default async function VendorProfilePage({
         tags={vendor.tags}
       />
 
-      <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8">
+      <div className="grid w-full gap-8 px-4 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-x-7 lg:px-10">
         <div className="min-w-0">
           <ProfileTabs
             panes={{

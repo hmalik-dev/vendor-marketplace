@@ -77,7 +77,7 @@ export function ProfileHeader({
         )}
       </div>
 
-      <div className="mx-auto w-full max-w-7xl overflow-visible px-4 sm:px-6 lg:px-8">
+      <div className="w-full overflow-visible px-4 sm:px-6 lg:px-10">
         {/*
           Lifted out of the banner. `relative` and `z-index` are what put the
           avatar over the banner rather than under it — without them the

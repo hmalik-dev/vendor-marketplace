@@ -192,7 +192,7 @@ The layout axis fails hardest.
 
 | ID | Axis | Expected | Observed |
 |----|------|----------|----------|
-| PB1-22 | Layout | Full-bleed: main column x=0 w=1020, content 40->992, rail 380px at x=1021..1401 | `mx-auto max-w-7xl px-8` -> **1216px centred, 112px gutters**; main content 112..916 (**804px vs 952px**), rail 948..1328 |
+| PB1-22 | Layout | Full-bleed: main column x=0 w=1020, content 40->992, rail 380px at x=1021..1401 | `mx-auto max-w-7xl px-8` -> **1216px centred, 112px gutters**; main content 112..916 (**804px vs 952px**), rail 948..1328 — **PASS** (#103, 2026-08-29): content 40..992, rail 1020..1400 measured live |
 | PB1-23 | Layout | Rail card y=282, level with the avatar row | y=364 — **82px lower**, level with the tab bar |
 | PB1-24 | Layout | Avatar y=246 (14px cover overlap) | y=226 (34px overlap) |
 | PB1-25 | Layout | `See all 34 ->` in the `Recent work` header at x=651 | **absent** |
