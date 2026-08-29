@@ -276,10 +276,23 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 >
                   Browse by category
                 </h2>
-                {/* The count is the taxonomy's length, read from the API. */}
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/search">All {categories.length} categories →</Link>
-                </Button>
+                {/*
+                  The count is the taxonomy's length, read from the API.
+
+                  Frame `01 Landing` draws this as a plain action link rather
+                  than a control: a bare span at padding 0 and radius 0, with
+                  no fill. A `Button variant="ghost" size="sm"` wrapper put a
+                  `px-3 py-1.5` pill and an 8px radius around it, taking the
+                  16px-tall link to 29px (#82). The colour, hover affordance
+                  and focus ring the wrapper used to supply are spelled out
+                  here, so dropping it costs the link neither.
+                */}
+                <Link
+                  href="/search"
+                  className="text-sm font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+                >
+                  All {categories.length} categories →
+                </Link>
               </div>
 
               <ul

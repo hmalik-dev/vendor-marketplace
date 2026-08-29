@@ -250,6 +250,25 @@ describe('HomePage', () => {
     }
   });
 
+  /*
+   * #82. Frame `01 Landing` draws this as a plain action link — a bare span at
+   * padding 0 and radius 0 — but it was rendered through
+   * `Button variant="ghost" size="sm"`, whose `px-3 py-1.5 rounded-md` took a
+   * 16px-tall link to 29px. The pill classes are what regressed, so they are
+   * what this asserts; it keeps the focus ring in the same breath, because
+   * dropping the `Button` is also what dropped the ring it used to supply.
+   */
+  it('draws "All 11 categories" as a plain link, not a padded pill', async () => {
+    render(await HomePage());
+
+    const link = screen.getByRole('link', { name: 'All 11 categories →' });
+
+    for (const pill of ['px-3', 'py-1.5', 'rounded-md']) {
+      expect(link.className).not.toContain(pill);
+    }
+    expect(link.className).toContain('focus-visible:ring-2');
+  });
+
   it('counts nothing in the badge or on a category card', async () => {
     render(await HomePage());
 
