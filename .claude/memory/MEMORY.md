@@ -21,3 +21,4 @@
 - [Filing a ticket is a three-file change](filing-a-ticket-is-a-three-file-change.md) — ids must be contiguous from 0; `pnpm test` caches a green over tracker edits, use --force
 - [Dev and build contend over .next](dev-and-build-contend-over-next.md) — a stray `pnpm build` silently kills the web dev server; start the two apps separately
 - [Lane manifests drift from reality](lane-manifest-branch-drifts.md) — **fixed 2026-08-29**; use `pnpm lane:pr`, never hand-edit. Manifests written before that still lie
+- [Lead, do not narrate](lead-dont-narrate.md) — short answers, state the call, no option surveys
