@@ -527,6 +527,16 @@ function fontSizeToken(px: string): string {
   return found[1];
 }
 
+/*
+ * Exact class-token match. `toContain` is not safe for utilities that share a
+ * prefix: `'py-2.5'.includes('py-2')` is true, so a `toContain` guard passes on
+ * a 10px padding where the frame says 8px — the exact defect the assertion
+ * exists to catch.
+ */
+function hasClass(element: Element, className: string): boolean {
+  return element.className.split(/\s+/).includes(className);
+}
+
 /** px -> the Tailwind spacing unit that renders it; the scale is 4px per unit. */
 function spacingUnit(px: string): string {
   return String(Number.parseFloat(px) / 4);
@@ -605,10 +615,17 @@ describe('frame 11 parity', () => {
     expect(back.className).toContain(`text-${token}`);
     expect(forward.className).toContain(`text-${token}`);
 
-    // `04-laws.md`: an icon-only control keeps a 44x44 target. jsdom has no
-    // layout, so this asserts the mechanism that provides it.
-    expect(back.className).toContain('before:size-11');
-    expect(forward.className).toContain('before:size-11');
+    /*
+     * `04-laws.md`: an icon-only control keeps a 44x44 target, and it has to be
+     * a real in-flow box. An absolutely positioned pseudo-element hung off the
+     * 16px glyph box gets clipped by `section.app-pane`'s `overflow-y: auto`,
+     * measured at 43px on the page. jsdom has no layout, so this asserts the
+     * mechanism; the browser pass measures the reach.
+     */
+    expect(hasClass(back, 'size-11')).toBe(true);
+    expect(hasClass(forward, 'size-11')).toBe(true);
+    expect(back.className).not.toContain('before:');
+    expect(forward.className).not.toContain('before:');
   });
 
   /*

@@ -83,9 +83,15 @@ export function cellAppearance(
 /*
  * Frame `11 Availability` draws month paging as bare `‹` / `›` glyphs at 13px in
  * `stone-600` on the heading baseline — not as filled icon buttons. It is still
- * an icon-only control, so `04-laws.md` requires a 44x44 hit area: the glyph
- * keeps the frame's size and colour while a centred pseudo-element carries the
- * target, so the law is met without the frame's composition moving.
+ * an icon-only control, so `04-laws.md` requires a 44x44 hit area.
+ *
+ * The target is a real 44px box **in flow**, with the glyph drawn at the frame's
+ * size and colour inside it. It cannot be an absolutely positioned pseudo-element
+ * hung off a 16px box: this row is the first child of `section.app-pane`, which
+ * `theme.css` gives `overflow-y: auto`, so anything reaching above the pane's
+ * content origin is clipped. Measured on the page, that cost the top 1px of the
+ * target — 43px against the 44px the law requires. A flex item cannot overflow
+ * the start of its own flex line, so an in-flow box has nothing to clip.
  */
 function MonthNavButton({
   label,
@@ -104,7 +110,7 @@ function MonthNavButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="relative rounded-sm text-action text-stone-600 outline-none transition-colors duration-(--duration-fast) before:absolute before:top-1/2 before:left-1/2 before:size-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] hover:text-stone-900 focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 disabled:pointer-events-none disabled:opacity-50"
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-sm text-action text-stone-600 outline-none transition-colors duration-(--duration-fast) hover:text-stone-900 focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 disabled:pointer-events-none disabled:opacity-50"
     >
       <span aria-hidden="true">{glyph}</span>
     </button>
