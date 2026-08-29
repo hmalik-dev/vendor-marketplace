@@ -461,3 +461,41 @@ describe('frame 03 — the punctuation is straight (#115)', () => {
     expect(CURLY.test(code), `${file} still contains a curly character`).toBe(false);
   });
 });
+
+describe('frame 03 — the rail controls are one box (#107/#108)', () => {
+  /*
+   * The frame's `.inp` is one box used three times, so the three controls have
+   * to be one class. They are not naturally the same height: `input[type=date]`
+   * carries an intrinsic height from Chromium's calendar sub-control and lands
+   * 1.5px taller than the `Guests` input beside it, which reads as a misaligned
+   * pair on the frame's shared row. Pinning the height on the shared constant
+   * is what keeps the three from drifting apart again.
+   */
+  const inp = /\.inp\{([^}]*)\}/.exec(frameHtml);
+  const rule = (inp as RegExpExecArray)[1] as string;
+
+  const railSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'booking-rail.tsx'),
+    'utf8',
+  );
+
+  const [padY] = pxParts(declaration(rule, 'padding'));
+  const border = Number.parseFloat(declaration(rule, 'border'));
+
+  it('pins a height that is the frame padding and border around one text line', () => {
+    const pinned = /h-\[(\d+(?:\.\d+)?)px\]/.exec(railSource);
+
+    expect(pinned, 'the shared field class pins no height').not.toBeNull();
+    const height = Number.parseFloat((pinned as RegExpExecArray)[1] as string);
+
+    // 38 = 16px line box + 10px padding twice + 1px border twice.
+    expect(height - 2 * (padY as number) - 2 * border).toBe(16);
+    expect(height).toBe(38);
+  });
+
+  it('gives all three controls the same class, so they cannot diverge', () => {
+    // `date`, `number` and `select` each take `FIELD` and nothing else sizing.
+    expect(railSource.match(/className=\{FIELD\}/g)).toHaveLength(2);
+    expect(railSource).toContain('className={`${FIELD} appearance-none`}');
+  });
+});

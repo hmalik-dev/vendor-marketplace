@@ -220,8 +220,15 @@ export function BookingRail({
 }
 
 /** The frame's `.inp` token, shared by all three rail controls. */
+/*
+ * The frame's `.inp` box: 16px of content, 10px of padding either side and a
+ * 1px border, which is 38px. The height is pinned rather than left to compute
+ * because `input[type=date]` carries an intrinsic height from Chromium's own
+ * calendar sub-control and lands on 39.5 — 1.5px taller than the `Guests`
+ * input beside it, which reads as a misaligned pair on the frame's shared row.
+ */
 const FIELD =
-  'w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-base text-stone-900';
+  'h-[38px] w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-base text-stone-900';
 
 const FIELD_LABEL = 'mb-1.25 text-label font-semibold tracking-label text-stone-600 uppercase';
 
