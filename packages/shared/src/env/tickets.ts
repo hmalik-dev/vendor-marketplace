@@ -296,11 +296,16 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   254: [],
   255: ['auth'],
   256: [],
-  // #257 and #258 were filed by lane 137 as #254 and #255 while it ran detached
-  // from main, which had already issued both. Renumbered on merge, per the
-  // collision rule in `.claude/plans/lane-handoff-2026-08-29.md`.
+  // #257 onward were filed by detached lanes that each restarted numbering at
+  // #254, which main had already issued. Renumbered on merge, per the collision
+  // rule in `.claude/plans/lane-handoff-2026-08-29.md`.
+  // Lane 137 filed #254-#255:
   257: [],
   258: [],
+  // Lane 124 filed #254-#256:
+  259: [],
+  260: [],
+  261: [],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
