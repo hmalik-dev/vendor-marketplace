@@ -488,6 +488,7 @@ export function AvailabilityCalendar({
                   type="button"
                   variant="ghost"
                   size="sm"
+                  className="text-stone-700 hover:text-stone-900"
                   disabled={isSaving}
                   onClick={() => {
                     setSelection([]);

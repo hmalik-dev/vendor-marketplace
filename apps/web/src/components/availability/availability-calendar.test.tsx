@@ -567,4 +567,19 @@ describe('frame 11 parity', () => {
     expect(back.className).toContain('before:size-11');
     expect(forward.className).toContain('before:size-11');
   });
+
+  /*
+   * `40-states.md`: clay is the action colour. `Clear` only drops a selection,
+   * so the frame keeps it in body stone and the clay was overstating it.
+   */
+  it('paints the secondary selection action in the frame colour, not clay', async () => {
+    const user = userEvent.setup();
+    renderCalendar();
+
+    await user.click(cell('2026-06-18'));
+
+    const token = colourToken(styleValue(frameSpanFor('Clear'), 'color'));
+
+    expect(screen.getByRole('button', { name: 'Clear' }).className).toContain(`text-${token}`);
+  });
 });
