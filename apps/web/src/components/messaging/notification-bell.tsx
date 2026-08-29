@@ -30,6 +30,13 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
   const [items, setItems] = useState<WireNotification[]>([...initial]);
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
+  /*
+   * Escape has to put focus back where it came from, so the trigger is held
+   * rather than found: `document.querySelector` would break the moment a
+   * second bell rendered, and closing the panel unmounts everything inside it,
+   * which would otherwise drop focus onto `<body>`.
+   */
+  const trigger = useRef<HTMLButtonElement>(null);
 
   const unread = items.filter((item) => item.readAt === null).length;
 
@@ -76,6 +83,29 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, [open]);
 
+  /*
+   * Escape closes it too — `04-laws.md` requires an overlay to close on Escape
+   * and restore focus. Clicking outside was the only dismissal that worked,
+   * which left a keyboard user with no way out of the panel at all.
+   */
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      setOpen(false);
+      trigger.current?.focus();
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   async function markRead(id: string): Promise<void> {
     setItems((current) =>
       current.map((item) => (item.id === id ? { ...item, readAt: new Date() } : item)),
@@ -99,6 +129,7 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
   return (
     <div ref={panel} className="relative">
       <button
+        ref={trigger}
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-label={unread === 0 ? 'Notifications' : `Notifications, ${unread} unread`}
