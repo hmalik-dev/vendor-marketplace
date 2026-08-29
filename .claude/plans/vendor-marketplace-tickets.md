@@ -118,6 +118,24 @@ verification (`e2e`) is implicit on every ticket.
 
 ## Beta gate — what blocks shipping to real users
 
+> ## The one-line answer, verified 2026-08-29
+>
+> **No booking can be created by anyone.** `POST /booking-requests/:id/accept` returns
+> **`402 - "Finish your payout setup before accepting bookings"`**, and payout setup does
+> not exist: all **17** vendor profiles are `is_published = true, stripe_onboarded = false`,
+> and there is no Stripe onboarding route, link or `accountLink` anywhere in the tree. The
+> only mentions of payouts in the web code are two comments saying it is deliberately absent
+> until **#9**.
+>
+> The 918 bookings in the database are **seed data**. Not one can be reproduced through the
+> application. Everything downstream of accept - the date hold, payment capture, completion,
+> reviews - is unreachable and therefore untested and unverifiable.
+>
+> **The product cannot transact.** That is #9 and #10, not a defect list. Until they land,
+> the only honest beta is browse-and-enquire, and the shipped payment copy has to come out
+> (**#217**, **#220**). See **#220** and **#221**.
+
+
 Added 2026-08-28 after five adversarial passes (136 findings). This separates **defective**
 from **off-spec**. Parity matters, but a cosmetic delta does not harm a real user and a
 broken transaction does.
@@ -383,6 +401,16 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **217** | **The two sides disagree about whether there is a platform fee** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
 | **218** | **`Send quote` is dead on the default path, contradicting what the customer was promised** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
 | **219** | **A new request opens no message thread, and the profile's message button is permanently dead** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **220** | **No booking can be created by anyone — accept is walled behind payout setup that does not exist** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **#9, #10** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **221** | **The customer cannot accept a quote — `Review quote` links to the vendor's marketing page** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **222** | **Vendor onboarding cannot be completed through the UI — a 400 is swallowed with no feedback at all** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **223** | **A below-minimum quote makes Send a dead control** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **224** | **An above-maximum quote shows the raw API error string to the vendor** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **225** | **The success toast covers the submit button it confirms** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **226** | **Sign-up returns to the role picker after email verification** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **227** | **Unsaved profile edits are discarded silently** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **228** | **A newly onboarded vendor's public storefront shows placeholder copy** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **229** | **Messaging: one thread per pair, and new messages raise no notification in either direction** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
 | **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
 | **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **In Progress** | main | **Vercel Production Branch setting** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. **Reconciliation 2026-08-29 — filed without reading `D10` or the plan.** The runtime split (web on Vercel, API on **Railway**) is decided in `vendor-marketplace-decisions.md` D10, and the release pipeline is already ticketed as **#20 Deploy Pipeline** (P0, blocked by #18, #19, #30). Treat this row as the git/branch-protection slice of #20, not a new ticket. |
@@ -9530,3 +9558,273 @@ customer** across account switches. **Where:** `/vendors/<slug>` and `/messages`
 **Tests (required):**
 
 - [ ] A test asserting a conversation exists and is reachable immediately after a request is created.
+
+---
+
+### #220: No booking can be created by anyone — accept is walled behind payout setup that does not exist
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #9, #10
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/vendor/dashboard`, every vendor.
+
+| | |
+| --- | --- |
+| **Expected** | accepting a request creates a booking |
+| **Observed** | `POST /booking-requests/:id/accept` returns **`402 PAYMENT_REQUIRED — "Finish your payout setup before accepting bookings"`**. Independently verified: **all 17 vendor profiles are `is_published = true, stripe_onboarded = false`**, and there is **no Stripe onboarding entry point anywhere in the product** — no route, no link, no `accountLink`. The only occurrences of "payout" in the web tree are two source comments saying it is deliberately absent until #9 |
+
+**Context.** The guard at `apps/api/src/modules/booking-requests/booking-requests.service.ts:558` is **correct** — a vendor must not accept money they cannot receive. The defect is that the UI publishes a storefront, tells the vendor they are `Ready to publish`, lets them receive requests, and only reveals the wall at the moment of accept, with an instruction pointing at a screen that does not exist. `40-states.md` requires every error to offer one primary action; this one names an action the product cannot perform.
+
+**The 918 bookings in the database are seed data. Not one of them can be reproduced through the application.** Everything downstream — the date hold, payment capture, completion, reviews — is unreachable and therefore untested.
+
+**Acceptance:**
+
+- [ ] Either payout onboarding exists and is reachable from the dashboard and the publish checklist, or a vendor cannot publish without it
+- [ ] The publish checklist counts payout setup as a blocker, so the wall is disclosed before a customer ever sends a request
+- [ ] The 402 message links to the action it names
+- [ ] No vendor-facing surface promises a capability gated behind an unbuilt screen
+
+**Tests (required):**
+
+- [ ] An API test asserting a vendor with `stripeOnboarded = true` can accept and a booking row is created — the accept path currently has no green test because it cannot succeed.
+- [ ] A test asserting the publish checklist blocks on payout setup.
+- [ ] A browser test driving request -> accept -> booking visible to both sides.
+
+---
+
+### #221: The customer cannot accept a quote — `Review quote` links to the vendor's marketing page
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/bookings`, customer.
+
+| | |
+| --- | --- |
+| **Expected** | a quote review screen with Accept and Decline |
+| **Observed** | the control is `<a href="/vendors/<slug>">` — the public storefront. On arrival, matching `/quote|accept|approve/i` against the page text returns **false**; the only CTAs there are `Request booking` and `Send a message`. Enumerating every `a`/`button` across `/bookings`, `/messages`, `/customer/profile` and `/dashboard` filtered for accept/approve/decline/counter/pay found **only** those two `Review quote` links, both pointing at the storefront |
+
+**Context.** The customer's own notification contradicts the UI: `request_quoted :: "Open the request to see the price and accept it."` — it promises an action the product does not provide. This is #68's booking-detail gap surfacing on the quote path specifically.
+
+**Acceptance:**
+
+- [ ] A quote review surface exists, showing the quoted amount and what it covers
+- [ ] The customer can accept a quote from it
+- [ ] The notification's deep link lands on that surface, not the storefront
+
+**Tests (required):**
+
+- [ ] A browser test driving vendor quote -> customer accept.
+- [ ] A test asserting the notification's link target renders the quote.
+
+---
+
+### #222: Vendor onboarding cannot be completed through the UI — a 400 is swallowed with no feedback at all
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/vendor/profile/edit`, vendor with no profile.
+
+| | |
+| --- | --- |
+| **Expected** | the profile is created, or the vendor is told what is wrong |
+| **Observed** | `POST /vendor/profile` returns **400 `"One or more selected categories are unavailable."`** and **nothing appears on screen** — no toast, no inline error, no `[role=alert]`, no `aria-invalid`, no focus move. The button reads as dead; the agent clicked it four times. Onboarding could only be completed by calling the API directly |
+
+**Context.** **Two separable defects.** (1) The editor posted a stale category id while `GET /categories` returned a fresh one — `apps/web/src/lib/vendor-data.ts:197` caches categories with `revalidate: 3600`, so stale ids survive a hard reload for an hour after any reseed. That is environment-specific. (2) **Silently swallowing a 400 on the product's only onboarding form is not.** The booking-request form on the same site handles this correctly — counted summary, per-field messages, `aria-invalid` on exactly the wrong fields. That is the model this form should follow.
+
+**Acceptance:**
+
+- [ ] A failed profile save always renders an error naming the field and the fix
+- [ ] Category ids are not served from a cache that can outlive a reference-data change, or a stale id is retried against fresh data
+- [ ] A vendor can complete onboarding end to end in the browser with no API calls
+
+**Tests (required):**
+
+- [ ] A test asserting a 400 from `POST /vendor/profile` renders a visible, associated error.
+- [ ] A test asserting the categories the form posts are the ones the API currently serves.
+- [ ] A browser test completing onboarding from an empty profile.
+
+---
+
+### #223: A below-minimum quote makes Send a dead control
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/vendor/dashboard`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | a message naming the $25 minimum |
+| **Observed** | for `0`, `-500`, `24` and `24.99`: **no network request at all**, no toast, no inline error. The editor stays open with the bad value still in the field and nothing whatsoever happens. The input has `min="25"` but sits **outside a `<form>`**, so native validation never fires either |
+
+**Context.** Note the asymmetry with the maximum (#224): the minimum blocks silently client-side, the maximum leaks a server exception string.
+
+**Acceptance:**
+
+- [ ] A below-minimum quote shows a visible message naming the minimum
+- [ ] The control is never inert without explanation
+
+**Tests (required):**
+
+- [ ] A component test asserting each out-of-range value renders a message and fires no request.
+
+---
+
+### #224: An above-maximum quote shows the raw API error string to the vendor
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/vendor/dashboard`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | "The most you can quote is $100,000." |
+| **Observed** | `100001` produces a toast reading literally **`Request validation failed`**. The maximum is never stated and the field carries no `max` attribute, so the vendor has no way to learn what number is acceptable |
+
+**Context.** Same class as #72 — an upstream error string reaching a user-facing surface.
+
+**Acceptance:**
+
+- [ ] The message names the maximum in the vendor's terms
+- [ ] The field carries `max` so the browser can help
+- [ ] No upstream validation string is rendered
+
+**Tests (required):**
+
+- [ ] Extend #72's test to assert no rendered error equals `Request validation failed`.
+
+---
+
+### #225: The success toast covers the submit button it confirms
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/vendor/profile/edit` and `/vendor/packages`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | the confirmation does not obstruct the control that produced it |
+| **Observed** | measured at 1440x900 on both screens: profile editor toast `x:1060 y:822 w:356 h:53` over a `Save changes` button at `x:1305 y:853`; packages toast `x:1060 y:823` over `Save package` at `x:1254 y:819`. `document.elementFromPoint` on the button centre returns the toast in both cases |
+
+**Context.** sonner pauses auto-dismiss on hover, and the pointer is resting on the button that was just clicked — so it blocked the driver for **30 seconds** on both screens. A real vendor saving twice in a row hits the same trap.
+
+**Acceptance:**
+
+- [ ] Toasts do not overlap primary submit controls at any supported viewport
+- [ ] Either the toast is repositioned, or the submit bar reserves space for it
+
+**Tests (required):**
+
+- [ ] A browser assertion that no toast's rect intersects a visible submit button's rect after a save.
+
+---
+
+### #226: Sign-up returns to the role picker after email verification
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/sign-up`, new user.
+
+| | |
+| --- | --- |
+| **Expected** | the new user lands in the product |
+| **Observed** | after choosing a role, entering email and password, and submitting the verification code, the app **returns to `/sign-up` showing the role step again**, with no fields and no progress indication. `window.Clerk.session` was in fact live — only manual navigation revealed it |
+
+**Context.** This is the first thing every beta user does. It reads as a failed sign-up.
+
+**Acceptance:**
+
+- [ ] A verified user is routed into the product by role
+- [ ] The verification step never returns to the role picker
+
+**Tests (required):**
+
+- [ ] A browser test completing sign-up for both roles and asserting the landing route.
+
+---
+
+### #227: Unsaved profile edits are discarded silently
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/vendor/profile/edit`, vendor.
+
+| | |
+| --- | --- |
+| **Expected** | the vendor is warned before losing work |
+| **Observed** | editing a field shows `Unsaved changes` in the submit bar; clicking a section-rail link navigates away with **no `beforeunload` and no in-app guard** (`dialogSeen: false`). Returning shows the old value |
+
+**Acceptance:**
+
+- [ ] Navigating away with unsaved changes prompts, in-app and on unload
+
+**Tests (required):**
+
+- [ ] A test asserting a guard fires when the form is dirty and not when it is clean.
+
+---
+
+### #228: A newly onboarded vendor's public storefront shows placeholder copy
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/vendors/<slug>`, public.
+
+| | |
+| --- | --- |
+| **Expected** | a cover image or a designed empty state |
+| **Observed** | the literal string **`COVER · FULL-BLEED BANNER`** renders in the cover band of every vendor without a cover image. `/vendors/kessler-co`, which has one, does not |
+
+**Context.** Every vendor who completes onboarding has this on their live public page until they upload a cover — and #137 records that **there is no cover upload control**, so today they cannot remove it.
+
+**Acceptance:**
+
+- [ ] A vendor with no cover gets a designed empty state, never a placeholder label
+- [ ] Resolved together with #137, which adds the missing cover control
+
+**Tests (required):**
+
+- [ ] A test asserting no public page renders a frame placeholder string.
+
+---
+
+### #229: Messaging: one thread per pair, and new messages raise no notification in either direction
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
+onboarding from nothing and the quote path. **Where:** `/messages`, both roles.
+
+| | |
+| --- | --- |
+| **Expected** | a thread per booking, and a notification when a message arrives |
+| **Observed** | a customer with two live requests against one vendor saw **exactly one thread**, headed `RE: DEC 31 WEDDING`, with no switcher — the DB has one `conversations` row bound to the *other* request. **There was no way to message the vendor about the request that carried the quote.** Separately, after a message was sent, `GET /notifications` was unchanged and the nav read plain `Messages` with no count — in **both** directions. The only unread signal is a chip inside `/messages` |
+
+**Context.** Extends #209 and #193. The SSE delivery itself works correctly — the reply appeared without a reload.
+
+**Acceptance:**
+
+- [ ] A conversation is scoped so a customer can discuss a specific request
+- [ ] A new message raises a notification and a nav badge for the recipient
+
+**Tests (required):**
+
+- [ ] A test asserting two requests from one customer to one vendor yield addressable threads.
+- [ ] A test asserting an inbound message increments the recipient's notification count.
