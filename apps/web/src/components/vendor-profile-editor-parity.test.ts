@@ -234,3 +234,64 @@ describe('the profile photo drop zone matches the frame (#143)', () => {
     expect(formSource).toContain('className="mt-4 w-24 sm:w-32"');
   });
 });
+
+describe('the category chips match the frame’s pills (#144)', () => {
+  const pickerSource = read('src/components/category-picker.tsx');
+  const iconSource = read('src/components/category-icon.tsx');
+
+  /** The frame's three chips, selected first. */
+  const chips =
+    editorFrame.match(/<span style="display:inline-flex;align-items:center;gap:8px;[^"]*"/g) ?? [];
+
+  it('finds the frame’s three chips', () => {
+    expect(chips).toHaveLength(3);
+  });
+
+  it('reads 7px 13px 7px 8px padding off every chip', () => {
+    for (const chip of chips) {
+      expect(chip).toContain('padding:7px 13px 7px 8px');
+    }
+  });
+
+  it('reads 13px text off every chip, which is the `text-action` token', () => {
+    for (const chip of chips) {
+      expect(chip).toContain('font-size:13px');
+    }
+  });
+
+  it('reads weight 600 on the selected chip and 500 on the rest', () => {
+    expect(chips[0]).toContain('font-weight:600');
+    expect(chips[1]).toContain('font-weight:500');
+    expect(chips[2]).toContain('font-weight:500');
+  });
+
+  it('reads a stone-300 edge on the unselected chips', () => {
+    // `--color-stone-300: #e4ddd1`. The app shipped stone-200 (#EFE9E0).
+    expect(chips[1]).toContain('border:1px solid #E4DDD1');
+  });
+
+  it('applies the frame’s padding and type to the chip', () => {
+    expect(pickerSource).toContain('py-[7px] pr-[13px] pl-2 text-action');
+    expect(pickerSource).not.toContain('py-1.5 pr-4 pl-1.5 text-sm');
+  });
+
+  it('gives the selected chip weight 600 and the rest 500', () => {
+    expect(pickerSource).toContain('bg-clay-100 font-semibold');
+    expect(pickerSource).toContain('bg-stone-0 font-medium');
+  });
+
+  it('moves the unselected edge from stone-200 to stone-300', () => {
+    expect(pickerSource).toContain('border-stone-300 bg-stone-0');
+    expect(pickerSource).not.toContain('border-stone-200 bg-stone-0');
+  });
+
+  it('sizes the icon badge 22px, which is what makes the chip 38px tall', () => {
+    const badge = editorFrame.match(
+      /<span style="width:22px;height:22px;border-radius:50%;background:(#[0-9A-F]{6})/i,
+    );
+
+    expect(badge).not.toBeNull();
+    expect(iconSource).toContain('size-[22px]');
+    expect(iconSource).not.toContain('size-7 shrink-0');
+  });
+});

@@ -61,7 +61,8 @@ export function CategoryIcon({ icon, className }: CategoryIconProps): React.Reac
 export type CategoryIconBadgeProps = CategoryIconProps;
 
 /**
- * The glyph in a `clay-100` circle, per the icon spec — the 28px chip badge.
+ * The glyph in a `clay-100` circle, per the icon spec — the 22px chip badge
+ * frame 09 draws inside each category chip.
  *
  * The 36px `card` variant is gone with the landing card that was its only
  * caller: frame `01` now draws a photograph there, and the glyph circle it
@@ -71,7 +72,7 @@ export function CategoryIconBadge({ icon, className }: CategoryIconBadgeProps): 
   return (
     <span
       className={cn(
-        'inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-clay-100 text-clay-600',
+        'inline-flex size-[22px] shrink-0 items-center justify-center rounded-full bg-clay-100 text-clay-600',
         className,
       )}
     >
