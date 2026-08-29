@@ -251,7 +251,9 @@ export function PackageForm({
               />
             </InputGroup>
             {priceError === null ? (
-              <p className="mt-1 text-xs text-stone-600">Between $25 and $100,000.</p>
+              <p className="mt-1 text-xs leading-normal text-stone-600">
+                Between $25 and $100,000.
+              </p>
             ) : (
               <p id={`${fieldId}-price-error`} role="alert" className="mt-1 text-xs text-error-500">
                 {priceError}
@@ -308,7 +310,7 @@ export function PackageForm({
 
           <fieldset className="sm:col-span-2">
             <legend className="text-sm font-medium text-stone-800">What&rsquo;s included</legend>
-            <p className="mt-1 text-xs text-stone-600">
+            <p className="mt-1 text-xs leading-normal text-stone-600">
               One line per thing the customer gets. Up to {MAX_INCLUSIONS}.
             </p>
 

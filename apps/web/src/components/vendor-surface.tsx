@@ -44,7 +44,7 @@ export function VendorSurface({
           </p>
           {/* App page titles cap at 26px — a display-lg heading in an app frame is a bug. */}
           <h1 className="mt-1 display-heading text-display-md text-stone-900">{heading}</h1>
-          <p className="mt-1 text-sm text-stone-600">{description}</p>
+          <p className="mt-1 text-sm leading-prose text-stone-600">{description}</p>
         </div>
         {aside}
       </header>

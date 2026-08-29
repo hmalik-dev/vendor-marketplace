@@ -294,7 +294,7 @@ export function BookingRequestScreen({
             ? `Tell ${vendor.businessName} about your event`
             : 'Check this over before it goes'}
         </h1>
-        <p className="mb-5 text-md text-stone-700">
+        <p className="mb-5 text-md leading-prose text-stone-700">
           {step === 1
             ? 'The more they know now, the fewer messages it takes to lock the date.'
             : 'Nothing is sent yet. Edit anything that is not right.'}
@@ -470,7 +470,7 @@ export function BookingRequestScreen({
                   placeholder="Outdoor ceremony at 4, reception inside. We'd love golden-hour portraits and we have an elderly grandparent who can't stand for long."
                   value={form.notes}
                   onChange={(event) => set('notes', event.target.value)}
-                  className={cn('min-h-24 leading-[1.6]', props.className)}
+                  className={cn('min-h-24 leading-prose', props.className)}
                 />
               )}
             </Field>
@@ -579,7 +579,7 @@ function Field({
         <p
           id={messageId}
           className={cn(
-            'mt-1.5 text-xs leading-[1.5]',
+            'mt-1.5 text-xs leading-normal',
             blocked ? 'text-error-500' : 'text-gold-600',
           )}
         >
@@ -712,7 +712,7 @@ function SuccessPanel({
           <h1 className="mb-2 display-heading text-[26px] text-stone-900">
             Your request is with {businessName}
           </h1>
-          <p className="mb-5 text-md leading-[1.6] text-stone-700">
+          <p className="mb-5 text-md leading-prose text-stone-700">
             {responseTimeHours
               ? `${businessName} usually replies within ${responseTimeHours} ${responseTimeHours === 1 ? 'hour' : 'hours'}.`
               : `${businessName} has 48 hours to confirm the date or send a revised quote.`}{' '}

@@ -38,7 +38,7 @@ export function EmptyState({
         </span>
       ) : null}
       <h2 className="font-display text-display-sm text-stone-900">{headline}</h2>
-      <p className="max-w-sm text-base text-stone-700">{description}</p>
+      <p className="max-w-sm text-base leading-prose text-stone-700">{description}</p>
       {action ? <div className="mt-2">{action}</div> : null}
     </div>
   );

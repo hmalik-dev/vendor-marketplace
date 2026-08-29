@@ -98,7 +98,7 @@ export function RequestSummaryRail({
             <span className="font-semibold">{formatPrice(servicePackage.priceCents)}</span>
           </div>
           {servicePackage.inclusions.length > 0 ? (
-            <p className="text-sm leading-[1.6] text-stone-600">
+            <p className="text-sm leading-prose text-stone-600">
               {servicePackage.inclusions.join(' · ')}
             </p>
           ) : null}
@@ -184,7 +184,7 @@ export function RequestSummaryRail({
         </Button>
 
         {blocked ? (
-          <p className="text-center text-xs leading-[1.5] text-stone-600">
+          <p className="text-center text-xs leading-normal text-stone-600">
             Fix the fields above and this goes straight to {vendor.businessName}.
           </p>
         ) : (

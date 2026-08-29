@@ -280,7 +280,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
       ) : null}
 
       {items.length === 0 && inFlight.length === 0 ? (
-        <p className="mt-6 rounded-lg border border-stone-300 bg-card px-6 py-12 text-center text-sm text-stone-600">
+        <p className="mt-6 rounded-lg border border-stone-300 bg-card px-6 py-12 text-center text-sm leading-prose text-stone-600">
           No photos yet. Your gallery is what convinces a customer to send a request — eight to
           twelve of your best is plenty.
         </p>
@@ -290,7 +290,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
             States the rule the tile badge only shows the result of. Without it
             a vendor can see which photo is the cover but not how to change it.
           */}
-          <p className="mt-6 text-sm text-stone-600">
+          <p className="mt-6 text-sm leading-normal text-stone-600">
             The first photo is your cover — drag another into first place to change it.
           </p>
           <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">

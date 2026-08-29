@@ -118,7 +118,7 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
             value={bio}
             onChange={(event) => setBio(event.target.value)}
             placeholder="We're planning a small outdoor wedding and care most about photos that don't feel posed."
-            className={cn(FIELD, 'min-h-24 leading-[1.6]')}
+            className={cn(FIELD, 'min-h-24 leading-prose')}
           />
           <div className="mt-1.25 flex justify-between text-xs text-stone-600">
             <span>Vendors read this when deciding whether to take your date</span>

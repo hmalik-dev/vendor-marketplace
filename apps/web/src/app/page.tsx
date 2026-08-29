@@ -220,7 +220,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 <span className="text-clay-500 italic">without the back-and-forth.</span>
               </h1>
 
-              <p className="mt-3.75 max-w-112.5 text-base text-stone-700 min-[90rem]:text-lg">
+              <p className="mt-3.75 max-w-112.5 text-base leading-prose text-stone-700 min-[90rem]:text-lg">
                 Compare real availability and pricing from vendors near you, send one request, and
                 pay securely once the date is locked in.
               </p>
@@ -371,7 +371,9 @@ export default async function HomePage(): Promise<React.ReactElement> {
                   {index + 1}
                 </span>
                 <h3 className="mt-2 font-display text-display-sm text-stone-900">{step.title}</h3>
-                <p className="mt-1.5 max-w-80 text-base text-stone-700">{step.body}</p>
+                <p className="mt-1.5 max-w-80 text-base leading-prose text-stone-700">
+                  {step.body}
+                </p>
               </li>
             ))}
           </ol>
@@ -390,7 +392,9 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 <signal.icon aria-hidden="true" className="size-4.5" />
               </span>
               <h3 className="mt-3 font-display text-display-sm text-stone-900">{signal.title}</h3>
-              <p className="mt-1.5 max-w-80 text-base text-stone-700">{signal.body}</p>
+              <p className="mt-1.5 max-w-80 text-base leading-prose text-stone-700">
+                {signal.body}
+              </p>
             </li>
           ))}
         </ul>
@@ -415,7 +419,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
         >
           <div className="max-sm:pb-10 sm:pr-12">
             <h3 className="display-heading text-display-md text-stone-50">Planning an event?</h3>
-            <p className="mt-2 max-w-90 text-base text-stone-50/78">
+            <p className="mt-2 max-w-90 text-base leading-prose text-stone-50/78">
               Tell us the vendor type, the city and the date. You will see prices and open dates
               before you speak to anyone.
             </p>
@@ -428,7 +432,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
             <h3 className="display-heading text-display-md text-stone-50">
               Booking events yourself?
             </h3>
-            <p className="mt-2 max-w-90 text-base text-stone-50/78">
+            <p className="mt-2 max-w-90 text-base leading-prose text-stone-50/78">
               Publish your prices and your open dates, and take bookings without the phone tag.
               Payouts run through Stripe.
             </p>

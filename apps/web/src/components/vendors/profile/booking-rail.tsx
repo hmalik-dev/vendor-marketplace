@@ -112,7 +112,7 @@ export function BookingRail({
           control unexplained, and still carries the frame's charge reassurance
           — which is true today and stays true when the buttons wake up.
         */}
-        <p className="mt-0.5 text-center text-[11.5px] leading-[1.5] text-stone-600">
+        <p className="mt-0.5 text-center text-[11.5px] leading-normal text-stone-600">
           Messaging opens shortly. You won&rsquo;t be charged yet — {businessName} confirms the date
           first.
         </p>

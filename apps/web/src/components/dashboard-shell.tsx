@@ -41,7 +41,7 @@ export function DashboardShell({
           frame is a bug — see design/design-plan/04-laws.md.
         */}
         <h1 className="mt-2 display-heading text-display-md text-stone-900">{heading}</h1>
-        <p className="mt-3 text-base text-stone-700">{description}</p>
+        <p className="mt-3 text-base leading-prose text-stone-700">{description}</p>
       </header>
 
       {children}
@@ -54,7 +54,7 @@ export function DashboardShell({
               className="block h-full rounded-xl bg-stone-0 p-5 shadow-sm transition-shadow duration-(--duration-base) hover:shadow-hover"
             >
               <h2 className="font-display text-display-sm text-stone-900">{section.title}</h2>
-              <p className="mt-2 text-base text-stone-700">{section.description}</p>
+              <p className="mt-2 text-base leading-prose text-stone-700">{section.description}</p>
               <p className="mt-4 text-[10.5px] font-semibold tracking-[.05em] text-clay-500 uppercase">
                 Open
               </p>

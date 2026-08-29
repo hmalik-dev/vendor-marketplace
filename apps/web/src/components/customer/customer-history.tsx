@@ -221,7 +221,7 @@ export function CustomerReviews({ reviews }: CustomerReviewsProps): React.ReactE
           {review.title ? (
             <p className="mt-1 text-base font-semibold text-stone-900">{review.title}</p>
           ) : null}
-          <p className="mt-1 text-base leading-[1.6] text-stone-700">{review.content}</p>
+          <p className="mt-1 text-base leading-prose text-stone-700">{review.content}</p>
         </li>
       ))}
     </ul>
