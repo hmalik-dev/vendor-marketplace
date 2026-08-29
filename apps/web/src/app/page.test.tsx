@@ -96,6 +96,20 @@ describe('HomePage', () => {
     expect(screen.getByText('Now booking in Austin')).toBeDefined();
   });
 
+  /*
+   * #85. Frame `01 Landing` draws the hero badge at 12px. It carried
+   * `text-xs`, which is 11px in this theme, and the 12px step it wanted
+   * already existed as `--text-meta` — it had just never been moved onto it.
+   */
+  it('sizes the hero badge on the 12px step the frame draws it at', async () => {
+    render(await HomePage());
+
+    const badge = screen.getByText(/Now booking in/).closest('p');
+
+    expect(badge?.className).toContain('text-meta');
+    expect(badge?.className).not.toContain('text-xs');
+  });
+
   it('puts a search bar in the hero, so a visitor can start without scrolling', async () => {
     render(await HomePage());
 

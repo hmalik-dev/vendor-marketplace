@@ -199,7 +199,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
               narrows there and the frame's value returns at `xl`.
             */}
             <div className="lg:pr-4 xl:pr-8.5">
-              <p className="mb-4.5 inline-flex items-center gap-1.75 rounded-full bg-clay-400/10 px-3 py-1.5 text-xs font-semibold text-clay-600">
+              {/*
+                `text-meta`, not `text-xs`: frame `01 Landing` draws the badge
+                at 12px and `--text-xs` is 11px (#85). The step already existed
+                — #198 added `--text-meta: 12px` — the badge had simply never
+                been moved onto it.
+              */}
+              <p className="mb-4.5 inline-flex items-center gap-1.75 rounded-full bg-clay-400/10 px-3 py-1.5 text-meta font-semibold text-clay-600">
                 <span aria-hidden="true" className="size-1.25 rounded-full bg-clay-400" />
                 Now booking in {LAUNCH_CITY}
               </p>
