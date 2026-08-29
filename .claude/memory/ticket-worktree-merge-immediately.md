@@ -1,6 +1,6 @@
 ---
 name: ticket-worktree-merge-immediately
-description: "A ticket runs in its own branch and worktree; the PR is merged immediately with no review, and that merge is the signal to remove the worktree and start the next ticket"
+description: "Every /ticket invoke must merge the PR, close the lane and bring main up before it may report done — PENDING_MERGE is not a terminal state and /land-lanes is not a handoff"
 metadata: 
   node_type: memory
   type: feedback
@@ -15,6 +15,30 @@ CI already ran. **The completed merge is the signal** to remove that worktree an
 move to the next ticket.
 
 Stated by the user 2026-08-29.
+
+## The hard gate — restated 2026-08-29 after lane 198 stopped at `PENDING_MERGE`
+
+**Merge, close the lane, and bring `main` up. Always. Every invoke.** These three
+are a single hard gate that `/ticket`, `/next-ticket` and `/orchestrate` must
+pass before reporting the work done. `PENDING_MERGE` is **not** a terminal state
+and `/land-lanes` is **not** a handoff the invoking session may defer to — it
+exists only for lanes whose session died before the queue reached them.
+
+This overrides `~/.claude/orchestration-policy.md` and
+`~/.claude/skills/ticket/references/workflow.md` section 7, both of which still
+say a lane "exits at `PENDING_MERGE`" and leaves the merge to `/land-lanes`.
+Where those files and this rule disagree, this rule wins.
+
+**Why:** a lane that stops at the enqueue leaves the ticket row saying
+`In Progress` on `origin/main`, the worktree on disk, and the branch alive — so
+the next unattended batch re-selects work that is already written, and the
+operator cannot tell finished work from abandoned work. Lane 198 was reported as
+delivered while `main` still had none of it.
+
+**Expect the PR to be `BEHIND` by the time you get there** — a real ticket takes
+long enough that another lane lands first. Merge `origin/main` into the lane
+branch, **re-run the full gate on the merged result** (it is new code that no CI
+run has seen), push, and only then merge. Never force-push; the hook blocks it.
 
 **Why:** the PR exists for the CI run and the record, not for human review.
 Leaving it open blocks nothing and only accumulates stale worktrees and branches,
@@ -39,6 +63,12 @@ section 7 and the status-record rules in `~/.claude/orchestration-policy.md`.
 
 **How to apply:**
 
+- The gate, in order, every invoke: watch CI green → merge `origin/main` into the
+  lane and re-run the gate if the PR is `BEHIND` → merge the PR → move the ticket
+  to **Done** with the squash SHA → `pnpm lane:down <id>` → remove the worktree,
+  the local branch and the remote branch → bring the main checkout to
+  `origin/main` → confirm `git rev-list --left-right --count main...origin/main`
+  reads `0 0`. Only then report the status record.
 - One ticket, one branch, one worktree under `.claude/worktrees/<name>`.
   `.worktreeinclude` copies the gitignored env files in; run `pnpm install` in
   the worktree or the pre-commit hook fails with `tsx: command not found`.
