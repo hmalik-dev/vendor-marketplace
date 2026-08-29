@@ -18,3 +18,4 @@
 - [Commit ticket changes immediately](commit-ticket-changes-immediately.md) — tracker edits go straight to main, never left dirty
 - [Worktree env copies drift](worktree-env-copies-drift.md) — .worktreeinclude snapshots .env at creation; a stale copy or stale dist fails tests only in the worktree
 - [Ticket = branch + worktree, merge immediately](ticket-worktree-merge-immediately.md) — no review wait; the merge is the signal to kill the worktree and start the next ticket
+- [Filing a ticket is a three-file change](filing-a-ticket-is-a-three-file-change.md) — ids must be contiguous from 0; `pnpm test` caches a green over tracker edits, use --force
