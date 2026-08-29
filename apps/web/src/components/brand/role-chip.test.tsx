@@ -94,6 +94,19 @@ describe('the vendor role chip matches the frame', () => {
     expect(className).toContain('text-sage-600');
   });
 
+  /*
+   * The frame declares no line-height, so its 11px text takes the browser's
+   * normal leading and the chip measures 22px tall. The app inherits 1.5,
+   * which renders 24.5px, and `leading-none` renders 19px — both were measured
+   * in the browser before this landed on `normal`.
+   */
+  it('lets the text take the frame’s normal leading', () => {
+    expect(match?.[1] ?? '').not.toContain('line-height');
+
+    render(<RoleChip label="Vendor" />);
+    expect(screen.getByText('Vendor').className).toContain('leading-[normal]');
+  });
+
   it('is uppercase, as the frame sets it', () => {
     expect(match?.[1] ?? '').toContain('text-transform:uppercase');
 
