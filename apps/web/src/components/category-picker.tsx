@@ -58,11 +58,19 @@ export function CategoryPicker({
                 disabled={disabled || (!isSelected && atLimit)}
                 onClick={() => toggle(category.id)}
                 className={cn(
-                  'inline-flex min-h-11 items-center gap-2 rounded-full border py-1.5 pr-4 pl-1.5 text-sm font-medium transition-colors duration-(--duration-fast) sm:min-h-0',
+                  /*
+                   * Frame 09's chip: `padding:7px 13px 7px 8px`, 13px text,
+                   * `border-radius:999px`. With the 22px badge inside, that
+                   * padding is what makes the chip 38px tall.
+                   */
+                  'inline-flex min-h-11 items-center gap-2 rounded-full border py-[7px] pr-[13px] pl-2 text-action transition-colors duration-(--duration-fast) sm:min-h-0',
                   'focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:outline-none',
                   isSelected
-                    ? 'border-clay-400 bg-clay-100 text-stone-800'
-                    : 'border-stone-200 bg-stone-0 text-stone-700 hover:border-stone-300 hover:bg-stone-50',
+                    ? // `clay-600` is the token for text on a `clay-100`
+                      // surface, which is exactly what a selected chip is.
+                      // `stone-800` was not even in the ramp.
+                      'border-clay-400 bg-clay-100 font-semibold text-clay-600'
+                    : 'border-stone-300 bg-stone-0 font-medium text-stone-700 hover:border-stone-400 hover:bg-stone-50',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                 )}
               >

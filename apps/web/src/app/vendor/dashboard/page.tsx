@@ -5,7 +5,7 @@ import { pageTitle, todayDateString } from '@vendor-marketplace/shared';
 import { DashboardStats } from '@/components/vendor/dashboard-stats';
 import { PublishChecklist } from '@/components/vendor/publish-checklist';
 import { RequestRow } from '@/components/vendor/request-row';
-import { EmptyState } from '@/components/ui/empty-state';
+import { EmptyState, EmptyStateGlyph } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { getOwnBookingRequests } from '@/lib/vendor-requests';
 import { getOwnVendorProfile, getVendorDashboard } from '@/lib/vendor-data';
@@ -85,6 +85,13 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         <div className="min-h-0 flex-1 overflow-y-auto pb-5">
           {waiting.length === 0 ? (
             <EmptyState
+              /*
+                Frame `20` draws the pane as a panel that fills the column —
+                a dashed hairline at an 18px radius — rather than leaving the
+                space blank below a top-aligned sentence.
+              */
+              panel
+              icon={<EmptyStateGlyph />}
               headline={dashboard.isPublished ? 'No requests right now' : 'Nobody can find you yet'}
               /*
                 Frame `20`: an empty request list is almost always an
@@ -98,7 +105,11 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
               }
               action={
                 dashboard.isPublished ? null : (
-                  <Button asChild variant="primary">
+                  /*
+                    `.btnS` on frame `20`, not the clay fill: the pane is a
+                    waiting state, not the one action the screen exists for.
+                  */
+                  <Button asChild variant="secondary">
                     <Link href={PROFILE_EDIT_PATH}>Finish your profile</Link>
                   </Button>
                 )

@@ -105,7 +105,15 @@ export function ImageUpload({
 
   return (
     <div className="space-y-2">
-      <label htmlFor={inputId} className="block text-sm font-medium text-stone-800">
+      {/*
+        The frames draw this one as a `.lbl` like every other field label, so
+        it takes the same micro-label treatment. It is a bare `<label>` rather
+        than the `Label` primitive because it labels a file input it owns.
+      */}
+      <label
+        htmlFor={inputId}
+        className="block text-label font-semibold tracking-label text-stone-600 uppercase"
+      >
         {label}
       </label>
       <div
@@ -124,8 +132,16 @@ export function ImageUpload({
           }
         }}
         className={cn(
-          'relative flex w-full items-center justify-center overflow-hidden border-2 border-dashed border-stone-200 bg-stone-50 transition-colors',
-          rounded ? 'size-24 rounded-full sm:size-40' : cn(aspectClassName, 'rounded-lg'),
+          /*
+           * The frames draw every drop zone as a 1px `stone-400` dash over the
+           * hatched placeholder, not a 2px `stone-200` dash over flat
+           * `stone-50`. `placeholder-hatch` is the frames' own gradient, and
+           * the uploaded image covers it once there is one.
+           */
+          'relative flex w-full items-center justify-center overflow-hidden border border-dashed border-stone-400 transition-colors',
+          value ? 'bg-stone-50' : 'placeholder-hatch',
+          // 128px circle from `sm`, the size frame 09 draws the profile photo.
+          rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-lg'),
           isDragging && 'border-clay-400 bg-clay-100',
           isBusy && 'opacity-70',
         )}
@@ -134,8 +150,19 @@ export function ImageUpload({
           // A plain <img>: these are user uploads on an origin that changes
           // between environments, so next/image's loader would need per-env
           // remote patterns for no benefit at this size.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="size-full object-cover" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={value} alt="" className="size-full object-cover" />
+            {/*
+              The frame labels a filled zone `Replace`, and without it there is
+              no visible affordance for changing a photo once one exists — the
+              zone still opens the picker, but nothing says so. Sits over the
+              foot of the image so it reads against the photograph.
+            */}
+            <span className="absolute inset-x-0 bottom-0 bg-stone-900/55 py-1 text-center text-helper font-semibold text-stone-0">
+              Replace
+            </span>
+          </>
         ) : (
           <span className="flex flex-col items-center gap-1 px-2 text-center text-xs text-stone-600">
             <ImagePlus aria-hidden="true" className="size-5" />

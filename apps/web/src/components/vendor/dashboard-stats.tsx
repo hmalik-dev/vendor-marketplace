@@ -11,10 +11,23 @@ interface StatProps {
 
 function Stat({ label, value, delta, isPositive = false }: StatProps): React.ReactElement {
   return (
-    <li className="rounded-xl bg-stone-0 p-3.25 shadow-sm">
+    /*
+      12px, not `rounded-xl`. Frame `08` overrides `.card`'s 16px radius
+      on the stat row specifically, and the scale has no 12px step —
+      `--radius-lg` is 10px and `--radius-xl` 14px — so the value is
+      written literally rather than forced into a neighbouring token,
+      the same way `RoleChip` writes its 5px.
+    */
+    <li className="rounded-[12px] bg-stone-0 p-3.25 shadow-sm">
       <p className="text-label font-semibold tracking-label text-stone-600 uppercase">{label}</p>
       <p className="mt-1 font-display text-[30px] leading-none text-stone-900">{value}</p>
-      <p className={`mt-1 text-xs ${isPositive ? 'text-sage-600' : 'text-stone-600'}`}>{delta}</p>
+      {/*
+        11.5px — `text-helper`, not `text-xs`. Frame `08` draws the delta line
+        at 11.5px and the `text-xs` step is 11px.
+      */}
+      <p className={`mt-1 text-helper ${isPositive ? 'text-sage-600' : 'text-stone-600'}`}>
+        {delta}
+      </p>
     </li>
   );
 }
@@ -49,11 +62,18 @@ export function DashboardStats({ dashboard, today }: DashboardStatsProps): React
       <Stat
         label="Bookings this month"
         value={String(dashboard.bookingsThisMonth)}
-        delta={
-          dashboard.bookingsLastMonth === 0 && dashboard.bookingsThisMonth === 0
-            ? `None in ${MONTH.format(previous)}`
-            : `${change >= 0 ? '+' : ''}${change} vs ${MONTH.format(previous)}`
-        }
+        /*
+          Always a delta, in the frame's `+2 vs April` shape.
+
+          There used to be a `None in <previous month>` branch for a vendor
+          with no bookings in either month. It named the right month — the
+          month is derived correctly — but it is a statement about last month
+          under a label that reads `Bookings this month`, and it is the line
+          every new vendor sees. The frame draws a delta in every state, so
+          the special case is deleted rather than reworded: with both months
+          at zero this reads `+0 vs April`, which is still a comparison.
+        */
+        delta={`${change >= 0 ? '+' : ''}${change} vs ${MONTH.format(previous)}`}
         isPositive={change > 0}
       />
       <Stat

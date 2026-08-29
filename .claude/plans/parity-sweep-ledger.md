@@ -31,7 +31,7 @@ browser alongside the live screen; compare, never recall.
 | 8 | 08 Vendor dashboard | `/vendor/dashboard` | vendor | 1440x900 | **FAIL (13)** | #124–#136 |
 | 9 | 09 Vendor profile editor | `/vendor/profile/edit` | vendor | 1440x900 | **FAIL (16)** | #137–#152 |
 | 10 | 10 Messaging | `/messages` | customer | 1440x900 | todo | — |
-| 11 | 11 Availability | `/vendor/availability` | vendor | 1440x900 | **FAIL (12) — RE-RUN** | #153–#164, +#166 |
+| 11 | 11 Availability | `/vendor/availability` | vendor | 1440x900 | **re-run done — #153–#164 all closed; still FAIL on the new state model** | #153–#164 done, +#166, new #254–#270 |
 | 12 | 12 Sign up | `/sign-up` | guest | 1440x900 | **FAIL (13)** | #194–#197 |
 | 13 | 13 Admin | `NO ROUTE — #15` | guest | 1440x900 | n/a | — |
 | 14 | 14 Search tablet | `derive from base screen` | guest | 768x1024 | todo | — |
@@ -319,20 +319,44 @@ id, not appearance), 0 contrast failures, the gold blocker carries text not colo
 
 The closest of the three; the calendar itself is near-exact.
 
-| ID | Axis | Expected | Observed |
-|----|------|----------|----------|
-| PB2-30 | Layout | Rail 341px footprint / 300px content | 300px / 260px — month columns absorb the 41px (852px content vs 786px; columns 271px vs 248.7px) |
-| PB2-31 | Style | Selected panel radius 12 / padding 13 | 14 / 14 |
-| PB2-32 | Style | Market-note panel radius 12 | 14 |
-| PB2-33 | Style | `Block these` `padding:8px 14px` | `6px 12px` |
-| PB2-34 | Style | Month nav inline glyphs in `#6B6459` at 13px | two 36px circular icon buttons |
-| PB2-35 | Colour | `Clear` `#4A443C` | `#A34A28` |
-| PB2-36 | Font | Day cells 12px | **11px** |
-| PB2-37 | Font | Title letter-spacing -0.26px | -0.65px (root cause) |
-| PB2-38 | Font | Month names letter-spacing normal | -0.45px |
-| PB2-39 | Font | Rail micro-labels in Instrument Sans | **Instrument Serif** (root cause) — size/weight/tracking/colour all correct |
-| PB2-40 | Text | One instruction | **Contradictory copy 40px apart**: rail says `Click a date to select it, or drag across several.` while the pane sub-line says `Click a date to block it...`. Only one is true |
-| PB2-41 | Access | Page has an `h1` | **No `<h1>` on the page** — the title is an `h2`, so the document has no top-level heading |
+**Re-run completed 2026-08-29 (lane 153).** The frame was flagged `RE-RUN REQUIRED`
+because the 2026-08-28 design merge changed frame `11`. Every value below was
+re-derived from scratch: the frame rendered **in situ** from the whole
+`Orla - Screens.dc.html` at 1440x900 with `document.fonts.ready` awaited, read off
+the `[data-screen-label="11 Availability"]` node, and the live screen measured in
+the same browser at the same viewport. **Every frame-side ("Expected") value in
+this table re-derived correctly** — the stale-frame worry did not materialise for
+these twelve. **No finding was voided by the frame change.** Four are now closed by
+re-measurement; the frame change instead produced *new* findings, filed as
+**#254–#270**.
+
+The frame's revision is a **state-model** change, not a metric change. It now
+draws nine distinct cell states and a seven-row legend in which every swatch
+carries the real mark; the app has five states, no `completed` state at all, and
+a shape on exactly one of them. That is why the twelve numbers survived while
+the screen still fails: nothing the old findings measured moved, and everything
+the merge added is new ground. #166 owns the shapes; #254 and #255 own the
+missing state and the legend.
+
+One mis-transcription found: **PB2-34 said "36px"; the live buttons are 44x44**
+(`size-11`). The 36px `icon-sm` variant was deleted from `button.tsx` precisely
+because no caller could make it meet the 44px hit-area law, so 36px could not
+have been observed. Corrected in place.
+
+| ID | Axis | Expected | Observed | Re-run verdict |
+|----|------|----------|----------|----------------|
+| PB2-30 | Layout | Rail 341px footprint / 300px content | 300px / 260px — month columns absorb the 41px (852px content vs 786px; columns 271px vs 248.7px) | **PASS** — live now 341px/300px, months grid 786px, gap 20px, columns 248.656px, identical to frame. Fixed by shared chrome `43ce159` (#153) |
+| PB2-31 | Style | Selected panel radius 12 / padding 13 | 14 / 14 | **PASS** — fixed in this lane (#154): panel is now `rounded-[12px] p-[13px]` |
+| PB2-32 | Style | Market-note panel radius 12 | 14 | **PASS** — fixed in this lane (#155): now `rounded-[12px]` |
+| PB2-33 | Style | `Block these` `padding:8px 14px` | `6px 12px` | **PASS** — fixed in this lane (#156): `px-3.5 py-2` at the call site |
+| PB2-34 | Style | Month nav inline glyphs in `#6B6459` at 13px | ~~two 36px circular icon buttons~~ → **two 44x44 icon buttons**, `border-radius:10px`, `color:#A34A28` | **PASS** — fixed in this lane (#157): bare `‹`/`›` at `text-action` / `text-stone-600`, 44x44 target kept via `before:size-11` |
+| PB2-35 | Colour | `Clear` `#4A443C` | `#A34A28` | **PASS** — fixed in this lane (#158): `text-stone-700` at the call site |
+| PB2-36 | Font | Day cells 12px | **11px** | **PASS** — fixed in this lane (#159): now `text-meta` (12px, line-height normal) |
+| PB2-37 | Font | Title letter-spacing -0.26px | -0.65px (root cause) | **PASS** — live now `-0.26px`. Closed by #165 (`8a14155`) |
+| PB2-38 | Font | Month names letter-spacing normal | -0.45px | **PASS** — live now `normal`. Closed by #165 (`8a14155`) |
+| PB2-39 | Font | Rail micro-labels in Instrument Sans | **Instrument Serif** (root cause) — size/weight/tracking/colour all correct | **PASS** — all three rail labels now Instrument Sans 10.5px/600/0.525px/`#6B6459`/uppercase. Closed by #165 (`8a14155`) |
+| PB2-40 | Text | One instruction | **Contradictory copy 40px apart**: rail says `Click a date to select it, or drag across several.` while the pane sub-line says `Click a date to block it...`. Only one is true | **PARTIAL** — contradiction removed in this lane (#163); rail is now a status line. The frame full instruction still cannot ship until the `completed` state exists |
+| PB2-41 | Access | Page has an `h1` | **No `<h1>` on the page** — the title is an `h2`, so the document has no top-level heading | **PASS** — fixed in this lane (#164): title is now the page `h1`, rail sections stay `h2` |
 
 Recorded as plan-authorized, do not re-flag: the market note states this vendor's own numbers
 rather than the frame's Austin market figure — `19-availability.md` Post-MVP requires exactly

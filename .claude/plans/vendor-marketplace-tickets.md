@@ -430,47 +430,47 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **121** | **08/09/11 shared — Four icon-only controls are under the 44x44 hit area** | **P1** | **M3** | **P1 High** | **Done** | `worktree-117` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-S5`, axis **Access** **Done 2026-08-29 (`10d7ee3`, `e98bec5`, `16a5426`), lane 117.** Re-measured: **still failing**. All four now measure **44x44** at 1440x900 — `Open user menu`, `Notifications`, `Show earlier months`, `Show later months`. The button's `icon-sm` variant (36px) was the root of three and is **retired rather than resized**: all three of its callers were icon-only controls that had to grow, so keeping the name at 44px would make "sm" meaningless and keeping it at 36px would leave the trap for the next caller. There is now one icon size, compliant by construction. `input-group.tsx` has an unrelated variant of the same name, deliberately untouched. Clerk's trigger is grown in CSS — **the same cascade-layer trap as #120**: the diagnostic signal was that `min-width` applied while `min-height` did not, from a single rule declaring both, because Clerk sets `min-height` and no `min-width`. Only the hit area changes; the avatar keeps Clerk's size, so the control still looks as the frames draw it, which is what the law's own wording ("hit area", not icon size) asks for. **Closing browser pass (2026-08-29, lane 117) drove the whole flow and found no regression**: bell and user menu both 44x44 with an even 16px gap and a 32px inset, vertical centres 31.5 against a header centre of 32; Clerk's menu opens, closes on Escape and on outside click, its card aligned to 1px, avatar still 28x28 so only the target grew; focus rings visibly render on all six tab stops. **Regression risk checked and cleared:** frame `11` draws the month stepper as two bare inline chevron `<span>`s in a 13px baseline row, not a button pair, so growing them to 44x44 was a real threat to the 1.0x scroll budget `04-laws.md` puts on availability. Measured after the change: `scrollHeight` **900** = `clientHeight` **900**, no horizontal scroll, stepper row 44px — the pane absorbed it and the page still does not scroll. Dashboard likewise 900=900 |
 | **122** | **08/09/11 shared — Notifications popover does not close on Escape** | **P1** | **M3** | **P1 High** | **Done** | `worktree-117` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-S6`, axis **Access** **Done 2026-08-29 (`ad0396b`), lane 117.** Re-measured: **still failing** — confirmed statically before touching it, there was no `keydown` handler at all, only a `mousedown` outside-click listener. A keyboard user who opened the panel had no way to shut it, and the empty state holds nothing focusable so there was not even a tab-out. Escape now closes it and restores focus to the trigger, which is held in a ref because closing unmounts the panel and focus would otherwise land on `<body>`. The listener is bound only while open, so Escape is not swallowed elsewhere. Driven in a real browser: `aria-expanded` true → false, focus back on the bell, and outside-click still works. Tests drive the DOM rather than the source; one presses keys that do **not** activate the trigger, because Enter and Space are the button's own toggle and would make a handler bound to every keydown look correct |
 | **123** | **08/09/11 shared — Notification copy renders a raw ISO date** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-117` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-S7`, axis **Text** **Done 2026-08-29 (`c002aae`), lane 117 — closed by re-measurement, test-only.** All three notification bodies already route their date through `readableDate` (named month, `timeZone: 'UTC'`), so no production change was needed; an earlier ticket fixed it. **Not verified in the browser, and that is recorded honestly:** the e2e vendor has zero notification rows, so the panel renders empty and proves nothing. The regression guard was instead validated by reverting the interpolation to `${row.eventDate}` and watching it go red on both the bare-field and formatter assertions, then restoring it. It also pins `timeZone: 'UTC'` — `eventDate` is a date-only column and reading it locally slides it a day, which would put the wrong date in front of a vendor. **The frame carries no vendor notification panel**, so unlike the rest of this frame's findings the expected string cannot be read out of the bundle; what the frames do establish is that dates are written for a reader, never as ISO |
-| **124** | **08 Vendor dashboard — `View my public profile` moved out of the header into the content column** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-1`, axis **Layout** |
-| **125** | **08 Vendor dashboard — Dashboard rail is 41px narrow** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-2`, axis **Layout** |
-| **126** | **08 Vendor dashboard — Empty request pane has no panel, glyph or CTA** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-3`, axis **Layout** |
-| **127** | **08 Vendor dashboard — `See all N →` is missing beside `Requests waiting on you`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-4`, axis **Layout** |
-| **128** | **08 Vendor dashboard — Stat card radius is 14px, not 12px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-5`, axis **Style** |
-| **129** | **08 Vendor dashboard — Stat micro-labels use `text-xs` instead of the 10.5px micro-label** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-6`, axis **Font** |
-| **130** | **08 Vendor dashboard — Stat delta line is 11px, not 11.5px** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-7`, axis **Font** |
-| **131** | **08 Vendor dashboard — Rail label renders in Instrument Serif at 11px** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-8`, axis **Font** |
-| **132** | **08 Vendor dashboard — Empty-state headline is 21px, not 26px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-9`, axis **Font** |
-| **133** | **08 Vendor dashboard — `Requests waiting on you` carries tracking the frame does not** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-10`, axis **Font** |
-| **134** | **08 Vendor dashboard — `Vendor` chip string absent** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-11`, axis **Text** |
-| **135** | **08 Vendor dashboard — `See all 4 →` string absent** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-12`, axis **Text** |
-| **136** | **08 Vendor dashboard — `Bookings this month` shows a wrong-month statement instead of a delta** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-13`, axis **Text** |
-| **137** | **09 Vendor profile editor — The cover image drop zone is missing entirely** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-14`, axis **Layout** |
-| **138** | **09 Vendor profile editor — Two undocumented fields inserted into the form** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-15`, axis **Layout** |
-| **139** | **09 Vendor profile editor — Three section headings inserted into a pane the frame gives none** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-16`, axis **Layout** |
-| **140** | **09 Vendor profile editor — Section nav is missing `Payouts` and its gold dot** | **P1** | **M3** | **P3 Low** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-17`, axis **Layout** |
+| **124** | **08 Vendor dashboard — `View my public profile` moved out of the header into the content column** | **P1** | **M3** | **P2 Medium** | **Blocked** | `worktree-124` | **#74** | `core` | **BLOCKED 2026-08-29 by lane 124 — needs a product decision, no code written.** Confirmed FAIL: the link renders in the content column at 12.5px/600 `rgb(163,74,40)`, where the frame puts it in the **app header** at 13.5px/500 `rgb(74,68,60)` beside the avatar. The fix is not local. That header slot is **per-screen** across the vendor frames — `08` draws `View my public profile`, `09` `Preview as customer`, `10` and `11` both `Dashboard` — so it is one contextual slot in `site-header.tsx`, which sits in the **root layout** and is shared chrome that frames 09/11 lanes are editing concurrently. It would also need the vendor's slug fetched in the root layout on every page. **Question: should `SiteHeader` gain a per-route contextual link slot (owned by one lane, filled per screen), or should each vendor surface keep rendering its own link and frames 08-11 be treated as deviating?** |
+| **125** | **08 Vendor dashboard — Dashboard rail is 41px narrow** | **P1** | **M3** | **P1 High** | **Done** | `worktree-124` | **#74** | `core` | **Closed by re-measurement 2026-08-29 — no code written.** The rail already measures a **381px footprint / 340px content**, `box-sizing: content-box`, `padding: 20px`, `border-left: 1px`, exactly the frame. The ledger's 340/300 predates the shared-chrome merge `43ce159`, which added `xl:box-content` to `publish-checklist.tsx`. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **126** | **08 Vendor dashboard — Empty request pane has no panel, glyph or CTA** | **P1** | **M3** | **P1 High** | **Done** | `worktree-124` | **#74** | `core` | **Done 2026-08-29 (`789a880`, corrected by `1410e7d`).** The pane is now a frame-`20` panel: `bg rgb(255,253,249)`, `border 1px dashed rgb(213,206,194)`, `border-radius 18px`, `padding 0 40px`, flex column centred, **filling its column at 572.5px** where it was a 237px top-aligned stub. Adds `EmptyStateGlyph` (58x36, a filled 36px `stone-150` circle and a 1.5px-dashed `stone-400` circle offset 22px) and switches the CTA to the frame's `.btnS` secondary. `1410e7d` corrected the glyph to 1.5px and set the frame's 18/9/18 stack rhythm. Panel is opt-in so the other eight `EmptyState` call sites are untouched. Verified in the browser at 1440x900 from computed styles; 7 component tests; `pnpm test` 866 passing. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **127** | **08 Vendor dashboard — `See all N →` is missing beside `Requests waiting on you`** | **P1** | **M3** | **P2 Medium** | **Blocked** | `worktree-124` | **#74** | `core` | **BLOCKED 2026-08-29 by lane 124 — the control has no destination, no code written.** Confirmed FAIL: absent from the markup. But there is **no `/vendor/requests` route** (`apps/web/src/app/vendor/` holds only `dashboard`, `profile/edit`, `packages`, `portfolio`, `availability`) and no Requests entry in `vendor-nav.tsx`. Frame `08`'s sidebar draws `Requests 4`, `Bookings`, `Messages` and `Payments`, none of which exist. The dashboard already lists **every** pending request in a scrolling pane, so `See all N →` would either 404 or link to the page it is already on. **Question: should a `/vendor/requests` index be built (a new surface, well beyond a parity ticket), or should the dashboard cap its list at the frame's three rows and `See all N →` link there once that route exists?** |
+| **128** | **08 Vendor dashboard — Stat card radius is 14px, not 12px** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-124` | **#74** | `core` | **Done 2026-08-29 (`2499d14`).** Stat cards now compute `border-radius: 12px`; `rounded-xl` resolved to 14px. The scale has no 12px step (`--radius-lg` 10px, `--radius-xl` 14px) so the value is literal, as `RoleChip` does for its 5px. Verified in the browser; test asserts all four cards. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **129** | **08 Vendor dashboard — Stat micro-labels use `text-xs` instead of the 10.5px micro-label** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-124` | **#74** | `core` | **Closed by re-measurement 2026-08-29 — no code written.** The stat micro-label already computes `600 / 10.5px / letter-spacing 0.525px / uppercase / rgb(107,100,89)` Instrument Sans. The ledger's `text-xs` (11px) predates `43ce159`, which moved it to the `text-label` + `tracking-label` tokens. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **130** | **08 Vendor dashboard — Stat delta line is 11px, not 11.5px** | **P1** | **M3** | **P3 Low** | **Done** | `worktree-124` | **#74** | `core` | **Done 2026-08-29 (`712740e`).** The delta line computes `11.5px`; `text-xs` resolved to 11px. Swapped to the existing `--text-helper` token rather than a new value. Verified in the browser on all four cards. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **131** | **08 Vendor dashboard — Rail label renders in Instrument Serif at 11px** | **P1** | **M3** | **P1 High** | **Done** | `worktree-124` | **#74** | `core` | **Closed by re-measurement 2026-08-29 — no code written.** The rail date heading already computes Instrument **Sans** `600 / 10.5px / 0.525px / uppercase / rgb(107,100,89)` — not Instrument Serif at 11px. Fixed by `43ce159`. Verified on both rail branches (published schedule label and the publish-checklist label). Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **132** | **08 Vendor dashboard — Empty-state headline is 21px, not 26px** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-124` | **#74** | `core` | **Done 2026-08-29 (`555b473`).** The empty-state headline computes `26px` Instrument Serif, `letter-spacing normal`; it was `text-display-sm` (21px). Fixed in the shared component because `40-states.md` states the rule for **every** in-app empty state and a dashboard-only override is the drift that rule exists to prevent — nine call sites inherit it, none pinned the old size. Also widened the sentence to the frame's 420px measure. The residual gap on frame `18` (30px marketing step) is filed as **#255**. Verified in the browser; `/search` and `/messages` empty branches driven and clean. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **133** | **08 Vendor dashboard — `Requests waiting on you` carries tracking the frame does not** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-124` | **#74** | `core` | **Closed by re-measurement 2026-08-29 — no code written.** `Requests waiting on you` already computes Instrument Serif 21px with **`letter-spacing: normal`**. It carries `font-display` (family only), not `.display-heading` (which adds -0.01em), so the -0.525px the ledger recorded is gone. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **134** | **08 Vendor dashboard — `Vendor` chip string absent** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-124` | **None** | `core` | **Closed by re-measurement 2026-08-29 — no code written.** The header `Vendor` chip renders and computes `600 / 11px / letter-spacing 0.66px / uppercase / rgb(75,89,64)` on `rgb(237,240,233)`, radius 5px, padding 4px 8px — the frame exactly. `RoleChip` was added by `43ce159`. **Caveat:** the whole header cluster renders signed-out on the first load in a fresh browser context (present on 7 of 8 loads, the miss always the first) — filed separately as **#254**; it is not a chip defect. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **135** | **08 Vendor dashboard — `See all 4 →` string absent** | **P1** | **M3** | **P2 Medium** | **Blocked** | `worktree-124` | **None** | `core` | **BLOCKED 2026-08-29 by lane 124 — same blocker as #127, no code written.** Confirmed FAIL: the literal `See all 4 →` is absent from the DOM. The string cannot be added before its destination exists; see #127 for the question. Once answered, this is the text half (exact literal, the `→` glyph, the live count and its behaviour at zero) of the same control. |
+| **136** | **08 Vendor dashboard — `Bookings this month` shows a wrong-month statement instead of a delta** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-124` | **None** | `core` | **Done 2026-08-29 (`e034898`).** `Bookings this month` now states a delta in every state, in the frame's `+2 vs April` shape; the `None in <month>` fallback is deleted, so a vendor with no bookings in either month reads `+0 vs July`. **Correcting the sweep's note: the month was never wrong** — `previous` is derived as the month before `today`, so an August dashboard naming July was correct. The defect was solely that the line was a statement about last month under a label reading `this month`, and not a comparison. Sage stays reserved for an actual increase. Three tests including the zero case. Lane 124, worktree `worktree-124` on `43ce159`, measured at 1440x900 against `[data-screen-label="08 Vendor dashboard"]` read in situ after `document.fonts.ready`; **every `expected` value in the ledger re-derived independently and confirmed correct for this frame**. Zero console errors. |
+| **137** | **09 Vendor profile editor — The cover image drop zone is missing entirely** | **P1** | **M3** | **P0 Critical** | **Blocked** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-14`, axis **Layout** **BLOCKED 2026-08-29, lane 137 — the design contract contradicts itself; not a lane's call.** Frame `09` renders a `Cover image` drop zone beside the photo (862x130 border-box, `1px dashed #D5CEC2`, radius 14px, strings `cover 21:9 — 1600×686 min` / `Drop an image or browse`), and `17-vendor-profile-editor.md` §1 requires it: "Profile photo … and cover image (128px tall, `aspect-21/9` drop zone) **side by side**, photo first", with "Media pair on one row" in its acceptance list. But `40-states.md` line 100 states the opposite rule for the whole product: "**Cover** is a designation on an existing tile (drag to first slot), **never a second uploader**." `vendor-profile-form.tsx` already omits the zone deliberately, citing that line in a source comment. **Question for the design owner: does frame 09's cover drop zone override `40-states.md`'s "never a second uploader" rule, or should the frame's cover slot be re-cut as a designation on the first portfolio tile?** Both readings are internally consistent, so implementing either silently overrules the other. Note the frame's zone measures 862x128 content (~6.7:1), not literally 21:9 — "21:9" appears only inside the mono placeholder string. Infrastructure is already present either way (`ImageUpload` accepts `prefix: 'vendor-cover'` and `aspectClassName`, and `vendor_profiles.cover_image_url` exists), so this is a decision, not an effort, problem. Blocks the cover strings in #151 for the same reason. **Why the standing tie-breaker does not settle this:** `.claude/rules/web-design-parity.md` says "where the two disagree, build the frame and correct the plan", which would mean building the zone — but the same rule elevates `40-states.md` to "a law, not a screen file… it binds every ticket, **including ones whose frames predate it**", which would mean not building it. So this is law-versus-frame, not plan-versus-frame, and the tie-breaker points both ways at once. That precedence is the decision needed. |
+| **138** | **09 Vendor profile editor — Two undocumented fields inserted into the form** | **P1** | **M3** | **P2 Medium** | **Blocked** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-15`, axis **Layout** **BLOCKED 2026-08-29, lane 137 — deleting these fields removes the only editing surface for data another frame requires.** Confirmed both are absent from frame `09` and from `17-vendor-profile-editor.md`'s ordered field list, so the finding is accurate as far as it goes. But both feed frame `03`: `12-vendor-profile.md:62` specifies "**About** — tagline as a Serif italic pull-quote, bio at max 640px, **three** stat tiles", its layout sketch (line 21) carries `tagline (Serif italic 20px)`, and frame `03` itself renders an `Experience` tile reading `10 yrs`, which is `yearsInBusiness`. `vendor_profiles.tagline` and `.years_in_business` are real columns whose schema comments name exactly those two consumers. Removing the inputs makes required public-profile content permanently unsettable — a regression dressed as a parity fix. **Question for the design owner: should `Your line` and `Years in business` be deleted outright (accepting that frame 03 loses its pull-quote and Experience tile), or relocated — most plausibly into the `About your business` section, which is where their content belongs — rather than removed?** Relocating also serves #141's scroll budget without destroying data. Not a lane's call, so no code written. |
+| **139** | **09 Vendor profile editor — Three section headings inserted into a pane the frame gives none** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-16`, axis **Layout** **Done 2026-08-29 (`24ecc75`), lane 137.** Re-measured first: **two of the three were already correct**. `Business` and `Location & service area` were `sr-only`; only `Tags` rendered visibly, as `font-display text-display-sm text-stone-900` — measured at **21px Instrument Serif** in the live editor at 1440x900. Frame `09`'s form pane uses the visible pane-heading class `.h2` exactly once, for `Your storefront`, and gives the fields no section headings at all. Fixed by making the `Tags` `<h2>` `sr-only`, matching its two siblings. **Deliberately not deleted:** the nav rail's anchors target these sections, so the headings stay in the accessibility tree — the Access axis is a hard gate, and an unnamed landmark is a worse trade than a heading no sighted vendor sees. Evidence: new `apps/web/src/components/vendor-profile-editor-parity.test.ts` derives its expectations from the frame file itself (9 tests); confirmed **2 assertions fail before the change and all 9 pass after**. `tsc --noEmit` clean, `eslint` clean on both files, prettier unchanged. |
+| **140** | **09 Vendor profile editor — Section nav is missing `Payouts` and its gold dot** | **P1** | **M3** | **P3 Low** | **Blocked** | `worktree-137` | **#9**, **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-17`, axis **Layout** **BLOCKED 2026-08-29 on #9, lane 137 — the finding itself calls this "scope-deferrable", and it is.** Confirmed the gap is real: frame `09` lists seven nav rows ending `Payouts` with a `#C99A2E` dot, and the live nav renders six, stopping at `Portfolio`. But nothing behind it exists yet — there is **no `/vendor/payouts` route** (`apps/web/src/app/vendor/` holds only availability, dashboard, packages, portfolio, profile) and **no `payouts` key in `PUBLISH_BLOCKERS`** (`packages/shared/src/constants/index.ts:57`), so the API cannot report the blocker the dot is supposed to represent. Shipping the row now yields a link to a 404 and a gold dot the vendor can never clear — which `40-states.md`'s gold-means-waiting semantics make actively misleading, since nothing is actually waiting on them. `vendor-profile-form.tsx:93` already records this decision in a source comment. **Unblock condition: #9 (Stripe Connect Vendor Onboarding, M4) lands the payouts surface and its blocker key; then this is a three-line change to `SECTION_ORDER`.** Note for whoever does it: the frame's submit-bar summary reads "**2 things** left before you can publish — response time and payouts", so that string only becomes reproducible once payouts is a real blocker — it is the other half of #151. |
 | **141** | **09 Vendor profile editor — Form pane exceeds its scroll budget** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-18`, axis **Layout** |
-| **142** | **09 Vendor profile editor — Inputs are 7px short, unpadded and transparent** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-19`, axis **Style** |
-| **143** | **09 Vendor profile editor — Profile photo zone is oversized with the wrong dashed border** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-20`, axis **Style** |
-| **144** | **09 Vendor profile editor — Category chips have the wrong border weight, padding and icon circle** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-21`, axis **Style** |
-| **145** | **09 Vendor profile editor — Submit-bar buttons are a size class below the frame** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-22`, axis **Style** |
-| **146** | **09 Vendor profile editor — Service radius is an unstyled native range input** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-23`, axis **Style** |
-| **147** | **09 Vendor profile editor — Selected category chip label is stone-900, not clay-600** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-24`, axis **Colour** |
-| **148** | **09 Vendor profile editor — Field labels are stone-900, not stone-600** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-25`, axis **Colour** |
-| **149** | **09 Vendor profile editor — Field labels are sentence-case 12.5px/500 instead of uppercase micro-labels** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-26`, axis **Font** |
-| **150** | **09 Vendor profile editor — Tag group headings render in Instrument Serif at 12.5px** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-27`, axis **Font** |
-| **151** | **09 Vendor profile editor — Six frame strings are missing and the slug preview has an extra path segment** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-28`, axis **Text** |
-| **152** | **09 Vendor profile editor — Eight helper strings appear with no frame or content-voice source** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-29`, axis **Text** |
-| **153** | **11 Availability — Availability rail is 41px narrow and the month columns absorb it** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-30`, axis **Layout** |
-| **154** | **11 Availability — Selected panel radius and padding are both 2px/1px over** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-31`, axis **Style** |
-| **155** | **11 Availability — Market-note panel radius is 14px, not 12px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-32`, axis **Style** |
-| **156** | **11 Availability — `Block these` button is under-padded** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-33`, axis **Style** |
-| **157** | **11 Availability — Month nav uses circular icon buttons where the frame uses inline glyphs** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-34`, axis **Style** |
-| **158** | **11 Availability — `Clear` is clay where the frame is stone** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-35`, axis **Colour** |
-| **159** | **11 Availability — Calendar day cells render 11px, not 12px** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-36`, axis **Font** |
-| **160** | **11 Availability — Page title carries `-0.65px` tracking against the frame's `-0.26px`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-37`, axis **Font** |
-| **161** | **11 Availability — Month names carry negative tracking the frame does not** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-38`, axis **Font** |
-| **162** | **11 Availability — Rail micro-labels render in Instrument Serif** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-39`, axis **Font** |
-| **163** | **11 Availability — Two instructions 40px apart contradict each other** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-40`, axis **Text** |
-| **164** | **11 Availability — The page has no `<h1>`** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-41`, axis **Access** |
+| **142** | **09 Vendor profile editor — Inputs are 7px short, unpadded and transparent** | **P1** | **M3** | **P1 High** | **Done** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-19`, axis **Style** **Done 2026-08-29 (`1d05ba0`), lane 137.** **Corrected the finding's number:** the frame's `.inp` is **38px**, not "~39px" — `.inp{padding:10px 13px;border:1px solid #E4DDD1;font-size:13.5px}` gives 10+10+16+2. App measured **32px, `padding:4px 10px`, transparent** over the `#F8F5EF` pane. Fixed `h-8 → h-[38px]` and `px-2.5 py-1 → px-[13px] py-2.5` in the shared `ui/input.tsx`, and `INPUT_TOUCH_HEIGHT` `lg:h-8 → lg:h-[38px]` so the touch variant cannot drift from it. Radius (`rounded-lg` = 10px), border (`stone-300` = `#E4DDD1`) and font (`text-base` = 13.5px) were **already correct**. **Background deliberately left off the shared primitive:** across the frames `.inp` is `#F1ECE4` by default and overridden to `#FFFDF9` on 26 of 38 instances — it tracks the surface, not the control — so frame 09's seven fields get `bg-stone-0` at the call site and frames 03/04/23/26 keep the filled default. Also raised the two `SelectTrigger`s from `sm:h-9` to `sm:h-[38px]` to match. **Cross-cutting: `ui/input.tsx` is shared app-wide** — ran the whole web suite, **78 files / 871 tests pass**, no regressions. New assertions in `vendor-profile-editor-parity.test.ts` read `.inp` out of the frame file; **4 fail before the change, all 17 pass after**. `tsc --noEmit` clean, `eslint` clean, prettier clean. |
+| **143** | **09 Vendor profile editor — Profile photo zone is oversized with the wrong dashed border** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-20`, axis **Style** **Done 2026-08-29 (`6517fb6`), lane 137.** Finding confirmed exactly. Frame: `width:128px;height:128px` (**130x130** border-box), `border:1px dashed #D5CEC2`, hatched `repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px)`. App measured **160x160, `2px dashed #EFE9E0`** (stone-200, not stone-400) over flat `#F8F5EF`. **Both values it needed were already in the design system and simply unused:** `--color-stone-400` *is* `#d5cec2`, and `@utility placeholder-hatch` (`theme.css:355`) already carries the frame's exact gradient. Fixed in `image-upload.tsx`: `border-2 border-dashed border-stone-200` → `border border-dashed border-stone-400`; flat `bg-stone-50` → `placeholder-hatch` while empty (the uploaded image covers it once set); `sm:size-40` → `sm:size-32`. The editor's wrapper `sm:w-40` → `sm:w-32` too, or it would re-crop the circle. Touches `customer-profile-form.tsx`'s avatar as well — the only other `ImageUpload` caller — which no frame contradicts. Evidence: 6 new assertions parsing the frame's own photo-zone node; **3 fail before, all 23 pass after**; whole web suite **78 files / 877 tests** green; `tsc` / `eslint` / prettier clean. |
+| **144** | **09 Vendor profile editor — Category chips have the wrong border weight, padding and icon circle** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-21`, axis **Style** **Done 2026-08-29 (`92f448b`), lane 137.** **Correcting the finding on border weight: there is no deviation there.** The frame's inline `border:1.5px` **computes to `1px`** in Chromium at DPR 1 — measured on the frame node itself — and the app already renders `1px solid #B4552F`. Chasing 1.5px would have chased a value the frame does not produce. The real deviations, all fixed: padding `6px 16px 6px 6px` → **`7px 13px 7px 8px`**; type `text-sm` (12.5px) → **`text-action` (13px)**, the token that already existed for it; selected weight 500 → **600**; unselected border `stone-200` (`#EFE9E0`) → **`stone-300` (`#E4DDD1`)**; icon badge **28px → 22px**, which is what brings the chip from 42px to the frame's **38px**. Updated `category-icon.test.tsx`, which pinned the old 28px. **One sub-point deliberately left alone:** the frame's selected badge fill is `#F3D6C8` and the unselected `#F1ECE4`, while the app paints both `clay-100` (`#F7E7E0`); neither frame value is a token (`clay-200` is `#efd8cc`), so introducing a raw hex or minting a token is a design-system change beyond a parity lane. Worth a follow-up if the badge is meant to read distinctly against the chip fill. Evidence: 10 new assertions parsed from the frame's three chip nodes, **4 fail before / 32 pass after**; whole web suite **78 files / 886 tests** green; `tsc` and prettier clean. |
+| **145** | **09 Vendor profile editor — Submit-bar buttons are a size class below the frame** | **P1** | **M3** | **P1 High** | **Done** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-22`, axis **Style** **Done 2026-08-29 (`3deb775`), lane 137.** **Correcting the finding's number: the buttons measured 29px, not 33px.** The ticket title is exactly right, though — the cause was literally a size class: both controls carried `size="sm"`, which is `px-3 py-1.5 text-sm rounded-md` and computes to 12.5px/600 on a **29px** control with an **8px** radius, against the frame's 13.5px/600 on **38px** with a **10px** radius. **Fixed without touching the shared primitive:** the `default` size (`px-5 py-2.5`, `text-base`, `rounded-lg`) already *is* the frame's button, so the fix was dropping `size="sm"` from `Save changes` / `Create profile` and `Preview`. Both land on 38px by the same arithmetic the frame uses — `.btnP` gets there with 11px padding and no border, `.btnS` with 10px and a 1px border, and the app's `border border-transparent` base makes 10+10+16+2 = 38 for both variants. Evidence: 5 new assertions reading `.btnP`/`.btnS` out of the frame's stylesheet, **1 fails before / 37 pass after**; whole web suite **78 files / 891 tests** green; `tsc` and prettier clean. |
+| **146** | **09 Vendor profile editor — Service radius is an unstyled native range input** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-23`, axis **Style** **Done 2026-08-29 (`047defd`), lane 137.** Finding confirmed: `className="h-6 w-full accent-clay-400"` — a **24px** browser-drawn control, where the frame draws a **4px `#EFE9E0` track, a `#B4552F` fill, and a 14px `#FFFDF9` thumb ringed 2px `#B4552F`** (18px across). `accent-color` cannot express that; it tints the control but keeps the browser's track height and thumb. Added `@utility range-slider` to `packages/config/tailwind/theme.css` with the frame's exact geometry, covering both `::-webkit-` and `::-moz-` pseudo-elements. **Kept the native `input[type=range]`** rather than adopting a custom widget, so keyboard stepping, the value announcement and the step arithmetic stay the browser's — the Access axis is a hard gate. The fill is a gradient stop on the track (a native range has no element between track and thumb to colour), fed by `--range-fill` from the new exported `serviceRadiusFillPercent()`. The frame's authored `width:46%` at 60 miles is a hand-rounded figure; the derived value is **45.8%** — `(60-5)/(125-5)` — a **0.2px** difference on the frame's 502px track, and it now tracks the bounds instead of being pinned. **Verified in the browser, not just in source:** computed `appearance:none` on an 18px box with `--range-fill: 20.8%` at the seeded 30 miles, plus a 3x screenshot showing the clay fill, pale remainder and ringed thumb — a CSS utility that failed to compile would pass source assertions silently, so this one was checked as rendered. Evidence: 5 unit tests on the percentage helper + 7 frame-derived assertions, **4 fail before / 44 pass after**; whole web suite **78 files / 902 tests** green; `tsc` and prettier clean. |
+| **147** | **09 Vendor profile editor — Selected category chip label is stone-900, not clay-600** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-137` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-24`, axis **Colour** **Done 2026-08-29 (`6071377`), lane 137.** Finding confirmed and its root cause is sharper than "stone-900": the class was **`text-stone-800`, a step this theme's ramp never defines** (it runs stone-0/50/100/150/200/300/400/500/600/700/900), so it fell through to Tailwind's stock cool stone — which is why it measured as a neutral `oklch(0.268 0.007 34.298)` belonging to no token here rather than to `stone-900`. Frame's selected chip is **`#8E3F20`**, and `--color-clay-600: #8e3f20` is documented in `theme.css` as "text on clay-100 surfaces, pressed fill" — precisely a selected chip. Changed to `text-clay-600`; unselected chips keep `stone-700` (`#4A443C`), which is what the frame's other two carry. Evidence: 6 new assertions, **2 fail before / 49 pass after**; whole web suite **78 files / 907 tests** green. **Note for other lanes:** `brand-literals.test.ts` scans *comments* too — a code comment naming the product by name fails it, which briefly broke this commit's suite. |
+| **148** | **09 Vendor profile editor — Field labels are stone-900, not stone-600** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-137` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-25`, axis **Colour** **Done 2026-08-29 (`f21987f`), lane 137.** Finding confirmed: measured `rgb(35,32,28)` against the frames' `.lbl{color:#6B6459}`. Root cause is that **`ui/label.tsx` set no colour at all** — it inherited whatever ink surrounded it, which is stone-900 here — so this was one shared defect showing on every form rather than a per-screen slip. Added `text-stone-600`, the token the ramp itself annotates as "MUTED TEXT — the minimum for any real label". **Cross-cutting by design: 30 `<Label>` usages across 9 files** (booking, checkout, packages, portfolio, customer profile, search, tags). That is the right blast radius — frames `03`/`04`/`05` draw their labels with the same `.lbl` rule, so this moves them toward their frames too rather than away. Whole web suite **78 files / 910 tests** green. Evidence: 3 new assertions reading `.lbl`'s colour out of the frame stylesheet and the token out of `theme.css`; **1 fails before, 52 pass after**. |
+| **149** | **09 Vendor profile editor — Field labels are sentence-case 12.5px/500 instead of uppercase micro-labels** | **P1** | **M3** | **P1 High** | **Done** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-26`, axis **Font** **Done 2026-08-29 (`7d6a052`), lane 137.** Finding confirmed exactly: measured **12.5px/500 sentence case** against `.lbl{font:600 10.5px;letter-spacing:.05em;text-transform:uppercase}`. **Every token already existed and was already the app's idiom** — `--text-label: 10.5px`, `--tracking-label: 0.05em` (annotated in `theme.css` as "`.lbl`, `.tl` — the uppercase micro-label"), and the exact four classes `text-label font-semibold tracking-label text-stone-600 uppercase` are hand-rolled in `rail.tsx`, `dashboard-shell.tsx`, `vendor-surface.tsx`, `site-footer.tsx` and `not-found.tsx`. `ui/label.tsx` was the one place not using them, so the primitive now agrees with its own design system. **Also caught in the browser and fixed:** `image-upload.tsx` renders its own bare `<label>` (it labels a file input it owns) and stayed sentence case — the frame draws `Profile photo` as a `.lbl` like the rest, so it takes the same treatment. Verified live at 1440x900: label computes **10.5px/600, letter-spacing 0.525px, uppercase, `rgb(107,100,89)`** — an exact match for the frame rule. Evidence: 7 new assertions, **2 fail before / 58 pass after**; whole web suite **78 files / 917 tests** green; `tsc` and prettier clean. Same 30-call-site blast radius as #148, and for the same reason it is the right one. |
+| **150** | **09 Vendor profile editor — Tag group headings render in Instrument Serif at 12.5px** | **P1** | **M3** | **P1 High** | **Done** | `worktree-137` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-27`, axis **Font** **Done 2026-08-29 by re-measurement, lane 137 — no code written.** The defect does not reproduce. Measured the live editor at 1440x900 with a populated storefront, vendor session, after `document.fonts.ready`: the tag group headings `Languages spoken`, `Cultural specialties` and `Dietary` compute to **`Instrument Sans` 12.5px/500**, not the `Instrument Serif` 12.5px the finding records. Fixed upstream by `bf525f9` ("Rebuild the storefront editor and calendar to their Orla frames"), already on `main` at `43ce159`. The one remaining serif heading on the screen is the **section** heading `Tags` (21px `Instrument Serif`), which is #139's scope (the frame's form pane carries no section headings at all), not this ticket's. |
+| **151** | **09 Vendor profile editor — Six frame strings are missing and the slug preview has an extra path segment** | **P1** | **M3** | **P1 High** | **Done** | `worktree-137` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-28`, axis **Text** **Done 2026-08-29 (`d70d105`), lane 137 — three strings landed, three split out with reasons.** **Landed:** the radius label now carries its value as one phrase, `Service radius — 60 miles`, instead of a label plus a separate `60 miles` span (it also reads better to a screen reader, which now announces the number with the control); the slider ends in the frame's two bounds `5 mi` / `125 mi`, `aria-hidden` since the input announces its own min and max; and a filled photo zone is labelled **`Replace`**, which the app had no equivalent for at all — a vendor with a photo previously saw no visible way to change it. **Deliberately not reproduced — `portrait`:** the frame's mono `portrait` line is *labelled placeholder art*, and `.claude/rules/web-design-parity.md` lists "real photography in place of the labelled placeholders" among the only three things allowed to differ. The frame depicts a filled zone; the app's empty zone honestly says `Add photo`. Reproducing `portrait` would print a fake caption over an empty circle. **Split out, not dropped:** the three cover strings (`Cover image`, `cover 21:9 — 1600×686 min`, `Drop an image or browse`) belong to the cover zone and ride on **#137**'s blocked design question; the slug's `/vendors/` segment became **#257** because the frame's `orla.com/kessler-co` is not a route the app serves and printing it would show every vendor a 404; `Saved 30 seconds ago` became **#258** because it is a persistent relative timestamp, a behaviour rather than a string. Evidence: 4 new frame-derived assertions; whole web suite **78 files / 921 tests** green; `tsc` and `eslint` clean. |
+| **152** | **09 Vendor profile editor — Eight helper strings appear with no frame or content-voice source** | **P1** | **M3** | **P2 Medium** | **Blocked** | `worktree-137` | **#138** | `core` | Parity sweep 2026-08-28, finding `PB2-29`, axis **Text** **PARTLY DONE, then BLOCKED on #138 — 2026-08-29, lane 137 (`06446f7`).** Classified all eight rather than deleting the list wholesale, and they are not one kind of thing. **Removed (2):** `How far you will travel for an event.` — superseded by the frame's own `5 mi` / `125 mi` bounds, added in #151, which say the same thing in the frame's words; and `A couple of paragraphs is plenty.` — decoration the frame has no equivalent for. **Not an offender (1):** `JPG or PNG · 12 MB each · min 1200px wide · 20 files per upload` is **required verbatim** by `40-states.md` ("Constraints, stated before the picker opens… The same line appears in the drop zone and the requirements rail"), so the finding is wrong to count it. **Blocked on #138 (2):** `One sentence, in your own words.` and `Counted from when you started…` are the helpers for `Your line` and `Years in business` — the two fields #138 asks whether to delete. Removing a helper for a field that may itself go is premature. **Needs a decision (3):** the counters `0 / 80`, `57 / 1200` and `1 of 5 chosen.` are affordances, not prose — they sit on `maxLength`-capped inputs and a 5-category limit, where silent truncation is the alternative, and `03-components.md:92` explicitly provides for a helper line under a field ("11.5px `stone-600`; when it names a publish blocker, `gold-600`"). The frame shows no counter, but it also shows no vendor mid-typing. **Question: do capped fields keep a live character counter, or does frame parity mean removing them and letting the cap bite silently?** Frame 09's pane carries exactly one helper — the gold `Required before you can publish` — which is kept. Evidence: 6 new assertions; whole web suite **78 files / 926 tests** green; `tsc` and `eslint` clean. |
+| **153** | **11 Availability — Availability rail is 41px narrow and the month columns absorb it** | **P1** | **M3** | **P1 High** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-30`, axis **Layout**. **Closed by re-measurement 2026-08-29 — no code written.** Frame re-derived in situ at 1440x900 (`[data-screen-label="11 Availability"]`, fonts settled): rail **341px** footprint / **300px** content (300px + 20px padding each side + 1px `border-left`, content-box); months grid **786px**, gap **20px**, columns **248.656px**. Live now measures rail **341px** / **300px** content (`xl:grid-cols-[1fr_calc(var(--list-pane)+41px)]` with `--list-pane: 18.75rem` = 300px, border-box) and months grid **786px**, gap **20px**, columns **248.656px** — identical on both halves of the finding. Fixed upstream by the frames 08/09/11 shared chrome (`43ce159`) |
+| **154** | **11 Availability — Selected panel radius and padding are both 2px/1px over** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-31`, axis **Style**. Frame draws the rail panel at `border-radius:12px` / `padding:13px`; live was `rounded-xl` (`--radius-xl: 14px`) / `p-3.5` (14px). Now `rounded-[12px] p-[13px]`. There is no 12px step in the radius scale (6/8/10/14/18) though the frames use 12px **69 times** — token gap filed separately |
+| **155** | **11 Availability — Market-note panel radius is 14px, not 12px** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-32`, axis **Style**. Frame draws it at `border-radius:12px`; live was `rounded-xl` (14px). Now `rounded-[12px]`. Padding already matched at 12px. The panel **copy** deliberately differs — `19-availability.md` defers the market statistic Post-MVP and instructs stating only this vendor own numbers — so only the radius was in scope |
+| **156** | **11 Availability — `Block these` button is under-padded** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-33`, axis **Style**. Frame draws `padding:8px 14px`; Button `size="sm"` is `px-3 py-1.5` (6px 12px). Overridden at the call site with `px-3.5 py-2` rather than changing the shared `sm` size that every small button in the product uses. The `shadow-sm` the frame flat span does not carry is a separate finding, filed |
+| **157** | **11 Availability — Month nav uses circular icon buttons where the frame uses inline glyphs** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-34`, axis **Style**. Frame draws bare `‹` / `›` at 13px in `#6B6459`; live drew two **44x44** `size-11` icon buttons in clay `#A34A28` (the ledger said 36px — corrected, that variant was deleted). Now bare glyphs at `text-action` / `text-stone-600`, with a centred `before:size-11` pseudo-element keeping the 44x44 hit area `04-laws.md` requires. Also closes the ledger PB2-34 colour half. **`19-availability.md` says "no month navigation" twice and the frame contradicts it — plan correction filed separately** |
+| **158** | **11 Availability — `Clear` is clay where the frame is stone** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-35`, axis **Colour**. Frame draws `Clear` in `#4A443C` (stone-700); live rendered `#A34A28` (clay-500) from the `ghost` variant. Now `text-stone-700 hover:text-stone-900` at the call site. Semantics, not just the hex: `40-states.md` makes clay the action colour, and `Clear` only drops a selection. Its **padding/radius** also differ from the frame (`6px 12px` + `rounded-lg` vs `8px 6px`, no radius) — filed separately |
+| **159** | **11 Availability — Calendar day cells render 11px, not 12px** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-36`, axis **Font**. Frame day grid is `font-size:12px`; live used `text-xs` (`--text-xs: 11px`) on all 92 cells. Now **`text-meta`** (`--text-meta: 12px`), which is the token `19-availability.md` names and which carries `--text-meta--line-height: normal`, so the cell keeps the frame 29px height rather than inheriting a 1.5 leading the way an arbitrary `text-[12px]` would |
+| **160** | **11 Availability — Page title carries `-0.65px` tracking against the frame's `-0.26px`** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-37`, axis **Font**. **Closed by re-measurement 2026-08-29 — no code written.** Frame `.h2` is Instrument Serif 26px / `letter-spacing:-.01em` = **-0.26px**; live title now computes **-0.26px** at 26px in Instrument Serif. Closed upstream by **#165** (`8a14155`), which this ticket was named a downstream symptom of |
+| **161** | **11 Availability — Month names carry negative tracking the frame does not** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-38`, axis **Font**. **Closed by re-measurement 2026-08-29 — no code written.** Frame `.sh` month name computes `letter-spacing: **normal**` at 18px Instrument Serif; live `h3` now computes `letter-spacing: **normal**` at 18px Instrument Serif. Closed upstream by **#165** (`8a14155`) |
+| **162** | **11 Availability — Rail micro-labels render in Instrument Serif** | **P1** | **M3** | **P1 High** | **Done** | `worktree-153` | **#74** | `core` | Parity sweep 2026-08-28, finding `PB2-39`, axis **Font**. **Closed by re-measurement 2026-08-29 — no code written.** Frame `.lbl` is **Instrument Sans** 10.5px / 600 / `0.525px` / `#6B6459` / uppercase. All three live rail labels (`Selected`, `Legend`, `This quarter`) now compute **Instrument Sans** 10.5px / 600 / `0.525px` / `rgb(107,100,89)` / uppercase — every attribute matches. Closed upstream by **#165** (`8a14155`), the blanket serif rule that was making these `h2`s render in the display face |
+| **163** | **11 Availability — Two instructions 40px apart contradict each other** | **P1** | **M3** | **P1 High** | **Done** | `worktree-153` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-40`, axis **Text**. The rail said a click **selects**, the pane said it **blocks**. The frame draws one instruction, in the pane, and no rail empty state at all; the rail line is now the status `No dates selected yet.` and the pane keeps the instruction. **The pane string still stops short of the frame** — the frame ends `…, and completed events stay on the calendar — click one to open it.`, which describes the `completed` state the app does not implement. Adopting it verbatim would promise behaviour that does not exist, so the clause is filed with the completed-state ticket rather than shipped as copy |
+| **164** | **11 Availability — The page has no `<h1>`** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-41`, axis **Access**. Re-confirmed against the current DOM before implementing — `document.querySelectorAll("h1").length === 0`. The screen title is now an `h1`; the rail three section headings stay `h2`, so the hierarchy runs h1 -> h2 instead of three sibling `h2`s with no parent. Visually inert: `.display-heading` is a class role and **#165** removed the tag-level serif rule, so nothing keys off the element name |
 | **165** | **One `globals.css` rule breaks the font axis on every screen in the product** | **P1** | **M3** | **P1 High** | **Done** | `worktree-165` | **None** | `core` | **Root cause** of #131, #150, #160, #161, #162 and every unswept frame (the row previously named #89/#109/#119/#121 — wrong numbers, corrected 2026-08-29). Highest-leverage fix in the sweep | **Merged 2026-08-29 (`8a14155`, PR #7), CI green.** Lane torn down.
 | **166** | **Availability calendar — every cell state carries a shape, not just a fill** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order A1.** Booked/pending/blocked were within ~2 points of luminance — unreadable in greyscale or with CVD. Adds Completed + Today. Resolves #164 |
 | **167** | **Build the shared dropdown component — nothing rolls its own** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order A2** + `42-dropdowns.md` + frames `28`. **Supersedes #69.** Closes the unreachable-panel and stays-open findings |
@@ -552,6 +552,11 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **254** | **Vendor profile tabs — the focus ring is clipped to a 1px sliver by `overflow-x-auto`** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Found 2026-08-29 by the final `parity-checker` pass on frame `03 Vendor profile`, during lane #103-#116.** `profile-tabs.tsx` gives the `[role="tablist"]` `overflow-x-auto`, which makes `overflow-y` compute `auto` rather than `visible`. The focus ring itself is correct — every tab computes `box-shadow: rgb(248,245,239) 0 0 0 2px, oklab(...) 0 0 0 4px`, which is the `04-laws.md` token — but it is clipped to **0.00px above and 1.00px below** on all five tabs, and 0.00px to the left of `About`. A keyboard user tabbing the profile sees a 1px sliver where the law requires a 4px ring on all four sides. **Nothing is actually scrolling at 1440** (`scrollWidth === clientWidth === 952`); the clip is collateral from the <=390px overflow fix that file documents. **Not caused by #103-#116** — none of those fourteen touch `profile-tabs.tsx`; it was found because the parity pass gates the Access axis. Likely fix: drop the horizontal scroller above the breakpoint that needs it, or give the tablist vertical padding so the ring has room inside the clip. Verify with a real Tab traversal at 1440 and at 390. **TWO AGENTS DISAGREE — RE-MEASURE BEFORE FIXING.** `parity-checker` reports the ring **clipped** and gives geometry for it: tab rect `40,380.80,39.97,40.25` against tablist rect `40,380.80,952,41.25` — the tab's top edge is level with the tablist's, so a 4px outward ring has no room above it, measured as **0.00px top / 1.00px bottom** on all five. `browser-verifier`, tabbing the page for real, reports all five tabs **individually reachable with a clearly visible two-layer ring** and `:focus-visible` true — and notes it nearly filed a false defect here, because reading computed style immediately after `Tab` returns `NONE` until `transition-all` settles (~260ms). The two are not necessarily in conflict: the ring can be **painted** (computed `box-shadow` present, which is what the second agent measured) and still be **clipped** by the ancestor's overflow (which is what the first agent measured). **Settle it by measuring the painted extent against the tablist's client box with focus held and the transition finished**, not by reading `box-shadow`, and not from a screenshot. If it turns out unclipped, close this as not-a-defect and say so.  **Renumbered from #239** on merge — lanes 90 and 82 had already filed #239-#253. |
 | **255** | **An expired session on `/messages` and the vendor request queue shows an empty state instead of sign-in** | P1 | M3 | P2 Medium | Backlog | — | None | `core` `auth` | **Found 2026-08-29 while writing #76's tests.** `getOwnConversations` (`apps/web/src/lib/messaging-data.ts`) and `getOwnBookingRequests` (`apps/web/src/lib/vendor-requests.ts`) degrade **every** read failure to `[]`, including a **401**. `customer-data.ts` special-cases 401 into a sign-in redirect; these two do not. A customer whose session expired is therefore told *No conversations yet* — the app claims they have no messages when it simply could not read them. Not changed in #76 because the empty state is a designed surface and #76 was about destinations; `apps/web/src/lib/data-auth-redirect.test.ts` pins the current behaviour, so the fix flips those two assertions. |
 | **256** | **A resumed lane keeps a stale `worktreePath` and `branch` in its manifest** | P2 | M4.5 | P3 Low | Backlog | — | None | `core` | Found 2026-08-29 landing #238. `laneUp` returns an existing `state: 'active'` manifest verbatim, reconciling only the env file, so a lane first brought up from the wrong directory keeps that directory forever. `/land-lanes` reads exactly these two fields |
+| **257** | **09 Vendor profile editor — the slug preview promises a vanity URL the router does not serve** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 137 from #151, 2026-08-29.** Frame `09` renders the profile-link preview as `orla.com/kessler-co`, and `17-vendor-profile-editor.md` §2 agrees in words: "the slug preview renders live under its field as `{BRAND_DOMAIN}/kessler-co`". The app renders **`{BRAND_DOMAIN}/vendors/<slug>`** — the `/vendors/` segment appears in neither source, so on the Text axis the app is wrong. **But the frame's string is not currently a real URL:** the only public vendor route is `apps/web/src/app/vendors/[slug]/page.tsx`, and there is no top-level `[slug]` route, so `orla.com/kessler-co` 404s. Changing the preview text alone would show every vendor a link that does not resolve — worse than the parity break it fixes. **Decision needed: add a vanity route (a top-level `/[slug]` that renders or redirects to the vendor page) and then match the frame, or accept `/vendors/` and correct the frame and `17-vendor-profile-editor.md`?** A top-level catch-all is not free — every current and future static route (`/search`, `/bookings`, `/messages`, `/sign-in`, …) shadows a vendor slug, so it needs a reserved-slug list enforced at slug creation. Axis **Text**. |
+| **258** | **09 Vendor profile editor — the submit bar never shows when the storefront was last saved** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Filed by lane 137 from #151, 2026-08-29.** Frame `09`'s submit bar reads **`Saved 30 seconds ago`** in 12.5px `#6B6459`, left of `Preview`. The app's `aria-live` region shows `Saving…` while in flight, `Saved` for `SAVED_NOTICE_MS` (2s), then `Unsaved changes` or nothing — so a vendor who returns to a clean form is told nothing about when it was last saved. `17-vendor-profile-editor.md` carries both halves: 'Right: save state ("Saved 30 seconds ago"), Preview, and Save changes' **and** 'Inline "Saved" fades after 2s', which read as two different elements — a transient confirmation *and* a persistent relative timestamp — but the plan never says so outright. **Confirm that reading before building it**, then render a relative time from the last successful save. Keep it deterministic in tests: inject the clock rather than reading `Date.now()` in the component, per `.claude/rules/testing.md`. Axis **Text**. |
+| **259** | **Header renders its signed-out variant on the first navigation in a fresh browser context** | P1 | M3 | **P1 High** | Backlog | — | None | `core` | **Found by lane 124's closing parity pass 2026-08-29 on `/vendor/dashboard`.** On the first load in a fresh context the whole header cluster renders signed-out — wordmark row, the `Vendor` `RoleChip`, the Messages/Dashboard nav, the notification bell and the avatar — while the page body renders fully authenticated. Every later load in the same context is correct; measured **present on 7 of 8 loads, and the miss is always the first**. Clerk's client session resolves after first paint. Not a `RoleChip` bug — `role-chip.tsx` matches frame `08` exactly (600 11px, 0.66px, uppercase, `sage-600` on `sage-50`, radius 5, padding 4/8). It is a Layout/Text parity hole against frame `08`'s header and it makes any header parity measurement flaky. |
+| **260** | **`18 Search no results` empty state is 26px/420px where the frame draws 30px/520px** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Surfaced by #132 (lane 124, 2026-08-29).** `40-states.md` sets the empty-state headline at **26px in-app / 30px marketing**, and the shared `EmptyState` now renders 26px for every call site. Frame `18` draws the search no-results headline at **30px** with a **520px** body measure against the component's 420px. 26 is closer than the 21 it replaced, so this is a residual gap rather than a regression, but the component has no marketing step. Needs a marketing variant, not a per-screen override. |
+| **261** | **The two-circle empty-state glyph is absent from seven of the nine `EmptyState` call sites** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found by lane 124 while implementing #126, 2026-08-29.** `40-states.md` names the muted two-circle glyph (one dashed, `stone-400`) as *the* empty-state glyph, not one option among several. #126 shipped it as `EmptyStateGlyph` and wired it to the vendor dashboard only; it was left opt-in deliberately so a parallel lane's screens would not shift underneath them. `search-shell` passes its own lucide icons (2 sites); the remaining **7** — `packages-pane`, `portfolio-pane`, `customer-history` (x2), `messages-screen`, `vendors/[slug]`, and the dashboard's published branch — render with no glyph at all. |
 | **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
 | **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
 | **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. **Reconciliation 2026-08-29 — filed without reading `D10` or the plan.** The runtime split (web on Vercel, API on **Railway**) is decided in `vendor-marketplace-decisions.md` D10, and the release pipeline is already ticketed as **#20 Deploy Pipeline** (P0, blocked by #18, #19, #30). Treat this row as the git/branch-protection slice of #20, not a new ticket. **Done 2026-08-29.** Vercel Production Branch flipped `main` -> `production`, confirmed by reading `link.productionBranch: production` from the API. `production` branch exists and is protected alongside `main` (no deletions, no force pushes, linear history, CI required). `main` now produces previews; the live site advances only on a deliberate fast-forward. |
@@ -561,6 +566,24 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P3 Low** | **Deferred — needs a human** | — | **Launch prep — not current work** | `core` | **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. **Reconciliation 2026-08-29:** overlaps **#19**, which already covers external-account provisioning and is `Deferred — needs a human`. The plan's launch checklist also requires the pooled string on Railway and the unpooled one on Railway *and* GitHub Actions. **Deferred to launch prep 2026-08-29 (user ruling).** Free is the correct plan while there is no real data — usage is **8.9 of 100 CU-hours**, 34 MB of 512 MB, 3 of 10 branches. Nothing here blocks development. **The checklist moved to `docs/pre-launch.md` §3.2**, which is where launch-gated work belongs; this row is a pointer, not a queue item. Do not re-surface it as active work. |
 | **207** | **`nearby-availability` computes "today" in two timezones — the suite fails every evening** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Found 2026-08-28** running the gate for #200; **pre-existing**, reproduced with that ticket's source changes stashed. `never suggests a past date when the wanted date is today` asserts `expected '2026-08-28' to be '2026-08-30'`: the test helper `dayFromToday` and the route disagree about which day it is once local time passes UTC midnight (failure observed at 22:26 local = 05:26 UTC the next day). Violates the deterministic-test law — the suite reads the real clock, so it is green all morning and red all evening. Fix by injecting a fixed clock rather than widening the assertion, and check `dayFromToday` against every other date-anchored suite. Use `/debug-flaky-test`. |
 | **235** | **The app's inherited line-height is 1.5, so every arbitrary `text-[Npx]` renders loose against its frame** | **P1** | **M3** | **P1 High** | **Backlog** | — | **#165** | `core` | **Found by #74's browser measurement 2026-08-29, with compiled-CSS evidence.** #74 set every `--text-*--line-height` to `normal`, which only reaches elements sized by a named scale step. 96 sites across 40 files use an arbitrary `text-[Npx]`, which emits `font-size` and nothing else, so they inherit Preflight's `html{line-height:1.5}`. **Three of #74's five acceptance controls still fail because of this.** Owns the one-line fix #165 declined to absorb. Work before #198 |
+| **262** | **11 Availability — The calendar has no `completed` cell state** | P1 | M3 | P1 High | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame `11 Availability` and `19-availability.md` both specify `completed` as an **MVP** state: `sage-50` fill, `sage-600` numeral, a **check glyph**, `padding:5px 0 10px`, and clickable — it opens the past booking. `AvailabilityStatus` has four members and `completed` is not one. So the cell state, its legend row (`Completed · check`), its `This quarter` row (`Completed` / `2 events`) and the instruction clause `and completed events stay on the calendar — click one to open it.` are all absent. Nothing in the Post-MVP section defers it. **Blocks the Text axis closing on #163**, which deliberately stopped short of the frame's full instruction rather than promise behaviour that does not exist |
+| **263** | **11 Availability — The legend renders flat colour chips, not the actual marks** | P1 | M3 | P1 High | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame draws each legend swatch **22x22, radius 6px**, containing the numeral at 10px/600 in that state's own text colour, plus the real mark — dot, dashed border, hatch + strikethrough, check. Live draws **18x18, radius 5px**, empty and `aria-hidden`, and **5 rows where the frame has 7**. Labels also drop the frame's qualifier suffixes (`Available — no mark`, `Booked — locked · dot`). `19-availability.md`: *"The legend renders the actual marks, not plain colour chips. A legend of flat swatches is the one place the distinction would be invisible."* Pairs with #166 |
+| **264** | **11 Availability — `Today` is a clay ring where the frame draws an ink border** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame and the plan's revised state table both draw today as **`1.5px solid #23201C`** on the cell, `font-weight:600`, `padding:5.5px 0`. Live uses `ring-2 ring-clay-400` at weight 400 — an outward ring in the *selecting* colour, so today and an in-progress drag share a colour family. **`19-availability.md` contradicts itself here**: its prose says a `clay-400` ring while its revised table says the ink border. The frame agrees with the table, so the prose is the line to correct |
+| **265** | **11 Availability — Month range and quarter rows render 13.5px against the frame's 13px** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame sets the month-nav row and the `This quarter` rows at **13px**; live uses `text-base` (`--text-base: 13.5px`). `--text-action: 13px` already exists in the scale and carries `line-height: normal`, so this is a token swap. Axis **Font** |
+| **266** | **11 Availability — Helper line and market note inherit a 1.5 line-height** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame helper line is `line-height: normal` (16px); live renders **20.25px** from `leading-normal`. Frame market note is 1.55 (19.375px); live is `leading-relaxed`, 1.625 (**20.3125px**). Separate from **#235**: the month heading (27px vs 24px) and the selected range (30px vs 26px) are loose for #235's reason — arbitrary `text-[18px]` / `text-[20px]` emit no line-height — but these two are explicit leading utilities that simply do not match the frame. Axis **Font** |
+| **267** | **11 Availability — Focus ring is clipped on controls flush with the pane edge** | P1 | M3 | P1 High | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Both panes are `overflow: auto` (`section.app-pane` at `y:86`, `aside.app-pane` at `y:86`). A control whose box sits flush with the top edge has its **outward 4px focus ring clipped**. Pixel-sampled from a screenshot with the control focused: ring absent 3px above, present 3px below/left/right. The ring token itself computes correctly everywhere — this is the failure mode `04-laws.md` warns about, where it computes right and renders invisible. The frame specifies `overflow: hidden` on the rail, and **neither pane needs to scroll** (`scrollHeight === clientHeight` on both), so `overflow:auto` is buying nothing. Same class as ledger finding `P1-3`. #157 removed the two controls that were sitting on the edge, so the hazard is currently latent rather than firing — fix the container, not just the symptom. Axis **Access** |
+| **268** | **11 Availability — Weekday headers announce as blank and the month tables are unnamed** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Each weekday header is `<th scope="col"><span aria-hidden="true">S</span></th>` — the only content is hidden from assistive technology and nothing replaces it, so all seven `columnheader`s have an **empty accessible name** and the `scope="col"` association conveys nothing. Separately, all three `<table>`s have no `<caption>`, `aria-label` or `role`, so three sibling grids of bare numerals give no way to tell which month you are in. The frame uses plain spans in a CSS grid and has no table semantics to satisfy; if the table stays, the headers need real names. Axis **Access** |
+| **269** | **11 Availability — Day grid uses `border-spacing`, adding an outer gutter the frame has not** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame draws the day grid as a CSS grid with `gap:4px` and **no outer gutter**, cell width **32.09px**. Live uses a `<table>` with `border-spacing:4px`, which also applies *outside* the edge cells — insetting the grid 4px on all sides and narrowing every cell to **31.03px**. Separately the frame draws adjacent-month numerals (June shows `31` in `stone-500`, no background) where live renders empty `<td>`s in every month. Axis **Layout** |
+| **270** | **11 Availability — The rail fill starts 22px below the header** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame's rail box begins flush with the header (`y:66`), so its cream fill and 1px left border run the full height of the shell. Live begins at `y:86` — `pt-5.5` on the page wrapper leaves a **22px stone-50 band** above the rail, so both the fill and the border stop short of the header. Axis **Layout** |
+| **271** | **11 Availability — Past day cells have no fill** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame draws a past date as `background:#F8F5EF` with `border-radius:7px`. Live `PAST_STYLE` sets only `cursor-not-allowed text-stone-500`, so `backgroundColor` computes `rgba(0,0,0,0)` and past days sit as bare text on the page ground rather than as filled inert cells. Axis **Style** |
+| **272** | **11 Availability — `Clear` padding and radius differ from the frame** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** Frame draws `Clear` at `padding:8px 6px` with no radius and no background. Live renders `6px 12px` with `rounded-lg`, from Button `size="sm"`. The **colour** half of this control was closed by #158; this is the remaining Style half, split out rather than folded into a Colour ticket. Axis **Style** |
+| **273** | **11 Availability — `Block these` carries a shadow and border the frame does not draw** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** The `primary` variant adds `shadow-sm` (`rgba(35,32,28,.06) 0 2px 10px`) and the Button base adds `border border-transparent` (1px on every side). The frame draws a flat span with neither. Deliberately **not** folded into #156, which was scoped to padding: `03-components.md` may intend the shadow on every primary button, in which case the frame is the thing to reconcile rather than this call site. Axis **Style** |
+| **274** | **11 Availability — Two rail strings are in neither the frame nor the voice guide** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** `No dates selected yet.` — added by **#163** to replace a rail instruction that contradicted the pane — and `Open these up`, the primary label when the selection is already blocked. Neither appears in frame `11 Availability` nor in `31-content-voice.md`. The frame draws no empty state and no blocked-selection state, so it cannot settle either. Both need approving into the voice guide or replacing with approved copy. Axis **Text** |
+| **275** | **[DESIGN] Frame `11 Availability` draws a designer's rationale note that should not ship** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** The frame's rail draws, as styled UI: *"Every state carries a shape as well as a colour, so the calendar still reads in greyscale and for colour-blind vendors. Fill alone is never the signal."* That is process commentary explaining change order **A1** to a reader of the design, not copy addressed to a vendor using the product. **QUESTION — do not build until answered:** confirm it is an annotation and is excluded from the build. Filed rather than silently ignored, because a parity pass otherwise reports it as a missing element on every future run. **#166 is the ticket that implements what the sentence describes** |
+| **276** | **[DESIGN] `19-availability.md` says "no month navigation" twice while the frame draws it** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** The plan says *"three months across ... which covers a typical booking horizon **with no month navigation**"* and repeats it in its own acceptance checklist (*"Three months visible at 1440 with no month navigation"*). Frame `11 Availability` draws `‹ June — August 2026 ›`, and the app implements paging. **#157** built the frame's glyphs under the standing rule *"where the two disagree, build the frame and correct the plan"*. The plan is the half still to correct, by whoever owns it — tickets write code, design passes edit the plan |
+| **277** | **The frames use a 12px radius 69 times and the radius scale has no 12px step** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** `--radius-*` is 6 / 8 / 10 / 14 / 18. **12px is the second most common radius in the frame bundle — 69 uses, against 50 for 14px** — and has no token, so #154 and #155 both had to reach for `rounded-[12px]`. Either the scale is missing a step or those 69 frame uses should be 14px; that is a foundations decision, not a per-screen one. Note the *type* scale has no such gap: `--text-meta: 12px` already exists and #159 used it |
+| **278** | **[DESIGN] The frame's blocked hatch puts text on a band that fails AA** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Filed by lane 153, frame `11 Availability` re-run 2026-08-29.** The blocked cell's hatch alternates `#EFE9E0` / `#E0D8CA` every 3px under `#6B6459` text. Against the dark band alone that is **4.13:1**, below AA. Over the alternation the perceived ground is roughly `#E7E0D5`, which clears, so the frame reads acceptably — but a verbatim implementation puts glyph strokes directly on the failing band. Worth resolving against `19-availability.md` before **#166** builds the hatch, rather than after |
+| **279** | **`availability-calendar.test.tsx` asserts class tokens with `toContain`, which a longer token satisfies** | P2 | M3 | P3 Low | Backlog | — | None | `core` | Filed 2026-08-29 while merging lane 153. Residue of the reviewer finding in `lane-handoff-2026-08-29.md` §2. The specific `toContain('py-2')` defect is **gone** — `4aedac7` introduced an exact-token `hasClass` helper — but ~10 assertions still compare class strings with `toContain`, where `bg-clay-400` is satisfied by `bg-clay-400/30`. Convert them to `hasClass`. Also §2's third finding: three assertions near the `FRAME_11_RAIL` slice helpers assert literals their own slice starts with, and one is unreachable because the IIFE throws at module load when the slice is empty |
 
 Rows are ordered by build sequence, not by ticket number. **207 rows — 50 Done, 1 In Progress, 150 Backlog, 4 Deferred, 2 Blocked.** Recounted 2026-08-28; the previous "56 rows — 25 Done" line had been stale for many batches.
 
@@ -11003,5 +11026,448 @@ looks correct until something has focus.
 - [ ] a test that focuses each tab and asserts the ring is not clipped by an
       ancestor — compare the ring's painted extent against the container's
       client box, so the assertion fails if `overflow` is reintroduced.
+
+
+---
+
+### #262: 11 Availability — The calendar has no `completed` cell state
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame `11 Availability` and `19-availability.md` both specify `completed` as an **MVP** state: `sage-50` fill, `sage-600` numeral, a **check glyph**, `padding:5px 0 10px`, and clickable — it opens the past booking. `AvailabilityStatus` has four members and `completed` is not one. So the cell state, its legend row (`Completed · check`), its `This quarter` row (`Completed` / `2 events`) and the instruction clause `and completed events stay on the calendar — click one to open it.` are all absent. Nothing in the Post-MVP section defers it. **Blocks the Text axis closing on #163**, which deliberately stopped short of the frame's full instruction rather than promise behaviour that does not exist
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #263: 11 Availability — The legend renders flat colour chips, not the actual marks
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame draws each legend swatch **22x22, radius 6px**, containing the numeral at 10px/600 in that state's own text colour, plus the real mark — dot, dashed border, hatch + strikethrough, check. Live draws **18x18, radius 5px**, empty and `aria-hidden`, and **5 rows where the frame has 7**. Labels also drop the frame's qualifier suffixes (`Available — no mark`, `Booked — locked · dot`). `19-availability.md`: *"The legend renders the actual marks, not plain colour chips. A legend of flat swatches is the one place the distinction would be invisible."* Pairs with #166
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #264: 11 Availability — `Today` is a clay ring where the frame draws an ink border
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame and the plan's revised state table both draw today as **`1.5px solid #23201C`** on the cell, `font-weight:600`, `padding:5.5px 0`. Live uses `ring-2 ring-clay-400` at weight 400 — an outward ring in the *selecting* colour, so today and an in-progress drag share a colour family. **`19-availability.md` contradicts itself here**: its prose says a `clay-400` ring while its revised table says the ink border. The frame agrees with the table, so the prose is the line to correct
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #265: 11 Availability — Month range and quarter rows render 13.5px against the frame's 13px
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame sets the month-nav row and the `This quarter` rows at **13px**; live uses `text-base` (`--text-base: 13.5px`). `--text-action: 13px` already exists in the scale and carries `line-height: normal`, so this is a token swap. Axis **Font**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #266: 11 Availability — Helper line and market note inherit a 1.5 line-height
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame helper line is `line-height: normal` (16px); live renders **20.25px** from `leading-normal`. Frame market note is 1.55 (19.375px); live is `leading-relaxed`, 1.625 (**20.3125px**). Separate from **#235**: the month heading (27px vs 24px) and the selected range (30px vs 26px) are loose for #235's reason — arbitrary `text-[18px]` / `text-[20px]` emit no line-height — but these two are explicit leading utilities that simply do not match the frame. Axis **Font**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #267: 11 Availability — Focus ring is clipped on controls flush with the pane edge
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Both panes are `overflow: auto` (`section.app-pane` at `y:86`, `aside.app-pane` at `y:86`). A control whose box sits flush with the top edge has its **outward 4px focus ring clipped**. Pixel-sampled from a screenshot with the control focused: ring absent 3px above, present 3px below/left/right. The ring token itself computes correctly everywhere — this is the failure mode `04-laws.md` warns about, where it computes right and renders invisible. The frame specifies `overflow: hidden` on the rail, and **neither pane needs to scroll** (`scrollHeight === clientHeight` on both), so `overflow:auto` is buying nothing. Same class as ledger finding `P1-3`. #157 removed the two controls that were sitting on the edge, so the hazard is currently latent rather than firing — fix the container, not just the symptom. Axis **Access**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #268: 11 Availability — Weekday headers announce as blank and the month tables are unnamed
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Each weekday header is `<th scope="col"><span aria-hidden="true">S</span></th>` — the only content is hidden from assistive technology and nothing replaces it, so all seven `columnheader`s have an **empty accessible name** and the `scope="col"` association conveys nothing. Separately, all three `<table>`s have no `<caption>`, `aria-label` or `role`, so three sibling grids of bare numerals give no way to tell which month you are in. The frame uses plain spans in a CSS grid and has no table semantics to satisfy; if the table stays, the headers need real names. Axis **Access**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #269: 11 Availability — Day grid uses `border-spacing`, adding an outer gutter the frame has not
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame draws the day grid as a CSS grid with `gap:4px` and **no outer gutter**, cell width **32.09px**. Live uses a `<table>` with `border-spacing:4px`, which also applies *outside* the edge cells — insetting the grid 4px on all sides and narrowing every cell to **31.03px**. Separately the frame draws adjacent-month numerals (June shows `31` in `stone-500`, no background) where live renders empty `<td>`s in every month. Axis **Layout**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #270: 11 Availability — The rail fill starts 22px below the header
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame's rail box begins flush with the header (`y:66`), so its cream fill and 1px left border run the full height of the shell. Live begins at `y:86` — `pt-5.5` on the page wrapper leaves a **22px stone-50 band** above the rail, so both the fill and the border stop short of the header. Axis **Layout**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #271: 11 Availability — Past day cells have no fill
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame draws a past date as `background:#F8F5EF` with `border-radius:7px`. Live `PAST_STYLE` sets only `cursor-not-allowed text-stone-500`, so `backgroundColor` computes `rgba(0,0,0,0)` and past days sit as bare text on the page ground rather than as filled inert cells. Axis **Style**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #272: 11 Availability — `Clear` padding and radius differ from the frame
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+Frame draws `Clear` at `padding:8px 6px` with no radius and no background. Live renders `6px 12px` with `rounded-lg`, from Button `size="sm"`. The **colour** half of this control was closed by #158; this is the remaining Style half, split out rather than folded into a Colour ticket. Axis **Style**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #273: 11 Availability — `Block these` carries a shadow and border the frame does not draw
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+The `primary` variant adds `shadow-sm` (`rgba(35,32,28,.06) 0 2px 10px`) and the Button base adds `border border-transparent` (1px on every side). The frame draws a flat span with neither. Deliberately **not** folded into #156, which was scoped to padding: `03-components.md` may intend the shadow on every primary button, in which case the frame is the thing to reconcile rather than this call site. Axis **Style**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #274: 11 Availability — Two rail strings are in neither the frame nor the voice guide
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+`No dates selected yet.` — added by **#163** to replace a rail instruction that contradicted the pane — and `Open these up`, the primary label when the selection is already blocked. Neither appears in frame `11 Availability` nor in `31-content-voice.md`. The frame draws no empty state and no blocked-selection state, so it cannot settle either. Both need approving into the voice guide or replacing with approved copy. Axis **Text**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #275: [DESIGN] Frame `11 Availability` draws a designer's rationale note that should not ship
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+The frame's rail draws, as styled UI: *"Every state carries a shape as well as a colour, so the calendar still reads in greyscale and for colour-blind vendors. Fill alone is never the signal."* That is process commentary explaining change order **A1** to a reader of the design, not copy addressed to a vendor using the product. **QUESTION — do not build until answered:** confirm it is an annotation and is excluded from the build. Filed rather than silently ignored, because a parity pass otherwise reports it as a missing element on every future run. **#166 is the ticket that implements what the sentence describes**
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #276: [DESIGN] `19-availability.md` says "no month navigation" twice while the frame draws it
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+The plan says *"three months across ... which covers a typical booking horizon **with no month navigation**"* and repeats it in its own acceptance checklist (*"Three months visible at 1440 with no month navigation"*). Frame `11 Availability` draws `‹ June — August 2026 ›`, and the app implements paging. **#157** built the frame's glyphs under the standing rule *"where the two disagree, build the frame and correct the plan"*. The plan is the half still to correct, by whoever owns it — tickets write code, design passes edit the plan
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #277: The frames use a 12px radius 69 times and the radius scale has no 12px step
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+`--radius-*` is 6 / 8 / 10 / 14 / 18. **12px is the second most common radius in the frame bundle — 69 uses, against 50 for 14px** — and has no token, so #154 and #155 both had to reach for `rounded-[12px]`. Either the scale is missing a step or those 69 frame uses should be 14px; that is a foundations decision, not a per-screen one. Note the *type* scale has no such gap: `--text-meta: 12px` already exists and #159 used it
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #278: [DESIGN] The frame's blocked hatch puts text on a band that fails AA
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed by lane 153 during the frame `11 Availability` re-run on 2026-08-29. The
+frame was rendered **in situ** from the whole `Orla - Screens.dc.html` at
+1440x900 with `document.fonts.ready` awaited and read off the
+`[data-screen-label="11 Availability"]` node; the live screen was measured in the
+same browser at the same viewport. Every number below is from computed styles on
+both sides, never from a screenshot.
+
+The blocked cell's hatch alternates `#EFE9E0` / `#E0D8CA` every 3px under `#6B6459` text. Against the dark band alone that is **4.13:1**, below AA. Over the alternation the perceived ground is roughly `#E7E0D5`, which clears, so the frame reads acceptably — but a verbatim implementation puts glyph strokes directly on the failing band. Worth resolving against `19-availability.md` before **#166** builds the hatch, rather than after
+
+**Acceptance:**
+
+- [ ] The live element matches the frame value above, read from the DOM rather than judged from a screenshot
+- [ ] `parity-checker` reports **MATCH** on the affected axis for frame `11 Availability`
+- [ ] No other element on the screen regresses on any of the six axes as a result
+
+**Test (required):**
+
+- [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
 
 ---

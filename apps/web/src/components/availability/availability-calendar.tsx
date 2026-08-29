@@ -6,7 +6,6 @@ import {
   LOCKED_AVAILABILITY_STATUSES,
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';
@@ -79,6 +78,43 @@ export function cellAppearance(
     return SELECTING_STYLE;
   }
   return STATUS_STYLES[status];
+}
+
+/*
+ * Frame `11 Availability` draws month paging as bare `‹` / `›` glyphs at 13px in
+ * `stone-600` on the heading baseline — not as filled icon buttons. It is still
+ * an icon-only control, so `04-laws.md` requires a 44x44 hit area.
+ *
+ * The target is a real 44px box **in flow**, with the glyph drawn at the frame's
+ * size and colour inside it. It cannot be an absolutely positioned pseudo-element
+ * hung off a 16px box: this row is the first child of `section.app-pane`, which
+ * `theme.css` gives `overflow-y: auto`, so anything reaching above the pane's
+ * content origin is clipped. Measured on the page, that cost the top 1px of the
+ * target — 43px against the 44px the law requires. A flex item cannot overflow
+ * the start of its own flex line, so an in-flow box has nothing to clip.
+ */
+function MonthNavButton({
+  label,
+  glyph,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  glyph: string;
+  disabled: boolean;
+  onClick: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-sm text-action text-stone-600 outline-none transition-colors duration-(--duration-fast) hover:text-stone-900 focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 disabled:pointer-events-none disabled:opacity-50"
+    >
+      <span aria-hidden="true">{glyph}</span>
+    </button>
+  );
 }
 
 const RANGE_FORMATTER = new Intl.DateTimeFormat('en-US', {
@@ -303,34 +339,26 @@ export function AvailabilityCalendar({
     >
       <section className="app-pane flex min-h-0 flex-col pr-0 xl:pr-6">
         <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-3">
-          <h2 className="display-heading text-display-md text-stone-900">Availability</h2>
+          <h1 className="display-heading text-display-md text-stone-900">Availability</h1>
 
           <div className="flex items-center gap-3 text-base text-stone-700">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Show earlier months"
+            <MonthNavButton
+              label="Show earlier months"
+              glyph="‹"
               disabled={!canPageBack}
               onClick={() => setPageStart((previous) => Math.max(0, previous - MONTHS_PER_PAGE))}
-            >
-              <ChevronLeft aria-hidden="true" />
-            </Button>
+            />
             <span className="tabular-nums">{rangeLabel}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Show later months"
+            <MonthNavButton
+              label="Show later months"
+              glyph="›"
               disabled={!canPageForward}
               onClick={() =>
                 setPageStart((previous) =>
                   Math.min(allMonths.length - MONTHS_PER_PAGE, previous + MONTHS_PER_PAGE),
                 )
               }
-            >
-              <ChevronRight aria-hidden="true" />
-            </Button>
+            />
           </div>
         </div>
 
@@ -403,7 +431,7 @@ export function AvailabilityCalendar({
                                 // 7px padding at the 1440 reference; a 44px
                                 // touch target below `sm`, where the input is
                                 // a finger rather than a pointer.
-                                'min-h-11 w-full rounded-[7px] py-[7px] text-center text-xs tabular-nums transition-colors duration-(--duration-fast) sm:min-h-0',
+                                'min-h-11 w-full rounded-[7px] py-[7px] text-center text-meta tabular-nums transition-colors duration-(--duration-fast) sm:min-h-0',
                                 // Exactly one of these, never layered: a
                                 // `hover:` utility outranks a plain one at the
                                 // same specificity, so an available cell's
@@ -438,11 +466,15 @@ export function AvailabilityCalendar({
           </h2>
 
           {selection.length === 0 ? (
-            <p className="text-sm leading-normal text-stone-700">
-              Click a date to select it, or drag across several.
-            </p>
+            /*
+              A status line, not a second instruction. The frame draws no empty
+              state here, and the sentence that used to sit in this slot told
+              the vendor a click "selects" while the pane 40px away told them it
+              "blocks". Only the pane carries an instruction now.
+            */
+            <p className="text-sm leading-normal text-stone-700">No dates selected yet.</p>
           ) : (
-            <div className="rounded-xl bg-clay-100 p-3.5">
+            <div className="rounded-[12px] bg-clay-100 p-[13px]">
               <p className="font-display text-[20px] text-stone-900">{formatRange(selection)}</p>
               <p className="mt-1 text-sm text-stone-700">
                 {selection.length} {selection.length === 1 ? 'day' : 'days'} · currently{' '}
@@ -454,6 +486,7 @@ export function AvailabilityCalendar({
                   type="button"
                   variant="primary"
                   size="sm"
+                  className="px-3.5 py-2"
                   disabled={isSaving}
                   onClick={() =>
                     void apply(selection, selectionIsBlocked ? 'available' : 'blocked')
@@ -465,6 +498,7 @@ export function AvailabilityCalendar({
                   type="button"
                   variant="ghost"
                   size="sm"
+                  className="text-stone-700 hover:text-stone-900"
                   disabled={isSaving}
                   onClick={() => {
                     setSelection([]);
@@ -522,7 +556,7 @@ export function AvailabilityCalendar({
           design/design-plan/98-post-mvp.md. Until then this panel says only
           what this vendor's own calendar says, which is true on day one.
         */}
-        <p className="rounded-xl bg-stone-150 p-3 text-sm leading-relaxed text-stone-700">
+        <p className="rounded-[12px] bg-stone-150 p-3 text-sm leading-relaxed text-stone-700">
           {quarter.openSaturdays === 0
             ? 'Every Saturday in these three months is already spoken for.'
             : `${quarter.openSaturdays} of your Saturdays in these three months are still open, alongside ${quarter.booked} booked and ${quarter.blocked} blocked dates.`}

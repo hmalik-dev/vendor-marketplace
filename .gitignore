@@ -53,6 +53,12 @@ coverage/
 # would swallow package.json and tsconfig.json.
 /f[0-9][0-9].json
 
+# The frame-vs-live screenshot pairs a parity sweep writes while it measures.
+# `/*.png` above only reaches the root, and these land in a directory, so a
+# running sweep left them untracked in the shared checkout — where the staging
+# hook reads the session cwd and blocked an unrelated lane's commit.
+/.parity-tmp/
+
 # Tool-managed skill packs installed into the repo (see skills-lock.json).
 # Note `.claude/skills/*`, not `.claude/skills/`: git does not descend into an
 # ignored directory, so a directory rule would make the negations below

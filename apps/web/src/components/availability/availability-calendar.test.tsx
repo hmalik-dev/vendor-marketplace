@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -341,5 +343,356 @@ describe('AvailabilityCalendar', () => {
     renderCalendar([entry('2026-06-15', 'booked')]);
 
     expect(document.body.textContent).not.toMatch(/across Austin|%|average|median/i);
+  });
+});
+
+/*
+ * Frame `11 Availability` is the acceptance criterion for this screen. Every
+ * expected value below is read out of the frame at test time rather than
+ * written down here, so a design re-import that moves one fails this file
+ * instead of passing silently.
+ *
+ * jsdom has no layout, so these compare the utility the component asks for
+ * against the value the frame declares. The browser parity gate is the real
+ * check; this is what stops the two sides drifting apart in source between
+ * gates.
+ */
+const designDirectory = join(process.cwd(), '../../design');
+const framesFile = readdirSync(designDirectory).filter((entry) =>
+  entry.endsWith('Screens.dc.html'),
+);
+
+if (framesFile.length !== 1) {
+  throw new Error(`Expected exactly one screens frame file in design/, found ${framesFile.length}`);
+}
+
+const frames = readFileSync(join(designDirectory, framesFile[0] as string), 'utf8');
+
+/** Frame `11 Availability`, up to the frame that follows it. */
+const FRAME_11 = (() => {
+  const start = frames.indexOf('data-screen-label="11 Availability"');
+  const next = frames.indexOf('class="fr"', start + 1);
+
+  return frames.slice(start, next === -1 ? undefined : next);
+})();
+
+/** One `property:value` out of an inline `style` attribute, as the frame writes it. */
+function styleValue(markup: string, property: string): string {
+  const declaration = new RegExp(`(?:^|[;"])${property}:([^;"]+)`).exec(markup);
+
+  if (!declaration?.[1]) {
+    throw new Error(`Frame 11 does not set \`${property}\` on this element`);
+  }
+
+  return declaration[1].trim();
+}
+
+/*
+ * The rail — the frame's 300px right-hand column. The selected panel has to be
+ * found inside the rail rather than in the whole frame: the booked day cells
+ * carry the same `#F7E7E0` fill (booked *is* clay-100 by design), so a
+ * frame-wide search finds a 7px day cell instead of the 12px panel.
+ */
+const FRAME_11_RAIL = (() => {
+  const at = FRAME_11.indexOf('width:300px');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the 300px rail');
+  }
+
+  return FRAME_11.slice(at);
+})();
+
+/** The rail's "Selected" panel — the one clay-100 panel the rail draws. */
+const frameSelectedPanel = (() => {
+  const at = FRAME_11_RAIL.indexOf('background:#F7E7E0;border-radius:');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the selected panel this test measures');
+  }
+
+  return FRAME_11_RAIL.slice(at, FRAME_11_RAIL.indexOf('>', at));
+})();
+
+/*
+ * The market-note panel at the foot of the rail. `lastIndexOf`, because the
+ * rail draws two `#F1ECE4` panels: the designer's note about the shape-first
+ * cell states at `border-radius:9px`, then this one last at 12px.
+ */
+const frameMarketNote = (() => {
+  const at = FRAME_11_RAIL.lastIndexOf('background:#F1ECE4');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the market-note panel this test measures');
+  }
+
+  return FRAME_11_RAIL.slice(at, FRAME_11_RAIL.indexOf('>', at));
+})();
+
+/** The `<span>` the frame's rail draws for a given label. */
+function frameSpanFor(label: string): string {
+  const at = FRAME_11_RAIL.indexOf(`>${label}<`);
+
+  if (at === -1) {
+    throw new Error(`Frame 11's rail no longer draws \`${label}\``);
+  }
+
+  return FRAME_11_RAIL.slice(FRAME_11_RAIL.lastIndexOf('<span', at), at + 1);
+}
+
+/*
+ * The frame's month-nav glyphs. They sit in the pane, not the rail, and the
+ * `‹` span is the first thing the title row draws after the heading.
+ */
+const frameNavGlyphs = (() => {
+  const at = FRAME_11.indexOf('June — August 2026');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the month range this test measures');
+  }
+
+  return FRAME_11.slice(FRAME_11.lastIndexOf('<div', at), FRAME_11.indexOf('</div>', at));
+})();
+
+/*
+ * The `‹` glyph's own style. It has to be read off the span rather than the row
+ * that holds it: the row is `#4A443C` and the glyphs are the muted `#6B6459`,
+ * so reading the row silently measures the wrong colour.
+ */
+const frameNavGlyphStyle = (() => {
+  const found = /<span style="([^"]*)">\u2039</.exec(frameNavGlyphs);
+
+  if (!found?.[1]) {
+    throw new Error('Frame 11 no longer styles the month-nav glyph this test measures');
+  }
+
+  return found[1];
+})();
+
+/** The theme token whose value is this hex, e.g. `#6B6459` -> `stone-600`. */
+function colourToken(hex: string): string {
+  const theme = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+  const found = new RegExp(`--color-([a-z0-9-]+):\\s*${hex}\\s*;`, 'i').exec(theme);
+
+  if (!found?.[1]) {
+    throw new Error(`No theme colour token has the value ${hex}`);
+  }
+
+  return found[1];
+}
+
+/*
+ * The frame's day grid. `[1]`, not `[0]`: each month draws two 7-column grids,
+ * the weekday initials first and the day numerals second.
+ */
+const frameDayGrid = (() => {
+  const grids = [...FRAME_11.matchAll(/<div style="([^"]*repeat\(7,1fr\)[^"]*)"/g)];
+  const dayGrid = grids[1]?.[1];
+
+  if (!dayGrid) {
+    throw new Error('Frame 11 no longer draws the day grid this test measures');
+  }
+
+  return dayGrid;
+})();
+
+/** The frame's one instruction line, HTML entities resolved. */
+const frameInstruction = (() => {
+  const at = FRAME_11.indexOf('Click a date');
+
+  if (at === -1) {
+    throw new Error('Frame 11 no longer draws the instruction this test measures');
+  }
+
+  return FRAME_11.slice(at, FRAME_11.indexOf('</div>', at))
+    .replace(/&mdash;/g, '\u2014')
+    .trim();
+})();
+
+/** The type-scale token whose size is this value, e.g. `12px` -> `meta`. */
+function fontSizeToken(px: string): string {
+  const theme = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+  const found = new RegExp(`--text-([a-z0-9-]+):\\s*${px}\\s*;`).exec(theme);
+
+  if (!found?.[1]) {
+    throw new Error(`No type-scale token has the size ${px}`);
+  }
+
+  return found[1];
+}
+
+/*
+ * Exact class-token match. `toContain` is not safe for utilities that share a
+ * prefix: `'py-2.5'.includes('py-2')` is true, so a `toContain` guard passes on
+ * a 10px padding where the frame says 8px — the exact defect the assertion
+ * exists to catch.
+ */
+function hasClass(element: Element, className: string): boolean {
+  return element.className.split(/\s+/).includes(className);
+}
+
+/** px -> the Tailwind spacing unit that renders it; the scale is 4px per unit. */
+function spacingUnit(px: string): string {
+  return String(Number.parseFloat(px) / 4);
+}
+
+describe('frame 11 parity', () => {
+  afterEach(cleanup);
+
+  it('finds the frame and the elements these assertions measure', () => {
+    expect(FRAME_11).not.toBe('');
+    expect(FRAME_11).toContain('data-screen-label="11 Availability"');
+    expect(frameSelectedPanel).toContain('border-radius');
+  });
+
+  it('draws the selected panel at the frame radius and padding', async () => {
+    const user = userEvent.setup();
+    renderCalendar();
+
+    await user.click(cell('2026-06-18'));
+
+    const panel = screen.getByText('Jun 18').parentElement;
+
+    expect(panel?.className).toContain(
+      `rounded-[${styleValue(frameSelectedPanel, 'border-radius')}]`,
+    );
+    expect(panel?.className).toContain(`p-[${styleValue(frameSelectedPanel, 'padding')}]`);
+  });
+
+  /*
+   * Only the radius. The frame's copy ("Saturdays in June and July are 80%
+   * booked across Austin") needs market data the product does not have, and
+   * `19-availability.md` defers it Post-MVP with an explicit instruction to
+   * state only this vendor's own numbers until then — so the wording
+   * deliberately differs and is not a Text finding.
+   */
+  it('draws the market-note panel at the frame radius', () => {
+    renderCalendar();
+
+    const note = screen.getByText(/Saturdays in these three months/);
+
+    expect(note.className).toContain(`rounded-[${styleValue(frameMarketNote, 'border-radius')}]`);
+  });
+
+  it('pads the primary selection action the way the frame draws it', async () => {
+    const user = userEvent.setup();
+    renderCalendar();
+
+    await user.click(cell('2026-06-18'));
+
+    const [padY, padX] = styleValue(frameSpanFor('Block these'), 'padding').split(/\s+/) as [
+      string,
+      string,
+    ];
+    const action = screen.getByRole('button', { name: 'Block these' });
+
+    expect(action.className).toContain(`py-${spacingUnit(padY)}`);
+    expect(action.className).toContain(`px-${spacingUnit(padX)}`);
+  });
+
+  it('pages the months with the frame glyphs, in the frame colour', () => {
+    renderCalendar();
+
+    const back = screen.getByRole('button', { name: 'Show earlier months' });
+    const forward = screen.getByRole('button', { name: 'Show later months' });
+
+    // The literal glyphs, read out of the frame rather than duplicated here.
+    const glyphs = [...frameNavGlyphs.matchAll(/>([\u2039\u203a])</g)].map((hit) => hit[1]);
+
+    expect(glyphs).toEqual(['\u2039', '\u203a']);
+    expect(back.textContent).toBe(glyphs[0]);
+    expect(forward.textContent).toBe(glyphs[1]);
+
+    // Muted, not the clay an action would use.
+    const token = colourToken(styleValue(frameNavGlyphStyle, 'color'));
+
+    expect(back.className).toContain(`text-${token}`);
+    expect(forward.className).toContain(`text-${token}`);
+
+    /*
+     * `04-laws.md`: an icon-only control keeps a 44x44 target, and it has to be
+     * a real in-flow box. An absolutely positioned pseudo-element hung off the
+     * 16px glyph box gets clipped by `section.app-pane`'s `overflow-y: auto`,
+     * measured at 43px on the page. jsdom has no layout, so this asserts the
+     * mechanism; the browser pass measures the reach.
+     */
+    expect(hasClass(back, 'size-11')).toBe(true);
+    expect(hasClass(forward, 'size-11')).toBe(true);
+    expect(back.className).not.toContain('before:');
+    expect(forward.className).not.toContain('before:');
+  });
+
+  /*
+   * `40-states.md`: clay is the action colour. `Clear` only drops a selection,
+   * so the frame keeps it in body stone and the clay was overstating it.
+   */
+  it('paints the secondary selection action in the frame colour, not clay', async () => {
+    const user = userEvent.setup();
+    renderCalendar();
+
+    await user.click(cell('2026-06-18'));
+
+    const token = colourToken(styleValue(frameSpanFor('Clear'), 'color'));
+
+    expect(screen.getByRole('button', { name: 'Clear' }).className).toContain(`text-${token}`);
+  });
+
+  it('sets day numerals at the frame size, from the type scale', () => {
+    renderCalendar();
+
+    const token = fontSizeToken(styleValue(frameDayGrid, 'font-size'));
+
+    expect(token).toBe('meta');
+    expect(cell('2026-06-18').className).toContain(`text-${token}`);
+  });
+
+  /*
+   * The screen used to tell the vendor two different things 40px apart: the
+   * rail said a click "selects", the pane said it "blocks". The frame draws one
+   * instruction, in the pane, so that is the one that survives.
+   */
+  it('carries exactly one instruction, opening the way the frame does', () => {
+    renderCalendar();
+
+    const instructions = screen.queryAllByText(/Click a date to/);
+
+    expect(instructions).toHaveLength(1);
+
+    const opening = `${frameInstruction.split('. ')[0]}.`;
+
+    expect(instructions[0]?.textContent?.trim().startsWith(opening)).toBe(true);
+  });
+
+  it('states the empty selection rather than instructing a second time', () => {
+    renderCalendar();
+
+    expect(screen.getByText('No dates selected yet.')).toBeDefined();
+  });
+
+  /*
+   * `04-laws.md`: the document needs a top-level heading. The screen title was
+   * an `h2`, so the page had none and the rail's section headings sat at the
+   * same level as the thing they sit inside. Queried by role, so this asserts
+   * the accessibility tree rather than the tag.
+   */
+  it('gives the page a top-level heading', () => {
+    renderCalendar();
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Availability' })).toBeDefined();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('keeps the rail section headings below the page heading', () => {
+    renderCalendar();
+
+    for (const label of ['Selected', 'Legend', 'This quarter']) {
+      expect(screen.getByRole('heading', { level: 2, name: label })).toBeDefined();
+    }
   });
 });
