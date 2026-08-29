@@ -719,11 +719,11 @@ export function VendorProfileForm({
                 {isSaving ? 'Saving…' : justSaved ? 'Saved' : isDirty ? 'Unsaved changes' : ''}
               </span>
               {profile !== null ? (
-                <Button type="button" variant="secondary" size="sm" asChild>
+                <Button type="button" variant="secondary" asChild>
                   <a href={`/vendors/${profile.slug}`}>Preview</a>
                 </Button>
               ) : null}
-              <Button type="submit" variant="primary" size="sm" disabled={isSaving}>
+              <Button type="submit" variant="primary" disabled={isSaving}>
                 {isNew ? 'Create profile' : 'Save changes'}
               </Button>
             </div>

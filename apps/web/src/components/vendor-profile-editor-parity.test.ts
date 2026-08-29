@@ -295,3 +295,50 @@ describe('the category chips match the frame’s pills (#144)', () => {
     expect(iconSource).not.toContain('size-7 shrink-0');
   });
 });
+
+describe('the submit-bar buttons match the frame’s .btnP / .btnS (#145)', () => {
+  const btnP = frameRule('btnP');
+  const btnS = frameRule('btnS');
+  const buttonSource = read('src/components/ui/button.tsx');
+
+  it('reads 13.5px weight-600 text off both frame buttons', () => {
+    for (const rule of [btnP, btnS]) {
+      expect(declaration(rule, 'font-size')).toBe('13.5px');
+      expect(declaration(rule, 'font-weight')).toBe('600');
+    }
+  });
+
+  it('reads a 10px radius off both, not 8px', () => {
+    for (const rule of [btnP, btnS]) {
+      expect(declaration(rule, 'border-radius')).toBe('10px');
+    }
+  });
+
+  it('reads 20px side padding off both', () => {
+    expect(declaration(btnP, 'padding')).toBe('11px 20px');
+    expect(declaration(btnS, 'padding')).toBe('10px 20px');
+  });
+
+  /*
+   * Both frame buttons measure 38px. `.btnP` gets there with 11px padding and
+   * no border; `.btnS` with 10px padding and a 1px border. The app's default
+   * size is `px-5 py-2.5` over the base's `border border-transparent`, so both
+   * variants land on 10+10+16+2 = 38 — the same height by the same arithmetic.
+   */
+  it('keeps the default size on the frame’s 20px/10px padding and 10px radius', () => {
+    expect(buttonSource).toContain("default: 'gap-2 px-5 py-2.5'");
+    expect(buttonSource).toContain('rounded-lg');
+    expect(buttonSource).toContain('text-base font-semibold');
+  });
+
+  /*
+   * The regression: both controls shipped `size="sm"`, which is
+   * `px-3 py-1.5 text-sm rounded-md` — 12.5px text on a 29px control with an
+   * 8px radius, a whole size class below the frame.
+   */
+  it('no longer renders Save changes or Preview at the sm size', () => {
+    expect(formSource).toContain('<Button type="submit" variant="primary" disabled={isSaving}>');
+    expect(formSource).toContain('<Button type="button" variant="secondary" asChild>');
+    expect(formSource).not.toContain('size="sm"');
+  });
+});
