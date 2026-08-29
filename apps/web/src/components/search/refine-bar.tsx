@@ -8,6 +8,7 @@ import {
   type TagCategory,
   type VendorSortOption,
 } from '@vendor-marketplace/shared';
+import { useRef } from 'react';
 import { TAG_CATEGORY_CHIP_LABELS, TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { WireTag } from '@/lib/wire-schemas';
@@ -88,6 +89,8 @@ function Chip({
   triggerName,
   children,
 }: ChipProps): React.ReactElement {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
   return (
     <span
       className={cn(
@@ -97,6 +100,7 @@ function Chip({
     >
       <Popover>
         <PopoverTrigger
+          ref={triggerRef}
           aria-label={triggerName}
           className={cn(
             'flex items-center gap-1.5 py-1.75 pl-3.25',
@@ -106,7 +110,28 @@ function Chip({
           {label}
           {onClear ? null : <span aria-hidden="true">▾</span>}
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-70">
+        <PopoverContent
+          align="start"
+          className="w-70"
+          /*
+            Closing by tabbing out of the panel must not lose the keyboard.
+
+            The panel is portalled to the end of `<body>`, so when Radix moves
+            focus *onward* past it there is nothing after it to receive focus
+            and `document.activeElement` becomes `<body>` — the next Tab then
+            restarts at "Skip to content". It only bites a panel that is a
+            single tab stop, which is why the sort chip's radio group surfaced
+            it while the price and tag chips, with several stops each, never
+            reach the boundary.
+
+            Returning focus to the trigger keeps the next Tab going to whatever
+            follows the chip. Escape already landed here; this makes Tab agree.
+          */
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            triggerRef.current?.focus();
+          }}
+        >
           {children}
         </PopoverContent>
       </Popover>
