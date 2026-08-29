@@ -1,0 +1,28 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "dependsOn": ["^build"],
+      // This package's tests assert files that live OUTSIDE it — the drift
+      // guards in `checks/toolchain.test.ts` and the dev-script guard in
+      // `lane/dev-ports.test.ts`. Turborepo hashes only a package's own files,
+      // so without naming them here, changing one of them leaves this task's
+      // hash identical: the run is a cache HIT, the guard never executes, and
+      // CI is green with the thing it guards already broken. CI restores the
+      // cache across runs (`restore-keys: turbo-`), so this is not local-only.
+      //
+      // Every path a test in this package reads from outside it belongs here.
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/.nvmrc",
+        "$TURBO_ROOT$/docker-compose.yml",
+        "$TURBO_ROOT$/turbo.json",
+        "$TURBO_ROOT$/.github/workflows/ci.yml",
+        "$TURBO_ROOT$/apps/api/Dockerfile",
+        "$TURBO_ROOT$/apps/web/package.json"
+      ]
+    }
+  }
+}

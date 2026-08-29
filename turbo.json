@@ -33,6 +33,7 @@
     "STRIPE_PLATFORM_FEE_RATE",
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
+    "WEB_PORT",
     "WEB_URL"
   ],
   "tasks": {

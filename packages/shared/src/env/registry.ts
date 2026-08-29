@@ -238,6 +238,32 @@ export const ENV_REGISTRY = [
     setup: APP_SETUP,
   },
   {
+    /*
+     * `next dev` reads `PORT` too, and `PORT` belongs to the API. Inside a lane
+     * that made the web app bind the lane's API port and the API die with
+     * EADDRINUSE (#231), so `apps/web`'s dev script passes `--port` explicitly
+     * whenever this is set — and omits the flag entirely when it is not, which
+     * is what keeps Next's own retry-to-the-next-free-port behaviour outside a
+     * lane.
+     *
+     * `tooling`, because no application process reads it: the dev script does,
+     * in the shell, before Next boots. That is also why the row exists at all —
+     * `globalPassThroughEnv` is generated from this registry, and Turborepo
+     * strips any variable missing from it, which would leave every lane's web
+     * app back on the default port.
+     */
+    key: 'WEB_PORT',
+    capability: 'core',
+    audience: 'server',
+    consumers: ['tooling'],
+    environments: 'shared',
+    shape: /^\d{1,5}$/,
+    defaultValue: '3000',
+    description:
+      'Port the Next.js dev server binds. Exported by `pnpm lane:up` into the lane environment; setting it in this file has no effect, because the dev script reads it from the shell before Next loads .env.',
+    setup: APP_SETUP,
+  },
+  {
     key: 'HOST',
     capability: 'core',
     audience: 'server',
