@@ -638,7 +638,16 @@ export function VendorProfileForm({
             </section>
 
             <section id={SECTION_IDS.tags} className="scroll-mt-6 py-6">
-              <h2 className="font-display text-display-sm text-stone-900">Tags</h2>
+              {/*
+               * Visually hidden, like the Business and Location headings above.
+               * Frame `09`'s form pane carries exactly one visible heading —
+               * `Your storefront` — and no section headings under it; the
+               * section names live in the nav rail instead. The heading stays
+               * in the accessibility tree because the nav's anchors target
+               * these sections, and a landmark a screen reader cannot name is
+               * a worse trade than a heading a sighted vendor never sees.
+               */}
+              <h2 className="sr-only">Tags</h2>
               <p className="mt-1 text-base leading-prose text-stone-700">
                 How customers find someone who fits their celebration.
               </p>
