@@ -26,6 +26,7 @@ vi.mock('./api-client', async () => {
 const {
   DASHBOARD_PATH_BY_ROLE,
   getCurrentUser,
+  readRoleForChrome,
   redirectIfSignedIn,
   POST_SIGN_IN_PATH_BY_ROLE,
   redirectVendorToDashboard,
@@ -300,5 +301,77 @@ describe('POST_SIGN_IN_PATH_BY_ROLE', () => {
 
   it('covers every role so the lookup can never return undefined', () => {
     expect(POST_SIGN_IN_PATH_BY_ROLE.admin).toBe('/');
+  });
+});
+
+/*
+ * `SiteHeader` renders in the root layout, so anything it throws escapes every
+ * `error.tsx` and only `global-error.tsx` catches it — which replaces the whole
+ * document. The vendor chip is decoration, so its read must never be able to
+ * cost the page.
+ */
+describe('readRoleForChrome', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+    redirect.mockClear();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the role when the record reads', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(VENDOR);
+
+    await expect(readRoleForChrome()).resolves.toBe('vendor');
+  });
+
+  it('returns null when nobody is signed in', async () => {
+    getToken.mockResolvedValue(null);
+
+    await expect(readRoleForChrome()).resolves.toBeNull();
+  });
+
+  /*
+   * The suspended case, which is the one that would have been worst: the API
+   * answers a banned account 403, and `/suspended` is where such an account is
+   * sent — so a propagating read would have made the very page it is redirected
+   * to unreachable, along with every other page in the product.
+   */
+  it('degrades on a 403 rather than taking the document down', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(new ApiClientError(403, 'FORBIDDEN', 'Account suspended'));
+
+    await expect(readRoleForChrome()).resolves.toBeNull();
+  });
+
+  it('degrades when the API is unreachable', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(new Error('fetch failed'));
+
+    await expect(readRoleForChrome()).resolves.toBeNull();
+  });
+
+  it('degrades on a 500 as well, where getCurrentUser propagates', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
+
+    await expect(readRoleForChrome()).resolves.toBeNull();
+  });
+
+  /*
+   * A redirect is not a failure. Swallowing Next's navigation signal would turn
+   * every redirect raised beneath this read into a silent no-op.
+   */
+  it('lets a navigation signal through', async () => {
+    getToken.mockResolvedValue('token');
+
+    const signal = new Error('NEXT_REDIRECT:/suspended') as Error & { digest: string };
+    signal.digest = 'NEXT_REDIRECT;replace;/suspended;307;';
+    apiRequest.mockRejectedValue(signal);
+
+    await expect(readRoleForChrome()).rejects.toBe(signal);
   });
 });

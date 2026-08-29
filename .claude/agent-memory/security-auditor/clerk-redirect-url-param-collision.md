@@ -34,9 +34,10 @@ first. Use an app-owned key (`returnTo`) so `fallbackRedirectUrl` stays load-bea
 Also note `allowedRedirectOrigins` is **not** set on `ClerkProvider` in
 `apps/web/src/app/layout.tsx`, so Clerk falls back to
 `createAllowedRedirectOrigins` = own origin + `https://<frontendApi minus "clerk.">`
-+ `https://*.<same>` — a production custom domain `clerk.orla.com` therefore allows
-every `*.orla.com` subdomain as a redirect target. And `isAllowedRedirect` opens
-with `if (!allowedRedirectOrigins) return true;` — allow-everything if it is ever
-undefined. Setting it explicitly to `[siteOrigin]` closes both.
+
+- `https://*.<same>` — a production custom domain `clerk.orla.com` therefore allows
+  every `*.orla.com` subdomain as a redirect target. And `isAllowedRedirect` opens
+  with `if (!allowedRedirectOrigins) return true;` — allow-everything if it is ever
+  undefined. Setting it explicitly to `[siteOrigin]` closes both.
 
 Related: [[validate-before-normalize-return-path]]

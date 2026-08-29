@@ -99,7 +99,16 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
       }
 
       setOpen(false);
-      trigger.current?.focus();
+
+      /*
+       * Only reclaim focus if it is still inside the panel. Someone who tabbed
+       * out and pressed Escape on another control should keep it there — the
+       * overlay owes focus back to the trigger, not away from wherever the
+       * person actually is.
+       */
+      if (panel.current?.contains(document.activeElement)) {
+        trigger.current?.focus();
+      }
     }
 
     document.addEventListener('keydown', onKeyDown);

@@ -19,12 +19,7 @@ import { describe, expect, it } from 'vitest';
 const globalsCss = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
 
 /** The four utilities the law names, in the order it names them. */
-const RING = [
-  'ring-2',
-  'ring-clay-400/30',
-  'ring-offset-2',
-  'ring-offset-stone-50',
-] as const;
+const RING = ['ring-2', 'ring-clay-400/30', 'ring-offset-2', 'ring-offset-stone-50'] as const;
 
 function ruleFor(selector: string): string {
   const match = globalsCss.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`));

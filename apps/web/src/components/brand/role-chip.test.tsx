@@ -107,6 +107,24 @@ describe('the vendor role chip matches the frame', () => {
     expect(screen.getByText('Vendor').className).toContain('leading-[normal]');
   });
 
+  /*
+   * The frames draw the chip at 1440 and 1024 and omit it on the tablet and
+   * mobile headers, so it is hidden below `lg` rather than shown everywhere.
+   */
+  it('appears only from the width the frames first draw it', () => {
+    const chipFrames = [...frames.matchAll(/data-screen-label="([^"]+)"/g)].map((m) => m[1]);
+
+    // Guards the guard: the bundle must actually contain the frames named.
+    expect(chipFrames).toContain('14 Vendor dashboard mobile');
+    expect(chipFrames).toContain('27 Vendor dashboard — 1024');
+
+    render(<RoleChip label="Vendor" />);
+    const className = screen.getByText('Vendor').className;
+
+    expect(className).toContain('hidden');
+    expect(className).toContain('lg:inline-block');
+  });
+
   it('is uppercase, as the frame sets it', () => {
     expect(match?.[1] ?? '').toContain('text-transform:uppercase');
 

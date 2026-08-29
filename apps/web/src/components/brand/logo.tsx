@@ -23,14 +23,14 @@ const WORDMARK_GAP_RATIO = 0.5;
 /**
  * Wordmark font size, as a multiple of the diameter.
  *
- * Read off the frames rather than chosen: they pair a 15px mark with a 23px
- * wordmark in **24** desktop headers, a 14px mark with 21px on mobile, and a
- * 19px mark with 29px on the sign-up panel — all three are 23/15 to within
- * half a pixel. Frame `01 Landing` alone draws 24px, so it is the outlier and
- * not the rule. At 1.6 every one of those surfaces rendered a pixel or two
- * over: 24px in the app header, 22.4px on mobile, 30.4px on sign-up.
+ * `design-plan/02-brand-and-logo.md` states this as a law — "wordmark size
+ * 1.60 D" — so it is not a ticket's to change. Frames `08`/`09`/`10`/`11` pair
+ * a 15px mark with a 23px wordmark, which is 1.533 and renders 24px here; ten
+ * desktop frames do the same, while frame `01 Landing` draws the 24px that 1.6
+ * produces. The frames and the plan therefore disagree, and adjudicating that
+ * is a design pass rather than a parity fix. Recorded against #118.
  */
-const WORDMARK_SIZE_RATIO = 23 / 15;
+const WORDMARK_SIZE_RATIO = 1.6;
 /**
  * The diameters the design calls for, by context. Named so no surface picks a
  * logo size by eye.

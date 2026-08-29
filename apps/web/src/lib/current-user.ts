@@ -114,6 +114,40 @@ export async function redirectIfSignedIn(): Promise<void> {
 }
 
 /**
+ * The role, for chrome that **decorates** rather than gates.
+ *
+ * `SiteHeader` renders in the root layout, so it runs on every route — public
+ * and protected, signed in and out. A throw there is not catchable by any
+ * `error.tsx`: only `global-error.tsx` sees it, and that replaces the whole
+ * document. `getCurrentUser` swallows 401 and 404 and propagates everything
+ * else, so a 403, a 500 or an unreachable API would have taken every page in
+ * the product down to the global error screen — including `/suspended`, which
+ * a banned account is redirected *to* and whose own read answers 403.
+ *
+ * That is the regression #33 already fixed once for signed-out visitors; this
+ * read is what would have reintroduced it for signed-in ones.
+ *
+ * Degrading is safe **here specifically** because the value decorates: an
+ * unreadable record costs the vendor chip and nothing else. It is not a gate.
+ * Protected routes still call `requireRole`, which propagates, so nothing
+ * fails open. Never reach for this where the answer is load-bearing.
+ *
+ * Unlike `readIdentityOnPublicRoute` it does not redirect a suspended account:
+ * the header runs on `/suspended` too, and redirecting from there would loop.
+ */
+export async function readRoleForChrome(): Promise<UserRole | null> {
+  try {
+    return (await getCurrentUser())?.role ?? null;
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+
+    return null;
+  }
+}
+
+/**
  * Identity on a route that is **declared public** — never inferred from where a
  * `try/catch` happens to sit.
  *

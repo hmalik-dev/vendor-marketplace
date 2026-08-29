@@ -87,7 +87,13 @@ describe('the notifications panel dismisses on Escape', () => {
     expect(bell.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('stops listening once closed, so Escape is not swallowed later', async () => {
+  /*
+   * A leaked listener only reacts to Escape, so re-opening with a click and
+   * checking it is open proves nothing — that passes with the cleanup deleted.
+   * Pressing Escape a second time while closed is what exercises the leak: a
+   * bound-but-stale listener would run against the reopened panel.
+   */
+  it('unbinds on close, so a stale listener cannot fire', async () => {
     const { user, bell } = await openPanel();
 
     await user.keyboard('{Escape}');
@@ -95,8 +101,17 @@ describe('the notifications panel dismisses on Escape', () => {
       expect(bell.getAttribute('aria-expanded')).toBe('false');
     });
 
-    // Re-opening must still work; a listener left bound would close it again.
+    // Escape while closed must be inert.
+    await user.keyboard('{Escape}');
+    expect(bell.getAttribute('aria-expanded')).toBe('false');
+
     await user.click(bell);
     expect(bell.getAttribute('aria-expanded')).toBe('true');
+
+    // And exactly one handler should close it again, not several.
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(bell.getAttribute('aria-expanded')).toBe('false');
+    });
   });
 });

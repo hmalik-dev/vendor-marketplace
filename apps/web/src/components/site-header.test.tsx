@@ -47,10 +47,10 @@ vi.mock('@/components/messaging/notification-bell', () => ({
  * the signed-in/signed-out state above — the two can disagree, and the chip
  * must follow the record.
  */
-let currentUser: { role: 'customer' | 'vendor' | 'admin' } | null = null;
+let currentRole: 'customer' | 'vendor' | 'admin' | null = null;
 
 vi.mock('@/lib/current-user', () => ({
-  getCurrentUser: async () => currentUser,
+  readRoleForChrome: async () => currentRole,
 }));
 
 const { SiteHeader } = await import('./site-header');
@@ -59,7 +59,7 @@ describe('SiteHeader', () => {
   beforeEach(() => {
     authState = 'signed-out';
     pathname = '/';
-    currentUser = null;
+    currentRole = null;
   });
 
   afterEach(() => {
@@ -184,7 +184,7 @@ describe('SiteHeader', () => {
    */
   it('carries the vendor chip when the account is a vendor', async () => {
     authState = 'signed-in';
-    currentUser = { role: 'vendor' };
+    currentRole = 'vendor';
 
     render(await SiteHeader());
 
@@ -193,7 +193,7 @@ describe('SiteHeader', () => {
 
   it('withholds the vendor chip from a customer', async () => {
     authState = 'signed-in';
-    currentUser = { role: 'customer' };
+    currentRole = 'customer';
 
     render(await SiteHeader());
 
@@ -203,6 +203,23 @@ describe('SiteHeader', () => {
   it('withholds the vendor chip from a signed-out visitor', async () => {
     render(await SiteHeader());
 
+    expect(screen.queryByText('Vendor')).toBeNull();
+  });
+
+  /*
+   * The header must not be able to cost the page. It sits in the root layout,
+   * where a throw escapes every `error.tsx` and takes the whole document to
+   * the global error screen — so the chip's read degrades to null rather than
+   * propagating. That degrade lives in `readRoleForChrome` and is tested in
+   * `current-user.test.ts`; here it is enough that a null role still renders.
+   */
+  it('renders without a chip when the role is unreadable', async () => {
+    authState = 'signed-in';
+    currentRole = null;
+
+    render(await SiteHeader());
+
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeDefined();
     expect(screen.queryByText('Vendor')).toBeNull();
   });
 });

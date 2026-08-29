@@ -1,8 +1,15 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Logo, LOGO_SIZES } from './logo';
+
+const require = createRequire(import.meta.url);
+const themeCss = readFileSync(
+  require.resolve('@vendor-marketplace/config/tailwind/theme.css'),
+  'utf8',
+);
 
 /*
  * Frame `08/09/11 shared` vs the live vendor chrome, on the Layout axis.
@@ -25,14 +32,6 @@ const frames = readFileSync(join(designDirectory, framesFile[0] as string), 'utf
 
 /** `.hd` is the one header class every frame in the bundle uses. */
 const HEADER_RULE = /\.hd\{([^}]*)\}/;
-
-/**
- * The wordmark in a vendor frame's header. `{{ brandName }}` is a placeholder
- * in the bundle — the frames never hard-code the product name, and neither
- * does the app — so the size is read from the span that carries it.
- */
-const VENDOR_FRAME = /data-screen-label="08 Vendor dashboard"([\s\S]*?)<\/div>\s*<div style="flex:1/;
-const WORDMARK_SIZE = /font-family:'Instrument Serif',serif;font-size:([\d.]+)px/;
 
 describe('the shared header matches the frame on the Layout axis', () => {
   const headerRule = frames.match(HEADER_RULE)?.[1] ?? '';
@@ -67,26 +66,38 @@ describe('the shared header matches the frame on the Layout axis', () => {
     expect(nav).toContain("'/messages'");
   });
 
-  it('keeps the header the frame’s height', () => {
+  it('keeps the header the frame’s height, in the token that sets it', () => {
     const height = headerRule.match(/height:(\d+)px/);
 
     expect(height).not.toBeNull();
-    // The token, not a literal in the component — `--header-height` is 64px.
-    expect(Number(height?.[1])).toBe(64);
+
+    // Read the app's own token rather than restating the number, so changing
+    // `--header-height` fails here instead of passing on the frame alone.
+    const token = themeCss.match(/--header-height:\s*([\d.]+)rem/);
+
+    expect(token).not.toBeNull();
+    expect(Number(token?.[1]) * 16).toBe(Number(height?.[1]));
   });
 
   /*
-   * The wordmark's size is an inline style, so this is the rendered value
-   * rather than a class name standing in for one.
+   * The wordmark is deliberately NOT asserted against the frame here. The
+   * frames pair a 15px mark with 23px, and `design-plan/02-brand-and-logo.md`
+   * states 1.60 D, which is 24px. Those disagree, and the plan wins until a
+   * design pass rules otherwise — so this file asserts the plan's number and
+   * `logo.test.tsx` owns it. Recorded against #118.
    */
-  it('renders the wordmark at the size the vendor frame draws', () => {
-    const frame = frames.match(VENDOR_FRAME)?.[1] ?? '';
-    const expected = frame.match(WORDMARK_SIZE)?.[1];
+  it('keeps the wordmark on the plan’s ratio, not the frame’s', () => {
+    const plan = readFileSync(
+      join(process.cwd(), '../../design/design-plan/02-brand-and-logo.md'),
+      'utf8',
+    );
+    const stated = plan.match(/wordmark size\s+([\d.]+) D/);
 
-    expect(expected).toBeDefined();
+    expect(stated).not.toBeNull();
 
     render(<Logo size={LOGO_SIZES.desktopHeader} />);
 
+    const expected = LOGO_SIZES.desktopHeader * Number(stated?.[1]);
     expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe(`${expected}px`);
   });
 });

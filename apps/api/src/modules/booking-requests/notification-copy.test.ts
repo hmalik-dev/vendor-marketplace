@@ -35,7 +35,11 @@ describe('notification copy never carries a raw ISO date', () => {
 
     // Guards the guard: a regex that matched nothing would pass everything.
     expect(templates.length).toBeGreaterThan(0);
-    expect(templates.some((template) => template.includes('asked about'))).toBe(true);
+
+    // At least one template must interpolate a date, or the assertions below
+    // are vacuous. The wording itself is not pinned — a copy rewrite is not a
+    // regression in date formatting.
+    expect(templates.some((template) => /\$\{readableDate\(/.test(template))).toBe(true);
   });
 
   it('interpolates no date field directly', () => {

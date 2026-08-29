@@ -100,7 +100,17 @@ describe('icon-only controls carry the law’s hit area', () => {
     expect(rule).not.toBeNull();
     expect(rule?.[1]).toContain('min-h-11');
     expect(rule?.[1]).toContain('min-w-11');
-    // Sizing the avatar here would change the frame's visual, not the target.
-    expect(globals).not.toMatch(/\.cl-avatarBox\s*\{/);
+
+    /*
+     * Only the target grows. `globals.css` does style `.cl-avatarBox`
+     * elsewhere, so this cannot assert the selector's absence — it asserts
+     * that no rule reaching the avatar sets a width or height, which is the
+     * thing that would change the frame's visual rather than the hit area.
+     */
+    for (const [, body] of globals.matchAll(/\.cl-avatarBox[^{]*\{([^}]*)\}/g)) {
+      expect(body).not.toMatch(/(?:^|[\s;])(?:min-)?[wh]-\d/);
+      expect(body).not.toMatch(/(?:width|height)\s*:/);
+      expect(body).not.toMatch(/\bsize-\d/);
+    }
   });
 });

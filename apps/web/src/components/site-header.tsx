@@ -10,7 +10,7 @@ import { HeaderQuery } from '@/components/search/header-query';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
-import { getCurrentUser } from '@/lib/current-user';
+import { readRoleForChrome } from '@/lib/current-user';
 
 /**
  * Global site header. Server Component — Clerk's control components resolve
@@ -27,10 +27,14 @@ export async function SiteHeader(): Promise<React.ReactElement> {
   /*
    * The role decides whether the header carries the vendor chip, and it is
    * read from the local account record rather than Clerk metadata — the same
-   * rule `current-user.ts` states. Signed out, `getCurrentUser` returns before
-   * it makes a request, so a marketing page pays nothing for this.
+   * rule `current-user.ts` states. Signed out, the read returns before it
+   * makes a request, so a marketing page pays nothing for it.
+   *
+   * `readRoleForChrome` never throws. This header is in the root layout, where
+   * a throw escapes every `error.tsx` and takes the whole document to the
+   * global error screen — see the note on that function.
    */
-  const [categories, user] = await Promise.all([getCategories(), getCurrentUser()]);
+  const [categories, role] = await Promise.all([getCategories(), readRoleForChrome()]);
 
   return (
     // The height sits on the header, not the nav inside it, so the bottom
@@ -47,17 +51,18 @@ export async function SiteHeader(): Promise<React.ReactElement> {
         {/* 34px from the wordmark to the nav — frame `01`. */}
         <div className="flex min-w-0 flex-none items-center gap-8.5">
           {/*
-            The chip sits inside the wordmark's own row so the cluster's 34px
-            gap stays between the logo and the nav, exactly as the frames draw
-            it — the chip's own offset is its 4px margin, not the cluster gap.
+            The chip is a child of the wordmark's own row, not a sibling of it,
+            so it takes that row's 9px gap *and* its own 4px margin — 13px from
+            the wordmark, as the frames draw it. Keeping it in this row also
+            leaves the cluster's 34px gap between the logo and the nav.
           */}
-          <div className="flex items-center">
+          <div className="flex items-center gap-[9px]">
             <Link href="/" className="transition-opacity hover:opacity-80">
               {/* The wordmark reads BRAND_NAME — never a literal. */}
               <Logo size={LOGO_SIZES.desktopHeader} />
             </Link>
 
-            {user?.role === 'vendor' ? <RoleChip label="Vendor" /> : null}
+            {role === 'vendor' ? <RoleChip label="Vendor" /> : null}
           </div>
 
           <Show when="signed-out">
