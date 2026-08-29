@@ -152,31 +152,40 @@ body:has([data-auth-screen]) > footer {
   :focus-visible {
     @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
   }
-  /*
-   * Clerk ships its own focus ring on the user button and wins the cascade, so
-   * the rule above never reached it: the trigger drew a single 4px clay at 50%
-   * with no offset ring, where the law is 2px at 30% over a 2px stone-50
-   * offset. Restating the same utilities against Clerk's own class is what
-   * puts that one control back on the product's ring — the tokens are named,
-   * not the hex, so a palette change still reaches it.
-   */
-  .cl-userButtonTrigger:focus-visible {
-    @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
-  }
-  /*
-   * `04-laws.md`: an icon-only control carries a 44x44 hit area. Clerk renders
-   * its trigger at 28x28, and the avatar inside it keeps its own size — only
-   * the target grows, so the control still *looks* the way the frames draw it.
-   */
-  .cl-userButtonTrigger {
-    @apply inline-flex min-h-11 min-w-11 items-center justify-center;
-  }
   body {
     @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
   }
+}
+
+/*
+ * Clerk's user button, corrected against the same tokens the rest of the
+ * product uses. Never a brand hex — `layout.tsx` says why.
+ *
+ * Deliberately **outside** `@layer base`. Clerk injects its own styles into a
+ * later cascade layer, and a later layer beats an earlier one whatever the
+ * selector's specificity, so neither restating the rule nor doubling the class
+ * moved it: the trigger measured 44x28 because Clerk sets `min-height` and no
+ * `min-width`, so only the half it did not claim took effect. Unlayered rules
+ * outrank every layer, which is the one thing that reaches it.
+ *
+ * Two corrections, both on the Access axis:
+ *
+ * 1. The product's focus ring. Clerk drew a single 4px clay at 50% alpha with
+ *    no offset layer, where `04-laws.md` asks for 2px at 30% over a 2px
+ *    stone-50 offset.
+ * 2. A 44x44 hit area. Clerk renders the trigger at 28x28. Only the target
+ *    grows — the avatar keeps the size Clerk gives it, so the control still
+ *    looks the way the frames draw it.
+ */
+.cl-userButtonTrigger {
+  @apply inline-flex min-h-11 min-w-11 items-center justify-center;
+}
+
+.cl-userButtonTrigger:focus-visible {
+  @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
 }
 
 /*

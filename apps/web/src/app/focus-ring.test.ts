@@ -60,6 +60,20 @@ describe('the product’s focus ring reaches every control', () => {
     expect(rule).toContain('outline-none');
   });
 
+  /*
+   * Load-bearing, and the reason two earlier attempts failed: Clerk injects
+   * its styles into a later cascade layer, and a later layer beats an earlier
+   * one whatever the selector's specificity. Putting this back inside
+   * `@layer base` silently restores the bug.
+   */
+  it('keeps Clerk’s overrides outside @layer base, where they can win', () => {
+    const base = globalsCss.match(/@layer base \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(base).not.toBe('');
+    expect(base).not.toContain('cl-userButtonTrigger');
+    expect(globalsCss).toContain('.cl-userButtonTrigger:focus-visible');
+  });
+
   it('names tokens rather than hexes, so the palette stays one source', () => {
     const rule = ruleFor('\\.cl-userButtonTrigger:focus-visible');
 
