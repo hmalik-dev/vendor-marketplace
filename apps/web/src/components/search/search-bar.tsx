@@ -124,7 +124,21 @@ export function SearchBar({
     'shrink-0 bg-stone-200 max-sm:h-px max-sm:w-full sm:w-px sm:bg-stone-300',
     isHero ? 'sm:h-8' : 'sm:h-6.5 sm:bg-stone-200',
   );
-  const segment = 'flex min-w-0 flex-col max-sm:w-full max-sm:px-0 max-sm:py-1.5';
+  /*
+   * #89. The halo on the pill says the bar has focus; it cannot say *which*
+   * segment has it, so focusing `Vendor type` and focusing `City` rendered
+   * pixel-identically and a keyboard user could not tell them apart. Each
+   * segment now tints while the control inside it is focused.
+   *
+   * A tint rather than a ring, for the reason the field carries no ring of its
+   * own: a rectangular ring around one segment breaks out past the pill's edge
+   * and reads as a second, misaligned box. A background stays inside the bar
+   * and inherits its shape, so the bar still reads as one control.
+   */
+  const segment = cn(
+    'flex min-w-0 flex-col max-sm:w-full max-sm:px-0 max-sm:py-1.5',
+    'rounded-full transition-colors duration-(--duration-fast) has-[:focus-visible]:bg-clay-400/10',
+  );
 
   return (
     <form
@@ -359,7 +373,7 @@ export function SearchBar({
             // the bar, so this ring sits directly on the button's edge.
             'focus-visible:ring-offset-0',
             isHero
-              ? 'sm:ml-2 sm:px-6 sm:py-2.75 sm:text-base'
+              ? 'sm:ml-2 sm:px-7 sm:py-3.25 sm:text-cta'
               : 'sm:ml-1.5 sm:px-5 sm:py-2.5 sm:text-[12.5px]',
           )}
         >

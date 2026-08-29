@@ -84,10 +84,16 @@ export function CategorySelect({
           aria-label="Vendor type"
           className={cn(
             'flex min-w-0 flex-col rounded-full text-left outline-none',
-            // The bar draws the focus halo for every segment — a ring on this
-            // trigger alone would be a rounded box inside the pill. See the
-            // `has-[:focus-visible]` rule on the form in `search-bar.tsx`.
+            /*
+              No ring: on this trigger alone it would be a rounded box inside
+              the pill. The bar draws the halo that says the bar has focus.
+              But the halo is identical whichever segment holds it, so this
+              tints while it is the focused one — the same treatment the other
+              two segments carry in `search-bar.tsx` (#89). Without it a
+              keyboard user cannot tell `Vendor type` from `City`.
+            */
             'focus-visible:ring-0 focus-visible:ring-offset-0',
+            'transition-colors duration-(--duration-fast) focus-visible:bg-clay-400/10',
             // Stacks to a full-width row below `sm`, with the bar itself.
             'max-sm:w-full max-sm:py-1.5',
             /*

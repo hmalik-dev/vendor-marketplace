@@ -96,6 +96,20 @@ describe('HomePage', () => {
     expect(screen.getByText('Now booking in Austin')).toBeDefined();
   });
 
+  /*
+   * #85. Frame `01 Landing` draws the hero badge at 12px. It carried
+   * `text-xs`, which is 11px in this theme, and the 12px step it wanted
+   * already existed as `--text-meta` — it had just never been moved onto it.
+   */
+  it('sizes the hero badge on the 12px step the frame draws it at', async () => {
+    render(await HomePage());
+
+    const badge = screen.getByText(/Now booking in/).closest('p');
+
+    expect(badge?.className).toContain('text-meta');
+    expect(badge?.className).not.toContain('text-xs');
+  });
+
   it('puts a search bar in the hero, so a visitor can start without scrolling', async () => {
     render(await HomePage());
 
@@ -248,6 +262,38 @@ describe('HomePage', () => {
     for (const category of CATEGORY_SEEDS.slice(LANDING_CATEGORY_COUNT)) {
       expect(screen.queryByRole('heading', { level: 3, name: category.name })).toBeNull();
     }
+  });
+
+  /*
+   * #82. Frame `01 Landing` draws this as a plain action link — a bare span at
+   * padding 0 and radius 0 — but it was rendered through
+   * `Button variant="ghost" size="sm"`, whose `px-3 py-1.5 rounded-md` took a
+   * 16px-tall link to 29px. The pill classes are what regressed, so they are
+   * what this asserts; it keeps the focus ring in the same breath, because
+   * dropping the `Button` is also what dropped the ring it used to supply.
+   */
+  it('draws "All 11 categories" as a plain link, not a padded pill', async () => {
+    render(await HomePage());
+
+    const link = screen.getByRole('link', { name: 'All 11 categories →' });
+
+    for (const pill of ['px-3', 'py-1.5', 'rounded-md']) {
+      expect(link.className).not.toContain(pill);
+    }
+    expect(link.className).toContain('focus-visible:ring-2');
+  });
+
+  /*
+   * #86. Frame `01 Landing` draws this link at 13px; it rendered at 12.5px
+   * (`text-sm`) because the scale had no 13px step until `--text-action`.
+   */
+  it('sizes the categories link on the 13px step the frame draws it at', async () => {
+    render(await HomePage());
+
+    const link = screen.getByRole('link', { name: 'All 11 categories →' });
+
+    expect(link.className).toContain('text-action');
+    expect(link.className).not.toContain('text-sm');
   });
 
   it('counts nothing in the badge or on a category card', async () => {

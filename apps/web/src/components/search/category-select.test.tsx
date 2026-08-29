@@ -131,4 +131,19 @@ describe('CategorySelect', () => {
     });
     expect(onChange).not.toHaveBeenCalled();
   });
+  /*
+   * #89. The vendor-type trigger is the third segment of the search bar, and
+   * like the other two it now tints while it holds focus. Without it the
+   * bar's halo was the only focus signal and said nothing about which
+   * segment was active.
+   */
+  it('tints the trigger while it holds focus, so the segment is identifiable', () => {
+    render(
+      <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Vendor type' }).className).toContain(
+      'focus-visible:bg-clay-400/10',
+    );
+  });
 });

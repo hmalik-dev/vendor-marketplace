@@ -64,6 +64,25 @@ describe('Button', () => {
     expect(button.className).not.toContain('px-5');
   });
 
+  /*
+   * #83. Frame `01 Landing` draws the sign-up pill 82.05x36 at 13px; the app
+   * drew it 85.83x38. Two independent causes, so two assertions: `text-base`
+   * (13.5px) for the size, and the base `border border-transparent` — a real
+   * 1px box on every side — for the last 2px in each axis. `text-stone-50` is
+   * re-asserted here because `text-action` only keeps it once the step is
+   * registered with tailwind-merge in `lib/utils.ts`; without that the two
+   * land in one class group and the fill colour is the one that is dropped.
+   */
+  it('draws ink at the size and box frame 01 Landing measures', () => {
+    render(<Button variant="ink">Join as a vendor</Button>);
+
+    const button = screen.getByRole('button', { name: 'Join as a vendor' });
+    expect(button.className).toContain('text-action');
+    expect(button.className).not.toContain('text-base');
+    expect(button.className).toContain('border-0');
+    expect(button.className).toContain('text-stone-50');
+  });
+
   it('paints destructive in error rather than in clay', () => {
     render(<Button variant="destructive">Yes, cancel booking</Button>);
 
