@@ -152,6 +152,17 @@ body:has([data-auth-screen]) > footer {
   :focus-visible {
     @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
   }
+  /*
+   * Clerk ships its own focus ring on the user button and wins the cascade, so
+   * the rule above never reached it: the trigger drew a single 4px clay at 50%
+   * with no offset ring, where the law is 2px at 30% over a 2px stone-50
+   * offset. Restating the same utilities against Clerk's own class is what
+   * puts that one control back on the product's ring — the tokens are named,
+   * not the hex, so a palette change still reaches it.
+   */
+  .cl-userButtonTrigger:focus-visible {
+    @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
+  }
   body {
     @apply bg-background text-foreground;
   }
