@@ -9612,11 +9612,30 @@ customer** across account switches. **Where:** every authenticated page load, bo
 
 **Context.** Query strings land in access logs, proxy logs, browser history and `Referer` headers. EventSource cannot set headers, which is presumably why it was done — the fix is a short-lived single-use stream ticket exchanged for the session, not the session JWT itself.
 
+**Confirmed reaching logfiles, 2026-08-29** (found while browser-verifying #66). This
+is no longer only a "could leak via `Referer` or a proxy" risk: Fastify's request logger
+writes the full URL, so the API's own log fills with
+
+```
+"req":{"method":"GET","url":"/events/stream?token=eyJhbGciOiJSUzI1NiIs…
+```
+
+**27 live session tokens** were counted in a single lane's dev log from one verification
+session. Anything that captures API stdout — a terminal scrollback, a CI artifact, a log
+shipper, an agent's job directory — is holding session credentials. The E2E accounts are
+the affected subjects so far. The tokens observed were destroyed with their logfile, but
+the mechanism reproduces on every authenticated page load until this ticket lands.
+
+Redacting the query string in the logger is a **mitigation, not the fix** — the token is
+still in the URL, so it still reaches proxies and browser history. It is worth doing
+anyway, because it is minutes of work and it stops the bleeding until the ticket is done.
+
 **Acceptance:**
 
 - [ ] The SSE stream authenticates with a short-lived, single-use ticket scoped to that stream, or with a cookie — never the session JWT
 - [ ] The ticket is not reusable and expires in minutes
 - [ ] No credential appears in any URL the server or a proxy logs
+- [ ] The API's request logger cannot write a credential even if one reaches a URL again
 
 **Tests (required):**
 
