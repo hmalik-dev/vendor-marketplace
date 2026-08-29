@@ -1,9 +1,9 @@
 - [Local ticket tracker, not Linear](vendor-marketplace-local-ticket-tracker.md) — the queue lives in a markdown file in the repo
-- [Docker Postgres is available but unused](vendor-marketplace-no-docker.md) — the compose container holds no app data; migrate/seed go to Neon. MinIO is the one container that matters
+- [Docker Postgres IS the local app database](vendor-marketplace-no-docker.md) — postgres:18-alpine on 5432; migrate/seed go there, not Neon. MinIO matters too
 - [Playwright browser verification is mandatory](vendor-marketplace-playwright-verification.md) — every ticket flow gets driven in a real browser before Done
 - [E2E test accounts, one per role](vendor-marketplace-e2e-credentials.md) — customer + vendor credentials in the gitignored .env.e2e.local, never in the repo
 - [Open Playwright before frontend work](open-playwright-before-frontend-work.md) — user watches FE changes live; open the browser session before the first FE edit
-- [Neon dev branch is the app database](vendor-marketplace-neon-dev-branch.md) — Docker Postgres is not; the old pre-#17 Docker data was deleted in the rename
+- [Local dev left Neon; Neon holds production](vendor-marketplace-neon-dev-branch.md) — an always-open dev pool was pacing 375h/mo against a 100 CU-hour cap production shares
 - [Design is a contract, not code](design-is-a-contract-not-code.md) — design passes edit the plan; tickets write the code
 - [Desktop-first at 1440x900](vendor-marketplace-desktop-first.md) — scroll budgets, rails and the degradation table live in design/design-plan
 - [Two names: vendor-marketplace vs Orla](vendor-marketplace-naming.md) — infra/packages take the repo name; the user-facing name is Orla, read from BRAND_NAME, never a literal

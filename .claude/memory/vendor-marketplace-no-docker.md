@@ -1,40 +1,56 @@
 ---
 name: vendor-marketplace-no-docker
-description: "Docker IS available; the compose Postgres holds no app data and PGlite in tests is a choice, not a workaround"
+description: "The compose Postgres 18 IS the local application database; migrate and seed go there, not Neon. PGlite in tests is a choice, not a workaround"
 metadata:
   node_type: memory
   type: project
-  originSessionId: b1069b8f-eb56-4bcc-ae39-04751cc2fd20
-  modified: 2026-08-29T00:00:00.000Z
 ---
 
-Docker is installed and working on this machine (verified 2026-08-26 during
-ticket #2 browser verification — an earlier note claiming otherwise was wrong).
-`docker compose up -d` brings up `vendor-marketplace-postgres`
-(postgres:16-alpine, port 5432) and `vendor-marketplace-storage` (MinIO, 9000/9001).
+> The slug is a historical artifact — it once recorded "Docker is unavailable",
+> which was wrong, and then "Docker is available but unused", which is also now
+> wrong. Four memories link to it, so the name stays. Read the content.
 
-**The compose Postgres holds no application data.** `pnpm db:migrate` and
-`pnpm db:seed` resolve their connection through
-`packages/db/src/migration-url.ts` → `DATABASE_URL_UNPOOLED` → the Neon `dev`
-branch. Nothing outside test fixtures references `localhost:5432`. Verified
-2026-08-29. The container exists only for fully-offline work, where you point
-`DATABASE_URL` at it and leave `DATABASE_URL_UNPOOLED` unset. MinIO, by
-contrast, IS used on every run as the local stand-in for Cloudflare R2.
+**The Docker Postgres is the local application database.** `docker compose up -d`
+brings up `vendor-marketplace-postgres` (**postgres:18-alpine**, port 5432,
+user/db `vendor_marketplace`) and `vendor-marketplace-storage` (MinIO, 9000/9001).
+Both matter on every run.
 
-`pnpm start` still runs `docker compose up -d --wait postgres storage`, so it
-blocks on a database the run will not query.
+**Migrations and seeds go to that container, not to Neon.** Verified against the
+repository 2026-08-29:
+
+- `.env` sets **only** `DATABASE_URL`, pointing at `localhost:5432/vendor_marketplace`.
+- `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` are **unset, by design**. The env
+  registry marks both `optionalFor: ['baseline', 'local']`; setting them on a
+  laptop fails `pnpm preflight` on a correct configuration.
+- `packages/db/src/migration-url.ts` prefers `DATABASE_URL_UNPOOLED` and falls
+  back to `DATABASE_URL`. With unpooled unset, that fallback is the local
+  container.
+
+**Why it moved off Neon** (`5ca9a5f`, 2026-08-28): `pnpm dev` holds a pool open,
+so the Neon compute never scaled to zero — 103,692s active over 2.4 days, pacing
+~375h/month against a **100 CU-hour per-project cap**. The allowance is per
+project and `dev` shared one with `production`, so exhausting it would suspend
+production's compute. Local work could have caused a production outage.
+
+**Neon still backs staging and production.** Only local development moved.
+
+**PG18 moved the data mount.** Images 18+ abort when the volume is at
+`/var/lib/postgresql/data`, so it is now `/var/lib/postgresql`. **A compose
+recreate therefore wipes local data.** Restore with `pnpm db:migrate` then
+`pnpm db:seed:marketing`; the reference seed alone leaves zero vendors and a 404
+on every profile.
 
 The test suite uses in-process PGlite via `@vendor-marketplace/db/testing`, a
-deliberate choice: it keeps `pnpm test` runnable with nothing else started and
-makes each suite hermetic. Not a workaround for missing Docker.
+deliberate choice: it keeps `pnpm test` runnable with nothing started and makes
+each suite hermetic. Not a workaround for missing Docker.
 
-**Why:** a session that assumes the container is the app database will inspect
-an empty Postgres on localhost:5432 and conclude the data is missing or the
-seed failed.
+**Why:** a session carrying the old note will look for application data on Neon,
+find a `dev` branch nothing writes to any more, and conclude the seed failed —
+or worse, point local work at Neon and restart the compute burn.
 
-**How to apply:** Use `createTestDatabase()` for anything in `pnpm test`. For
-browser verification per [[vendor-marketplace-playwright-verification]], the
-dev servers read the Neon `dev` branch — see [[vendor-marketplace-neon-dev-branch]].
-Only MinIO needs to be up locally.
-
-Related: [[vendor-marketplace-local-ticket-tracker]]
+**How to apply:** bring both containers up before browser verification. Treat the
+local data as disposable and seed it. Use `createTestDatabase()` for anything in
+`pnpm test`. Parallel lanes take their own database on this same container — see
+[[worktree-env-copies-drift]]. Related: [[vendor-marketplace-neon-dev-branch]],
+[[vendor-marketplace-local-ticket-tracker]],
+[[vendor-marketplace-playwright-verification]].
