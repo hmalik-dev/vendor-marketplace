@@ -280,6 +280,33 @@ describe('SearchBar — pill and circle discipline', () => {
     expect(button.querySelectorAll('span')).toHaveLength(2);
   });
 
+  /*
+   * #94 (Access half). #57 settled that the compact header keeps the circle
+   * rather than the frame 02 text pill, so the 44x44 law in `04-laws.md:133`
+   * has to be met without changing what is painted — the target is grown past
+   * the circle instead. `size-11` is 44px.
+   *
+   * The rendered hit area is what actually matters, so the browser pass probes
+   * `elementFromPoint` at the target corners; this asserts the control carries
+   * the rule at all, which is what a component test can see.
+   */
+  it('gives the icon-only circle a 44x44 hit area past its own paint', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
+
+    const button = screen.getByRole('button', { name: 'Search' });
+
+    // Painted at the size the frames draw — the circle must not have grown.
+    expect(button.className).toContain('size-7.5');
+    expect(button.className).toContain('xl:size-8');
+
+    // and targeted at 44, centred on it.
+    expect(button.className).toContain('after:size-11');
+    expect(button.className).toContain('after:absolute');
+    expect(button.className).toContain('after:-translate-x-1/2');
+    expect(button.className).toContain('after:-translate-y-1/2');
+    expect(button.className).toContain('relative');
+  });
+
   it('still submits the query from the icon-only control', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

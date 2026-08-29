@@ -303,7 +303,19 @@ export function SearchBar({
           aria-label="Search"
           className={cn(
             // 30px at 1024, 32px from 1280 — the circle follows the bar.
-            'flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 xl:size-8',
+            'relative flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 xl:size-8',
+            /*
+              `04-laws.md:133`: an icon-only control carries a 44x44 hit area.
+              The circle keeps the size the frames draw — #57 settled that it is
+              a circle rather than a labelled pill — so the target grows past the
+              paint instead of the paint growing. A hit area may exceed its own
+              control; what it may not be is 32px.
+
+              Centred on the circle, so the 6px it gains on each side comes off
+              the date segment's far edge rather than off the bar's, and the two
+              never both claim a point.
+            */
+            "after:absolute after:top-1/2 after:left-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']",
             'ml-1.5 focus-visible:ring-offset-0',
           )}
         >
