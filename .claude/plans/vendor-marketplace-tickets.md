@@ -534,6 +534,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **236** | **The web search boundary re-declares the API's query schema instead of deriving from it** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `searchStateSchema` in `apps/web/src/components/search/search-state.ts` hand-copies every bound in `vendorSearchQuerySchema`. The constants are shared so values cannot disagree, but the composition can — `tags` was already more permissive on the client until #66 caught it. Export a field map from `packages/shared` that both build from. **Deliberately not done in #66:** that file was owned by a concurrent lane, which required additive changes only |
 | **237** | **`page` is bounded below but not above, on both sides of the boundary** | **P1** | **M3** | **P3 Low** | **Backlog** | - | **None** | `core` | Filed from #66 review 2026-08-29. `paginationQuerySchema` and `vendorSearchQuerySchema` both cap `pageSize` and not `page`. Not a 500 — Zod's `.int()` caps at 2^53−1 and the offset stays inside `bigint` — but `?page=99999999` still makes Postgres sort the whole filtered set. Same class as #66's price cap. `tags` likewise has no array-length bound on either side |
 | **238** | **The lane support tooling still hardcodes ports 3000 and 4000** | **P1.5** | **M4.5** | **P1 High** | **Backlog** | - | **None** | `core` `auth` | Filed from #231 review 2026-08-29. `preflight`, `hunt-bugs` and `e2e:auth` all assume the shared dev ports, so inside a lane they check, gate on, and authenticate against the wrong process |
+| **239** | **Vendor profile tabs — the focus ring is clipped to a 1px sliver by `overflow-x-auto`** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Found 2026-08-29 by the final `parity-checker` pass on frame `03 Vendor profile`, during lane #103-#116.** `profile-tabs.tsx` gives the `[role="tablist"]` `overflow-x-auto`, which makes `overflow-y` compute `auto` rather than `visible`. The focus ring itself is correct — every tab computes `box-shadow: rgb(248,245,239) 0 0 0 2px, oklab(...) 0 0 0 4px`, which is the `04-laws.md` token — but it is clipped to **0.00px above and 1.00px below** on all five tabs, and 0.00px to the left of `About`. A keyboard user tabbing the profile sees a 1px sliver where the law requires a 4px ring on all four sides. **Nothing is actually scrolling at 1440** (`scrollWidth === clientWidth === 952`); the clip is collateral from the <=390px overflow fix that file documents. **Not caused by #103-#116** — none of those fourteen touch `profile-tabs.tsx`; it was found because the parity pass gates the Access axis. Likely fix: drop the horizontal scroller above the breakpoint that needs it, or give the tablist vertical padding so the ring has room inside the clip. Verify with a real Tab traversal at 1440 and at 390. |
 | **200** | **[PLATFORM] Local development runs on the Docker Postgres, upgraded to 18** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / cost.** Filed 2026-08-28. `pnpm dev` holds a connection pool open, so the Neon compute never scales to zero: the `dev` branch logged **103,692s active (~12h/day)** across 2.4 days, pacing ~375h/month against a **100 CU-hour** free cap (400h at the 0.25 CU floor). Exhausting it **suspends the compute until the next billing period** — a production outage caused by local work. Fix: bump `docker-compose.yml` `postgres:16-alpine` → **`postgres:18-alpine`** (Neon runs PG18; 16 is silent version drift), point local `DATABASE_URL` at it, leave `DATABASE_URL_UNPOOLED` unset per `migration-url.ts`. Update the compose header comment and README, which both still describe the container as offline-only. Keep `--wait storage` in `pnpm start`; drop `--wait postgres` only if the container stays optional **Human gate: none.** Fully agent-executable — compose file, local `.env`, README. **Implemented 2026-08-28.** Compose on **postgres:18-alpine**; local `DATABASE_URL` repointed, Neon values kept commented in `.env`. **PG18 also moved the data mount** — 18+ images abort when the volume is at `/var/lib/postgresql/data`, so it is now `/var/lib/postgresql` (docker-library/postgres#1259); the old volume was recreated (verified empty of tables first). New `optionalFor` field on the env registry makes `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` optional for `baseline`/`local` and still required for `production`. **Verified:** PostgreSQL 18.6, 8 migrations, 11 categories + 43 tags seeded, **preflight 21/21**, typecheck + lint + build green, drift test proven to fail on drift. Full suite: **1 pre-existing failure**, filed as #207. **Not committed** — the pre-commit hook refuses a partial stage and the tree carries 28 unrelated in-flight files. **Merged to main 2026-08-28** (4dc4159). |
 | **201** | **[PLATFORM] Split development onto its own Neon project** | **INFRA** | **M-OPS** | **P1 High** | **Done** | — | **None** | `core` | **Platform / cost.** Filed 2026-08-28. The 100 CU-hour allowance is **per project**, and `dev` + `production` currently share one — development spends production's budget and can suspend it. Free plan allows 100 projects. Create `vendor-marketplace-dev`, move the `dev` branch's role there, repoint `.env`. Complements #200: Docker for day-to-day, the dev project for Neon-specific behaviour (pooling, SSL, cold starts). Production keeps its own untouched 100 **Human gate: a confirmation only.** Project creation runs through the Neon MCP; it changes account structure, so the agent must ask before creating. **Closed 2026-08-28 without work — #200 removed the cause.** The 100 CU-hour cap is per project and the burn was a `pnpm dev` pool holding a Neon compute awake ~12h/day. Local now runs on Docker, so the remaining Neon consumers are the staging deploy, CI migrations and short-lived preview branches — nowhere near the cap. A second project would be an unused thing to maintain. **Revisit only if staging compute ever threatens production's quota**; #206 removes the cap entirely. |
 | **202** | **[PLATFORM] Cut a `production` git branch and repoint Vercel's production deploy** | **INFRA** | **M-OPS** | **P0 Critical** | **Done** | main | **None** | `core` | **Platform / release process.** Filed 2026-08-28. `origin/main` is the **only** remote branch and Vercel deploys it, so every merged ticket ships to users immediately — there is no batching and no staging gate. Add a `production` branch that advances **only by fast-forward from `main`** at release time, tagged `vX.Y.Z`; flip Vercel's Production Branch setting `main` → `production`; `main` becomes the staging deploy. Extend `ci.yml` triggers (currently `[main]` only). Deliberately **not** Git Flow — no `develop`, no `release/*`, no hotfix branches; that ceremony is built for teams cutting quarterly releases. **Repo is not linked to Vercel locally** (`vercel env ls` errors), so confirm which branch and which `DATABASE_URL` production currently holds before changing anything **Human gate: two dashboard actions.** (1) Vercel → Project → Settings → Git → **Production Branch** `main` → `production`. (2) GitHub → branch protection on `production` (no direct pushes, fast-forward only). The agent can create the branch and extend `ci.yml`; it cannot complete the ticket without those two. **Done 2026-08-28:** `production` branch created at main and pushed; `ci.yml` triggers extended to `[main, production]`; **branch protection applied to both** — deletions blocked, force pushes blocked, linear history required, `Typecheck, lint, build, test` required. **Outstanding:** flip Vercel Production Branch `main` -> `production`. **Reconciliation 2026-08-29 — filed without reading `D10` or the plan.** The runtime split (web on Vercel, API on **Railway**) is decided in `vendor-marketplace-decisions.md` D10, and the release pipeline is already ticketed as **#20 Deploy Pipeline** (P0, blocked by #18, #19, #30). Treat this row as the git/branch-protection slice of #20, not a new ticket. **Done 2026-08-29.** Vercel Production Branch flipped `main` -> `production`, confirmed by reading `link.productionBranch: production` from the API. `production` branch exists and is protected alongside `main` (no deletions, no force pushes, linear history, CI required). `main` now produces previews; the live site advances only on a deliberate fast-forward. |
@@ -10521,3 +10522,51 @@ All three follow the same rules when they land: name the cause, state the money 
 
 - **Dark mode.** The warm cream identity is the brand; a true inversion is post-MVP.
 - **Vendor-doesn't-reply path** — open question #1, and the one I would resolve *inside* MVP. The 48-hour expiry is specified but the customer-side experience is not designed, and it is the most common failure path in a two-sided marketplace.
+
+### #239: Vendor profile tabs — the focus ring is clipped to a 1px sliver by `overflow-x-auto`
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 by the final `parity-checker` pass over frame `03 Vendor profile`,
+run at the end of the #103-#116 parity lane. **Not caused by that lane** — none of
+those fourteen tickets touches `profile-tabs.tsx`. It surfaced because the parity
+gate covers the Access axis, and no other checker looks at ring clipping.
+
+**Axis: Access**
+
+| | Value |
+| --- | --- |
+| **Expected** (`04-laws.md`) | the focus ring visible on all four sides — `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50`, 4px beyond the control |
+| **Observed** (live, 1440x900) | **0.00px above and 1.00px below** on all five tabs, and 0.00px to the left of `About` |
+
+The ring itself is correct. Every tab computes
+`box-shadow: rgb(248,245,239) 0 0 0 2px, oklab(0.560981 0.100727 0.0885573 / 0.3) 0 0 0 4px`,
+which is the law's token exactly. What removes it is the container: the
+`[role="tablist"]` in `apps/web/src/components/vendors/profile/profile-tabs.tsx`
+carries `overflow-x-auto`, and setting `overflow-x` to anything but `visible`
+forces `overflow-y` to compute `auto` rather than `visible`. The ring is drawn
+and then clipped away.
+
+**Nothing is actually scrolling at 1440** — `scrollWidth === clientWidth === 952`.
+The scroller exists for the <=390px case that file's own comment documents, so
+the clip is pure collateral at desktop widths.
+
+A keyboard user tabbing through the profile sees a 1px sliver where the law
+requires a 4px ring. This is silent: it fails no unit test, and a screenshot
+looks correct until something has focus.
+
+**Acceptance:**
+
+- [ ] Every tab shows the full ring on all four sides at 1440, read from the DOM
+- [ ] The <=390px horizontal scroll the container exists for still works
+- [ ] `parity-checker` reports **MATCH** on the **Access** axis for frame `03 Vendor profile`
+- [ ] No other element on the screen regresses on any of the six axes
+
+**Test (required):**
+
+- [ ] a test that focuses each tab and asserts the ring is not clipped by an
+      ancestor — compare the ring's painted extent against the container's
+      client box, so the assertion fails if `overflow` is reintroduced.
+
+---
