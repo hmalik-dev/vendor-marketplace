@@ -66,7 +66,10 @@ export function CategoryPicker({
                   'inline-flex min-h-11 items-center gap-2 rounded-full border py-[7px] pr-[13px] pl-2 text-action transition-colors duration-(--duration-fast) sm:min-h-0',
                   'focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:outline-none',
                   isSelected
-                    ? 'border-clay-400 bg-clay-100 font-semibold text-stone-800'
+                    ? // `clay-600` is the token for text on a `clay-100`
+                      // surface, which is exactly what a selected chip is.
+                      // `stone-800` was not even in the ramp.
+                      'border-clay-400 bg-clay-100 font-semibold text-clay-600'
                     : 'border-stone-300 bg-stone-0 font-medium text-stone-700 hover:border-stone-400 hover:bg-stone-50',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                 )}

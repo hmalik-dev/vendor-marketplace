@@ -40,6 +40,13 @@ function frameBlock(label: string): string {
 
 const editorFrame = frameBlock('09 Vendor profile editor');
 
+/** The frame's three category chips, selected first. */
+function chipsInFrame(): string[] {
+  return (
+    editorFrame.match(/<span style="display:inline-flex;align-items:center;gap:8px;[^"]*"/g) ?? []
+  );
+}
+
 const read = (path: string): string => readFileSync(join(process.cwd(), path), 'utf8');
 const formSource = read('src/components/vendor-profile-form.tsx');
 const inputSource = read('src/components/ui/input.tsx');
@@ -385,5 +392,41 @@ describe('the service-radius slider matches the frame (#146)', () => {
   it('covers Firefox as well as Chromium', () => {
     expect(slider).toContain('::-moz-range-thumb');
     expect(slider).toContain('::-moz-range-progress');
+  });
+});
+
+describe('the selected chip’s label is clay, not stone (#147)', () => {
+  const pickerSource = read('src/components/category-picker.tsx');
+  const themeCss = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+
+  it('reads #8E3F20 off the frame’s selected chip', () => {
+    expect(chipsInFrame()[0]).toContain('color:#8E3F20');
+  });
+
+  it('leaves the unselected chips in stone-700', () => {
+    // `--color-stone-700: #4a443c`, which is what the frame's other two carry.
+    expect(chipsInFrame()[1]).toContain('color:#4A443C');
+  });
+
+  it('maps that colour to the clay-600 token', () => {
+    expect(themeCss).toContain('--color-clay-600: #8e3f20');
+  });
+
+  it('paints the selected chip’s label clay-600', () => {
+    expect(pickerSource).toContain('bg-clay-100 font-semibold text-clay-600');
+  });
+
+  /*
+   * `stone-800` is not a step in this theme's ramp at all — it defines
+   * stone-0/50/100/150/200/300/400/500/600/700/900 — so the old class fell
+   * through to Tailwind's default cool stone, which is why it measured as a
+   * neutral `oklch(0.268 0.007 34.298)` rather than any token in this theme.
+   */
+  it('stops using a stone step this theme never defines', () => {
+    expect(pickerSource).not.toContain('text-stone-800');
+    expect(themeCss).not.toContain('--color-stone-800:');
   });
 });
