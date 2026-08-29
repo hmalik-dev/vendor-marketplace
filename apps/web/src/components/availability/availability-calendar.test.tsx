@@ -429,6 +429,22 @@ const frameMarketNote = (() => {
   return FRAME_11_RAIL.slice(at, FRAME_11_RAIL.indexOf('>', at));
 })();
 
+/** The `<span>` the frame's rail draws for a given label. */
+function frameSpanFor(label: string): string {
+  const at = FRAME_11_RAIL.indexOf(`>${label}<`);
+
+  if (at === -1) {
+    throw new Error(`Frame 11's rail no longer draws \`${label}\``);
+  }
+
+  return FRAME_11_RAIL.slice(FRAME_11_RAIL.lastIndexOf('<span', at), at + 1);
+}
+
+/** px -> the Tailwind spacing unit that renders it; the scale is 4px per unit. */
+function spacingUnit(px: string): string {
+  return String(Number.parseFloat(px) / 4);
+}
+
 describe('frame 11 parity', () => {
   afterEach(cleanup);
 
@@ -465,5 +481,21 @@ describe('frame 11 parity', () => {
     const note = screen.getByText(/Saturdays in these three months/);
 
     expect(note.className).toContain(`rounded-[${styleValue(frameMarketNote, 'border-radius')}]`);
+  });
+
+  it('pads the primary selection action the way the frame draws it', async () => {
+    const user = userEvent.setup();
+    renderCalendar();
+
+    await user.click(cell('2026-06-18'));
+
+    const [padY, padX] = styleValue(frameSpanFor('Block these'), 'padding').split(/\s+/) as [
+      string,
+      string,
+    ];
+    const action = screen.getByRole('button', { name: 'Block these' });
+
+    expect(action.className).toContain(`py-${spacingUnit(padY)}`);
+    expect(action.className).toContain(`px-${spacingUnit(padX)}`);
   });
 });

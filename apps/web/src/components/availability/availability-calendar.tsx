@@ -454,6 +454,7 @@ export function AvailabilityCalendar({
                   type="button"
                   variant="primary"
                   size="sm"
+                  className="px-3.5 py-2"
                   disabled={isSaving}
                   onClick={() =>
                     void apply(selection, selectionIsBlocked ? 'available' : 'blocked')

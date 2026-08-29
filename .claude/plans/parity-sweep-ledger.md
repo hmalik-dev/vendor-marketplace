@@ -340,7 +340,7 @@ have been observed. Corrected in place.
 | PB2-30 | Layout | Rail 341px footprint / 300px content | 300px / 260px — month columns absorb the 41px (852px content vs 786px; columns 271px vs 248.7px) | **PASS** — live now 341px/300px, months grid 786px, gap 20px, columns 248.656px, identical to frame. Fixed by shared chrome `43ce159` (#153) |
 | PB2-31 | Style | Selected panel radius 12 / padding 13 | 14 / 14 | **PASS** — fixed in this lane (#154): panel is now `rounded-[12px] p-[13px]` |
 | PB2-32 | Style | Market-note panel radius 12 | 14 | **PASS** — fixed in this lane (#155): now `rounded-[12px]` |
-| PB2-33 | Style | `Block these` `padding:8px 14px` | `6px 12px` | **HOLDS** — re-measured live `6px 12px` (Button `size="sm"` = `px-3 py-1.5`) |
+| PB2-33 | Style | `Block these` `padding:8px 14px` | `6px 12px` | **PASS** — fixed in this lane (#156): `px-3.5 py-2` at the call site |
 | PB2-34 | Style | Month nav inline glyphs in `#6B6459` at 13px | ~~two 36px circular icon buttons~~ → **two 44x44 icon buttons**, `border-radius:10px`, `color:#A34A28` | **HOLDS** (observed value corrected — see note above) |
 | PB2-35 | Colour | `Clear` `#4A443C` | `#A34A28` | **HOLDS** — re-measured live `rgb(163,74,40)` = `#A34A28` (Button `variant="ghost"` = `text-clay-500`) |
 | PB2-36 | Font | Day cells 12px | **11px** | **HOLDS** — re-measured live 11px (`text-xs` = `--text-xs: 11px`) |
