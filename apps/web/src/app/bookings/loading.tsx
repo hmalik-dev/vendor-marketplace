@@ -16,9 +16,7 @@ export default function BookingsLoading(): React.ReactElement {
   return (
     <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-5.5">
-        <h1 className="mb-0.5 font-display text-[26px] tracking-[-.01em] text-stone-900">
-          Your bookings
-        </h1>
+        <h1 className="mb-0.5 display-heading text-[26px] text-stone-900">Your bookings</h1>
         {/*
           The summary line names a count and a next booking, and both are
           exactly what is not known yet — so it is a skeleton rather than a

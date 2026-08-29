@@ -264,7 +264,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           comes from the URL. It is capped at 100 characters, but 100 characters
           with no space in them still overflow a column that has no rule for it.
         */}
-        <h1 className="min-w-0 font-display text-[22px] break-words text-stone-900">
+        <h1 className="min-w-0 display-heading text-[22px] break-words text-stone-900">
           {isLoading ? searchingLine(state) : heading}
           {state.date ? (
             <span className="ml-2.5 font-sans text-[13px] text-stone-600">

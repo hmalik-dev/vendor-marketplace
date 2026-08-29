@@ -289,7 +289,7 @@ export function BookingRequestScreen({
       <div className="min-w-0">
         <RequestStepper current={step} />
 
-        <h1 className="mb-1 font-display text-[26px] tracking-[-.01em] text-stone-900">
+        <h1 className="mb-1 display-heading text-[26px] text-stone-900">
           {step === 1
             ? `Tell ${vendor.businessName} about your event`
             : 'Check this over before it goes'}
@@ -709,7 +709,7 @@ function SuccessPanel({
         </div>
 
         <div className="px-6 py-6">
-          <h1 className="mb-2 font-display text-[26px] tracking-[-.01em] text-stone-900">
+          <h1 className="mb-2 display-heading text-[26px] text-stone-900">
             Your request is with {businessName}
           </h1>
           <p className="mb-5 text-md leading-[1.6] text-stone-700">
