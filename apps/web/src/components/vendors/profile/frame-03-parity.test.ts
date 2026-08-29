@@ -318,3 +318,50 @@ describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
     expect(railSource).toContain('aria-hidden="true"');
   });
 });
+
+describe('frame 03 — chip and tile radii (#109)', () => {
+  /*
+   * Both shipped 2px over-rounded, because both reached for the nearest token
+   * rather than the frame's number: the chips took `rounded-md` (8px, the
+   * table-control step) and the strip took `rounded-xl` (14px, the card step).
+   */
+  const chipStyle = styleContaining('background:#F7E7E0', 'border-radius');
+  const tileStyle = styleContaining('height:118px', 'border-radius');
+
+  const chipRadius = Number.parseFloat(declaration(chipStyle, 'border-radius'));
+  const tileRadius = Number.parseFloat(declaration(tileStyle, 'border-radius'));
+
+  const themeCss = readFileSync(
+    join(process.cwd(), '..', '..', 'packages', 'config', 'tailwind', 'theme.css'),
+    'utf8',
+  );
+
+  const headerSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'profile-header.tsx'),
+    'utf8',
+  );
+  const stripSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'portfolio-strip.tsx'),
+    'utf8',
+  );
+
+  it('reads the frame contract it is asserting against', () => {
+    expect(chipRadius).toBe(6);
+    expect(tileRadius).toBe(12);
+  });
+
+  it('rounds the chips on the token that exists for them', () => {
+    // `--radius-sm` is 6px and its own comment names category chips.
+    expect(themeCss).toMatch(new RegExp(`--radius-sm:\\s*${chipRadius}px;`));
+    expect(headerSource).toContain('rounded-sm');
+    expect(headerSource).not.toContain('rounded-md');
+  });
+
+  it('rounds the strip tiles to the frame, which has no token', () => {
+    // 12px sits between `--radius-lg` (10) and `--radius-xl` (14), so it is
+    // written exact — the same call #41 made for the stat tiles.
+    expect(themeCss).not.toMatch(new RegExp(`--radius-[a-z0-9]+:\\s*${tileRadius}px;`));
+    expect(stripSource).toContain(`rounded-[${tileRadius}px]`);
+    expect(stripSource).not.toContain('rounded-xl');
+  });
+});

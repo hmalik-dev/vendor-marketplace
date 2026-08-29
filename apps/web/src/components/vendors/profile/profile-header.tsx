@@ -195,4 +195,9 @@ export function ProfileHeader({
   );
 }
 
-const CHIP = 'inline-block rounded-md px-2.5 py-1.25 text-helper font-semibold';
+/*
+ * `rounded-sm` is 6px, and its theme comment names this exact use — "badges,
+ * category chips, small pills". The chips shipped on the 8px table-control
+ * step instead, which is 2px rounder than frame `03` draws them.
+ */
+const CHIP = 'inline-block rounded-sm px-2.5 py-1.25 text-helper font-semibold';

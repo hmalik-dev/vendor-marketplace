@@ -52,7 +52,12 @@ export function PortfolioStrip({
             <img
               src={item.thumbnailUrl ?? item.imageUrl ?? ''}
               alt={item.caption ?? ''}
-              className="h-[118px] w-full rounded-xl bg-stone-200 object-cover"
+              /*
+                12px, as frame `03` draws the strip — between the 10px of a
+                button and the 14px of a card, the same in-between step #41
+                established for the stat tiles above.
+              */
+              className="h-[118px] w-full rounded-[12px] bg-stone-200 object-cover"
             />
           </li>
         ))}
