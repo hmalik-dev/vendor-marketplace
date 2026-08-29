@@ -108,6 +108,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # migrate.ts imports @vendor-marketplace/shared from its dist.
+      - run: pnpm build --filter=@vendor-marketplace/db...
+
       - name: Require the staging connection string
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
@@ -152,6 +155,9 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # migrate.ts imports @vendor-marketplace/shared from its dist.
+      - run: pnpm build --filter=@vendor-marketplace/db...
 
       - name: Require the production connection string
         env:

@@ -61,6 +61,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # `migrate.ts` imports @vendor-marketplace/shared, which resolves to its
+      # `dist`. Without this the run dies on ERR_MODULE_NOT_FOUND before it
+      # reaches the database.
+      - run: pnpm build --filter=@vendor-marketplace/db...
+
       # The point of the branch: prove this PR's migrations apply cleanly to a
       # copy of staging before they are ever pointed at staging itself.
       - name: Apply this PR's migrations to the branch
