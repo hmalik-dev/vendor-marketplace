@@ -72,10 +72,22 @@ interface ChipProps {
   tone?: ChipTone;
   /** Present only on an `active` chip; renders the `✕` that clears it. */
   onClear?: () => void;
+  /**
+   * What the trigger is called, where the visible label is not enough on its
+   * own. `Sort` draws its name beside the chip rather than inside it, so the
+   * trigger would otherwise announce only the chosen value.
+   */
+  triggerName?: string;
   children: React.ReactNode;
 }
 
-function Chip({ label, tone = 'resting', onClear, children }: ChipProps): React.ReactElement {
+function Chip({
+  label,
+  tone = 'resting',
+  onClear,
+  triggerName,
+  children,
+}: ChipProps): React.ReactElement {
   return (
     <span
       className={cn(
@@ -85,6 +97,7 @@ function Chip({ label, tone = 'resting', onClear, children }: ChipProps): React.
     >
       <Popover>
         <PopoverTrigger
+          aria-label={triggerName}
           className={cn(
             'flex items-center gap-1.5 py-1.75 pl-3.25',
             onClear ? 'pr-1.5' : 'pr-3.25',
@@ -338,20 +351,41 @@ export function RefineBar({
         ) : null}
       </div>
 
-      <label className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
+      {/*
+        A chip, not a native `select`. Frame `02` draws the word `Sort` in
+        `stone-600` beside a resting chip carrying the chosen option and a `▾`
+        — the same object as every other control on this bar, which a native
+        select cannot be: the platform sizes and positions it itself, so it
+        rendered 148x33 where the frame draws 92x31 and sat 56px left of where
+        the frame puts it.
+
+        The name lives outside the chip, so the trigger is named explicitly
+        rather than announcing a bare value.
+      */}
+      <div className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
         Sort
-        <select
-          value={state.sort}
-          onChange={(event) => setState({ sort: event.target.value as VendorSortOption })}
-          className="rounded-md border border-stone-300 bg-stone-0 px-3.25 py-1.75 text-[12.5px] font-semibold text-stone-900"
-        >
-          {VENDOR_SORT_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {SORT_LABELS[option]}
-            </option>
-          ))}
-        </select>
-      </label>
+        <Chip label={SORT_LABELS[state.sort]} triggerName={`Sort: ${SORT_LABELS[state.sort]}`}>
+          <fieldset>
+            <legend className="text-sm font-semibold text-stone-900">Sort by</legend>
+            <ul className="mt-2 flex flex-col gap-2">
+              {VENDOR_SORT_OPTIONS.map((option) => (
+                <li key={option}>
+                  <label className="flex cursor-pointer items-center gap-2.5 text-base text-stone-700">
+                    <input
+                      type="radio"
+                      name="sort"
+                      checked={state.sort === option}
+                      onChange={() => setState({ sort: option })}
+                      className="size-3.75 shrink-0 border-[1.4px] border-stone-400 accent-clay-400"
+                    />
+                    {SORT_LABELS[option]}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
+        </Chip>
+      </div>
     </div>
   );
 }

@@ -55,11 +55,42 @@ describe('RefineBar layout', () => {
 
   it('holds Sort outside the wrapping group, with no auto margin', () => {
     const bar = renderBar();
-    const sort = screen.getByText('Sort').closest('label') as HTMLElement;
+    // `Sort` names the chip beside it rather than wrapping a control, so the
+    // container is a plain element — the layout rule below is what matters.
+    const sort = screen.getByText('Sort').closest('div') as HTMLElement;
 
     expect(sort.parentElement).toBe(bar);
     expect(sort.className).not.toContain('ml-auto');
     expect(sort.className).toContain('shrink-0');
+  });
+
+  /*
+   * #98. Frame `02` draws sort as a chip, like every other control on this
+   * bar. A native `select` is sized and placed by the platform, so it came out
+   * 148x33 against the frame's 92x31 and 56px to the left of it — none of
+   * which a stylesheet can correct.
+   */
+  it('draws sort as a chip rather than a native select', () => {
+    const bar = renderBar();
+
+    expect(bar.querySelector('select')).toBeNull();
+
+    const trigger = screen.getByRole('button', { name: 'Sort: Most relevant' });
+
+    // The frame's chip: `stone-0` fill, `stone-300` hairline, 8px radius,
+    // 12.5px semibold, 7px/13px padding — the resting tone, shared with the
+    // filter chips so the two cannot drift apart.
+    expect(trigger.textContent).toBe('Most relevant▾');
+    expect(trigger.className).toContain('py-1.75');
+    expect(trigger.className).toContain('pl-3.25');
+    expect(trigger.className).toContain('pr-3.25');
+
+    const chip = trigger.parentElement as HTMLElement;
+    expect(chip.className).toContain('rounded-md');
+    expect(chip.className).toContain('border-stone-300');
+    expect(chip.className).toContain('bg-stone-0');
+    expect(chip.className).toContain('text-[12.5px]');
+    expect(chip.className).toContain('font-semibold');
   });
 
   it('keeps every chip and Clear inside the wrapping group', () => {
