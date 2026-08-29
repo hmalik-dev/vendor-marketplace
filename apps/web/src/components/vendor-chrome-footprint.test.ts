@@ -71,13 +71,29 @@ describe('the vendor chrome keeps the frames’ footprints', () => {
     expect(token).toBe(contentWidth());
   });
 
-  it('opts the sidebar out of border-box so the token is content width', () => {
+  /*
+   * The gutters have to be on the `nav` itself. `box-content` can only add
+   * padding the element declares, and with them on the inner list the nav
+   * measured 241px in the browser — its border and nothing else. Reading the
+   * whole file would pass on the list's own class, so the nav's class string
+   * is isolated first.
+   */
+  it('opts the sidebar out of border-box and carries its own gutters', () => {
     const nav = read('src/components/vendor-nav.tsx');
+    const navClasses = nav.match(/'(border-b [^']*lg:box-content[^']*)'/)?.[1] ?? '';
 
-    expect(nav).toContain('lg:box-content');
-    // The gutters the sum above depends on.
-    expect(nav).toContain('lg:px-3');
-    expect(nav).toContain('lg:border-r');
+    expect(navClasses).not.toBe('');
+    expect(navClasses).toContain('lg:box-content');
+    expect(navClasses).toContain(`lg:px-${gutter() / 4}`);
+    expect(navClasses).toContain('lg:border-r');
+  });
+
+  it('drops the gutters from the list, so they are not counted twice', () => {
+    const nav = read('src/components/vendor-nav.tsx');
+    const listClasses = nav.match(/className="(flex gap-1 overflow-x-auto[^"]*)"/)?.[1] ?? '';
+
+    expect(listClasses).not.toBe('');
+    expect(listClasses).toContain('lg:px-0');
   });
 
   it('opts the dashboard rail out of border-box, on both of its states', () => {

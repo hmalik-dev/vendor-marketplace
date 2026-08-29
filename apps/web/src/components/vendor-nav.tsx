@@ -57,11 +57,16 @@ export function VendorNav(): React.ReactElement | null {
          * 25px narrow. It is correct at both steps: 200 + 25 = 225, the
          * footprint frame `09` draws, and 240 + 25 = 265, the one frames `08`
          * and `11` draw.
+         *
+         * The gutters sit here rather than on the list because that is where
+         * the frame puts them, and because `box-content` can only add padding
+         * the element itself declares: with them on the `ul` the nav measured
+         * 241px, its border and nothing else.
          */
-        'border-b border-stone-300 bg-stone-0 lg:box-content lg:w-(--sidebar-width-sm) lg:shrink-0 lg:border-r lg:border-b-0 xl:w-(--sidebar-width)'
+        'border-b border-stone-300 bg-stone-0 lg:box-content lg:w-(--sidebar-width-sm) lg:shrink-0 lg:border-r lg:border-b-0 lg:px-3 xl:w-(--sidebar-width)'
       }
     >
-      <ul className="flex gap-1 overflow-x-auto px-3 py-2 lg:sticky lg:top-(--header-height) lg:flex-col lg:h-[calc(100dvh-var(--header-height))] lg:overflow-visible lg:px-3 lg:py-6">
+      <ul className="flex gap-1 overflow-x-auto px-3 py-2 lg:sticky lg:top-(--header-height) lg:flex-col lg:h-[calc(100dvh-var(--header-height))] lg:overflow-visible lg:px-0 lg:py-6">
         {ITEMS.map((item) => {
           // Prefix matching, so a nested route keeps its section highlighted.
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
