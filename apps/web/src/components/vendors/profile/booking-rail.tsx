@@ -197,7 +197,7 @@ export function BookingRail({
           #110's job and is recorded there.
         */}
         <p className="mt-0.5 text-center text-helper leading-normal text-stone-600">
-          You won&rsquo;t be charged yet — {businessName} confirms the date first.
+          You won&apos;t be charged yet — {businessName} confirms the date first.
         </p>
       </div>
 

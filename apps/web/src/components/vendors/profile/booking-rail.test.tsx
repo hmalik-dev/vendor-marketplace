@@ -242,14 +242,9 @@ describe('BookingRail', () => {
       const expected = sentence.replace(/Maya/, 'Kessler & Co.');
       const rendered = screen.getByText(/be charged yet/).textContent ?? '';
 
-      /*
-       * Apostrophes are compared loosely here and strictly in #115, which is
-       * the ticket that owns straight-versus-curly punctuation.
-       */
-      const loose = (value: string) => value.replace(/[\u2018\u2019]/g, "'");
-
-      expect(loose(rendered)).toBe(loose(expected));
-      expect(rendered.startsWith('You won')).toBe(true);
+      // Compared character for character, apostrophe included — #115 made the
+      // punctuation straight, so nothing needs normalising away any more.
+      expect(rendered).toBe(expected);
     });
   });
 });

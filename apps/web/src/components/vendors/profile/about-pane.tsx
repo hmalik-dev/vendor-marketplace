@@ -70,12 +70,15 @@ export function AboutPane({
       {tagline ? (
         /*
           The vendor's own words, exactly as entered — never truncated and
-          never re-cased. The quotation marks are the frame's, and they are
-          curly so a straight quote inside the tagline reads as nested rather
-          than as the end of the quote.
+          never re-cased. The quotation marks are the frame's, and the frame's
+          are STRAIGHT: the pull-quote opens on U+0022 and frame `03` contains
+          no curly character at all. This shipped curly on the belief that the
+          frame drew it that way, which is what #115 corrects. Curly marks
+          would nest a quote inside the tagline more gracefully, but the frame
+          is the contract and consistency across the screen is worth more.
         */
         <p className="max-w-[620px] font-display text-[20px] leading-[1.4] text-stone-700 italic">
-          &ldquo;{tagline}&rdquo;
+          &quot;{tagline}&quot;
         </p>
       ) : null}
 
@@ -97,7 +100,7 @@ export function AboutPane({
             tagline && 'mt-3.5',
           )}
         >
-          This vendor hasn&rsquo;t written an introduction yet.
+          This vendor hasn&apos;t written an introduction yet.
         </p>
       )}
 

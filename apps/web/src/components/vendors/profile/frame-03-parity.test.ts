@@ -421,3 +421,43 @@ describe('frame 03 — the availability line on the From row (#112)', () => {
     expect(railSource).toContain("calendar[eventDate] ?? 'available'");
   });
 });
+
+describe('frame 03 — the punctuation is straight (#115)', () => {
+  /*
+   * The pull-quote shipped curly on a stated belief that the frame drew it
+   * that way. It does not: the frame's pull-quote opens on U+0022 and frame
+   * `03` contains no curly character at all, which the first assertion pins
+   * so the rule stays derived from the contract rather than asserted here.
+   */
+  const CURLY = /[\u2018\u2019\u201C\u201D]/;
+  const CURLY_ENTITY = /&(?:ldquo|rdquo|lsquo|rsquo);/;
+
+  const components = [
+    'about-pane.tsx',
+    'booking-rail.tsx',
+    'profile-header.tsx',
+    'portfolio-strip.tsx',
+  ];
+
+  it('reads the frame contract it is asserting against', () => {
+    expect(CURLY.test(FRAME_03)).toBe(false);
+    // The pull-quote's own opening mark, straight.
+    expect(FRAME_03).toContain('">"Quiet,');
+  });
+
+  it.each(components)('renders no curly punctuation from %s', (file) => {
+    const source = readFileSync(
+      join(process.cwd(), 'src', 'components', 'vendors', 'profile', file),
+      'utf8',
+    );
+
+    /*
+     * Comments are stripped first: this very file's neighbours explain the
+     * defect in prose, and naming a curly mark is not shipping one.
+     */
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+    expect(CURLY_ENTITY.test(code), `${file} still writes a curly entity`).toBe(false);
+    expect(CURLY.test(code), `${file} still contains a curly character`).toBe(false);
+  });
+});

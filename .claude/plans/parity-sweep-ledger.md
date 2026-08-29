@@ -204,7 +204,7 @@ The layout axis fails hardest.
 | PB1-31 | Text | Rail shows `Free on June 14` | **absent** — **PASS** (#112, 2026-08-29): "Free on December 5" in rgb(75,89,64) 12px/600 on the From row, measured live |
 | PB1-32 | Text | Rail price row shows `· 6 hour coverage` | **absent** |
 | PB1-33 | Text | `You won't be charged yet — <vendor> confirms the date first.` | prefixed with `Messaging opens shortly.` — copy the frame does not carry — **PASS** (#114, 2026-08-29): exact frame sentence, one line, measured live |
-| PB1-34 | Text | Straight quotes | curly `" "` and `'` |
+| PB1-34 | Text | Straight quotes | curly `" "` and `'` — **PASS** (#115, 2026-08-29): zero curly characters in rendered text, pull-quote opens U+0022, measured live |
 | PB1-35 | Interaction | Signed-out `Request booking` preserves the destination | redirects to `/sign-in` with **no `redirect_url`** (`location.search === ""`) — the booking in progress is lost |
 
 Also: `Send a message` is dead by design, and the blocker is explained only inside
