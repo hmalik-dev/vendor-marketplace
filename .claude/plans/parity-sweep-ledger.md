@@ -192,20 +192,20 @@ The layout axis fails hardest.
 
 | ID | Axis | Expected | Observed |
 |----|------|----------|----------|
-| PB1-22 | Layout | Full-bleed: main column x=0 w=1020, content 40->992, rail 380px at x=1021..1401 | `mx-auto max-w-7xl px-8` -> **1216px centred, 112px gutters**; main content 112..916 (**804px vs 952px**), rail 948..1328 |
-| PB1-23 | Layout | Rail card y=282, level with the avatar row | y=364 — **82px lower**, level with the tab bar |
-| PB1-24 | Layout | Avatar y=246 (14px cover overlap) | y=226 (34px overlap) |
+| PB1-22 | Layout | Full-bleed: main column x=0 w=1020, content 40->992, rail 380px at x=1021..1401 | `mx-auto max-w-7xl px-8` -> **1216px centred, 112px gutters**; main content 112..916 (**804px vs 952px**), rail 948..1328 — **PASS** (#103, 2026-08-29): content 40..992, rail 1020..1400 measured live |
+| PB1-23 | Layout | Rail card y=282, level with the avatar row | y=364 — **82px lower**, level with the tab bar — **PASS** (#104, 2026-08-29): rail card top = cover bottom + 20 measured live |
+| PB1-24 | Layout | Avatar y=246 (14px cover overlap) | y=226 (34px overlap) — **PASS** (#105, 2026-08-29): overlap 16px measured live; ledger's "14px" corrected to 16px from the rendered frame |
 | PB1-25 | Layout | `See all 34 ->` in the `Recent work` header at x=651 | **absent** |
-| PB1-26 | Layout+Text | Rail pairs `Event date` + `Guests` above `Package` | **both fields absent** |
-| PB1-27 | Style+Colour | Package control `.inp`: `bg #F1ECE4` (stone-150), h39 | native `<select>` `bg #FFFDF9` (stone-0), h41 |
-| PB1-28 | Style | Attribute chips radius 6px; portfolio tiles 12px | 8px; 14px |
+| PB1-26 | Layout+Text | Rail pairs `Event date` + `Guests` above `Package` | **both fields absent** — **PASS** (#107, 2026-08-29): 194.13 + 135.88 with 10px gap, above Package, measured live |
+| PB1-27 | Style+Colour | Package control `.inp`: `bg #F1ECE4` (stone-150), h39 | native `<select>` `bg #FFFDF9` (stone-0), h41 — **PASS** (#108, 2026-08-29): bg rgb(241,236,228), padding 10px 13px, h38 measured live; ledger's "h39" corrected to 38 from the rendered frame |
+| PB1-28 | Style | Attribute chips radius 6px; portfolio tiles 12px | 8px; 14px — **PASS** (#109, 2026-08-29): chip 6px, tile 12px measured live |
 | PB1-29 | Style | `Send a message` enabled `.btnS` | **disabled, opacity .5, pointer-events:none** |
-| PB1-30 | Font | Vendor name `letter-spacing: normal`; `Recent work` -0.2px | -0.825px; -0.5px |
-| PB1-31 | Text | Rail shows `Free on June 14` | **absent** |
+| PB1-30 | Font | Vendor name `letter-spacing: normal`; `Recent work` -0.2px | -0.825px; -0.5px — **PASS** (#111, 2026-08-29): closed by re-measurement after #74/#165/#198 — name `normal`, Recent work `-0.2px` |
+| PB1-31 | Text | Rail shows `Free on June 14` | **absent** — **PASS** (#112, 2026-08-29): "Free on December 5" in rgb(75,89,64) 12px/600 on the From row, measured live |
 | PB1-32 | Text | Rail price row shows `· 6 hour coverage` | **absent** |
-| PB1-33 | Text | `You won't be charged yet — <vendor> confirms the date first.` | prefixed with `Messaging opens shortly.` — copy the frame does not carry |
-| PB1-34 | Text | Straight quotes | curly `" "` and `'` |
-| PB1-35 | Interaction | Signed-out `Request booking` preserves the destination | redirects to `/sign-in` with **no `redirect_url`** (`location.search === ""`) — the booking in progress is lost |
+| PB1-33 | Text | `You won't be charged yet — <vendor> confirms the date first.` | prefixed with `Messaging opens shortly.` — copy the frame does not carry — **PASS** (#114, 2026-08-29): exact frame sentence, one line, measured live |
+| PB1-34 | Text | Straight quotes | curly `" "` and `'` — **PASS** (#115, 2026-08-29): zero curly characters in rendered text, pull-quote opens U+0022, measured live |
+| PB1-35 | Interaction | Signed-out `Request booking` preserves the destination | redirects to `/sign-in` with **no `redirect_url`** (`location.search === ""`) — the booking in progress is lost — **PASS** (#116, 2026-08-29): 307 to /sign-in?redirect_url=<full destination>, measured live signed out; open-redirect vectors rejected |
 
 Also: `Send a message` is dead by design, and the blocker is explained only inside
 the shared payment reassurance sentence. `40-states.md` wants the blocker named

@@ -26,7 +26,7 @@ describe('AboutPane — the pull-quote', () => {
   it("renders the vendor's line in quotation marks", () => {
     render(<AboutPane {...BASE} tagline="Quiet, documentary, never asks you to pose." />);
 
-    expect(screen.getByText('“Quiet, documentary, never asks you to pose.”')).toBeDefined();
+    expect(screen.getByText('"Quiet, documentary, never asks you to pose."')).toBeDefined();
   });
 
   /* Absent is the common case, and an empty quote would be worse than none. */
@@ -40,14 +40,14 @@ describe('AboutPane — the pull-quote', () => {
     const exactly80 = 'a'.repeat(80);
     render(<AboutPane {...BASE} tagline={exactly80} />);
 
-    expect(screen.getByText(`“${exactly80}”`)).toBeDefined();
+    expect(screen.getByText(`"${exactly80}"`)).toBeDefined();
   });
 
   /* Curly wrappers, so a straight quote inside reads as nested. */
   it('survives a tagline that contains its own quotes', () => {
     render(<AboutPane {...BASE} tagline={'They said "unforgettable" and meant it.'} />);
 
-    expect(screen.getByText('“They said "unforgettable" and meant it.”')).toBeDefined();
+    expect(screen.getByText('"They said "unforgettable" and meant it."')).toBeDefined();
   });
 });
 
@@ -87,7 +87,7 @@ describe('AboutPane — the stat tiles', () => {
    * Zero is a real answer. "0 yrs" reads as a data error where "Less than a
    * year" reads as a new business, which is what it is.
    */
-  it('renders a vendor’s first year as "Less than a year"', () => {
+  it('renders a vendor first year as "Less than a year"', () => {
     render(<AboutPane {...BASE} yearsInBusiness={0} />);
 
     expect(tileValue('Experience')).toBe('Less than a year');

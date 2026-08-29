@@ -3,11 +3,12 @@ import { notFound, redirect } from 'next/navigation';
 import { pageTitle, todayDateString, type AvailabilityStatus } from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
 import { requireCurrentUser } from '@/lib/current-user';
+import { parseGuestCountParam } from '@/lib/guest-count';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ package?: string; date?: string }>;
+  searchParams: Promise<{ package?: string; date?: string; guests?: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -45,7 +46,19 @@ export default async function BookingRequestPage({
    * A vendor cannot request their own listing, and has no customer identity to
    * do it with — sending them to their dashboard is more use than a 403 page.
    */
-  const user = await requireCurrentUser();
+  /*
+   * Signing in comes back here, with the package and date the customer already
+   * chose in the rail — losing them meant starting the booking over.
+   */
+  const returnQuery = new URLSearchParams();
+  if (query.package) returnQuery.set('package', query.package);
+  if (query.date) returnQuery.set('date', query.date);
+  if (query.guests) returnQuery.set('guests', query.guests);
+  const returnSuffix = returnQuery.toString();
+
+  const user = await requireCurrentUser(
+    `/vendors/${slug}/request${returnSuffix ? `?${returnSuffix}` : ''}`,
+  );
   if (user.role === 'vendor') {
     redirect('/vendor/dashboard');
   }
@@ -62,6 +75,13 @@ export default async function BookingRequestPage({
     vendor.packages.find((servicePackage) => servicePackage.id === query.package) ?? null;
 
   const initialDate = query.date && query.date >= today ? query.date : '';
+
+  /*
+   * `?guests=` arrives from the profile rail and is attacker-controlled like
+   * every other URL value: parsed at the boundary, and dropped rather than
+   * rendered when it is not a whole number inside the bounds the form enforces.
+   */
+  const initialGuestCount = parseGuestCountParam(query.guests);
 
   const leadCategory = vendor.categories[0]?.name ?? null;
 
@@ -91,6 +111,7 @@ export default async function BookingRequestPage({
       }
       calendar={calendar}
       initialDate={initialDate}
+      initialGuestCount={initialGuestCount}
       today={today}
     />
   );

@@ -1,4 +1,6 @@
-import type { ServicePackage } from '@vendor-marketplace/shared';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BRAND_NAME, type ServicePackage } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -36,6 +38,8 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={127}
+        today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -55,6 +59,8 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
+        today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -63,7 +69,9 @@ describe('BookingRail', () => {
 
     expect(request.getAttribute('href')).toBe('/vendors/kessler-and-co/request?package=pkg-1');
     expect(message).toHaveProperty('disabled', true);
-    expect(screen.getByText(/Messaging opens shortly/)).toBeDefined();
+    // The reassurance line carries the frame's sentence and nothing in front
+    // of it — see #114. The blocker's own explanation belongs on the button.
+    expect(screen.queryByText(/Messaging opens shortly/)).toBeNull();
   });
 
   it('omits the package when the vendor has none to choose from', () => {
@@ -74,6 +82,8 @@ describe('BookingRail', () => {
         startingPriceCents={null}
         packages={[]}
         reviewCount={0}
+        today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -90,6 +100,8 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
+        today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -105,6 +117,8 @@ describe('BookingRail', () => {
         startingPriceCents={null}
         packages={[]}
         reviewCount={0}
+        today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -123,6 +137,8 @@ describe('BookingRail', () => {
           servicePackage({ id: 'pkg-2', name: 'Full day', priceCents: 320_000 }),
         ]}
         reviewCount={0}
+        today="2026-01-01"
+        calendar={{}}
       />,
     );
 
@@ -139,10 +155,96 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
+        today="2026-01-01"
+        calendar={{}}
       />,
     );
 
     expect(screen.getByText('Every review comes from a completed booking')).toBeDefined();
     expect(screen.queryByText(/0 reviews/)).toBeNull();
+  });
+
+  describe('the free-on line (#112)', () => {
+    /*
+     * A vendor publishes only the days they are NOT free, so a date absent from
+     * the calendar is available — the same rule the request form applies.
+     */
+    function renderRail(calendar: Record<string, 'blocked' | 'booked' | 'available' | 'pending'>) {
+      return render(
+        <BookingRail
+          businessName="Kessler & Co."
+          slug="kessler-and-co"
+          startingPriceCents={145_000}
+          packages={[servicePackage()]}
+          reviewCount={127}
+          today="2026-08-29"
+          calendar={calendar}
+        />,
+      );
+    }
+
+    it('names a future date the vendor has not blocked', async () => {
+      renderRail({});
+      await userEvent.type(screen.getByLabelText('Event date'), '2026-12-05');
+
+      expect(screen.getByText('Free on December 5')).toBeDefined();
+    });
+
+    it('says nothing about a date the vendor has blocked', async () => {
+      renderRail({ '2026-12-05': 'blocked' });
+      await userEvent.type(screen.getByLabelText('Event date'), '2026-12-05');
+
+      expect(screen.queryByText(/^Free on/)).toBeNull();
+    });
+
+    it('says nothing about a date already past', async () => {
+      renderRail({});
+      await userEvent.type(screen.getByLabelText('Event date'), '2026-06-14');
+
+      expect(screen.queryByText(/^Free on/)).toBeNull();
+    });
+
+    it('says nothing until a date is chosen', () => {
+      renderRail({});
+
+      expect(screen.queryByText(/^Free on/)).toBeNull();
+    });
+  });
+
+  describe('the charge reassurance (#114)', () => {
+    /*
+     * The sentence is read out of the frame rather than duplicated here, so a
+     * design re-import that rewords it fails this test instead of drifting.
+     * The frame writes a persona name where the app writes the real vendor.
+     */
+    const frameHtml = readFileSync(
+      join(process.cwd(), '..', '..', 'design', `${BRAND_NAME} - Screens.dc.html`),
+      'utf8',
+    );
+    const literal = /text-align:center;margin-top:2px">([^<]*)</.exec(frameHtml);
+
+    it('is exactly the frame sentence, with nothing in front of it', () => {
+      expect(literal).not.toBeNull();
+      const sentence = (literal as RegExpExecArray)[1] as string;
+
+      render(
+        <BookingRail
+          businessName="Kessler & Co."
+          slug="kessler-and-co"
+          startingPriceCents={145_000}
+          packages={[servicePackage()]}
+          reviewCount={127}
+          today="2026-08-29"
+          calendar={{}}
+        />,
+      );
+
+      const expected = sentence.replace(/Maya/, 'Kessler & Co.');
+      const rendered = screen.getByText(/be charged yet/).textContent ?? '';
+
+      // Compared character for character, apostrophe included — #115 made the
+      // punctuation straight, so nothing needs normalising away any more.
+      expect(rendered).toBe(expected);
+    });
   });
 });

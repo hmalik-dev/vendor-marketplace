@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { BRAND_NAME, pageTitle, todayDateString } from '@vendor-marketplace/shared';
+import {
+  BRAND_NAME,
+  pageTitle,
+  todayDateString,
+  type AvailabilityStatus,
+} from '@vendor-marketplace/shared';
 import { AboutPane } from '@/components/vendors/profile/about-pane';
 import { AvailabilityPane } from '@/components/vendors/profile/availability-pane';
 import { BookingRail } from '@/components/vendors/profile/booking-rail';
@@ -70,6 +75,13 @@ export default async function VendorProfilePage({
   const availability = await getPublicVendorAvailability(slug);
   const today = todayDateString();
 
+  /* The same keyed view of availability the request form takes, so the rail's
+     free-date line and that form read one source. */
+  const calendar: Record<string, AvailabilityStatus> = {};
+  for (const entry of availability) {
+    calendar[entry.date] = entry.status;
+  }
+
   /**
    * `LocalBusiness` rather than `Organization`, matching the landing page: a
    * vendor serves a metro, and the search result that matters is a local one.
@@ -124,66 +136,58 @@ export default async function VendorProfilePage({
         state={vendor.state}
         categories={vendor.categories}
         tags={vendor.tags}
-      />
-
-      <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8">
-        <div className="min-w-0">
-          <ProfileTabs
-            panes={{
-              about: (
-                <AboutPane
-                  bio={vendor.bio}
-                  tagline={vendor.tagline}
-                  yearsInBusiness={vendor.yearsInBusiness}
-                  completedEventCount={vendor.completedEventCount}
-                  serviceRadiusKm={vendor.serviceRadiusKm}
-                  portfolio={vendor.portfolio}
-                  onSeeAllHref={`/vendors/${vendor.slug}?tab=portfolio`}
-                />
-              ),
-              packages: (
-                <PackagesPane packages={vendor.packages} businessName={vendor.businessName} />
-              ),
-              portfolio: (
-                <PortfolioPane items={vendor.portfolio} businessName={vendor.businessName} />
-              ),
-              reviews: (
-                /* The tab and its empty state only — review content is #12. */
-                <EmptyState
-                  headline={vendor.reviewCount > 0 ? 'Reviews are on their way' : 'No reviews yet'}
-                  description={
-                    vendor.reviewCount > 0
-                      ? `${vendor.businessName} has ${vendor.reviewCount} reviews. We're building the page that shows them.`
-                      : `Every review here comes from a completed booking, so ${vendor.businessName} has none until they've worked an event.`
-                  }
-                />
-              ),
-              availability: (
-                <AvailabilityPane
-                  entries={availability}
-                  today={today}
-                  businessName={vendor.businessName}
-                />
-              ),
-            }}
-          />
-        </div>
-
-        {/*
-          Sticky through the whole page, offset by the header so it never slides
-          under it. `self-start` is what stops the grid stretching the rail to
-          the row height, which would make `sticky` a no-op.
-        */}
-        <div className="lg:sticky lg:top-[calc(var(--header-height)+16px)] lg:self-start">
+        rail={
           <BookingRail
             businessName={vendor.businessName}
             slug={vendor.slug}
             startingPriceCents={vendor.startingPriceCents}
             packages={vendor.packages}
             reviewCount={vendor.reviewCount}
+            today={today}
+            calendar={calendar}
           />
-        </div>
-      </div>
+        }
+      >
+        <ProfileTabs
+          panes={{
+            about: (
+              <AboutPane
+                bio={vendor.bio}
+                tagline={vendor.tagline}
+                yearsInBusiness={vendor.yearsInBusiness}
+                completedEventCount={vendor.completedEventCount}
+                serviceRadiusKm={vendor.serviceRadiusKm}
+                portfolio={vendor.portfolio}
+                onSeeAllHref={`/vendors/${vendor.slug}?tab=portfolio`}
+              />
+            ),
+            packages: (
+              <PackagesPane packages={vendor.packages} businessName={vendor.businessName} />
+            ),
+            portfolio: (
+              <PortfolioPane items={vendor.portfolio} businessName={vendor.businessName} />
+            ),
+            reviews: (
+              /* The tab and its empty state only — review content is #12. */
+              <EmptyState
+                headline={vendor.reviewCount > 0 ? 'Reviews are on their way' : 'No reviews yet'}
+                description={
+                  vendor.reviewCount > 0
+                    ? `${vendor.businessName} has ${vendor.reviewCount} reviews. We're building the page that shows them.`
+                    : `Every review here comes from a completed booking, so ${vendor.businessName} has none until they've worked an event.`
+                }
+              />
+            ),
+            availability: (
+              <AvailabilityPane
+                entries={availability}
+                today={today}
+                businessName={vendor.businessName}
+              />
+            ),
+          }}
+        />
+      </ProfileHeader>
     </>
   );
 }

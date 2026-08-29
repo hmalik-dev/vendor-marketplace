@@ -43,6 +43,8 @@ export interface BookingRequestScreenProps {
   calendar: Readonly<Record<string, AvailabilityStatus>>;
   /** Pre-filled from the search or the profile rail the customer came from. */
   initialDate: string;
+  /** A guest count carried in from the profile rail, already validated. */
+  initialGuestCount: string;
   /** `todayDateString()` resolved on the server, so the two agree. */
   today: string;
 }
@@ -105,6 +107,7 @@ export function BookingRequestScreen({
   servicePackage,
   calendar,
   initialDate,
+  initialGuestCount,
   today,
 }: BookingRequestScreenProps): React.ReactElement {
   const fieldId = useId();
@@ -114,7 +117,7 @@ export function BookingRequestScreen({
     eventDate: initialDate,
     eventType: '',
     eventStartTime: '',
-    guestCount: '',
+    guestCount: initialGuestCount,
     eventLocation: '',
     notes: '',
   });

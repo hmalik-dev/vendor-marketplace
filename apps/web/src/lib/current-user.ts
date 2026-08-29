@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
+import { signInPathReturningTo } from './return-path';
 import { wireUserSchema, type WireUser } from './wire-schemas';
 
 /** Where each role's own dashboard lives. */
@@ -59,11 +60,20 @@ export async function getCurrentUser(): Promise<WireUser | null> {
  * session. Role is read from the local database record, never from Clerk
  * metadata.
  */
-export async function requireCurrentUser(): Promise<WireUser> {
+export async function requireCurrentUser(returnTo?: string): Promise<WireUser> {
   const user = await getCurrentUserOrSuspend();
 
   if (!user) {
-    redirect('/sign-in');
+    /*
+     * The destination travels with the redirect so signing in resumes the
+     * thing the customer was doing. It is passed in by the caller rather than
+     * sniffed from a header: the page knows its own URL exactly, including the
+     * query that carries a chosen package and date, and a header would have to
+     * be trusted and reassembled. `signInPathReturningTo` drops anything that
+     * is not a same-origin path, so a caller cannot widen this into an open
+     * redirect by accident.
+     */
+    redirect(signInPathReturningTo(returnTo));
   }
 
   return user;
