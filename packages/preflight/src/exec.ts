@@ -20,9 +20,13 @@ export async function runCommand(
   command: string,
   args: readonly string[],
   timeoutMs = 10_000,
+  env?: NodeJS.ProcessEnv,
 ): Promise<CommandOutcome> {
   try {
-    const { stdout, stderr } = await run(command, [...args], { timeout: timeoutMs });
+    const { stdout, stderr } = await run(command, [...args], {
+      timeout: timeoutMs,
+      ...(env ? { env } : {}),
+    });
     return { status: 'ok', stdout: stdout.trim(), stderr: stderr.trim() };
   } catch (error: unknown) {
     const shaped = error as { code?: string | number; stdout?: string; stderr?: string };
