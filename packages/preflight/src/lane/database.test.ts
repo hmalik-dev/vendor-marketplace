@@ -90,9 +90,9 @@ describe('createLaneDatabase', () => {
   });
 
   it('fails loudly on any other error', async () => {
-    await expect(createLaneDatabase('42', BASE, async () => failed('connection refused'))).rejects.toThrow(
-      /connection refused/,
-    );
+    await expect(
+      createLaneDatabase('42', BASE, async () => failed('connection refused')),
+    ).rejects.toThrow(/connection refused/);
   });
 });
 
