@@ -311,9 +311,11 @@ export function SearchBar({
               paint instead of the paint growing. A hit area may exceed its own
               control; what it may not be is 32px.
 
-              Centred on the circle, so the 6px it gains on each side comes off
-              the date segment's far edge rather than off the bar's, and the two
-              never both claim a point.
+              Centred on the circle, so the 6px it gains on the left lands on
+              the bar's own `ml-1.5` gap rather than on a neighbour: measured at
+              1440, the target's left edge and the date field's right edge both
+              sit at 623.7 — they abut with 0px overlap, and the date field's
+              own edge stays clickable.
             */
             "after:absolute after:top-1/2 after:left-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']",
             'ml-1.5 focus-visible:ring-offset-0',
