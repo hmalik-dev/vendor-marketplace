@@ -21,7 +21,13 @@ function Stat({ label, value, delta, isPositive = false }: StatProps): React.Rea
     <li className="rounded-[12px] bg-stone-0 p-3.25 shadow-sm">
       <p className="text-label font-semibold tracking-label text-stone-600 uppercase">{label}</p>
       <p className="mt-1 font-display text-[30px] leading-none text-stone-900">{value}</p>
-      <p className={`mt-1 text-xs ${isPositive ? 'text-sage-600' : 'text-stone-600'}`}>{delta}</p>
+      {/*
+        11.5px — `text-helper`, not `text-xs`. Frame `08` draws the delta line
+        at 11.5px and the `text-xs` step is 11px.
+      */}
+      <p className={`mt-1 text-helper ${isPositive ? 'text-sage-600' : 'text-stone-600'}`}>
+        {delta}
+      </p>
     </li>
   );
 }
