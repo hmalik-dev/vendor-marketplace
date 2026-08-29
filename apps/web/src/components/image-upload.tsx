@@ -150,8 +150,19 @@ export function ImageUpload({
           // A plain <img>: these are user uploads on an origin that changes
           // between environments, so next/image's loader would need per-env
           // remote patterns for no benefit at this size.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="size-full object-cover" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={value} alt="" className="size-full object-cover" />
+            {/*
+              The frame labels a filled zone `Replace`, and without it there is
+              no visible affordance for changing a photo once one exists — the
+              zone still opens the picker, but nothing says so. Sits over the
+              foot of the image so it reads against the photograph.
+            */}
+            <span className="absolute inset-x-0 bottom-0 bg-stone-900/55 py-1 text-center text-helper font-semibold text-stone-0">
+              Replace
+            </span>
+          </>
         ) : (
           <span className="flex flex-col items-center gap-1 px-2 text-center text-xs text-stone-600">
             <ImagePlus aria-hidden="true" className="size-5" />

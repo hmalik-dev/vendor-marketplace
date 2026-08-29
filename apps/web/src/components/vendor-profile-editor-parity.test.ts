@@ -519,3 +519,36 @@ describe('field labels are the frame’s uppercase micro-label (#149)', () => {
     expect(uploadSource).not.toContain('block text-sm font-medium text-stone-800');
   });
 });
+
+describe('frame 09’s text reaches the screen (#151)', () => {
+  const uploadSource = read('src/components/image-upload.tsx');
+
+  it('carries the radius value inside the label, as the frame does', () => {
+    expect(editorFrame).toContain('Service radius — 60 miles');
+    expect(formSource).toContain('Service radius — {form.serviceRadiusMiles} miles');
+  });
+
+  it('ends the slider with the frame’s two bounds', () => {
+    expect(editorFrame).toContain('<span>5 mi</span><span>125 mi</span>');
+    expect(formSource).toContain('{SERVICE_RADIUS_MIN_MILES} mi');
+    expect(formSource).toContain('{SERVICE_RADIUS_MAX_MILES} mi');
+  });
+
+  /*
+   * `Replace` is a real affordance rather than placeholder art: without it a
+   * vendor who already has a photo sees no way to change it. The frame's
+   * `portrait` mono line beside it *is* placeholder art — the labelled
+   * placeholder that `web-design-parity.md` explicitly allows real photography
+   * to replace — so it is deliberately not reproduced.
+   */
+  it('labels a filled photo zone Replace, as the frame does', () => {
+    expect(editorFrame).toContain('>Replace</span>');
+    expect(uploadSource).toContain('Replace');
+  });
+
+  it('keeps an honest empty state rather than the frame’s placeholder label', () => {
+    expect(editorFrame).toContain('>portrait</span>');
+    expect(uploadSource).toContain("'Add photo'");
+    expect(uploadSource).not.toContain('>portrait<');
+  });
+});

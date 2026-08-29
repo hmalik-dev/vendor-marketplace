@@ -589,12 +589,15 @@ export function VendorProfileForm({
                 </div>
 
                 <div>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <Label htmlFor="serviceRadius">Service radius</Label>
-                    <span className="text-sm font-medium text-stone-700">
-                      {form.serviceRadiusMiles} miles
-                    </span>
-                  </div>
+                  {/*
+                    The frame carries the value inside the label —
+                    "Service radius — 60 miles" — rather than in a second
+                    element beside it, so the label reads as one phrase and the
+                    number is announced with the control it belongs to.
+                  */}
+                  <Label htmlFor="serviceRadius">
+                    Service radius — {form.serviceRadiusMiles} miles
+                  </Label>
                   <input
                     id="serviceRadius"
                     type="range"
@@ -612,6 +615,19 @@ export function VendorProfileForm({
                      */
                     style={{ '--range-fill': `${radiusFillPercent}%` } as React.CSSProperties}
                   />
+                  {/*
+                    The frame ends the slider with its two bounds rather than a
+                    sentence, which is what tells the vendor how far the track
+                    actually reaches. `aria-hidden` because the input already
+                    announces its own min and max.
+                  */}
+                  <div
+                    aria-hidden="true"
+                    className="mt-[7px] flex justify-between text-xs text-stone-600"
+                  >
+                    <span>{SERVICE_RADIUS_MIN_MILES} mi</span>
+                    <span>{SERVICE_RADIUS_MAX_MILES} mi</span>
+                  </div>
                   <p className="mt-1 text-xs text-stone-600">
                     How far you will travel for an event.
                   </p>
