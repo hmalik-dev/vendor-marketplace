@@ -67,7 +67,16 @@ export function VendorCard({
   return (
     <article
       className={cn(
-        'group/card overflow-hidden rounded-2xl bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base)',
+        /*
+          16px, which is what `.card` computes to in frame `02 Search` and in
+          the fourteen other places the frames draw a card. Not `rounded-2xl`:
+          that token is 18px, which the frames do use — on modals, panels and
+          three overridden cards — so the token is right and the vendor card
+          was simply reaching for the wrong step. There is no 16px step to
+          reach for instead, and inventing one would repoint every
+          `rounded-2xl` in the product.
+        */
+        'group/card overflow-hidden rounded-[16px] bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base)',
         'hover:shadow-hover motion-safe:hover:-translate-y-0.5',
         className,
       )}
@@ -148,7 +157,13 @@ export function VendorCard({
             {isReviewed ? (
               <>
                 <span aria-hidden="true">★ </span>
-                <span className="font-semibold text-stone-700">{vendor.avgRating.toFixed(1)}</span>
+                {/*
+                  One weight and one colour for the whole line. The frame sets
+                  the meta line once — `font-size:12px;color:#6B6459` — and
+                  draws `★ 4.9 (127) · Austin, TX` inside it with nothing
+                  emphasised, so the rating is not a second treatment.
+                */}
+                {vendor.avgRating.toFixed(1)}
                 <span className="sr-only"> out of 5, from {vendor.reviewCount} reviews</span> (
                 {vendor.reviewCount}){location ? ` · ${location}` : ''}
               </>

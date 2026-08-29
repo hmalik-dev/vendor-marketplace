@@ -11,7 +11,15 @@ const FALLBACK_TONES = ['bg-clay-100 text-clay-600', 'bg-sage-100 text-sage-600'
 /** The five sizes the design calls for, in px. */
 export const AVATAR_SIZES = {
   xs: 30,
-  sm: 34,
+  /*
+   * The vendor card's monogram. Frame `02 Search` draws a 32px circle with a
+   * 2px ring *outside* it, and the frames are content-box, so it occupies 36.
+   * `box-border` below takes the ring out of the number instead, which is why
+   * this is 36 rather than 32: 36 less two 2px edges is the frame's 32px fill,
+   * in the frame's 36px footprint. At 34 the fill was 30 and the whole card
+   * seam sat 2px out.
+   */
+  sm: 36,
   md: 38,
   lg: 64,
   /*
@@ -24,6 +32,23 @@ export const AVATAR_SIZES = {
 } as const;
 
 export type AvatarSize = keyof typeof AVATAR_SIZES;
+
+/**
+ * Initials are sized as a fraction of the circle, except where a frame draws
+ * them otherwise.
+ *
+ * Frame `02 Search` sets the card monogram at 13px against a 32px fill, which
+ * is not the fraction the other sizes use — the same frame puts 14px on the
+ * 32px header avatar, so the design does not hold one ratio across contexts.
+ * The fraction stays the default for the sizes no ticket has measured yet.
+ */
+const GLYPH_FRACTION = 0.42;
+
+const GLYPH_SIZES: Partial<Record<AvatarSize, number>> = { sm: 13 };
+
+function glyphSize(size: AvatarSize): number {
+  return GLYPH_SIZES[size] ?? AVATAR_SIZES[size] * GLYPH_FRACTION;
+}
 
 /**
  * A stable, order-independent hash. Deliberately not `Math.random` or an array
@@ -117,7 +142,7 @@ export function Avatar({
       aria-label={name}
       data-slot="avatar-fallback"
       className={cn(shared, 'font-display leading-none', FALLBACK_TONES[avatarToneIndex(name)])}
-      style={{ width: `${pixels}px`, height: `${pixels}px`, fontSize: `${pixels * 0.42}px` }}
+      style={{ width: `${pixels}px`, height: `${pixels}px`, fontSize: `${glyphSize(size)}px` }}
     >
       {initialsFor(name)}
     </span>
