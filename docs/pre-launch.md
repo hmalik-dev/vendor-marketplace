@@ -165,6 +165,25 @@ bucket is empty today. Ticket **#47**.
       categories where `dev` has 11.
 - [ ] Extend preflight so a _production_ target refuses a non-production branch.
       It enforces only the opposite direction today.
+- [ ] **Upgrade Neon from Free to Launch** (**#206**) — pay-as-you-go, no monthly
+      minimum, realistically $5-25/month at this size. Free is the correct plan
+      while there is no real data; every line below is gated on this one. On the
+      Free plan today: **6-hour** history window, **zero** snapshots and no
+      scheduled backups, `production` **unprotected**, scale-to-zero that cannot
+      be disabled, a 0.5 GB storage cap whose breach makes inserts, updates and
+      deletes _fail_, and 5 GB/month egress shared across the whole account. A
+      bad `UPDATE` found the next morning is unrecoverable inside a six-hour
+      window.
+- [ ] After the upgrade — all four are agent-executable through the Neon MCP once
+      the plan allows them: set `protected: true` on the `production` branch,
+      widen `history_retention_seconds` from **21,600 (6h)** to **604,800
+      (7 days)**, add a scheduled backup, and set a spending notification.
+- [ ] Disable scale-to-zero on `production` once real traffic exists, so the
+      first visitor after an idle spell does not pay the cold start.
+- [ ] `pg_dump` to R2 on a schedule, **regardless of plan**. Point-in-time
+      restore and snapshots protect against your own mistakes; an off-platform
+      dump is the only thing that protects against the platform's — account
+      lockout, billing failure, a bad support day.
 - [ ] Point-in-time recovery / backup retention confirmed and tested by doing a
       real restore, not by reading the setting.
 - [ ] Migrations run as a gated pre-deploy step and roll back cleanly on failure.
