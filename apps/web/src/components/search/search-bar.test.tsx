@@ -260,6 +260,40 @@ describe('SearchBar — pill and circle discipline', () => {
     expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
   });
 
+  /*
+   * #84. Frame `01 Landing` draws the hero submit 102.2x44 at `padding:13px
+   * 28px`; the app drew it 92.55x38 from `px-6 py-2.75 text-base`. The bar's
+   * height follows its tallest child, so this is also what puts the bar back
+   * on the frame's 58px — it had dropped to 52 when the button shrank.
+   */
+  it('draws the hero submit at the padding and size frame 01 Landing measures', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    const submit = screen.getByRole('button', { name: 'Search' });
+
+    expect(submit.className).toContain('sm:px-7');
+    expect(submit.className).toContain('sm:py-3.25');
+    expect(submit.className).toContain('sm:text-cta');
+    expect(submit.className).not.toContain('sm:text-base');
+  });
+
+  /*
+   * #89. The halo is on the pill, so it is identical whichever segment holds
+   * focus — focusing `Vendor type` and focusing `City` rendered pixel-
+   * identically and a keyboard user could not tell which was active. Each
+   * segment now tints while the control inside it has focus. Asserted on the
+   * class because jsdom resolves neither `:focus-visible` nor `has-()`.
+   */
+  it('marks which segment has focus, not just that the bar has it', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    for (const name of ['City', 'Event date']) {
+      expect(screen.getByText(name).closest('label')?.className).toContain(
+        'has-[:focus-visible]:bg-clay-400/10',
+      );
+    }
+  });
+
   it('drops the visible label in the compact header, never the accessible one', () => {
     render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
 

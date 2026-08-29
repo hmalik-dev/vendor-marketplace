@@ -108,8 +108,29 @@
   --text-meta--line-height: normal;
   --text-sm: 12.5px;
   --text-sm--line-height: normal;
+  /*
+   * The size the frames give an action that is not a form control: the header
+   * sign-up pill and the `All N categories →` link that opens a section. It is
+   * the size the frames draw most often after `sm` — 138 places — and it sits
+   * between `sm` and `base`, so like `meta` it is named for the role rather
+   * than a position the scale cannot express.
+   *
+   * Read from frame `01 Landing`, which draws both of those actions, rather
+   * than from the pill shape generally: across all frames a dark 999px pill is
+   * drawn at 11.5, 12.5 and 13px, so the shape alone does not fix a size.
+   */
+  --text-action: 13px;
+  --text-action--line-height: normal;
   --text-base: 13.5px;
   --text-base--line-height: normal;
+  /*
+   * The size the frames give the primary submit inside a search bar — the one
+   * control on the hero that is a filled clay pill. Read from frame
+   * `01 Landing` for the same reason `action` is: across all frames a clay
+   * 999px pill is drawn at 10, 11, 12.5, 13 and 14px.
+   */
+  --text-cta: 14px;
+  --text-cta--line-height: normal;
   --text-md: 15px;
   --text-md--line-height: normal;
   --text-lg: 16px;

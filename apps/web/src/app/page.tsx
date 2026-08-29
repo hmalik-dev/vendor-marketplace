@@ -199,7 +199,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
               narrows there and the frame's value returns at `xl`.
             */}
             <div className="lg:pr-4 xl:pr-8.5">
-              <p className="mb-4.5 inline-flex items-center gap-1.75 rounded-full bg-clay-400/10 px-3 py-1.5 text-xs font-semibold text-clay-600">
+              {/*
+                `text-meta`, not `text-xs`: frame `01 Landing` draws the badge
+                at 12px and `--text-xs` is 11px (#85). The step already existed
+                — #198 added `--text-meta: 12px` — the badge had simply never
+                been moved onto it.
+              */}
+              <p className="mb-4.5 inline-flex items-center gap-1.75 rounded-full bg-clay-400/10 px-3 py-1.5 text-meta font-semibold text-clay-600">
                 <span aria-hidden="true" className="size-1.25 rounded-full bg-clay-400" />
                 Now booking in {LAUNCH_CITY}
               </p>
@@ -276,10 +282,23 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 >
                   Browse by category
                 </h2>
-                {/* The count is the taxonomy's length, read from the API. */}
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/search">All {categories.length} categories →</Link>
-                </Button>
+                {/*
+                  The count is the taxonomy's length, read from the API.
+
+                  Frame `01 Landing` draws this as a plain action link rather
+                  than a control: a bare span at padding 0 and radius 0, with
+                  no fill. A `Button variant="ghost" size="sm"` wrapper put a
+                  `px-3 py-1.5` pill and an 8px radius around it, taking the
+                  16px-tall link to 29px (#82). The colour, hover affordance
+                  and focus ring the wrapper used to supply are spelled out
+                  here, so dropping it costs the link neither.
+                */}
+                <Link
+                  href="/search"
+                  className="text-action font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+                >
+                  All {categories.length} categories →
+                </Link>
               </div>
 
               <ul
