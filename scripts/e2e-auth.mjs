@@ -21,9 +21,10 @@ import { chromium } from 'playwright';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveBaseUrl } from './e2e-base-url.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+const BASE = resolveBaseUrl();
 const CLERK_TEST_CODE = '424242';
 const AUTH_DIR = resolve(ROOT, '.auth');
 

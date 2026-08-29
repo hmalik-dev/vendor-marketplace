@@ -26,7 +26,7 @@ just an expired-token problem — the two look identical at first (both make
 
 **How to apply:** If `/vendor/availability` (or any route) starts 500ing and
 `e2e:auth` also fails/times out against it, don't keep retrying `e2e:auth` —
-diagnose whether the *public* root route also 500s. If it does, the web dev
+diagnose whether the _public_ root route also 500s. If it does, the web dev
 process itself needs a restart, which is outside a browser-verifier's
 permissions (killing lane processes gets blocked by the auto-mode classifier).
 Report this as a `BLOCKED` environment issue for the caller to restart the lane's

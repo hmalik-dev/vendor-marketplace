@@ -1,3 +1,2 @@
 - [Unpinned safety constants](review-checklist-unpinned-safety-constants.md) — flip the literal and re-run the caller's suite; a test of the callee's default pins nothing
 - [Pseudo-element hit areas](review-checklist-pseudo-element-hit-areas.md) — `before:size-11` on a glyph button is clipped by `app-pane`'s overflow; measure with elementFromPoint, not className
-
