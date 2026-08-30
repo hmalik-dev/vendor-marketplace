@@ -31,6 +31,39 @@ failed too — the words _are_ the design.
 
 Delegate the comparison to the `parity-checker` agent rather than eyeballing it.
 
+## A one-shot read is a sample, not a measurement
+
+An animated property has no single computed value. Read it once, in the same
+tick as the interaction that started it, and you capture whatever keyframe
+happened to be current — then report it as fact.
+
+**Sample twice and compare. A value that differs between two reads was never a
+measurement.** That is one extra line, and it is the whole guard.
+
+Four instances of this in one night, 2026-08-30, and **none was a wrong value —
+each was a right value answering a question nobody had asked**:
+
+- A focus ring read in the same tick as the keypress computed as five
+  transparent entries with `outline: 3px none`, and was reported as a broken
+  `Button` primitive. `transition-all` animates Tailwind v4's ring custom
+  properties; at 250ms it paints correctly. (The real defect was smaller: every
+  keyboard stop spent 150ms with no indicator.)
+- The same artefact produced `calc(0px + 0px)` and "2px ring, 0px offset" in a
+  second pass, and those figures reached a ticket as evidence.
+- A PR watcher matched _any_ failing check rather than the required one, and
+  abandoned a live merge because a rate-limited Vercel had gone red.
+- An upload test's mock honoured an `AbortSignal` only when it finished,
+  modelling abort as unconditionally effective — encoding the bug as correct
+  behaviour and hiding it from a passing suite.
+
+The shared tell: **an automated check confidently reporting something it never
+established, with one instant standing in for a behaviour over time.**
+
+Separate the two halves in any finding. A **class-level fact** read from the
+source — `focus-visible:ring-0` is a static suppression — survives, because no
+timing explains it away. A **number measured mid-interpolation** does not, and
+must not be quoted as though it were reproducible.
+
 ## `40-states.md` is a law, not a screen file
 
 It binds every ticket, including ones whose frames predate it:

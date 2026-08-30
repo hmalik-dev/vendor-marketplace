@@ -365,7 +365,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **170** | **Uploads — Customer profile photo upload is dead, and leaks an internal role message to the user** | **P1** | **M3** | **P0 Critical** | **Done** | `worktree-170` | **None** | `core` `storage` | Uploads pass 2026-08-28. **Done 2026-08-29 (`afa9c63`, PR #21).** Authorization is now per prefix via `STORAGE_PREFIX_ROLES`, typed `Record<StoragePrefix, readonly UserRole[]>` so a new namespace cannot ship without a role decision. Two further defects fixed with it: `assertRole` no longer interpolates the required role into a message ~11 surfaces render verbatim, and `avatarUrl` was migrated to `imageRefSchema` on **five** schemas — the fifth, `conversationSummarySchema`, would have 500d the conversations list of every vendor a photo-uploading customer had messaged, since a response schema is a second write boundary. Tests: all **12** (role, prefix) pairs derived from `STORAGE_PREFIXES` and `USER_ROLES` (admin refused everywhere), a new `image-upload.test.tsx` asserting the **rendered** DOM carries no internal sentence, and a PUT/GET round trip. Browser-verified at 1440x900 in five states: customer 201 and persisting across a real reload (`naturalWidth: 1600`), customer refused on all three vendor prefixes, vendor refused on `customer-profile`, signed out 401. CI green. Filed #293 (pre-existing UTC/local test failure). Left to their own tickets: #171 (preview renders the key), #175 (too-narrow should be gold) |
 | **171** | **Uploads — A successful upload renders a broken image and a 500, while the toast says it worked** | **P1** | **M3** | **P1 High** | **Done** | `worktree-171` | **None** | `core` `storage` | Uploads pass 2026-08-28. **Built and verified 2026-08-29; PR [#23](https://github.com/hmalik-dev/vendor-marketplace/pull/23) open and enqueued with `--auto`, held on a red `main`.** The fix moves the commit off the `201` and onto the `<img>` `load` event, and keeps the URL the API returned rather than re-deriving one from `NEXT_PUBLIC_S3_PUBLIC_URL` — `assertWebEnv` validates only `core` and `auth`, so a deploy missing the public base would blank the circle at the moment of success, which is this bug again. Browser-verified on lane 171 at 1440x900 and 1024x768: `src` absolute on the storage host, `naturalWidth` 1400 and 1600 across two uploads, the toast trailing `load` by 9ms with the storage response held 4s, and a **key** — not a URL — reaching `vendor_profiles.profile_image_url`, still rendering after save and reload. 14 component tests. CI on the PR: shared 273/273, db 238/238, api 97/97 green; the only failures are the 4 inherited from `main` (see Blocked By). The browser test the ticket asks for is not committable — there is no Playwright harness yet (#14) — so the `naturalWidth` assertion was driven by `browser-verifier` instead. #170 was skipped at selection because a concurrent session held its worktree lock. **Done 2026-08-30 — squashed as `afe419e` via [PR #23](https://github.com/hmalik-dev/vendor-marketplace/pull/23).** Held three days-worth of a night on a red `main` (#294) and landed once #24 made it green. |
 | **172** | **Uploads — The image format allow-list is bypassed by renaming the file** | **P1** | **M3** | **P1 High** | **Superseded** | — | **None** | `core` `storage` | **Superseded 2026-08-29 by the backlog consolidation — merged into #311.** The detail section below is kept for its measurements and context; do not work it directly. Uploads pass 2026-08-28 |
-| **173** | **Uploads — No Cancel control exists during an upload** | **P1** | **M3** | **P1 High** | **In Progress** | worktree-173 | **None** | `core` `storage` | **Started 2026-08-30 by lane 173.** `pnpm preflight --ticket 173` passes 33/33. Uploads pass 2026-08-28. **Started then released 2026-08-29 — unstarted, but with a head start.** `worktree-173` holds `be30830`: the cancel-semantics tests, which currently FAIL because `useUploadQueue` has no `cancel()`. No implementation exists. Read that branch before starting rather than branching fresh. **Two findings already made:** (1) the ticket prose says Cancel sits "directly under the aggregate line", but frame `24` draws it to the **right**, inside the steel banner (`steel-50` fill, `steel-200` border, `steel-600` text and progress bar) — the frame outranks the plan, and the banner and its progress bar do not exist yet either, so building Cancel means building the banner the frame draws around it. (2) An abort rejects the transport identically to a dropped connection, so a naive cancel tells the vendor "The connection dropped part-way. The file is fine — send it again." about a file they stopped themselves. Red is for failure and a cancel is not one |
+| **173** | **Uploads — No Cancel control exists during an upload** | **P1** | **M3** | **P1 High** | **Done** | worktree-173 | **None** | `core` `storage` | **Done 2026-08-30 — merged as `66866a3` via PR #36, CI green.** `Cancel` sits beside the aggregate line while a batch is in flight and disappears with it. **Browser-verified:** after the cancel, **no further `POST /upload/image` or `POST /vendor/portfolio` for 14s**, across three separate cancels; the four photos already completed stayed, and survived a reload. **Started 2026-08-30 by lane 173.** `pnpm preflight --ticket 173` passes 33/33. Uploads pass 2026-08-28. **Started then released 2026-08-29 — unstarted, but with a head start.** `worktree-173` holds `be30830`: the cancel-semantics tests, which currently FAIL because `useUploadQueue` has no `cancel()`. No implementation exists. Read that branch before starting rather than branching fresh. **Two findings already made:** (1) the ticket prose says Cancel sits "directly under the aggregate line", but frame `24` draws it to the **right**, inside the steel banner (`steel-50` fill, `steel-200` border, `steel-600` text and progress bar) — the frame outranks the plan, and the banner and its progress bar do not exist yet either, so building Cancel means building the banner the frame draws around it. (2) An abort rejects the transport identically to a dropped connection, so a naive cancel tells the vendor "The connection dropped part-way. The file is fine — send it again." about a file they stopped themselves. Red is for failure and a cancel is not one |
 | **174** | **Uploads — Size refusal contradicts itself at the byte boundary** | **P1** | **M3** | **P2 Medium** | **Superseded** | — | **None** | `core` `storage` | **Superseded 2026-08-29 by the backlog consolidation — merged into #312.** The detail section below is kept for its measurements and context; do not work it directly. Uploads pass 2026-08-28 |
 | **175** | **Uploads — Below-minimum width is red on one uploader and gold on the other** | **P1** | **M3** | **P2 Medium** | **Superseded** | — | **None** | `core` `storage` | **Superseded 2026-08-29 by the backlog consolidation — merged into #312.** The detail section below is kept for its measurements and context; do not work it directly. Uploads pass 2026-08-28 |
 | **176** | **Uploads — The aggregate progress line counts bytes that are never sent** | **P1** | **M3** | **P2 Medium** | **Superseded** | — | **None** | `core` `storage` | **Superseded 2026-08-29 by the backlog consolidation — merged into #311.** The detail section below is kept for its measurements and context; do not work it directly. Uploads pass 2026-08-28 |
@@ -8864,8 +8864,49 @@ Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio` and `/vendo
 
 ### #173: Uploads — No Cancel control exists during an upload
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core` `storage`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core` `storage`
 **Blocked by:** None
+
+**Merged as `66866a3` via PR #36 on 2026-08-30, CI green (2m42s).**
+
+**Browser-verified at 1440x900** with upload bandwidth throttled to widen the
+mid-flight window. The decisive evidence is a negative: after the cancel, **no
+further `POST /upload/image` and no further `POST /vendor/portfolio` for 14
+seconds**, confirmed across three separate cancels. Four photos had completed
+when Cancel was pressed; four were in the gallery after, and still four after a
+reload. The file at 81% and the one queued behind it never appeared. No failure
+tiles. Line and control disappear together within 62ms. Tab reaches the control,
+it carries a visible focus ring, and Enter activates it.
+
+**The defect this nearly shipped with, and why the tests could not see it.**
+`AbortSignal` dispatches `abort` exactly once, at `abort()` time, so a listener
+attached afterwards never runs. The listener went on after `await getToken()` — a
+network round trip whenever Clerk refreshes — and after `await
+screenDimensions(file)`, which decodes the image. A cancel in either window was
+silently lost: the request went out, the upload succeeded, the row was written,
+and **the photo the vendor cancelled appeared in their gallery**. Those are the
+windows the vendor is most likely to click in, because the tiles and the control
+both render the instant files are picked.
+
+The queue's suites mock the uploader, and the fake honoured the signal when it
+*finished* — modelling abort as unconditionally effective, which is exactly the
+assumption that was false. **The mock encoded the bug as correct behaviour**, so a
+passing suite asserted the wrong mechanism. Fixed by a suite against the real hook
+with a recording XHR; against the prior commit both new tests fail *by timing out*,
+because the old code neither sent nor rejected.
+
+**A deliberate deviation.** Frame `24` draws `Cancel` as a bare underlined `<span>`.
+It ships as a `<button>` with that treatment — `text-steel-600` resolves to the
+frame's `#3d6a8c`, weight 600, underlined, right-aligned in the row — because a
+span is not keyboard-reachable and `04-laws.md` does not bend for a visual. The
+steel panel and determinate bar the frame draws around that row still do not
+exist; that is frame-24 parity work, not cancellation, and was left alone.
+
+**Recorded rather than fixed**, all confirmed untouched by this branch: **#311** —
+`addFiles` starts a new loop per call, so two selections upload concurrently,
+contradicting the code's own "sequential" comment. **#312** — the aggregate line's
+denominator accumulates across batches in one session (`8 of 12` when you picked
+six), and the header photo count is stale until reload.
 
 Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/portfolio`, vendor.
 
