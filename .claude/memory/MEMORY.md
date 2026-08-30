@@ -26,3 +26,4 @@
 - [Lane manifests drift from reality](lane-manifest-branch-drifts.md) — **fixed 2026-08-29**; use `pnpm lane:pr`, never hand-edit. Manifests written before that still lie
 - [Lead, do not narrate](lead-dont-narrate.md) — short answers, state the call, no option surveys
 - [Detached lane ticket ids collide silently](detached-lane-ticket-ids-collide-silently.md) — merging a stopped lane duplicates board rows and drops registry rows with no conflict
+- [Check for an existing branch before starting](check-for-an-existing-branch-before-starting-a-ticket.md) — a ticket's Branch column may already name pushed work; read it before rebuilding
