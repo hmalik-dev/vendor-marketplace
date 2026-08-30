@@ -5,11 +5,14 @@ import {
   paginationQuerySchema,
   sendMessageResultSchema,
   sendMessageSchema,
+  streamTicketSchema,
   uuidSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { forbidden, unauthorized } from '../../lib/errors.js';
 import { authenticated, requireAuth } from '../../lib/guards.js';
+import { findUserById } from '../users/users.dao.js';
 import {
   listConversations,
   listMessages,
@@ -19,6 +22,26 @@ import {
   readNotification,
   sendMessage,
 } from './messaging.service.js';
+
+/**
+ * Pulls the stream ticket out of the URL.
+ *
+ * Read by hand rather than through a Zod query schema because the stream
+ * writes its own headers straight to the socket and never reaches the
+ * serializer; the route is outside the type provider's normal path for the
+ * same reason the CORS headers are set here by hand.
+ */
+export function readStreamTicket(url: string): string | null {
+  const separator = url.indexOf('?');
+
+  if (separator === -1) {
+    return null;
+  }
+
+  const ticket = new URLSearchParams(url.slice(separator + 1)).get('ticket')?.trim();
+
+  return ticket ? ticket : null;
+}
 
 const conversationParamsSchema = z.object({ conversationId: uuidSchema });
 const notificationParamsSchema = z.object({ notificationId: uuidSchema });
@@ -156,16 +179,62 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
   );
 
   /**
+   * Exchanges the session for a ticket that authenticates one stream.
+   *
+   * This request carries its credential in a header like every other, and the
+   * ticket it answers with is opaque, single-use and dead in a minute — so the
+   * value that ends up in the stream URL, and therefore in access logs,
+   * browser history and `Referer`, is worth nothing to whoever finds it.
+   *
+   * POST because it creates something and must not be replayed from a cache.
+   */
+  app.post(
+    '/events/stream-ticket',
+    { preHandler: requireAuth, schema: { response: { 200: streamTicketSchema } } },
+    async (request) => {
+      const user = authenticated(request.auth);
+
+      return app.streamTickets.issue(user.id);
+    },
+  );
+
+  /**
    * The single event stream, carrying both message and notification events.
    *
-   * `EventSource` cannot send an `Authorization` header, so the token arrives
-   * in the query string — which is why this route resolves the caller through
-   * the same auth plugin rather than trusting the parameter. A token in a URL
-   * is visible in logs, so it is short-lived by Clerk's own design and the
-   * stream carries no data the socket did not already earn.
+   * `EventSource` cannot send an `Authorization` header, so something has to
+   * travel in the URL. It is a stream ticket rather than the session JWT:
+   * #215 found 27 live session tokens in one lane's dev log, written there by
+   * the request logger from this very route. A ticket names one user, is spent
+   * on first use, and expires in a minute.
+   *
+   * Deliberately not `requireAuth` — the whole point is that this route does
+   * not accept a session token in its URL. A ticket is the only way in.
    */
-  app.get('/events/stream', { preHandler: requireAuth }, async (request, reply) => {
-    const user = authenticated(request.auth);
+  app.get('/events/stream', async (request, reply) => {
+    const ticket = readStreamTicket(request.url);
+    const userId = ticket ? app.streamTickets.consume(ticket) : null;
+
+    if (!userId) {
+      throw unauthorized('This stream ticket is missing, spent, or expired');
+    }
+
+    /*
+     * The account is re-checked here rather than trusted from the ticket.
+     * `requireAuth` used to do this on the way in and no longer sees this
+     * route, so without it a ban landing between issue and connect would be
+     * ignored — and a stream, once open, stays open.
+     */
+    const account = await findUserById(app.db, userId);
+
+    if (!account) {
+      throw unauthorized('No account is linked to this stream ticket');
+    }
+
+    if (account.isBanned) {
+      throw forbidden('This account has been suspended');
+    }
+
+    const user = { id: account.id };
 
     // Echoed only when it is on the list, never reflected blindly.
     const origin = request.headers.origin;
