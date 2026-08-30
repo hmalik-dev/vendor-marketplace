@@ -77,6 +77,28 @@ function declaration(rule: string, property: string): string {
   return (match?.[1] ?? '').trim();
 }
 
+/*
+ * The boundary itself, pinned.
+ *
+ * Without this, the three assertions below pass again for the right reason
+ * today and fail in those same three places the next time a bundle nests
+ * frames differently — reading as design drift in the editor rather than as a
+ * slicing bug, which is exactly how the 2026-08-29 import presented. The cost
+ * of that misreading is high: the obvious "fix" is to update the expected
+ * counts to whatever the widened slice produces, which encodes the bug.
+ */
+describe('the frame slice covers one frame, not a screen’s responsive set', () => {
+  it('starts at frame 09 and stops before the variants sharing its card', () => {
+    expect(editorFrame).toContain('data-screen-label="09 Vendor profile editor"');
+    expect(editorFrame).not.toContain('27 Vendor profile editor');
+    expect(editorFrame).not.toContain('14 Profile editor mobile');
+  });
+
+  it('carries exactly one screen label', () => {
+    expect(editorFrame.match(/data-screen-label="/g)).toHaveLength(1);
+  });
+});
+
 describe('frame 09 gives the form pane one visible heading', () => {
   /*
    * `.h2` is the frames' visible pane heading class. Frame 09 uses it exactly
