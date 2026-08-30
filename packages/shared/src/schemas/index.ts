@@ -83,12 +83,17 @@ export const urlSchema = z.url().max(MAX_URL_LENGTH);
  */
 export const imageRefSchema = z
   .string()
+  .trim()
   .min(1)
   .max(MAX_URL_LENGTH)
   .refine(
     (value) => {
-      // An absolute URL, but only over http(s): a `javascript:` or `data:`
-      // value reaching an `img src` is the reason this is an allowlist.
+      /*
+       * An absolute URL, but only over http(s): a `javascript:` or `data:`
+       * value reaching an `img src` is the reason this is an allowlist. The
+       * `.trim()` above is load-bearing — the scheme test is anchored, so
+       * " javascript:alert(1)" would otherwise pass as a relative path.
+       */
       if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
         return /^https?:\/\//i.test(value);
       }
@@ -923,7 +928,13 @@ export const conversationSummarySchema = z.object({
   id: uuidSchema,
   /** The other party — a business name for the customer, a person for the vendor. */
   otherPartyName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
-  otherPartyAvatarUrl: urlSchema.nullable(),
+  /*
+   * A user avatar, so an object key — not a URL. A response schema is a second
+   * write boundary: `serializerCompiler` re-validates on the way out, and a
+   * refusal there is an opaque 500. Left as a URL, one customer uploading a
+   * photo would 500 the conversations list of every vendor they had messaged.
+   */
+  otherPartyAvatarUrl: imageRefSchema.nullable(),
   /** `null` until somebody says something. */
   lastMessagePreview: z.string().nullable(),
   lastMessageAt: z.date().nullable(),

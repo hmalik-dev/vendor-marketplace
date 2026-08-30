@@ -19,6 +19,7 @@ import {
   tagSuggestionResponseSchema,
   uploadedImageSchema,
   updateUserSchema,
+  conversationSummarySchema,
   fullCustomerProfileSchema,
   userSchema,
   vendorProfileDetailSchema,
@@ -141,6 +142,19 @@ describe('userSchema', () => {
  */
 describe('a user avatar is an image reference, not a URL', () => {
   const KEY = 'customer-profile/0f4a1c2e-1111-2222-3333-444455556666.webp';
+
+  /*
+   * A response schema is a second write boundary. `serializerCompiler`
+   * re-validates on the way out and the error handler turns a serialisation
+   * failure into an opaque 500 — so a read model that still demands a URL does
+   * not fail politely, it 500s the page. This row carries the OTHER party's
+   * avatar, which means one customer uploading a photo would have broken the
+   * conversations list of every vendor they had messaged.
+   */
+  it('accepts the key on a conversation row, which is a response schema', () => {
+    expect(conversationSummarySchema.shape.otherPartyAvatarUrl.safeParse(KEY).success).toBe(true);
+  });
+
 
   it('accepts the object key an upload returns, on the way in', () => {
     expect(updateUserSchema.safeParse({ avatarUrl: KEY }).success).toBe(true);
@@ -926,6 +940,24 @@ describe('imageRefSchema', () => {
 
   it.each(['../../etc/passwd', 'a/../../b.webp'])('rejects the traversal %s', (value) => {
     expect(imageRefSchema.safeParse(value).success).toBe(false);
+  });
+
+  /*
+   * The scheme test is anchored, so without a trim a leading space or newline
+   * reclassifies a dangerous value as a harmless relative path. Not exploitable
+   * at today's only sink (an `img src`, where `javascript:` does not run), but
+   * one careless consumer — an `<a href>`, an email template, a server-side
+   * fetch — away from mattering. Validate before normalising.
+   */
+  it.each([' javascript:alert(1)', '\njavascript:alert(1)', '  data:image/png;base64,AAA'])(
+    'rejects %j rather than reading it as a relative path',
+    (value) => {
+      expect(imageRefSchema.safeParse(value).success).toBe(false);
+    },
+  );
+
+  it('trims an otherwise valid reference rather than rejecting it', () => {
+    expect(imageRefSchema.parse('  portfolio/abc.webp  ')).toBe('portfolio/abc.webp');
   });
 
   it('rejects an empty reference', () => {
