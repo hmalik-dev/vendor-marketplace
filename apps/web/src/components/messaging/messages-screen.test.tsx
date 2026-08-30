@@ -155,6 +155,40 @@ describe('MessagesScreen', () => {
   });
 
   /*
+   * A pasted gallery link is close to the most likely message this product
+   * carries, and it escaped its bubble: `whitespace-pre-wrap` keeps the
+   * newlines a message was typed with, but neither it nor the default
+   * `overflow-wrap: normal` breaks inside a token. A 160-character share URL
+   * measured 680px of bubble against 768px of text; 5000 unbroken characters
+   * reached a scrollWidth of 53,677.
+   *
+   * The ticket asks for `scrollWidth <= clientWidth` on the element, and that
+   * cannot be asserted here — jsdom performs no layout, so every width is 0 and
+   * the assertion would pass against the broken version too. It needs the
+   * Playwright harness (#14). What is assertable without layout is that the
+   * element carries the rule, which is the class-level fact; the measurement
+   * belongs to the browser pass and is recorded as owed rather than faked.
+   */
+  it.each([
+    ['a long unbroken URL', `https://photos.example.com/share/${'a'.repeat(160)}`],
+    ['5000 unbroken characters', 'Q'.repeat(5_000)],
+  ])('lets the bubble break %s rather than overflow it', async (_name, content) => {
+    respondWith([message('44444444-4444-4444-8444-444444444444', THEM, content)]);
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    const bubble = await screen.findByText(content);
+
+    expect(bubble.className).toContain('break-words');
+    expect(bubble.className).toContain('whitespace-pre-wrap');
+  });
+
+  /*
    * A dropped stream is the normal case on a phone, so it is steel — never red
    * — and the composer stays usable throughout.
    */

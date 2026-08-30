@@ -4,15 +4,12 @@ import {
   bookingRequests,
   bookings,
   conversations,
-  notifications,
   servicePackages,
   users,
   vendorProfiles,
   type AvailabilityRow,
   type BookingRequestRow,
   type NewBookingRequestRow,
-  type NewNotificationRow,
-  type NotificationRow,
   type ServicePackageRow,
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
@@ -358,9 +355,12 @@ export async function setHeldDate(
 }
 
 /**
- * The one conversation per customer/vendor pair, created by the first request.
- * Idempotent: a second request from the same customer reuses the thread rather
- * than opening a duplicate one beside it.
+ * The conversation this request is negotiated in, created with it.
+ *
+ * One thread per request, because the context rail's actions — send a revised
+ * quote, accept as-is, decline — act on exactly one. Idempotent on the request
+ * id, so a retry after a half-finished attempt reuses the thread rather than
+ * opening a second one beside it.
  */
 export async function ensureConversation(
   db: AppDatabase,
@@ -369,18 +369,7 @@ export async function ensureConversation(
   await db
     .insert(conversations)
     .values(values)
-    .onConflictDoNothing({
-      target: [conversations.customerId, conversations.vendorId],
-    });
-}
-
-export async function insertNotification(
-  db: AppDatabase,
-  values: NewNotificationRow,
-): Promise<NotificationRow | null> {
-  const inserted = await db.insert(notifications).values(values).returning();
-
-  return inserted?.[0] ?? null;
+    .onConflictDoNothing({ target: conversations.bookingRequestId });
 }
 
 /** The `users.id` behind a vendor profile — notifications address people. */

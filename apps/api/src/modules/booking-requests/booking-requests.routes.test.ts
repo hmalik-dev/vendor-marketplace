@@ -244,13 +244,43 @@ describe('/booking-requests', () => {
       expect(Math.round(days)).toBe(BOOKING_REQUEST_EXPIRY_DAYS);
     });
 
-    it('opens exactly one conversation, however many requests are sent', async () => {
+    /*
+     * This used to assert one thread per pair, and #219 is why it does not any
+     * more: a customer who asked the same photographer about two dates saw both
+     * negotiations under whichever line came first, and the context rail —
+     * headed **This request**, offering `Send revised quote` and `Accept
+     * as-is` — had no single request to act on.
+     */
+    it('opens one conversation per request, each carrying its own booking', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
 
-      expect((await createRequest(vendorId, { packageId })).statusCode).toBe(201);
-      expect((await createRequest(vendorId, { packageId, eventDate: OTHER_DATE })).statusCode).toBe(
-        201,
+      const first = await createRequest(vendorId, { packageId });
+      const second = await createRequest(vendorId, { packageId, eventDate: OTHER_DATE });
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(201);
+
+      const threads = await harness.database.db.select().from(conversations);
+
+      expect(threads).toHaveLength(2);
+      expect(new Set(threads.map((thread) => thread.bookingRequestId))).toEqual(
+        new Set([first.json().id, second.json().id]),
       );
+    });
+
+    /*
+     * The other half of the same rule. A retry after a half-finished attempt
+     * re-creates the request row, and the thread must not double with it.
+     */
+    it('reuses the thread when the same request is submitted twice', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+
+      const first = await createRequest(vendorId, { packageId });
+      const repeat = await createRequest(vendorId, { packageId });
+
+      expect(first.statusCode).toBe(201);
+      // 200, not 201: this is the request you already made.
+      expect(repeat.statusCode).toBe(200);
+      expect(repeat.json().id).toBe(first.json().id);
 
       const threads = await harness.database.db.select().from(conversations);
       expect(threads).toHaveLength(1);

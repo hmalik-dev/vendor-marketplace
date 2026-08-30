@@ -1,10 +1,25 @@
-import { sql } from 'drizzle-orm';
+import { isNull, sql } from 'drizzle-orm';
 import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { bookingRequests } from './bookings.js';
 import { users } from './users.js';
 import { vendorProfiles } from './vendor-profiles.js';
 
-/** Exactly one conversation per customer/vendor pair, created on first request. */
+/**
+ * One conversation per booking request, plus at most one unattached thread per
+ * customer/vendor pair.
+ *
+ * The scoping is the design's, not an implementation detail: `18-messaging.md`
+ * gives every thread a context rail headed **This request**, whose actions are
+ * `Send revised quote`, `Accept as-is` and `Decline politely`. Those act on one
+ * request, so a thread that spanned three of them could not draw the rail at
+ * all — and a customer who asked the same photographer about a wedding and then
+ * a birthday saw both negotiations under whichever line came first.
+ *
+ * The unattached thread is what `Send a message` on a vendor profile opens: a
+ * conversation that exists before any request does. Its rail has no request to
+ * show, which is honest, and the first request the customer sends opens its own
+ * thread beside it.
+ */
 export const conversations = pgTable(
   'conversations',
   {
@@ -25,7 +40,16 @@ export const conversations = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('conversations_customer_vendor_key').on(table.customerId, table.vendorId),
+    /*
+     * Two partial keys rather than one composite: a `NULL` booking request is
+     * distinct from every other `NULL` under the default `NULLS DISTINCT`, so a
+     * three-column unique index would let a pair accumulate unattached threads
+     * without limit — one per click of `Send a message`.
+     */
+    uniqueIndex('conversations_request_key').on(table.bookingRequestId),
+    uniqueIndex('conversations_customer_vendor_open_key')
+      .on(table.customerId, table.vendorId)
+      .where(isNull(table.bookingRequestId)),
     index('conversations_customer_idx').on(table.customerId, table.lastMessageAt),
     index('conversations_vendor_idx').on(table.vendorId, table.lastMessageAt),
   ],

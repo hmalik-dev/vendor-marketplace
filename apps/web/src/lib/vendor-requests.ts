@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { apiRequest } from './api-client';
+import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
 import { wireBookingRequestListSchema, type WireBookingRequest } from './wire-schemas';
@@ -29,6 +29,17 @@ export async function getOwnBookingRequests(
   } catch (error) {
     if (isNavigationSignal(error)) {
       throw error;
+    }
+
+    /*
+     * A lapsed session is not an empty queue. Before any degrading, a 401
+     * sends the vendor to sign in — otherwise the dashboard reassures them
+     * that nothing is waiting when the app simply could not read it, which is
+     * the one claim an empty state must never make on a failure's behalf.
+     * `customer-data.ts` already drew this line; this module did not.
+     */
+    if (error instanceof ApiClientError && error.statusCode === 401) {
+      redirect(await signInPathReturningHere());
     }
 
     /*

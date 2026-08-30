@@ -3,13 +3,18 @@
 import {
   MAX_GUEST_COUNT,
   formatPrice,
+  openedConversationSchema,
   type AvailabilityStatus,
   type ServicePackage,
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
-import { useId, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { ApiClientError } from '@/lib/api-client';
+import { signInPathReturningTo } from '@/lib/return-path';
+import { useApi } from '@/lib/use-api';
 
 export interface BookingRailProps {
   businessName: string;
@@ -29,10 +34,10 @@ export interface BookingRailProps {
  * fields, both CTAs, the charge reassurance, then the trust lines.
  *
  * `Request booking` opens frame `04` with the selected package already in its
- * rail. `Send a message` still renders disabled — messaging is #8 — following
- * the rule #31 established: a control that opens nothing either does something
- * or says why it cannot, and it never simply disappears, because hiding it
- * would leave the page with no visible ask.
+ * rail. `Send a message` opens the thread with this vendor and goes to it —
+ * #110's ruling, answered by #310 in the only way that satisfies the rule #31
+ * established: a control either does something or says why it cannot, and the
+ * thread it needed now exists to be opened.
  */
 export function BookingRail({
   businessName,
@@ -44,9 +49,49 @@ export function BookingRail({
   calendar,
 }: BookingRailProps): React.ReactElement {
   const fieldId = useId();
+  const errorId = `${fieldId}-message-error`;
+  const router = useRouter();
+  const call = useApi();
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
   const [eventDate, setEventDate] = useState('');
   const [guestCount, setGuestCount] = useState('');
+  const [opening, setOpening] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
+
+  /*
+   * Opens the thread with this vendor and goes to it. The call is idempotent,
+   * so a second click lands on the same conversation rather than opening one
+   * beside it — the button is safe to press twice, which is what makes
+   * `opening` a spinner-free guard rather than a correctness one.
+   *
+   * A signed-out visitor is sent to sign in *carrying this page*, because the
+   * profile is where they were and where the button they pressed lives.
+   * `opening` stays set on both navigations: the component is about to be
+   * unmounted, and clearing it would re-enable a control on a page that is
+   * leaving.
+   */
+  const openThread = useCallback(async () => {
+    setOpening(true);
+    setMessageError(null);
+
+    try {
+      const { id } = await call('/conversations', {
+        method: 'POST',
+        body: { vendorSlug: slug },
+        schema: openedConversationSchema,
+      });
+
+      router.push(`/messages?conversation=${id}`);
+    } catch (error) {
+      if (error instanceof ApiClientError && error.statusCode === 401) {
+        router.push(signInPathReturningTo(`${window.location.pathname}${window.location.search}`));
+        return;
+      }
+
+      setMessageError('That did not go through. Try again in a moment.');
+      setOpening(false);
+    }
+  }, [call, router, slug]);
 
   const selected = packages.find((servicePackage) => servicePackage.id === packageId);
   const shownPriceCents = selected?.priceCents ?? startingPriceCents;
@@ -185,39 +230,38 @@ export function BookingRail({
           <Link href={requestHref}>Request booking</Link>
         </Button>
         {/*
-          #110's ruling, recorded in `vendor-marketplace-decisions.md`: the
-          control stays disabled until #310 builds the thread it would open.
-          Frame `03` draws it enabled because the frame draws the finished
-          product, and enabling it here would send a customer to `/messages`,
-          which can only open a thread that already exists — a control that
-          looks like it worked and did nothing is worse than one that says it
-          is not ready.
-
-          `40-states.md` requires the blocker to be named beside the control it
-          blocks. It is named to assistive technology rather than in visible
-          copy, because the frame draws no helper line here and inventing one
-          would fail the Text axis to satisfy the Access axis.
+          #110, answered. The control was disabled under an `sr-only` line
+          saying messaging was not available, because `/messages` could only
+          open a thread that already existed and enabling it would have sent a
+          customer nowhere. #310 gave it one to open, so the frame's enabled
+          control is now the honest one — and the blocked-state copy is gone
+          rather than left behind contradicting it.
         */}
         <Button
           variant="secondary"
-          disabled
-          aria-describedby="send-message-blocked"
+          onClick={openThread}
+          disabled={opening}
+          aria-describedby={messageError ? errorId : undefined}
           className="w-full justify-center py-3"
         >
           Send a message
         </Button>
-        <span id="send-message-blocked" className="sr-only">
-          Messaging is not available yet. Request a booking to start a conversation with{' '}
-          {businessName}.
-        </span>
+        {messageError ? (
+          /*
+            `40-states.md`: the failure is named beside the control that failed,
+            in the reader's words with one thing to do. The upstream message is
+            not printed — it is the API's sentence, not a reader's.
+          */
+          <p id={errorId} role="alert" className="text-center text-helper text-red-600">
+            {messageError}
+          </p>
+        ) : null}
 
         {/*
           The frame's charge reassurance, and only that. It previously carried
           "Messaging opens shortly." in front, which frame `03` does not draw
-          and which wrapped a one-line helper onto two. That sentence was the
-          only explanation the disabled `Send a message` button had; naming the
-          blocker beside the control it blocks, as `40-states.md` requires, is
-          #110's job and is recorded there.
+          and which wrapped a one-line helper onto two. That sentence existed to
+          explain a disabled `Send a message`, which is no longer disabled.
         */}
         <p className="mt-0.5 text-center text-helper leading-normal text-stone-600">
           You won&apos;t be charged yet — {businessName} confirms the date first.

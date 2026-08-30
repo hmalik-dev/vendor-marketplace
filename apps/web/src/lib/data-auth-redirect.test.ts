@@ -109,17 +109,40 @@ describe('a protected read whose session has expired', () => {
   });
 
   /*
-   * `/messages` and the vendor request queue deliberately degrade *any* read
-   * failure to their designed empty state, and that swallows a 401 too — an
-   * expired session is shown "No conversations yet" instead of being sent to
-   * sign in. This pins the behaviour as it actually is; the inconsistency with
-   * the reads above is filed separately rather than changed here, because the
-   * empty state is a designed surface and #76 is about destinations.
+   * These two used to be the exception, and this block pinned it: `/messages`
+   * and the vendor request queue degraded *any* read failure to their designed
+   * empty state, and that swallowed a 401 too — an expired session was shown
+   * "No conversations yet" rather than being sent to sign in.
+   *
+   * #76 pinned it deliberately rather than fixing it, because changing a
+   * designed empty state is a different question from carrying a destination.
+   * #310 is where that question was answered: an empty state may stand in for
+   * an absence, never for a failure, so the 401 is separated out and everything
+   * else still degrades exactly as it did.
    */
   it.each([
     ['conversations', getOwnConversations],
     ['vendor request queue', vendorRequests.getOwnBookingRequests],
-  ])('leaves %s showing its empty state instead of redirecting', async (_name, read) => {
+  ])('sends %s to sign in rather than showing an empty state', async (_name, read) => {
+    expect(await redirectTargetOf(read)).toBe(
+      `/sign-in?returnTo=${encodeURIComponent('/vendor/packages?filter=active')}`,
+    );
+  });
+
+  /*
+   * The other half of the same rule, and the reason this is not simply "throw
+   * on everything": a 500 or an unreachable API still degrades. The empty state
+   * is a real surface for a real absence, and the live stream refills it.
+   */
+  it.each([
+    ['conversations', getOwnConversations],
+    ['vendor request queue', vendorRequests.getOwnBookingRequests],
+  ])('still degrades %s to its empty state on a server failure', async (_name, read) => {
+    token = 'session-token';
+    apiRequest.mockRejectedValue(
+      new ApiClientError(500, ERROR_CODES.INTERNAL_ERROR, 'Internal server error'),
+    );
+
     expect(await redirectTargetOf(read)).toBeNull();
     await expect(read()).resolves.toEqual([]);
   });

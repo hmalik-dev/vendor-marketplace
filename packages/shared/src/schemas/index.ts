@@ -1003,6 +1003,23 @@ export const conversationSummarySchema = z.object({
 });
 export type ConversationSummary = z.infer<typeof conversationSummarySchema>;
 
+/**
+ * Opening a thread from a vendor's profile, before any request exists.
+ *
+ * The slug rather than the id: it is what the customer's URL already carries,
+ * and it keeps a profile id off a body the browser composes.
+ */
+export const openConversationSchema = z.object({
+  vendorSlug: slugSchema,
+});
+export type OpenConversationInput = z.infer<typeof openConversationSchema>;
+
+/** Just the thread's id — enough to navigate to it, which is all this is for. */
+export const openedConversationSchema = z.object({
+  id: uuidSchema,
+});
+export type OpenedConversation = z.infer<typeof openedConversationSchema>;
+
 export const sendMessageResultSchema = z.object({
   id: uuidSchema,
   conversationId: uuidSchema,
