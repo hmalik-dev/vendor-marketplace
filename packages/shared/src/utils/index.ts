@@ -1,6 +1,7 @@
 import {
   BOOKING_REQUEST_EXPIRY_DAYS,
   DEFAULT_PLATFORM_FEE_RATE,
+  MAX_EVENT_DATE_MONTHS_AHEAD,
   MAX_SLUG_LENGTH,
 } from '../constants/index.js';
 
@@ -264,6 +265,35 @@ export function isUniversallyPastDate(value: string, now: Date = new Date()): bo
   }
 
   return parsed.getTime() < addDays(now, -1).setUTCHours(0, 0, 0, 0);
+}
+
+/**
+ * True when a calendar date is further ahead than the product will accept.
+ *
+ * The mirror of `isUniversallyPastDate`, and the bound that was missing: the
+ * floor was enforced and the ceiling was not, so `9999-12-31` was a valid event
+ * date. Counted in months rather than days so it lands on the same day of the
+ * month regardless of month length, the way `availabilityWindow` does.
+ */
+export function isBeyondBookingHorizon(value: string, now: Date = new Date()): boolean {
+  const parsed = parseDateString(value);
+  if (parsed === null) {
+    return false;
+  }
+
+  const horizon = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth() + MAX_EVENT_DATE_MONTHS_AHEAD,
+      now.getUTCDate(),
+      23,
+      59,
+      59,
+      999,
+    ),
+  );
+
+  return parsed.getTime() > horizon.getTime();
 }
 
 // --- Image URLs ------------------------------------------------------------

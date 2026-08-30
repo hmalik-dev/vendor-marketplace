@@ -1,4 +1,5 @@
 import { categories, servicePackages, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { ERROR_CODES, MAX_PAGE } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -427,6 +428,32 @@ describe('GET /vendors', () => {
     const body = await search('?page=50');
     expect(body.items).toEqual([]);
     expect(body.total).toBe(1);
+  });
+
+  /*
+   * `page` was bounded below and not above, so this reached the DAO and
+   * overflowed `int4` in `(page - 1) * pageSize` — a 500 for a URL anyone can
+   * paste. Asserted as status **and** body shape, because the point is that it
+   * is a refusal the client can read rather than a crash.
+   */
+  it('refuses a page beyond the ceiling, as a validation error', async () => {
+    const response = await harness.app.inject({
+      method: 'GET',
+      url: `/vendors?page=${MAX_PAGE + 1}`,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      statusCode: 400,
+      error: ERROR_CODES.VALIDATION_ERROR,
+    });
+  });
+
+  it('refuses the int4 boundary that used to reach the query', async () => {
+    const response = await harness.app.inject({ method: 'GET', url: '/vendors?page=2147483648' });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: ERROR_CODES.VALIDATION_ERROR });
   });
 
   it('refuses a page size beyond the cap', async () => {

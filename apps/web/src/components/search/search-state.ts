@@ -6,6 +6,7 @@ import {
   MAX_BUSINESS_NAME_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
+  paginationQuerySchema,
   REVIEW_RATING_MAX,
   slugSchema,
   uuidSchema,
@@ -105,7 +106,18 @@ const searchStateSchema = z.object({
   // param that still reaches the API and comes back as a failed search.
   tags: z.array(uuidSchema),
   sort: z.enum(VENDOR_SORT_OPTIONS),
-  page: z.number().int().min(1),
+  /*
+    Derived from the API's own pagination schema rather than restated. `page`
+    was declared here and in `vendorSearchQuerySchema` and the two disagreed:
+    this side had a lower bound and no upper one, so `?page=2147483648` cleared
+    the screen's boundary, reached the DAO and overflowed `int4` computing its
+    offset — a 500 for a URL anyone can paste.
+
+    `unwrap()` drops the API's `.default(1)`: the URL layer supplies its own
+    default through `searchParsers`, and a schema default here would mask a
+    dropped param rather than reporting it in `dropped`.
+  */
+  page: paginationQuerySchema.shape.page.unwrap(),
 });
 
 /**
