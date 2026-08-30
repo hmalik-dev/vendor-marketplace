@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { useSubmitValidation, type FieldIssue } from '@/lib/use-submit-validation';
 import { cn } from '@/lib/utils';
@@ -117,9 +117,7 @@ export function ReviewForm({
        * published. A generic line would replace a specific fix with a shrug.
        */
       setFailure(
-        error instanceof ApiClientError
-          ? error.message
-          : 'Your review didn’t reach us. Check your connection and try again.',
+        userFacingError(error, 'Your review didn’t reach us. Check your connection and try again.'),
       );
     } finally {
       setSubmitting(false);

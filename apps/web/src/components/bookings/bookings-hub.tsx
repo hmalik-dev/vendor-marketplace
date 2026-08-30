@@ -1,5 +1,11 @@
 import Link from 'next/link';
+import {
+  FALLBACK_TONES as AVATAR_FALLBACK_TONES,
+  avatarToneIndex,
+  initialsFor,
+} from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { EmptyStateGlyph } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import {
   applyRefinements,
@@ -48,7 +54,26 @@ function BookingCard({ entry }: BookingCardProps): React.ReactElement {
           // eslint-disable-next-line @next/next/no-img-element -- vendor bucket is not in the image config (#47)
           <img src={entry.vendorImageUrl} alt="" className="size-9.5 rounded-[9px] object-cover" />
         ) : (
-          <span aria-hidden="true" className="size-9.5 rounded-[9px] bg-stone-150" />
+          /*
+            A monogram, not a blank swatch. `40-states.md` is explicit that "a
+            generic grey box is a bug", and #81's second finding was this
+            rendering on all eleven cards while `/search` and `/messages`
+            already drew initials for the same vendors.
+
+            Not the `Avatar` component itself: this tile is the card's 9px
+            squircle and `Avatar` is unconditionally `rounded-full`. The
+            initials and the tone come from `Avatar`'s own helpers, so a vendor
+            keeps one colour and one monogram everywhere they appear.
+          */
+          <span
+            aria-hidden="true"
+            className={cn(
+              'flex size-9.5 items-center justify-center rounded-[9px] text-[13px] font-semibold',
+              AVATAR_FALLBACK_TONES[avatarToneIndex(entry.vendorName)],
+            )}
+          >
+            {initialsFor(entry.vendorName)}
+          </span>
         )}
         <StatusPill tone={entry.statusTone}>{entry.statusLabel}</StatusPill>
       </div>
@@ -345,12 +370,21 @@ export function BookingsHub({
 export function EmptyBookings(): React.ReactElement {
   return (
     <div className="flex h-full flex-col items-center justify-center rounded-[18px] border border-dashed border-stone-400 bg-stone-0 px-10 py-14">
-      {/* The mark's two rings, at rest. */}
-      <span aria-hidden="true" className="relative mb-5 block h-9 w-14.5">
-        <span className="absolute top-0 left-0 size-9 rounded-full bg-stone-150" />
-        <span className="absolute top-0 left-5.5 size-9 rounded-full border-[1.5px] border-stone-400" />
+      {/*
+        The shared glyph, not a second copy of it. This pane hand-rolled its own
+        and left the outer ring `border-[1.5px] border-stone-400` with no
+        `border-dashed`, so two visually different glyphs shipped for one idea —
+        `40-states.md` names it as "two circles, `stone-400`, **one dashed**".
+      */}
+      <span className="mb-5 block">
+        <EmptyStateGlyph />
       </span>
-      <p className="mb-2.25 font-display text-[26px] text-stone-900">No bookings yet</p>
+      {/*
+        An `h2`, as `EmptyState` draws it. A `p` styled to look like a headline
+        leaves this state with no heading in the accessibility tree, so a
+        screen-reader user landing here has nothing to navigate to.
+      */}
+      <h2 className="mb-2.25 font-display text-[26px] text-stone-900">No bookings yet</h2>
       <p className="mb-5 max-w-100 text-center text-base leading-[1.65] text-stone-700">
         Every request you send will land here, grouped by month, with its status and the
         vendor&rsquo;s replies.

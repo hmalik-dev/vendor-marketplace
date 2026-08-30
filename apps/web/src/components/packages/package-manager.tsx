@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, GripVertical, Package, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import { moveItem } from '@/lib/reorder';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
@@ -93,9 +93,7 @@ export function PackageManager({
       toast.success(isActive ? 'Package is bookable again.' : 'Package hidden from customers.');
       router.refresh();
     } catch (error) {
-      toast.error(
-        error instanceof ApiClientError ? error.message : 'Could not change that package.',
-      );
+      toast.error(userFacingError(error, 'Could not change that package.'));
     } finally {
       setIsBusy(false);
       setPendingDeactivation(null);
@@ -128,9 +126,7 @@ export function PackageManager({
     } catch (error) {
       // Put the list back where it was: the server rejected the new order.
       setPackages(previous);
-      toast.error(
-        error instanceof ApiClientError ? error.message : 'Could not save the new order.',
-      );
+      toast.error(userFacingError(error, 'Could not save the new order.'));
     } finally {
       setIsBusy(false);
     }

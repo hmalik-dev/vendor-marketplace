@@ -25,7 +25,7 @@ import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { useSavedDraft } from '@/lib/use-saved-draft';
 import {
@@ -271,9 +271,10 @@ export function BookingRequestScreen({
       setSentAt(created.id);
     } catch (error) {
       setSendFailure(
-        error instanceof ApiClientError
-          ? error.message
-          : 'The request did not reach us. Check your connection and send it again.',
+        userFacingError(
+          error,
+          'The request did not reach us. Check your connection and send it again.',
+        ),
       );
     } finally {
       setSubmitting(false);

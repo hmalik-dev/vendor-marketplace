@@ -62,9 +62,24 @@ export function BookingsRail({
   conversations,
 }: BookingsRailProps): React.ReactElement {
   const recent = conversations.slice(0, RECENT_MESSAGE_COUNT);
+
+  /*
+    The label follows the content rather than describing the best case. A fixed
+    "What needs your attention" announced a section that was not rendered —
+    #81's ninth finding — and #302 gave the rail a third shape, so there are now
+    three answers rather than two: the quotes waiting, the threads, or frame
+    `19`'s promises. Each one names the heading the reader actually meets.
+  */
+  const label =
+    needsYou.length > 0
+      ? 'What needs your attention'
+      : hasBookings
+        ? 'Recent messages'
+        : 'How booking works here';
+
   return (
     <aside
-      aria-label="What needs your attention"
+      aria-label={label}
       className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-stone-300 bg-stone-0 p-5 xl:block"
     >
       {needsYou.length > 0 ? (

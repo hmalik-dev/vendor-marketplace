@@ -1,5 +1,6 @@
 import { fieldErrorDetailsSchema } from '@vendor-marketplace/shared';
 import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import type { FieldIssue } from '@/lib/use-submit-validation';
 
 /**
@@ -191,7 +192,29 @@ export function problemFromSaveError(error: unknown): ProfileSaveProblem {
 
   const details = fieldErrorDetailsSchema.safeParse(error.details);
 
-  return details.success
-    ? collect([{ payloadKey: details.data.field, message: error.message }])
-    : { fields: [], formMessage: error.message };
+  /*
+   * The API's generic shapes never become the message a vendor reads. "Invalid
+   * input" at the bottom of a form, naming no field and offering no fix, is
+   * #72's fifth finding and the opposite of what `40-states.md` asks of a
+   * validation message.
+   *
+   * The two fallbacks are deliberately different, and neither mentions
+   * highlighting. A summary that says "check the highlighted fields" when the
+   * API named none sends the vendor hunting for a highlight that does not
+   * exist — worse than the raw string it replaced, because it is instruction
+   * rather than noise. What is true in each case is all each one says.
+   */
+  if (details.success) {
+    return collect([
+      {
+        payloadKey: details.data.field,
+        message: userFacingError(error, 'This value was not accepted. Change it and save again.'),
+      },
+    ]);
+  }
+
+  return {
+    fields: [],
+    formMessage: userFacingError(error, 'We could not save your profile. Try again in a moment.'),
+  };
 }

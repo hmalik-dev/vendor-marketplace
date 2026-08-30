@@ -12,6 +12,7 @@ import { SiteFooter } from '@/components/site-footer';
 import { SearchStatusProvider } from '@/components/search/search-status';
 import { SiteHeader } from '@/components/site-header';
 import { Toaster } from '@/components/ui/sonner';
+import { TOAST_BOTTOM_OFFSET } from '@/components/ui/toast-offset';
 import './globals.css';
 
 /**
@@ -136,8 +137,28 @@ export default function RootLayout({
             `richColors` is deliberately absent: it fills the whole toast with
             a tint per type, where the spec puts the type in a 4px left accent
             on a `stone-0` surface.
+
+            The bottom inset clears the sticky submit bar rather than landing on
+            it. `/vendor/profile/edit` floats one at `bottom-0`, and the toast
+            confirming a save was covering the button that produced it —
+            `elementFromPoint` on the button centre returned the toast. sonner
+            pauses its dismiss timer on hover and the pointer is still resting
+            where it clicked, so the control was unreachable for 30 seconds
+            rather than 5.
+
+            **`bottom` only, and `mobileOffset` as well as `offset`.** A scalar
+            is written to all four sides, which would move every toast in from
+            the right edge too; and sonner applies `mobileOffset` below 600px,
+            which is inside the range where the bar is `sticky` rather than
+            `static` — so leaving it at its 16px default would have left #225's
+            trap intact on exactly the widths that still have the bar.
           */}
-          <Toaster position="bottom-right" duration={5000} />
+          <Toaster
+            position="bottom-right"
+            duration={5000}
+            offset={{ bottom: TOAST_BOTTOM_OFFSET }}
+            mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
+          />
         </ClerkProvider>
       </body>
     </html>

@@ -9,7 +9,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import { CELL_HELD, CELL_UNAVAILABLE } from '@/components/availability/cell-marks';
 import { buildMonth, datesBetween, monthsFrom, WEEKDAY_LABELS } from '@/lib/calendar';
 import { useApi } from '@/lib/use-api';
@@ -390,9 +390,7 @@ export function AvailabilityCalendar({
           : `${editable.length} ${editable.length === 1 ? 'date is' : 'dates are'} open again.`,
       );
     } catch (error) {
-      toast.error(
-        error instanceof ApiClientError ? error.message : 'Could not update your calendar.',
-      );
+      toast.error(userFacingError(error, 'Could not update your calendar.'));
     } finally {
       setIsSaving(false);
     }

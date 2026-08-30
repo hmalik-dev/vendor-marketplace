@@ -9,6 +9,8 @@ import {
   MIN_UPLOAD_IMAGE_WIDTH,
 } from '@vendor-marketplace/shared';
 
+import { isUpstreamErrorShape } from '@/lib/user-facing-error';
+
 /**
  * The upload model behind frames `24` and `25`.
  *
@@ -213,7 +215,14 @@ export function rejectedFailure(message: string, code?: ErrorCode): UploadFailur
     return {
       kind: 'rejected',
       tone: 'red',
-      reason: message,
+      /*
+       * The API writes a real sentence for a rejected file — the format, the
+       * size, the minimum width — and that is the reason worth showing. When it
+       * falls back to its generic shape there is nothing in it for a vendor, so
+       * the constraints stand in rather than "Request validation failed"
+       * appearing beside a photograph.
+       */
+      reason: isUpstreamErrorShape(message) ? 'That file was refused.' : message,
       fix: CONSTRAINT_FIX,
       retryable: false,
     };

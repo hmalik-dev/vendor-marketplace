@@ -163,3 +163,44 @@ describe('the notifications panel stays inside the viewport', () => {
     ).toBeGreaterThanOrEqual(CHROME_TO_THE_RIGHT_PX);
   });
 });
+
+/**
+ * #72 also found the bell dropping the weekday every other date in the product
+ * carries — `search-shell`, `request-row` and `booking-entries` all include it.
+ * "Sat, Dec 19" is the product's format; "Dec 19" was the bell's alone.
+ */
+describe('notification dates', () => {
+  const NOTIFICATION = {
+    id: 'n1',
+    type: 'new_request',
+    title: 'New booking request',
+    body: 'A customer asked about Dec 19.',
+    data: {},
+    readAt: null,
+    // A `Date`, as the wire schema yields — `Intl` rejects the raw ISO string.
+    createdAt: new Date('2026-12-19T15:00:00.000Z'),
+  };
+
+  it('names the weekday, as every other date in the product does', async () => {
+    call.mockResolvedValueOnce({
+      items: [NOTIFICATION],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    } as never);
+
+    const user = userEvent.setup();
+    render(<NotificationBell />);
+    await user.click(screen.getByRole('button', { name: /Notifications/ }));
+
+    // Scoped to the timestamp itself; the body copy also mentions the date.
+    const WEEKDAY_DATE = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), Dec 19$/;
+
+    await waitFor(() => {
+      expect(screen.getByText(WEEKDAY_DATE)).toBeDefined();
+    });
+
+    // The raw ISO form #72 measured must never reach a reader.
+    expect(screen.queryByText(/\d{4}-\d{2}-\d{2}/)).toBeNull();
+  });
+});

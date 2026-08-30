@@ -28,6 +28,20 @@ export interface Relaxation {
 export function relaxations(state: SearchState): Relaxation[] {
   const options: Relaxation[] = [];
 
+  /*
+   * First, because a name match is the narrowest filter in the product: it
+   * rules out every vendor but one before any other filter is consulted.
+   *
+   * Its absence here was #72's fourth finding. With only a name searched,
+   * `relaxations` returned nothing, so the headline fell through to "No
+   * photographers listed yet" — false where seventeen are listed — and blamed
+   * vendor type and city, which the customer never touched, while offering no
+   * way back at all. Naming it restores all three at once: the count, the
+   * culprit, and the one-tap escape.
+   */
+  if (state.name !== '') {
+    options.push({ label: 'Any name', patch: { name: '' } });
+  }
   if (state.date !== '') {
     options.push({ label: 'Any date', patch: { date: '' } });
   }
@@ -100,15 +114,17 @@ export function noResultsDiagnosis(state: SearchState): string | null {
   }
 
   const culprit =
-    first.patch.date !== undefined
-      ? 'The date'
-      : first.patch.minPriceCents !== undefined
-        ? 'The price range'
-        : first.patch.minRating !== undefined
-          ? 'The rating floor'
-          : first.patch.tags !== undefined
-            ? 'The tag filter'
-            : 'The city';
+    first.patch.name !== undefined
+      ? 'The name'
+      : first.patch.date !== undefined
+        ? 'The date'
+        : first.patch.minPriceCents !== undefined
+          ? 'The price range'
+          : first.patch.minRating !== undefined
+            ? 'The rating floor'
+            : first.patch.tags !== undefined
+              ? 'The tag filter'
+              : 'The city';
 
   /*
    * Frame `18` reads "Marfa is a small market — the distance limit is the

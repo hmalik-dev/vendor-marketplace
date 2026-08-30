@@ -6,7 +6,15 @@ import { cn } from '@/lib/utils';
  *
  * See design/design-plan/03-components.md.
  */
-const FALLBACK_TONES = ['bg-clay-100 text-clay-600', 'bg-sage-100 text-sage-600'] as const;
+/**
+ * The two monogram tones, paired with `avatarToneIndex` so one person keeps one
+ * colour wherever they appear.
+ *
+ * Exported because the bookings card draws the same monogram in a 9px squircle
+ * rather than a circle, so it cannot use `Avatar` itself but must not invent a
+ * second palette.
+ */
+export const FALLBACK_TONES = ['bg-clay-100 text-clay-600', 'bg-sage-100 text-sage-600'] as const;
 
 /** The six sizes the design calls for, in px. */
 export const AVATAR_SIZES = {

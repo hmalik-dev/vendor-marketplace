@@ -135,3 +135,45 @@ describe('EmptyStateGlyph', () => {
     expect(circles[1]?.className).toContain('left-[22px]');
   });
 });
+
+/**
+ * The guard #261 asked for.
+ *
+ * `40-states.md` lists the glyph as part of an empty state, but the prop was
+ * optional and seven of the nine call sites omitted it — an optional prop is
+ * one a caller forgets. The glyph is now the default, and these hold that.
+ */
+describe('the glyph is not optional', () => {
+  function glyphIn(container: HTMLElement): Element | null {
+    return container.querySelector('[data-slot="empty-state"] .w-\\[58px\\]');
+  }
+
+  it('draws the glyph when the caller passes no icon at all', () => {
+    const { container } = render(
+      <EmptyState headline="No requests yet" description="Nothing has come in." />,
+    );
+
+    expect(glyphIn(container)).not.toBeNull();
+  });
+
+  it('lets a caller say something more specific instead', () => {
+    const { container } = render(
+      <EmptyState
+        icon={<svg data-testid="search-x" />}
+        headline="No vendors match"
+        description="Try widening the price range."
+      />,
+    );
+
+    expect(container.querySelector('[data-testid="search-x"]')).not.toBeNull();
+    expect(glyphIn(container)).toBeNull();
+  });
+
+  it('removes it only when a caller says so outright', () => {
+    const { container } = render(
+      <EmptyState icon={null} headline="No requests yet" description="Nothing has come in." />,
+    );
+
+    expect(glyphIn(container)).toBeNull();
+  });
+});

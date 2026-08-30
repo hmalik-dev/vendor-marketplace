@@ -204,7 +204,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P3 Low** | **Deferred — needs a human** | — | **Launch prep — not current work** | `core` | **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. **Reconciliation 2026-08-29:** overlaps **#19**, which already covers external-account provisioning and is `Deferred — needs a human`. The plan's launch checklist also requires the pooled string on Railway and the unpooled one on Railway *and* GitHub Actions. **Deferred to launch prep 2026-08-29 (user ruling).** Free is the correct plan while there is no real data — usage is **8.9 of 100 CU-hours**, 34 MB of 512 MB, 3 of 10 branches. Nothing here blocks development. **The checklist moved to `docs/pre-launch.md` §3.2**, which is where launch-gated work belongs; this row is a pointer, not a queue item. Do not re-surface it as active work. |
 | **299** | **09 Vendor profile editor — cover field, preview rail and parity close-out** | P1 | M3 | **P0 Critical** | **Deferred — needs a human** | — | #335 | `core` `storage` | **Re-pointed 2026-08-30: the ruling this waits on is question D of #335.**  **Filed 2026-08-29 by the backlog consolidation.** Merges **#137, #138, #140, #141, #152, #257, #258, #288**. **#288 leads and unblocks #137**, which was stuck because the design contract contradicted itself on the cover field: the media row becomes a 128px circle profile photo beside a **216×144, 3:2** cover drop zone reading *"Drop a photo or browse · landscape · 1200×800 or larger"* — the `21:9, 1600×686 min` ask is retired, and the drop zone that is missing entirely today (#137) is built to that spec. The card preview is **never a field**: a **308px right-edge rail** at ≥1024 with a mono `PREVIEW` label, an **In search / Your profile** toggle and the real card, 280px at 1280, a panel above the fields at 768, a bottom sheet at 390. **There is no separate profile-banner field and there must never be one** — one file, two placements, per #287, which is why this is blocked on #298. Then the parity remainder: two undocumented fields to remove (#138) and the eight helper strings that came with them (#152, already `Blocked by #138`), the section nav's missing `Payouts` entry and gold dot (#140 — the dot depends on #9), the form pane over its scroll budget (#141), the slug preview promising a vanity URL the router does not serve (#257), and the submit bar never saying when the storefront was last saved (#258). Parity gate at 1440 / 1024 / 768 / 390. **Deferred 2026-08-30 — started, then released unstarted with no code written.** #298 unblocked this ticket but also sharpened the contradiction at its centre. Acceptance requires removing the two undocumented fields (#138) so every remaining string traces to frame `09`. **Both fields are the only editing surface for content frame `03` displays:** #298 moved the tagline into the identity card, and `yearsInBusiness` is read by the About pane's `Experience` tile. Deleting the inputs makes public-profile content permanently unsettable — a regression dressed as a parity fix. Keeping them fails frame `09`'s parity gate on the Layout and Text axes. **Lane 137 reached the identical conclusion on #138 and escalated rather than guessing; the question was never answered, and it is now load-bearing for a P0.** The repo's tie-breaker ("where the two disagree, build the frame and correct the plan") settles frame-vs-plan and does **not** arbitrate frame-vs-frame, which is what this is: frame `03` plus `12-vendor-profile.md` require the data, frame `09` plus `17-vendor-profile-editor.md`'s ordered field list omit the inputs. **The question, unchanged from lane 137:** delete `Your line` and `Years in business` outright, accepting that frame `03` loses its tagline and Experience tile, or relocate them into `About your business`, accepting that frame `09`'s field list is not exhaustive? Relocating also serves #141's scroll budget without destroying data. The field list determines the form's layout and every parity assertion, so the rest of the ticket cannot close its gate ahead of the ruling. Everything else in #299 (cover drop zone #288/#137, the 308px preview rail, `Payouts` nav #140, slug preview #257, last-saved #258) is implementable the moment this is answered. |
 | **300** | **08 Vendor dashboard — re-measure, then close parity** | P1 | M3 | **P2 Medium** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#124, #127, #135, #79**. Re-measure frame `08` first — all four predate #74/#165/#198. #127 and #135 are the **same missing string** (`See all N →` beside `Requests waiting on you`) filed twice, from the Layout axis and the Text axis; close them together. Plus `View my public profile` moved out of the header into the content column (#124) and the vendor nav labels and their order diverging from the frame (#79). Small, self-contained, one browser pass. |
-| **305** | **`40-states.md` compliance sweep — copy, glyphs and unsaved work** | P1 | M3 | **P1 High** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#72, #261, #225, #227, #228, #81**. `40-states.md` is a law, and it is violated in five places of error and empty-state copy (#72) — steel is information, gold is waiting on someone, red is failure; **red is never `pending` and gold is never a failure**. The two-circle empty-state glyph is absent from **seven of the nine** `EmptyState` call sites (#261), so the sweep is one component plus its callers. Alongside them, three defects in the same class of "the screen says something untrue": the success toast covering the submit button it confirms (#225), unsaved profile edits discarded silently with no prompt (#227), and a newly onboarded vendor's public storefront still showing placeholder copy (#228). **#81** is itself a rollup of nine smaller adversarial-sweep defects — triage it inside this ticket and carry anything that does not belong here out as its own row rather than silently dropping it. |
+| **305** | **`40-states.md` compliance sweep — copy, glyphs and unsaved work** | P1 | M3 | **P1 High** | **In Progress** | worktree-305 | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#72, #261, #225, #227, #228, #81**. `40-states.md` is a law, and it is violated in five places of error and empty-state copy (#72) — steel is information, gold is waiting on someone, red is failure; **red is never `pending` and gold is never a failure**. The two-circle empty-state glyph is absent from **seven of the nine** `EmptyState` call sites (#261), so the sweep is one component plus its callers. Alongside them, three defects in the same class of "the screen says something untrue": the success toast covering the submit button it confirms (#225), unsaved profile edits discarded silently with no prompt (#227), and a newly onboarded vendor's public storefront still showing placeholder copy (#228). **#81** is itself a rollup of nine smaller adversarial-sweep defects — triage it inside this ticket and carry anything that does not belong here out as its own row rather than silently dropping it. |
 | **313** | **Sign-up and session entry** | P1 | M3 | **P1 High** | **Deferred — needs a human** | worktree-313 | None | `core` `auth` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#194, #197, #226, #234, #259**. **Two halves, and the first is implementable today**: the header renders its signed-out variant on the first navigation in a fresh browser context (#259), and Clerk's own sign-in card reads `vendor-marketplace` to the user instead of `BRAND_NAME` (#234). The second half is **three rulings, and this ticket asks for all three at once rather than three tickets asking separately** — the primary action reads `Continue` where the frame says `Create my account` (#194); panel text over photography is not contrast-guaranteed and needs either a scrim or a ruling that the photography is fixed (#197); and sign-up returns to the role picker after email verification (#226), which is either a Clerk redirect defect or an intended re-confirmation. Do the first half, then return **BLOCKED with the three questions together** if they are still unanswered. **First half done 2026-08-30 (`worktree-313`).** #259 is **not a product defect** — it reproduces only from a restored `storageState`; a real sign-in takes 0 handshake hops and paints correctly on the first navigation. Filed as **#321**, which matters more than the ticket it came from because every browser verification here restores state. #234 is fixed as far as code reaches: `.cl-headerTitle` now reads the brand, though it was never visible (the app hides Clerk's header). **Four questions now wait on a human**, the three rulings plus renaming the Clerk application itself — that name is the source every `{{applicationName}}` key interpolates, and it is dashboard configuration on the shared instance. | **Found 2026-08-30 by #9's parity pass:** the site header renders **signed-out chrome on an authenticated vendor page** — `window.Clerk.loaded === true` and `Clerk.user.id` is populated after a 15s settle, yet `/vendor/dashboard`'s header reads `Sign in` / `Sign up` where frame `08` draws `View my public profile` and the avatar. Reproduced at 1440x900 signed in as the vendor.
 | **322** | **Vendor surfaces at 1024 and 768** | P1 | M3 | **P1 High** | **In Progress** | worktree-322 | **None** | `core` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. #304 verified landing and the shared chrome; these five frames are **not** verified and their components carry no 1024 or 1440 steps at all — `profile-header.tsx` and `bookings-hub.tsx` contain **zero** `min-[90rem]:` between them, so they render one composition at every width, exactly as landing did before #304. Frames: `27 Vendor profile — 1024`, `27 Vendor profile — 768`, `27 Vendor dashboard — 1024`, `27 Vendor dashboard — empty · 1024`, `27 Vendor profile editor — 768`. **#169's own numbers to check first:** sidebars stay 220px with labels (no icon rail), right rails narrow 420 → 340 and never stack, and the dashboard's right column is 300px with the calendar on the **booking week** rather than the month. The shared chrome from #304 already helps — gutter ladder, 56px header below 1440, capped popovers — so start by **re-measuring** rather than assuming the deltas match landing's. Needs `pnpm db:seed:e2e`; a vendor surface is unreachable without it. |
 | **323** | **Search and checkout at 1024** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. Frames: `27 Search results — 1024`, `27 Search — loading · 1024`, `27 Search — no results · 1024`, `27 Checkout — 1024`. **Coordinate with #297**, which owns `/search` parity at 1440 — this is the 1024 composition only, and the two will collide in `search-shell.tsx` and `refine-bar.tsx` if run concurrently. #304 already moved the `/search` **header** inset to 20px at 1024 (`SEARCH_INSET`), which the three search frames draw and which had been inheriting landing's 28px; the page body below it is untouched. `search-bar.tsx`'s **`compact`** variant is likewise untouched — #304 stepped only `hero`. **Checkout has a route as of 2026-08-30** (`apps/web/src/app/bookings/[requestId]/checkout/page.tsx`); #304 had recorded it as unimplemented and that finding is now stale. **#169's hard constraint applies: "Due today" must stay above the fold at 1024, asserted rather than eyeballed** — its rect bottom ≤ 640. |
@@ -226,9 +226,16 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **343** | **07 Bookings hub — residual parity after #302** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302, which fixed the Access axis and the deviations #302 itself introduced. These are **pre-existing** and were out of that ticket's scope. **Layout:** the title row should be `flex` with `Your bookings` left and today's date (`12.5px`, `#6B6459`) right — **the date is absent from the screen entirely**; the sidebar draws two rows where the frame draws four (`Messages` with an unread dot and `Saved vendors` are missing, and `bookings-sidebar.tsx:10-17` justifies that under #31's dead-control rule, which **no longer applies now that `/messages` exists and is linked from the header**). **Style:** `StatusPill` is `700 11px` / `padding 6px 10px` where `.pill` is `700 10px` / `5px 10px` — **shared, so it affects every screen carrying a pill**; the dashed tile border is `#D5CEC2` (`stone-400`) where the frame draws `#DDD5C7`. **Font:** the summary sentence is `text-md` (15px) with `leading-prose` where the frame draws **14px / normal** — and **there is no 14px token**, so this one needs a scale decision, not a class swap. Sidebar card body and CTA are 11px where the frame draws 11.5 and 12 |
 | **344** | **19 Bookings hub empty — the app renders frame 07's shell around frame 19's panel** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. #302's own assertion is verified — with bookings the rail draws `Recent messages` and not `How booking works here` — and the **empty pane itself matches frame `19` exactly**: dashed panel, the two-circle mark, `No bookings yet`, the body copy character for character including the curly apostrophe, the `Find a vendor` button, and the `01/02/03` steps in JetBrains Mono. **The shell around it does not.** Frame `19` draws a different title (`My bookings`), a `Nothing booked yet` sub-line, a `Find a vendor` button in the title row, pill filters `All / Pending / Confirmed / Past`, a sidebar with a `Booking` section label plus `Payments` and an Account/`Settings` block, and a **bordered radius-18 card** rail rather than `07`'s flush border-left. None of that is present. **This long predates #302** and may well be a deliberate one-shell reconciliation of frames `07` and `19` — but nothing in the repo records that decision, so it currently reads as unexplained drift. **Decide and record before building**: one shell is probably right, and if so frame `19` is what needs correcting. **Also unverified:** the rail's `How booking works here` block on a live empty hub — the E2E customer has bookings and `.claude/rules/e2e-auth.md` forbids a throwaway account, so it was not driven and is not recorded as matching |
 | **345** | **04 Booking request — `31-content-voice.md` states a deadline the product does not use** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. Frame `04` **and** `31-content-voice.md`'s approved string both read *"Maya has **48 hours** to confirm or send a **revised quote**"*. The app renders *"…has **7 days** to confirm or send a **quote**"*. **The code is right** — the sent-confirmation and the request card both say 7d, and the interval is derived from the constant rather than written down — so **the plan is what is stale**, and `04-laws.md`'s precedence rule says correct it in the same pass. Two more from the same frame: the copy neutralises the vendor's pronoun (*"the more **they know**"* for the frame's *"**she knows**"*, and *"Anything else **they** should know?"*), which is deliberate and correct but is a wording change from the frame and needs recording rather than leaving as drift; and `Continue to review` carries a `shadow-sm` the frame's `.btnP` does not. **Two small ones for the same visit:** the `Start time` field is 42px against `Guest count`'s 38px — the native `<input type="time"]` clock affordance adds 4px to a pair the frame draws at one height — and removing the marketing footer left a **stray empty `<section>` at `y=900`, height 0**, which should be deleted rather than emitted |
+| **346** | **`/messages` keys threads by vendor, so one booking's question lands in another's thread** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 305**, carved out of #81 (item 3) because it is a data-model change, not the copy fix the rest of that ticket was. A customer asking about their Jun 11 fundraiser sends it into a thread the vendor reads as "Mar 15 birthday" — the subtitle names one arbitrary booking out of several. `conversations` already carries a nullable `booking_request_id` and a `conversations_request_key` unique index, so the schema supports a thread per request; what does not exist is the read path, the list grouping, or a rule for the vendor-initiated thread that belongs to no request. Needs a design ruling on how a multi-booking relationship is listed before it is built |
+| **347** | **`/search` has no pagination control, so page 2 is unreachable and page 2+ renders blank** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 305**, carved out of #81 (item 4) because it is a missing feature rather than a defect in one. `?page=2` returns HTTP 200 with an empty results pane while the `h1` claims the full count; there is no control anywhere to reach it, and `pageSize=20` means it is unreachable in practice today. Two halves: the control itself (frame `02` draws none — needs a design ruling), and an out-of-range page rendering an empty state whose heading agrees with its body rather than a blank pane |
+| **348** | **[DESIGN] Does a real vendor with no cover get the labelled placeholder, or a designed empty state?** | P1 | M3 | **P2 Medium** | **Deferred — needs a human** | — | **A design ruling** | `core` | **Filed 2026-08-30 by lane 305**, the residue of #228 after #305 closed its literal finding. The `COVER · FULL-BLEED BANNER` string #228 measured is gone — `CHANGE-ORDER-2026-08-29.md` retired that composition. What remains is a genuine conflict between two documents. `03-components.md` defines `Placeholder` as "stand-in imagery **until real photography exists**", and `web-design-parity.md` permits "real photography in place of the labelled placeholders" — both about the *product* lacking photos before launch. #228 was about a different absence: a real vendor who has not uploaded a cover, whose live public page then reads as unfinished to their own customers. `40-states.md` would give that a designed empty state. Deciding which applies is a ruling, not an implementation choice, so #305 closed the finding and filed this rather than guessing. The upload control itself is #299 |
+| **349** | **Back and Forward discard unsaved profile edits without prompting** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 305**, the third exit #227 did not name. `useUnsavedChangesGuard` covers leaving the site (`beforeunload`) and leaving the page by link (a capture-phase click intercept), and deliberately does **not** cover a history navigation: `beforeunload` does not fire for a same-document one, and `popstate` arrives *after* the entry has already changed, so the only way to "block" it is to push a decoy entry and undo it — which corrupts the history stack the user is walking. A vendor who presses Back on a dirty `/vendor/profile/edit` still loses the edit. Needs either a supported App Router navigation-blocking API, or a ruling that the decoy-entry trade is worth making |
+| **350** | **The 500 page offers "Go to my bookings" to a signed-out visitor, and the frame draws it that way** | P1 | M3 | **P3 Low** | **Deferred — needs a human** | — | **A design ruling** | `core` | **Filed 2026-08-30 by lane 305**, carved out of #81 (item 7). A visitor who has never signed in is offered a link to bookings they cannot have. #305 changed the label to "Browse vendors" and then **reverted it**: frame `16` draws `Go to my bookings` verbatim, every other string on that screen matches the frame exactly, and `web-design-parity.md` is explicit that "the words *are* the design" and that design passes edit the plan while tickets write the code. Changing approved copy to fix a logic problem is the reverse of that. Also note `global-error.tsx` renders outside the Clerk provider, so it cannot know who is reading — any auth-aware answer needs a default, and the frame gives none. Needs a ruling: a second frame for the signed-out 500, or an accepted inaccuracy |
+| **351** | **The notification dropdown's empty state is a bare paragraph, not an `EmptyState`** | P1 | M3 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 305**, found by browser verification. The bell renders `<p class="px-4 py-6 text-center text-base text-stone-600">No notifications yet</p>` — no glyph, no heading, no CTA, and `closest('[data-slot="empty-state"]')` is null. #305 made the two-circle glyph the default for every `EmptyState`, which is why this one stands out: it is not a call site, so the default cannot reach it. Whether a dropdown that small should carry the full glyph-headline-sentence-CTA stack is a judgement — frame `08/09/11 shared` draws the panel but `40-states.md` does not name a dropdown among its empty states — so this needs a look at the frame before it is changed rather than a mechanical swap |
+| **352** | **The user-menu avatar's alt text reads "'s logo" — the business name interpolates empty** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-08-30 by lane 305**, found by browser verification on every signed-in page. The avatar in the user menu has `alt="'s logo"`, so the name it should carry is an empty string — a screen-reader user hears a possessive with nothing in front of it. Present for both roles. The template is right and the value reaching it is not, so the fix is wherever that name is resolved, not in the alt attribute. `04-laws.md` covers alternative text and the parity `Access` axis is what would have caught it |
 **This board carries open work only. The 311 closed rows moved to `.claude/plans/vendor-marketplace-tickets-archive.md` on 2026-08-30**, whole — 180 `Done` and 131 `Superseded`, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
-Rows are ordered by build sequence, not by ticket number. **31 rows — 30 open (18 Backlog, 10 Deferred, 2 Blocked) plus #14, closed and not yet archived.** Recounted programmatically on 2026-08-30 after #302 closed and #342–#345 were filed. **16 tickets are workable** — #11, #300, #305, #322, #323, #326, #332, #333, #334, #336, #337, #338, #341, #343, #344, #345. Two more are `Backlog` but gated: **#20** on #19 and **#15** on the Sentry DSN, so a Backlog count is not a ready count — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over it. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
+Rows are ordered by build sequence, not by ticket number. **38 rows — 37 open (21 Backlog, 2 In Progress, 12 Deferred, 2 Blocked) plus #14, closed and not yet archived.** Recounted programmatically on 2026-08-30 after #302 and #305 closed, and after #342–#345 and #346–#352 were filed by two lanes that were open at once. **#305 is the worked example of why a Backlog count is not a ready count**: it read workable, and its own ticket ids collided at merge with a concurrent lane's, which the contiguity guard caught rather than silently duplicating. Two more are `Backlog` but gated: **#20** on #19 and **#15** on the Sentry DSN, so a Backlog count is not a ready count — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over it. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -749,6 +756,261 @@ alongside the slugs.
 - [ ] Existing rows carrying a label are corrected on the next seed run, not stranded (`.claude/rules/db-schema.md`)
 
 **Blocked by:** None
+
+---
+
+### #346: `/messages` keys threads by vendor, so one booking's question lands in another's thread
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 305**, carved out of #81 (item 3). #305 fixed #81's
+copy and markup findings; this one is a data-model change and does not belong in
+a compliance sweep.
+
+**Observed:** `/messages` lists one thread per vendor, subtitled with one
+arbitrary booking out of however many the customer has with them. A customer
+asking about their Jun 11 fundraiser sends the message into a thread the vendor
+reads as "Mar 15 birthday".
+
+**Expected:** a message about a booking is readable against that booking.
+
+**What already exists:** `conversations` carries a nullable `booking_request_id`
+and a `conversations_request_key` unique index, so the schema already permits a
+thread per request — `booking-requests.dao.ts` opens one on request creation.
+What is missing is the read path, the list grouping, and a rule for the
+vendor-initiated thread that belongs to no request (`conversations_customer_vendor_open_key`
+covers exactly that row).
+
+**Needs a ruling first:** how a customer with three bookings from one vendor is
+listed — three rows, or one row that opens to three. `18-messaging.md` draws a
+single list and does not answer it, so building either shape is a guess.
+
+**Acceptance:**
+
+- [ ] A message sent from a booking is read against that booking, by both sides
+- [ ] The list distinguishes threads that share a vendor
+- [ ] A vendor-initiated thread with no request still has somewhere to live
+- [ ] The ruling above is recorded in `99-open-questions.md` before implementation
+
+---
+
+### #347: `/search` has no pagination control, so page 2 is unreachable and page 2+ renders blank
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 305**, carved out of #81 (item 4) as a missing
+feature rather than a defect in an existing one.
+
+**Observed:** `/search?page=2` returns HTTP 200 with a blank results pane while
+the `h1` still claims the full count. No control anywhere reaches page 2, and
+`pageSize=20` against 17 vendors means nothing is currently lost — which is why
+this is Medium rather than High, and why it will stop being true the moment the
+marketplace grows.
+
+**Two halves, and only the second is unambiguous:**
+
+1. **The control.** Frame `02 Search` draws no pagination, so its shape — pages,
+   "load more", or an infinite rail — is a design ruling, not an implementation
+   choice.
+2. **The out-of-range page.** Whatever the control turns out to be, `?page=99`
+   must render an empty state whose heading agrees with its body instead of a
+   blank pane under a contradicting count. That half can land first.
+
+**Acceptance:**
+
+- [ ] An out-of-range page renders an empty state whose heading agrees with the body
+- [ ] The heading never claims a count the pane does not show
+- [ ] A control exists to reach every page the API will return, in the shape the ruling picks
+
+**Tests (required):**
+
+- [ ] A test asserting an out-of-range page renders an empty state whose heading agrees with the body
+
+---
+
+### #348: [DESIGN] Does a real vendor with no cover get the labelled placeholder, or a designed empty state?
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Deferred — needs a human | **Capabilities:** `core`
+**Blocked by:** A design ruling
+
+**Filed 2026-08-30 by lane 305**, the residue of #228 after #305 closed its
+literal finding.
+
+**What #305 closed.** #228 measured the string `COVER · FULL-BLEED BANNER`
+rendering in the cover band of every vendor without a cover image. That
+composition no longer exists: `CHANGE-ORDER-2026-08-29.md` retired the
+full-bleed banner and the avatar overlapping it, and `profile-header.tsx`
+records why. The finding as written is fixed.
+
+**What is left is a conflict between two documents, not a bug.**
+
+- `03-components.md` defines `Placeholder` as "stand-in imagery **until real
+  photography exists** — a hatched swatch with a mono label naming the shot it
+  is waiting for … the label is the point, because it reads as deliberately
+  unfinished". `web-design-parity.md` reinforces it, permitting "real
+  photography in place of the labelled placeholders" as one of only three
+  allowed differences from a frame.
+- Both of those are about **the product** lacking photographs before launch.
+  #228 was about a **different absence**: a real vendor who has completed
+  onboarding and not uploaded a cover. Their live public page then tells their
+  own customers that the page is unfinished.
+- `40-states.md` would give that second case a designed empty state — glyph,
+  headline, one sentence, one CTA — not a build-time stand-in.
+
+**The question:** does `Placeholder` apply to a real vendor's missing cover, or
+only to the pre-launch product? If the latter, the vendor profile and the search
+card both need a designed coverless state.
+
+**Not decidable in a sweep.** #305 had no mandate to overrule `03-components.md`,
+so it closed the finding and filed this. The cover *upload control* is a separate
+missing piece and lives in **#299**.
+
+**Acceptance:**
+
+- [ ] The ruling is recorded in `99-open-questions.md`
+- [ ] If a designed empty state wins, it is drawn as a frame before it is built
+
+---
+
+### #349: Back and Forward discard unsaved profile edits without prompting
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 305** — the third exit #227 did not name, found by
+reviewing the guard #305 built for the first two.
+
+**Observed:** on `/vendor/profile/edit` with unsaved changes, pressing Back (or
+a trackpad swipe) navigates away and loses the edits with no prompt — #227's
+exact symptom through a different trigger.
+
+**Why #305 did not cover it.** `useUnsavedChangesGuard` covers the two exits it
+documents: `beforeunload` for leaving the site, and a capture-phase click
+intercept for a `<Link>` or `<a>`. A history navigation is neither.
+`beforeunload` does not fire for a same-document one, and `popstate` arrives
+**after** the entry has already changed — so the only way to "block" it is to
+push a decoy entry on mount and re-push it on every `popstate`, which corrupts
+the history stack the user is trying to walk and breaks a second Back press.
+Next's App Router exposes no supported navigation-blocking API.
+
+Covering it badly is worse than the gap, so #305 left it uncovered and said so
+in the hook's own contract rather than implying the surface was complete.
+
+**Needs one of:** a supported blocking API (watch `next/navigation`), or a
+ruling that the decoy-entry trade is acceptable and what it should do on a
+second Back.
+
+**Acceptance:**
+
+- [ ] A dirty form prompts on Back, or the ruling records why it deliberately does not
+- [ ] Whatever lands does not leave the history stack in a state a second Back handles wrongly
+- [ ] `useUnsavedChangesGuard`'s contract comment matches what it actually covers
+
+---
+
+### #350: The 500 page offers "Go to my bookings" to a signed-out visitor, and the frame draws it that way
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Deferred — needs a human | **Capabilities:** `core`
+**Blocked by:** A design ruling
+
+**Filed 2026-08-30 by lane 305**, carved out of #81 (item 7).
+
+**Observed:** the 500 page's secondary CTA is "Go to my bookings", offered to a
+visitor who by definition has none.
+
+**Why this is a ruling and not a fix.** #305 changed the label to "Browse
+vendors" and then reverted it. Frame `16` (`design/Orla - Screens.dc.html`)
+draws `Go to my bookings` verbatim, and every other string on that screen —
+`500 · SERVER ERROR`, `Something broke on our end`, `This wasn't anything you
+did…`, `No payment was taken and no booking was changed.`, `Try again` — matches
+the frame exactly. `.claude/rules/web-design-parity.md` is explicit: "Same
+composition with reworded copy has failed too — the words *are* the design", and
+"Design passes edit the plan. Tickets write the code. Never the reverse."
+Rewording approved copy to fix a logic problem is that reversal.
+
+**A complication for whoever rules on it.** `global-error.tsx` replaces the root
+layout, so it renders outside the Clerk provider and cannot ask who is reading —
+and it is the boundary that catches the errors most likely to be genuine 500s.
+Any auth-aware answer therefore needs a default for the case where the answer is
+unknown, and the frame supplies none.
+
+**The options, so the ruling has something to pick from:**
+
+1. A second frame for the signed-out 500, with its own CTA.
+2. A destination true for both readers, drawn into frame `16`.
+3. Accept the inaccuracy: a signed-out visitor following it lands on sign-in
+   carrying a return path, which is not broken, only mislabelled.
+
+**Acceptance:**
+
+- [ ] The ruling is recorded in `99-open-questions.md` or the decisions log
+- [ ] If the copy changes, `design/` changes first and the code follows
+
+---
+
+### #351: The notification dropdown's empty state is a bare paragraph, not an `EmptyState`
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 305**, found by browser verification.
+
+**Observed:** the notification dropdown renders
+
+```html
+<p class="px-4 py-6 text-center text-base text-stone-600">No notifications yet</p>
+```
+
+No glyph, no heading, no CTA; `closest('[data-slot="empty-state"]')` is null.
+
+**Why it surfaced now.** #305 made the two-circle glyph the default for every
+`EmptyState`, so the nine call sites gained it without being edited. This one is
+not a call site, so the default cannot reach it — it is the only empty state in
+the product that opted out by never opting in.
+
+**Not a mechanical swap.** `40-states.md` lists empty states by screen and names
+no dropdown among them, and frame `08/09/11 shared` draws the panel without one.
+A full glyph-headline-sentence-CTA stack inside a dropdown that size may be
+wrong; the point is that the decision should be made rather than inherited from
+whoever wrote the paragraph.
+
+**Acceptance:**
+
+- [ ] Either the dropdown uses `EmptyState`, or the frame's treatment is recorded as deliberate
+- [ ] Whatever lands is reachable from the glyph guard in `empty-state-callers.test.ts`, or exempted there in writing
+
+---
+
+### #352: The user-menu avatar's alt text reads "'s logo" — the business name interpolates empty
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 305**, found by browser verification on every
+signed-in page, for both roles.
+
+**Observed:** the user-menu avatar carries `alt="'s logo"`. The name that should
+precede the possessive is an empty string, so a screen-reader user hears a
+possessive with nothing in front of it.
+
+**Expected:** the account's business or personal name, or — if no name is
+resolvable at that point — an alt that does not imply one was expected.
+
+**Where to look.** The template is right and the value reaching it is not, so
+the fix belongs wherever that name is resolved for the menu, not in the alt
+attribute. Worth checking whether the same value is empty anywhere else it is
+rendered without a possessive to make it obvious.
+
+**Why nothing caught it.** `04-laws.md` covers alternative text and the parity
+`Access` axis is the gate for it, but the user menu is chrome rather than a
+framed screen, so no parity pass owns it.
+
+**Acceptance:**
+
+- [ ] The alt text names the account, on both roles
+- [ ] A test asserts the alt is non-empty and does not begin with an apostrophe
 
 ---
 
@@ -1385,29 +1647,74 @@ once off the Layout axis and once off the Text axis.
 
 ### #305: `40-states.md` compliance sweep — copy, glyphs and unsaved work
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 Merges **#72, #261, #225, #227, #228, #81**.
 
+## Outcome — worked 2026-08-30 by lane 305
+
+Every finding is accounted for. Nothing was silently dropped, which is what the
+last acceptance line asks for.
+
+**Fixed**
+
+| From | Finding | How |
+| --- | --- | --- |
+| #72 | Raw upstream error strings reaching users at 11 call sites | `userFacingError` is now the boundary: a 5xx never surfaces, the API's five generic shapes are replaced by the caller's own sentence, and a message the product wrote is kept. The two string-only paths — the upload mapper and the profile-save summary — go through `isUpstreamErrorShape` |
+| #72 | `?name=` with no results claimed none were listed, blamed filters the customer never set, offered no way out | `relaxations` was missing the name filter entirely. Adding it fixes the count, the culprit and the one-tap escape at once |
+| #72 | City accepted more than the API's 100-char cap | `maxLength` on the field, so the error is unreachable by typing |
+| #72 | Notification dates dropped the weekday every other surface carries | `weekday: 'short'`, matching `search-shell`, `request-row` and `booking-entries` |
+| #261 | Seven of nine `EmptyState` call sites drew no glyph | The glyph is the **default** rather than an optional prop, so a tenth caller inherits it. Removing it now takes an explicit `icon={null}`, which a test forbids |
+| #225 | Success toast covered the submit button that produced it | The toast clears the sticky submit bar. Still bottom-right, which is what `03-components.md` fixes; only the inset moved, and it is measured against the bar's own padding |
+| #227 | Unsaved profile edits vanished with no prompt | `useUnsavedChangesGuard` covers both exits — `beforeunload` for the tab, a capture-phase click intercept for the router — and the form asks with the product's own dialog |
+| #81-1 | `From` qualified a price that was no longer the lowest | Shown while the price on screen **is** the starting price, so the frame's default reading survives and a dearer package drops it |
+| #81-2 | Blank grey swatch on every bookings card | The vendor's monogram, from `Avatar`'s own initials and tone helpers so one vendor keeps one colour everywhere |
+
+| #81-9 | Bookings rail `aria-label` described a section that was not rendered | The label follows the content |
+| verification | `/bookings` hand-rolled a second empty-state glyph, its outer ring solid where the shared one is dashed, under a `p` styled as a headline | Uses `EmptyStateGlyph` and a real `h2`, so one glyph ships and the state has a heading in the accessibility tree |
+
+**Closed with a reason**
+
+| From | Finding | Why |
+| --- | --- | --- |
+| #72 | Empty state named a "style" filter that does not exist | Fixed by **#329**, which removed the Style group; `relaxations.ts` already says "Any tag" |
+| #81-5 | `State` accepted `ZZZZZZZZZZ` | **#332** is exactly this, from the form to the column. Half-fixing it here is work #332 would undo |
+| #81-6 | Profile tabs used history `replace` | Already `useQueryState`'s default with search explicitly pushing; no longer reproducible |
+| #81-8 | Results `h1` ran together | Fixed by **#242** |
+| #81-10 | A past date still fired the request | `search-shell` clears it before the call and announces the clear |
+| #228 | `COVER · FULL-BLEED BANNER` on a coverless storefront | The composition was retired by `CHANGE-ORDER-2026-08-29.md`; the string is gone. What remained was a documented conflict, filed as **#348** |
+
+**Filed rather than fixed**
+
+| From | Now | Why |
+| --- | --- | --- |
+| #81-3 | **#346** | One thread per vendor is a data-model change needing a ruling, not a copy fix |
+| #81-4 | **#347** | Pagination does not exist; frame `02` draws no control, so its shape is a ruling |
+| #228 | **#348** | Whether a *real* vendor's missing cover gets the sanctioned `Placeholder` or a designed empty state is a design ruling, and `03-components.md` is not a sweep's to overrule |
+| verification | **#351** | The notification dropdown's empty state is a bare `<p>`, not an `EmptyState`, so the new glyph default cannot reach it. Whether a dropdown should carry the full stack is a frame question |
+| verification | **#352** | The user-menu avatar's alt reads `'s logo` — the name interpolates empty, on every signed-in page. The fix is where that name is resolved, not in the attribute |
+| #227 | **#349** | Back/Forward is a third exit the guard does not cover. `beforeunload` does not fire for a same-document navigation and `popstate` arrives too late, so the only block corrupts the history stack. Named in the hook's own contract rather than implied away |
+| #81-7 | **#350** | Changed the 500 page's CTA to "Browse vendors", then **reverted it**: frame `16` draws `Go to my bookings` verbatim and `web-design-parity.md` says "the words *are* the design". Rewording approved copy to fix a logic problem is the reversal that rule forbids |
+
 **Acceptance:**
 
-- [ ] The five copy violations are corrected against `40-states.md`'s colour semantics —
+- [x] The five copy violations are corrected against `40-states.md`'s colour semantics —
       steel is information, gold is waiting on someone, red is failure, sage is settled.
       **Red is never `pending`; gold is never a failure** (#72)
-- [ ] The two-circle empty-state glyph is present at all nine `EmptyState` call sites (#261)
-- [ ] The success toast does not cover the submit button it confirms (#225)
-- [ ] Unsaved profile edits prompt rather than vanishing (#227)
-- [ ] A newly onboarded vendor's public storefront shows the vendor's own content, never
+- [x] The two-circle empty-state glyph is present at all nine `EmptyState` call sites (#261)
+- [x] The success toast does not cover the submit button it confirms (#225)
+- [x] Unsaved profile edits prompt rather than vanishing (#227)
+- [x] A newly onboarded vendor's public storefront shows the vendor's own content, never
       placeholder copy (#228)
-- [ ] **#81**'s nine adversarial-sweep defects are each either fixed here or filed as their
+- [x] **#81**'s nine adversarial-sweep defects are each either fixed here or filed as their
       own row with a reason — none is silently dropped
 
 **Tests (required):**
 
-- [ ] A test over the `EmptyState` call sites asserting the glyph, so a tenth caller cannot
+- [x] A test over the `EmptyState` call sites asserting the glyph, so a tenth caller cannot
       be added without it
-- [ ] A test that leaving a dirty profile form prompts, and that a clean one does not
+- [x] A test that leaving a dirty profile form prompts, and that a clean one does not
 
 ---
 
