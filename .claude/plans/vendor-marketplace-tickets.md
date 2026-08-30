@@ -591,6 +591,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **284** | **The vendor profile's sticky rail slides 22px under the header at max scroll** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 82's frame-03 pass.** `lg:top-[calc(var(--header-height)+16px)]` computes to `80px`, but at maximum scroll `aside.getBoundingClientRect().y` is **42.1** — 22px of the card sits behind the 64px sticky header, on all five tabs (packages 41.7; portfolio/reviews/availability 42.0). Cause: the grid's `pb-14` puts the sticky containing block's content bottom at 544.3, and 544.3 − 522.25 (wrapper height) = 22.05, which clamps the offset before it reaches 80. `12-vendor-profile.md` says the rail is *"offset by the header so it never slides under it"*. The frame's 900px shell cannot show this, so no frame contradicts the fix. |
 | **285** | **The rating star renders as a filled clay SVG where every frame draws a text glyph** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Found 2026-08-29 by lane 82's frame-03 pass.** Live: a 14px lucide `Star` SVG with `fill: rgb(180,85,47)` (clay-400). Frame: a `★` text glyph at 13px inheriting `#4A443C`. **All 19 `★` occurrences in the entire frame file are text glyphs** inheriting `#6B6459`/`#4A443C`; no frame anywhere draws a filled star icon. Affects the profile and every vendor card, so it is a systemic Style/Colour miss rather than one screen's. Note clay-400 as an icon fill is not the same rule as clay-400 as text, which is banned — check `01-foundations.md` before choosing the replacement colour. |
 | **286** | **The vendor profile tabs implement `role=tablist` without the keyboard pattern it promises** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 82's frame-03 pass.** All five tabs sit in the Tab order with `tabindex` unset and `ArrowRight` from `About` does nothing — there is no roving tabindex. Announcing `role=tablist` while behaving like five plain links is worse than not announcing it: a screen-reader user is told to expect arrow-key navigation that is not there. Either implement the ARIA tabs pattern (roving tabindex, Arrow/Home/End) or drop the tablist roles. Pairs with **#254**, which is the same row's focus ring being clipped by its `overflow-x-auto`. |
+| **287** | **`nearby-availability` builds test dates in UTC while the route reads server-local time, so the suite fails locally every evening** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 170** while running the API suite. Not caused by any diff — reproduced on a clean tree with `git stash`. See detail section |
 
 Rows are ordered by build sequence, not by ticket number. **207 rows — 50 Done, 1 In Progress, 150 Backlog, 4 Deferred, 2 Blocked.** Recounted 2026-08-28; the previous "56 rows — 25 Done" line had been stale for many batches.
 
@@ -11450,6 +11451,45 @@ both sides, never from a screenshot.
 **Test (required):**
 
 - [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #287: `nearby-availability` builds its dates in UTC while the route reads server-local time
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 by lane 170 while running the API suite for #170. **Not caused by that
+diff** — reproduced on a clean tree with `git stash`, 1 failed / 403 passed.
+
+| | |
+| --- | --- |
+| **Expected** | `pnpm --filter @vendor-marketplace/api test` is green on `main` at any hour, in any timezone |
+| **Observed** | `src/modules/vendors/nearby-availability.routes.test.ts > "never suggests a past date when the wanted date is today"` fails with `expected '2026-08-29' to be '2026-08-31'`, but **only between 20:00 and 00:00 EDT** — the window where the local date and the UTC date disagree |
+
+**Cause.** The test's `dayFromToday()` helper (line 17) builds dates with
+`new Date().toISOString().slice(0, 10)`, which is **UTC**. The route computes "today" in
+**server-local** time. At 22:00 EDT the two differ by a day, so the test asks for
+availability from the UTC tomorrow and asserts against a UTC-derived expectation while the
+route answers from the local today. CI runs in UTC, so the two agree there and `main` stays
+green — the failure is invisible to CI and reproducible only on a developer machine west of
+Greenwich in the evening.
+
+**Which side is wrong is the product question this ticket has to settle**, and it is not
+merely a test bug: a marketplace that decides whether a date is in the past using the API
+server's local clock will give a different answer depending on where the process runs. The
+likely correct fix is that the route resolves "today" in an explicit timezone rather than
+the server's, and the test then shares that definition.
+
+**Acceptance:**
+
+- [ ] "Today" is resolved from an explicit, stated timezone rather than the server's local clock
+- [ ] The test derives its expectations from the same definition the route uses
+- [ ] The suite is green at any hour — proven by running it with `TZ` set to a zone behind and a zone ahead of UTC, not by waiting for the clock
+
+**Tests (required):**
+
+- [ ] Run the affected test under at least `TZ=America/Los_Angeles`, `TZ=UTC` and `TZ=Pacific/Kiritimati`, asserting the same result in each. This is the dimension the current test has no coverage of, and the reason CI cannot see the defect.
 
 ---
 
