@@ -709,6 +709,34 @@ describe('/booking-requests', () => {
       expect(response.json().message).toBe('This request is already priced by its package');
     });
 
+    /*
+     * The notification promised "open the request to see the price and accept
+     * it" and linked to the hub, because the request had no page. It has one
+     * now, and this is what stops the promise drifting from the destination
+     * again.
+     */
+    it('deep-links the quoted notification at the request, not the hub', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+
+      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+
+      const inbox = await harness.app.inject({
+        method: 'GET',
+        url: '/notifications',
+        headers: bearer(CUSTOMER),
+      });
+      expect(inbox.statusCode).toBe(200);
+
+      const quoted = (
+        inbox.json() as { items: { type: string; href: string | null }[] }
+      ).items.find((item) => item.type === 'request_quoted');
+      expect(quoted?.href).toBe(`/bookings/${requestId}`);
+    });
+
     it('pending -> declined by the vendor', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
