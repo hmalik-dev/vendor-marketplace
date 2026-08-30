@@ -795,6 +795,27 @@ export const REVIEW_CONTENT_MAX_LENGTH = 2_000;
 export const REVIEW_RATING_MIN = 1;
 export const REVIEW_RATING_MAX = 5;
 
+/**
+ * Every rating a review can carry, ascending — the distribution chart's rows.
+ *
+ * Derived from the bounds rather than written out, so the chart cannot disagree
+ * with what the schema accepts: `12-vendor-profile.md:134` draws **five** bars,
+ * and five is `MAX - MIN + 1`, not a number the component gets to choose.
+ */
+export const REVIEW_RATINGS = Array.from(
+  { length: REVIEW_RATING_MAX - REVIEW_RATING_MIN + 1 },
+  (_unused, index) => REVIEW_RATING_MIN + index,
+) as readonly number[];
+
+/**
+ * How many reviews a page of the vendor's Reviews tab holds.
+ *
+ * Its own number rather than `DEFAULT_PAGE_SIZE`, because the tab **appends**
+ * — `12-vendor-profile.md:137`, "Show more reviews appends; no page numbers" —
+ * so this is how much arrives per press, not how much fills a numbered page.
+ */
+export const REVIEW_PAGE_SIZE = 10;
+
 /** Default page size for vendor search and most list endpoints. */
 export const DEFAULT_PAGE_SIZE = 20;
 /** Message history loads in larger pages than list endpoints. */
@@ -879,6 +900,20 @@ export const UPLOAD_CONSTRAINT_LINE = `${ACCEPTED_IMAGE_LABEL} · ${MAX_UPLOAD_B
 export const MAX_SLUG_LENGTH = 200;
 export const MAX_BUSINESS_NAME_LENGTH = 200;
 export const MAX_NAME_LENGTH = 100;
+/**
+ * The longest `Priya M.` the database can produce — **not** `MAX_NAME_LENGTH`.
+ *
+ * The reviewer's display name is built by concatenation, so it is longer than
+ * either column it comes from: a first name at its own 100-character limit,
+ * plus a space, an initial and a full stop, is 103. Bounding the response at
+ * 100 made a legal profile un-serialisable, and the whole Reviews tab 500ed for
+ * every reader of that vendor — something a customer could do to a vendor by
+ * saving one long first name.
+ *
+ * Derived rather than written down, so a change to the name column moves this
+ * with it. The three is the space, the initial and the stop.
+ */
+export const MAX_REVIEWER_DISPLAY_NAME_LENGTH = MAX_NAME_LENGTH + 3;
 export const MAX_EMAIL_LENGTH = 255;
 export const MAX_PHONE_LENGTH = 20;
 export const MAX_URL_LENGTH = 500;

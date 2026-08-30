@@ -32,6 +32,7 @@ import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
+import { reviewRoutes } from './modules/reviews/reviews.routes.js';
 import { tagRoutes } from './modules/tags/tags.routes.js';
 import { uploadRoutes } from './modules/uploads/uploads.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
@@ -151,6 +152,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(stripeConnectRoutes, { returnOrigin: canonicalWebOrigin(env) });
   await app.register(packageRoutes);
   await app.register(portfolioRoutes);
+  await app.register(reviewRoutes);
   await app.register(availabilityRoutes);
   await app.register(bookingRequestRoutes);
   await app.register(messagingRoutes, { allowedOrigins: allowedOrigins(env) });

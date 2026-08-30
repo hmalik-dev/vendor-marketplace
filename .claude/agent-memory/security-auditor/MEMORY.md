@@ -21,3 +21,4 @@
 - [The e2e fixture forges stripe_onboarded](e2e-fixture-forges-stripe-onboarded.md) — `true` with a null `stripe_account_id`, a shape Stripe cannot produce; harmless until checkout exists
 - [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — no upload owns its key, and `GET /vendors/:slug` hands every key to anonymous callers
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes were left as low-severity on purpose
+- [The review profanity filter is a hard-reject floor](review-profanity-filter-is-a-hard-reject-floor.md) — the failure mode and the easy bypasses are settled until #15; the `\w*` over-match on "spicy" is not

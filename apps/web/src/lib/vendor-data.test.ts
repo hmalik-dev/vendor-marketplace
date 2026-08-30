@@ -24,8 +24,13 @@ vi.mock('./api-client', async (importOriginal) => ({
   apiRequest: (path: string, options: unknown) => apiRequest(path, options),
 }));
 
-const { getActiveTags, getCategories, getFeaturedVendors, getPublicVendorProfile } =
-  await import('./vendor-data');
+const {
+  getActiveTags,
+  getCategories,
+  getFeaturedVendors,
+  getPublicVendorProfile,
+  getPublicVendorReviews,
+} = await import('./vendor-data');
 
 const upstream500 = new ApiClientError(
   500,
@@ -187,6 +192,73 @@ describe('reference reads', () => {
     ])('returns null for %s without asking the API', async (_label, slug) => {
       await expect(getPublicVendorProfile(slug)).resolves.toBeNull();
       expect(apiRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  /*
+   * The Reviews tab is public, but this is the only one of the three
+   * public-profile reads that presents a token — and the API's auth hook
+   * answers 401/403 on *any* route, public included, when a presented token
+   * does not verify or belongs to a suspended account. Without the retry, one
+   * stale session turned a vendor with 127 reviews into a tab saying they had
+   * never worked an event.
+   */
+  describe('getPublicVendorReviews', () => {
+    const page = {
+      items: [],
+      summary: { avgRating: 4.9, reviewCount: 127, distribution: [0, 0, 0, 13, 114] },
+      viewer: { canReview: false, bookingId: null },
+      page: 1,
+      pageSize: 10,
+      hasMore: true,
+    };
+
+    it.each([
+      ['a refused session', 401, ERROR_CODES.UNAUTHORIZED],
+      ['a suspended account', 403, ERROR_CODES.FORBIDDEN],
+    ])(
+      'retries unauthenticated after %s, so the reviews still render',
+      async (_l, status, code) => {
+        apiRequest
+          .mockRejectedValueOnce(new ApiClientError(status, code, 'Session expired'))
+          .mockResolvedValueOnce(page);
+
+        await expect(getPublicVendorReviews('june-harlow')).resolves.toEqual(page);
+
+        expect(apiRequest).toHaveBeenCalledTimes(2);
+        expect(apiRequest.mock.calls[0]?.[1]).toMatchObject({ token: 'session-token' });
+        // The second attempt drops the token — the reviews never needed it, and
+        // only the viewer's own eligibility is lost with it.
+        expect(apiRequest.mock.calls[1]?.[1]).toMatchObject({ token: null });
+      },
+    );
+
+    it('gives up rather than looping when the unauthenticated retry also fails', async () => {
+      apiRequest.mockRejectedValue(
+        new ApiClientError(401, ERROR_CODES.UNAUTHORIZED, 'Session expired'),
+      );
+
+      await expect(getPublicVendorReviews('june-harlow')).resolves.toBeNull();
+      expect(apiRequest).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry a failure a second attempt cannot change', async () => {
+      apiRequest.mockRejectedValue(upstream500);
+
+      await expect(getPublicVendorReviews('june-harlow')).resolves.toBeNull();
+      expect(apiRequest).toHaveBeenCalledTimes(1);
+    });
+
+    it('never asks the API about a slug that cannot be one', async () => {
+      await expect(getPublicVendorReviews('JUNE-HARLOW')).resolves.toBeNull();
+      expect(apiRequest).not.toHaveBeenCalled();
+    });
+
+    /* A thrown `redirect()` must not be swallowed as "no reviews". */
+    it('propagates a transport failure rather than reporting an empty tab', async () => {
+      apiRequest.mockRejectedValue(apiUnreachable);
+
+      await expect(getPublicVendorReviews('june-harlow')).rejects.toBe(apiUnreachable);
     });
   });
 
