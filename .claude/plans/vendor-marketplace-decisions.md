@@ -520,3 +520,42 @@ the warning; the work is not wasted, but two behaviours in it are now wrong.
 **frame** defect, not an app one — the README's own diagnosis is that the padding was
 already correct at 76px against a 68px bar and the frame was frozen at a bad scroll
 position. Filing a ticket for it would have sent someone to fix working code.
+
+---
+
+### D15: Tags — Where They Live, and What They Are Offered For — *2026-08-30*
+
+**Prompted by** the user asking, reasonably, where tags even are.
+
+**They have two surfaces and neither announces itself.** Vendors claim tags in the profile
+editor's **Tags** section; customers filter by them in the **Refine bar** on `/search`.
+Three groups, seeded in `packages/shared/src/constants`: **language (23)**, **cultural
+(16)**, **dietary (4)**.
+
+**Rulings, all user-directed:**
+
+1. **No search field over a tag list.** Not in the vendor picker, not anywhere. Typing
+   narrows the list in place. 23 languages is exactly the case that makes a search box feel
+   necessary, and it is still the wrong answer — narrowing gives the same reach with nothing
+   to focus and no ring to get wrong. This closes the question **#322** had left open rather
+   than deferring it again.
+2. **Dietary is scoped to food.** It appears for **Catering** and **Carts** and nowhere
+   else. Language and cultural stay category-agnostic, because a photographer who speaks
+   Spanish is a genuine filter while a photographer who is Halal is not a coherent claim.
+   The scope must come from a `servesFood` flag on the category seed rows — a slug list
+   inside the Refine bar would be a second source of truth that rots the next time a food
+   category is added.
+3. **Style stays out, and the frames now agree.** #25 ruled it out of the MVP yesterday;
+   it never reached the data model. Four frames were still drawing a `Style ▾` refine chip
+   (`02`, `17`, and both 1024 variants), which would have failed every future parity run
+   against tickets that are correct. Removed. Screen `28`'s multi-select example moved off
+   Style onto **Languages**, since an example body has to demonstrate a filter that exists.
+
+**Filed:** **#323**, carrying rulings 1 and 2. Ruling 3 needed no code.
+
+**Open, and deliberately not decided here:** `Catering`'s short description reads
+**"Food, bar, carts"** while **Carts is its own category** (`carts`, "Coffee & dessert").
+The landing card therefore advertises carts on the tile that does not contain them. Both the
+constant and frame `01` carry the string, so it is a taxonomy question rather than a typo,
+and it has two defensible answers — reword Catering, or fold Carts back in. Put to the user
+rather than guessed.
