@@ -27,7 +27,15 @@ loading idiom per screen. Three-tier validation.
 
 1. Read the frame's markup in the `.dc.html` file. Read `04-laws.md` for the full
    procedure and `31-content-voice.md` for the approved strings.
-2. Drive the live screen at exactly 1440x900 and screenshot it.
+2. Drive the live screen at exactly 1440x900 and screenshot it. **If this pass
+   signed in via a restored `storageState`, warm the context first** —
+   navigate once and discard that render, then navigate again before
+   screenshotting or reading computed styles on any Clerk-rendered chrome
+   (the header's auth cluster, role chip, `<UserButton>`). The first
+   navigation of a restored context reads signed-out by construction (#321),
+   which is exactly what produced #259 as a false Layout/Text finding against
+   `08`'s header. See `.claude/rules/e2e-auth.md` § "First-paint auth chrome
+   cannot be asserted from a restored context".
 3. Compare on all six axes and report per axis:
 
 | Axis   | Must match                                                                                                                                                |
