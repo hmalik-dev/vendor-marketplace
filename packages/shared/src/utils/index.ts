@@ -1,6 +1,8 @@
 import {
   BOOKING_REQUEST_EXPIRY_DAYS,
   DEFAULT_PLATFORM_FEE_RATE,
+  FULL_REFUND_CUTOFF_HOURS,
+  LATE_CANCELLATION_REFUND_RATE,
   MAX_EVENT_DATE_MONTHS_AHEAD,
   MAX_SLUG_LENGTH,
 } from '../constants/index.js';
@@ -112,6 +114,58 @@ export function expiryCountdown(expiresAt: Date | null, now: Date = new Date()):
   }
 
   return days === 1 ? 'expires today' : `expires in ${days}d`;
+}
+
+/** What cancelling right now returns, and which side of the cutoff it falls. */
+export interface RefundQuote {
+  refundCents: number;
+  /** True at or beyond the cutoff — the customer gets everything back. */
+  isFullRefund: boolean;
+  /** Hours between now and the start of the event day, floored at 0. */
+  hoursUntilEvent: number;
+}
+
+/**
+ * What a cancellation returns, decided in one place for both sides.
+ *
+ * D3 fixed these tiers platform-wide rather than per vendor, so this is
+ * arithmetic and not policy lookup: at or beyond `FULL_REFUND_CUTOFF_HOURS`
+ * the customer gets everything back, inside it they get
+ * `LATE_CANCELLATION_REFUND_RATE` of it.
+ *
+ * **The comparison is against the start of the event day in UTC.** `eventDate`
+ * is a `DATE` column and carries no time, so "48 hours before the event" has to
+ * mean 48 hours before *something* — and the only choice that does not move
+ * with the reader's timezone is midnight UTC on that date. Reading it in local
+ * time would give a customer in Auckland and a customer in Honolulu different
+ * refunds for the same cancellation on the same booking.
+ *
+ * The rate is applied to the total and rounded once, so the refund and the
+ * amount retained always sum back to the total exactly.
+ */
+export function calculateRefund(
+  totalCents: number,
+  eventDate: string,
+  now: Date = new Date(),
+): RefundQuote {
+  if (!Number.isInteger(totalCents) || totalCents < 0) {
+    throw new Error('calculateRefund: totalCents must be a non-negative integer');
+  }
+
+  const eventStart = new Date(`${eventDate}T00:00:00Z`);
+
+  if (Number.isNaN(eventStart.getTime())) {
+    throw new Error(`calculateRefund: eventDate is not a calendar date: ${eventDate}`);
+  }
+
+  const hoursUntilEvent = Math.max((eventStart.getTime() - now.getTime()) / 3_600_000, 0);
+  const isFullRefund = hoursUntilEvent >= FULL_REFUND_CUTOFF_HOURS;
+
+  return {
+    refundCents: isFullRefund ? totalCents : Math.round(totalCents * LATE_CANCELLATION_REFUND_RATE),
+    isFullRefund,
+    hoursUntilEvent,
+  };
 }
 
 export interface FeeBreakdown {
