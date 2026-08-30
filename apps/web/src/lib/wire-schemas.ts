@@ -38,6 +38,20 @@ import { z } from 'zod';
  */
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_S3_PUBLIC_URL;
 
+/**
+ * The same resolution, for a value that did not arrive over the wire.
+ *
+ * An upload hands the browser an object key before any response carrying it
+ * has been re-fetched, so a component holding that key needs the identical
+ * mapping the schemas apply — and needs it from here, because
+ * `IMAGE_BASE_URL` is the thing that must not be read in two places. Passing
+ * an already-resolved URL through is deliberate and is what makes this safe to
+ * call on a value that may be either.
+ */
+export function toImageSrc(stored: string | null): string | null {
+  return resolveImageUrl(IMAGE_BASE_URL, stored);
+}
+
 const imageUrl = () =>
   z
     .string()

@@ -142,12 +142,33 @@ interface InlineType {
   /** `null` when the frame sets a ratio without restating the size. */
   readonly fontSize: number | null;
   readonly lineHeight: string;
+  /** Which frame set it, so one screen cannot outvote the rest by repetition. */
+  readonly screen: string;
 }
 
 /** Every ratio the frames set inline, with the size it was set at. */
 const INLINE_TYPE: InlineType[] = [];
 /** The ratios the frames set inline at one font-size, so 54px yields `['1.04']`. */
 const INLINE_RATIOS_BY_SIZE = new Map<number, Set<string>>();
+
+/** The frame labels in file order, so any offset can be attributed to a screen. */
+const SCREEN_STARTS = [...frameHtml.matchAll(/data-screen-label="([^"]+)"/g)].map((match) => ({
+  at: match.index,
+  label: match[1] as string,
+}));
+
+function screenAt(index: number): string {
+  let label = '';
+
+  for (const screen of SCREEN_STARTS) {
+    if (screen.at > index) {
+      break;
+    }
+    label = screen.label;
+  }
+
+  return label;
+}
 
 for (const attribute of frameHtml.matchAll(/style="([^"]*)"/g)) {
   const style = attribute[1] as string;
@@ -161,7 +182,7 @@ for (const attribute of frameHtml.matchAll(/style="([^"]*)"/g)) {
   const size = /font-size:\s*([\d.]+)px/.exec(style);
   const fontSize = size ? Number.parseFloat(size[1] as string) : null;
 
-  INLINE_TYPE.push({ fontSize, lineHeight });
+  INLINE_TYPE.push({ fontSize, lineHeight, screen: screenAt(attribute.index) });
 
   if (fontSize !== null) {
     const atSize = INLINE_RATIOS_BY_SIZE.get(fontSize) ?? new Set<string>();
@@ -179,15 +200,34 @@ const FRAME_RATIOS = [
   ]),
 ];
 
-/** The ratio the frames reach for most often across a slice of their inline type. */
+/**
+ * The ratio the frames reach for most often across a slice of their inline type,
+ * counted **once per screen**.
+ *
+ * Counting raw occurrences lets a single screen that repeats one heading four
+ * times outvote four screens that each state a different ratio once — which is
+ * exactly what the 2026-08-29 import produced: `12 Sign up` uses 1.15 four
+ * times, while 1.06 is the ratio `03 Vendor profile`, both `27 Vendor profile`
+ * breakpoints and `14 Landing mobile` each use once. That read as a 4-4 tie and
+ * resolved on map insertion order, so reordering the frame file silently
+ * changed what the theme was required to be. A measure "the frames give display
+ * type" is a measure across screens, not across repetitions.
+ */
 function modalRatio(matches: (type: InlineType) => boolean): string {
-  const tally = new Map<string, number>();
+  const screens = new Map<string, Set<string>>();
 
   for (const type of INLINE_TYPE.filter(matches)) {
-    tally.set(type.lineHeight, (tally.get(type.lineHeight) ?? 0) + 1);
+    const seen = screens.get(type.lineHeight) ?? new Set<string>();
+
+    seen.add(type.screen);
+    screens.set(type.lineHeight, seen);
   }
 
-  return [...tally.entries()].sort(([, a], [, b]) => b - a)[0]?.[0] as string;
+  const ranked = [...screens.entries()].sort(
+    ([aRatio, a], [bRatio, b]) => b.size - a.size || aRatio.localeCompare(bRatio),
+  );
+
+  return ranked[0]?.[0] as string;
 }
 
 /**
