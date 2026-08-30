@@ -204,7 +204,6 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P3 Low** | **Deferred — needs a human** | — | **Launch prep — not current work** | `core` | **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. **Reconciliation 2026-08-29:** overlaps **#19**, which already covers external-account provisioning and is `Deferred — needs a human`. The plan's launch checklist also requires the pooled string on Railway and the unpooled one on Railway *and* GitHub Actions. **Deferred to launch prep 2026-08-29 (user ruling).** Free is the correct plan while there is no real data — usage is **8.9 of 100 CU-hours**, 34 MB of 512 MB, 3 of 10 branches. Nothing here blocks development. **The checklist moved to `docs/pre-launch.md` §3.2**, which is where launch-gated work belongs; this row is a pointer, not a queue item. Do not re-surface it as active work. |
 | **299** | **09 Vendor profile editor — cover field, preview rail and parity close-out** | P1 | M3 | **P0 Critical** | **Deferred — needs a human** | — | #335 | `core` `storage` | **Re-pointed 2026-08-30: the ruling this waits on is question D of #335.**  **Filed 2026-08-29 by the backlog consolidation.** Merges **#137, #138, #140, #141, #152, #257, #258, #288**. **#288 leads and unblocks #137**, which was stuck because the design contract contradicted itself on the cover field: the media row becomes a 128px circle profile photo beside a **216×144, 3:2** cover drop zone reading *"Drop a photo or browse · landscape · 1200×800 or larger"* — the `21:9, 1600×686 min` ask is retired, and the drop zone that is missing entirely today (#137) is built to that spec. The card preview is **never a field**: a **308px right-edge rail** at ≥1024 with a mono `PREVIEW` label, an **In search / Your profile** toggle and the real card, 280px at 1280, a panel above the fields at 768, a bottom sheet at 390. **There is no separate profile-banner field and there must never be one** — one file, two placements, per #287, which is why this is blocked on #298. Then the parity remainder: two undocumented fields to remove (#138) and the eight helper strings that came with them (#152, already `Blocked by #138`), the section nav's missing `Payouts` entry and gold dot (#140 — the dot depends on #9), the form pane over its scroll budget (#141), the slug preview promising a vanity URL the router does not serve (#257), and the submit bar never saying when the storefront was last saved (#258). Parity gate at 1440 / 1024 / 768 / 390. **Deferred 2026-08-30 — started, then released unstarted with no code written.** #298 unblocked this ticket but also sharpened the contradiction at its centre. Acceptance requires removing the two undocumented fields (#138) so every remaining string traces to frame `09`. **Both fields are the only editing surface for content frame `03` displays:** #298 moved the tagline into the identity card, and `yearsInBusiness` is read by the About pane's `Experience` tile. Deleting the inputs makes public-profile content permanently unsettable — a regression dressed as a parity fix. Keeping them fails frame `09`'s parity gate on the Layout and Text axes. **Lane 137 reached the identical conclusion on #138 and escalated rather than guessing; the question was never answered, and it is now load-bearing for a P0.** The repo's tie-breaker ("where the two disagree, build the frame and correct the plan") settles frame-vs-plan and does **not** arbitrate frame-vs-frame, which is what this is: frame `03` plus `12-vendor-profile.md` require the data, frame `09` plus `17-vendor-profile-editor.md`'s ordered field list omit the inputs. **The question, unchanged from lane 137:** delete `Your line` and `Years in business` outright, accepting that frame `03` loses its tagline and Experience tile, or relocate them into `About your business`, accepting that frame `09`'s field list is not exhaustive? Relocating also serves #141's scroll budget without destroying data. The field list determines the form's layout and every parity assertion, so the rest of the ticket cannot close its gate ahead of the ruling. Everything else in #299 (cover drop zone #288/#137, the 308px preview rail, `Payouts` nav #140, slug preview #257, last-saved #258) is implementable the moment this is answered. |
 | **300** | **08 Vendor dashboard — re-measure, then close parity** | P1 | M3 | **P2 Medium** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#124, #127, #135, #79**. Re-measure frame `08` first — all four predate #74/#165/#198. #127 and #135 are the **same missing string** (`See all N →` beside `Requests waiting on you`) filed twice, from the Layout axis and the Text axis; close them together. Plus `View my public profile` moved out of the header into the content column (#124) and the vendor nav labels and their order diverging from the frame (#79). Small, self-contained, one browser pass. |
-| **302** | **07 Bookings hub and 06 Booking request — dead controls and parity** | P1 | M3 | **P1 High** | **In Progress** | worktree-302 | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#187, #188, #189, #190, #191, #192, #193** — seven findings across two screens in one component tree. Four are dead or lying controls: `All categories` and `Soonest first` do nothing (#187), the notifications bell opens nothing (#188), the hub renders the **EMPTY-state rail on a hub holding 11 bookings** (#189), and the count sentence contradicts the tab it sits above (#190). Then booking cards with no focus ring that link to the vendor profile instead of the booking (#191 — the destination is the booking detail #309 builds, so sequence them), a marketing footer appended below the app shell on the request screen (#192), and a form field moved into the context rail (#193). Re-measure frames `06` and `07` before fixing. **Released 2026-08-30 unstarted, with two blockers found and no code written.** Traced all seven items first. Five are implementable as filed (#188 bell, #189 rail state, #191 card destination + focus ring, #192 footer, #193 field placement) and **#191's destination already exists** — #308 built `/bookings/[requestId]`, which is the interim surface the ticket says to use while #309 is blocked. Two are not: **(a) #187's `All categories` filter has no data to filter on.** Both entry builders in `booking-entries.ts` hardcode `categoryName: null`, and `bookingRequestDetailSchema.vendor` carries slug, business name and avatar but no category — so the filter needs a field plumbed through DAO, response schema and web before it can do anything. The sort half is client-side and trivial by comparison. Note `20-customer-bookings-hub.md` also draws the **booking card** as `Category · …`, so the same missing field is a Text-axis gap on the card, not only a dead control. **(b) #190 needs approved copy that does not exist.** Its second acceptance bullet asks that *each tab* have approved copy for its empty and populated states. `20-customer-bookings-hub.md` specifies exactly one sentence — the upcoming summary — and `31-content-voice.md` carries no per-tab wording. Deriving the sentence from the active tab is easy; **inventing History and All copy would fail the Text axis**, and a ticket may not write the plan. That is a design ruling, and it is the only thing standing between this ticket and its parity gate on frames `06` and `07`. |
 | **305** | **`40-states.md` compliance sweep — copy, glyphs and unsaved work** | P1 | M3 | **P1 High** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#72, #261, #225, #227, #228, #81**. `40-states.md` is a law, and it is violated in five places of error and empty-state copy (#72) — steel is information, gold is waiting on someone, red is failure; **red is never `pending` and gold is never a failure**. The two-circle empty-state glyph is absent from **seven of the nine** `EmptyState` call sites (#261), so the sweep is one component plus its callers. Alongside them, three defects in the same class of "the screen says something untrue": the success toast covering the submit button it confirms (#225), unsaved profile edits discarded silently with no prompt (#227), and a newly onboarded vendor's public storefront still showing placeholder copy (#228). **#81** is itself a rollup of nine smaller adversarial-sweep defects — triage it inside this ticket and carry anything that does not belong here out as its own row rather than silently dropping it. |
 | **313** | **Sign-up and session entry** | P1 | M3 | **P1 High** | **Deferred — needs a human** | worktree-313 | None | `core` `auth` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#194, #197, #226, #234, #259**. **Two halves, and the first is implementable today**: the header renders its signed-out variant on the first navigation in a fresh browser context (#259), and Clerk's own sign-in card reads `vendor-marketplace` to the user instead of `BRAND_NAME` (#234). The second half is **three rulings, and this ticket asks for all three at once rather than three tickets asking separately** — the primary action reads `Continue` where the frame says `Create my account` (#194); panel text over photography is not contrast-guaranteed and needs either a scrim or a ruling that the photography is fixed (#197); and sign-up returns to the role picker after email verification (#226), which is either a Clerk redirect defect or an intended re-confirmation. Do the first half, then return **BLOCKED with the three questions together** if they are still unanswered. **First half done 2026-08-30 (`worktree-313`).** #259 is **not a product defect** — it reproduces only from a restored `storageState`; a real sign-in takes 0 handshake hops and paints correctly on the first navigation. Filed as **#321**, which matters more than the ticket it came from because every browser verification here restores state. #234 is fixed as far as code reaches: `.cl-headerTitle` now reads the brand, though it was never visible (the app hides Clerk's header). **Four questions now wait on a human**, the three rulings plus renaming the Clerk application itself — that name is the source every `{{applicationName}}` key interpolates, and it is dashboard configuration on the shared instance. | **Found 2026-08-30 by #9's parity pass:** the site header renders **signed-out chrome on an authenticated vendor page** — `window.Clerk.loaded === true` and `Clerk.user.id` is populated after a 15s settle, yet `/vendor/dashboard`'s header reads `Sign in` / `Sign up` where frame `08` draws `View my public profile` and the avatar. Reproduced at 1440x900 signed in as the vendor.
 | **322** | **Vendor surfaces at 1024 and 768** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. #304 verified landing and the shared chrome; these five frames are **not** verified and their components carry no 1024 or 1440 steps at all — `profile-header.tsx` and `bookings-hub.tsx` contain **zero** `min-[90rem]:` between them, so they render one composition at every width, exactly as landing did before #304. Frames: `27 Vendor profile — 1024`, `27 Vendor profile — 768`, `27 Vendor dashboard — 1024`, `27 Vendor dashboard — empty · 1024`, `27 Vendor profile editor — 768`. **#169's own numbers to check first:** sidebars stay 220px with labels (no icon rail), right rails narrow 420 → 340 and never stack, and the dashboard's right column is 300px with the calendar on the **booking week** rather than the month. The shared chrome from #304 already helps — gutter ladder, 56px header below 1440, capped popovers — so start by **re-measuring** rather than assuming the deltas match landing's. Needs `pnpm db:seed:e2e`; a vendor surface is unreachable without it. |
@@ -223,9 +222,13 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **339** | **[DESIGN] Search `Sort` has no specified default — the frame draws a chosen one** | P1 | M3 | **P3 Low** | **Deferred — needs a human** | — | **A design ruling on the default sort** | `core` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live defaults to **`Most relevant`** (`sort: 'relevance'`); frame `02` draws **`Top rated ▾`**. Neither `11-search.md` nor `42-dropdowns.md` fixes a default, and the frame draws a *chosen* sort exactly as it draws a chosen price and a chosen rating — so this is **not** evidence the default is wrong, and `parity-checker` correctly did not call it a deviation. It is an unresolved gap in the plan: **a new marketplace defaulting to `Top rated` ranks its thinnest review counts first**, which is a product decision, not a parity one. Needs a one-line ruling, then either the code or the plan changes. Do not "fix" this by matching the frame |
 | **340** | **Playwright E2E harness and the eight critical-journey suites** | P3 | M6 | **P1 High** | **Backlog** | — | **#14** | `core` `auth` `stripe` | **Filed 2026-08-30 by lane 14**, split out of #14. The repo has **no `playwright.config`, no `e2e/` directory and no test-runner harness at all** — Playwright is currently MCP-driven for agentic verification only, so this ticket builds the runner from nothing. Depends on #14 for the fixed-UUID dataset the suites select on. Carries the eight suites verbatim from #14: auth, vendor profile, search, booking request, payment, messaging, reviews, admin — plus `@clerk/testing` for programmatic sign-in and the 1440x900 / 1024 / 768 / 390 viewport matrix |
 | **341** | **`seed:marketing` and `seed:e2e` write an event-type label into a slug column** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 14.** `seed-marketing.ts:406` and `seed-e2e.ts:465` both write `eventType: 'Wedding'`. `booking_requests.event_type` holds an `EVENT_TYPES` **slug** — `eventTypeSchema` is `z.enum(EVENT_TYPES)` at the API edge — so the correct value is `'wedding'`. Harmless today because reads are typed as a plain string, wrong the moment anything renders the label via `EVENT_TYPE_LABELS` or validates on read. Same defect was found and fixed in `seed-demo.ts` by #14; **close the class with a guard**, not two edits — a test asserting every seeded `event_type` is in `EVENT_TYPES` |
+| **342** | **[DESIGN] The avatar tint the frames draw has no token** | P1 | M3 | **P2 Medium** | **Deferred — needs a human** | — | **A colour ruling** | `core` | **Filed 2026-08-30 by lane 302**, from the `parity-checker` pass that closed #302. Frame `07`'s `Recent messages` rows draw two avatar palettes: **`#EADCCB` fill with `#8E3F20` initials**, and `#E4E9DE` with `#4B5940`. The sage pair resolves to tokens exactly and renders correctly. **`#EADCCB` is not in `01-foundations.md`** — the `Avatar` primitive alternates `clay-100` (`#F7E7E0`) and `sage-100` by a hash of the name, so the initials colour matches the frame and the fill does not. This is the same class as the `#C4D6A8` / `#5C4A18` values **#306** ruled on: a frame colour with no token behind it. **Do not substitute silently** — either the token gains a step or the frame is corrected, and both are design passes. Affects every avatar fallback in the app, not just this rail |
+| **343** | **07 Bookings hub — residual parity after #302** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302, which fixed the Access axis and the deviations #302 itself introduced. These are **pre-existing** and were out of that ticket's scope. **Layout:** the title row should be `flex` with `Your bookings` left and today's date (`12.5px`, `#6B6459`) right — **the date is absent from the screen entirely**; the sidebar draws two rows where the frame draws four (`Messages` with an unread dot and `Saved vendors` are missing, and `bookings-sidebar.tsx:10-17` justifies that under #31's dead-control rule, which **no longer applies now that `/messages` exists and is linked from the header**). **Style:** `StatusPill` is `700 11px` / `padding 6px 10px` where `.pill` is `700 10px` / `5px 10px` — **shared, so it affects every screen carrying a pill**; the dashed tile border is `#D5CEC2` (`stone-400`) where the frame draws `#DDD5C7`. **Font:** the summary sentence is `text-md` (15px) with `leading-prose` where the frame draws **14px / normal** — and **there is no 14px token**, so this one needs a scale decision, not a class swap. Sidebar card body and CTA are 11px where the frame draws 11.5 and 12 |
+| **344** | **19 Bookings hub empty — the app renders frame 07's shell around frame 19's panel** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. #302's own assertion is verified — with bookings the rail draws `Recent messages` and not `How booking works here` — and the **empty pane itself matches frame `19` exactly**: dashed panel, the two-circle mark, `No bookings yet`, the body copy character for character including the curly apostrophe, the `Find a vendor` button, and the `01/02/03` steps in JetBrains Mono. **The shell around it does not.** Frame `19` draws a different title (`My bookings`), a `Nothing booked yet` sub-line, a `Find a vendor` button in the title row, pill filters `All / Pending / Confirmed / Past`, a sidebar with a `Booking` section label plus `Payments` and an Account/`Settings` block, and a **bordered radius-18 card** rail rather than `07`'s flush border-left. None of that is present. **This long predates #302** and may well be a deliberate one-shell reconciliation of frames `07` and `19` — but nothing in the repo records that decision, so it currently reads as unexplained drift. **Decide and record before building**: one shell is probably right, and if so frame `19` is what needs correcting. **Also unverified:** the rail's `How booking works here` block on a live empty hub — the E2E customer has bookings and `.claude/rules/e2e-auth.md` forbids a throwaway account, so it was not driven and is not recorded as matching |
+| **345** | **04 Booking request — `31-content-voice.md` states a deadline the product does not use** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. Frame `04` **and** `31-content-voice.md`'s approved string both read *"Maya has **48 hours** to confirm or send a **revised quote**"*. The app renders *"…has **7 days** to confirm or send a **quote**"*. **The code is right** — the sent-confirmation and the request card both say 7d, and the interval is derived from the constant rather than written down — so **the plan is what is stale**, and `04-laws.md`'s precedence rule says correct it in the same pass. Two more from the same frame: the copy neutralises the vendor's pronoun (*"the more **they know**"* for the frame's *"**she knows**"*, and *"Anything else **they** should know?"*), which is deliberate and correct but is a wording change from the frame and needs recording rather than leaving as drift; and `Continue to review` carries a `shadow-sm` the frame's `.btnP` does not. **Two small ones for the same visit:** the `Start time` field is 42px against `Guest count`'s 38px — the native `<input type="time"]` clock affordance adds 4px to a pair the frame draws at one height — and removing the marketing footer left a **stray empty `<section>` at `y=900`, height 0**, which should be deleted rather than emitted |
 **This board carries open work only. The 311 closed rows moved to `.claude/plans/vendor-marketplace-tickets-archive.md` on 2026-08-30**, whole — 180 `Done` and 131 `Superseded`, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
-Rows are ordered by build sequence, not by ticket number. **28 rows — 15 Backlog, 1 In Progress, 9 Deferred, 2 Blocked, and #14 Done pending the next archive sweep.** A Backlog count is not a ready count: run `pnpm preflight --ticket <n>` before trusting a row, which is how #15 was found parked on a placeholder `SENTRY_DSN` while reading as workable. Recounted programmatically from this table on 2026-08-30, after #329 closed, #336–#339 were filed, and #11 and #14 were corrected. **13 tickets are workable** — #11, #300, #302, #305, #322, #323, #326, #332, #333, #334, #336, #337, #338. Two more are `Backlog` but gated: **#20** on #19 and **#15** on #14, so a Backlog count is not a ready count — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over it, since #14 read `None` while its gate was failing on `SENTRY_DSN`. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
+Rows are ordered by build sequence, not by ticket number. **31 rows — 30 open (18 Backlog, 10 Deferred, 2 Blocked) plus #14, closed and not yet archived.** Recounted programmatically on 2026-08-30 after #302 closed and #342–#345 were filed. **16 tickets are workable** — #11, #300, #305, #322, #323, #326, #332, #333, #334, #336, #337, #338, #341, #343, #344, #345. Two more are `Backlog` but gated: **#20** on #19 and **#15** on the Sentry DSN, so a Backlog count is not a ready count — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over it. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -1380,35 +1383,6 @@ once off the Layout axis and once off the Text axis.
 
 ---
 
-### #302: 07 Bookings hub and 06 Booking request — dead controls and parity
-
-**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
-**Blocked by:** None
-
-Merges **#187, #188, #189, #190, #191, #192, #193**.
-
-**Acceptance:**
-
-- [ ] `All categories` and `Soonest first` filter and sort the hub (#187)
-- [ ] The notifications bell opens the notification surface (#188)
-- [ ] The hub renders its populated rail when it holds bookings, and the EMPTY-state rail only
-      when it holds none (#189)
-- [ ] The count sentence agrees with the tab it sits above (#190)
-- [ ] Booking cards render a focus ring and link to **the booking**, not the vendor profile
-      (#191) — the destination is the detail surface **#309** builds, so land that first or
-      link to the interim surface and say which in Notes
-- [ ] The marketing footer is gone from below the app shell on the request screen (#192), and
-      the form field is back out of the context rail (#193)
-- [ ] `parity-checker` returns MATCH on all six axes for frames `06` and `07`
-
-**Tests (required):**
-
-- [ ] A test per control asserting the **observable effect** — a filter that renders a
-      different result set, a sort that reorders — never that a handler was attached
-- [ ] A test that a hub with bookings does not render the empty state, seeded with a real row
-
----
-
 ### #305: `40-states.md` compliance sweep — copy, glyphs and unsaved work
 
 **Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
@@ -2133,3 +2107,169 @@ changes or the plan gains the line it is missing.
       does not re-open this from the frame
 
 ---
+
+### #342: [DESIGN] The avatar tint the frames draw has no token
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Deferred — needs a human | **Capabilities:** `core`
+**Blocked by:** A colour ruling
+
+**Filed 2026-08-30 by lane 302**, from the `parity-checker` pass that closed #302.
+
+Frame `07`'s `Recent messages` rows draw two avatar palettes:
+
+| Row | Fill | Initials | Resolves to a token? |
+| --- | --- | --- | --- |
+| 1, 3 | `#EADCCB` | `#8E3F20` | **fill: no** · initials: `clay-600` |
+| 2 | `#E4E9DE` | `#4B5940` | yes — `sage-100` / `sage-600` |
+
+The `Avatar` primitive alternates `clay-100` (`#F7E7E0`) and `sage-100` by a hash of the
+name. The sage pair is exact. The clay pair is not: the initials colour matches and the
+fill does not.
+
+**This is the same class as `#C4D6A8` and `#5C4A18`, which #306 ruled on** — a colour the
+frames draw with nothing behind it in `01-foundations.md`.
+
+**Do not substitute silently.** Either the palette gains a step or the frame is corrected;
+both are design passes, and a ticket may not make either call. It affects **every avatar
+fallback in the app**, not just this rail, which is why it is worth a ruling rather than a
+local override.
+
+**Acceptance:**
+
+- [ ] `01-foundations.md` either carries the value or records why the frame is wrong
+- [ ] Whatever is decided is applied through the `Avatar` primitive, not per call site
+- [ ] `parity-checker` returns MATCH on the Colour axis for frame `07`'s rail
+
+---
+
+### #343: 07 Bookings hub — residual parity after #302
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. That
+ticket fixed the Access axis and the deviations it had introduced itself; everything here
+is **pre-existing** and was outside its scope.
+
+**Layout**
+
+- The title row should be `flex` with `Your bookings` left and today's date right
+  (`12.5px`, `#6B6459`). **The date is absent from the screen entirely** — the `h1` is a
+  full-width block with no sibling.
+- The sidebar draws **two** rows where the frame draws **four**: `Messages` (with an unread
+  dot) and `Saved vendors` are missing. `bookings-sidebar.tsx:10-17` justifies this under
+  #31's "a control that opens nothing is furniture" rule — but **`/messages` now exists and
+  is linked from the header**, so that justification has expired for at least that row.
+
+**Style**
+
+- `StatusPill` computes `700 11px` / `padding 6px 10px`; `.pill` is `700 10px` /
+  `5px 10px`. **Shared primitive — this affects every screen carrying a pill**, so measure
+  the others before changing it.
+- The dashed "Book another vendor" tile borders `#D5CEC2` (`stone-400`) where the frame
+  draws `#DDD5C7`.
+
+**Font**
+
+- The summary sentence is `text-md` (15px) with `leading-prose` (24px); the frame draws
+  **14px at `normal`**. **There is no 14px token**, so this is a scale decision rather than
+  a class swap — `--text-base` is 13.5 and `--text-md` is 15. Decide whether the frame
+  earns a step or the sentence takes `base`.
+- Sidebar card body 11px against the frame's 11.5, and its CTA 11px against 12.
+
+**Acceptance:**
+
+- [ ] Each item above is either fixed or recorded with the reason it stands
+- [ ] The `StatusPill` change, if made, is measured against every frame that draws a pill
+- [ ] `parity-checker` returns MATCH on Layout, Style and Font for frame `07`
+
+---
+
+### #344: 19 Bookings hub empty — the app renders frame 07's shell around frame 19's panel
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302.
+
+**What is verified.** #302's own assertion holds: with bookings the rail draws
+`Recent messages` and not `How booking works here`. And the **empty pane itself matches
+frame `19` exactly** — dashed panel at `radius 18`, the 58x36 two-circle mark,
+`No bookings yet` at 26px Instrument Serif, the body copy character for character including
+the curly apostrophe in "vendor's", the `Find a vendor` button, and the `01/02/03` steps in
+JetBrains Mono at `500 10.5px` with `1.05px` tracking.
+
+**What does not match is the shell around it.** Frame `19` draws a different title
+(`My bookings`), a `Nothing booked yet` sub-line, a `Find a vendor` button *in the title
+row*, pill filters `All / Pending / Confirmed / Past`, a sidebar carrying a `Booking`
+section label plus `Payments` and an Account/`Settings` block, and a **bordered radius-18
+card** rail rather than `07`'s flush border-left. None of that is present; the app renders
+frame `07`'s shell and swaps only the pane.
+
+**This long predates #302.** It may well be a deliberate reconciliation — one shell for a
+hub that is sometimes empty is a better product than two — but **nothing in the repo records
+that decision**, so it currently reads as unexplained drift, and the next parity pass will
+find it again.
+
+**Decide before building.** If one shell is right, frame `19` is what needs correcting, and
+that is a design pass rather than this ticket.
+
+**Also unverified, and deliberately not recorded as matching:** the rail's
+`How booking works here` block on a *live* empty hub. The E2E customer has bookings and
+`.claude/rules/e2e-auth.md` forbids creating a throwaway account, so it was never driven.
+
+**Acceptance:**
+
+- [ ] The one-shell question is answered on the record, in `20-customer-bookings-hub.md` or
+      a ruling
+- [ ] Whatever survives that answer matches, and the empty rail is driven in a browser
+      rather than inferred
+- [ ] A customer fixture with an empty hub exists, so the next pass can drive it
+
+---
+
+### #345: 04 Booking request — `31-content-voice.md` states a deadline the product does not use
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302.
+
+**The stale approved string.** Frame `04` **and** `31-content-voice.md` both read:
+
+> You're requesting, not paying. Maya has **48 hours** to confirm or send a **revised
+> quote** — you approve before any card is charged.
+
+The app renders **7 days**, and a plain "quote" rather than "revised quote".
+
+**The code is right.** The sent-confirmation and the request card both say 7d, and the
+interval is derived from the constant rather than written down — so this is the plan that
+is stale, and `04-laws.md`'s precedence rule says correct it in the same pass rather than
+leaving the two disagreeing. **The correction must derive the number from the same constant
+the code reads**, not restate it as a literal, or it goes stale again the next time the
+window moves.
+
+**The pronoun neutralisation, which is correct but unrecorded.** The frame writes *"The more
+**she knows** now…"* and *"Anything else **she** should know?"*; the app writes *"they know"*
+and *"they"*. Vendor gender is unknown, so the app is right — but it is a wording change
+from the frame on the Text axis and needs recording rather than standing as drift.
+
+**Two small ones for the same visit:**
+
+- `Continue to review` carries `shadow-sm` (`0 2px 10px rgba(35,32,28,.06)`); the frame's
+  `.btnP` has no shadow.
+- `Start time` renders 42px tall beside `Guest count` at 38px — the native
+  `<input type="time">` clock affordance adds 4px to a pair the frame draws at one height.
+  Visibly misaligned.
+- Removing the marketing footer (#192) left a **stray empty `<section>` at `y=900`, height
+  0**. Harmless — zero extent, no text — but it should be deleted rather than emitted.
+
+**Acceptance:**
+
+- [ ] `31-content-voice.md`'s row derives the window from the constant and matches what ships
+- [ ] The pronoun decision is recorded
+- [ ] The two style deviations and the stray node are fixed
+- [ ] `parity-checker` returns MATCH on Style and Text for frame `04`
+
+---
+
