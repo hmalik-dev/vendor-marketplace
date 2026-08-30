@@ -39,7 +39,7 @@ describe('relaxations', () => {
       'Any date',
       'Any price',
       'Any rating',
-      'Any style',
+      'Any tag',
       'Anywhere',
     ]);
   });
@@ -91,6 +91,30 @@ describe('noResultsDiagnosis', () => {
   it('names the price range when there is no date', () => {
     expect(noResultsDiagnosis(state({ maxPriceCents: 120_000 }))).toBe(
       'The price range is the narrowest filter here. Loosen one filter and results come back.',
+    );
+  });
+
+  /*
+   * The branch that shipped the wrong word. Until #329 this read "The style
+   * filter", naming a filter the product had removed — and it survived the
+   * removal precisely because every other branch here was pinned by a test and
+   * this one was not. The chip label at the top of the file was caught by its
+   * own test in the same pass; this sentence was not.
+   *
+   * Rating is set alongside the tags on purpose: `relaxations` orders date,
+   * price, rating, tags, city, so the tag branch is only reachable as *first*
+   * when the three above it are unset. A test that set tags alone would pass
+   * against a diagnosis that never looked at tags at all.
+   */
+  it('names the tag filter, not any one of the groups it spans', () => {
+    expect(noResultsDiagnosis(state({ tags: ['a-language-tag-id'] }))).toBe(
+      'The tag filter is the narrowest filter here. Loosen one filter and results come back.',
+    );
+  });
+
+  it('names the city when it is the only filter set', () => {
+    expect(noResultsDiagnosis(state({ city: 'Marfa' }))).toBe(
+      'The city is the narrowest filter here. Loosen one filter and results come back.',
     );
   });
 

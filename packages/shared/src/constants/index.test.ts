@@ -51,7 +51,7 @@ describe('enum constants', () => {
 
   it('exposes exactly the budget tiers and tag enums the data model defines', () => {
     expect(BUDGET_TIERS).toEqual(['budget', 'mid_range', 'premium', 'luxury']);
-    expect(TAG_CATEGORIES).toEqual(['style', 'language', 'cultural', 'dietary']);
+    expect(TAG_CATEGORIES).toEqual(['language', 'cultural', 'dietary']);
     expect(TAG_SUGGESTION_STATUSES).toEqual(['pending', 'approved', 'rejected']);
   });
 
@@ -198,53 +198,39 @@ describe('TAG_SEEDS', () => {
   });
 
   /*
-   * The uniqueness rule is "unique within its own scope", and the scope is not
-   * the same thing for both kinds of tag. For the three global groups it is the
-   * group; for `style` it is the vendor category, because the option set
-   * changes with the selected type. This mirrors the two partial unique indexes
-   * on `tags` exactly — if these ever disagree, the seed fails on insert.
+   * Every group is global since #329 removed `style`, so the scope is the group
+   * alone and this mirrors the single unique index on `tags` exactly — if the
+   * two ever disagree, the seed fails on insert.
    */
-  it('keeps names unique within a scope while allowing reuse across scopes', () => {
+  it('keeps names unique within a group while allowing reuse across groups', () => {
     const seen = new Map<string, number>();
 
     for (const tag of TAG_SEEDS) {
-      const scope = `${tag.category}:${tag.vendorCategorySlug ?? ''}:${tag.name}`;
+      const scope = `${tag.category}:${tag.name}`;
       seen.set(scope, (seen.get(scope) ?? 0) + 1);
     }
 
     expect([...seen.entries()].filter(([, count]) => count > 1)).toEqual([]);
   });
 
-  it('reuses a name across scopes rather than inventing a synonym', () => {
+  it('reuses a name across groups rather than inventing a synonym', () => {
     // "Korean" is both a language and a culture — the category prefix in the
     // slug is what keeps the two rows from colliding.
     const korean = TAG_SEEDS.filter((tag) => tag.name === 'Korean');
     expect(korean).toHaveLength(2);
     expect(korean.map((tag) => tag.slug).sort()).toEqual(['cultural-korean', 'language-korean']);
-
-    // And "Documentary" is a style in two different vendor categories, which is
-    // the case the two-column key could not express.
-    const documentary = TAG_SEEDS.filter((tag) => tag.name === 'Documentary');
-    expect(documentary.map((tag) => tag.slug).sort()).toEqual([
-      'style-photography-documentary',
-      'style-videography-documentary',
-    ]);
-    expect(new Set(documentary.map((tag) => tag.category))).toEqual(new Set(['style']));
   });
 
-  /* Every style tag is scoped, and nothing else is. */
-  it('scopes exactly the style group to a vendor category', () => {
+  /*
+   * The seed is what would put a `style` row back into the database, so it is
+   * the right place to prove the group is gone rather than merely unrendered.
+   */
+  it('seeds no style tag and scopes nothing to a vendor category', () => {
+    expect(TAG_SEEDS.filter((tag) => (tag.category as string) === 'style')).toEqual([]);
+    expect(TAG_SEEDS.some((tag) => tag.slug.startsWith('style-'))).toBe(false);
     for (const tag of TAG_SEEDS) {
-      expect(tag.vendorCategorySlug === undefined).toBe(tag.category !== 'style');
+      expect(tag).not.toHaveProperty('vendorCategorySlug');
     }
-
-    const scopes = new Set(
-      TAG_SEEDS.filter((tag) => tag.category === 'style').map((tag) => tag.vendorCategorySlug),
-    );
-    expect([...scopes].every((slug) => CATEGORY_SLUGS.includes(slug as string))).toBe(true);
-    // Every category offers a style vocabulary; a chip that empties on one type
-    // is worse than no chip.
-    expect(scopes.size).toBe(CATEGORY_SLUGS.length);
   });
 
   it('uses URL-safe, category-prefixed slugs', () => {
@@ -254,15 +240,11 @@ describe('TAG_SEEDS', () => {
     }
   });
 
-  it('numbers display order from 1 within each scope', () => {
-    const scopes = new Set(
-      TAG_SEEDS.map((tag) => `${tag.category}:${tag.vendorCategorySlug ?? ''}`),
-    );
-
-    for (const scope of scopes) {
-      const orders = TAG_SEEDS.filter(
-        (tag) => `${tag.category}:${tag.vendorCategorySlug ?? ''}` === scope,
-      ).map((tag) => tag.displayOrder);
+  it('numbers display order from 1 within each group', () => {
+    for (const category of TAG_CATEGORIES) {
+      const orders = TAG_SEEDS.filter((tag) => tag.category === category).map(
+        (tag) => tag.displayOrder,
+      );
 
       expect(orders).toEqual(orders.map((_, index) => index + 1));
     }

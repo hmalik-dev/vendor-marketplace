@@ -10,10 +10,11 @@ function tag(id: string, name: string): Tag {
     id,
     name,
     slug: name.toLowerCase(),
-    category: 'style',
+    category: 'cultural',
+    displayOrder: 1,
     isActive: true,
     createdAt: new Date(),
-  } as unknown as Tag;
+  };
 }
 
 function renderHeader(overrides: Partial<Parameters<typeof ProfileHeader>[0]> = {}) {

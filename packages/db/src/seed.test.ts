@@ -195,12 +195,22 @@ describe('seedTags', () => {
     expect(new Set(korean.map((row) => row.category)).size).toBe(2);
   });
 
-  it('is idempotent — a second run does not duplicate tags', async () => {
+  it('is idempotent — a second run does not duplicate tags or add a group', async () => {
     await seedTags(testDb.db);
     await seedTags(testDb.db);
 
     const rows = await testDb.db.select().from(tags);
     expect(rows).toHaveLength(TAG_SEEDS.length);
+    /*
+     * The group set by name, not its size. #329 removed `style`, and a count
+     * alone would pass just as happily on three groups with the wrong one in
+     * them — which is the shape the seed would take if `style` came back.
+     */
+    expect([...new Set(rows.map((row) => row.category))].sort()).toEqual([
+      'cultural',
+      'dietary',
+      'language',
+    ]);
   });
 
   it('preserves tag ids across runs so vendor_tags rows stay valid', async () => {

@@ -11,7 +11,6 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { MAX_ADMIN_NOTE_LENGTH } from '@vendor-marketplace/shared';
-import { categories } from './categories.js';
 import { tagCategoryEnum, tagSuggestionStatusEnum } from './enums.js';
 import { users } from './users.js';
 import { vendorProfiles } from './vendor-profiles.js';
@@ -31,20 +30,6 @@ export const tags = pgTable(
      */
     slug: varchar('slug', { length: 100 }).notNull(),
     category: tagCategoryEnum('category').notNull(),
-    /**
-     * The vendor category a `style` tag belongs to, and null for every other
-     * group.
-     *
-     * `11-search.md` makes the Style chip's option set change with the selected
-     * vendor type, which a global tag cannot express: "Documentary" means one
-     * thing to a photographer and another to a videographer, and "Family style"
-     * means nothing at all to a florist. Languages, cultures and dietary
-     * requirements are the same list whoever is being filtered, so they stay
-     * null and the column stays nullable rather than becoming a fourth table.
-     */
-    vendorCategoryId: uuid('vendor_category_id').references(() => categories.id, {
-      onDelete: 'cascade',
-    }),
     displayOrder: integer('display_order').notNull().default(0),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -52,23 +37,14 @@ export const tags = pgTable(
   (table) => [
     uniqueIndex('tags_slug_key').on(table.slug),
     /*
-     * Two partial keys, because "unique name within its group" means different
-     * things for the two kinds of tag.
-     *
-     * For the three global groups the group *is* the scope, and the original
-     * key still holds — but only over the rows that have no narrower scope,
-     * hence the predicate. For `style` the scope is the vendor category, and a
-     * name is legitimately repeated across them: "Documentary" is both a
-     * photography and a videography style, "Editorial" is both photography and
-     * beauty. Left as one two-column key, the seed would be rejected on the
-     * second Documentary.
+     * One unconditional key: every remaining group is global, so the group *is*
+     * the scope and a name is unique within it. #329 removed the `style` group
+     * and with it `vendor_category_id`, the only reason this key was ever
+     * partial — a style name legitimately repeated across vendor categories
+     * ("Documentary" was both a photography and a videography style), which a
+     * single two-column key would have rejected.
      */
-    uniqueIndex('tags_category_name_key')
-      .on(table.category, table.name)
-      .where(sql`${table.vendorCategoryId} IS NULL`),
-    uniqueIndex('tags_scoped_category_name_key')
-      .on(table.vendorCategoryId, table.name)
-      .where(sql`${table.vendorCategoryId} IS NOT NULL`),
+    uniqueIndex('tags_category_name_key').on(table.category, table.name),
     // Drives the grouped tag picker, which only ever lists active tags.
     index('tags_category_display_order_idx')
       .on(table.category, table.displayOrder)
