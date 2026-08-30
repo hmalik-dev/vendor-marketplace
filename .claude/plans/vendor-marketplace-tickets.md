@@ -497,7 +497,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **304** | **1024 and 768 as real, height-constrained breakpoints** | P1 | M3 | **P1 High** | **Backlog** | — | **#306** | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#169, #69, #70, #290**. **#169 is the change order (B4)** — 1024 renders the desktop composition, height-constrained, not a tablet one, and seven `27 …` frames depend on it. #69 and #70 are its symptoms: filter popovers unreachable below 1440 that also stay open after use (#69 — check what #167's shared dropdown already fixes before rebuilding it), and the app broken below 768 with messaging a dead end and notifications rendering off-screen (#70). **#290** adds the first tablet frame the landing page has ever had (`14 Landing tablet`): two hero cards at 0.62 — this **overrides the old "the cluster never sheds a card" rule**, because a third would be 105×85 against a ~140px short-edge floor — the search bar drops below the split to run full width, and categories go three across in two rows. Rotated art needs ~30px clearance on both axes. 1024 is unchanged, keeping all three cards at 0.73. Blocked on **#306** for the tab-swap threshold, which three parts of the design contract currently disagree about. |
 | **305** | **`40-states.md` compliance sweep — copy, glyphs and unsaved work** | P1 | M3 | **P1 High** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#72, #261, #225, #227, #228, #81**. `40-states.md` is a law, and it is violated in five places of error and empty-state copy (#72) — steel is information, gold is waiting on someone, red is failure; **red is never `pending` and gold is never a failure**. The two-circle empty-state glyph is absent from **seven of the nine** `EmptyState` call sites (#261), so the sweep is one component plus its callers. Alongside them, three defects in the same class of "the screen says something untrue": the success toast covering the submit button it confirms (#225), unsaved profile edits discarded silently with no prompt (#227), and a newly onboarded vendor's public storefront still showing placeholder copy (#228). **#81** is itself a rollup of nine smaller adversarial-sweep defects — triage it inside this ticket and carry anything that does not belong here out as its own row rather than silently dropping it. |
 | **306** | **[DESIGN] Reconcile the frames, the plan and the missing frames** | P1 | M3 | **P1 High** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#248, #275, #276, #278, #283, #291, #292, #295, #199, #80** — every open ticket whose fix edits `design/` rather than code, in one pass with one owner, because rule 4 of the old unattended run forbade tickets touching the design bundle piecemeal. **#301 and #304 are blocked on this**, so it goes early. Contradictions to rule on: frame `02 Search` disagrees with five sibling frames about the compact search bar (#248); frame `11 Availability` draws a designer's rationale note that should not ship (#275); `19-availability.md` says "no month navigation" twice while the frame draws it (#276); the blocked hatch puts text on a band at **4.13:1**, below AA (#278) — **this is what #301 waits on**; frame `03`'s caption and `12-vendor-profile.md` both say the avatar overlaps by 34px while the markup renders 16px (#283, now largely moot under #298's retirement, so resolve by deletion); the tab-swap threshold is `≥1024` in one place and `≥1280` in another (#291) — **this is what #304 waits on**, and the repo law is that the frame is the tiebreak; frame `28` hardcodes the brand name where nine peers use the token (#292); frame `03`'s tagline pull-quote reverted to curly punctuation against #115 (#295). Two more: **#199** needs a ruling on the two frame colours absent from the foundations — adopt `#C4D6A8`/`#5C4A18` as tokens or correct the frames to sanctioned ones, one of which was substituted at an accessibility cost. **#80** — five live routes have no frame at all, so parity is unprovable on them; either draw them or record them as exempt, but do not leave them undecided. **Leave `Orla - Screens.dc.html` byte-identical to the export** where the finding is against the source design project; say so in Notes instead of patching it here. |
-| **307** | **The vendor can see, identify and safely decline a booking** | P1 | M3 | **P0 Critical** | **In Progress** | `worktree-307` | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#210, #211, #212, #213** — four views of the same missing surface. The vendor has **no surface anywhere that shows a confirmed booking** (#210), and never learns who the customer is, before or after accepting (#211). Accepting labels the date `Pending request` on the vendor's own calendar and leaves the `Booked` counter at 0 (#212) — that is the same calendar **#301** rebuilds, so sequence them and do not fix the label twice. Decline is one click, irreversible, with no confirmation and no undo (#213). Splitting these leaves the vendor able to accept a booking it cannot then see, which is a worse intermediate state than not shipping. | **Started 2026-08-30** in lane `worktree-307` (web 3020, api 4020, db `vendor_marketplace_lane_307`); preflight `--ticket 307` passed 23/23 after seeding reference and marketing data.
+| **307** | **The vendor can see, identify and safely decline a booking** | P1 | M3 | **P0 Critical** | **Done** | `worktree-307` | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#210, #211, #212, #213** — four views of the same missing surface. The vendor has **no surface anywhere that shows a confirmed booking** (#210), and never learns who the customer is, before or after accepting (#211). Accepting labels the date `Pending request` on the vendor's own calendar and leaves the `Booked` counter at 0 (#212) — that is the same calendar **#301** rebuilds, so sequence them and do not fix the label twice. Decline is one click, irreversible, with no confirmation and no undo (#213). Splitting these leaves the vendor able to accept a booking it cannot then see, which is a worse intermediate state than not shipping. | **Started 2026-08-30** in lane `worktree-307` (web 3020, api 4020, db `vendor_marketplace_lane_307`); preflight `--ticket 307` passed 23/23 after seeding reference and marketing data. **Done 2026-08-30**, merged as squash **`5b5f4f0`** (PR #26). All four acceptance criteria browser-verified at 1440x900 as the vendor: `/vendor/bookings` reachable from the sidebar; the privacy line holds on pending rows (the customer email appears nowhere in the rendered HTML) and opens on acceptance; accept flips the cell to `2026-10-09 — Booked — locked` and the `Booked` counter 1 -> 2; decline fires nothing until confirmed and returns focus to its trigger. Privacy rule recorded as decision **D11**. **Migration `0010` is load-bearing** — the old accept path wrote `pending`, `accepted` is terminal, and all three double-booking guards read the literal `booked`, so pre-existing accepted dates would have taken a second booking. A live request deliberately stores **no** availability row (search excludes any non-`available` date); the vendor calendar overlays it at read time. Filed **#317** and **#318** from the verification run.
 | **308** | **The quote flow works end to end — send, validate, accept** | P1 | M3 | **P0 Critical** | **In Progress** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#218, #221, #223, #224, #216, #217**. Today `Send quote` is dead on the default path, contradicting what the customer was promised (#218), and on the other side `Review quote` links to the **vendor's marketing page**, so the customer cannot accept (#221). Validation is broken at both ends: a below-minimum quote makes Send a dead control with no reason given (#223), and an above-maximum quote shows the raw API error string to the vendor (#224). Two contract defects ride with them because they are the copy on this same flow: **four different expiry promises for one deadline, and the one shown at the moment of commitment is wrong** (#216), and the two sides disagree about whether there is a platform fee (#217) — the public promise is *no service fee*, so the discrepancy is decided by that, not by a guess. Send → validate → accept is one seam; each half alone leaves a quote nobody can act on. |
 | **309** | **The customer can review, act on and cancel a request it sent** | P1 | M3 | **P0 Critical** | **Backlog** | — | **#9, #10** | `core` `auth` `stripe` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#214, #68**. A customer cannot cancel, or even review, a request they sent (#214) — and the reason is #68: an accepted, priced booking **dead-ends**, with no detail surface, no quote approval and no checkout. #68 *is* the missing surface #214 needs, so they are one build, not two. Inherits #68's block on **#9** and **#10**: checkout cannot exist before Stripe Connect and the payment lifecycle. The booking-card destination in **#302** (#191) is this surface — sequence accordingly. |
 | **310** | **Messaging — threads open, notify and survive long input** | P1 | M3 | **P1 High** | **Backlog** | — | None | `core` `auth` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#219, #229, #71, #255**. A new request opens **no message thread**, and the profile's message button is permanently dead (#219 — and whether that button is enabled at all is the product decision carried by #110 in **#298**, so answer it once). Threads are one per pair, and a new message raises **no notification in either direction** (#229). Long tokens are never broken, so one pasted link overflows its bubble (#71). And an expired session on `/messages` shows an empty state instead of sending the user to sign in (#255) — the fix is the `REDIRECTS_ON_401` table, and a 500 must still return `[]` rather than turning an outage into a forced sign-out. |
@@ -507,8 +507,10 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **314** | **Boundary schemas and input bounds** | P1 | M3 | **P2 Medium** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#236, #237, #77, #78** — four edits to the same two boundary files. The web search boundary **re-declares** the API's query schema instead of deriving from it (#236), which is why `page` is bounded below but not above on **both** sides (#237) — fix the derivation and the second follows. Event date has no upper bound, so a booking for the year 9999 goes through (#77). And `DrizzleQueryError` is logged without its `cause`, so the actual SQL failure never reaches the log (#78). |
 | **315** | **`nearby-availability` builds dates in one timezone and reads them in another** | P1 | M3 | **P1 High** | **Done** | `main` | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#207 and #293 — the same bug, filed twice by two lanes on the same day.** The test builds its dates in UTC while the route computes "today" in server-local time, so the API suite fails locally every evening. Reproduced on a clean tree with `git stash`, so it is not caused by any diff. Fix the timezone seam once, and make the test deterministic rather than clock-dependent — no real clock, per the testing standard. **#207's row is the one that carried `P1 High`; #293 was filed at `P2 Medium` for the same defect.** **Done 2026-08-30 — landed directly on `main` as `ddc9b54`.** **Correction to the reason it was taken first:** it was selected on the belief that a red `main` was blocking the merge queue, and that was wrong. CI has been green on `main` continuously since `0ac8f9a`, and no lane was ever gated by this. The failure was **local-only**, and the reason is the defect itself — CI runs `TZ=UTC`, where PGlite's session day and the UTC day agree, so `CURRENT_DATE` gave the right answer by luck. It still merited jumping the queue, for a better reason than the one given: every local `pnpm test` after 00:00 UTC came back red, which teaches an unattended lane to distrust its own gate, and the endpoint really was wrong for any deployment whose session timezone is not UTC. **Not only a test bug.** The window floored on Postgres `CURRENT_DATE`, which is the *session's* day: PGlite runs that session on `Etc/GMT+5`, so from 00:00 UTC it sat a day behind the UTC day the service validates in and the endpoint offered a date already past. Today now travels as a bound parameter from a new `clockPlugin`, decorated like `db` and `storage`. The availability routes were wired to the same seam after they silently dropped a past-dated write during this work — the calendar floor and this window were two independent clocks. Verified green under `Pacific/Kiritimati`, `Etc/GMT+12`, `UTC` and `America/New_York`, and red on ten tests when `CURRENT_DATE` is restored. **Class closed by `dao-clock-guard.test.ts`**, which fails any DAO collapsing the connection clock to a calendar day while leaving `now()` on a `timestamptz` alone. Gate: typecheck 7/7, lint 8/8, test 148 files / 7 tasks, build 5/5, format clean, all with caches forced. |
 | **316** | **Lane tooling and preflight test hygiene** | P2 | M4.5 | **P2 Medium** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#256 and #64** — both are the repo's own tooling, neither ships user-facing behaviour. A resumed lane keeps a stale `worktreePath` and `branch` in its manifest (#256): `laneUp` returns an existing `state: 'active'` manifest without re-deriving either, which is the same class of defect as the manifest drift fixed on 2026-08-29 — use `pnpm lane:pr`, never hand-edit. And `packages/preflight` has a test that fails only under parallel Turbo runs (#64), found while gating the #61 env-shape commit; **#64 has never had a detail section**, so reproduce it before fixing it. Load the `debug-flaky-test` skill for the second half. |
+| **317** | **No E2E account can reach a vendor surface — the vendor test user has no profile** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | None | `core` `auth` `e2e` | **Found 2026-08-30 while browser-verifying #307.** `vendor+clerk_test@example.com` has **zero `vendor_profiles` rows**, so `/vendor/dashboard`, `/vendor/bookings` and `/vendor/availability` all redirect to `/vendor/profile/edit` and no vendor surface can be driven at all. `pnpm db:seed:marketing` seeds 16 vendors, but every one is owned by a synthetic `*@orla-demo.example` user the E2E accounts are never linked to. This blocks the `browser-verifier` gate on **every vendor-side ticket**, not just #307 — #307 was only verified by reassigning a seeded profile to the E2E user in the lane database by hand, which is not repeatable and was deliberately not committed. A second, smaller instance of the same gap: the seeded profiles have `stripe_onboarded = false`, so `POST /booking-requests/:id/accept` 402s and there is no in-app route to clear it. **Do not fix this by changing `db:seed:marketing`** — it would silently change what every other lane sees. |
+| **318** | **The notification stream connects to a hardcoded port, so it fails in every lane** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | None | `core` | **Found 2026-08-30 while browser-verifying #307.** Every authenticated page in lane 307 logged a tight retry loop of `net::ERR_CONNECTION_REFUSED` against `http://localhost:4028/events/stream?token=...` — dozens of failed attempts within seconds. The lane's API is on **4020**; `4028` is another lane's port, so the SSE client is resolving its origin from something that is not the lane environment. Two things to fix and they are separable: the origin must come from `NEXT_PUBLIC_API_URL` like every other call, and the client must **back off** rather than retrying in a tight loop against a refused connection. Console noise on this scale also degrades every future browser verification, because a real error has to be found among hundreds of these. |
 
-Rows are ordered by build sequence, not by ticket number. **315 rows — 145 Done, 130 Superseded, 5 In Progress, 29 Backlog, 4 Deferred, 2 Blocked.** Recounted 2026-08-29 after the backlog consolidation, which merged **130 open tickets into 21** (`#296`–`#316`) and re-scoped **#73** as the shared-cause accessibility ticket. **40 tickets are open**, down from 150: 5 in flight, 6 waiting on a human or an external account, and 29 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
+Rows are ordered by build sequence, not by ticket number. **317 rows — 150 Done, 130 Superseded, 5 In Progress, 25 Backlog, 5 Deferred, 2 Blocked.** Recounted 2026-08-29 after the backlog consolidation, which merged **130 open tickets into 21** (`#296`–`#316`) and re-scoped **#73** as the shared-cause accessibility ticket. **40 tickets are open**, down from 150: 5 in flight, 6 waiting on a human or an external account, and 29 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -12128,7 +12130,7 @@ rulings recorded in the board Notes of every ticket that was waiting on one.
 
 ### #307: The vendor can see, identify and safely decline a booking
 
-**Milestone:** M3 | **Priority:** P0 Critical | **Status:** In Progress | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
 
 Merges **#210, #211, #212, #213** — four views of one missing surface. Splitting them leaves
@@ -12136,20 +12138,20 @@ the vendor able to accept a booking it cannot then see.
 
 **Acceptance:**
 
-- [ ] There is a surface showing a **confirmed** booking, reachable from the dashboard (#210)
-- [ ] The vendor sees who the customer is — at the request stage and after accepting, at
+- [x] There is a surface showing a **confirmed** booking, reachable from the dashboard (#210)
+- [x] The vendor sees who the customer is — at the request stage and after accepting, at
       whatever detail the privacy position allows, stated explicitly rather than assumed (#211)
-- [ ] An accepted booking's date is labelled **booked** on the vendor's own calendar, and the
+- [x] An accepted booking's date is labelled **booked** on the vendor's own calendar, and the
       `Booked` counter counts it (#212). This is the calendar **#301** rebuilds — sequence
       them so the label is not written twice
-- [ ] Decline asks for confirmation, and is either reversible or says plainly that it is not
+- [x] Decline asks for confirmation, and is either reversible or says plainly that it is not
       before the click, not after (#213)
 
 **Tests (required):**
 
-- [ ] An API test asserting status and body shape for the confirmed-booking read, including
+- [x] An API test asserting status and body shape for the confirmed-booking read, including
       the customer identity fields
-- [ ] A test that accept flips the calendar cell's state and increments the counter — asserting
+- [x] A test that accept flips the calendar cell's state and increments the counter — asserting
       the specific values, not that the call was made
 
 ---
@@ -12408,5 +12410,88 @@ Merges **#256 and #64** — the repo's own tooling; no user-facing behaviour, so
 - [ ] A test that a resumed lane's manifest reports the worktree path that exists on disk
 - [ ] Whatever the reproduction shows the flake to be — load `debug-flaky-test` before
       guessing at it
+
+---
+
+### #317: No E2E account can reach a vendor surface — the vendor test user has no profile
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `e2e`
+**Blocked by:** None
+
+Found 2026-08-30 while browser-verifying #307. **Where:** every route under `/vendor`, as the
+E2E vendor account.
+
+| | |
+| --- | --- |
+| **Expected** | the documented vendor test account can reach the vendor surfaces it exists to verify |
+| **Observed** | `vendor+clerk_test@example.com` has **zero `vendor_profiles` rows**, so `/vendor/dashboard`, `/vendor/bookings` and `/vendor/availability` every one redirect to `/vendor/profile/edit` with an empty form. `vendor_profiles` holds 16 rows, all owned by synthetic `*@orla-demo.example` users that the seed never links to the `+clerk_test` accounts |
+
+**Context.** This is not a #307 quirk — it blocks the `browser-verifier` gate on **every**
+vendor-side ticket, and the repo's own law is that verification is delegated, not asserted.
+#307 was only verified by reassigning a seeded profile to the E2E user directly in the lane
+database, by hand, in a script that was deliberately not committed.
+
+A second instance of the same gap rides with it: seeded profiles carry
+`stripe_onboarded = false`, so `POST /booking-requests/:id/accept` returns **402 `Finish your
+payout setup before accepting bookings`**, and the vendor nav has no `Payouts` entry, so it
+cannot be cleared through the UI either.
+
+**Do not fix this inside `db:seed:marketing`.** Changing it changes what every lane sees, which
+is how one lane's fixture becomes another lane's mystery failure. The likely right shape is a
+separate, opt-in `db:seed:e2e` that attaches the existing E2E accounts to already-seeded rows —
+but that is a decision for whoever takes this, not a conclusion of the report.
+
+**Acceptance:**
+
+- [ ] A documented, repeatable command gives the E2E vendor account a profile, at least one
+      package, and at least one live booking request
+- [ ] That vendor can complete an accept without hitting the payout 402, or the fixture states
+      plainly why not and how to clear it
+- [ ] `db:seed:marketing` is unchanged, or its change is opt-in and off by default
+- [ ] `pnpm preflight` fails, rather than warns, when a browser-verification capability is
+      required and the E2E accounts cannot reach the surfaces under test
+
+**Tests (required):**
+
+- [ ] A test asserting the fixture command leaves the E2E vendor with a profile and a live
+      request — asserting the specific row counts, not that the command exited 0.
+
+---
+
+### #318: The notification stream connects to a hardcoded port, so it fails in every lane
+
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-30 while browser-verifying #307. **Where:** every authenticated page.
+
+| | |
+| --- | --- |
+| **Expected** | the notification stream connects to this lane's API, or fails quietly once |
+| **Observed** | a tight retry loop of `net::ERR_CONNECTION_REFUSED` against `http://localhost:4028/events/stream?token=...` — dozens of attempts within seconds, on `/vendor/dashboard`, `/vendor/profile/edit` and `/vendor/bookings` alike. The lane's API is on **4020**; **4028** belongs to a different lane |
+
+**Context.** Two separable defects, and both should be fixed.
+
+1. **The origin is not read from the environment.** Every other call resolves through
+   `NEXT_PUBLIC_API_URL`; this one does not, which is why it lands on a port no one configured
+   for this lane. On a developer machine running two lanes it will connect to the *wrong lane's*
+   API rather than failing — which is worse than the refused connection, because it succeeds.
+2. **There is no backoff.** A refused connection retries immediately and forever. Beyond the
+   wasted work, it degrades every future browser verification: a genuine console error has to be
+   found among hundreds of identical failures, and the `browser-verifier` gate reads the console
+   at every checkpoint.
+
+**Acceptance:**
+
+- [ ] The stream's origin is derived from the same env var as the rest of the API client
+- [ ] A refused or dropped connection backs off rather than retrying in a tight loop, and stops
+      after a bounded number of attempts
+- [ ] Two lanes running at once never connect to each other's stream
+
+**Tests (required):**
+
+- [ ] A test asserting the stream URL is built from `NEXT_PUBLIC_API_URL`, not a literal.
+- [ ] A test asserting the retry delay grows and the attempts are bounded — asserting the
+      specific delays, not that a retry happened.
 
 ---
