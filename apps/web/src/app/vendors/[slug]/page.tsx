@@ -16,8 +16,9 @@ import { PackagesPane } from '@/components/vendors/profile/packages-pane';
 import { PortfolioPane } from '@/components/vendors/profile/portfolio-pane';
 import { ProfileHeader } from '@/components/vendors/profile/profile-header';
 import { ProfileTabs } from '@/components/vendors/profile/profile-tabs';
-import { EmptyState } from '@/components/ui/empty-state';
+import { ReviewsPane } from '@/components/vendors/profile/reviews-pane';
 import { siteOrigin } from '@/config/env';
+import { getReviewEligibility, getVendorReviews } from '@/lib/reviews-data';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
 /**
@@ -125,7 +126,12 @@ export default async function VendorProfilePage({
     notFound();
   }
 
-  const availability = await getPublicVendorAvailability(slug);
+  // Three independent reads, none depending on another.
+  const [availability, reviewsPage, reviewEligibility] = await Promise.all([
+    getPublicVendorAvailability(slug),
+    getVendorReviews(slug),
+    getReviewEligibility(vendor.id),
+  ]);
   const today = todayDateString();
 
   /* The same keyed view of availability the request form takes, so the rail's
@@ -221,17 +227,24 @@ export default async function VendorProfilePage({
             portfolio: (
               <PortfolioPane items={vendor.portfolio} businessName={vendor.businessName} />
             ),
-            reviews: (
-              /* The tab and its empty state only — review content is #12. */
-              <EmptyState
-                headline={vendor.reviewCount > 0 ? 'Reviews are on their way' : 'No reviews yet'}
-                description={
-                  vendor.reviewCount > 0
-                    ? `${vendor.businessName} has ${vendor.reviewCount} reviews. We're building the page that shows them.`
-                    : `Every review here comes from a completed booking, so ${vendor.businessName} has none until they've worked an event.`
-                }
-              />
-            ),
+            reviews:
+              (
+                /*
+                 * `key={vendor.reviewCount}` forces a clean remount after a
+                 * submitted review calls `router.refresh()` — see
+                 * `reviews-pane.tsx`'s own note on why it does not patch its
+                 * pagination state locally.
+                 */
+                <ReviewsPane
+                  key={vendor.reviewCount}
+                  slug={vendor.slug}
+                  businessName={vendor.businessName}
+                  avgRating={vendor.avgRating}
+                  reviewCount={vendor.reviewCount}
+                  initialPage={reviewsPage}
+                  eligibility={reviewEligibility}
+                />
+              ),
             availability: (
               <AvailabilityPane
                 entries={availability}

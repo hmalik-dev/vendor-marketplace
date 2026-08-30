@@ -954,11 +954,64 @@ export const reviewSchema = z.object({
 export type Review = z.infer<typeof reviewSchema>;
 
 export const createReviewSchema = z.object({
+  bookingId: uuidSchema,
   rating: z.int().min(REVIEW_RATING_MIN).max(REVIEW_RATING_MAX),
   title: z.string().trim().max(MAX_TITLE_LENGTH).optional(),
   content: trimmedString(REVIEW_CONTENT_MAX_LENGTH, REVIEW_CONTENT_MIN_LENGTH),
 });
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
+
+/**
+ * A public customer-to-vendor review as the vendor profile's Reviews tab
+ * renders it — the reviewer's first name and last initial only, never their
+ * full identity, and the booking's occasion as the badge.
+ */
+export const vendorReviewSchema = z.object({
+  id: uuidSchema,
+  rating: z.int().min(REVIEW_RATING_MIN).max(REVIEW_RATING_MAX),
+  title: z.string().max(MAX_TITLE_LENGTH).nullable(),
+  content: z.string(),
+  reviewerFirstName: trimmedString(MAX_NAME_LENGTH, 0),
+  reviewerLastInitial: z.string().max(1),
+  /*
+   * Read back as a plain string rather than `eventTypeSchema`, for the same
+   * reason `bookingRequestSchema` does: a row written before the vocabulary
+   * closed must still be readable.
+   */
+  eventType: z.string().max(MAX_BUSINESS_NAME_LENGTH).nullable(),
+  createdAt: z.date(),
+});
+export type VendorReview = z.infer<typeof vendorReviewSchema>;
+
+/** One bar of the Reviews tab's five-bar distribution chart. */
+export const reviewRatingDistributionSchema = z.object({
+  1: z.int().min(0),
+  2: z.int().min(0),
+  3: z.int().min(0),
+  4: z.int().min(0),
+  5: z.int().min(0),
+});
+export type ReviewRatingDistribution = z.infer<typeof reviewRatingDistributionSchema>;
+
+/**
+ * `GET /vendors/:slug/reviews`. `limit`, not `pageSize` — this is the one
+ * paginated endpoint the product exposes as "show more" rather than page
+ * numbers, and the query name matches the ticket's own wire contract.
+ */
+export const vendorReviewsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+});
+export type VendorReviewsQuery = z.infer<typeof vendorReviewsQuerySchema>;
+
+export const vendorReviewsPageSchema = z.object({
+  items: z.array(vendorReviewSchema),
+  total: z.int().min(0),
+  page: z.int().min(1),
+  limit: z.int().min(1),
+  distribution: reviewRatingDistributionSchema,
+});
+export type VendorReviewsPage = z.infer<typeof vendorReviewsPageSchema>;
 
 // --- Tags ------------------------------------------------------------------
 

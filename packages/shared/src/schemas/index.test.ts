@@ -13,6 +13,7 @@ import {
   createVendorProfileSchema,
   imageRefSchema,
   paginatedSchema,
+  reviewRatingDistributionSchema,
   sendMessageSchema,
   setVendorTagsSchema,
   tagSchema,
@@ -23,11 +24,14 @@ import {
   fullCustomerProfileSchema,
   userSchema,
   vendorProfileDetailSchema,
+  vendorReviewsQuerySchema,
   vendorSearchQuerySchema,
 } from './index.js';
 import {
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
+  DEFAULT_PAGE_SIZE,
   ERROR_CODES,
+  MAX_PAGE_SIZE,
   MAX_CUSTOMER_BIO_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
   MAX_TAGLINE_LENGTH,
@@ -543,10 +547,19 @@ describe('sendMessageSchema', () => {
 });
 
 describe('createReviewSchema', () => {
-  const valid = { rating: 5, content: 'Outstanding work from start to finish.' };
+  const valid = {
+    bookingId: '11111111-1111-4111-8111-111111111111',
+    rating: 5,
+    content: 'Outstanding work from start to finish.',
+  };
 
   it('accepts a valid review', () => {
     expect(createReviewSchema.parse(valid).rating).toBe(5);
+  });
+
+  it('rejects a missing bookingId', () => {
+    const { bookingId: _bookingId, ...withoutBookingId } = valid;
+    expect(createReviewSchema.safeParse(withoutBookingId).success).toBe(false);
   });
 
   it('rejects a rating outside 1-5', () => {
@@ -560,6 +573,37 @@ describe('createReviewSchema', () => {
 
   it('rejects content shorter than 10 characters after trimming', () => {
     expect(createReviewSchema.safeParse({ ...valid, content: '   ok   ' }).success).toBe(false);
+  });
+});
+
+describe('vendorReviewsQuerySchema', () => {
+  it('defaults page to 1 and limit to DEFAULT_PAGE_SIZE', () => {
+    const parsed = vendorReviewsQuerySchema.parse({});
+    expect(parsed.page).toBe(1);
+    expect(parsed.limit).toBe(DEFAULT_PAGE_SIZE);
+  });
+
+  it('coerces string query values', () => {
+    const parsed = vendorReviewsQuerySchema.parse({ page: '2', limit: '5' });
+    expect(parsed.page).toBe(2);
+    expect(parsed.limit).toBe(5);
+  });
+
+  it('rejects a limit above MAX_PAGE_SIZE', () => {
+    expect(vendorReviewsQuerySchema.safeParse({ limit: MAX_PAGE_SIZE + 1 }).success).toBe(false);
+  });
+});
+
+describe('reviewRatingDistributionSchema', () => {
+  it('accepts a count for every star value 1-5', () => {
+    const parsed = reviewRatingDistributionSchema.parse({ 1: 0, 2: 1, 3: 2, 4: 3, 5: 10 });
+    expect(parsed[5]).toBe(10);
+  });
+
+  it('rejects a negative count', () => {
+    expect(
+      reviewRatingDistributionSchema.safeParse({ 1: -1, 2: 0, 3: 0, 4: 0, 5: 0 }).success,
+    ).toBe(false);
   });
 });
 

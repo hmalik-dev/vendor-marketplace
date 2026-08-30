@@ -17,12 +17,15 @@ import {
   nearbyAvailabilityResultSchema,
   nearbyVendorSchema,
   publicVendorProfileSchema,
+  reviewSchema,
   servicePackageSchema,
   streamTicketSchema,
   tagSchema,
   userSchema,
   vendorCardSchema,
   vendorProfileDetailSchema,
+  vendorReviewSchema,
+  vendorReviewsPageSchema,
   vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
 import { resolveImageUrl } from '@vendor-marketplace/shared';
@@ -151,6 +154,20 @@ export const wireCustomerReviewSchema = customerReviewSchema.extend({
 });
 export type WireCustomerReview = z.infer<typeof wireCustomerReviewSchema>;
 export const wireCustomerReviewListSchema = z.array(wireCustomerReviewSchema);
+
+/** `POST /reviews` and `GET /bookings/:bookingId/reviews` — ticket #12. */
+export const wireReviewSchema = reviewSchema.extend({ createdAt: z.coerce.date() });
+export type WireReview = z.infer<typeof wireReviewSchema>;
+export const wireReviewListSchema = z.array(wireReviewSchema);
+
+/** `GET /vendors/:slug/reviews` — the Reviews tab's own review card. */
+export const wireVendorReviewSchema = vendorReviewSchema.extend({ createdAt: z.coerce.date() });
+export type WireVendorReview = z.infer<typeof wireVendorReviewSchema>;
+
+export const wireVendorReviewsPageSchema = vendorReviewsPageSchema.extend({
+  items: z.array(wireVendorReviewSchema),
+});
+export type WireVendorReviewsPage = z.infer<typeof wireVendorReviewsPageSchema>;
 
 export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
   expiresAt: z.coerce.date().nullable(),

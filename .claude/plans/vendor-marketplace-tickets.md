@@ -252,7 +252,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | 42 | Soft 404 — `notFound()` returns HTTP 200 in production | P1.5 | M4.5 | P1 High | Done | main | None | `core` | Pushed 2026-08-28 (**0bd90cc**), CI green, **verified on the deployed origin**: `/vendors/<missing>` and `/definitely-not-a-route` both **404**, `/`, `/search` and a real vendor **200**, `/customer/dashboard` still **307** to sign-in. **The ticket's diagnosis was wrong and is corrected here.** Clerk's middleware does rewrite to the URL it already has (`decorateRequest` swaps `x-middleware-next` for `x-middleware-rewrite: <same url>`), but that is **not** what costs the status — proven by a 2x2: with the **original** middleware untouched and the root `loading.tsx` removed, every `notFound()` returns 404. **The root `loading.tsx` was the whole cause:** it is a Suspense boundary, Next streams everything inside one, so the 200 shell flushes before the page finishes and a later `notFound()` has nothing left to set — and at the root it wrapped every route in the app. A patch to unwrap Clerk's no-op rewrite was written, measured, found unnecessary, and **reverted**. **Fix:** the loader is unchanged and became `components/ui/page-loader.tsx`, mounted on `/customer` and `/vendor` — the two segments that await identity and never call `notFound()`. **Guardrail:** `app/loading-boundaries.test.ts` walks the app directory and fails if any loading boundary sits at or above a page calling `notFound()`; verified to fail on all three counts with the old root file restored. Middleware and matcher are byte-unchanged, so nothing was opened |
 | 19 | Production Environment Provisioning | P1.5 | M4.5 | P0 Critical | Deferred — needs a human | — | #17 | all | **BLOCKED on a human** — external accounts only, no repo code. Parallel with #18; schedule after #10  **Deferred 2026-08-28:** the ticket says so itself — "almost entirely external account configuration rather than repository code", with a provisioned environment rather than a diff as its deliverable. Every value must be newly minted in Clerk, Stripe, R2 and Resend by the account holder; nothing here can be produced autonomously |
 | 20 | Deploy Pipeline | P1.5 | M4.5 | P0 Critical | Backlog | — | #18, #19, #30 | `core` | First production deploy |
-| 12 | Review System | P2 | M5 | P1 High | Backlog | — | #10 | `core` `auth` | Fills the Reviews tab on frame `03` and the write-review flow. **MVP because the landing page promises "Reviews from real bookings" and every vendor card renders a rating** |
+| 12 | Review System | P2 | M5 | P1 High | In Progress | worktree-12 | #10 | `core` `auth` | **Code and tests complete, PR open, not merged — the design-parity gate and the mandated `diff-reviewer`/`security-auditor` passes could not run in this session.** See the `### #12` detail section for the full account: what shipped, 34 new API tests + 15 new web tests (all passing; monorepo total **2,737/2,737**, `pnpm typecheck` 6/6, `pnpm lint` 3/3, `pnpm format:check` clean), and the exact blocker (no `DATABASE_URL`/Clerk credentials and no Docker daemon in this sandboxed worktree, so even `pnpm build` cannot complete for `apps/web`; no Task-tool access to spawn the review subagents from this session). A session with those available should finish the verification and flip this to Done |
 | 11 | Transactional Email Notifications | P3 | M6 | P2 Medium | Deferred — needs a human | — | Resend API key | `core` `auth` `email` | **BLOCKED on credentials, not code** (checked 2026-08-28): `pnpm preflight --ticket 11` fails on `RESEND_API_KEY — still the placeholder re_...`; `EMAIL_FROM` is set. The project's own rule is that a ticket does not start until the gate passes, and the acceptance requires verifying that each row of the event table actually sends. **Unblocks with one key** from https://resend.com/api-keys. Everything it hangs off is ready: `NOTIFICATION_TYPES` is the shared enum, and #7/#8 already emit every event at a single call site, so email attaches there without a second source of truth |
 | 14 | Demo Dataset + Playwright E2E | P3 | M6 | P1 High | Backlog | — | #12 | all | **Content gap partly closed by ef8b341:** `pnpm db:seed:marketing` now seeds 16 photography vendors with covers, packages, and 918 reviews behind 918 completed bookings. **Still open here:** the other 10 categories (5 of 6 landing cards still lead to an empty search), portfolio images, messages, notifications, the non-completed booking statuses, and the 8 E2E suites. Asset tracking for the covers is **#32** |
 | 15 | Admin Portal + Sentry Integration | P3 | M6 | P1 High | Backlog | — | #12, #14 | `core` `auth` `sentry` | Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` |
@@ -2968,21 +2968,21 @@ to reviews, which are post-MVP.
 
 **Acceptance:**
 
-- [ ] Only participants in a **completed** booking can review — enforced server-side
-- [ ] One review per user per booking, enforced by `UNIQUE(booking_id, reviewer_id)`; a duplicate returns `CONFLICT`
-- [ ] Review type is derived from who the reviewer is, never sent by the client
-- [ ] **A vendor→customer review is not publicly readable** — asserted by requesting it as an unrelated vendor and as an anonymous user
-- [ ] A vendor who has been requested by that customer **can** read it
-- [ ] `avg_rating` and `review_count` are **recomputed from source rows**, never incremented — asserted by a concurrent double-insert test
-- [ ] Deleting a review recomputes; zero remaining reviews gives `avg_rating = 0`, `review_count = 0`
-- [ ] Rating constrained 1–5; content 10–2000 chars; whitespace-only rejected
-- [ ] Profanity filter rejects with `VALIDATION_ERROR` and the specified message
-- [ ] `GET /vendors/:slug/reviews` returns the five-bucket distribution
-- [ ] "Show more reviews" **appends** — no page numbers anywhere
-- [ ] "Write a review" appears only for a user with a completed booking with that vendor
-- [ ] Star input uses a **radio-group** pattern, keyboard operable
-- [ ] The prompt reads "How was your experience?"
-- [ ] **Design parity gate** against the Reviews tab of frame `03 Vendor profile` at 1440×900, then 1280 / 1024 / 768 / 390
+- [x] Only participants in a **completed** booking can review — enforced server-side
+- [x] One review per user per booking, enforced by `UNIQUE(booking_id, reviewer_id)`; a duplicate returns `CONFLICT`
+- [x] Review type is derived from who the reviewer is, never sent by the client
+- [x] **A vendor→customer review is not publicly readable** — asserted by requesting it as an unrelated vendor and as an anonymous user
+- [x] A vendor who has been requested by that customer **can** read it
+- [x] `avg_rating` and `review_count` are **recomputed from source rows**, never incremented — asserted by a concurrent double-insert test
+- [x] Deleting a review recomputes; zero remaining reviews gives `avg_rating = 0`, `review_count = 0`
+- [x] Rating constrained 1–5; content 10–2000 chars; whitespace-only rejected
+- [x] Profanity filter rejects with `VALIDATION_ERROR` and the specified message
+- [x] `GET /vendors/:slug/reviews` returns the five-bucket distribution
+- [x] "Show more reviews" **appends** — no page numbers anywhere
+- [x] "Write a review" appears only for a user with a completed booking with that vendor
+- [x] Star input uses a **radio-group** pattern, keyboard operable
+- [x] The prompt reads "How was your experience?"
+- [ ] **Design parity gate** against the Reviews tab of frame `03 Vendor profile` at 1440×900, then 1280 / 1024 / 768 / 390 — **NOT RUN, see Notes**: this sandboxed session had no `DATABASE_URL`/Clerk credentials, no Docker daemon and no way to invoke `parity-checker`/`browser-verifier`
 
 **Blocked by:** #10
 
