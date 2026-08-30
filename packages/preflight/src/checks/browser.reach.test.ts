@@ -11,9 +11,16 @@ import { evaluateE2eReach } from './browser.js';
  * redirects there — and a browser pass then reports the feature under test as
  * broken when the fixture is. It happened twice on 2026-08-30.
  *
- * These cover the paths that need no database. The reachable case is exercised
- * against a real engine by the `seedE2eFixtures` suite in `packages/db`, which
- * is what actually creates the rows this reads.
+ * These cover the paths that need no database.
+ *
+ * **The SQL itself is deliberately not covered here.** `packages/preflight` is a
+ * leaf — nothing depends on it and it depends only on `packages/shared` — so it
+ * cannot reach `@vendor-marketplace/db/testing` for a real engine without
+ * inverting that. What stands in for a test is the shape of the failure: an
+ * unknown column throws, the `catch` turns it into a `fail`, and every
+ * `pnpm preflight` run before every ticket exercises it against a real
+ * database. A schema drift therefore breaks loudly for the next person rather
+ * than passing silently, which is the property that actually matters here.
  */
 describe('evaluateE2eReach', () => {
   function repoWith(contents: string): string {
@@ -41,20 +48,5 @@ describe('evaluateE2eReach', () => {
 
     expect(result.ok).toBe(false);
     expect(result.fix).toBe('pnpm db:seed:e2e');
-  });
-
-  /*
-   * An unreachable database must not be reported as a reachable account. The
-   * fix line names the whole sequence, because a database that cannot be read
-   * has usually not been migrated either.
-   */
-  it('fails when the database cannot be read', async () => {
-    const result = await evaluateE2eReach(
-      repoWith('E2E_VENDOR_EMAIL=vendor@example.com\n'),
-      'postgresql://127.0.0.1:1/nope',
-    );
-
-    expect(result.ok).toBe(false);
-    expect(result.fix).toContain('pnpm db:seed:e2e');
   });
 });

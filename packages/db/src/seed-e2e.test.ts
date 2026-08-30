@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { seedReferenceData } from './seed.js';
 import { E2E_VENDOR_SLUG, seedE2eFixtures, type E2eSeedInput } from './seed-e2e.js';
 import {
+  availability,
   bookingRequests,
   servicePackages,
   users,
@@ -176,6 +177,123 @@ describe('seedE2eFixtures', () => {
     expect(found?.id).toBe(result.vendorUserId);
     // The sign-in must not demote the fixture's role back to customer.
     expect(found?.role).toBe('vendor');
+  });
+
+  /*
+   * The state a browser pass leaves behind the first time it exercises
+   * `POST /vendor/profile`. `vendor_profiles` carries a unique index on
+   * `user_id` as well as on `slug`, and an upsert can only name one — so
+   * conflicting on `slug` dies here on the machine this fixture exists to fix.
+   */
+  it('adopts a profile the vendor already owns under some other slug', async () => {
+    const [vendorUser] = await database.db
+      .insert(users)
+      .values({
+        clerkUserId: INPUT.vendor.clerkUserId,
+        email: INPUT.vendor.email,
+        role: 'vendor',
+        firstName: 'Evie',
+        lastName: 'Vendor',
+      })
+      .returning({ id: users.id });
+
+    await database.db.insert(vendorProfiles).values({
+      userId: vendorUser!.id,
+      businessName: 'Probe Test Studio',
+      slug: 'probe-test-studio',
+      isPublished: false,
+      stripeOnboarded: false,
+    });
+
+    const result = await seedE2eFixtures(database.db, INPUT);
+
+    const profiles = await database.db.select().from(vendorProfiles);
+    expect(profiles).toHaveLength(1);
+    // Adopted in place, slug intact — not replaced, and not duplicated.
+    expect(profiles[0]?.slug).toBe('probe-test-studio');
+    expect(profiles[0]?.id).toBe(result.vendorProfileId);
+    expect(profiles[0]?.isPublished).toBe(true);
+    expect(profiles[0]?.stripeOnboarded).toBe(true);
+  });
+
+  /*
+   * `booking_requests_live_package_key` is partial on `pending` **and**
+   * `quoted`, so a fixture probing only for `pending` finds nothing once a
+   * browser pass has sent a quote — then inserts, and dies on that index.
+   */
+  it('reuses a request that has moved from pending to quoted', async () => {
+    const first = await seedE2eFixtures(database.db, INPUT);
+
+    await database.db
+      .update(bookingRequests)
+      .set({ status: 'quoted', quotedPriceCents: 160_000 })
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    const second = await seedE2eFixtures(database.db, INPUT);
+
+    expect(second.bookingRequestId).toBe(first.bookingRequestId);
+    expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
+  });
+
+  /*
+   * A row the application could not have created is a fixture that makes every
+   * pass measuring it measure a state real data never reaches: no price on the
+   * dashboard, no countdown, and a quote allowed on a package request.
+   */
+  it('shapes the request the way the service shapes one', async () => {
+    const result = await seedE2eFixtures(database.db, INPUT);
+
+    const [request] = await database.db
+      .select()
+      .from(bookingRequests)
+      .where(eq(bookingRequests.id, result.bookingRequestId));
+
+    expect(request?.finalPriceCents).toBe(145_000);
+    expect(request?.packageId).toBe(result.packageId);
+    expect(request?.expiresAt).toBeInstanceOf(Date);
+    // Seven days on from the pinned "now", as `createBookingRequest` locks it.
+    expect(request?.expiresAt?.toISOString().slice(0, 10)).toBe('2026-09-06');
+  });
+
+  /*
+   * After an accept marks the date `booked`, a re-seed landing on that same
+   * date would create a request that can never be accepted — 409 from
+   * `prepareTransition`. The fixture has to survive its own previous run.
+   */
+  it('steps past a date the vendor has already booked', async () => {
+    const first = await seedE2eFixtures(database.db, INPUT);
+
+    await database.db
+      .update(bookingRequests)
+      .set({ status: 'accepted' })
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+    await database.db.insert(availability).values({
+      vendorId: first.vendorProfileId,
+      date: first.eventDate,
+      status: 'booked',
+    });
+
+    const second = await seedE2eFixtures(database.db, INPUT);
+
+    expect(second.bookingRequestId).not.toBe(first.bookingRequestId);
+    expect(second.eventDate).not.toBe(first.eventDate);
+    expect(second.eventDate > first.eventDate).toBe(true);
+  });
+
+  /*
+   * A half-applied run grants the vendor role and leaves no fixture — which
+   * reads as healthy to anything checking the role alone.
+   */
+  it('applies nothing at all when a later step fails', async () => {
+    const empty = await createTestDatabase();
+    await empty.runMigrations();
+
+    await expect(seedE2eFixtures(empty.db, INPUT)).rejects.toThrow(/pnpm db:seed/);
+
+    // The account upserts ran before the category lookup threw.
+    expect(await empty.db.select().from(users)).toHaveLength(0);
+
+    await empty.close();
   });
 
   it('refuses clearly when reference data has not been seeded', async () => {

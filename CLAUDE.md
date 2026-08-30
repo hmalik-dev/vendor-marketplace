@@ -73,7 +73,24 @@ Database:
 | Generate a migration | `pnpm db:generate` (after editing `packages/db/src/schema`)  |
 | Apply migrations     | `pnpm db:migrate`                                            |
 | Seed reference data  | `pnpm db:seed`                                               |
+| Seed E2E fixtures    | `pnpm db:seed:e2e` — see below                               |
 | Browse data          | `pnpm db:studio`                                             |
+
+**`pnpm db:seed:e2e` is what makes a vendor surface reachable.** Signing in
+creates a `users` row and nothing else — `vendor_profiles` is only ever written
+by `POST /vendor/profile` — so without it the E2E vendor lands on an empty
+profile form and every `/vendor` route redirects there. It gives that account a
+published storefront, one package, one live booking request, and
+`stripe_onboarded`, so `accept` is not blocked by the 402.
+
+It needs `pnpm db:seed` first (for categories), `.env.e2e.local` for the account
+emails, and `CLERK_SECRET_KEY` for the **same Clerk instance those accounts live
+in** — it resolves their real Clerk ids rather than inventing them, because a
+`users` row carrying an E2E email under a made-up id makes that account's next
+sign-in collide on the email index and locks it out. It refuses to run against
+`NODE_ENV=production` or a protected Neon branch, and `lane:up` runs it for
+every lane. `pnpm preflight` **fails** when the accounts cannot reach their
+surfaces.
 
 Deployed web: `web-gules-eta-41.vercel.app` — the parity target after every push.
 

@@ -1,5 +1,16 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assertSafeTarget } from './safe-target.js';
+
+/*
+ * An empty root, so the Neon cases turn on `NEON_BRANCH` alone.
+ * `.worktreeinclude` copies `.neon` into every worktree, so a test reading the
+ * real repository root would pass or fail by accident depending on whether one
+ * happened to be there.
+ */
+const EMPTY_ROOT = mkdtempSync(path.join(tmpdir(), 'safe-target-'));
 
 /**
  * The guard that stands between a fabricating seed and a database holding real
@@ -18,7 +29,9 @@ describe('assertSafeTarget', () => {
   it('refuses when DATABASE_URL is not set at all', () => {
     vi.stubEnv('DATABASE_URL', '');
 
-    expect(() => assertSafeTarget('end-to-end fixtures')).toThrow(/DATABASE_URL is not set/);
+    expect(() => assertSafeTarget('end-to-end fixtures', EMPTY_ROOT)).toThrow(
+      /DATABASE_URL is not set/,
+    );
   });
 
   /*
@@ -30,7 +43,7 @@ describe('assertSafeTarget', () => {
     vi.stubEnv('DATABASE_URL', 'postgresql://localhost:5432/vendor_marketplace');
     vi.stubEnv('NODE_ENV', 'production');
 
-    expect(() => assertSafeTarget('end-to-end fixtures')).toThrow(
+    expect(() => assertSafeTarget('end-to-end fixtures', EMPTY_ROOT)).toThrow(
       /Refusing to seed end-to-end fixtures with NODE_ENV=production/,
     );
   });
@@ -39,7 +52,7 @@ describe('assertSafeTarget', () => {
     vi.stubEnv('DATABASE_URL', 'postgresql://localhost:5432/vendor_marketplace_lane_317');
     vi.stubEnv('NODE_ENV', 'development');
 
-    expect(() => assertSafeTarget('end-to-end fixtures')).not.toThrow();
+    expect(() => assertSafeTarget('end-to-end fixtures', EMPTY_ROOT)).not.toThrow();
   });
 
   it('refuses a Neon host whose branch cannot be identified', () => {
@@ -47,7 +60,9 @@ describe('assertSafeTarget', () => {
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('NEON_BRANCH', '');
 
-    expect(() => assertSafeTarget('end-to-end fixtures')).toThrow(/unidentified branch/);
+    expect(() => assertSafeTarget('end-to-end fixtures', EMPTY_ROOT)).toThrow(
+      /unidentified branch/,
+    );
   });
 
   it.each(['production', 'main', 'master', 'Production'])(
@@ -57,7 +72,7 @@ describe('assertSafeTarget', () => {
       vi.stubEnv('NODE_ENV', 'development');
       vi.stubEnv('NEON_BRANCH', branch);
 
-      expect(() => assertSafeTarget('end-to-end fixtures')).toThrow(
+      expect(() => assertSafeTarget('end-to-end fixtures', EMPTY_ROOT)).toThrow(
         new RegExp(`Refusing to seed end-to-end fixtures into the ${branch} branch`),
       );
     },
@@ -68,13 +83,15 @@ describe('assertSafeTarget', () => {
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('NEON_BRANCH', 'dev');
 
-    expect(() => assertSafeTarget('end-to-end fixtures')).not.toThrow();
+    expect(() => assertSafeTarget('end-to-end fixtures', EMPTY_ROOT)).not.toThrow();
   });
 
   it('names the data it stopped, so the refusal says what was refused', () => {
     vi.stubEnv('DATABASE_URL', 'postgresql://localhost:5432/vendor_marketplace');
     vi.stubEnv('NODE_ENV', 'production');
 
-    expect(() => assertSafeTarget('demo marketing data')).toThrow(/demo marketing data/);
+    expect(() => assertSafeTarget('demo marketing data', EMPTY_ROOT)).toThrow(
+      /demo marketing data/,
+    );
   });
 });

@@ -16,13 +16,13 @@ const PROTECTED_BRANCHES = /^(production|main|master)$/i;
  * downstream would invert the one-way `apps → packages` dependency the repo
  * holds to. Fifteen duplicated lines are cheaper than that inversion.
  */
-function resolveBranch(): { branch?: string; source: string } {
+function resolveBranch(repoRoot: string): { branch?: string; source: string } {
   const declared = process.env.NEON_BRANCH?.trim();
   if (declared) {
     return { branch: declared, source: 'NEON_BRANCH' };
   }
 
-  const stateFile = path.join(REPO_ROOT, '.neon');
+  const stateFile = path.join(repoRoot, '.neon');
   if (existsSync(stateFile)) {
     try {
       const state = JSON.parse(readFileSync(stateFile, 'utf8')) as { branch?: unknown };
@@ -51,8 +51,11 @@ function resolveBranch(): { branch?: string; source: string } {
  * to take payment.
  *
  * @param what names the data in the refusal, so the message says what was stopped.
+ * @param repoRoot where `.neon` is looked for. Injectable so the suite can point
+ * at an empty directory: `.worktreeinclude` copies `.neon` into every worktree,
+ * so a test that depended on the real root would pass or fail by accident.
  */
-export function assertSafeTarget(what: string): void {
+export function assertSafeTarget(what: string, repoRoot: string = REPO_ROOT): void {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
@@ -74,7 +77,7 @@ export function assertSafeTarget(what: string): void {
     return;
   }
 
-  const { branch, source } = resolveBranch();
+  const { branch, source } = resolveBranch(repoRoot);
 
   if (!branch) {
     throw new Error(

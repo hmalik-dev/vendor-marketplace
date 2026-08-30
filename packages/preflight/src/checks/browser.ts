@@ -98,6 +98,11 @@ export function evaluateE2eCredentials(repoRoot: string): CheckResult {
  * broken when the fixture is, which is exactly what happened twice on
  * 2026-08-30 before this check existed.
  *
+ * It checks the whole fixture, not merely that a profile exists. A stale
+ * storefront left behind by an earlier pass satisfies "owns a profile" while
+ * having no package, no request to act on and no payouts — so the run drives
+ * the surfaces and still cannot complete a single flow it was sent to verify.
+ *
  * It fails rather than warns, for the same reason `Demo data present` does: an
  * unattended run must stop here instead of spending an hour describing a
  * database that cannot answer the question.
@@ -126,14 +131,32 @@ export async function evaluateE2eReach(
   });
 
   try {
-    const [row] = await sql<{ role: string | null; profiles: number }[]>`
+    /*
+     * Matched case-insensitively, because the fixture writes Clerk's canonical
+     * address while `.env.e2e.local` holds whatever a human typed.
+     */
+    const [row] = await sql<
+      {
+        role: string | null;
+        profile_id: string | null;
+        payouts_ready: boolean | null;
+        packages: number;
+        live_requests: number;
+      }[]
+    >`
       select
         u.role::text as role,
-        count(v.id)::int as profiles
+        v.id::text as profile_id,
+        v.stripe_onboarded as payouts_ready,
+        (select count(*) from service_packages p where p.vendor_id = v.id)::int as packages,
+        (
+          select count(*) from booking_requests r
+          where r.vendor_id = v.id and r.status in ('pending', 'quoted')
+        )::int as live_requests
       from users u
       left join vendor_profiles v on v.user_id = u.id and v.is_deleted = false
-      where u.email = ${vendorEmail} and u.deleted_at is null
-      group by u.role
+      where lower(u.email) = lower(${vendorEmail}) and u.deleted_at is null
+      limit 1
     `;
 
     if (!row) {
@@ -154,7 +177,7 @@ export async function evaluateE2eReach(
       );
     }
 
-    if (row.profiles === 0) {
+    if (!row.profile_id) {
       return fail(
         'e2e',
         name,
@@ -163,7 +186,33 @@ export async function evaluateE2eReach(
       );
     }
 
-    return pass('e2e', name, 'the vendor account owns a storefront and holds the vendor role');
+    /*
+     * Beyond "can it load a page". A storefront with no package and no live
+     * request renders the dashboard's empty state, and an un-onboarded vendor
+     * meets a 402 on accept — so a pass would drive the surfaces and still be
+     * unable to complete the flows it was sent to verify. That is the state
+     * this check exists to refuse, and the one a bare profile test lets through.
+     */
+    const missing: string[] = [];
+    if (row.packages === 0) {
+      missing.push('no bookable package');
+    }
+    if (row.live_requests === 0) {
+      missing.push('no live booking request to act on');
+    }
+    if (!row.payouts_ready) {
+      missing.push('payouts not connected, so accept answers 402');
+    }
+
+    if (missing.length > 0) {
+      return fail('e2e', name, `the vendor account has ${missing.join(', ')}`, 'pnpm db:seed:e2e');
+    }
+
+    return pass(
+      'e2e',
+      name,
+      'the vendor account owns a published storefront with a package, a live request and payouts',
+    );
   } catch (error: unknown) {
     return fail(
       'e2e',
