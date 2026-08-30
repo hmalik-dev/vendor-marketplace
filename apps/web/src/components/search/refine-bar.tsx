@@ -255,22 +255,12 @@ export function RefineBar({
     /*
      * Seed `displayOrder`, never alphabetical — the order is the design.
      *
-     * `style` is the one group whose options are scoped: `11-search.md` has its
-     * set change with the selected vendor type, because "Documentary" means one
-     * thing to a photographer and another to a videographer, and "Family style"
-     * means nothing at all to a florist. Every other group is the same list
-     * whoever is being filtered.
-     *
-     * With no type selected the chip renders nothing rather than everything —
-     * offering fifty styles across eleven trades is not a filter, and the
-     * `options.length === 0` return below is what makes that a chip that is
-     * absent rather than a chip that is empty.
+     * Every group is global, so the option set does not change with the selected
+     * vendor type. `style` was the exception until #329 removed it; a chip with
+     * nothing to offer still renders as absent rather than empty, which is what
+     * an inactive group would otherwise look like.
      */
-    const options = tags.filter(
-      (tag) =>
-        tag.category === tagCategory &&
-        (tag.vendorCategorySlug === null || tag.vendorCategorySlug === state.category),
-    );
+    const options = tags.filter((tag) => tag.category === tagCategory);
     if (options.length === 0) {
       return null;
     }
@@ -286,7 +276,7 @@ export function RefineBar({
     return (
       <span key={tagCategory} className={chipWrapper(hasChosen ? 'active' : 'resting')}>
         {/*
-          Multi-select, and it **applies on Apply** rather than per tick. Four
+          Multi-select, and it **applies on Apply** rather than per tick. Three
           of these chips filter the same grid; ticking three languages used to
           re-query and re-sort three times, moving the list under the hand that
           was still choosing.
@@ -300,7 +290,7 @@ export function RefineBar({
           value={chosen.map((tag) => tag.id)}
           onApply={(next) =>
             setState({
-              // Only this group's ids are replaced; the other three chips'
+              // Only this group's ids are replaced; the other two chips'
               // selections are not this panel's to discard.
               tags: [...state.tags.filter((id) => !options.some((tag) => tag.id === id)), ...next],
             })
@@ -432,10 +422,10 @@ export function RefineBar({
         </span>
 
         {/*
-          Six chips, in the frame's order: Price and Rating above, then Style,
-          Languages, Cultural and Dietary from `TAG_CATEGORIES`. `Style ▾` was a
-          named deviation until #281 gave it a group to read from — the chip was
-          never the missing part, the data model was.
+          Five chips, in the frame's order: Price and Rating above, then
+          Languages, Cultural and Dietary from `TAG_CATEGORIES`. A sixth,
+          `Style ▾`, shipped in #281 and came out in #329 when Style was ruled
+          out of the MVP — frames `02`, `17`, `27` and `28` draw five.
         */}
         {TAG_CATEGORIES.map(tagChip)}
 

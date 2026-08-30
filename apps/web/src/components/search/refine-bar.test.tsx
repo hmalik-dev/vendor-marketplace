@@ -284,13 +284,11 @@ describe('filter popovers are reachable and know when they are finished', () => 
       id: 'a1111111-1111-4111-8111-111111111111',
       name: 'English',
       category: 'language',
-      vendorCategorySlug: null,
     },
     {
       id: 'a2222222-2222-4222-8222-222222222222',
       name: 'Spanish',
       category: 'language',
-      vendorCategorySlug: null,
     },
   ] as const;
 
@@ -445,102 +443,102 @@ describe('filter popovers are reachable and know when they are finished', () => 
 });
 
 /*
- * #92/#281. Frame `02` draws six refine chips; live rendered five, because
- * there was no `style` group in the data model for the sixth to read from.
+ * #329. Frame `02` draws **five** refine chips. A sixth, `Style ▾`, shipped in
+ * #92/#281 and was ruled out of the MVP the same day `c4c8fa2` removed it from
+ * frames `02`, `17`, `27` and `28` — so for a while the code drew six against a
+ * five-chip frame and this suite asserted the six.
  *
- * The chip's own rule is what makes it more than a fourth copy of the other
- * three: `11-search.md` has its option set change with the selected vendor
- * type, so a style tag belongs to one category while a language belongs to all
- * of them.
+ * The chip set is read out of the frame rather than written down here, and
+ * asserted **by name**: a count alone would pass just as happily if Style came
+ * back and a real group went missing.
  */
-describe('the Style chip', () => {
-  /** The chip labels frame `02` draws in its Refine bar, read at test time. */
+describe('the refine chips', () => {
+  /**
+   * Every chip frame `02` draws in its Refine bar, read at test time.
+   *
+   * Not just the `▾` ones — the frame draws Rating in its *active* state
+   * (`4★ & up ✕`), so a reader keyed on the glyph silently sees four chips and
+   * calls a five-chip bar correct.
+   */
   const frameChips = (() => {
     const frame = frameHtml.slice(frameHtml.indexOf('data-screen-label="02 Search"'));
     const bar = frame.slice(frame.indexOf('Refine'), frame.indexOf('Sort'));
 
-    return [...bar.matchAll(/>([^<>]*?)\s*▾</g)].map((match) => (match[1] ?? '').trim());
+    return [...bar.matchAll(/>([^<>]+?)</g)]
+      .map((match) => (match[1] ?? '').trim())
+      .filter((label) => label.length > 0 && label !== 'Refine' && label !== 'Clear');
   })();
 
-  const STYLES = [
+  const TAGS = [
     {
       id: 'b1111111-1111-4111-8111-111111111111',
-      name: 'Documentary',
-      category: 'style',
-      vendorCategorySlug: 'photography',
+      name: 'English',
+      category: 'language',
     },
     {
       id: 'b2222222-2222-4222-8222-222222222222',
-      name: 'Cinematic',
-      category: 'style',
-      vendorCategorySlug: 'videography',
+      name: 'South Asian',
+      category: 'cultural',
     },
     {
       id: 'b3333333-3333-4333-8333-333333333333',
-      name: 'English',
-      category: 'language',
-      vendorCategorySlug: null,
+      name: 'Halal',
+      category: 'dietary',
     },
   ] as const;
 
-  function renderStyles(category: string) {
+  function renderChips(category: string) {
     render(
       <RefineBar
         state={state({ category })}
         setState={vi.fn()}
         clearRefinements={vi.fn()}
-        tags={STYLES as unknown as React.ComponentProps<typeof RefineBar>['tags']}
+        tags={TAGS as unknown as React.ComponentProps<typeof RefineBar>['tags']}
         facets={[]}
       />,
     );
   }
 
   /* Guards the guard: a frame read that stopped matching would pass anything. */
-  it('reads six chips out of the frame, Style among them', () => {
-    expect(frameChips).toContain('Style');
-    expect(frameChips.length).toBeGreaterThanOrEqual(5);
+  it('reads five chips out of the frame, and Style is not one of them', () => {
+    expect(frameChips).toHaveLength(5);
+    expect(frameChips).not.toContain('Style');
+    expect(frameChips.slice(2)).toEqual(['Languages ▾', 'Cultural ▾', 'Dietary ▾']);
   });
 
-  it('draws the chip the frame draws', () => {
-    renderStyles('photography');
+  it('draws the three tag chips the frame draws, and no Style chip', () => {
+    renderChips('photography');
 
-    expect(screen.getByRole('button', { name: /^Style/ })).toBeDefined();
-  });
-
-  /*
-   * The scoping, asserted from the rendered options rather than from the
-   * filter expression — "Cinematic" is a real style and a real tag, and the
-   * only thing wrong with it here is that this customer is looking for a
-   * photographer.
-   */
-  it('offers only the styles belonging to the selected vendor type', async () => {
-    renderStyles('photography');
-
-    await userEvent.click(screen.getByRole('button', { name: /^Style/ }));
-
-    expect(screen.getByRole('option', { name: /Documentary/ })).toBeDefined();
-    expect(screen.queryByRole('checkbox', { name: /Cinematic/ })).toBeNull();
-  });
-
-  it('swaps the option set with the vendor type', async () => {
-    renderStyles('videography');
-
-    await userEvent.click(screen.getByRole('button', { name: /^Style/ }));
-
-    expect(screen.getByRole('option', { name: /Cinematic/ })).toBeDefined();
-    expect(screen.queryByRole('checkbox', { name: /Documentary/ })).toBeNull();
-  });
-
-  /*
-   * With no type chosen there is no option set, and fifty styles across eleven
-   * trades is not a filter. The chip is absent rather than present and empty —
-   * a control that opens onto nothing is the dead-control defect.
-   */
-  it('is absent entirely when no vendor type is selected', () => {
-    renderStyles('');
-
+    for (const label of ['Languages', 'Cultural', 'Dietary']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeDefined();
+    }
     expect(screen.queryByRole('button', { name: /^Style/ })).toBeNull();
-    // The unscoped groups are unaffected by the vendor type.
-    expect(screen.getByRole('button', { name: /^Language/ })).toBeDefined();
+  });
+
+  /*
+   * Every remaining group is global, so the option set no longer moves with the
+   * vendor type — the scoping that `style` needed went with it. Asserted from
+   * the rendered chips rather than from the filter expression.
+   */
+  it('draws the same chips whichever vendor type is selected', () => {
+    renderChips('videography');
+
+    for (const label of ['Languages', 'Cultural', 'Dietary']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeDefined();
+    }
+    expect(screen.queryByRole('button', { name: /^Style/ })).toBeNull();
+  });
+
+  /*
+   * The bar is reachable with no vendor type chosen, and the three global groups
+   * are the same list there. A chip is still absent rather than present and
+   * empty when its group has no tags at all — a control that opens onto nothing
+   * is the dead-control defect.
+   */
+  it('draws the tag chips with no vendor type selected', () => {
+    renderChips('');
+
+    expect(screen.getByRole('button', { name: /^Languages/ })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /^Style/ })).toBeNull();
   });
 });

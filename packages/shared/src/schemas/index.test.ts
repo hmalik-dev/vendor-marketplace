@@ -243,7 +243,6 @@ describe('tagSchema', () => {
     name: 'South Asian',
     slug: 'cultural-south-asian',
     category: 'cultural',
-    vendorCategorySlug: null,
     displayOrder: 1,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -254,32 +253,15 @@ describe('tagSchema', () => {
   });
 
   /*
-   * A style tag carries the vendor category it belongs to; the three global
-   * groups carry null. The schema allows either, because it describes both
-   * kinds of row — what enforces the correspondence is the seed and its own
-   * test, not this.
+   * #329 removed the `style` group and with it `vendor_category_id`, the scope
+   * it existed for. Every remaining group is global, so a tag row carries no
+   * scope at all — and the schema strips one rather than passing it through to
+   * a consumer that would read it as meaningful.
    */
-  it('carries the vendor category a scoped tag belongs to', () => {
-    const scoped = tagSchema.parse({
-      ...valid,
-      name: 'Documentary',
-      slug: 'style-photography-documentary',
-      category: 'style',
-      vendorCategorySlug: 'photography',
-    });
+  it('carries no vendor-category scope', () => {
+    const parsed = tagSchema.parse({ ...valid, vendorCategorySlug: 'photography' });
 
-    expect(scoped.vendorCategorySlug).toBe('photography');
-    expect(tagSchema.parse(valid).vendorCategorySlug).toBeNull();
-  });
-
-  /*
-   * The slug, not the id — a consumer already holding `?category=photography`
-   * must be able to match without a second lookup.
-   */
-  it('rejects a scope that is not a slug', () => {
-    expect(tagSchema.safeParse({ ...valid, vendorCategorySlug: 'Photography!' }).success).toBe(
-      false,
-    );
+    expect(parsed).not.toHaveProperty('vendorCategorySlug');
   });
 
   it('rejects a tag category outside the shared set', () => {
@@ -717,7 +699,6 @@ describe('tagSuggestionResponseSchema', () => {
     name: 'Amharic',
     slug: 'language-amharic',
     category: 'language',
-    vendorCategorySlug: null,
     displayOrder: 1,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -818,7 +799,6 @@ describe('vendorProfileDetailSchema', () => {
           name: 'Spanish',
           slug: 'language-spanish',
           category: 'language',
-          vendorCategorySlug: null,
           displayOrder: 2,
           isActive: true,
           createdAt: new Date('2026-01-01T00:00:00.000Z'),

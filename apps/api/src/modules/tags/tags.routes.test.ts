@@ -101,32 +101,31 @@ describe('tag routes', () => {
       expect(response.json().length).toBeGreaterThan(0);
     });
 
-    it('covers every picker section, including the scoped one', async () => {
+    it('covers every picker section and no others', async () => {
       const response = await harness.app.inject({ method: 'GET', url: '/tags' });
       const seen = new Set<string>(
         response.json().map((tag: { category: string }) => tag.category),
       );
 
-      expect([...seen].sort()).toEqual(['cultural', 'dietary', 'language', 'style']);
+      expect([...seen].sort()).toEqual(['cultural', 'dietary', 'language']);
     });
 
     /*
-     * A style tag is only meaningful beside the vendor category it belongs to —
-     * "Family style" says nothing about a florist — so the scope travels with
-     * the row rather than being looked up separately by whoever renders it.
+     * #329 removed `style`, the only scoped group, and with it the
+     * `vendor_category_id` the route projected as `vendorCategorySlug`. This is
+     * the contract the Refine bar reads, so a field reappearing here is a group
+     * reappearing — asserted on the wire rather than on the DAO, because a
+     * left-over projection would still be serialised.
      */
-    it('carries the vendor category a style tag is scoped to, and only for style', async () => {
+    it('carries no vendor-category scope on any row', async () => {
       const response = await harness.app.inject({ method: 'GET', url: '/tags' });
-      const rows = response.json() as { category: string; vendorCategorySlug: string | null }[];
+      const rows = response.json() as Record<string, unknown>[];
 
+      expect(rows.length).toBeGreaterThan(0);
       for (const row of rows) {
-        expect(row.vendorCategorySlug === null).toBe(row.category !== 'style');
+        expect(row).not.toHaveProperty('vendorCategorySlug');
+        expect(row).not.toHaveProperty('vendorCategoryId');
       }
-
-      // The slug, so the Refine bar can match it against `?category=` directly.
-      expect(
-        rows.filter((row) => row.category === 'style').map((row) => row.vendorCategorySlug),
-      ).toContain('photography');
     });
 
     it('omits a deactivated tag', async () => {

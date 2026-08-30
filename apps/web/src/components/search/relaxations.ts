@@ -38,7 +38,16 @@ export function relaxations(state: SearchState): Relaxation[] {
     options.push({ label: 'Any rating', patch: { minRating: null } });
   }
   if (state.tags.length > 0) {
-    options.push({ label: 'Any style', patch: { tags: [] } });
+    /*
+     * "Tag", not "style": #329 removed the Style group, and this one option
+     * clears all three that remain — languages, cultural specialties and
+     * dietary requirements. Naming any one of them would be the same defect
+     * one group over, since a customer who filtered only by language would be
+     * offered "Any specialty". `tags` is the collective the picker already
+     * shows a customer (`tag-picker.tsx`'s "Add tags"), so it is the product's
+     * own word rather than a new one; frame `18` draws no tag chip of its own.
+     */
+    options.push({ label: 'Any tag', patch: { tags: [] } });
   }
   if (state.city !== '') {
     options.push({ label: 'Anywhere', patch: { city: '' } });
@@ -98,7 +107,7 @@ export function noResultsDiagnosis(state: SearchState): string | null {
         : first.patch.minRating !== undefined
           ? 'The rating floor'
           : first.patch.tags !== undefined
-            ? 'The style filter'
+            ? 'The tag filter'
             : 'The city';
 
   /*

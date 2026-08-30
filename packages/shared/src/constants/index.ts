@@ -259,20 +259,19 @@ export const BUDGET_TIER_LABELS: Record<
 };
 
 /**
- * The four groups a vendor tag belongs to, rendered as sections in the picker.
+ * The three groups a vendor tag belongs to, rendered as sections in the picker.
  *
- * `style` is the odd one and the reason this list is not simply longer.
- * `11-search.md` defines its chip as "category-specific tags (documentary,
- * editorial…) — **the option set changes with the selected type**", so a style
- * tag belongs to one vendor category while a language, culture or dietary
- * requirement belongs to all of them. That scoping is `tags.vendor_category_id`,
- * which is null for the other three and required for this one.
+ * All three are global: a language, a culture and a dietary requirement mean the
+ * same thing whichever trade is being filtered, so a tag belongs to every vendor
+ * category at once and needs no scope column.
+ *
+ * A fourth group, `style`, was built in #281 and removed in #329 when Style was
+ * ruled out of the MVP. It was the only scoped group — its option set changed
+ * with the selected vendor type — and `tags.vendor_category_id` existed solely
+ * to carry that scope. Both went together; re-adding one means re-adding both.
  */
-export const TAG_CATEGORIES = ['style', 'language', 'cultural', 'dietary'] as const;
+export const TAG_CATEGORIES = ['language', 'cultural', 'dietary'] as const;
 export type TagCategory = (typeof TAG_CATEGORIES)[number];
-
-/** The one group whose tags are scoped to a single vendor category. */
-export const SCOPED_TAG_CATEGORY = 'style' satisfies TagCategory;
 
 export const TAG_SUGGESTION_STATUSES = ['pending', 'approved', 'rejected'] as const;
 export type TagSuggestionStatus = (typeof TAG_SUGGESTION_STATUSES)[number];
@@ -517,73 +516,9 @@ export interface TagSeed {
   readonly category: TagCategory;
   /** Ordering within the tag's own category group. */
   readonly displayOrder: number;
-  /**
-   * The vendor category this tag applies to, for `style` only — a documentary
-   * photographer and a family-style caterer have nothing to offer each other's
-   * filter. Absent for the three global groups.
-   */
-  readonly vendorCategorySlug?: string;
-}
-
-/**
- * How a vendor in each category describes the *way* they work.
- *
- * Chosen rather than found: nothing in the design bundle enumerates these
- * beyond `11-search.md`'s "(documentary, editorial…)", so this is a first
- * vocabulary and not a transcription. It is deliberately short — four to six
- * per category, the distinctions a customer would actually filter on — because
- * a long list is a worse filter than a short one and every entry a vendor
- * cannot honestly claim is noise in the facet counts.
- *
- * Cheap to revise while it is: `vendor_tags` is empty of style rows until
- * vendors start choosing, and the seeds are regenerated rather than migrated.
- */
-const STYLE_SEEDS: ReadonlyArray<{ category: string; styles: readonly string[] }> = [
-  {
-    category: 'photography',
-    styles: ['Documentary', 'Editorial', 'Fine art', 'Traditional', 'Moody', 'Light and airy'],
-  },
-  {
-    category: 'videography',
-    styles: ['Documentary', 'Cinematic', 'Journalistic', 'Highlight film'],
-  },
-  { category: 'entertainment', styles: ['DJ', 'Live band', 'Acoustic', 'Open format', 'MC-led'] },
-  {
-    category: 'catering',
-    styles: ['Plated', 'Family style', 'Buffet', 'Food stations', 'Grazing'],
-  },
-  { category: 'florals', styles: ['Garden', 'Minimal', 'Wild and loose', 'Structured', 'Dried'] },
-  {
-    category: 'venues',
-    styles: ['Indoor', 'Outdoor', 'Barn', 'Industrial', 'Historic', 'Waterfront'],
-  },
-  { category: 'beauty', styles: ['Natural', 'Glam', 'Editorial', 'Bridal'] },
-  { category: 'carts', styles: ['Coffee', 'Cocktail', 'Dessert', 'Late night'] },
-  { category: 'decor', styles: ['Minimal', 'Romantic', 'Modern', 'Rustic', 'Bold colour'] },
-  { category: 'planning', styles: ['Full planning', 'Partial planning', 'Day-of coordination'] },
-  { category: 'rentals', styles: ['Tabletop', 'Furniture', 'Tenting', 'Lighting'] },
-];
-
-/**
- * `style-<category>-<name>`, because a style name is unique only inside its
- * category — "Documentary" is a photography style *and* a videography one, and
- * "Editorial" is both photography and beauty. The category segment is what
- * keeps the globally-unique slug from colliding.
- */
-function styleSeeds(): readonly TagSeed[] {
-  return STYLE_SEEDS.flatMap(({ category, styles }) =>
-    styles.map((name, index) => ({
-      name,
-      slug: `style-${category}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-      category: 'style' as const,
-      displayOrder: index + 1,
-      vendorCategorySlug: category,
-    })),
-  );
 }
 
 export const TAG_SEEDS: readonly TagSeed[] = [
-  ...styleSeeds(),
   { name: 'English', slug: 'language-english', category: 'language', displayOrder: 1 },
   { name: 'Spanish', slug: 'language-spanish', category: 'language', displayOrder: 2 },
   { name: 'French', slug: 'language-french', category: 'language', displayOrder: 3 },

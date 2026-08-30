@@ -28,8 +28,6 @@ function tag(name: string, category: TagCategory, order: number): WireTag {
     name,
     slug: `${category}-${name.toLowerCase().replace(/\s+/g, '-')}`,
     category,
-    // Only `style` carries a scope; these fixtures are the global groups.
-    vendorCategorySlug: category === 'style' ? 'photography' : null,
     displayOrder: order,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -71,12 +69,17 @@ describe('TagPicker', () => {
     cleanup();
   });
 
-  it('renders one section per tag category', () => {
+  /*
+   * The exact set, not three lookups. #329 removed the `style` group ("How you
+   * work"), and naming the survivors proves nothing about a fourth section
+   * still rendering beside them — which is the shape the regression would take.
+   */
+  it('renders one section per tag category and no others', () => {
     renderPicker();
 
-    expect(screen.getByRole('heading', { name: 'Languages spoken' })).toBeDefined();
-    expect(screen.getByRole('heading', { name: 'Cultural specialties' })).toBeDefined();
-    expect(screen.getByRole('heading', { name: 'Dietary' })).toBeDefined();
+    expect(
+      screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
+    ).toEqual(['Languages spoken', 'Cultural specialties', 'Dietary']);
   });
 
   it('adds a tag as a removable pill when it is selected', async () => {
