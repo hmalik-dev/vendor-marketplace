@@ -2,7 +2,6 @@
 
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
-  MAX_UPLOAD_BYTES,
   UPLOAD_CONSTRAINT_LINE,
   type UploadedImage,
 } from '@vendor-marketplace/shared';
@@ -16,6 +15,7 @@ import {
   connectionFailure,
   previewFailure,
   rejectedFailure,
+  screenDimensions,
   screenFile,
   type UploadFailure,
 } from '@/lib/uploads';
@@ -50,7 +50,6 @@ export interface ImageUploadProps {
 }
 
 const ACCEPT = ACCEPTED_IMAGE_MIME_TYPES.join(',');
-export const MAX_UPLOAD_MB = Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024));
 
 /**
  * Click-or-drop upload for a single image. The file is validated here for a
@@ -112,6 +111,25 @@ export function ImageUpload({
     const screened = screenFile(file);
     if (screened) {
       setFailure(screened);
+      return;
+    }
+
+    /*
+     * The width floor, screened here as well as in the portfolio queue.
+     *
+     * Skipping it did not skip the rule — the server still refused a 680px
+     * file — but it arrived as a generic 400 and was classified as a **red**
+     * rejection, where the same file on `/vendor/portfolio` was **gold**. One
+     * file, two colours, and the red one told the vendor their photo was
+     * invalid when `40-states.md` says gold: it would look soft, and the
+     * decision is theirs.
+     *
+     * Both uploaders now reach `tooNarrowFailure` by the same path, which is
+     * what makes the colour agree rather than two call sites agreeing to.
+     */
+    const narrow = await screenDimensions(file);
+    if (narrow) {
+      setFailure(narrow);
       return;
     }
 

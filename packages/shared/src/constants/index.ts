@@ -733,8 +733,26 @@ export const MAX_PAGE = 100_000;
  * the server's own refusals — so every one of them reads these.
  */
 
-/** Largest accepted upload before server-side image processing. */
-export const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+/** One megabyte, decimal — the convention a file manager reports. */
+export const BYTES_PER_MB = 1_000_000;
+
+/**
+ * Largest accepted upload before server-side image processing.
+ *
+ * **Decimal megabytes, not binary.** This was `12 * 1024 * 1024`, and every
+ * displayed size divided by the same figure while labelling the result "MB" —
+ * so a 70,062,643-byte file was reported as `66.8 MB` where Finder called it
+ * `70.1 MB`, an under-report of 4.8% against the only number the vendor can
+ * see. Internally consistent and externally wrong.
+ *
+ * Changing the divisor alone would have made the limit read `12.6 MB` and
+ * contradicted `40-states.md`, which fixes the contract at "12 MB each". So the
+ * limit moved to the vendor's units instead: **12 MB now means 12,000,000
+ * bytes**, the stated number is literally true, and the drop zone, the
+ * refusals and the file manager finally agree. The server's multipart ceiling
+ * reads this same constant, so both ends moved together.
+ */
+export const MAX_UPLOAD_BYTES = 12 * BYTES_PER_MB;
 
 /**
  * Accepted **input** formats. WebP is deliberately not among them: it is the
@@ -767,7 +785,7 @@ export const ACCEPTED_IMAGE_LABEL = 'JPG or PNG';
  * drop zone and the requirements rail, so it is built here rather than
  * retyped at each site.
  */
-export const UPLOAD_CONSTRAINT_LINE = `${ACCEPTED_IMAGE_LABEL} · ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB each · min ${MIN_UPLOAD_IMAGE_WIDTH}px wide · ${MAX_UPLOAD_BATCH_FILES} files per upload`;
+export const UPLOAD_CONSTRAINT_LINE = `${ACCEPTED_IMAGE_LABEL} · ${MAX_UPLOAD_BYTES / BYTES_PER_MB} MB each · min ${MIN_UPLOAD_IMAGE_WIDTH}px wide · ${MAX_UPLOAD_BATCH_FILES} files per upload`;
 
 /** Column widths mirrored from the Drizzle schema, enforced by Zod. */
 export const MAX_SLUG_LENGTH = 200;

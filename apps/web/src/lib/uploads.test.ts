@@ -4,7 +4,7 @@ import {
   aggregateLine,
   connectionFailure,
   failureSentence,
-  formatMegabytes,
+  formatFileSize,
   heldBackSentence,
   rejectedFailure,
   retryableTasks,
@@ -12,6 +12,7 @@ import {
   screenFile,
   splitBatch,
   summarise,
+  previewFailure,
   tooLargeFailure,
   tooNarrowFailure,
   unsupportedFormatFailure,
@@ -56,15 +57,27 @@ describe('screenFile', () => {
     });
   });
 
-  it('states the actual size against the limit when a file is too large', () => {
-    const failure = screenFile({
-      name: 'huge.jpg',
-      type: 'image/jpeg',
-      size: MAX_UPLOAD_BYTES + 1,
-    });
+  /*
+   * The whole sentence, at the boundary, on both sides of it.
+   *
+   * This previously asserted `'12 MB is over the 12 MB limit.'` — the
+   * contradiction itself, pinned as expected behaviour. The check is
+   * `size > MAX_UPLOAD_BYTES`, so a refused file is always strictly larger;
+   * one-decimal rounding was what made the sentence deny its own premise, and
+   * a test asserting that string could never have caught it.
+   */
+  it.each([
+    // A single byte over rounds to the limit at every sane precision, so the
+    // exact count is stated rather than a rounder number that would read false.
+    [MAX_UPLOAD_BYTES + 1, '12,000,001 bytes is over the 12 MB limit.'],
+    [MAX_UPLOAD_BYTES + 4_000, '12.004 MB is over the 12 MB limit.'],
+    [MAX_UPLOAD_BYTES + 1_000_000, '13 MB is over the 12 MB limit.'],
+  ])('never states a refused size equal to the limit (%i bytes)', (size, reason) => {
+    const failure = screenFile({ name: 'huge.jpg', type: 'image/jpeg', size });
 
     expect(failure).toMatchObject({ kind: 'too-large', tone: 'red', retryable: false });
-    expect(failure?.reason).toBe('12 MB is over the 12 MB limit.');
+    expect(failure?.reason).toBe(reason);
+    expect(failure?.reason).not.toBe('12 MB is over the 12 MB limit.');
     expect(failure?.fix).toBe('Export it as a JPG at 2400px wide.');
   });
 
@@ -155,11 +168,66 @@ describe('splitBatch', () => {
       '20 files upload at a time, so 2 files were held back: x.jpg, y.jpg. Add them next.',
     );
   });
+
+  /*
+   * The noun agreed for one file and the verb did not, so picking 21 read
+   * "1 file were held back". Only the plural case had a test, which is exactly
+   * why the singular one was wrong.
+   */
+  it('agrees in the singular, verb and pronoun included', () => {
+    expect(heldBackSentence(['b21.jpg'])).toBe(
+      '20 files upload at a time, so 1 file was held back: b21.jpg. Add it next.',
+    );
+  });
+});
+
+/*
+ * Every failure sentence begins with a capital. The extensionless branch did
+ * not — a JPG renamed `noextension` produced "file isn't a format we can
+ * publish." — and it escaped review because the first word is interpolated,
+ * so no literal in the source began lowercase.
+ */
+describe('failure sentences', () => {
+  it.each([
+    ['noextension', 'File'],
+    ['photo.heic', 'HEIC'],
+    ['scan.tiff', 'TIFF'],
+  ])('starts %s with a capital', (fileName, expectedStart) => {
+    const { reason } = unsupportedFormatFailure(fileName);
+
+    expect(reason.startsWith(expectedStart)).toBe(true);
+    expect(reason[0]).toBe(reason[0]?.toUpperCase());
+  });
+
+  it('starts every other failure sentence with a capital too', () => {
+    const sentences = [
+      tooLargeFailure(MAX_UPLOAD_BYTES + 4_000).reason,
+      tooNarrowFailure(680).reason,
+      connectionFailure().reason,
+      previewFailure().reason,
+    ];
+
+    for (const sentence of sentences) {
+      expect(sentence[0]).toBe(sentence[0]?.toUpperCase());
+    }
+  });
 });
 
 describe('batch reporting', () => {
-  it('formats megabytes to one decimal', () => {
-    expect(formatMegabytes(18.2 * 1024 * 1024)).toBe('18.2 MB');
+  /*
+   * Decimal megabytes, matching the file manager. This divided by 1024 twice
+   * while labelling the result MB, so a 70,062,643-byte file read as 66.8 MB
+   * where Finder said 70.1 MB — internally consistent and 4.8% wrong against
+   * the only number the vendor can check.
+   */
+  it('reports megabytes in the same units the file manager does', () => {
+    expect(formatFileSize(18_200_000)).toBe('18.2 MB');
+    expect(formatFileSize(70_062_643)).toBe('70.1 MB');
+  });
+
+  /* A fraction of a megabyte is a rounding artefact, not a size. */
+  it('reports a small file in kB rather than as 0.2 MB', () => {
+    expect(formatFileSize(204_800)).toBe('205 kB');
   });
 
   it('writes the aggregate line the frame specifies', () => {
@@ -173,7 +241,7 @@ describe('batch reporting', () => {
       ),
     ];
 
-    expect(aggregateLine(tasks)).toBe('Uploading 4 of 8 — 14 MB of 32 MB');
+    expect(aggregateLine(tasks)).toBe('Uploading 4 of 8 — 14.7 MB of 33.6 MB');
   });
 
   it('has no aggregate line once every file has settled', () => {
@@ -219,6 +287,44 @@ describe('an eight-file batch with two failures', () => {
   it('says nothing at all when every file landed', () => {
     expect(failureSentence(tasks.slice(0, 6))).toBeNull();
     expect(retryableTasks(tasks.slice(0, 6))).toEqual([]);
+  });
+
+  /*
+   * The mid-batch checkpoint the ticket describes: ten files, two failed
+   * client-side, one uploading and seven still queued at ~800ms. The banner
+   * claimed "Everything else saved" when nothing had been persisted at all —
+   * it was describing the end of a batch that had barely started.
+   */
+  it('does not claim completion while files are still queued or uploading', () => {
+    const midBatch: UploadTask[] = [
+      task({ id: 'f1', status: 'failed', failure: tooNarrowFailure(680) }),
+      task({ id: 'f2', status: 'failed', failure: tooNarrowFailure(700) }),
+      task({ id: 'up', status: 'uploading', progress: 40 }),
+      ...Array.from({ length: 7 }, (_, index) => task({ id: `q${index}`, status: 'queued' })),
+    ];
+
+    const sentence = failureSentence(midBatch);
+
+    expect(sentence).toBe("2 photos didn't upload. 8 still going.");
+    expect(sentence).not.toContain('Everything else saved');
+  });
+
+  /* Once the batch settles, the original sentence is the right one again. */
+  it('claims the remainder saved only after everything has settled', () => {
+    expect(failureSentence(tasks)).toBe("2 photos didn't upload. Everything else saved.");
+  });
+
+  /*
+   * Nothing else to claim when the whole batch failed. "Everything else saved"
+   * of an empty remainder is the same false note in a quieter voice.
+   */
+  it('claims nothing about a remainder that does not exist', () => {
+    const allFailed: UploadTask[] = [
+      task({ id: 'a', status: 'failed', failure: connectionFailure() }),
+      task({ id: 'b', status: 'failed', failure: connectionFailure() }),
+    ];
+
+    expect(failureSentence(allFailed)).toBe("2 photos didn't upload.");
   });
 });
 
