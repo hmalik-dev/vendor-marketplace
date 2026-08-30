@@ -50,6 +50,17 @@ export type StreamEvent =
 /** Backoff schedule, in ms. Capped so a long outage still retries. */
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000] as const;
 
+/**
+ * How many consecutive failures are attempted before the stream waits to be
+ * woken rather than retrying again.
+ *
+ * One full pass of the ladder: roughly a minute of trying, ending at the 30s
+ * ceiling. Long enough to ride out a redeploy or a tunnel, short enough that a
+ * lane with no API behind it stops writing an identical console error every
+ * half minute for the rest of the session.
+ */
+const MAX_CONSECUTIVE_ATTEMPTS = BACKOFF_MS.length;
+
 export interface EventStream {
   /**
    * Whether the stream is currently connected.
@@ -100,6 +111,8 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
     let source: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
+    /** Set once the bounded run is spent; cleared by `resume`. */
+    let exhausted = false;
     let cancelled = false;
     let hasConnectedBefore = false;
     const aborter = new AbortController();
@@ -176,11 +189,48 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
       };
     }
 
+    /*
+     * Gives up after a bounded run of failures, and waits to be woken.
+     *
+     * Retrying for ever at the 30s ceiling is not a tight loop, but it is
+     * still noise nobody reads: a lane whose API is down produces an identical
+     * console error every half minute, and `browser-verifier` reads the
+     * console at every checkpoint, so a real error has to be found among them.
+     *
+     * Simply stopping would be worse than the noise, though. A dropped
+     * connection is the **normal** case on a phone — a screen lock, a tunnel, a
+     * network switch — and a stream that gave up permanently would leave a
+     * device silently stale for the rest of the session. So the attempts are
+     * bounded and the browser's own signals restart them: coming back online,
+     * or the tab being looked at again. Both are exactly the moments a
+     * reconnect is likely to succeed.
+     */
     function scheduleRetry(): void {
+      if (attempt >= MAX_CONSECUTIVE_ATTEMPTS) {
+        exhausted = true;
+        return;
+      }
+
       const delay = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)] ?? 30_000;
       attempt += 1;
       retry = setTimeout(() => void connect(), delay);
     }
+
+    function resume(): void {
+      if (cancelled || !exhausted) {
+        return;
+      }
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
+
+      exhausted = false;
+      attempt = 0;
+      void connect();
+    }
+
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
 
     void connect();
 
@@ -189,6 +239,8 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
       // An exchange in flight outlives the effect otherwise, and lands a
       // ticket nothing will ever spend.
       aborter.abort();
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
       if (retry) {
         clearTimeout(retry);
       }

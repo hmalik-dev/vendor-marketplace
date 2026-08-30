@@ -209,6 +209,103 @@ describe('useEventStream', () => {
     },
   );
 
+  /*
+   * #318. The stream connected to a literal `http://localhost:4028` while the
+   * lane's API was on 4020, so it retried a refused connection for ever. On a
+   * machine running two lanes the same bug is worse than a refusal: the port
+   * belongs to the *other* lane, so it connects, and one lane's notifications
+   * arrive in the other's tab.
+   */
+  it('builds the stream URL from the configured API origin, not a literal', async () => {
+    render(<Subscriber />);
+
+    await vi.waitFor(() => expect(opened).toHaveLength(1));
+
+    const origin = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    expect(opened[0]?.startsWith(`${origin}/events/stream`)).toBe(true);
+  });
+
+  /*
+   * The delays themselves, not merely that a retry happened. Asserting "it
+   * retried" passes just as well against the tight loop this ticket is about,
+   * which is why the ticket asks for the specific values.
+   */
+  it('backs off on the ladder rather than retrying at a fixed interval', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockResolvedValue(new Response('nope', { status: 503 }));
+
+    render(<Subscriber />);
+
+    /*
+     * `vi.waitFor` advances fake timers itself, so it cannot be used to reach a
+     * known point on the clock — flushing microtasks with a zero advance is
+     * what keeps the boundaries below meaningful.
+     */
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+
+    // Just short of each delay changes nothing; crossing it spends one attempt.
+    for (const [index, delay] of [1_000, 2_000, 4_000, 8_000].entries()) {
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(index + 1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(index + 2);
+    }
+
+    vi.useRealTimers();
+  });
+
+  /*
+   * Bounded, so a lane with no API behind it stops writing an identical console
+   * error every thirty seconds for the rest of the session — `browser-verifier`
+   * reads the console at every checkpoint, and a real error has to be findable
+   * among them.
+   */
+  it('stops after a bounded run of failures instead of retrying for ever', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockResolvedValue(new Response('nope', { status: 503 }));
+
+    render(<Subscriber />);
+    await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1));
+
+    // The whole ladder, then well past the ceiling several times over.
+    await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000 + 8_000 + 16_000 + 30_000);
+    const spent = vi.mocked(fetch).mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(spent);
+
+    vi.useRealTimers();
+  });
+
+  /*
+   * Bounded is not the same as given up. A dropped connection is the normal
+   * case on a phone, so the browser's own "you are back" signals restart the
+   * run — otherwise a device that reconnects an hour later stays silently
+   * stale for the rest of the session.
+   */
+  it('resumes when the browser comes back online', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockResolvedValue(new Response('nope', { status: 503 }));
+
+    render(<Subscriber />);
+    await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000 + 8_000 + 16_000 + 30_000);
+
+    const spent = vi.mocked(fetch).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(spent);
+
+    vi.mocked(fetch).mockResolvedValue(Response.json({ ticket: 'ticket-after-online' }));
+    window.dispatchEvent(new Event('online'));
+
+    await vi.waitFor(() => expect(opened).toHaveLength(1));
+    expect(opened[0]).toContain('ticket=ticket-after-online');
+
+    vi.useRealTimers();
+  });
+
   it('opens nothing when unmounted while the exchange is in flight', async () => {
     let release: (value: Response) => void = () => {};
     vi.mocked(fetch).mockImplementation(
