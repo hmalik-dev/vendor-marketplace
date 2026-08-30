@@ -12,6 +12,7 @@ import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { ImageUpload } from '@/components/image-upload';
 import { Button } from '@/components/ui/button';
+import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -46,6 +47,7 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
   const [city, setCity] = useState(user.city ?? '');
   const [state, setState] = useState(user.state ?? '');
   const [budgetTier, setBudgetTier] = useState<BudgetTier | ''>(user.budgetTier ?? '');
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [guestMin, setGuestMin] = useState(user.typicalGuestCountMin?.toString() ?? '');
   const [guestMax, setGuestMax] = useState(user.typicalGuestCountMax?.toString() ?? '');
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
@@ -162,20 +164,47 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
             The glyph never appears without its label and range. `$$$` alone is
             a code the reader has to have been taught; the row spells it out.
           */}
-          <select
-            id={`${fieldId}-budget`}
+          {/* The one dropdown, not a native `<select>` (#167). */}
+          <SingleSelectDropdown
+            open={budgetOpen}
+            onOpenChange={setBudgetOpen}
+            label="Typical budget"
+            countNoun="tiers"
+            options={[
+              { value: '', label: 'Prefer not to say' },
+              ...BUDGET_TIERS.map((tier) => ({
+                value: tier,
+                label: `${BUDGET_TIER_LABELS[tier].glyph} · ${BUDGET_TIER_LABELS[tier].label}`,
+                hint: BUDGET_TIER_LABELS[tier].range,
+              })),
+            ]}
             value={budgetTier}
-            onChange={(event) => setBudgetTier(event.target.value as BudgetTier | '')}
-            className={cn(FIELD, 'appearance-none')}
-          >
-            <option value="">Prefer not to say</option>
-            {BUDGET_TIERS.map((tier) => (
-              <option key={tier} value={tier}>
-                {BUDGET_TIER_LABELS[tier].glyph} · {BUDGET_TIER_LABELS[tier].label} (
-                {BUDGET_TIER_LABELS[tier].range})
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setBudgetTier(next as BudgetTier | '')}
+            trigger={
+              <button
+                type="button"
+                id={`${fieldId}-budget`}
+                aria-haspopup="listbox"
+                aria-expanded={budgetOpen}
+                className={cn(FIELD, 'flex items-center justify-between gap-2 text-left')}
+              >
+                <span className={cn('truncate', budgetTier === '' && 'text-stone-600')}>
+                  {budgetTier === ''
+                    ? 'Prefer not to say'
+                    : `${BUDGET_TIER_LABELS[budgetTier].glyph} · ${BUDGET_TIER_LABELS[budgetTier].label} (${BUDGET_TIER_LABELS[budgetTier].range})`}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'shrink-0 text-base',
+                    budgetOpen ? 'text-clay-400' : 'text-stone-600',
+                  )}
+                >
+                  {budgetOpen ? '▴' : '▾'}
+                </span>
+              </button>
+            }
+          />
         </div>
 
         <div>

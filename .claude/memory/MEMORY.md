@@ -3,6 +3,7 @@
 - [Playwright browser verification is mandatory](vendor-marketplace-playwright-verification.md) — every ticket flow gets driven in a real browser before Done
 - [E2E test accounts, one per role](vendor-marketplace-e2e-credentials.md) — customer + vendor credentials in the gitignored .env.e2e.local, never in the repo
 - [Open Playwright before frontend work](open-playwright-before-frontend-work.md) — user watches FE changes live; open the browser session before the first FE edit
+- [The Playwright browser is shared across sessions](playwright-browser-is-shared-across-sessions.md) — read a tab's viewport before resizing; "restored to a default" is a guess, not a repair
 - [Local dev left Neon; Neon holds production](vendor-marketplace-neon-dev-branch.md) — an always-open dev pool was pacing 375h/mo against a 100 CU-hour cap production shares
 - [Design is a contract, not code](design-is-a-contract-not-code.md) — design passes edit the plan; tickets write the code
 - [Desktop-first at 1440x900](vendor-marketplace-desktop-first.md) — scroll budgets, rails and the degradation table live in design/design-plan
@@ -25,3 +26,4 @@
 - [Lane manifests drift from reality](lane-manifest-branch-drifts.md) — **fixed 2026-08-29**; use `pnpm lane:pr`, never hand-edit. Manifests written before that still lie
 - [Lead, do not narrate](lead-dont-narrate.md) — short answers, state the call, no option surveys
 - [Detached lane ticket ids collide silently](detached-lane-ticket-ids-collide-silently.md) — merging a stopped lane duplicates board rows and drops registry rows with no conflict
+- [Check for an existing branch before starting](check-for-an-existing-branch-before-starting-a-ticket.md) — a ticket's Branch column may already name pushed work; read it before rebuilding

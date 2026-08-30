@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiClientError } from './api-client';
 import { useImageUpload, UploadTransportError } from './use-api';
 import {
   connectionFailure,
   heldBackSentence,
+  isBatchInFlight,
   rejectedFailure,
   screenDimensions,
   screenFile,
@@ -39,6 +40,14 @@ export interface UploadQueue {
   tasks: readonly UploadTask[];
   /** The gold batch-overflow line, or null. Cleared on the next selection. */
   heldBackNotice: string | null;
+  /**
+   * Whether anything is still queued or sending.
+   *
+   * Published because a `File` is not serialisable and cannot survive a
+   * navigation: nothing can resume the batch, so the only honest thing to do
+   * with a page-leave is warn about it while this is true.
+   */
+  inFlight: boolean;
   addFiles: (files: readonly File[]) => void;
   /** Re-sends every failed file whose bytes are still good. */
   retryAll: () => void;
@@ -320,5 +329,35 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
     setHeldBackNotice(null);
   }, []);
 
-  return { tasks, heldBackNotice, addFiles, retryAll, dismiss, dismissAllFailed, cancel };
+  /*
+   * #184. The `File` objects live in a ref and never enter state, so nothing
+   * about an in-flight batch survives a navigation: the running XHR is killed,
+   * everything queued behind it vanishes, and the vendor is shown no tile, no
+   * banner and no record of which files were lost.
+   *
+   * Persisting them is not possible — a `File` is not serialisable, and the
+   * comment on `filesById` says so. Warning is, and it is the honest option:
+   * the browser asks, and the vendor decides whether the upload matters more
+   * than wherever they were going.
+   *
+   * Only while something is actually in flight. `portfolio-manager` documents
+   * leaving mid-upload as supported, and a guard that fires on an idle page
+   * would be the papercut this is meant to prevent.
+   */
+  const inFlight = isBatchInFlight(tasks);
+
+  useEffect(() => {
+    if (!inFlight) {
+      return;
+    }
+
+    const warn = (event: BeforeUnloadEvent): void => {
+      event.preventDefault();
+    };
+
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [inFlight]);
+
+  return { tasks, heldBackNotice, inFlight, addFiles, retryAll, dismiss, dismissAllFailed, cancel };
 }

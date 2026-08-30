@@ -1,6 +1,7 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   portfolioItems,
+  users,
   vendorProfiles,
   type NewPortfolioItemRow,
   type PortfolioItemRow,
@@ -85,9 +86,9 @@ export async function deletePortfolioItemById(
   db: AppDatabase,
   vendorId: string,
   itemId: string,
-): Promise<boolean> {
+): Promise<{ imageUrl: string; thumbnailUrl: string | null } | null> {
   if (!vendorId || !itemId) {
-    return false;
+    return null;
   }
 
   /*
@@ -100,15 +101,20 @@ export async function deletePortfolioItemById(
     const deleted = await tx
       .delete(portfolioItems)
       .where(and(eq(portfolioItems.vendorId, vendorId), eq(portfolioItems.id, itemId)))
-      .returning({ id: portfolioItems.id });
+      // Returns the keys, so the caller can reap the objects behind the row.
+      .returning({
+        imageUrl: portfolioItems.imageUrl,
+        thumbnailUrl: portfolioItems.thumbnailUrl,
+      });
 
-    if (deleted.length === 0) {
-      return false;
+    const row = deleted[0];
+    if (!row) {
+      return null;
     }
 
     await syncCoverFromPortfolio(tx, vendorId);
 
-    return true;
+    return { imageUrl: row.imageUrl, thumbnailUrl: row.thumbnailUrl };
   });
 }
 
@@ -189,4 +195,64 @@ export async function syncCoverFromPortfolio(
     .where(eq(vendorProfiles.id, vendorId));
 
   return cover;
+}
+
+/**
+ * Of `keys`, the ones no surviving row still points at.
+ *
+ * **Every column in the database that can hold an object key is queried here,
+ * and the set is pinned by a test.** One object is routinely referenced from
+ * more than one of them — `syncCoverFromPortfolio` copies a portfolio item's
+ * key onto `vendor_profiles.cover_image_url`, so the cover is usually a
+ * *second* reference to a photo rather than an upload of its own, and
+ * `PUT /users/me` accepts a bare key for `users.avatar_url`, which any
+ * authenticated caller may point at an object they also hold on a vendor row.
+ *
+ * A column missed here is not a leak, it is deletion of live data: the reap
+ * concludes "nothing references this" and removes bytes that a surviving row
+ * still renders. `key-bearing-columns.test.ts` fails when the schema grows a
+ * URL column that nobody has classified.
+ */
+export async function findUnreferencedKeys(
+  db: AppDatabase,
+  keys: readonly string[],
+): Promise<string[]> {
+  if (keys.length === 0) {
+    return [];
+  }
+
+  const wanted = [...keys];
+
+  const [items, profiles, accounts] = await Promise.all([
+    db
+      .select({ a: portfolioItems.imageUrl, b: portfolioItems.thumbnailUrl })
+      .from(portfolioItems)
+      .where(
+        or(inArray(portfolioItems.imageUrl, wanted), inArray(portfolioItems.thumbnailUrl, wanted)),
+      ),
+    db
+      .select({ a: vendorProfiles.profileImageUrl, b: vendorProfiles.coverImageUrl })
+      .from(vendorProfiles)
+      .where(
+        or(
+          inArray(vendorProfiles.profileImageUrl, wanted),
+          inArray(vendorProfiles.coverImageUrl, wanted),
+        ),
+      ),
+    db
+      .select({ a: users.avatarUrl, b: users.avatarUrl })
+      .from(users)
+      .where(inArray(users.avatarUrl, wanted)),
+  ]);
+
+  const referenced = new Set<string>();
+  for (const row of [...items, ...profiles, ...accounts]) {
+    for (const value of [row.a, row.b]) {
+      if (value !== null) {
+        referenced.add(value);
+      }
+    }
+  }
+
+  return keys.filter((key) => !referenced.has(key));
 }

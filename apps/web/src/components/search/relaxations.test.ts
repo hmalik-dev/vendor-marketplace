@@ -69,7 +69,7 @@ describe('noResultsHeadline', () => {
   it('counts the filters actually set rather than claiming all three', () => {
     expect(
       noResultsHeadline(state({ category: 'photography', date: '2026-06-14', minRating: 4 })),
-    ).toBe('No photographers match all 2 filters');
+    ).toBe('No photographers match all two filters');
   });
 
   it('says the category is simply not listed yet when nothing was filtered', () => {
@@ -84,13 +84,13 @@ describe('noResultsHeadline', () => {
 describe('noResultsDiagnosis', () => {
   it('names the narrowest filter as the likely cause', () => {
     expect(noResultsDiagnosis(state({ date: '2026-06-14', minRating: 4 }))).toBe(
-      'The date is the narrowest filter here. Loosen one and results come back.',
+      'The date is the narrowest filter here. Loosen one filter and results come back.',
     );
   });
 
   it('names the price range when there is no date', () => {
     expect(noResultsDiagnosis(state({ maxPriceCents: 120_000 }))).toBe(
-      'The price range is the narrowest filter here. Loosen one and results come back.',
+      'The price range is the narrowest filter here. Loosen one filter and results come back.',
     );
   });
 

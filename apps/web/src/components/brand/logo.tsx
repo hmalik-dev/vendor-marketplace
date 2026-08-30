@@ -18,8 +18,44 @@ import { cn } from '@/lib/utils';
 const OFFSET_RATIO = 0.45;
 /** Stroke on the right-hand circle, as a fraction of the diameter. */
 const STROKE_RATIO = 0.08;
-/** Gap between the mark and the wordmark, as a fraction of the diameter. */
-const WORDMARK_GAP_RATIO = 0.5;
+/**
+ * Gap between the mark and the wordmark, as a fraction of the diameter — for
+ * the diameters no frame draws.
+ *
+ * 0.6, not 0.5 (#244/#250). It is exact at both diameters where the design file
+ * states a gap in round numbers on both sides: D=15 → 9px, D=20 → 12px.
+ */
+const WORDMARK_GAP_RATIO = 0.6;
+/**
+ * The gaps the frames actually draw, in px, by diameter.
+ *
+ * The gap is **not** one ratio. Measured across every lockup in the design file
+ * — a `gap` flex whose first child is a D-sized box holding two D-sized circles
+ * — the frames draw whole pixels and round toward them:
+ *
+ * | D  | gap  | ratio | drawn in                      |
+ * | -- | ---- | ----- | ----------------------------- |
+ * | 14 | 9px  | 0.643 | 10 frames (3 more draw 8px)   |
+ * | 15 | 9px  | 0.600 | 22 frames — the desktop header |
+ * | 18 | 10px | 0.556 | 3 frames                      |
+ * | 19 | 10px | 0.526 | `12 Sign up` — the auth panel  |
+ *
+ * A single ratio therefore cannot satisfy all four, and #244's first fix — 0.5
+ * to 0.6, derived from D=15 alone — traded a 0.5px error on the auth lockup for
+ * a 1.4px one, because 0.6 renders 11.4 where frame `12` draws 10. The same
+ * shape as `AVATAR_SIZES`' glyph table: measured sizes are stated, and the
+ * fraction is what the unmeasured ones fall back to.
+ *
+ * D=14 draws 9px in ten frames against 8px in three, so the majority is taken.
+ * D=20 (`marketingFooter`) is absent from every frame and is left to the ratio,
+ * which lands on the 12px the design file's own cover chrome draws.
+ */
+const WORDMARK_GAPS: Partial<Record<number, number>> = { 14: 9, 15: 9, 18: 10, 19: 10 };
+
+/** The gap for a diameter: the frames' number where there is one. */
+function wordmarkGap(size: number): number {
+  return WORDMARK_GAPS[size] ?? size * WORDMARK_GAP_RATIO;
+}
 /**
  * Wordmark font size, as a multiple of the diameter.
  *
@@ -86,7 +122,7 @@ export function Logo({
       aria-label={BRAND_NAME}
       data-testid="logo"
       className={cn('inline-flex items-center', className)}
-      style={{ gap: `${size * WORDMARK_GAP_RATIO}px` }}
+      style={{ gap: `${wordmarkGap(size)}px` }}
     >
       <span
         aria-hidden="true"
@@ -99,9 +135,26 @@ export function Logo({
           className={cn('absolute top-0 left-0 rounded-full', tokens.fill)}
           style={{ width: `${size}px`, height: `${size}px` }}
         />
+        {/*
+          `box-content`, not `box-border` (#250).
+
+          The two circles are equal as **fills** — a D-wide disc and a D-wide
+          hole — and the stroke is drawn *outside* the D, which is how every
+          frame draws the mark and what `02-brand-and-logo.md` means by "two
+          circles of equal diameter". Border-box read "equal" as equal
+          footprints instead, which charged the stroke to the hole and rendered
+          it `D - 2×stroke` across: at the desktop header, a 13px hole beside a
+          15px disc, so the outline circle sat visibly small inside its own
+          lockup.
+
+          The stroke therefore overflows the mark's declared box by one used
+          pixel per edge, exactly as it does in the frame — whose 22px box holds
+          ink out to 23px. The box stays 1.45 D so the wordmark gap keeps
+          measuring from the same place.
+        */}
         <span
           data-testid="logo-mark-stroke"
-          className={cn('absolute top-0 box-border rounded-full border', tokens.stroke)}
+          className={cn('absolute top-0 box-content rounded-full border', tokens.stroke)}
           style={{
             left: `${size * OFFSET_RATIO}px`,
             width: `${size}px`,

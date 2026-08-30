@@ -135,12 +135,41 @@
   --text-md--line-height: normal;
   --text-lg: 16px;
   --text-lg--line-height: normal;
+  /*
+   * The section-heading step below 1440. `.h2` is 26px in the bundle and both
+   * `27 Landing — 1024` and `14 Landing tablet` override it to 19px inline —
+   * the same override, so this is one step rather than two. No line-height,
+   * because neither frame declares one and `.h2` does not either: they inherit
+   * `normal`, and naming a ratio here would invent one.
+   */
+  --text-display-xs: 19px;
   --text-display-sm: 21px;
   --text-display-sm--line-height: normal;
   --text-display-md: 26px;
   --text-display-md--line-height: normal;
+  /*
+   * The marketing empty-state headline. `40-states.md` fixes the empty-state
+   * headline at "26px in-app / 30px marketing", and frame `18 Search no
+   * results` draws the marketing one at 30 — between `display-md`'s 26 and
+   * `display-lg`'s 34, so neither step can express it.
+   *
+   * A role step rather than a ramp step, like the two hero sizes below: it
+   * exists because one law names one number, not because the scale needed
+   * another rung. No line-height, because the frame declares none.
+   */
+  --text-display-empty: 30px;
+  --text-display-empty--line-height: normal;
   --text-display-lg: 34px;
   --text-display-lg--line-height: 1.06;
+  /*
+   * The hero headline's 768 step. `14 Landing tablet` draws it at 36px, between
+   * the 34 of `display-lg` and the 40 of the 1024 step — the headline does not
+   * jump straight from its narrow size to its laptop size, because at 768 the
+   * copy column has already given ~40% of the row to the photo cluster and a
+   * 40px headline wraps to a fourth line inside it.
+   */
+  --text-display-hero-sm: 36px;
+  --text-display-hero-sm--line-height: 1.05;
   /*
    * The hero headline's 1024 step. `30-responsive.md` takes display type from
    * 54 to 40px at that width, and frame `25 Landing — 1024` draws it at 40 —
@@ -183,9 +212,20 @@
   --shadow-lg: 0 8px 28px rgba(35, 32, 28, 0.1);
   --shadow-xl: 0 12px 40px rgba(35, 40, 38, 0.2);
   --shadow-hover: 0 8px 24px rgba(35, 32, 28, 0.12);
+  /*
+   * The dropdown pair, from section 28 of the frames (`42-dropdowns.md`).
+   *
+   * Neither is `--shadow-xl` — the panel is two pixels further out and four
+   * wider than it, and the sheet casts *upward*, which no existing token does.
+   * Minted rather than approximated because a dropdown floats over the page's
+   * own cards, and matching one of those cards' shadows is what makes a panel
+   * read as part of the page rather than above it.
+   */
+  --shadow-dropdown: 0 14px 44px rgba(35, 40, 38, 0.2);
+  --shadow-sheet: 0 -10px 40px rgba(35, 40, 38, 0.24);
 
   /* Chrome the full-height app shells are measured against. */
-  --header-height: 4rem; /* 64px; 56px below `md` — see the override below */
+  --header-height: 4rem; /* 64px at 1440; 56px below it — see the override */
   --sidebar-width: 15rem; /* 240px */
   --sidebar-width-sm: 12.5rem; /* 200px — also the sticky form section nav */
   /*
@@ -282,7 +322,14 @@
 }
 
 /*
- * 56px below `md`, per `30-responsive.md`'s Header row.
+ * 56px below 1440, per the frames.
+ *
+ * This used to read `width < 48rem`, which is 768 — so every width from 768 to
+ * 1439 kept the 64px desktop bar. Both `27 Landing — 1024` and `14 Landing
+ * tablet` draw `height:56px` explicitly, and 64px is the `.hd` default that
+ * only `01 Landing` and the other 1440 frames take. On a 640px-tall laptop
+ * viewport those 8px come straight out of the fold, which is the whole point
+ * of #169 treating height as the binding constraint at 1024.
  *
  * An override on the same variable rather than a second token, so every
  * `app-shell`, sticky offset and `scroll-mt` that already reads
@@ -291,7 +338,7 @@
  * these 8px on every phone — which is the failure #4 already had to fix a
  * 1px version of.
  */
-@media (width < 48rem) {
+@media (width < 90rem) {
   :root {
     --header-height: 3.5rem;
   }
@@ -345,6 +392,25 @@
  */
 @utility hero-gradient {
   background-image: linear-gradient(155deg, var(--color-stone-50) 0%, #f7f0e8 52%, #f2e4d8 100%);
+
+  /*
+   * The sweep turns as the hero gets shorter and proportionally wider, so its
+   * warm end stays inside the frame instead of falling below the fold: 155deg
+   * at 1440 and 1024, 160 at 768, 170 at 390 — and 390 moves the midpoint too,
+   * from 52% to 50%.
+   *
+   * Bounded at both ends. An unbounded `width < 64rem` handed 390 the tablet's
+   * 160deg/52%, and its comment claimed the tablet frame was the only one that
+   * turns the gradient and that the stops never move. `14 Landing mobile`
+   * contradicts both.
+   */
+  @media (48rem <= width < 64rem) {
+    background-image: linear-gradient(160deg, var(--color-stone-50) 0%, #f7f0e8 52%, #f2e4d8 100%);
+  }
+
+  @media (width < 48rem) {
+    background-image: linear-gradient(170deg, var(--color-stone-50) 0%, #f7f0e8 50%, #f2e4d8 100%);
+  }
 }
 
 /*

@@ -1,3 +1,5 @@
+import { BRAND_NAME } from '@vendor-marketplace/shared';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { StockPhoto } from '@/components/ui/stock-photo';
@@ -172,7 +174,17 @@ export function AuthScreen({
       <div className="relative flex flex-1 flex-col items-center overflow-y-auto bg-stone-50 px-6 py-10 sm:px-10 xl:px-15">
         <div className="relative my-auto w-full max-w-115">
           <div className="mb-6.5 flex justify-center">
-            <Logo size={LOGO_SIZES.authPanel} />
+            {/*
+              The mark is the way out. Sign-in and sign-up have no header and no
+              back link, so someone who arrived here by accident — or changed
+              their mind — had nothing to press but the browser's own button. A
+              wordmark that goes home is the convention every other page on the
+              site already follows; here it was the only thing on screen that
+              looked like a link and was not one.
+            */}
+            <Link href="/" aria-label={`${BRAND_NAME} home`} className="rounded-md">
+              <Logo size={LOGO_SIZES.authPanel} />
+            </Link>
           </div>
 
           <h1 className="text-center font-display text-[32px] leading-[1.15] text-stone-900">

@@ -23,6 +23,12 @@ const CATEGORIES: Category[] = [
   },
 ];
 
+/** The cities the City select offers — real places with published vendors. */
+const CITIES = [
+  { city: 'Austin', state: 'TX', vendorCount: 11 },
+  { city: 'Portland', state: 'OR', vendorCount: 3 },
+];
+
 describe('HeroSearch', () => {
   afterEach(() => {
     cleanup();
@@ -31,19 +37,23 @@ describe('HeroSearch', () => {
 
   it('carries the three values the query is made of into /search', async () => {
     const user = userEvent.setup();
-    render(<HeroSearch categories={CATEGORIES} />);
+    render(<HeroSearch categories={CATEGORIES} cities={CITIES} />);
 
     await user.click(screen.getByRole('button', { name: 'Vendor type' }));
-    await user.click(screen.getByRole('option', { name: 'Photography' }));
-    await user.type(screen.getByRole('textbox'), 'Austin');
+    // The row carries the category's short description under its name, so the
+    // accessible name is the pair rather than the name alone (#167).
+    await user.click(await screen.findByRole('option', { name: /^Photography/ }));
+    // City is a select over real places now, and it carries its state (#167).
+    await user.click(screen.getByRole('button', { name: 'City' }));
+    await user.click(await screen.findByRole('option', { name: /^Austin, TX/ }));
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
-    expect(push).toHaveBeenCalledWith('/search?category=photography&city=Austin');
+    expect(push).toHaveBeenCalledWith('/search?category=photography&city=Austin&state=TX');
   });
 
   it('leaves an untouched segment out of the URL rather than sending it empty', async () => {
     const user = userEvent.setup();
-    render(<HeroSearch categories={CATEGORIES} />);
+    render(<HeroSearch categories={CATEGORIES} cities={CITIES} />);
 
     await user.click(screen.getByRole('button', { name: 'Search' }));
 

@@ -23,6 +23,41 @@ describe('EmptyState', () => {
     expect(screen.getByText('Nothing has come in.').className).toContain('max-w-[420px]');
   });
 
+  /*
+   * `40-states.md` names two sizes for this one component — "headline at 26px
+   * in-app / 30px marketing" — and frame `18 Search no results` draws the
+   * marketing one. The two are asserted together rather than in isolation,
+   * because the defect they guard is the pair collapsing into one.
+   */
+  it('draws the marketing scale at the 30px step and the 520px measure', () => {
+    render(
+      <EmptyState
+        scale="marketing"
+        headline="No photographers match all three filters"
+        description="Loosen one filter and results come back."
+      />,
+    );
+
+    const heading = screen.getByRole('heading', {
+      name: 'No photographers match all three filters',
+    });
+
+    expect(heading.className).toContain('text-display-empty');
+    expect(heading.className).not.toContain('text-display-md');
+    expect(screen.getByText('Loosen one filter and results come back.').className).toContain(
+      'max-w-[520px]',
+    );
+  });
+
+  it('keeps the in-app scale when none is asked for', () => {
+    render(<EmptyState headline="No requests yet" description="Nothing has come in." />);
+
+    const heading = screen.getByRole('heading', { name: 'No requests yet' });
+
+    expect(heading.className).toContain('text-display-md');
+    expect(heading.className).not.toContain('text-display-empty');
+  });
+
   it('draws no panel by default', () => {
     const { container } = render(
       <EmptyState headline="No requests yet" description="Nothing has come in." />,

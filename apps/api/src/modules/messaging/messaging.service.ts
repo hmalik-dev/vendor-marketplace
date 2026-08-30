@@ -3,6 +3,7 @@ import {
   type ConversationSummary,
   type EventType,
   type NotificationItem,
+  type OpenedConversation,
   type Paginated,
   type SendMessageResult,
 } from '@vendor-marketplace/shared';
@@ -14,17 +15,22 @@ import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
 import {
   countMessages,
   countNotifications,
+  countUnreadInConversation,
   countUnreadPerConversation,
   findConversationById,
   findConversationsFor,
   findLastMessages,
   findMessages,
   findNotifications,
+  findOpenableVendor,
   insertMessage,
+  insertNotification,
   markAllNotificationsRead,
   markConversationRead,
   markNotificationRead,
+  openUnattachedConversation,
   type ConversationListRow,
+  type ConversationParties,
 } from './messaging.dao.js';
 
 /** How much of the last message the list shows before it would wrap. */
@@ -67,6 +73,20 @@ export function notificationHref(row: NotificationRow): string | null {
     return `/messages?conversation=${conversationId}`;
   }
 
+  /*
+   * A review lands on whichever surface shows the recipient the review itself,
+   * and the two directions have different ones: a vendor reads a public review
+   * on their own profile's Reviews tab, a customer reads a private one on
+   * theirs. The vendor slug in the payload is what distinguishes them — a
+   * `vendor_to_customer` row carries none, because there is no public page for
+   * it to lead to.
+   */
+  if (row.type === 'new_review') {
+    return typeof data.vendorSlug === 'string'
+      ? `/vendors/${data.vendorSlug}?tab=reviews`
+      : '/customer/profile?tab=reviews';
+  }
+
   if (typeof data.bookingRequestId === 'string') {
     if (row.type === 'new_request') {
       return '/vendor/dashboard';
@@ -94,7 +114,8 @@ export function notificationHref(row: NotificationRow): string | null {
   return null;
 }
 
-function toNotification(row: NotificationRow): NotificationItem {
+/** A stored notification as every surface reads it — the list and the stream. */
+export function toNotification(row: NotificationRow): NotificationItem {
   return {
     id: row.id,
     type: row.type as NotificationItem['type'],
@@ -104,6 +125,31 @@ function toNotification(row: NotificationRow): NotificationItem {
     readAt: row.readAt,
     createdAt: row.createdAt,
   };
+}
+
+/**
+ * How each party is named to the other. A customer sees the business they are
+ * booking; a vendor sees the person, by first name and initial — the same limit
+ * the tiered customer profile applies before acceptance.
+ */
+function nameOfSide(
+  row: {
+    vendorBusinessName: string;
+    customerFirstName: string;
+    customerLastName: string;
+  },
+  side: 'customer' | 'vendor',
+): string {
+  if (side === 'vendor') {
+    return row.vendorBusinessName;
+  }
+
+  return (
+    [row.customerFirstName, row.customerLastName.trim().slice(0, 1)]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || 'A customer'
+  );
 }
 
 /** Which side of the conversation this user is, or `null` for a stranger. */
@@ -133,25 +179,19 @@ export async function listConversations(
       db,
       rows.map((row) => row.id),
     ),
-    countUnreadPerConversation(db, user.id),
+    countUnreadPerConversation(
+      db,
+      user.id,
+      rows.map((row) => row.id),
+    ),
   ]);
 
   return rows.map((row) => {
     const side = sideOf(row, user.id);
     const last = lastMessages.get(row.id);
 
-    /*
-     * Each party sees the other. A customer sees the business they are
-     * booking; a vendor sees the person, by first name and initial — the same
-     * limit the tiered customer profile applies before acceptance.
-     */
-    const otherPartyName =
-      side === 'customer'
-        ? row.vendorBusinessName
-        : [row.customerFirstName, row.customerLastName.trim().slice(0, 1)]
-            .filter(Boolean)
-            .join(' ')
-            .trim() || 'A customer';
+    // Each party sees the other, named by `nameOfSide`.
+    const otherPartyName = nameOfSide(row, side === 'customer' ? 'vendor' : 'customer');
 
     return {
       id: row.id,
@@ -164,6 +204,41 @@ export async function listConversations(
       vendorSlug: row.vendorSlug,
     };
   });
+}
+
+/**
+ * The thread `Send a message` on a vendor's profile opens, created if it is not
+ * there yet.
+ *
+ * Unattached to any request on purpose: this is the customer who has questions
+ * *before* they ask for a date, and #219 found they had nowhere to ask them —
+ * the control was disabled, and `/messages` could only open a thread that
+ * already existed. Idempotent, so the button opens the same thread every time
+ * rather than one per click.
+ */
+export async function openConversation(
+  db: AppDatabase,
+  user: AuthenticatedUser,
+  vendorSlug: string,
+): Promise<{ conversation: OpenedConversation; created: boolean }> {
+  const vendor = await findOpenableVendor(db, vendorSlug);
+
+  if (!vendor) {
+    throw notFound('That vendor is not taking messages');
+  }
+
+  // The same refusal `createBookingRequest` makes, for the same reason: a
+  // vendor writing to themselves would be both sides of `sideOf`.
+  if (vendor.userId === user.id) {
+    throw forbidden('You cannot message your own listing');
+  }
+
+  const { conversation, created } = await openUnattachedConversation(db, {
+    customerId: user.id,
+    vendorId: vendor.id,
+  });
+
+  return { conversation: { id: conversation.id }, created };
 }
 
 /** Fails unless the caller is one of the two people in the conversation. */
@@ -246,7 +321,48 @@ export async function sendMessage(
     hub.publish(participant, { type: 'new_message', conversationId, message });
   }
 
+  await notifyRecipient(db, hub, row, side, inserted);
+
   return message;
+}
+
+/**
+ * The bell, for whichever party did *not* send — in both directions, because a
+ * vendor's reply is exactly as easy to miss as a customer's question, and until
+ * now neither raised anything a closed tab could find later. The live push
+ * above reaches an open stream only.
+ *
+ * **One row per unread run, not one per message.** A back-and-forth of thirty
+ * messages is one thing to be told about, and thirty rows would bury every
+ * other notification in the panel under a conversation the reader can already
+ * see. Once they have opened the thread — which marks it read — the next
+ * message raises a new one.
+ */
+async function notifyRecipient(
+  db: AppDatabase,
+  hub: EventHub,
+  row: ConversationParties,
+  side: 'customer' | 'vendor',
+  sent: MessageRow,
+): Promise<void> {
+  const recipientId = side === 'customer' ? row.vendorUserId : row.customerId;
+  const alreadyWaiting = await countUnreadInConversation(db, row.id, recipientId, sent.id);
+
+  if (alreadyWaiting > 0) {
+    return;
+  }
+
+  const stored = await insertNotification(db, {
+    userId: recipientId,
+    type: 'new_message',
+    title: 'New message',
+    body: `${nameOfSide(row, side)} sent you a message. Open the thread to reply.`,
+    data: { conversationId: row.id },
+  });
+
+  if (stored) {
+    hub.publish(recipientId, { type: 'new_notification', notification: toNotification(stored) });
+  }
 }
 
 export async function readConversation(

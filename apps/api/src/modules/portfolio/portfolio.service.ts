@@ -8,12 +8,14 @@ import type { NewPortfolioItemRow, PortfolioItemRow } from '@vendor-marketplace/
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
 import { assertCompleteOrder } from '../../lib/ordering.js';
+import { ownsObjectKey, type ObjectStorage } from '../../lib/storage.js';
 import { requireOwnVendorProfile } from '../vendors/vendors.service.js';
 import {
   applyPortfolioOrder,
   deletePortfolioItemById,
   findOwnedPortfolioIds,
   findPortfolioByVendor,
+  findUnreferencedKeys,
   insertPortfolioItem,
   nextDisplayOrder,
   syncCoverFromPortfolio,
@@ -82,19 +84,93 @@ export async function updatePortfolioItem(
 
 export async function removePortfolioItem(
   db: AppDatabase,
+  storage: ObjectStorage,
   userId: string,
   itemId: string,
+  log?: { warn: (details: unknown, message: string) => void },
 ): Promise<void> {
   const vendor = await requireOwnVendorProfile(db, userId);
+  const deleted = await deletePortfolioItemById(db, vendor.id, itemId);
+
+  if (!deleted) {
+    throw notFound('That portfolio photo does not exist');
+  }
 
   /*
-   * The stored object is deliberately left in the bucket. Keys are immutable
-   * and unguessable, an orphaned WebP costs a few kilobytes, and a delete that
-   * half-succeeds — row gone, object gone, but the row's sibling still pointing
-   * at it — is the worse failure. Reaping is a housekeeping job, not a request.
+   * The objects are reaped **after** the row is gone, and never inside its
+   * transaction.
+   *
+   * This used to leave them in the bucket on purpose, reasoning that keys are
+   * unguessable and an orphaned WebP costs a few kilobytes. Two things undid
+   * that: the bucket was enumerable (#180), so "unguessable" was worth nothing;
+   * and every profile-photo change leaks two objects, for the life of the
+   * account, with no reaper anywhere in the product.
+   *
+   * The original worry — a half-succeeded delete — is answered by the ordering
+   * rather than by not deleting. The row is the source of truth, so it commits
+   * first; if the reap then fails, the result is one orphaned object, which is
+   * exactly the state the old behaviour produced deliberately, every time.
    */
-  if (!(await deletePortfolioItemById(db, vendor.id, itemId))) {
-    throw notFound('That portfolio photo does not exist');
+  await reapObjects(db, storage, vendor.userId, [deleted.imageUrl, deleted.thumbnailUrl], log);
+}
+
+/**
+ * Best-effort object removal. Never throws, and refuses more than it removes.
+ *
+ * **Two checks, and the diff that added this needed both.**
+ *
+ * *Ownership.* The key on a row is written by the client — `imageRefSchema`
+ * exists to accept a bare object key — and every public vendor page hands out
+ * the keys it renders. So a vendor could read a rival's key off
+ * `GET /vendors/:slug`, claim it on a row of their own, delete that row, and
+ * take the rival's photo with it. Nothing else records who uploaded a key, so
+ * the owner segment in the key is the only check available.
+ *
+ * *Still referenced.* The cover is a **designation on an existing tile**, not
+ * a second upload — `syncCoverFromPortfolio` copies a portfolio item's key
+ * onto `vendor_profiles`. Two rows, one object, on purpose. Reaping on the
+ * strength of one row would destroy an object the other still points at, and
+ * the vendor would have done it to themselves with a legal request.
+ *
+ * A key that fails either check is left in the bucket, which is exactly the
+ * state this repository shipped deliberately before. An orphan is recoverable
+ * by a sweep; a deleted photo is not.
+ */
+export async function reapObjects(
+  db: AppDatabase,
+  storage: ObjectStorage,
+  ownerId: string,
+  keys: readonly (string | null)[],
+  log?: { warn: (details: unknown, message: string) => void },
+): Promise<void> {
+  const owned = keys.filter(
+    (key): key is string => key !== null && key.length > 0 && ownsObjectKey(key, ownerId),
+  );
+
+  if (owned.length === 0) {
+    return;
+  }
+
+  /*
+   * The lookup is inside the guard too. It is a database round trip on a
+   * connection whose transaction has already committed the caller's delete —
+   * a 500 raised here would report failure for work that succeeded, which is
+   * the one outcome worse than an orphan.
+   */
+  try {
+    const unreferenced = await findUnreferencedKeys(db, owned);
+
+    if (unreferenced.length > 0) {
+      await storage.remove(unreferenced);
+    }
+  } catch (error) {
+    /*
+     * An orphan is the old behaviour and a sweep can find it. A 500 on a
+     * delete the caller already watched succeed is neither recoverable nor
+     * explicable — but it is logged, because a token missing `DeleteObject`
+     * would otherwise reap nothing, forever, in silence.
+     */
+    log?.warn({ keys: owned, error }, 'Could not reap storage objects');
   }
 }
 

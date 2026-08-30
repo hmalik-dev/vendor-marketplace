@@ -41,7 +41,8 @@ function renderOnboarding(): void {
 }
 
 async function chooseState(user: User): Promise<void> {
-  await user.click(screen.getByRole('combobox', { name: 'State' }));
+  // A dropdown trigger now, not a Radix `Select` combobox (#167).
+  await user.click(screen.getByRole('button', { name: /^State/ }));
   await user.click(await screen.findByRole('option', { name: 'Texas' }));
 }
 

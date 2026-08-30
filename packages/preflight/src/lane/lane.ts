@@ -364,9 +364,25 @@ export async function laneUp(
    * every failure it would be asked to detect.
    */
   if (alreadyUp?.state === 'active') {
-    ensureLaneEnv(worktreePath, alreadyUp, () => laneUrl(worktreePath, alreadyUp));
+    /*
+     * The manifest can fall behind the worktree it describes: `EnterWorktree`
+     * (or a hand rebuild of one) can leave a lane resumed from a different path
+     * than the one it was provisioned at, and a branch can be renamed after the
+     * fact. Reading `alreadyUp.worktreePath`/`.branch` back out unexamined would
+     * hand every later caller — `lane:exec`, `lane:pr`, `/land-lanes` — a path
+     * or branch name that no longer matches reality. Re-deriving both here,
+     * through `updateManifest` rather than a hand edit, is the same repair
+     * `laneEnqueued` uses to keep the manifest atomic.
+     */
+    const branch = deps.branchOf(worktreePath);
+    const resumed =
+      alreadyUp.worktreePath === worktreePath && alreadyUp.branch === branch
+        ? alreadyUp
+        : updateManifest(mainCheckout, ticket, { worktreePath, branch });
 
-    return alreadyUp;
+    ensureLaneEnv(worktreePath, resumed, () => laneUrl(worktreePath, resumed));
+
+    return resumed;
   }
 
   let provisionHere = false;

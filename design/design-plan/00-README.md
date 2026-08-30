@@ -70,23 +70,26 @@ is not an outcome.
 four routes were added after the 2026-08-28 mapping and nothing forced the ledger
 forward. That is the actual finding — not which five.
 
-| Route                     | Ruling                                                                                                                                                                                                |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/sign-in`                | **Exempt.** The form is Clerk-hosted and we do not control its markup. The surface around it — the marketing panel — **is** framed, by `12 Sign up`, and that panel is on the parity gate.            |
-| `/suspended`              | **Exempt for now.** A dead end for a banned account, reached by no navigation. `#15` owns the admin tooling behind suspensions and draws it then.                                                     |
-| `/vendor/packages`        | **Framed, as a tab.** Drawn inside `09 Vendor profile editor`. The app split the tab into a route; that split is a composition question for `#79`, not a missing frame.                               |
-| `/vendor/portfolio`       | **Framed.** `24 Image upload` and `25 Upload failures` both draw it. The ledger says both things — rows 36–37 map the frames, finding `S-2` calls it unframed — and the rows are right.               |
-| `/customer/profile`       | **Needs a frame.** A four-tab surface with an editable form, booking history and the customer's own reviews, and no drawing anywhere. It has already produced defects that a frame would have caught. |
-| `/bookings/[requestId]`   | **Needs a frame.** The customer's quote-review screen, added by `#308`.                                                                                                                               |
-| `/vendor/bookings`        | **Needs a frame.** Added by `#307`; the one surface that prints a customer's contact details.                                                                                                         |
-| `/vendor/payments`        | **Needs a frame.** Stripe Connect payout onboarding, added by `#9`.                                                                                                                                   |
-| `/vendor/payments/return` | **Exempt.** A redirect landing that exists for the length of one round trip and renders nothing a person reads for longer.                                                                            |
+| Route                     | Ruling                                                                                                                                                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/sign-in`                | **Exempt.** The form is Clerk-hosted and we do not control its markup. The surface around it — the marketing panel — **is** framed, by `12 Sign up`, and that panel is on the parity gate.                                                                        |
+| `/suspended`              | **Exempt for now.** A dead end for a banned account, reached by no navigation. `#15` owns the admin tooling behind suspensions and draws it then.                                                                                                                 |
+| `/vendor/packages`        | **Framed, as a tab.** Drawn inside `09 Vendor profile editor`. The app split the tab into a route; that split is a composition question for `#79`, not a missing frame.                                                                                           |
+| `/vendor/portfolio`       | **Framed.** `24 Image upload` and `25 Upload failures` both draw it (rows 36–37 of the sweep ledger). The ledger used to say both things — finding `S-2` also called it unframed — and the frame rows were the right ones; `S-2` is corrected in place by `#319`. |
+| `/customer/profile`       | **Needs a frame.** A four-tab surface with an editable form, booking history and the customer's own reviews, and no drawing anywhere. It has already produced defects that a frame would have caught.                                                             |
+| `/bookings/[requestId]`   | **Needs a frame.** The customer's quote-review screen, added by `#308`.                                                                                                                                                                                           |
+| `/vendor/bookings`        | **Needs a frame.** Added by `#307`; the one surface that prints a customer's contact details.                                                                                                                                                                     |
+| `/vendor/payments`        | **Needs a frame.** Stripe Connect payout onboarding, added by `#9`.                                                                                                                                                                                               |
+| `/vendor/payments/return` | **Exempt.** A redirect landing that exists for the length of one round trip and renders nothing a person reads for longer.                                                                                                                                        |
 
 Four exempt, four to draw, one already framed and mis-recorded.
 
-**The reverse gap is real too and is not a defect:** frames `05 Checkout`,
-`06 Booking confirmed` and `21 Checkout declined` have no route yet, because the
-payment lifecycle is `#10`. `13 Admin` has no route because that is `#15`.
+**The reverse gap used to include the payment lifecycle; it is smaller now.**
+`#10` landed after this table was first written: frames `05 Checkout`,
+`06 Booking confirmed` and `21 Checkout declined` now have live routes
+(`/bookings/[requestId]/checkout` and `/bookings/[requestId]/confirmed`, corrected
+in the sweep ledger by `#319`). `13 Admin` still has no route, because that is
+`#15`.
 
 **What stops this recurring is a test, not this table.** A route added after a
 mapping is exactly how the count went from five to nine with nobody noticing.

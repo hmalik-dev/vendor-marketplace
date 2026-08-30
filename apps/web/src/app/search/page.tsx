@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { pageTitle } from '@vendor-marketplace/shared';
 import { SearchShell } from '@/components/search/search-shell';
-import { getActiveTags, getCategories } from '@/lib/vendor-data';
+import { getActiveTags, getCategories, getVendorCities } from '@/lib/vendor-data';
 
 export const metadata: Metadata = { title: pageTitle('Find a vendor') };
 
@@ -13,7 +13,11 @@ export const metadata: Metadata = { title: pageTitle('Find a vendor') };
  * server and handed down; only the result set is re-fetched as filters change.
  */
 export default async function SearchPage(): Promise<React.ReactElement> {
-  const [categories, tags] = await Promise.all([getCategories(), getActiveTags()]);
+  const [categories, cities, tags] = await Promise.all([
+    getCategories(),
+    getVendorCities(),
+    getActiveTags(),
+  ]);
 
-  return <SearchShell categories={categories} tags={tags} />;
+  return <SearchShell categories={categories} cities={cities} tags={tags} />;
 }

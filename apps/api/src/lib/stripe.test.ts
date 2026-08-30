@@ -48,7 +48,7 @@ describe('describeAccountEvent', () => {
         account: 'acct_live_one',
         data: { object: { id: 'acct_live_one' } },
       }),
-    ).toEqual({ type: 'account.updated', accountId: 'acct_live_one' });
+    ).toEqual({ type: 'account.updated', accountId: 'acct_live_one', objectId: 'acct_live_one' });
   });
 
   /** `capability.updated` carries a Capability in `data`, so `account` is the only source. */
@@ -60,7 +60,7 @@ describe('describeAccountEvent', () => {
         account: 'acct_live_two',
         data: { object: { id: 'transfers' } },
       }),
-    ).toEqual({ type: 'capability.updated', accountId: 'acct_live_two' });
+    ).toEqual({ type: 'capability.updated', accountId: 'acct_live_two', objectId: 'transfers' });
   });
 
   it('reads it off a v2 thin notification', () => {
@@ -73,6 +73,7 @@ describe('describeAccountEvent', () => {
     ).toEqual({
       type: 'v2.core.account[configuration.recipient].capability_status_updated',
       accountId: 'acct_thin',
+      objectId: 'acct_thin',
     });
   });
 
@@ -83,17 +84,37 @@ describe('describeAccountEvent', () => {
         type: 'account.updated',
         data: { object: { id: 'acct_from_data' } },
       }),
-    ).toEqual({ type: 'account.updated', accountId: 'acct_from_data' });
+    ).toEqual({ type: 'account.updated', accountId: 'acct_from_data', objectId: 'acct_from_data' });
   });
 
   it('names no account for an event that is about something else', () => {
     expect(
       describeAccountEvent({ object: 'event', type: 'charge.succeeded', data: { object: {} } }),
-    ).toEqual({ type: 'charge.succeeded', accountId: null });
+    ).toEqual({ type: 'charge.succeeded', accountId: null, objectId: null });
+  });
+
+  /*
+   * The payment branch's whole input. A destination charge's intent lives on
+   * the platform, so `event.account` is absent — the intent is reachable only
+   * through `data.object.id`, and reading `accountId` for it would look up a
+   * `pi_…` as though it were a vendor.
+   */
+  it('names the payment intent an intent event is about', () => {
+    expect(
+      describeAccountEvent({
+        object: 'event',
+        type: 'payment_intent.succeeded',
+        data: { object: { id: 'pi_live_one', amount_received: 145_000 } },
+      }),
+    ).toEqual({
+      type: 'payment_intent.succeeded',
+      accountId: 'pi_live_one',
+      objectId: 'pi_live_one',
+    });
   });
 
   it('survives a body with nothing in it rather than throwing', () => {
-    expect(describeAccountEvent(null)).toEqual({ type: '', accountId: null });
-    expect(describeAccountEvent({})).toEqual({ type: '', accountId: null });
+    expect(describeAccountEvent(null)).toEqual({ type: '', accountId: null, objectId: null });
+    expect(describeAccountEvent({})).toEqual({ type: '', accountId: null, objectId: null });
   });
 });

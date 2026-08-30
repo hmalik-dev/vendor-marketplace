@@ -184,6 +184,27 @@ describe('vendor Stripe Connect onboarding', () => {
 
       expect(response.statusCode).toBe(401);
     });
+
+    /*
+     * The route has no `body` schema, so nothing here looks like schema
+     * validation — but Fastify's JSON body parser still runs before
+     * `preHandler`, and it rejects an empty `application/json` payload on its
+     * own. Guarded only at `preHandler`, a customer sending one got
+     * `400 VALIDATION_ERROR` instead of the `403` every other shape answers:
+     * still denied, but the wrong reason, which reads like a broken route
+     * rather than the refusal it actually was.
+     */
+    it('still answers 403, not the parser 400, when a customer sends a malformed body', async () => {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/stripe/connect',
+        headers: { ...bearer('customer_a'), 'content-type': 'application/json' },
+        payload: '',
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(harness.stripe.createdAccounts).toHaveLength(0);
+    });
   });
 
   describe('GET /vendor/stripe/status', () => {

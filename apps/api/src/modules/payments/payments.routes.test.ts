@@ -1,0 +1,589 @@
+import {
+  availability,
+  bookingRequests,
+  bookings,
+  categories,
+  conversations,
+  notifications,
+  users,
+  vendorProfiles,
+} from '@vendor-marketplace/db/schema';
+import {
+  addDays,
+  DEFAULT_PLATFORM_FEE_RATE,
+  ERROR_CODES,
+  toDateString,
+} from '@vendor-marketplace/shared';
+import { eq } from 'drizzle-orm';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+
+const VENDOR = 'user_vendor';
+const CUSTOMER = 'user_customer';
+const OUTSIDER = 'user_customer_two';
+
+/** $1,450 — the frame's own figure, so a wrong split is visible as a wrong price. */
+const PRICE_CENTS = 145_000;
+const EXPECTED_FEE_CENTS = 17_400;
+const EXPECTED_PAYOUT_CENTS = 127_600;
+
+/**
+ * One fixed timeline, moved deliberately rather than read from the wall clock.
+ *
+ * Two assertions here are about which side of the 48-hour cutoff a cancellation
+ * falls on, and one is about an event having already happened — all three are
+ * answers that change with the moment the suite runs. `clockNow` is what the
+ * server reads, so a test that needs the event to be in the past advances time
+ * past it instead of back-dating a row into a state the app could not have
+ * produced: a request for a past date is refused at creation, which is correct
+ * and is why `PAST_DATE` cannot simply be handed to the booking route.
+ */
+const START = new Date('2026-06-01T12:00:00Z');
+const EVENT_DATE = toDateString(addDays(START, 30));
+let clockNow = START;
+
+describe('payments', () => {
+  let harness: TestHarness;
+  let photographyId: string;
+
+  async function inject(
+    method: 'GET' | 'POST' | 'PUT',
+    url: string,
+    actor: string | null,
+    payload?: Record<string, unknown>,
+  ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
+    return harness.app.inject({
+      method,
+      url,
+      ...(actor ? { headers: bearer(actor) } : {}),
+      ...(payload ? { payload } : {}),
+    });
+  }
+
+  /** A published, payout-ready vendor with one package. */
+  async function createVendor(): Promise<{ vendorId: string; packageId: string }> {
+    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+      businessName: 'Sunlit Studio',
+      categoryIds: [photographyId],
+      city: 'Austin',
+      state: 'TX',
+      bio: 'Documentary wedding photography for people who hate posing.',
+    });
+    expect(profile.statusCode).toBe(201);
+    const vendorId: string = profile.json().id;
+
+    const created = await inject('POST', '/vendor/packages', VENDOR, {
+      name: 'Full day coverage',
+      description: 'Six hours of coverage with two photographers on site.',
+      priceCents: PRICE_CENTS,
+      priceType: 'fixed',
+      inclusions: ['6 hours'],
+    });
+    expect(created.statusCode).toBe(201);
+
+    await harness.database.db
+      .update(vendorProfiles)
+      .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
+      .where(eq(vendorProfiles.id, vendorId));
+
+    return { vendorId, packageId: created.json().id };
+  }
+
+  /** A request the vendor has accepted — the only state checkout opens on. */
+  async function acceptedRequest(eventDate = EVENT_DATE): Promise<string> {
+    const { vendorId, packageId } = await createVendor();
+
+    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+      vendorId,
+      packageId,
+      eventDate,
+      eventType: 'wedding',
+      eventLocation: 'Barr Mansion, Austin, TX',
+      guestCount: 120,
+    });
+    expect(request.statusCode).toBe(201);
+
+    const accepted = await inject('POST', `/booking-requests/${request.json().id}/accept`, VENDOR);
+    expect(accepted.statusCode).toBe(200);
+
+    return request.json().id;
+  }
+
+  /** Opens checkout and settles the charge, as confirming the card would. */
+  async function payFor(requestId: string): Promise<string> {
+    const checkout = await inject(
+      'POST',
+      `/customer/booking-requests/${requestId}/checkout`,
+      CUSTOMER,
+    );
+    expect(checkout.statusCode).toBe(200);
+
+    const intentId: string = checkout.json().paymentIntentId;
+    harness.stripe.succeed(intentId);
+    harness.stripe.nextEvent = {
+      type: 'payment_intent.succeeded',
+      accountId: null,
+      objectId: intentId,
+    };
+
+    const webhook = await harness.app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      headers: { 'stripe-signature': 'valid-signature', 'content-type': 'application/json' },
+      payload: { id: 'evt_test', type: 'payment_intent.succeeded' },
+    });
+    expect(webhook.statusCode).toBe(200);
+
+    return intentId;
+  }
+
+  /**
+   * A paid booking whose event has since happened — the state completion needs.
+   * The clock moves forward rather than the row moving backward, because the
+   * booking route refuses a past date and a hand-written one would be a state
+   * the application cannot reach.
+   */
+  async function pastBooking(): Promise<{ id: string; customerId: string }> {
+    const requestId = await acceptedRequest();
+    await payFor(requestId);
+    clockNow = addDays(START, 31);
+
+    const [booking] = await harness.database.db.select().from(bookings);
+
+    return { id: booking!.id, customerId: booking!.customerId };
+  }
+
+  beforeAll(async () => {
+    harness = await createTestHarness({ clock: () => clockNow });
+
+    for (const [clerkUserId, role, email] of [
+      [VENDOR, 'vendor', 'grace@example.com'],
+      [CUSTOMER, 'customer', 'alan@example.com'],
+      [OUTSIDER, 'customer', 'edsger@example.com'],
+    ] as const) {
+      harness.clerkUsers.set(clerkUserId, {
+        clerkUserId,
+        email,
+        firstName: 'Test',
+        lastName: 'User',
+        roleHint: role,
+        avatarUrl: null,
+      });
+    }
+
+    const rows = await harness.database.db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.slug, 'photography'))
+      .limit(1);
+    photographyId = rows[0]!.id;
+  });
+
+  afterEach(async () => {
+    clockNow = START;
+    harness.stripe.paymentIntents.clear();
+    harness.stripe.intentsByKey.clear();
+    harness.stripe.refunds.length = 0;
+    await harness.database.db.delete(bookings);
+    await harness.database.db.delete(conversations);
+    await harness.database.db.delete(notifications);
+    await harness.database.db.delete(bookingRequests);
+    await harness.database.db.delete(availability);
+    await harness.database.db.delete(vendorProfiles);
+    await harness.database.db.delete(users);
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  describe('opening checkout', () => {
+    it('returns the intent and the numbers the summary rail renders', async () => {
+      const requestId = await acceptedRequest();
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.clientSecret).toMatch(/_secret_/);
+      expect(body.amountCents).toBe(PRICE_CENTS);
+      // Nothing is added to the quoted price — the rail's "Service fee: None".
+      expect(body.customerFeeCents).toBe(0);
+      expect(body.vendor.businessName).toBe('Sunlit Studio');
+      expect(body.eventDate).toBe(EVENT_DATE);
+      expect(body.guestCount).toBe(120);
+      // "…accepted your request on…" needs a real acceptance timestamp.
+      expect(new Date(body.acceptedAt).toISOString()).toBe(START.toISOString());
+    });
+
+    /**
+     * The acceptance criterion, fired twice as it asks. Stripe replays an intent
+     * for a repeated idempotency key, so the second call cannot mint a second
+     * charge against the same booking — which is what makes a double-submitted
+     * button a UI nicety rather than the only guard.
+     */
+    it('is impossible to double-pay: the same request returns the same intent', async () => {
+      const requestId = await acceptedRequest();
+
+      const first = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      const second = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(first.json().paymentIntentId).toBe(second.json().paymentIntentId);
+      expect(harness.stripe.paymentIntents.size).toBe(1);
+    });
+
+    it('carries the platform fee and the payout account onto the intent', async () => {
+      const requestId = await acceptedRequest();
+      await inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+
+      // The fee is the platform's cut *out of* the price, not an addition.
+      expect(Math.round(PRICE_CENTS * DEFAULT_PLATFORM_FEE_RATE)).toBe(EXPECTED_FEE_CENTS);
+      const [intent] = [...harness.stripe.paymentIntents.values()];
+      expect(intent?.metadata.requestId).toBe(requestId);
+      expect(intent?.amountReceivedCents).toBe(PRICE_CENTS);
+    });
+
+    it('refuses to charge for a vendor who cannot be paid', async () => {
+      const requestId = await acceptedRequest();
+      await harness.database.db.update(vendorProfiles).set({ stripeOnboarded: false });
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(402);
+      expect(response.json().error).toBe(ERROR_CODES.PAYMENT_REQUIRED);
+    });
+
+    it('refuses a request nobody has accepted', async () => {
+      const { vendorId, packageId } = await createVendor();
+      const request = await inject('POST', '/booking-requests', CUSTOMER, {
+        vendorId,
+        packageId,
+        eventDate: EVENT_DATE,
+      });
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${request.json().id}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(409);
+    });
+
+    /* 404 rather than 403: a stranger probing ids learns nothing. */
+    it('will not let another customer open someone elses checkout', async () => {
+      const requestId = await acceptedRequest();
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        OUTSIDER,
+      );
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('rejects an unauthenticated checkout', async () => {
+      const requestId = await acceptedRequest();
+
+      expect(
+        (await inject('POST', `/customer/booking-requests/${requestId}/checkout`, null)).statusCode,
+      ).toBe(401);
+    });
+  });
+
+  describe('the succeeded webhook', () => {
+    it('creates the booking, splits the money and books the date — in one go', async () => {
+      const requestId = await acceptedRequest();
+
+      await payFor(requestId);
+
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(booking?.status).toBe('confirmed');
+      expect(booking?.totalAmountCents).toBe(PRICE_CENTS);
+      expect(booking?.platformFeeCents).toBe(EXPECTED_FEE_CENTS);
+      expect(booking?.vendorPayoutCents).toBe(EXPECTED_PAYOUT_CENTS);
+      // The two parts sum back to the total exactly — no cent is invented or lost.
+      expect(booking!.platformFeeCents + booking!.vendorPayoutCents).toBe(PRICE_CENTS);
+      expect(booking?.paidAt).not.toBeNull();
+
+      const [held] = await harness.database.db.select().from(availability);
+      expect(held?.status).toBe('booked');
+      expect(held?.date).toBe(EVENT_DATE);
+      expect(booking?.requestId).toBe(requestId);
+    });
+
+    /**
+     * Stripe retries a webhook it could not confirm for three days, so a second
+     * delivery is the normal case rather than an error. It must report success
+     * and write nothing — a duplicate booking row would sell the date twice.
+     */
+    it('is safe to deliver twice', async () => {
+      const requestId = await acceptedRequest();
+      const intentId = await payFor(requestId);
+
+      harness.stripe.nextEvent = {
+        type: 'payment_intent.succeeded',
+        accountId: null,
+        objectId: intentId,
+      };
+      const again = await harness.app.inject({
+        method: 'POST',
+        url: '/webhooks/stripe',
+        headers: { 'stripe-signature': 'valid-signature', 'content-type': 'application/json' },
+        payload: { id: 'evt_test', type: 'payment_intent.succeeded' },
+      });
+
+      expect(again.statusCode).toBe(200);
+      expect(again.json().outcome).toBe('already-booked');
+      expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+    });
+
+    it('tells both parties the booking is confirmed', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+
+      const rows = await harness.database.db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.type, 'booking_confirmed'));
+
+      expect(rows).toHaveLength(2);
+      expect(rows.map((row) => row.title).sort()).toEqual([
+        'A booking is confirmed',
+        'Sunlit Studio is booked',
+      ]);
+    });
+
+    it('ignores an intent that has not succeeded', async () => {
+      const requestId = await acceptedRequest();
+      const checkout = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      harness.stripe.nextEvent = {
+        type: 'payment_intent.succeeded',
+        accountId: null,
+        objectId: checkout.json().paymentIntentId,
+      };
+      const webhook = await harness.app.inject({
+        method: 'POST',
+        url: '/webhooks/stripe',
+        headers: { 'stripe-signature': 'valid-signature', 'content-type': 'application/json' },
+        payload: { id: 'evt_test', type: 'payment_intent.succeeded' },
+      });
+
+      expect(webhook.json().outcome).toBe('ignored');
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+    });
+  });
+
+  describe('reconciliation', () => {
+    /**
+     * The webhook that never arrives — a deploy mid-delivery, a rotated signing
+     * secret, a paused endpoint. Without this the customer sits on a charged
+     * card and an unbooked date with no path forward but support.
+     */
+    it('books from Stripe directly when no webhook ever landed', async () => {
+      const requestId = await acceptedRequest();
+      const checkout = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      harness.stripe.succeed(checkout.json().paymentIntentId);
+
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+
+      const response = await inject(
+        'GET',
+        `/customer/booking-requests/${requestId}/booking`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('confirmed');
+      expect(response.json().totalAmountCents).toBe(PRICE_CENTS);
+      expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+    });
+
+    it('says not-found while the charge is still unconfirmed', async () => {
+      const requestId = await acceptedRequest();
+      await inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+
+      expect(
+        (await inject('GET', `/customer/booking-requests/${requestId}/booking`, CUSTOMER))
+          .statusCode,
+      ).toBe(404);
+    });
+  });
+
+  describe('completion', () => {
+    it('lets the vendor mark a past event complete', async () => {
+      const booking = await pastBooking();
+
+      const response = await inject('PUT', `/vendor/bookings/${booking.id}/complete`, VENDOR);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('completed');
+      expect(response.json().completedAt).not.toBeNull();
+    });
+
+    it('refuses to complete an event that has not happened', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      const response = await inject('PUT', `/vendor/bookings/${booking!.id}/complete`, VENDOR);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe('That event has not happened yet');
+    });
+
+    it('refuses the customer marking their own booking complete', async () => {
+      const booking = await pastBooking();
+
+      expect(
+        (await inject('PUT', `/vendor/bookings/${booking.id}/complete`, CUSTOMER)).statusCode,
+      ).toBe(403);
+    });
+
+    it('invites the customer to review once it is complete', async () => {
+      const booking = await pastBooking();
+      await inject('PUT', `/vendor/bookings/${booking.id}/complete`, VENDOR);
+
+      const rows = await harness.database.db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.type, 'booking_completed'));
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.userId).toBe(booking.customerId);
+    });
+  });
+
+  describe('cancellation', () => {
+    /*
+     * D3's tiers, asserted with exact cent amounts rather than with the rate.
+     * A rate can be right while the rounding is wrong, and the customer is
+     * refunded cents rather than percentages.
+     */
+    it('refunds everything outside the 48-hour cutoff', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      const response = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
+        reason: 'The venue fell through.',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().refundCents).toBe(PRICE_CENTS);
+      expect(response.json().isFullRefund).toBe(true);
+      expect(harness.stripe.refunds).toEqual([
+        {
+          paymentIntentId: booking!.stripePaymentIntentId,
+          amountCents: PRICE_CENTS,
+          reason: 'requested_by_customer',
+        },
+      ]);
+    });
+
+    it('refunds half inside the cutoff', async () => {
+      // A day out: inside 48 hours, and still in the future.
+      const requestId = await acceptedRequest(toDateString(addDays(START, 1)));
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+
+      expect(response.json().refundCents).toBe(PRICE_CENTS / 2);
+      expect(response.json().isFullRefund).toBe(false);
+    });
+
+    it('frees the date again', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      const [held] = await harness.database.db.select().from(availability);
+      expect(held?.status).toBe('available');
+    });
+
+    it('cannot cancel an event that already happened', async () => {
+      const booking = await pastBooking();
+      await inject('PUT', `/vendor/bookings/${booking.id}/complete`, VENDOR);
+
+      const response = await inject('PUT', `/customer/bookings/${booking.id}/cancel`, CUSTOMER, {});
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(
+        'That event already happened, so it cannot be cancelled',
+      );
+      expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    it('refuses a second cancellation, and refunds nothing twice', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      const again = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      expect(again.statusCode).toBe(409);
+      expect(harness.stripe.refunds).toHaveLength(1);
+    });
+
+    it('refuses the vendor cancelling on the customers behalf', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      expect(
+        (await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, VENDOR, {})).statusCode,
+      ).toBe(403);
+      expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    it('tells the vendor their date is free again', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      const rows = await harness.database.db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.type, 'booking_cancelled'));
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.body).toBe('The date is free again on your calendar.');
+    });
+  });
+});

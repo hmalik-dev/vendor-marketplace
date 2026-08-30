@@ -320,11 +320,21 @@ describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
     expect(railSource).toContain('rounded-lg');
   });
 
-  it('keeps a native select while replacing only its arrow', () => {
-    // The element stays a real `<select>` — appearance is all that changes —
-    // so the keyboard, the screen reader and the mobile picker are untouched.
-    expect(railSource).toContain('<select');
-    expect(railSource).toContain('appearance-none');
+  /*
+   * The native `<select>` is gone (#167).
+   *
+   * It was kept for the behaviour the platform gives free — keyboard, screen
+   * reader, mobile picker — but the platform also *draws* it, and hiding that
+   * already took `appearance-none` and a hand-drawn glyph. What it gave away is
+   * now provided rather than borrowed, by the one dropdown every other select
+   * in the product uses: a listbox with roving `aria-activedescendant`, arrows,
+   * type-ahead, and a bottom sheet below 640 where the OS would have drawn one.
+   */
+  it('replaces the native select with the shared dropdown, glyph and all', () => {
+    expect(railSource).not.toContain('<select');
+    expect(railSource).not.toContain('appearance-none');
+    expect(railSource).toContain('SingleSelectDropdown');
+    // The caret is still ours, and still hidden from the accessibility tree.
     expect(railSource).toContain('aria-hidden="true"');
   });
 });
@@ -510,8 +520,20 @@ describe('frame 03 — the rail controls are one box (#107/#108)', () => {
   });
 
   it('gives all three controls the same class, so they cannot diverge', () => {
-    // `date`, `number` and `select` each take `FIELD` and nothing else sizing.
-    expect(railSource.match(/className=\{FIELD\}/g)).toHaveLength(2);
-    expect(railSource).toContain('className={`${FIELD} appearance-none`}');
+    /*
+      Guests still takes `FIELD` bare; the date and the package are dropdown
+      triggers now (#167) and take `FIELD` plus the row that holds their caret.
+      What has to hold is that all three start from the same class — the
+      divergence this test exists to catch — not which of them are inputs.
+    */
+    expect(railSource.match(/className=\{FIELD\}/g)).toHaveLength(1);
+    expect(
+      railSource.match(
+        /className=\{`\$\{FIELD\} flex items-center justify-between gap-2 text-left`\}/g,
+      ),
+    ).toHaveLength(2);
+    // The native `select` and the `appearance-none` that hid its arrow are gone.
+    expect(railSource).not.toContain('appearance-none');
+    expect(railSource).not.toContain('<select');
   });
 });

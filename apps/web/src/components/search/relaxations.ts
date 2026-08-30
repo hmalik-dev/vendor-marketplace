@@ -48,6 +48,21 @@ export function relaxations(state: SearchState): Relaxation[] {
 }
 
 /**
+ * Small counts as words, because frame `18` draws one: *"No photographers match
+ * all **three** filters"*. The number is still read from the state — what
+ * changes is only how it is spelled, and the Text axis is the literal string.
+ *
+ * Only as far as the list can actually go. `relaxations` pushes at most one
+ * option per filter, so there is no count here a word cannot spell; anything
+ * past the table falls back to the numeral rather than inventing a spelling.
+ */
+const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six'] as const;
+
+function spelled(count: number): string {
+  return COUNT_WORDS[count] ?? String(count);
+}
+
+/**
  * The headline. It counts the filters the customer actually set, because "all
  * three filters" when they set one reads as though the page misunderstood them.
  */
@@ -59,7 +74,9 @@ export function noResultsHeadline(state: SearchState): string {
     return `No ${noun} listed yet`;
   }
 
-  return count === 1 ? `No ${noun} match that filter` : `No ${noun} match all ${count} filters`;
+  return count === 1
+    ? `No ${noun} match that filter`
+    : `No ${noun} match all ${spelled(count)} filters`;
 }
 
 /**
@@ -91,5 +108,5 @@ export function noResultsDiagnosis(state: SearchState): string | null {
    * assertions as well as figures. What survives is the half that is true by
    * construction: this filter is the narrowest one the customer set.
    */
-  return `${culprit} is the narrowest filter here. Loosen one and results come back.`;
+  return `${culprit} is the narrowest filter here. Loosen one filter and results come back.`;
 }

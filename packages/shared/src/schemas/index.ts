@@ -25,6 +25,7 @@ import {
   MAX_EMAIL_LENGTH,
   MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
+  MAX_REVIEWER_DISPLAY_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
   MAX_PAGE,
   MAX_PAGE_SIZE,
@@ -40,6 +41,7 @@ import {
   REVIEW_CONTENT_MAX_LENGTH,
   REVIEW_CONTENT_MIN_LENGTH,
   REVIEW_RATING_MAX,
+  REVIEW_RATINGS,
   REVIEW_RATING_MIN,
   RESPONSE_TIME_HOURS_OPTIONS,
   REVIEW_TYPES,
@@ -771,6 +773,67 @@ export const bookingWithContextSchema = bookingSchema.extend({
 });
 export type BookingWithContext = z.infer<typeof bookingWithContextSchema>;
 
+// --- Checkout --------------------------------------------------------------
+
+/**
+ * What `POST /customer/booking-requests/:requestId/pay` answers.
+ *
+ * The client secret is the only thing that lets the browser confirm the charge,
+ * and it is returned rather than stored: it is scoped to one intent, it is
+ * useless without the publishable key, and holding a copy would mean keeping a
+ * live payment credential in a row nobody reads.
+ *
+ * The amounts travel with it so the summary rail renders from the same numbers
+ * the intent was created with. A rail that recomputes them client-side is a rail
+ * that can disagree with the charge.
+ */
+export const checkoutIntentSchema = z.object({
+  paymentIntentId: z.string().max(255),
+  /** `null` only for an intent that is already terminal — see `status`. */
+  clientSecret: z.string().nullable(),
+  /** Stripe's own vocabulary; `succeeded` means this is already paid. */
+  status: z.string().max(64),
+  amountCents: z.int().min(MIN_BOOKING_AMOUNT_CENTS),
+  /**
+   * What is **added** to the quoted price at checkout, which is nothing.
+   *
+   * Named for what the customer pays rather than for the platform's cut,
+   * because those are different numbers and only this one belongs on their
+   * receipt: D1 has the platform absorb Stripe's processing fee out of its
+   * commission, so the quoted price is the paid price. The rail states
+   * "Service fee: None" from this figure rather than from a hard-coded word,
+   * so a future decision to charge one cannot leave the copy lying.
+   */
+  customerFeeCents: z.int().min(0),
+  eventDate: calendarDateSchema,
+  eventLocation: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
+  guestCount: z.int().nullable(),
+  vendor: z.object({
+    slug: slugSchema,
+    businessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+    avatarUrl: imageRefSchema.nullable(),
+  }),
+  /** The date the vendor accepted, for the "Maya accepted your request on…" line. */
+  acceptedAt: z.date().nullable(),
+});
+export type CheckoutIntent = z.infer<typeof checkoutIntentSchema>;
+
+/**
+ * What a cancellation returns: the booking as it now stands, plus what was
+ * actually refunded.
+ *
+ * The refund is reported rather than left to be inferred from the tier, because
+ * the two can legitimately differ — a refund Stripe accepted for less than was
+ * asked is still a successful cancellation, and the customer is owed the real
+ * number rather than the one the policy predicted.
+ */
+export const cancelledBookingSchema = z.object({
+  booking: bookingSchema,
+  refundCents: z.int().min(0),
+  isFullRefund: z.boolean(),
+});
+export type CancelledBooking = z.infer<typeof cancelledBookingSchema>;
+
 // --- Vendor dashboard ------------------------------------------------------
 
 /**
@@ -899,6 +962,93 @@ export const createReviewSchema = z.object({
 });
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 
+/**
+ * A customer-to-vendor review as the public profile renders it.
+ *
+ * Deliberately **not** `reviewSchema`. That one is the row; this is what a
+ * stranger may read, and the difference is the point: no `reviewerId`, no
+ * `bookingId`, no `type`. The reviewer is a first name and an initial —
+ * `12-vendor-profile.md:135` — because a full name beside an event date and a
+ * city identifies someone at a wedding.
+ */
+export const publicReviewSchema = z.object({
+  id: uuidSchema,
+  rating: z.int().min(REVIEW_RATING_MIN).max(REVIEW_RATING_MAX),
+  title: z.string().max(MAX_TITLE_LENGTH).nullable(),
+  content: z.string(),
+  /**
+   * "Priya M." — built server-side, so the full name never leaves the API.
+   *
+   * Bounded by what the concatenation can produce, not by the column it starts
+   * from: `MAX_NAME_LENGTH` is three characters short of the longest legal
+   * value, and a name at the column's own limit made this response
+   * un-serialisable.
+   */
+  reviewerName: z.string().max(MAX_REVIEWER_DISPLAY_NAME_LENGTH),
+  /**
+   * The booking's own `event_type`, for the card's badge. Nullable because the
+   * column is: a booking made without one gets no badge rather than a made-up
+   * category.
+   */
+  eventType: z.string().max(MAX_TITLE_LENGTH).nullable(),
+  createdAt: z.date(),
+});
+export type PublicReview = z.infer<typeof publicReviewSchema>;
+
+/**
+ * The numbers above the list: the big Serif average, and the five-bar chart.
+ *
+ * Counted from the `reviews` rows in the same request that reads the page, not
+ * from `vendor_profiles.avg_rating`. The denormalised column is what search and
+ * the card render from and it is written by the same transaction — but a
+ * summary that disagrees with the list under it is the defect this avoids, and
+ * the chart needs the per-rating counts regardless, so the average comes from
+ * the same GROUP BY rather than from a second source.
+ */
+export const reviewSummarySchema = z.object({
+  /** `null` when there are none — never a 0.0 that reads as a bad score. */
+  avgRating: z.number().min(0).max(REVIEW_RATING_MAX).nullable(),
+  reviewCount: z.int().min(0),
+  /**
+   * One count per rating, ascending from `REVIEW_RATING_MIN`. Always the full
+   * length: a rating nobody gave is a zero-length bar, not a missing row.
+   */
+  distribution: z.array(z.int().min(0)).length(REVIEW_RATINGS.length),
+});
+export type ReviewSummary = z.infer<typeof reviewSummarySchema>;
+
+/**
+ * What the signed-in viewer may do here, resolved server-side.
+ *
+ * On the response rather than behind its own endpoint because the tab needs it
+ * on first paint, and because the answer is only ever "this viewer, this
+ * vendor" — a second request would ask the same question with the same inputs.
+ * Every field is `false`/`null` for a signed-out reader.
+ */
+export const reviewViewerSchema = z.object({
+  /**
+   * A completed booking with this vendor that this viewer has not reviewed.
+   * `12-vendor-profile.md:138`: "Write a review" appears only for a user with a
+   * completed booking with this vendor.
+   */
+  canReview: z.boolean(),
+  /** Which booking the review would be filed against, when there is one. */
+  bookingId: uuidSchema.nullable(),
+});
+export type ReviewViewer = z.infer<typeof reviewViewerSchema>;
+
+/** One appended page of the Reviews tab, with everything above it. */
+export const vendorReviewsPageSchema = z.object({
+  items: z.array(publicReviewSchema),
+  summary: reviewSummarySchema,
+  viewer: reviewViewerSchema,
+  page: z.int().min(1),
+  pageSize: z.int().min(1),
+  /** Whether another press of "Show more reviews" would return anything. */
+  hasMore: z.boolean(),
+});
+export type VendorReviewsPage = z.infer<typeof vendorReviewsPageSchema>;
+
 // --- Tags ------------------------------------------------------------------
 
 export const tagSchema = z.object({
@@ -906,6 +1056,18 @@ export const tagSchema = z.object({
   name: trimmedString(MAX_NAME_LENGTH),
   slug: slugSchema,
   category: tagCategorySchema,
+  /**
+   * The vendor category a `style` tag belongs to, and `null` for every other
+   * group.
+   *
+   * The **slug**, not the id, even though the column is an id: every consumer
+   * of this field already holds a slug — it is what `/search?category=` carries
+   * and what the picker is keyed by — so projecting the id would make each of
+   * them resolve it again. It travels with the row rather than being looked up
+   * separately, because the Refine bar's `Style ▾` option set changes with the
+   * selected vendor type, so the chip needs the scope in the same read.
+   */
+  vendorCategorySlug: slugSchema.nullable(),
   displayOrder: z.int(),
   isActive: z.boolean(),
   createdAt: z.date(),
@@ -1002,6 +1164,23 @@ export const conversationSummarySchema = z.object({
   vendorSlug: slugSchema,
 });
 export type ConversationSummary = z.infer<typeof conversationSummarySchema>;
+
+/**
+ * Opening a thread from a vendor's profile, before any request exists.
+ *
+ * The slug rather than the id: it is what the customer's URL already carries,
+ * and it keeps a profile id off a body the browser composes.
+ */
+export const openConversationSchema = z.object({
+  vendorSlug: slugSchema,
+});
+export type OpenConversationInput = z.infer<typeof openConversationSchema>;
+
+/** Just the thread's id — enough to navigate to it, which is all this is for. */
+export const openedConversationSchema = z.object({
+  id: uuidSchema,
+});
+export type OpenedConversation = z.infer<typeof openedConversationSchema>;
 
 export const sendMessageResultSchema = z.object({
   id: uuidSchema,
@@ -1264,6 +1443,24 @@ export const categoryFacetSchema = z.object({
   count: z.int().min(0),
 });
 export type CategoryFacet = z.infer<typeof categoryFacetSchema>;
+
+/**
+ * One place a customer can actually search, and how many vendors are in it.
+ *
+ * City and state travel **together**, always. "Springfield" names a place in
+ * thirty-odd states and "Portland" names two people would fly between; a city
+ * field that took either on its own could not tell a customer which one they
+ * had asked for. The pair is also the unit the vendor profile stores and the
+ * search filters on, so nothing has to be re-joined to use it.
+ */
+export const vendorCitySchema = z.object({
+  city: z.string().max(MAX_NAME_LENGTH),
+  state: z.string().max(MAX_NAME_LENGTH),
+  /** Published vendors there — a query result, never a platform statistic. */
+  vendorCount: z.int().min(1),
+});
+export type VendorCity = z.infer<typeof vendorCitySchema>;
+export const vendorCityListSchema = z.array(vendorCitySchema);
 
 export const vendorSearchResultSchema = z.object({
   items: z.array(vendorCardSchema),

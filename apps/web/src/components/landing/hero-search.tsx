@@ -1,14 +1,16 @@
 'use client';
 
-import type { Category } from '@vendor-marketplace/shared';
+import type { Category, VendorCity } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { SearchBar, type SearchBarValues } from '@/components/search/search-bar';
 
 /** An untouched hero bar asks nothing yet — every segment starts empty. */
-const EMPTY_QUERY: SearchBarValues = { category: '', city: '', date: '' };
+const EMPTY_QUERY: SearchBarValues = { category: '', city: '', state: '', date: '' };
 
 export interface HeroSearchProps {
   categories: readonly Category[];
+  /** The cities that have vendors, so City can only ask a real question. */
+  cities: readonly VendorCity[];
 }
 
 /**
@@ -23,15 +25,17 @@ export interface HeroSearchProps {
  *
  * See design/design-plan/10-landing.md.
  */
-export function HeroSearch({ categories }: HeroSearchProps): React.ReactElement {
+export function HeroSearch({ categories, cities }: HeroSearchProps): React.ReactElement {
   const router = useRouter();
 
   return (
     <SearchBar
       categories={categories}
+      cities={cities}
       value={EMPTY_QUERY}
       size="hero"
-      className="mt-6"
+      /* 18px at both narrow frames, 24 only at 1440. */
+      className="mt-4.5 min-[90rem]:mt-6"
       onSubmit={(values) => {
         const params = new URLSearchParams();
 

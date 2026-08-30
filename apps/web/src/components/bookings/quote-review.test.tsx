@@ -109,16 +109,92 @@ describe('QuoteReview', () => {
    * This originally asserted against exactly that impossible row: `quoted`
    * with a null price. Every field was checked and the object described could
    * not exist, which no assertion on values can see.
+   *
+   * #309 then found the assertion itself was pinning a broken screen. A
+   * `pending` request rendered a **disabled** `Accept quote` above the words
+   * "No price yet" — a field pretending to be a value, and a control offered
+   * for a decision nobody has put to the customer. There is nothing to accept
+   * before a quote exists, so the screen offers nothing to accept.
    */
-  it('cannot accept a custom request that has not been quoted yet', () => {
+  it('offers nothing to accept before the vendor has quoted', () => {
     render(
       <QuoteReview
         request={quotedRequest({ status: 'pending', quotedPriceCents: null, quoteNote: null })}
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Accept quote' })).toHaveProperty('disabled', true);
-    expect(screen.getByText('No price yet')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Accept quote' })).toBeNull();
+    expect(screen.queryByText('No price yet')).toBeNull();
+    expect(screen.queryByText('Quoted price')).toBeNull();
+  });
+
+  /*
+   * #309 / #214. `POST /booking-requests/:id/cancel` had existed the whole
+   * time and nothing on any customer surface reached it, so a request sent to
+   * a vendor who never answered could not be taken back.
+   *
+   * The word is the product's own: the hub renders a cancelled *request* as
+   * "Withdrawn", separately from a cancelled *booking*'s "Cancelled".
+   */
+  describe('withdrawing a request the vendor has not answered', () => {
+    it('names the state honestly rather than claiming a quote arrived', () => {
+      render(
+        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+      );
+
+      expect(screen.getByRole('heading', { name: /Waiting on/ })).toBeDefined();
+      expect(screen.queryByText(/sent a quote/)).toBeNull();
+    });
+
+    /* Destructive, so it takes a deliberate second press rather than one. */
+    it('asks twice before withdrawing', async () => {
+      render(
+        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
+
+      expect(requestMock).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Yes, withdraw it' })).toBeDefined();
+    });
+
+    it('withdraws through the API on the second press', async () => {
+      render(
+        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Yes, withdraw it' }));
+
+      expect(requestMock).toHaveBeenCalledWith(
+        '/booking-requests/req-1/cancel',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('lets the customer back out of withdrawing', async () => {
+      render(
+        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Keep waiting' }));
+
+      expect(requestMock).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Withdraw request' })).toBeDefined();
+    });
+
+    /*
+     * Withdrawing belongs to the unanswered state. Once a price is on the
+     * table the customer's "no" is `Decline`, and two controls that both end
+     * the request would be two names for one thing.
+     */
+    it('is absent once a quote is on the table', () => {
+      render(<QuoteReview request={quotedRequest({ status: 'quoted' })} />);
+
+      expect(screen.queryByRole('button', { name: 'Withdraw request' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Decline' })).toBeDefined();
+    });
   });
 
   it('shows a failure inline rather than losing it', async () => {
@@ -132,5 +208,75 @@ describe('QuoteReview', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('That date was booked while this quote was open');
+  });
+
+  /*
+   * The same defect as the `pending` one above, one status over — and the
+   * hub-card change is what made it reachable. Everything that is not
+   * `accepted` routes here, so `declined`, `cancelled` and `expired` were
+   * rendering as a live quote: "<vendor> sent a quote", the refund terms, and
+   * an **enabled** `Accept quote` that answers 409.
+   *
+   * The reachable version took one press. Withdrawing refreshes, the status
+   * becomes `cancelled`, and the screen the customer is still looking at
+   * started offering to accept a quote that never existed.
+   */
+  describe('a request that is already over', () => {
+    const settled = ['declined', 'cancelled', 'expired'] as const;
+
+    it.each(settled)('offers no decision on a %s request', (status) => {
+      render(<QuoteReview request={quotedRequest({ status })} />);
+
+      expect(screen.queryByRole('button', { name: 'Accept quote' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Decline' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Withdraw request' })).toBeNull();
+    });
+
+    it.each(settled)('does not claim a quote is waiting on a %s request', (status) => {
+      render(<QuoteReview request={quotedRequest({ status })} />);
+
+      expect(screen.queryByText(/sent a quote/)).toBeNull();
+      expect(screen.queryByText(/full refund applies/)).toBeNull();
+    });
+
+    /*
+     * `cancel` is customer-only, so "you withdrew this" is a fact. `declined`
+     * can be either party, so it stays impersonal. The words are the hub's —
+     * a cancelled *request* is "Withdrawn" there, and a second vocabulary is
+     * how two screens come to disagree about one row.
+     */
+    it('says who ended it where that is knowable', () => {
+      render(<QuoteReview request={quotedRequest({ status: 'cancelled' })} />);
+
+      expect(screen.getByText('You withdrew this request.')).toBeDefined();
+    });
+
+    it('stays impersonal about a decline, which either party can make', () => {
+      render(<QuoteReview request={quotedRequest({ status: 'declined' })} />);
+
+      expect(screen.getByText('This request was declined.')).toBeDefined();
+    });
+
+    /*
+     * `expiresAt` is never cleared when a request settles, so the countdown
+     * would keep running on a dead row — "expires in 5d" under "This request
+     * was declined".
+     */
+    it('stops counting down a deadline that no longer means anything', () => {
+      // A `Date`, not an ISO string — `expiresAt` is parsed by Zod before it
+      // reaches the component, and a string here throws inside the helper.
+      const future = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+      render(<QuoteReview request={quotedRequest({ status: 'declined', expiresAt: future })} />);
+
+      expect(screen.queryByText(/expires/)).toBeNull();
+    });
+
+    /* Live requests keep it, so the guard above cannot be silently over-broad. */
+    it('still counts down on a quote that is still open', () => {
+      const future = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+      render(<QuoteReview request={quotedRequest({ status: 'quoted', expiresAt: future })} />);
+
+      expect(screen.getByText(/This quote expires/)).toBeDefined();
+    });
   });
 });

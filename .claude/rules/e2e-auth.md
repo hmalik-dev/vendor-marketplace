@@ -50,6 +50,54 @@ Two mechanics the script had to learn, worth keeping:
 - **Do not create throwaway accounts** to get past auth. It pollutes the database
   and consumes fixtures the next pass depends on.
 
+## First-paint auth chrome cannot be asserted from a restored context
+
+**#321, confirmed.** The `__session` cookie `storageState` captures is a
+short-lived Clerk session JWT, minted at the moment `pnpm e2e:auth` runs. By
+the time a later pass restores `.auth/*.json`, that token has typically aged
+past its TTL — this is a **timing** defect, not a missing-cookie one; the
+cookie is present, just too old to use without a refresh. A development Clerk
+instance has no first-party cookie domain shared with the app (its Frontend
+API lives on a separate `*.accounts.dev` host), so it cannot refresh an
+expired `__session` silently on the server: the browser has to round-trip
+through `/v1/client/handshake` and an `__clerk_handshake` callback leg before
+the app's own document reflects the real session. **Until that settles, the
+server's very first render for the load reads signed-out** — the header
+cluster, the `Vendor` role chip, `Show when="signed-in"` sections, all of it —
+even though the account is genuinely signed in. A real in-context sign-in
+never shows this: the token is minted at the moment of use, nowhere near its
+TTL, so the very first render resolves correctly with **zero** handshake hops.
+
+Measured, unnamed, twice before this was diagnosed (lanes 153 and 215 — see
+`.claude/agent-memory/browser-verifier/`), then measured and named on lane 313.
+It is the entire cause of **#259**, which was filed as a product defect and
+closed as not reproducible, superseded by this ticket (#321).
+
+**The rule this becomes:** never assert first-paint auth chrome — anything
+Clerk's own control components render (`<Show>`, `<UserButton>`, the signed-in
+vs signed-out branches in `site-header.tsx`) — from the very first navigation
+after loading a restored `storageState`. Instead:
+
+1. Load the storage state and navigate once as a **throwaway warm-up**. Discard
+   whatever that render shows.
+2. Navigate again (or reload). **Only this render, and everything after it in
+   the same context, is evidence.** The ticket's own measurement showed a
+   second navigation always resolves correctly.
+3. If the header still reads signed-out after the warm-up, that is a real
+   finding, not this ticket — reload once more, and if it still does not
+   clear, treat the storage state as stale and regenerate it
+   (`pnpm e2e:auth <role>`) before continuing.
+
+What is **still safe** to assert on the very first navigation: anything not
+rendered by Clerk's control components — a server-side `requireRole` redirect
+(reads the local `users.role` column directly, unaffected by this), the page
+body behind an already-resolved layout, URL and status-code behaviour.
+
+`scripts/e2e-handshake.mjs` is the mechanical version of this check —
+`countHandshakeHops` / `handshakeVerdict` turn an observed navigation's
+document-request URLs into exactly the zero-vs-nonzero read this rule asks
+for, so "warm" does not have to be eyeballed from a screenshot.
+
 # A signed-in account is not yet a usable one
 
 `pnpm e2e:auth` gets you a session. It does **not** get you a vendor who can be

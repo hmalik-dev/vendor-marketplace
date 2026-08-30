@@ -1,6 +1,7 @@
 'use client';
 
 import { MESSAGE_MAX_LENGTH } from '@vendor-marketplace/shared';
+import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 import { Banner } from '@/components/ui/banner';
@@ -26,6 +27,14 @@ const DAY = new Intl.DateTimeFormat('en-US', {
 
 const CLOCK = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
 
+/**
+ * How close to the ceiling the counter starts speaking.
+ *
+ * A character count on every message is noise; one that appears only when
+ * the limit is within reach is information. 5000 characters is roughly a
+ * page of prose, so nobody writing an ordinary message ever sees it.
+ */
+const MESSAGE_COUNTER_THRESHOLD = 200;
 /** "2h", "5h", "3d" — the age of the last message, at a glance. */
 function ago(date: Date | null, now: number): string {
   if (!date) {
@@ -78,6 +87,20 @@ export function MessagesScreen({
 
   const bottom = useRef<HTMLDivElement>(null);
   const now = Date.now();
+
+  /*
+   * Below `md` the two panes become one screen, so exactly one of them shows.
+   *
+   * `14 Messaging tablet` draws both panes at 768 and there is no frame below
+   * it, so this is the usability floor #70 asks for rather than a drawn
+   * composition: `activeId` defaults to the first conversation, which meant a
+   * narrow screen opened straight into a thread with the list hidden and no
+   * control anywhere to get back to it. Every other conversation was
+   * unreachable without reloading.
+   *
+   * Derived once rather than tested twice, so the panes cannot both hide.
+   */
+  const listOwnsSmallScreen = activeId === null && conversations.length > 0;
 
   const active = useMemo(
     () => conversations.find((row) => row.id === activeId) ?? null,
@@ -178,7 +201,12 @@ export function MessagesScreen({
 
   return (
     <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-stone-300 bg-stone-0 max-md:hidden">
+      <aside
+        className={cn(
+          'flex w-[300px] shrink-0 flex-col border-r border-stone-300 bg-stone-0',
+          listOwnsSmallScreen ? 'max-md:w-full' : 'max-md:hidden',
+        )}
+      >
         <div className="flex items-center justify-between border-b border-stone-200 px-4.5 py-3.5">
           <h1 className="text-md font-semibold text-stone-900">Messages</h1>
           {conversations.some((row) => row.unreadCount > 0) ? (
@@ -240,7 +268,12 @@ export function MessagesScreen({
         </ul>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-stone-50">
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 flex-col overflow-hidden bg-stone-50',
+          listOwnsSmallScreen && 'max-md:hidden',
+        )}
+      >
         {active === null ? (
           <EmptyState
             headline="No conversations yet"
@@ -250,6 +283,20 @@ export function MessagesScreen({
         ) : (
           <>
             <div className="flex shrink-0 items-center gap-3 border-b border-stone-300 bg-stone-0 px-5.5 py-3">
+              {/*
+                The way out, and only where there is no list beside the thread
+                to go back to. 44px, because `04-laws.md` sizes an icon-only
+                control by the finger that presses it — and below `md` this is
+                the only navigation on the screen.
+              */}
+              <button
+                type="button"
+                onClick={() => setActiveId(null)}
+                aria-label="Back to messages"
+                className="-ml-2.5 flex size-11 shrink-0 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 md:hidden"
+              >
+                <ArrowLeft aria-hidden="true" className="size-4.5" />
+              </button>
               <Avatar name={active.otherPartyName} src={active.otherPartyAvatarUrl} size="md" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-md font-semibold text-stone-900">
@@ -302,7 +349,20 @@ export function MessagesScreen({
                         */}
                         <p
                           className={cn(
-                            'px-3.75 py-3 text-base leading-prose whitespace-pre-wrap text-stone-900',
+                            /*
+                              `break-words` is load-bearing, not defensive.
+                              `whitespace-pre-wrap` preserves the newlines a
+                              message was typed with, but neither it nor the
+                              default `overflow-wrap: normal` will break inside
+                              a token — so a 160-character share link measured
+                              680px of bubble against 768px of text and ran
+                              visibly past the rounded edge, and 5000 unbroken
+                              characters reached a scrollWidth of 53,677.
+
+                              Pasting a gallery link to a photographer is close
+                              to the most likely message this product carries.
+                            */
+                            'px-3.75 py-3 text-base leading-prose break-words whitespace-pre-wrap text-stone-900',
                             isOwn
                               ? 'rounded-[14px_14px_4px_14px] bg-clay-100'
                               : 'rounded-[14px_14px_14px_4px] bg-stone-0',
@@ -334,12 +394,26 @@ export function MessagesScreen({
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={`Reply to ${active.otherPartyName}…`}
                 aria-label="Write a message"
-                className="min-h-11 rounded-xl border-stone-300 bg-stone-150 px-3.5 py-3 text-base"
+                /*
+                  `maxLength` as well as the length guard below. The guard
+                  refuses to send an over-length draft, which is correct but
+                  late: without this the field accepted 5000+ characters and
+                  grew to 907px — taller than a 900px viewport — so the Send
+                  button that would have explained the problem was off screen.
+                  The cap stops the growth at the point it becomes unusable.
+                */
+                maxLength={MESSAGE_MAX_LENGTH}
+                className="max-h-56 min-h-11 overflow-y-auto rounded-xl border-stone-300 bg-stone-150 px-3.5 py-3 text-base"
               />
               <div className="mt-2.5 flex items-center justify-between gap-3">
+                {/*
+                  Counts down rather than reporting an overage that `maxLength`
+                  now prevents, and stays quiet until the limit is close enough
+                  to matter — a counter on every message is noise.
+                */}
                 <span className="text-xs text-stone-600">
-                  {draft.length > MESSAGE_MAX_LENGTH
-                    ? `${draft.length - MESSAGE_MAX_LENGTH} characters over`
+                  {draft.length >= MESSAGE_MAX_LENGTH - MESSAGE_COUNTER_THRESHOLD
+                    ? `${MESSAGE_MAX_LENGTH - draft.length} characters left`
                     : ''}
                 </span>
                 <Button

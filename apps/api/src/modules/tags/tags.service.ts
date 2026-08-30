@@ -5,8 +5,8 @@ import {
   type Tag,
   type TagSuggestionResponse,
 } from '@vendor-marketplace/shared';
-import type { TagRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import type { ScopedTagRow } from './tags.dao.js';
 import { notFound, validationFailed } from '../../lib/errors.js';
 import { findVendorProfileByUserId } from '../vendors/vendors.dao.js';
 import {
@@ -74,7 +74,7 @@ export async function setVendorTags(
 }
 
 /** Same ordering the picker renders: category group, then display order. */
-function sortForDisplay(rows: TagRow[]): TagRow[] {
+function sortForDisplay(rows: ScopedTagRow[]): ScopedTagRow[] {
   return [...rows].sort(
     (a, b) =>
       a.category.localeCompare(b.category) ||

@@ -3,13 +3,21 @@
 import {
   MAX_GUEST_COUNT,
   formatPrice,
+  openedConversationSchema,
   type AvailabilityStatus,
   type ServicePackage,
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
-import { useId, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { DateDropdown } from '@/components/ui/dropdown-date';
+import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { Label } from '@/components/ui/label';
+import { ApiClientError } from '@/lib/api-client';
+import { signInPathReturningTo } from '@/lib/return-path';
+import { useApi } from '@/lib/use-api';
+import { cn } from '@/lib/utils';
 
 export interface BookingRailProps {
   businessName: string;
@@ -29,10 +37,10 @@ export interface BookingRailProps {
  * fields, both CTAs, the charge reassurance, then the trust lines.
  *
  * `Request booking` opens frame `04` with the selected package already in its
- * rail. `Send a message` still renders disabled — messaging is #8 — following
- * the rule #31 established: a control that opens nothing either does something
- * or says why it cannot, and it never simply disappears, because hiding it
- * would leave the page with no visible ask.
+ * rail. `Send a message` opens the thread with this vendor and goes to it —
+ * #110's ruling, answered by #310 in the only way that satisfies the rule #31
+ * established: a control either does something or says why it cannot, and the
+ * thread it needed now exists to be opened.
  */
 export function BookingRail({
   businessName,
@@ -44,9 +52,52 @@ export function BookingRail({
   calendar,
 }: BookingRailProps): React.ReactElement {
   const fieldId = useId();
+  const errorId = `${fieldId}-message-error`;
+  const router = useRouter();
+  const call = useApi();
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
+  const [packageOpen, setPackageOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+
   const [eventDate, setEventDate] = useState('');
   const [guestCount, setGuestCount] = useState('');
+  const [opening, setOpening] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
+
+  /*
+   * Opens the thread with this vendor and goes to it. The call is idempotent,
+   * so a second click lands on the same conversation rather than opening one
+   * beside it — the button is safe to press twice, which is what makes
+   * `opening` a spinner-free guard rather than a correctness one.
+   *
+   * A signed-out visitor is sent to sign in *carrying this page*, because the
+   * profile is where they were and where the button they pressed lives.
+   * `opening` stays set on both navigations: the component is about to be
+   * unmounted, and clearing it would re-enable a control on a page that is
+   * leaving.
+   */
+  const openThread = useCallback(async () => {
+    setOpening(true);
+    setMessageError(null);
+
+    try {
+      const { id } = await call('/conversations', {
+        method: 'POST',
+        body: { vendorSlug: slug },
+        schema: openedConversationSchema,
+      });
+
+      router.push(`/messages?conversation=${id}`);
+    } catch (error) {
+      if (error instanceof ApiClientError && error.statusCode === 401) {
+        router.push(signInPathReturningTo(`${window.location.pathname}${window.location.search}`));
+        return;
+      }
+
+      setMessageError('That did not go through. Try again in a moment.');
+      setOpening(false);
+    }
+  }, [call, router, slug]);
 
   const selected = packages.find((servicePackage) => servicePackage.id === packageId);
   const shownPriceCents = selected?.priceCents ?? startingPriceCents;
@@ -122,13 +173,44 @@ export function BookingRail({
             <Label htmlFor={`${fieldId}-date`} className={FIELD_LABEL}>
               Event date
             </Label>
-            <input
-              id={`${fieldId}-date`}
-              type="date"
-              value={eventDate}
-              min={today}
-              onChange={(event) => setEventDate(event.target.value)}
-              className={FIELD}
+            {/*
+              The designed picker, and the one place it has real marks to draw:
+              this vendor's calendar is already in scope, so a day they are
+              booked on is hatched and struck through here rather than being
+              accepted and then refused on the next screen. Frame `28`'s note is
+              that the customer's picker inherits the vendor calendar's marks
+              exactly — this is that, with the same vendor's data behind it.
+            */}
+            <DateDropdown
+              open={dateOpen}
+              onOpenChange={setDateOpen}
+              label="Event date"
+              value={eventDate === '' ? null : eventDate}
+              onChange={(next) => setEventDate(next ?? '')}
+              today={today}
+              calendar={calendar}
+              trigger={
+                <button
+                  type="button"
+                  id={`${fieldId}-date`}
+                  aria-haspopup="dialog"
+                  aria-expanded={dateOpen}
+                  className={`${FIELD} flex items-center justify-between gap-2 text-left`}
+                >
+                  <span className={cn('truncate', eventDate === '' && 'text-stone-600')}>
+                    {eventDate === '' ? 'Add a date' : formatMonthDay(eventDate)}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'shrink-0 text-base',
+                      dateOpen ? 'text-clay-400' : 'text-stone-600',
+                    )}
+                  >
+                    {dateOpen ? '▴' : '▾'}
+                  </span>
+                </button>
+              }
             />
           </div>
           <div className="flex-[0.7]">
@@ -154,30 +236,49 @@ export function BookingRail({
               Package
             </Label>
             {/*
-              A real `<select>` — the element stays native so the keyboard, the
-              screen reader and the mobile picker all behave — with only the
-              OS-drawn arrow replaced by the frame's own glyph.
+              The one dropdown (#167). This was a native select element, kept for the
+              behaviour the platform gives free — but the platform also draws it,
+              and suppressing the OS arrow to draw our own was already most of
+              the way to replacing it. What it gave away is now provided rather
+              than borrowed: a listbox, roving `aria-activedescendant`, arrows,
+              type-ahead, and a bottom sheet where the OS would have drawn one.
             */}
-            <div className="relative">
-              <select
-                id={`${fieldId}-package`}
-                value={packageId}
-                onChange={(event) => setPackageId(event.target.value)}
-                className={`${FIELD} appearance-none`}
-              >
-                {packages.map((servicePackage) => (
-                  <option key={servicePackage.id} value={servicePackage.id}>
-                    {servicePackage.name} — {formatPrice(servicePackage.priceCents)}
-                  </option>
-                ))}
-              </select>
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 right-[13px] flex items-center text-base text-stone-600"
-              >
-                ▾
-              </span>
-            </div>
+            <SingleSelectDropdown
+              open={packageOpen}
+              onOpenChange={setPackageOpen}
+              label="Package"
+              countNoun="packages"
+              options={packages.map((servicePackage) => ({
+                value: servicePackage.id,
+                label: `${servicePackage.name} — ${formatPrice(servicePackage.priceCents)}`,
+              }))}
+              value={packageId}
+              onChange={setPackageId}
+              trigger={
+                <button
+                  type="button"
+                  id={`${fieldId}-package`}
+                  aria-haspopup="listbox"
+                  aria-expanded={packageOpen}
+                  className={`${FIELD} flex items-center justify-between gap-2 text-left`}
+                >
+                  <span className="truncate">
+                    {selected
+                      ? `${selected.name} — ${formatPrice(selected.priceCents)}`
+                      : 'Choose a package'}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'shrink-0 text-base',
+                      packageOpen ? 'text-clay-400' : 'text-stone-600',
+                    )}
+                  >
+                    {packageOpen ? '▴' : '▾'}
+                  </span>
+                </button>
+              }
+            />
           </div>
         ) : null}
 
@@ -185,39 +286,38 @@ export function BookingRail({
           <Link href={requestHref}>Request booking</Link>
         </Button>
         {/*
-          #110's ruling, recorded in `vendor-marketplace-decisions.md`: the
-          control stays disabled until #310 builds the thread it would open.
-          Frame `03` draws it enabled because the frame draws the finished
-          product, and enabling it here would send a customer to `/messages`,
-          which can only open a thread that already exists — a control that
-          looks like it worked and did nothing is worse than one that says it
-          is not ready.
-
-          `40-states.md` requires the blocker to be named beside the control it
-          blocks. It is named to assistive technology rather than in visible
-          copy, because the frame draws no helper line here and inventing one
-          would fail the Text axis to satisfy the Access axis.
+          #110, answered. The control was disabled under an `sr-only` line
+          saying messaging was not available, because `/messages` could only
+          open a thread that already existed and enabling it would have sent a
+          customer nowhere. #310 gave it one to open, so the frame's enabled
+          control is now the honest one — and the blocked-state copy is gone
+          rather than left behind contradicting it.
         */}
         <Button
           variant="secondary"
-          disabled
-          aria-describedby="send-message-blocked"
+          onClick={openThread}
+          disabled={opening}
+          aria-describedby={messageError ? errorId : undefined}
           className="w-full justify-center py-3"
         >
           Send a message
         </Button>
-        <span id="send-message-blocked" className="sr-only">
-          Messaging is not available yet. Request a booking to start a conversation with{' '}
-          {businessName}.
-        </span>
+        {messageError ? (
+          /*
+            `40-states.md`: the failure is named beside the control that failed,
+            in the reader's words with one thing to do. The upstream message is
+            not printed — it is the API's sentence, not a reader's.
+          */
+          <p id={errorId} role="alert" className="text-center text-helper text-red-600">
+            {messageError}
+          </p>
+        ) : null}
 
         {/*
           The frame's charge reassurance, and only that. It previously carried
           "Messaging opens shortly." in front, which frame `03` does not draw
-          and which wrapped a one-line helper onto two. That sentence was the
-          only explanation the disabled `Send a message` button had; naming the
-          blocker beside the control it blocks, as `40-states.md` requires, is
-          #110's job and is recorded there.
+          and which wrapped a one-line helper onto two. That sentence existed to
+          explain a disabled `Send a message`, which is no longer disabled.
         */}
         <p className="mt-0.5 text-center text-helper leading-normal text-stone-600">
           You won&apos;t be charged yet — {businessName} confirms the date first.

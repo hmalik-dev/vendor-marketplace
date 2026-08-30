@@ -32,11 +32,13 @@ import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
+import { reviewRoutes } from './modules/reviews/reviews.routes.js';
 import { tagRoutes } from './modules/tags/tags.routes.js';
 import { uploadRoutes } from './modules/uploads/uploads.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { vendorRoutes } from './modules/vendors/vendors.routes.js';
 import { stripeConnectRoutes } from './modules/vendors/stripe-connect.routes.js';
+import { paymentRoutes } from './modules/payments/payments.routes.js';
 import { stripeWebhookRoutes } from './modules/webhooks/stripe.routes.js';
 import {
   clerkWebhookRoutes,
@@ -150,6 +152,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(stripeConnectRoutes, { returnOrigin: canonicalWebOrigin(env) });
   await app.register(packageRoutes);
   await app.register(portfolioRoutes);
+  await app.register(reviewRoutes);
   await app.register(availabilityRoutes);
   await app.register(bookingRequestRoutes);
   await app.register(messagingRoutes, { allowedOrigins: allowedOrigins(env) });
@@ -158,7 +161,8 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     signingSecret: env.CLERK_WEBHOOK_SECRET,
     ...options.webhooks,
   });
-  await app.register(stripeWebhookRoutes);
+  await app.register(paymentRoutes, { platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE });
+  await app.register(stripeWebhookRoutes, { platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE });
 
   await app.ready();
   return app;

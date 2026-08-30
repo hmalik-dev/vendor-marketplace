@@ -1,10 +1,14 @@
 import Stripe from 'stripe';
 
 /**
- * Stripe Connect, reduced to the four things this codebase actually does with
- * it. The narrow port is what lets the route suites run the real handler, the
- * real service and real SQL without reaching the network — the same seam the
- * Clerk token verifier and the object store already use.
+ * Stripe, reduced to the things this codebase actually does with it. The narrow
+ * port is what lets the route suites run the real handler, the real service and
+ * real SQL without reaching the network — the same seam the Clerk token
+ * verifier and the object store already use.
+ *
+ * The name is historical: it covers the payment path too, because a destination
+ * charge *is* a Connect operation — the fee and the payout account are fields on
+ * the intent, not a separate transfer this platform makes.
  *
  * **Accounts v2, not v1.** `POST /v1/accounts` answers 400 for this platform —
  * *"Stripe no longer recommends Accounts v1 for new Connect integrations.
@@ -36,11 +40,80 @@ export interface StripeConnectGateway {
 
   /**
    * Verifies a webhook signature over the exact bytes Stripe sent and names
-   * the account the notification is about. Throws when the signature does not
-   * verify.
+   * the account or object the notification is about. Throws when the signature
+   * does not verify.
    */
   parseEventNotification(payload: string, signature: string): StripeEventNotification;
+
+  /**
+   * The charge, as a destination charge: the customer pays the platform, Stripe
+   * takes `application_fee_amount` for it, and the remainder lands in the
+   * vendor's connected account. One Stripe object, not a charge plus a later
+   * transfer — which is why there is no `createTransfer` on this port and why
+   * completion moves no money.
+   *
+   * **Idempotent on the request id.** Stripe returns the *same* intent for a
+   * repeated key rather than minting a second one, which is what makes a
+   * double-submitted checkout impossible to charge twice at the source rather
+   * than only in the UI.
+   */
+  createPaymentIntent(input: CreatePaymentIntentInput): Promise<PaymentIntentSnapshot>;
+
+  /**
+   * Reads an intent back. This is the reconciliation path: a webhook that never
+   * arrives leaves a paid customer with no booking row, and the booking detail
+   * asks Stripe directly rather than waiting for a delivery that is not coming.
+   */
+  retrievePaymentIntent(paymentIntentId: string): Promise<PaymentIntentSnapshot>;
+
+  /**
+   * Refunds part or all of an intent. The amount is always passed explicitly,
+   * even for a full refund: the cancellation tiers are the product's rule, and
+   * letting Stripe default to "everything" would make a 50% refund and a 100%
+   * refund two different code paths.
+   */
+  createRefund(input: CreateRefundInput): Promise<{ refundId: string; amountCents: number }>;
 }
+
+export interface CreatePaymentIntentInput {
+  /** The accepted request being paid for. Doubles as the idempotency key. */
+  requestId: string;
+  amountCents: number;
+  applicationFeeCents: number;
+  /** The vendor's connected account — where the remainder lands. */
+  destinationAccountId: string;
+  customerId: string;
+  vendorId: string;
+}
+
+export interface CreateRefundInput {
+  paymentIntentId: string;
+  amountCents: number;
+  /** Distinguishes a customer cancellation from an operator-driven one. */
+  reason: 'requested_by_customer';
+}
+
+/**
+ * What the app needs off an intent, and nothing more.
+ *
+ * `status` is Stripe's own vocabulary rather than a mapped enum on purpose:
+ * this is the one place a Stripe string is authoritative, and translating it
+ * here would mean maintaining a second list of payment states that can drift
+ * from the first.
+ */
+export interface PaymentIntentSnapshot {
+  id: string;
+  status: string;
+  /** Only meaningful once the intent has succeeded. */
+  amountReceivedCents: number;
+  /** `null` once the intent is terminal — there is nothing left to confirm. */
+  clientSecret: string | null;
+  /** `requestId`, `customerId` and `vendorId`, as sent at creation. */
+  metadata: Record<string, string>;
+}
+
+/** Stripe's terminal success state for an intent. */
+export const PAYMENT_INTENT_SUCCEEDED = 'succeeded';
 
 export interface CreateRecipientAccountInput {
   /** Stored on the Stripe account so a support question can be traced back. */
@@ -72,6 +145,15 @@ export interface StripeEventNotification {
   type: string;
   /** The connected account the event concerns, when the event names one. */
   accountId: string | null;
+  /**
+   * `data.object.id` — the payment intent a `payment_intent.*` event is about.
+   *
+   * Separate from `accountId` rather than reusing it, because for a destination
+   * charge the two are genuinely different objects and the payload names only
+   * one of them: the intent lives on the platform, so `event.account` is absent
+   * and the account is reachable only *through* the intent.
+   */
+  objectId: string | null;
 }
 
 /**
@@ -130,10 +212,12 @@ export function describeAccountEvent(verified: unknown): StripeEventNotification
 
   const type = typeof event.type === 'string' ? event.type : '';
 
+  const objectId = typeof event.data?.object?.id === 'string' ? event.data.object.id : null;
+
   // v2 thin: the affected object is named in `related_object`.
   const relatedId = event.related_object?.id;
   if (typeof relatedId === 'string') {
-    return { type, accountId: relatedId };
+    return { type, accountId: relatedId, objectId: objectId ?? relatedId };
   }
 
   /*
@@ -142,12 +226,10 @@ export function describeAccountEvent(verified: unknown): StripeEventNotification
    * the payload *is* the account and there is no separate `account` field.
    */
   if (typeof event.account === 'string') {
-    return { type, accountId: event.account };
+    return { type, accountId: event.account, objectId };
   }
 
-  const objectId = event.data?.object?.id;
-
-  return { type, accountId: typeof objectId === 'string' ? objectId : null };
+  return { type, accountId: objectId, objectId };
 }
 
 function readRecipientStatus(account: Stripe.V2.Core.Account): StripeAccountStatus {
@@ -237,5 +319,77 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
 
       return describeAccountEvent(verified);
     },
+
+    async createPaymentIntent(input) {
+      const intent = await stripe.paymentIntents.create(
+        {
+          amount: input.amountCents,
+          currency: 'usd',
+          application_fee_amount: input.applicationFeeCents,
+          transfer_data: { destination: input.destinationAccountId },
+          /*
+           * Card only, and no redirect methods. A redirect method would send
+           * the customer to a bank page and back through `return_url`, and the
+           * confirmed screen is reached from the intent's own status rather
+           * than from a return trip — so offering one would open a path the
+           * product does not finish.
+           */
+          automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+          metadata: {
+            requestId: input.requestId,
+            customerId: input.customerId,
+            vendorId: input.vendorId,
+          },
+        },
+        /*
+         * The request id, not a random key. Stripe replays the *same* intent
+         * for a repeated key for 24 hours, so a double-submitted checkout — or
+         * a retry after a dropped response — reaches the same intent rather
+         * than minting a second one against the same booking.
+         */
+        { idempotencyKey: `pay_${input.requestId}` },
+      );
+
+      return toSnapshot(intent);
+    },
+
+    async retrievePaymentIntent(paymentIntentId) {
+      return toSnapshot(await stripe.paymentIntents.retrieve(paymentIntentId));
+    },
+
+    async createRefund(input) {
+      const refund = await stripe.refunds.create({
+        payment_intent: input.paymentIntentId,
+        amount: input.amountCents,
+        reason: input.reason,
+        /*
+         * The platform gives back its own fee too. Orla took a commission for
+         * arranging a booking that is not happening, and keeping it out of a
+         * refund the customer is owed in full would make the "100% refund" the
+         * cancellation policy promises a 88% one.
+         */
+        refund_application_fee: true,
+        /*
+         * And it carries the loss rather than clawing it back from the vendor's
+         * balance, which is what `losses_collector: 'application'` on the
+         * account already says. Reversing the transfer would take money out of a
+         * vendor who may have already been paid out and turn a cancellation into
+         * a negative balance they have to fund.
+         */
+        reverse_transfer: false,
+      });
+
+      return { refundId: refund.id, amountCents: refund.amount };
+    },
+  };
+}
+
+function toSnapshot(intent: Stripe.PaymentIntent): PaymentIntentSnapshot {
+  return {
+    id: intent.id,
+    status: intent.status,
+    amountReceivedCents: intent.amount_received,
+    clientSecret: intent.client_secret,
+    metadata: intent.metadata ?? {},
   };
 }

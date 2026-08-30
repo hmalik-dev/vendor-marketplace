@@ -155,6 +155,40 @@ describe('MessagesScreen', () => {
   });
 
   /*
+   * A pasted gallery link is close to the most likely message this product
+   * carries, and it escaped its bubble: `whitespace-pre-wrap` keeps the
+   * newlines a message was typed with, but neither it nor the default
+   * `overflow-wrap: normal` breaks inside a token. A 160-character share URL
+   * measured 680px of bubble against 768px of text; 5000 unbroken characters
+   * reached a scrollWidth of 53,677.
+   *
+   * The ticket asks for `scrollWidth <= clientWidth` on the element, and that
+   * cannot be asserted here — jsdom performs no layout, so every width is 0 and
+   * the assertion would pass against the broken version too. It needs the
+   * Playwright harness (#14). What is assertable without layout is that the
+   * element carries the rule, which is the class-level fact; the measurement
+   * belongs to the browser pass and is recorded as owed rather than faked.
+   */
+  it.each([
+    ['a long unbroken URL', `https://photos.example.com/share/${'a'.repeat(160)}`],
+    ['5000 unbroken characters', 'Q'.repeat(5_000)],
+  ])('lets the bubble break %s rather than overflow it', async (_name, content) => {
+    respondWith([message('44444444-4444-4444-8444-444444444444', THEM, content)]);
+    render(
+      <MessagesScreen
+        initialConversations={[conversation()]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+      />,
+    );
+
+    const bubble = await screen.findByText(content);
+
+    expect(bubble.className).toContain('break-words');
+    expect(bubble.className).toContain('whitespace-pre-wrap');
+  });
+
+  /*
    * A dropped stream is the normal case on a phone, so it is steel — never red
    * — and the composer stays usable throughout.
    */
@@ -252,5 +286,100 @@ describe('MessagesScreen', () => {
     });
 
     expect(await screen.findByText('Just arrived')).toBeDefined();
+  });
+  /*
+   * #70: below 768 the two panes share one screen, so the pair has to behave
+   * like one. `activeId` defaults to the first conversation, which meant a
+   * narrow screen opened inside a thread with the list hidden and nothing to
+   * press to get back to it — every other conversation unreachable.
+   *
+   * The composition is class-driven, so what is asserted here is the pair of
+   * `max-md` rules and the state transition between them; the rendered result
+   * at 768 is `parity-checker`'s.
+   */
+  describe('below 768, where the panes share one screen', () => {
+    /** The list pane and the thread pane, in that order. */
+    function panes(container: HTMLElement): [HTMLElement, HTMLElement] {
+      const aside = container.querySelector('aside');
+      expect(aside, 'no conversation list pane').not.toBeNull();
+
+      const thread = (aside as HTMLElement).nextElementSibling;
+      expect(thread, 'no thread pane beside the list').not.toBeNull();
+
+      return [aside as HTMLElement, thread as HTMLElement];
+    }
+
+    it('shows the thread and hides the list while a conversation is open', async () => {
+      respondWith([message('44444444-4444-4444-8444-444444444444', THEM, 'Hello')]);
+      const { container } = render(
+        <MessagesScreen
+          viewerId={VIEWER}
+          initialConversations={[conversation()]}
+          initialConversationId={CONVERSATION}
+        />,
+      );
+
+      await screen.findByLabelText('Write a message');
+
+      const [list, thread] = panes(container);
+      expect(list.className).toContain('max-md:hidden');
+      expect(thread.className).not.toContain('max-md:hidden');
+    });
+
+    it('goes back to the list, which then takes the whole screen', async () => {
+      respondWith([message('44444444-4444-4444-8444-444444444444', THEM, 'Hello')]);
+      const { container } = render(
+        <MessagesScreen
+          viewerId={VIEWER}
+          initialConversations={[conversation()]}
+          initialConversationId={CONVERSATION}
+        />,
+      );
+
+      await screen.findByLabelText('Write a message');
+      await userEvent.click(screen.getByRole('button', { name: 'Back to messages' }));
+
+      const [list, thread] = panes(container);
+      expect(list.className).toContain('max-md:w-full');
+      expect(list.className).not.toContain('max-md:hidden');
+      expect(thread.className).toContain('max-md:hidden');
+
+      /* And back in again, so it is navigation rather than a one-way exit. */
+      await userEvent.click(screen.getByText('Kessler & Co.'));
+      expect(panes(container)[0].className).toContain('max-md:hidden');
+    });
+
+    /*
+     * The one case where an empty list must not win the screen: with no
+     * conversations at all, hiding the thread pane would hide the empty state
+     * too and leave a narrow screen genuinely blank.
+     */
+    it('keeps the empty state on screen when there is nothing to list', async () => {
+      respondWith([]);
+      const { container } = render(
+        <MessagesScreen viewerId={VIEWER} initialConversations={[]} initialConversationId={null} />,
+      );
+
+      const [list, thread] = panes(container);
+      expect(list.className).toContain('max-md:hidden');
+      expect(thread.className).not.toContain('max-md:hidden');
+    });
+
+    /* Above `md` both panes are drawn, so the back control has no job there. */
+    it('hides the back control from the width where the list is already beside it', async () => {
+      respondWith([message('44444444-4444-4444-8444-444444444444', THEM, 'Hello')]);
+      render(
+        <MessagesScreen
+          viewerId={VIEWER}
+          initialConversations={[conversation()]}
+          initialConversationId={CONVERSATION}
+        />,
+      );
+
+      await screen.findByLabelText('Write a message');
+      expect(screen.getByRole('button', { name: 'Back to messages' }).className).toContain(
+        'md:hidden',
+      );
+    });
   });
 });

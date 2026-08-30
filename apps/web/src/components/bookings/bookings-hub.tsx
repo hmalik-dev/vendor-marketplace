@@ -62,13 +62,36 @@ function BookingCard({ entry }: BookingCardProps): React.ReactElement {
   const className =
     'block rounded-[14px] bg-stone-0 p-3.5 shadow-sm transition-shadow hover:shadow-hover';
 
+  /*
+   * **The request, not the storefront.** Every card here linked to
+   * `/vendors/<slug>` — a marketing page whose only controls are `Request
+   * booking` and `Send a message`. So a customer opening the request they sent
+   * arrived somewhere offering to send it again, with no route to the thing
+   * they came for: the quote, the payment, or withdrawing it.
+   *
+   * The rail's `Review quote` link was corrected when that surface was built.
+   * The cards were not, and they are how everything that is not a live quote
+   * is reached — every `pending`, `accepted` and settled row on the page.
+   *
+   * A settled row still goes to its own detail: "what did I agree to, and what
+   * happened to it" is exactly what a customer opens a finished booking for.
+   * Only a row whose detail route does not exist falls back to the storefront.
+   */
+  const href = entry.kind === 'request' ? `/bookings/${entry.id}` : null;
+
   return (
     <li>
-      {entry.vendorSlug ? (
-        <Link href={`/vendors/${entry.vendorSlug}`} className={className}>
+      {href ? (
+        <Link href={href} className={className}>
           {body}
         </Link>
       ) : (
+        /*
+         * A booking row, which has no detail route of its own yet — and no
+         * slug either: `bookingToEntry` writes `vendorSlug: null`, so there is
+         * nothing to link to. It renders as a card and not a link rather than
+         * as a link to somewhere unhelpful.
+         */
         <div className={className}>{body}</div>
       )}
     </li>

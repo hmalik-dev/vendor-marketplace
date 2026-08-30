@@ -27,6 +27,7 @@ const getCategories = vi.fn(async () => []);
 
 vi.mock('@/lib/vendor-data', () => ({
   getCategories: () => getCategories(),
+  getVendorCities: async () => [],
 }));
 
 vi.mock('@/components/search/header-query', () => ({

@@ -20,6 +20,8 @@ import {
   type RailVendor,
 } from '@/components/booking/request-summary-rail';
 import { Button } from '@/components/ui/button';
+import { DateDropdown } from '@/components/ui/dropdown-date';
+import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -124,6 +126,8 @@ export function BookingRequestScreen({
   });
   const [customDetails, setCustomDetails] = useState('');
   const [step, setStep] = useState<1 | 2>(1);
+  const [eventTypeOpen, setEventTypeOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sentAt, setSentAt] = useState<string | null>(null);
   const [sendFailure, setSendFailure] = useState<string | null>(null);
@@ -372,12 +376,45 @@ export function BookingRequestScreen({
               }
             >
               {(props) => (
-                <Input
-                  {...props}
-                  type="date"
-                  min={today}
-                  value={form.eventDate}
-                  onChange={(event) => set('eventDate', event.target.value)}
+                /*
+                  The designed picker with this vendor's own calendar behind it
+                  (#167, #328). The native control could grey out the past and
+                  nothing else — a day the vendor is booked on looked exactly
+                  like a free one, and the customer found out by being refused.
+                */
+                <DateDropdown
+                  open={dateOpen}
+                  onOpenChange={setDateOpen}
+                  label={FIELD_LABELS.eventDate}
+                  value={form.eventDate === '' ? null : form.eventDate}
+                  onChange={(next) => set('eventDate', next ?? '')}
+                  today={today}
+                  calendar={calendar}
+                  trigger={
+                    <button
+                      {...props}
+                      type="button"
+                      aria-haspopup="dialog"
+                      aria-expanded={dateOpen}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-2 text-left',
+                        props.className,
+                      )}
+                    >
+                      <span className={form.eventDate === '' ? 'text-stone-600' : undefined}>
+                        {form.eventDate === '' ? 'Pick a date' : formatEventDate(form.eventDate)}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'shrink-0 text-[9px]',
+                          dateOpen ? 'text-clay-400' : 'text-stone-600',
+                        )}
+                      >
+                        {dateOpen ? '▴' : '▾'}
+                      </span>
+                    </button>
+                  }
                 />
               )}
             </Field>
@@ -388,20 +425,52 @@ export function BookingRequestScreen({
               issue={validation.issueFor(`${fieldId}-eventType`)}
             >
               {(props) => (
-                <select
-                  {...props}
-                  value={form.eventType}
-                  onChange={(event) => set('eventType', event.target.value as EventType)}
-                  /* `props.className` carries the tier styling, so it goes last. */
-                  className={cn('appearance-none', props.className)}
-                >
-                  <option value="">Choose an occasion</option>
-                  {EVENT_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {EVENT_TYPE_LABELS[type]}
-                    </option>
-                  ))}
-                </select>
+                /*
+                  The one dropdown, not a native `<select>` (#167). The platform
+                  sized and positioned the old one itself, so it drew a control
+                  the frames do not — and the `appearance-none` it needed to
+                  hide that took the caret with it.
+                */
+                <SingleSelectDropdown
+                  open={eventTypeOpen}
+                  onOpenChange={setEventTypeOpen}
+                  label={FIELD_LABELS.eventType}
+                  countNoun="occasions"
+                  width="field"
+                  options={EVENT_TYPES.map((type) => ({
+                    value: type,
+                    label: EVENT_TYPE_LABELS[type],
+                  }))}
+                  value={form.eventType === '' ? null : form.eventType}
+                  onChange={(next) => set('eventType', next as EventType)}
+                  trigger={
+                    <button
+                      {...props}
+                      type="button"
+                      aria-haspopup="listbox"
+                      aria-expanded={eventTypeOpen}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-2 text-left',
+                        props.className,
+                      )}
+                    >
+                      <span className={form.eventType === '' ? 'text-stone-600' : undefined}>
+                        {form.eventType === ''
+                          ? 'Choose an occasion'
+                          : EVENT_TYPE_LABELS[form.eventType]}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'shrink-0 text-[9px]',
+                          eventTypeOpen ? 'text-clay-400' : 'text-stone-600',
+                        )}
+                      >
+                        {eventTypeOpen ? '▴' : '▾'}
+                      </span>
+                    </button>
+                  }
+                />
               )}
             </Field>
 

@@ -243,6 +243,7 @@ describe('tagSchema', () => {
     name: 'South Asian',
     slug: 'cultural-south-asian',
     category: 'cultural',
+    vendorCategorySlug: null,
     displayOrder: 1,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -250,6 +251,35 @@ describe('tagSchema', () => {
 
   it('accepts a well-formed tag row', () => {
     expect(tagSchema.parse(valid)).toMatchObject({ slug: 'cultural-south-asian' });
+  });
+
+  /*
+   * A style tag carries the vendor category it belongs to; the three global
+   * groups carry null. The schema allows either, because it describes both
+   * kinds of row — what enforces the correspondence is the seed and its own
+   * test, not this.
+   */
+  it('carries the vendor category a scoped tag belongs to', () => {
+    const scoped = tagSchema.parse({
+      ...valid,
+      name: 'Documentary',
+      slug: 'style-photography-documentary',
+      category: 'style',
+      vendorCategorySlug: 'photography',
+    });
+
+    expect(scoped.vendorCategorySlug).toBe('photography');
+    expect(tagSchema.parse(valid).vendorCategorySlug).toBeNull();
+  });
+
+  /*
+   * The slug, not the id — a consumer already holding `?category=photography`
+   * must be able to match without a second lookup.
+   */
+  it('rejects a scope that is not a slug', () => {
+    expect(tagSchema.safeParse({ ...valid, vendorCategorySlug: 'Photography!' }).success).toBe(
+      false,
+    );
   });
 
   it('rejects a tag category outside the shared set', () => {
@@ -687,6 +717,7 @@ describe('tagSuggestionResponseSchema', () => {
     name: 'Amharic',
     slug: 'language-amharic',
     category: 'language',
+    vendorCategorySlug: null,
     displayOrder: 1,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -787,6 +818,7 @@ describe('vendorProfileDetailSchema', () => {
           name: 'Spanish',
           slug: 'language-spanish',
           category: 'language',
+          vendorCategorySlug: null,
           displayOrder: 2,
           isActive: true,
           createdAt: new Date('2026-01-01T00:00:00.000Z'),

@@ -8,9 +8,10 @@ import {
   type TagCategory,
   type VendorSortOption,
 } from '@vendor-marketplace/shared';
-import { useCallback, useRef, useState } from 'react';
+import { useState } from 'react';
 import { TAG_CATEGORY_CHIP_LABELS, TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { RangeDropdown, type RangePreset } from '@/components/ui/dropdown-range';
+import { MultiSelectDropdown, SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import type { WireTag } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
 import type { SearchPatch, SearchState } from './search-state';
@@ -37,10 +38,14 @@ const RATING_STEPS = [
   { label: 'Any rating', value: null },
 ] as const;
 
-/** Price bounds the range spans, in cents. */
+/**
+ * Price bounds the range spans, in cents.
+ *
+ * No step any more: the bounds are typed, not dragged, so there is nothing to
+ * quantise. The slider that needed one is a readout now (#167).
+ */
 const PRICE_FLOOR_CENTS = 0;
 const PRICE_CEILING_CENTS = 1_000_000;
-const PRICE_STEP_CENTS = 10_000;
 
 const SORT_LABELS: Record<VendorSortOption, string> = {
   relevance: 'Most relevant',
@@ -68,96 +73,132 @@ const CHIP_TONES: Record<ChipTone, string> = {
   active: 'border-clay-200 bg-clay-100 text-clay-600',
 };
 
-interface ChipProps {
-  label: string;
-  tone?: ChipTone;
-  /** Present only on an `active` chip; renders the `✕` that clears it. */
-  onClear?: () => void;
-  /**
-   * What the trigger is called, where the visible label is not enough on its
-   * own. `Sort` draws its name beside the chip rather than inside it, so the
-   * trigger would otherwise announce only the chosen value.
-   */
-  triggerName?: string;
-  /**
-   * A render prop receives `close`, for a panel whose choice completes it.
-   *
-   * The multi-select panels stay open on purpose — you are still choosing —
-   * but a single-choice one has nothing left to offer once it is answered,
-   * and the panel sits over the results the choice just changed.
-   */
-  children: React.ReactNode | ((close: () => void) => React.ReactNode);
-}
-
-function Chip({
-  label,
-  tone = 'resting',
-  onClear,
-  triggerName,
-  children,
-}: ChipProps): React.ReactElement {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
-
-  return (
-    <span
-      className={cn(
-        'flex items-center rounded-md border text-[12.5px] font-semibold transition-colors duration-(--duration-fast)',
-        CHIP_TONES[tone],
-      )}
-    >
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          ref={triggerRef}
-          aria-label={triggerName}
-          className={cn(
-            'flex items-center gap-1.5 py-1.75 pl-3.25',
-            onClear ? 'pr-1.5' : 'pr-3.25',
-          )}
-        >
-          {label}
-          {onClear ? null : <span aria-hidden="true">▾</span>}
-        </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          className="w-70"
-          /*
-            Closing by tabbing out of the panel must not lose the keyboard.
-
-            The panel is portalled to the end of `<body>`, so when Radix moves
-            focus *onward* past it there is nothing after it to receive focus
-            and `document.activeElement` becomes `<body>` — the next Tab then
-            restarts at "Skip to content". It only bites a panel that is a
-            single tab stop, which is why the sort chip's radio group surfaced
-            it while the price and tag chips, with several stops each, never
-            reach the boundary.
-
-            Returning focus to the trigger keeps the next Tab going to whatever
-            follows the chip. Escape already landed here; this makes Tab agree.
-          */
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            triggerRef.current?.focus();
-          }}
-        >
-          {typeof children === 'function' ? children(close) : children}
-        </PopoverContent>
-      </Popover>
-
-      {onClear ? (
-        <button
-          type="button"
-          onClick={onClear}
-          className="py-1.75 pr-2.75 pl-1 hover:text-clay-500"
-        >
-          <span aria-hidden="true">✕</span>
-          <span className="sr-only">Clear {label}</span>
-        </button>
-      ) : null}
-    </span>
+/**
+ * The chip is frame `02`'s and is unchanged. **What hangs off it is not.**
+ *
+ * Every panel on this bar used to be its own thing: two applied on click, two
+ * applied on nothing at all, and the Languages one grew to 719px and could not
+ * be reached at 1024 or 390. They are now the four bodies of the one dropdown
+ * (#167), so the chip keeps only its own geometry and lets each filter pick a
+ * body.
+ */
+function chipWrapper(tone: ChipTone): string {
+  return cn(
+    'flex items-center rounded-md border text-[12.5px] font-semibold transition-colors duration-(--duration-fast)',
+    CHIP_TONES[tone],
   );
 }
+
+/**
+ * The trigger half. An active chip's trigger ends flush with its label, and the
+ * 6px that used to sit here moves to the clear button's `pl` instead: the paint
+ * is identical — the gap is the same 10px either way — but the width now
+ * belongs to the box that needs it, for the hit area below.
+ */
+function chipTrigger(hasClear: boolean): string {
+  return cn('flex items-center gap-1.5 py-1.75 pl-3.25', hasClear ? 'pr-0' : 'pr-3.25');
+}
+
+/** The label and the caret, which flips and turns clay while the panel is open. */
+function ChipLabel({
+  label,
+  open,
+  hasClear,
+}: {
+  label: string;
+  open: boolean;
+  hasClear: boolean;
+}): React.ReactElement {
+  return (
+    <>
+      {label}
+      {hasClear ? null : (
+        <span aria-hidden="true" className={open ? 'text-clay-400' : undefined}>
+          {open ? '▴' : '▾'}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** The `✕` that clears an active chip. */
+function ChipClear({ label, onClear }: { label: string; onClear: () => void }): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      className={cn(
+        'relative py-1.75 pr-2.75 pl-2.5 hover:text-clay-500',
+        /*
+          `04-laws.md`: an icon-only control carries a 44x44 hit area. Its only
+          visible content is the glyph — the name is `sr-only` — so the rule
+          applies, and the paint measured 24.5 x 29 (#245).
+
+          The target grows past the paint rather than the paint growing: the
+          chip's own geometry is the frame's (`padding:7px 13px`), so widening
+          the *chip* would fail the Style axis to pass the Access one. What can
+          move without repainting anything is where the 6px between the label
+          and the glyph is charged — see `chipTrigger` above.
+
+          Anchored to the **right**, not centred, because that side is free: the
+          chip row is `gap-2`, so the target reaches 8px into the gutter and
+          stops ~2px short of the next chip. Budget, measured in Chromium at
+          1440: 30.5px button + 8px gutter = 38.5, so **5.5px falls left onto
+          the trigger**.
+
+          That 5.5px is a real overlap, not a claim of clearance: a click there
+          clears the filter instead of opening the panel. It is the floor, not a
+          choice — 44 is wider than the chip's whole right side — and it is what
+          the padding shift bought, down from the 11.47px measured before it.
+          Centring instead would put 19.5px there. The only ways to reach zero
+          are a taller chip or a 44px-wide glyph button, and both repaint a
+          control the frame draws exactly; that is a frame question, filed
+          rather than guessed.
+        */
+        "after:absolute after:top-1/2 after:-right-2 after:size-11 after:-translate-y-1/2 after:content-['']",
+      )}
+    >
+      <span aria-hidden="true">✕</span>
+      <span className="sr-only">Clear {label}</span>
+    </button>
+  );
+}
+
+/** Cents per dollar. Named, so neither direction below reads as a magic 100. */
+const CENTS_PER_DOLLAR = 100;
+
+/**
+ * What the reader typed, as cents. `$1,800` and `1800` both mean 180,000.
+ *
+ * Digits only: a stray `$`, comma or space is what someone pasting a price
+ * writes, and refusing it would be pedantry. A decimal is dropped with them —
+ * nobody filters a vendor's starting rate to the cent, and a half-typed `1.` is
+ * a state the field would otherwise have to render as an error.
+ */
+function dollarsToCents(raw: string): number | null {
+  const digits = raw.replace(/[^\d]/g, '');
+
+  return digits === '' ? null : Number.parseInt(digits, 10) * CENTS_PER_DOLLAR;
+}
+
+/** The stored cents back to the dollars the reader would have typed. */
+function centsToDollars(cents: number): string {
+  return String(Math.round(cents / CENTS_PER_DOLLAR));
+}
+
+/**
+ * The price presets frame `28` draws, in cents.
+ *
+ * Presets first because they are the common case — "under a thousand" is one
+ * press, where the same answer typed is eight keystrokes and a decision about
+ * whether to include the comma.
+ */
+const PRICE_PRESETS: readonly RangePreset[] = [
+  { label: 'Under $1k', min: null, max: 100_000 },
+  { label: '$1–2k', min: 100_000, max: 200_000 },
+  { label: '$2–4k', min: 200_000, max: 400_000 },
+  { label: '$4k+', min: 400_000, max: null },
+];
 
 export interface RefineBarProps {
   state: SearchState;
@@ -176,6 +217,28 @@ export function RefineBar({
   tags,
   className,
 }: RefineBarProps): React.ReactElement {
+  /*
+   * One open chip at a time, held here rather than in each chip.
+   *
+   * Six panels over one results grid: opening a second while the first was
+   * still up put two of them over the answer they had just changed. Radix
+   * dismisses on an outside click, but a click on the *next chip* opens that
+   * one in the same gesture, so the two were briefly both open.
+   */
+  const [openChip, setOpenChip] = useState<string | null>(null);
+
+  /**
+   * One chip's open/close, written so that closing cannot cancel an opening.
+   *
+   * Clicking chip B while chip A is open fires both: Radix dismisses A on the
+   * pointer-down and B's trigger opens on the click, and if A's close lands
+   * second it wipes B straight back out. The panel then took **two clicks** to
+   * move between chips. A close only clears the shared state when the chip
+   * closing is the one currently in it.
+   */
+  const chipOpen = (key: string) => (next: boolean) =>
+    setOpenChip((current) => (next ? key : current === key ? null : current));
+
   const hasPrice = state.minPriceCents !== null || state.maxPriceCents !== null;
   const priceLabel = hasPrice
     ? `${formatPrice(state.minPriceCents ?? PRICE_FLOOR_CENTS)} – ${
@@ -188,17 +251,26 @@ export function RefineBar({
   const ratingStep = RATING_STEPS.find((step) => step.value === state.minRating);
   const ratingLabel = state.minRating === null ? 'Rating' : (ratingStep?.label ?? 'Rating');
 
-  const toggleTag = (tagId: string): void => {
-    setState({
-      tags: state.tags.includes(tagId)
-        ? state.tags.filter((id) => id !== tagId)
-        : [...state.tags, tagId],
-    });
-  };
-
   const tagChip = (tagCategory: TagCategory): React.ReactElement | null => {
-    // Seed `displayOrder`, never alphabetical — the order is the design.
-    const options = tags.filter((tag) => tag.category === tagCategory);
+    /*
+     * Seed `displayOrder`, never alphabetical — the order is the design.
+     *
+     * `style` is the one group whose options are scoped: `11-search.md` has its
+     * set change with the selected vendor type, because "Documentary" means one
+     * thing to a photographer and another to a videographer, and "Family style"
+     * means nothing at all to a florist. Every other group is the same list
+     * whoever is being filtered.
+     *
+     * With no type selected the chip renders nothing rather than everything —
+     * offering fifty styles across eleven trades is not a filter, and the
+     * `options.length === 0` return below is what makes that a chip that is
+     * absent rather than a chip that is empty.
+     */
+    const options = tags.filter(
+      (tag) =>
+        tag.category === tagCategory &&
+        (tag.vendorCategorySlug === null || tag.vendorCategorySlug === state.category),
+    );
     if (options.length === 0) {
       return null;
     }
@@ -208,41 +280,50 @@ export function RefineBar({
     // keeps the full one, where there is room to be precise.
     const base = TAG_CATEGORY_CHIP_LABELS[tagCategory];
 
+    const hasChosen = chosen.length > 0;
+    const open = openChip === tagCategory;
+
     return (
-      <Chip
-        key={tagCategory}
-        label={chosen.length === 0 ? base : `${base} · ${chosen.length}`}
-        tone={chosen.length > 0 ? 'active' : 'resting'}
-        {...(chosen.length > 0
-          ? {
-              onClear: () =>
-                setState({
-                  tags: state.tags.filter((id) => !options.some((tag) => tag.id === id)),
-                }),
+      <span key={tagCategory} className={chipWrapper(hasChosen ? 'active' : 'resting')}>
+        {/*
+          Multi-select, and it **applies on Apply** rather than per tick. Four
+          of these chips filter the same grid; ticking three languages used to
+          re-query and re-sort three times, moving the list under the hand that
+          was still choosing.
+        */}
+        <MultiSelectDropdown
+          open={open}
+          onOpenChange={chipOpen(tagCategory)}
+          label={TAG_CATEGORY_LABELS[tagCategory]}
+          density="compact"
+          options={options.map((tag) => ({ value: tag.id, label: tag.name }))}
+          value={chosen.map((tag) => tag.id)}
+          onApply={(next) =>
+            setState({
+              // Only this group's ids are replaced; the other three chips'
+              // selections are not this panel's to discard.
+              tags: [...state.tags.filter((id) => !options.some((tag) => tag.id === id)), ...next],
+            })
+          }
+          trigger={
+            <button type="button" className={chipTrigger(hasChosen)}>
+              <ChipLabel
+                label={hasChosen ? `${base} · ${chosen.length}` : base}
+                open={open}
+                hasClear={hasChosen}
+              />
+            </button>
+          }
+        />
+        {hasChosen ? (
+          <ChipClear
+            label={base}
+            onClear={() =>
+              setState({ tags: state.tags.filter((id) => !options.some((tag) => tag.id === id)) })
             }
-          : {})}
-      >
-        <fieldset>
-          <legend className="text-sm font-semibold text-stone-900">
-            {TAG_CATEGORY_LABELS[tagCategory]}
-          </legend>
-          <ul className="mt-2 flex flex-col gap-2">
-            {options.map((tag) => (
-              <li key={tag.id}>
-                <label className="flex cursor-pointer items-center gap-2.5 text-base text-stone-700">
-                  <input
-                    type="checkbox"
-                    checked={state.tags.includes(tag.id)}
-                    onChange={() => toggleTag(tag.id)}
-                    className="size-3.75 shrink-0 rounded-[4px] border-[1.4px] border-stone-400 accent-clay-400"
-                  />
-                  {tag.name}
-                </label>
-              </li>
-            ))}
-          </ul>
-        </fieldset>
-      </Chip>
+          />
+        ) : null}
+      </span>
     );
   };
 
@@ -283,96 +364,80 @@ export function RefineBar({
         there is nothing an `✕` would mean here that dragging back to the ends
         doesn't already say.
       */}
-        <Chip label={priceLabel} tone={hasPrice ? 'valued' : 'resting'}>
-          <fieldset>
-            <legend className="text-sm font-semibold text-stone-900">Price range</legend>
-            <div className="mt-2 flex flex-col gap-2">
-              <label className="text-xs text-stone-600" htmlFor="minPrice">
-                Minimum
-              </label>
-              <input
-                id="minPrice"
-                type="range"
-                min={PRICE_FLOOR_CENTS}
-                max={PRICE_CEILING_CENTS}
-                step={PRICE_STEP_CENTS}
-                value={state.minPriceCents ?? PRICE_FLOOR_CENTS}
-                onChange={(event) =>
-                  setState({ minPriceCents: Number(event.target.value) || null })
-                }
-                className="h-5 w-full accent-clay-400"
-              />
-              <label className="text-xs text-stone-600" htmlFor="maxPrice">
-                Maximum
-              </label>
-              <input
-                id="maxPrice"
-                type="range"
-                min={PRICE_FLOOR_CENTS}
-                max={PRICE_CEILING_CENTS}
-                step={PRICE_STEP_CENTS}
-                value={state.maxPriceCents ?? PRICE_CEILING_CENTS}
-                onChange={(event) =>
-                  setState({
-                    maxPriceCents:
-                      Number(event.target.value) === PRICE_CEILING_CENTS
-                        ? null
-                        : Number(event.target.value),
-                  })
-                }
-                className="h-5 w-full accent-clay-400"
-              />
-              <div className="flex justify-between text-xs text-stone-600">
-                <span>{formatPrice(state.minPriceCents ?? PRICE_FLOOR_CENTS)}</span>
-                <span>
-                  {state.maxPriceCents === null
-                    ? `${formatPrice(PRICE_CEILING_CENTS)}+`
-                    : formatPrice(state.maxPriceCents)}
-                </span>
-              </div>
-            </div>
-          </fieldset>
-        </Chip>
-
-        <Chip
-          label={ratingLabel}
-          tone={state.minRating !== null ? 'active' : 'resting'}
-          {...(state.minRating !== null ? { onClear: () => setState({ minRating: null }) } : {})}
-        >
-          <fieldset>
-            <legend className="text-sm font-semibold text-stone-900">Minimum rating</legend>
-            <div className="mt-2 flex flex-col gap-1.5">
-              {RATING_STEPS.map((step) => (
-                <button
-                  key={step.label}
-                  type="button"
-                  aria-pressed={state.minRating === step.value}
-                  onClick={() => setState({ minRating: step.value })}
-                  className={cn(
-                    'rounded-md py-1.75 text-center text-xs font-semibold transition-colors duration-(--duration-fast)',
-                    state.minRating === step.value
-                      ? 'bg-clay-400 text-stone-0'
-                      : 'bg-stone-150 text-stone-700 hover:bg-stone-200',
-                  )}
-                >
-                  {step.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-        </Chip>
-
-        {TAG_CATEGORIES.map(tagChip)}
+        <span className={chipWrapper(hasPrice ? 'valued' : 'resting')}>
+          {/*
+            Presets, then typed bounds, then a slider that is only a readout.
+            Two bare `input[type=range]` sliders stood here: a budget is a
+            number someone already knows, and dragging a 0–$10,000 track in
+            $100 steps to reach $1,800 is not how anyone says that.
+          */}
+          <RangeDropdown
+            open={openChip === 'price'}
+            onOpenChange={chipOpen('price')}
+            label="Price"
+            caption="starting rate"
+            value={{ min: state.minPriceCents, max: state.maxPriceCents }}
+            presets={PRICE_PRESETS}
+            bounds={{ min: PRICE_FLOOR_CENTS, max: PRICE_CEILING_CENTS }}
+            /*
+              Money is integer cents everywhere and dollars only at the display
+              boundary — `shared-contracts.md`. This is that boundary: the
+              reader types dollars, the filter stores cents, and these three
+              functions are the whole of the conversion.
+            */
+            format={formatPrice}
+            parse={dollarsToCents}
+            toEditable={centsToDollars}
+            onApply={(next) => setState({ minPriceCents: next.min, maxPriceCents: next.max })}
+            trigger={
+              <button type="button" className={chipTrigger(false)}>
+                <ChipLabel label={priceLabel} open={openChip === 'price'} hasClear={false} />
+              </button>
+            }
+          />
+        </span>
 
         {/*
-        Frame `02` also draws a `Style ▾` chip — category-specific tags whose
-        option set changes with the selected vendor type (documentary,
-        editorial, …). There is no `style` tag category in the data model and no
-        link from a tag to a vendor category, so the chip has nothing to offer
-        yet. Seeding a style taxonomy for eleven categories is a product
-        decision, not a rendering one, so it is a ticket of its own (#25) rather
-        than invented here. Recorded as a named deviation from the frame.
-      */}
+          Single-select, so the choice completes the panel and the panel closes
+          — the same contract `Sort` already keeps. Left open, the 280x147 panel
+          sat over the results heading and the first result card, hiding the
+          answer to the question it had just been asked.
+        */}
+        <span className={chipWrapper(state.minRating !== null ? 'active' : 'resting')}>
+          <SingleSelectDropdown
+            open={openChip === 'rating'}
+            onOpenChange={chipOpen('rating')}
+            label="Minimum rating"
+
+            density="compact"
+            options={RATING_STEPS.map((step) => ({
+              value: String(step.value),
+              label: step.label,
+            }))}
+            value={String(state.minRating)}
+            onChange={(next) => setState({ minRating: next === 'null' ? null : Number(next) })}
+            trigger={
+              <button type="button" className={chipTrigger(state.minRating !== null)}>
+                <ChipLabel
+                  label={ratingLabel}
+                  open={openChip === 'rating'}
+                  hasClear={state.minRating !== null}
+                />
+              </button>
+            }
+          />
+          {state.minRating !== null ? (
+            <ChipClear label={ratingLabel} onClear={() => setState({ minRating: null })} />
+          ) : null}
+        </span>
+
+        {/*
+          Six chips, in the frame's order: Price and Rating above, then Style,
+          Languages, Cultural and Dietary from `TAG_CATEGORIES`. `Style ▾` was a
+          named deviation until #281 gave it a group to read from — the chip was
+          never the missing part, the data model was.
+        */}
+        {TAG_CATEGORIES.map(tagChip)}
 
         {hasAnyRefinement ? (
           <button
@@ -398,32 +463,36 @@ export function RefineBar({
       */}
       <div className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
         Sort
-        <Chip label={SORT_LABELS[state.sort]} triggerName={`Sort: ${SORT_LABELS[state.sort]}`}>
-          {(close) => (
-            <fieldset>
-              <legend className="text-sm font-semibold text-stone-900">Sort by</legend>
-              <ul className="mt-2 flex flex-col gap-2">
-                {VENDOR_SORT_OPTIONS.map((option) => (
-                  <li key={option}>
-                    <label className="flex cursor-pointer items-center gap-2.5 text-base text-stone-700">
-                      <input
-                        type="radio"
-                        name="sort"
-                        checked={state.sort === option}
-                        onChange={() => {
-                          setState({ sort: option });
-                          close();
-                        }}
-                        className="size-3.75 shrink-0 border-[1.4px] border-stone-400 accent-clay-400"
-                      />
-                      {SORT_LABELS[option]}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </fieldset>
-          )}
-        </Chip>
+        <span className={chipWrapper('resting')}>
+          <SingleSelectDropdown
+            open={openChip === 'sort'}
+            onOpenChange={chipOpen('sort')}
+            label="Sort by"
+
+            density="compact"
+            options={VENDOR_SORT_OPTIONS.map((option) => ({
+              value: option,
+              label: SORT_LABELS[option],
+            }))}
+            value={state.sort}
+            onChange={(next) => setState({ sort: next as VendorSortOption })}
+            trigger={
+              <button
+                type="button"
+                /* The name lives outside the chip, so the trigger would
+                   otherwise announce a bare value. */
+                aria-label={`Sort: ${SORT_LABELS[state.sort]}`}
+                className={chipTrigger(false)}
+              >
+                <ChipLabel
+                  label={SORT_LABELS[state.sort]}
+                  open={openChip === 'sort'}
+                  hasClear={false}
+                />
+              </button>
+            }
+          />
+        </span>
       </div>
     </div>
   );

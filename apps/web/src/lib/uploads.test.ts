@@ -6,6 +6,7 @@ import {
   failureSentence,
   formatFileSize,
   heldBackSentence,
+  isBatchInFlight,
   rejectedFailure,
   retryableTasks,
   screenDimensions,
@@ -244,6 +245,33 @@ describe('batch reporting', () => {
     expect(aggregateLine(tasks)).toBe('Uploading 4 of 8 — 14.7 MB of 33.6 MB');
   });
 
+  /*
+   * #176. A locally-refused file enters the list already `failed` with its full
+   * size and is then never sent, so counting it made the denominator include
+   * bytes that cannot go out. Worst where it shows most: the over-size refusal
+   * is by definition the biggest file in the batch.
+   */
+  it('leaves a locally-refused file out of the byte total', () => {
+    const line = aggregateLine([
+      { id: '1', name: 'a.jpg', sizeBytes: 1_000_000, status: 'uploading', progress: 50 },
+      // Refused before any byte left the machine.
+      { id: '2', name: 'huge.jpg', sizeBytes: 40_000_000, status: 'failed', progress: 0 },
+    ] as never);
+
+    expect(line).toContain('of 1 MB');
+    expect(line).not.toContain('41 MB');
+  });
+
+  it('keeps the bytes of a file that failed after sending some', () => {
+    const { uploadedBytes, totalBytes } = summarise([
+      { id: '1', name: 'a.jpg', sizeBytes: 1_000_000, status: 'failed', progress: 40 },
+    ] as never);
+
+    // Those bytes really did go out; dropping them runs the line backwards.
+    expect(totalBytes).toBe(1_000_000);
+    expect(uploadedBytes).toBe(400_000);
+  });
+
   it('has no aggregate line once every file has settled', () => {
     expect(
       aggregateLine([
@@ -409,5 +437,39 @@ describe('a refusal the server explained to a developer', () => {
       retryable: false,
     });
     expect(failure.fix).toContain('at least');
+  });
+});
+
+/**
+ * The predicate behind the `beforeunload` guard and the Cancel control.
+ *
+ * It is a plain function precisely so this state is reachable: a queue running
+ * a few files at a time keeps most of a large batch **queued**, and no
+ * hook-level test can hold that state still long enough to assert on it.
+ */
+describe('isBatchInFlight', () => {
+  function task(status: UploadTask['status'], id: string = status): UploadTask {
+    return { id, name: `${id}.jpg`, sizeBytes: 1000, status, progress: 0 };
+  }
+
+  it('is false for an empty queue', () => {
+    expect(isBatchInFlight([])).toBe(false);
+  });
+
+  it('is true while a file is transferring', () => {
+    expect(isBatchInFlight([task('uploading')])).toBe(true);
+  });
+
+  /*
+   * The one the hook cannot test. A file waiting its turn has not started and
+   * is destroyed by leaving the page exactly as surely as one mid-transfer, so
+   * dropping `queued` from this predicate silently unprotects most of a batch.
+   */
+  it('is true for a file that is only queued, with nothing transferring', () => {
+    expect(isBatchInFlight([task('done', 'a'), task('queued', 'b')])).toBe(true);
+  });
+
+  it('is false once every file has settled, however it settled', () => {
+    expect(isBatchInFlight([task('done', 'a'), task('failed', 'b')])).toBe(false);
   });
 });

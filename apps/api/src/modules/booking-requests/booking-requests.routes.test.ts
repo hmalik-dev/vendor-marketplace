@@ -244,13 +244,43 @@ describe('/booking-requests', () => {
       expect(Math.round(days)).toBe(BOOKING_REQUEST_EXPIRY_DAYS);
     });
 
-    it('opens exactly one conversation, however many requests are sent', async () => {
+    /*
+     * This used to assert one thread per pair, and #219 is why it does not any
+     * more: a customer who asked the same photographer about two dates saw both
+     * negotiations under whichever line came first, and the context rail —
+     * headed **This request**, offering `Send revised quote` and `Accept
+     * as-is` — had no single request to act on.
+     */
+    it('opens one conversation per request, each carrying its own booking', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
 
-      expect((await createRequest(vendorId, { packageId })).statusCode).toBe(201);
-      expect((await createRequest(vendorId, { packageId, eventDate: OTHER_DATE })).statusCode).toBe(
-        201,
+      const first = await createRequest(vendorId, { packageId });
+      const second = await createRequest(vendorId, { packageId, eventDate: OTHER_DATE });
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(201);
+
+      const threads = await harness.database.db.select().from(conversations);
+
+      expect(threads).toHaveLength(2);
+      expect(new Set(threads.map((thread) => thread.bookingRequestId))).toEqual(
+        new Set([first.json().id, second.json().id]),
       );
+    });
+
+    /*
+     * The other half of the same rule. A retry after a half-finished attempt
+     * re-creates the request row, and the thread must not double with it.
+     */
+    it('reuses the thread when the same request is submitted twice', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+
+      const first = await createRequest(vendorId, { packageId });
+      const repeat = await createRequest(vendorId, { packageId });
+
+      expect(first.statusCode).toBe(201);
+      // 200, not 201: this is the request you already made.
+      expect(repeat.statusCode).toBe(200);
+      expect(repeat.json().id).toBe(first.json().id);
 
       const threads = await harness.database.db.select().from(conversations);
       expect(threads).toHaveLength(1);
@@ -790,6 +820,48 @@ describe('/booking-requests', () => {
       expect((response.json() as RequestBody).status).toBe('declined');
     });
 
+    /*
+     * #309. The customer's own quote screen draws "Decline" beside "Accept" —
+     * `quote-review.tsx` renders it, and frame `06` puts it there. The service
+     * refused it: `prepareTransition` allowed `decline` for the vendor only,
+     * so the one control the frame gives the customer for saying no answered
+     * 403.
+     *
+     * Nothing caught it because the web test mocks the transport and asserts
+     * the URL it called. A test that asserts a request was *sent* cannot see
+     * the answer coming back, so it passed on a button that never worked.
+     */
+    it('quoted -> declined by the customer turning the quote down', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+
+      const response = await post(CUSTOMER, `/booking-requests/${requestId}/decline`);
+
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as RequestBody).status).toBe('declined');
+    });
+
+    /*
+     * The asymmetry is deliberate and it is the whole authorization rule.
+     * Declining a `pending` request means "I will not take this booking",
+     * which is the vendor's answer to make. A customer with no quote in front
+     * of them has nothing to decline — withdrawing is `cancel`, and it is
+     * theirs.
+     */
+    it('refuses a customer declining before any quote exists', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+
+      const response = await post(CUSTOMER, `/booking-requests/${created.json().id}/decline`);
+
+      expect(response.statusCode).toBe(403);
+      expect((response.json() as { message: string }).message).toContain('quote');
+    });
+
     it('pending -> cancelled by the customer', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
@@ -830,6 +902,58 @@ describe('/booking-requests', () => {
         .from(users)
         .where(eq(users.clerkUserId, CUSTOMER));
       expect(rows[1]!.userId).toBe(customer[0]!.id);
+    });
+
+    /*
+     * The invariant the test above names — "the other party" — held only for
+     * `accept`, which is the one transition it exercised. Decline addressed
+     * the customer unconditionally, which was correct while only the vendor
+     * could decline. Once the customer could turn a quote down, it told them
+     * their own decision back, attributed to the vendor: "Sunlit Studio
+     * declined". The vendor, who needed to know their quote was dead, got
+     * nothing.
+     */
+    it('tells the vendor, not the customer, when the customer declines a quote', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(CUSTOMER, `/booking-requests/${requestId}/decline`);
+
+      const rows = await harness.database.db
+        .select({ type: notifications.type, userId: notifications.userId })
+        .from(notifications);
+      const declined = rows.filter((row) => row.type === 'request_declined');
+
+      const vendorUser = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.clerkUserId, VENDOR));
+
+      expect(declined).toHaveLength(1);
+      expect(declined[0]!.userId).toBe(vendorUser[0]!.id);
+    });
+
+    /* The vendor's own decline still reaches the customer, as it always did. */
+    it('tells the customer when the vendor declines', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      await post(VENDOR, `/booking-requests/${created.json().id}/decline`);
+
+      const rows = await harness.database.db
+        .select({ type: notifications.type, userId: notifications.userId })
+        .from(notifications);
+      const declined = rows.filter((row) => row.type === 'request_declined');
+
+      const customer = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.clerkUserId, CUSTOMER));
+
+      expect(declined).toHaveLength(1);
+      expect(declined[0]!.userId).toBe(customer[0]!.id);
     });
   });
 

@@ -12,6 +12,8 @@ import {
   wireTagListSchema,
   wirePublicVendorProfileSchema,
   wireVendorDashboardSchema,
+  wireVendorCityListSchema,
+  wireVendorReviewsPageSchema,
   wireVendorSearchResultSchema,
   wireVendorProfileSchema,
   type WireAvailability,
@@ -22,6 +24,8 @@ import {
   type WireVendorCard,
   type WireVendorDashboard,
   type WireVendorProfile,
+  type WireVendorCity,
+  type WireVendorReviewsPage,
   type WireVendorPayoutStatus,
   wireVendorPayoutStatusSchema,
 } from './wire-schemas';
@@ -334,6 +338,89 @@ export async function getPublicVendorAvailability(slug: string): Promise<WireAva
     }
 
     throw error;
+  }
+}
+
+/**
+ * The cities that have vendors, for the search bar's City field.
+ *
+ * Public reference data, like the taxonomy: it changes when a vendor publishes
+ * rather than per request, and every visitor gets the same answer — so it is
+ * cached on the same hour the categories are. An empty list is the honest
+ * degradation: the field then offers "Anywhere" and nothing else, which is
+ * true of a marketplace whose vendors have not said where they work.
+ */
+export async function getVendorCities(): Promise<WireVendorCity[]> {
+  try {
+    return await apiRequest('/vendors/cities', {
+      schema: wireVendorCityListSchema,
+      revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
+    });
+  } catch (error) {
+    if (error instanceof ApiClientError || error instanceof TypeError) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * The first page of the profile's Reviews tab, plus its summary and what this
+ * reader may do there.
+ *
+ * The session is read but never required. The tab is public, and the API
+ * resolves the `viewer` block from whoever is asking — so a signed-in customer
+ * is offered "Write a review" on the first paint rather than after a second
+ * round trip, and a signed-out one gets the same reviews with no offer.
+ *
+ * **This is the only one of the three public-profile reads that presents a
+ * token**, which makes it the only one a refused token can fail. The API's
+ * auth hook answers 401 or 403 on *any* route when a presented token does not
+ * verify or belongs to a suspended account, public routes included — so without
+ * the retry below, one stale session turned a vendor with 127 reviews into a
+ * tab that said they had never worked an event. The reviews themselves need no
+ * session; only the `viewer` block does, and losing that costs a reader nothing
+ * but the offer to write one.
+ *
+ * Anything else returns `null`, and the pane says the reviews are on their way
+ * rather than that there are none — the vendor's own count is what tells those
+ * two apart, and it comes from a different read.
+ */
+export async function getPublicVendorReviews(slug: string): Promise<WireVendorReviewsPage | null> {
+  if (!slugSchema.safeParse(slug).success) {
+    return null;
+  }
+
+  const { getToken } = await auth();
+  const token = await getToken();
+
+  const read = async (bearer: string | null): Promise<WireVendorReviewsPage> =>
+    apiRequest(`/vendors/${encodeURIComponent(slug)}/reviews`, {
+      schema: wireVendorReviewsPageSchema,
+      token: bearer,
+    });
+
+  try {
+    return await read(token);
+  } catch (error) {
+    if (!(error instanceof ApiClientError)) {
+      throw error;
+    }
+
+    if (token && (error.statusCode === 401 || error.statusCode === 403)) {
+      try {
+        return await read(null);
+      } catch (retry) {
+        if (retry instanceof ApiClientError) {
+          return null;
+        }
+
+        throw retry;
+      }
+    }
+
+    return null;
   }
 }
 

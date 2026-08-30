@@ -52,7 +52,14 @@ export default function AppleIcon(): ImageResponse {
             height: DIAMETER,
             borderRadius: '50%',
             border: `${DIAMETER * STROKE_RATIO}px solid #23201c`,
-            boxSizing: 'border-box',
+            /*
+              `content-box`, matching `logo.tsx` (#250). The two circles are
+              equal as FILLS — a D-wide disc and a D-wide hole — with the stroke
+              drawn outside the D. Border-box charged the stroke to the hole and
+              rendered the outline circle `D - 2×stroke` across, so the tile's
+              ring sat visibly smaller than its disc.
+            */
+            boxSizing: 'content-box',
           }}
         />
       </div>

@@ -258,9 +258,21 @@ export const BUDGET_TIER_LABELS: Record<
   luxury: { glyph: '$$$$', label: 'Luxury', range: '$10,000+' },
 };
 
-/** The three groups a vendor tag belongs to, rendered as sections in the picker. */
-export const TAG_CATEGORIES = ['language', 'cultural', 'dietary'] as const;
+/**
+ * The four groups a vendor tag belongs to, rendered as sections in the picker.
+ *
+ * `style` is the odd one and the reason this list is not simply longer.
+ * `11-search.md` defines its chip as "category-specific tags (documentary,
+ * editorial…) — **the option set changes with the selected type**", so a style
+ * tag belongs to one vendor category while a language, culture or dietary
+ * requirement belongs to all of them. That scoping is `tags.vendor_category_id`,
+ * which is null for the other three and required for this one.
+ */
+export const TAG_CATEGORIES = ['style', 'language', 'cultural', 'dietary'] as const;
 export type TagCategory = (typeof TAG_CATEGORIES)[number];
+
+/** The one group whose tags are scoped to a single vendor category. */
+export const SCOPED_TAG_CATEGORY = 'style' satisfies TagCategory;
 
 export const TAG_SUGGESTION_STATUSES = ['pending', 'approved', 'rejected'] as const;
 export type TagSuggestionStatus = (typeof TAG_SUGGESTION_STATUSES)[number];
@@ -505,9 +517,73 @@ export interface TagSeed {
   readonly category: TagCategory;
   /** Ordering within the tag's own category group. */
   readonly displayOrder: number;
+  /**
+   * The vendor category this tag applies to, for `style` only — a documentary
+   * photographer and a family-style caterer have nothing to offer each other's
+   * filter. Absent for the three global groups.
+   */
+  readonly vendorCategorySlug?: string;
+}
+
+/**
+ * How a vendor in each category describes the *way* they work.
+ *
+ * Chosen rather than found: nothing in the design bundle enumerates these
+ * beyond `11-search.md`'s "(documentary, editorial…)", so this is a first
+ * vocabulary and not a transcription. It is deliberately short — four to six
+ * per category, the distinctions a customer would actually filter on — because
+ * a long list is a worse filter than a short one and every entry a vendor
+ * cannot honestly claim is noise in the facet counts.
+ *
+ * Cheap to revise while it is: `vendor_tags` is empty of style rows until
+ * vendors start choosing, and the seeds are regenerated rather than migrated.
+ */
+const STYLE_SEEDS: ReadonlyArray<{ category: string; styles: readonly string[] }> = [
+  {
+    category: 'photography',
+    styles: ['Documentary', 'Editorial', 'Fine art', 'Traditional', 'Moody', 'Light and airy'],
+  },
+  {
+    category: 'videography',
+    styles: ['Documentary', 'Cinematic', 'Journalistic', 'Highlight film'],
+  },
+  { category: 'entertainment', styles: ['DJ', 'Live band', 'Acoustic', 'Open format', 'MC-led'] },
+  {
+    category: 'catering',
+    styles: ['Plated', 'Family style', 'Buffet', 'Food stations', 'Grazing'],
+  },
+  { category: 'florals', styles: ['Garden', 'Minimal', 'Wild and loose', 'Structured', 'Dried'] },
+  {
+    category: 'venues',
+    styles: ['Indoor', 'Outdoor', 'Barn', 'Industrial', 'Historic', 'Waterfront'],
+  },
+  { category: 'beauty', styles: ['Natural', 'Glam', 'Editorial', 'Bridal'] },
+  { category: 'carts', styles: ['Coffee', 'Cocktail', 'Dessert', 'Late night'] },
+  { category: 'decor', styles: ['Minimal', 'Romantic', 'Modern', 'Rustic', 'Bold colour'] },
+  { category: 'planning', styles: ['Full planning', 'Partial planning', 'Day-of coordination'] },
+  { category: 'rentals', styles: ['Tabletop', 'Furniture', 'Tenting', 'Lighting'] },
+];
+
+/**
+ * `style-<category>-<name>`, because a style name is unique only inside its
+ * category — "Documentary" is a photography style *and* a videography one, and
+ * "Editorial" is both photography and beauty. The category segment is what
+ * keeps the globally-unique slug from colliding.
+ */
+function styleSeeds(): readonly TagSeed[] {
+  return STYLE_SEEDS.flatMap(({ category, styles }) =>
+    styles.map((name, index) => ({
+      name,
+      slug: `style-${category}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      category: 'style' as const,
+      displayOrder: index + 1,
+      vendorCategorySlug: category,
+    })),
+  );
 }
 
 export const TAG_SEEDS: readonly TagSeed[] = [
+  ...styleSeeds(),
   { name: 'English', slug: 'language-english', category: 'language', displayOrder: 1 },
   { name: 'Spanish', slug: 'language-spanish', category: 'language', displayOrder: 2 },
   { name: 'French', slug: 'language-french', category: 'language', displayOrder: 3 },
@@ -719,6 +795,27 @@ export const REVIEW_CONTENT_MAX_LENGTH = 2_000;
 export const REVIEW_RATING_MIN = 1;
 export const REVIEW_RATING_MAX = 5;
 
+/**
+ * Every rating a review can carry, ascending — the distribution chart's rows.
+ *
+ * Derived from the bounds rather than written out, so the chart cannot disagree
+ * with what the schema accepts: `12-vendor-profile.md:134` draws **five** bars,
+ * and five is `MAX - MIN + 1`, not a number the component gets to choose.
+ */
+export const REVIEW_RATINGS = Array.from(
+  { length: REVIEW_RATING_MAX - REVIEW_RATING_MIN + 1 },
+  (_unused, index) => REVIEW_RATING_MIN + index,
+) as readonly number[];
+
+/**
+ * How many reviews a page of the vendor's Reviews tab holds.
+ *
+ * Its own number rather than `DEFAULT_PAGE_SIZE`, because the tab **appends**
+ * — `12-vendor-profile.md:137`, "Show more reviews appends; no page numbers" —
+ * so this is how much arrives per press, not how much fills a numbered page.
+ */
+export const REVIEW_PAGE_SIZE = 10;
+
 /** Default page size for vendor search and most list endpoints. */
 export const DEFAULT_PAGE_SIZE = 20;
 /** Message history loads in larger pages than list endpoints. */
@@ -803,6 +900,20 @@ export const UPLOAD_CONSTRAINT_LINE = `${ACCEPTED_IMAGE_LABEL} · ${MAX_UPLOAD_B
 export const MAX_SLUG_LENGTH = 200;
 export const MAX_BUSINESS_NAME_LENGTH = 200;
 export const MAX_NAME_LENGTH = 100;
+/**
+ * The longest `Priya M.` the database can produce — **not** `MAX_NAME_LENGTH`.
+ *
+ * The reviewer's display name is built by concatenation, so it is longer than
+ * either column it comes from: a first name at its own 100-character limit,
+ * plus a space, an initial and a full stop, is 103. Bounding the response at
+ * 100 made a legal profile un-serialisable, and the whole Reviews tab 500ed for
+ * every reader of that vendor — something a customer could do to a vendor by
+ * saving one long first name.
+ *
+ * Derived rather than written down, so a change to the name column moves this
+ * with it. The three is the space, the initial and the stop.
+ */
+export const MAX_REVIEWER_DISPLAY_NAME_LENGTH = MAX_NAME_LENGTH + 3;
 export const MAX_EMAIL_LENGTH = 255;
 export const MAX_PHONE_LENGTH = 20;
 export const MAX_URL_LENGTH = 500;

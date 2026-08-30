@@ -2,7 +2,9 @@ import {
   availabilitySchema,
   bookingRequestDetailSchema,
   bookingWithContextSchema,
+  cancelledBookingSchema,
   categorySchema,
+  checkoutIntentSchema,
   conversationSummarySchema,
   customerProfileSchema,
   customerReviewSchema,
@@ -14,6 +16,7 @@ import {
   portfolioItemSchema,
   nearbyAvailabilityResultSchema,
   nearbyVendorSchema,
+  publicReviewSchema,
   publicVendorProfileSchema,
   servicePackageSchema,
   streamTicketSchema,
@@ -21,6 +24,8 @@ import {
   userSchema,
   vendorCardSchema,
   vendorProfileDetailSchema,
+  vendorReviewsPageSchema,
+  vendorCityListSchema,
   vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
 import { resolveImageUrl } from '@vendor-marketplace/shared';
@@ -150,6 +155,21 @@ export const wireCustomerReviewSchema = customerReviewSchema.extend({
 export type WireCustomerReview = z.infer<typeof wireCustomerReviewSchema>;
 export const wireCustomerReviewListSchema = z.array(wireCustomerReviewSchema);
 
+/**
+ * The cities that have vendors. No dates on it, so the domain schema passes
+ * straight through — it is re-exported here only so every read in the app
+ * reaches for its schema in one place.
+ */
+export const wireVendorCityListSchema = vendorCityListSchema;
+export type WireVendorCity = z.infer<typeof wireVendorCityListSchema>[number];
+
+/** One appended page of the vendor profile's Reviews tab. */
+export const wireVendorReviewsPageSchema = vendorReviewsPageSchema.extend({
+  items: z.array(publicReviewSchema.extend({ createdAt: z.coerce.date() })),
+});
+export type WireVendorReviewsPage = z.infer<typeof wireVendorReviewsPageSchema>;
+export type WirePublicReview = WireVendorReviewsPage['items'][number];
+
 export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
   expiresAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
@@ -157,6 +177,12 @@ export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
 });
 export type WireBookingRequest = z.infer<typeof wireBookingRequestSchema>;
 export const wireBookingRequestListSchema = z.array(wireBookingRequestSchema);
+
+/** The checkout read. `acceptedAt` is the only date on it. */
+export const wireCheckoutIntentSchema = checkoutIntentSchema.extend({
+  acceptedAt: z.coerce.date().nullable(),
+});
+export type WireCheckoutIntent = z.infer<typeof wireCheckoutIntentSchema>;
 
 export const wireBookingSchema = bookingWithContextSchema.extend({
   paidAt: z.coerce.date().nullable(),
@@ -167,6 +193,12 @@ export const wireBookingSchema = bookingWithContextSchema.extend({
 });
 export type WireBooking = z.infer<typeof wireBookingSchema>;
 export const wireBookingListSchema = z.array(wireBookingSchema);
+
+/** What a cancellation answers: the booking as it now stands, and the refund. */
+export const cancelledBookingWireSchema = cancelledBookingSchema.extend({
+  booking: wireBookingSchema.omit({ eventType: true, venue: true }),
+});
+export type WireCancelledBooking = z.infer<typeof cancelledBookingWireSchema>;
 
 /**
  * A customer as a vendor sees them. The discriminated union survives the

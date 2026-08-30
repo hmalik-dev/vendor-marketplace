@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Category } from '@vendor-marketplace/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,24 +45,36 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-const EMPTY: SearchBarValues = { category: '', city: '', date: '' };
+/** The cities the City select offers — real places with published vendors. */
+const CITIES = [
+  { city: 'Austin', state: 'TX', vendorCount: 11 },
+  { city: 'Portland', state: 'OR', vendorCount: 3 },
+];
+
+const EMPTY: SearchBarValues = { category: '', city: '', state: '', date: '' };
 
 function renderBar(value: SearchBarValues = EMPTY, onSubmit = vi.fn()) {
   return {
     onSubmit,
-    ...render(<SearchBar categories={CATEGORIES} value={value} onSubmit={onSubmit} size="hero" />),
+    ...render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={value}
+        onSubmit={onSubmit}
+        size="hero"
+      />,
+    ),
   };
 }
 
-/** The event-date field. Named "Event date" by the label that wraps it. */
-function dateInput(container: HTMLElement): HTMLInputElement {
-  const input = container.querySelector<HTMLInputElement>('input[type="date"]');
-
-  if (!input) {
-    throw new Error('no date input');
-  }
-
-  return input;
+/**
+ * The event-date field — a button that opens the designed picker, not an
+ * `input[type=date]` (#167, #328). The frames draw no native control, and the
+ * one it opened was a different thing on every platform.
+ */
+function dateField(): HTMLElement {
+  return screen.getByRole('button', { name: 'Event date' });
 }
 
 const TODAY = '2026-06-14';
@@ -102,11 +114,20 @@ describe('SearchBar', () => {
     expect(screen.queryByText('Add a date')).toBeNull();
   });
 
-  it('offers no free-text query field — the first segment is a picker', () => {
+  /*
+   * **No text box at all** now (#167). Vendor type was already a select; City
+   * became one too, because a typed city could not tell the two Portlands
+   * apart and a city nobody works in produced an empty grid with no
+   * explanation. All three segments are pickers, so the query can only ever ask
+   * a question the platform can answer.
+   */
+  it('offers no free-text query field — every segment is a picker', () => {
     renderBar();
 
-    // City is the only text box on the bar; vendor type is a select.
-    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    for (const name of ['Vendor type', 'City', 'Event date']) {
+      expect(screen.getByRole('button', { name })).toBeDefined();
+    }
   });
 });
 
@@ -126,29 +147,41 @@ describe('SearchBar — the event date cannot be in the past', () => {
     cleanup();
   });
 
+  /*
+   * The floor is the grid's own disabled cells now, not a native `min` (#167,
+   * #328). It still resolves after mount: "today" is the viewer's local day,
+   * and rendering it on the server would be a different one.
+   */
   it('floors the picker at today, so past days are unselectable', async () => {
-    const { container } = renderBar();
+    const user = userEvent.setup();
+    renderBar();
 
-    // The floor resolves after mount: "today" is the viewer's local day, and
-    // rendering it on the server would be a different one.
-    await vi.waitFor(() => {
-      expect(dateInput(container).min).toBe(TODAY);
-    });
+    await user.click(dateField());
+    const grid = await screen.findByRole('grid', { name: 'Event date' });
+
+    const yesterday = within(grid).getByRole('gridcell', { name: /2026-06-13/ });
+    const today = within(grid).getByRole('gridcell', { name: /2026-06-14/ });
+    const tomorrow = within(grid).getByRole('gridcell', { name: /2026-06-15/ });
+
+    expect((yesterday as HTMLButtonElement).disabled).toBe(true);
+    // Today itself is bookable — an event happening today is still an event.
+    expect((today as HTMLButtonElement).disabled).toBe(false);
+    expect((tomorrow as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('lets today itself through — an event happening today is still bookable', async () => {
     const user = userEvent.setup();
-    const { container, onSubmit } = renderBar({ ...EMPTY, date: TODAY });
+    const { onSubmit } = renderBar({ ...EMPTY, date: TODAY });
 
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
     expect(onSubmit).toHaveBeenCalledWith({ ...EMPTY, date: TODAY });
-    expect(dateInput(container).getAttribute('aria-invalid')).toBeNull();
+    expect(dateField().getAttribute('aria-describedby')).toBeNull();
   });
 
   it('holds back a search carrying a past date, and says why', async () => {
     const user = userEvent.setup();
-    const { container, onSubmit } = renderBar({ ...EMPTY, date: '2026-06-13' });
+    const { onSubmit } = renderBar({ ...EMPTY, date: '2026-06-13' });
 
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
@@ -156,27 +189,31 @@ describe('SearchBar — the event date cannot be in the past', () => {
     expect(screen.getByRole('alert').textContent).toBe(
       'That date has already passed — pick today or a later date.',
     );
-    expect(dateInput(container).getAttribute('aria-invalid')).toBe('true');
+    expect(dateField().getAttribute('aria-describedby')).toBe(
+      screen.getByRole('alert').getAttribute('id'),
+    );
   });
 
   /* Nothing is silently corrected: the value stays put so it can be fixed. */
   it('keeps the rejected date in the field rather than clearing it', async () => {
     const user = userEvent.setup();
-    const { container } = renderBar({ ...EMPTY, date: '2026-06-13' });
+    renderBar({ ...EMPTY, date: '2026-06-13' });
 
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
-    expect(dateInput(container).value).toBe('2026-06-13');
+    expect(dateField().textContent).toContain('Jun 13');
   });
 
   it('clears the complaint as soon as the date is changed', async () => {
     const user = userEvent.setup();
-    const { container } = renderBar({ ...EMPTY, date: '2026-06-13' });
+    renderBar({ ...EMPTY, date: '2026-06-13' });
 
     await user.click(screen.getByRole('button', { name: 'Search' }));
     expect(screen.getByRole('alert')).toBeDefined();
 
-    await user.clear(dateInput(container));
+    await user.click(dateField());
+    await user.click(await screen.findByRole('button', { name: 'Clear' }));
+
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -211,23 +248,30 @@ describe('SearchBar accessible names', () => {
 
   it.each(['hero', 'compact'] as const)('names every control in the %s bar', (size) => {
     const { container } = render(
-      <SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size={size} />,
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size={size}
+      />,
     );
 
-    expect(screen.getByRole('textbox', { name: 'City' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'City' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Search' })).toBeDefined();
     expect(screen.getByRole('button', { name: /vendor type/i })).toBeDefined();
 
+    // The date is a button now, not an input (#167, #328), and it is named.
+    expect(screen.getByRole('button', { name: /date/i })).toBeDefined();
+
     /*
-     * The date input is asserted through its label rather than by role:
-     * Chromium exposes `input[type=date]` as a named `textbox`, jsdom gives it
-     * no role at all, so a role query here would test the test environment.
-     * The loop below is the check that transfers.
+     * Nothing focusable is left anonymous — and there is no form control left
+     * on the bar at all. All three segments are dropdown triggers carrying
+     * their own `aria-label`, asserted above.
      */
-    // Nothing focusable is left anonymous.
     const controls = container.querySelectorAll('input, select, textarea');
 
-    expect(controls).toHaveLength(2);
+    expect(controls).toHaveLength(0);
 
     for (const control of controls) {
       const labels = Array.from((control as HTMLInputElement).labels ?? []);
@@ -250,14 +294,55 @@ describe('SearchBar accessible names', () => {
 describe('SearchBar — pill and circle discipline', () => {
   afterEach(cleanup);
 
+  /*
+   * The submit's ring keeps a ZERO offset, and this test exists to stop it
+   * being "fixed" (#296).
+   *
+   * Tailwind's ring is an outward box-shadow, so at `ring-offset-0` the band is
+   * already painted outside the border box, directly against the `clay-400`
+   * fill — a 3.18:1 boundary, the one edge of this indicator that clears SC
+   * 1.4.11. Giving it a 2px `stone-0` offset inserts the colour that was
+   * already there and pushes the band two pixels clear of the button, leaving
+   * it bounded by cream on both sides at 1.52:1. #296 shipped that inversion
+   * and a pixel scan caught it.
+   *
+   * The faintness against cream is `ring-clay-400/30`'s, not this line's —
+   * #306 owns raising the token's alpha.
+   */
+  it('keeps the submit ring on the button edge, where it has an edge to contrast with', () => {
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size="hero"
+      />,
+    );
+
+    const submit = screen.getByRole('button', { name: 'Search' });
+
+    expect(submit.className).toContain('focus-visible:ring-offset-0');
+    // Any non-zero offset re-introduces the inversion.
+    expect(submit.className).not.toMatch(/focus-visible:ring-offset-[1-9]/);
+  });
+
   it('labels the submit control by default, for the hero and the full-width bar', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size="hero"
+      />,
+    );
 
     expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
   });
 
   it('keeps the label on the full-width bar even at its compact size', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
   });
@@ -268,14 +353,41 @@ describe('SearchBar — pill and circle discipline', () => {
    * height follows its tallest child, so this is also what puts the bar back
    * on the frame's 58px — it had dropped to 52 when the button shrank.
    */
-  it('draws the hero submit at the padding and size frame 01 Landing measures', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+  /*
+   * Three landing frames draw this pill, not one: `13px / 12 24` at 768,
+   * `13px / 11 20` at 1024 and `14px / 13 28` at 1440. It used to carry only
+   * the 1440 values, pinned to `sm` — so a 102x44 control sat in the 50px bar
+   * the 1024 frame draws.
+   */
+  it('steps the hero submit through all three frames that draw it', () => {
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size="hero"
+      />,
+    );
 
     const submit = screen.getByRole('button', { name: 'Search' });
 
-    expect(submit.className).toContain('sm:px-7');
-    expect(submit.className).toContain('sm:py-3.25');
-    expect(submit.className).toContain('sm:text-cta');
+    // 768 — the unprefixed `sm` step.
+    expect(submit.className).toContain('sm:px-6');
+    expect(submit.className).toContain('sm:py-3');
+    expect(submit.className).toContain('sm:text-[13px]');
+
+    // 1024.
+    expect(submit.className).toContain('lg:px-5');
+    expect(submit.className).toContain('lg:py-2.75');
+
+    // 1440 — frame `01 Landing`, which is where these values came from.
+    expect(submit.className).toContain('min-[90rem]:px-7');
+    expect(submit.className).toContain('min-[90rem]:py-3.25');
+    expect(submit.className).toContain('min-[90rem]:text-cta');
+
+    // The 1440 size must not start at 640 again.
+    expect(submit.className).not.toContain('sm:text-cta');
     expect(submit.className).not.toContain('sm:text-base');
   });
 
@@ -290,7 +402,15 @@ describe('SearchBar — pill and circle discipline', () => {
    * The compact bar is a different control and keeps its own `sm:ml-1.5`.
    */
   it("gives the hero submit no left margin, so the segments keep the frame's width", () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size="hero"
+      />,
+    );
 
     const submit = screen.getByRole('button', { name: 'Search' });
 
@@ -299,7 +419,7 @@ describe('SearchBar — pill and circle discipline', () => {
   });
 
   it("leaves the compact bar's own submit margin alone", () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Search' }).className).toContain('sm:ml-1.5');
   });
@@ -312,17 +432,35 @@ describe('SearchBar — pill and circle discipline', () => {
    * class because jsdom resolves neither `:focus-visible` nor `has-()`.
    */
   it('marks which segment has focus, not just that the bar has it', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size="hero"
+      />,
+    );
 
+    // All three segments are trigger buttons now, and each carries the same
+    // per-segment focus tint (#167).
     for (const name of ['City', 'Event date']) {
-      expect(screen.getByText(name).closest('label')?.className).toContain(
+      expect(screen.getByRole('button', { name }).className).toContain(
         'has-[:focus-visible]:bg-clay-400/10',
       );
     }
   });
 
   it('drops the visible label in the compact header, never the accessible one', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        action="icon"
+      />,
+    );
 
     const button = screen.getByRole('button', { name: 'Search' });
 
@@ -332,7 +470,15 @@ describe('SearchBar — pill and circle discipline', () => {
 
   /* A circle without a glyph is not a reduced control, it is an unlabelled one. */
   it('never renders a bare ring — the circle always holds the magnifier', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        action="icon"
+      />,
+    );
 
     const button = screen.getByRole('button', { name: 'Search' });
 
@@ -352,7 +498,15 @@ describe('SearchBar — pill and circle discipline', () => {
    * the rule at all, which is what a component test can see.
    */
   it('gives the icon-only circle a 44x44 hit area past its own paint', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        action="icon"
+      />,
+    );
 
     const button = screen.getByRole('button', { name: 'Search' });
 
@@ -374,7 +528,8 @@ describe('SearchBar — pill and circle discipline', () => {
     render(
       <SearchBar
         categories={CATEGORIES}
-        value={{ category: 'photography', city: 'Austin', date: '' }}
+        cities={CITIES}
+        value={{ category: 'photography', city: 'Austin', state: 'TX', date: '' }}
         onSubmit={onSubmit}
         action="icon"
       />,
@@ -382,7 +537,12 @@ describe('SearchBar — pill and circle discipline', () => {
 
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
-    expect(onSubmit).toHaveBeenCalledWith({ category: 'photography', city: 'Austin', date: '' });
+    expect(onSubmit).toHaveBeenCalledWith({
+      category: 'photography',
+      city: 'Austin',
+      state: 'TX',
+      date: '',
+    });
   });
 });
 
@@ -397,7 +557,13 @@ describe('SearchBar — while a search is in flight', () => {
   function renderSearching(searching: boolean) {
     return render(
       <SearchStatusHarness searching={searching}>
-        <SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />
+        <SearchBar
+          categories={CATEGORIES}
+          cities={CITIES}
+          value={EMPTY}
+          onSubmit={vi.fn()}
+          action="icon"
+        />
       </SearchStatusHarness>,
     );
   }
@@ -421,7 +587,15 @@ describe('SearchBar — while a search is in flight', () => {
 
   /* The hero is never inside the provider, so it must not care. */
   it('leaves the labelled pill alone', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size="hero"
+      />,
+    );
 
     expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
   });
@@ -433,7 +607,7 @@ describe('SearchBar — the compact bar’s own measurements', () => {
   /* 40px at 1024, 42px from 1280 — frames `25` and `17`/`18`. */
   it('takes the frame’s heights from lg up', () => {
     const { container } = render(
-      <SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />,
+      <SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />,
     );
     const form = container.querySelector('form');
 
@@ -442,14 +616,22 @@ describe('SearchBar — the compact bar’s own measurements', () => {
   });
 
   it('shortens the date label, which is what leaves room for a date', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />);
 
     expect(screen.getByText('Date')).toBeDefined();
     expect(screen.queryByText('Event date')).toBeNull();
   });
 
   it('spells it out on the hero, where there is room', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size="hero"
+      />,
+    );
 
     expect(screen.getByText('Event date')).toBeDefined();
   });
@@ -492,10 +674,10 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
     return (match as RegExpMatchArray)[1] as string;
   }
 
-  const PICKED: SearchBarValues = { category: '', city: '', date: '2026-06-14' };
+  const PICKED: SearchBarValues = { category: '', city: '', state: '', date: '2026-06-14' };
 
   it('renders the 1440 frames literal, not the browser picker', () => {
-    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />);
 
     // `17 Search loading` and `18 Search no results` both draw `Jun 14, 2026`.
     const literal = dateLiteralIn('17 Search loading');
@@ -504,7 +686,7 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
   });
 
   it('renders the 1024 frames shorter literal alongside it', () => {
-    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />);
 
     const literal = dateLiteralIn('27 Search results — 1024');
 
@@ -517,7 +699,7 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
    * the wrong one on the server and change it under the reader after mount.
    */
   it('hides the year below 1440 and shows it at 1440', () => {
-    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />);
 
     expect(screen.getByText(dateLiteralIn('27 Search results — 1024')).className).toContain(
       'xl:hidden',
@@ -531,20 +713,36 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
    * The overlay must never replace the picker — focusing hands the field back
    * to the browser's own editor, which is the only way to change the date.
    */
-  it('keeps the native date input, so the picker still opens', () => {
+  /*
+   * The native input is **gone** (#167, #328), and that is asserted rather than
+   * merely untested. The frames draw no `input[type=date]`; the control it
+   * opened was a different thing on every platform, and the app had to make its
+   * own edit field transparent and lay a prompt over it to hide the fact.
+   */
+  it('opens the designed picker, not the browser’s', async () => {
+    const user = userEvent.setup();
     const { container } = render(
-      <SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />,
+      <SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />,
     );
 
-    const input = container.querySelector('input[type="date"]');
+    expect(container.querySelector('input[type="date"]')).toBeNull();
 
-    expect(input).not.toBeNull();
-    expect((input as HTMLInputElement).value).toBe('2026-06-14');
-    expect((input as HTMLInputElement).className).toContain('peer');
+    await user.click(screen.getByRole('button', { name: /date/i }));
+
+    expect(await screen.findByRole('grid', { name: /date/i })).toBeDefined();
+    /*
+      **No legend here.** The search bar asks the question before a vendor is
+      chosen, so nothing on this grid can be unavailable or held — there is
+      nobody for it to be unavailable from. The marks and their legend belong to
+      the pickers that have a vendor in scope: the profile rail and the request
+      form.
+    */
+    expect(screen.queryByText('Unavailable')).toBeNull();
+    expect(screen.queryByText('Held')).toBeNull();
   });
 
   it('still draws the prompt, not a literal, while no date is picked', () => {
-    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />);
 
     expect(screen.getByText('Add a date').textContent).toBe('Add a date');
     expect(screen.queryByText(/2026/)).toBeNull();
@@ -560,7 +758,8 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
       render(
         <SearchBar
           categories={CATEGORIES}
-          value={{ category: '', city: '', date: hostile }}
+          cities={CITIES}
+          value={{ category: '', city: '', state: '', date: hostile }}
           onSubmit={vi.fn()}
         />,
       ),

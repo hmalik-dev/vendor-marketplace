@@ -264,7 +264,14 @@ config was touched, turning #44 into a one-setting fix instead of a guessing loo
 
 ---
 
-## `Send a message` on the vendor profile is disabled until #310 (2026-08-30, #110 via #298)
+## `Send a message` on the vendor profile is disabled until #310 (2026-08-30, #110 via #298) — **spent, #310 landed**
+
+> **Spent on 2026-08-30.** #310 built the thread, so the control is enabled and
+> both the `disabled` attribute and the `sr-only` description are gone, as the
+> closing paragraph below required. Kept because the reasoning is the record of
+> why an enabled frame shipped disabled for two days, and because the shape —
+> a frame draws the finished product, not the build order — recurs. See
+> **A thread is scoped to one booking request** below for what #310 built.
 
 **Decision:** the rail's `Send a message` control ships **disabled**, and stays
 disabled until **#310** builds the conversation it would open.
@@ -290,6 +297,41 @@ helper line under that button and adding one would fail the Text axis in order
 to satisfy the Access axis. **#310 removes both the `disabled` attribute and
 the description in the same change** — leaving the description behind an
 enabled control would be worse than never having added it.
+
+---
+
+## A thread is scoped to one booking request (2026-08-30, #310 for #219/#229)
+
+**Decision:** a conversation belongs to **one booking request**, plus at most one
+**unattached** thread per customer/vendor pair — the one `Send a message` on a
+profile opens. Not one thread per pair.
+
+**Why this needed deciding.** The model was one per pair, and #219 measured what
+that costs: three requests to the same vendor produced one thread, carrying the
+*first* request's context line for all three. The deciding argument is the
+design's, not an implementation preference. `18-messaging.md` heads the context
+rail **This request** and gives it three actions — `Send revised quote`, `Accept
+as-is`, `Decline politely`. Each acts on exactly one request. A thread spanning
+three of them cannot draw that rail at all, and the list's booking context line
+("Re: Jun 14 wedding"), which is what makes thirty threads navigable, would name
+whichever request came first forever.
+
+**The unattached thread is the profile button's.** A customer with questions
+*before* they pick a date has somewhere to ask them, and its rail has no request
+to show, which is honest. The first request they send opens its own thread beside
+it rather than absorbing it.
+
+**How it is enforced.** Two **partial** unique indexes, not one composite: under
+Postgres's default `NULLS DISTINCT` a three-column key would treat every
+unattached thread as distinct from every other, so a pair could accumulate one
+per click of `Send a message`. `conversations_request_key` is unique on the
+request id; `conversations_customer_vendor_open_key` is unique on the pair
+`WHERE booking_request_id IS NULL`.
+
+**A new message notifies once per unread run, not once per message.** Thirty
+messages in a back-and-forth are one thing to be told about; thirty rows would
+bury every other notification under a conversation the reader can already see.
+Reading the thread re-arms it.
 
 ---
 

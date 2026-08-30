@@ -2,14 +2,16 @@
 
 import {
   isPastDate,
-  MAX_NAME_LENGTH,
   todayDateString,
   type Category,
+  type VendorCity,
 } from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
+import { DateDropdown } from '@/components/ui/dropdown-date';
 import { CategorySelect } from './category-select';
+import { CitySelect } from './city-select';
 import { useSearchStatus } from './search-status';
 
 /**
@@ -52,12 +54,16 @@ const PICKED_DATE_FORMATTERS = {
 export interface SearchBarValues {
   /** A category slug, or `''` for "any vendor type". Never free text. */
   category: string;
+  /** Chosen as a pair with `state`, never typed — see `CitySelect`. */
   city: string;
+  state: string;
   date: string;
 }
 
 export interface SearchBarProps {
   categories: readonly Category[];
+  /** Every city with a published vendor, so City can only ask a real question. */
+  cities: readonly VendorCity[];
   value: SearchBarValues;
   onSubmit: (value: SearchBarValues) => void;
   /** `compact` is the header variant; `hero` is the landing one. */
@@ -78,6 +84,7 @@ export interface SearchBarProps {
 
 export function SearchBar({
   categories,
+  cities,
   value,
   onSubmit,
   size = 'compact',
@@ -86,6 +93,7 @@ export function SearchBar({
 }: SearchBarProps): React.ReactElement {
   const [draft, setDraft] = useState<SearchBarValues>(value);
   const [pastDate, setPastDate] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
 
   /*
    * Guarded: `draft.date` is whatever the URL carried, and an unparseable value
@@ -134,33 +142,59 @@ export function SearchBar({
    */
   const { isSearching } = useSearchStatus();
 
+  /*
+   * `.lbl` is 10.5px in the bundle and `01 Landing` takes it unmodified, but
+   * both narrow landing frames override it inline to 9.5px — the same size the
+   * compact bar already uses everywhere.
+   */
   const label = cn(
     'font-semibold tracking-label text-stone-600 uppercase',
-    isHero ? 'text-label' : 'text-[9.5px]',
+    isHero ? 'text-[9.5px] min-[90rem]:text-label' : 'text-[9.5px]',
   );
-  const fieldText = isHero ? 'text-md' : 'text-[13.5px]';
   /*
-   * No focus ring on the field itself. The bar is one control visually — a
-   * single rounded-full pill with hairline dividers, per frame `01` — and a
-   * rectangular ring around one segment breaks out past the pill's edge and
-   * reads as a second, misaligned box. The ring lives on the bar instead, so
-   * it follows the pill's shape. See the form's `has-[:focus-visible]` below.
+   * The hero's value type: 14px at 768, 13.5px at 1024, 15px at 1440.
+   *
+   * **No weight here.** `14 Landing tablet` sets `font-weight:500` on the
+   * vendor-type value and on that span alone — City and Event date stay at 400.
+   * An earlier reading of this took the weight for a property of the bar and
+   * put it on all three, which is the sort of generalisation a single sample
+   * invites: one span carried it, so the rule looked like "the 768 bar is
+   * heavier". It is not. `CategorySelect` carries its own 500.
    */
-  const field = cn(
-    'min-w-0 bg-transparent text-stone-900 outline-none placeholder:text-stone-600',
-    'focus-visible:ring-0 focus-visible:ring-offset-0',
-    fieldText,
-    isHero && 'mt-0.5',
-  );
+  const fieldText = isHero ? 'text-[14px] lg:text-[13.5px] min-[90rem]:text-md' : 'text-[13.5px]';
+  /*
+   * The `field` class this used to hold is gone with the last text input on the
+   * bar (#167). All three segments are dropdown triggers now, and each carries
+   * its own value type — the ring rule it documented still holds and still
+   * lives on the bar itself, in `segment` below.
+   */
   /*
    * Below `sm` the three segments stack into a three-row card. They are the
    * query, not a refinement, so they never collapse into the filter sheet — but
    * three flex segments across 390px squeezes each to a few characters, which
    * is worse than a taller control. See design/design-plan/30-responsive.md.
    */
+  /*
+   * A short hairline at every width: 32px at 1440, 28px at 1024, 29px at 768.
+   *
+   * `14 Landing tablet` draws no divider element — it puts `border-right: 1px
+   * #EFE9E0` on the segments instead. That is rendered as this same span rather
+   * than restructured into three borders, because the two are pixel-identical
+   * and one element is easier to keep honest than three. It does pick up the
+   * frame's lighter colour there.
+   *
+   * **29px, not the bar's height.** The bar is `align-items:center`, so a
+   * border on a segment runs the *segment's* height inside the taller content
+   * box — 29px in a 40px box. Two wrong readings of that in a row: `h-full`
+   * resolved to 0 against an indefinite container and drew nothing, then
+   * `self-stretch` drew the whole 40px box. Both were attempts to derive a
+   * height that the frame simply states.
+   */
   const divider = cn(
     'shrink-0 bg-stone-200 max-sm:h-px max-sm:w-full sm:w-px sm:bg-stone-300',
-    isHero ? 'sm:h-8' : 'sm:h-6.5 sm:bg-stone-200',
+    isHero
+      ? 'sm:h-7.25 sm:bg-stone-200 lg:h-7 lg:bg-stone-300 min-[90rem]:h-8'
+      : 'sm:h-6.5 sm:bg-stone-200',
   );
   /*
    * #89. The halo on the pill says the bar has focus; it cannot say *which*
@@ -220,7 +254,12 @@ export function SearchBar({
         */
         'transition-shadow duration-(--duration-fast) has-[:focus-visible:not([type=submit])]:ring-3 has-[:focus-visible:not([type=submit])]:ring-clay-400/20',
         isHero
-          ? 'shadow-lg sm:py-1.75 sm:pr-1.75 sm:pl-6'
+          ? /*
+              Padding and shadow per frame: `6 6 6 20` at 768, `6 6 6 18` at
+              1024, `7 7 7 24` at 1440, and a 26px blur at 768 against 28
+              elsewhere.
+            */
+            'shadow-[0_8px_26px_rgba(35,32,28,.10)] sm:py-1.5 sm:pr-1.5 sm:pl-5 lg:pl-4.5 lg:shadow-lg min-[90rem]:py-1.75 min-[90rem]:pr-1.75 min-[90rem]:pl-6'
           : /*
               A fixed height from `lg`, because the compact bar sits inside a
               header of its own fixed height and the frames measure it: 40px at
@@ -242,113 +281,129 @@ export function SearchBar({
 
       <span aria-hidden="true" className={divider} />
 
-      <label className={cn(segment, isHero ? 'sm:flex-1 sm:pl-4.5' : 'sm:flex-[0.9] sm:pl-3.5')}>
-        <span className={label}>City</span>
-        <input
-          value={draft.city}
-          onChange={(event) => setDraft((previous) => ({ ...previous, city: event.target.value }))}
-          placeholder="Anywhere"
-          // The API's own cap. Without it a long paste is accepted here and
-          // then silently cleared at the URL boundary, which reads to the
-          // customer as the field losing what they typed.
-          maxLength={MAX_NAME_LENGTH}
-          className={field}
-        />
-      </label>
+      {/*
+        City is a select over the places that actually have vendors, and it
+        carries the state with it (#167). Typed, it could not distinguish the
+        two Portlands or the thirty Springfields, and a city nobody works in
+        produced an empty grid with nothing to say about why.
+      */}
+      <CitySelect
+        cities={cities}
+        city={draft.city}
+        state={draft.state}
+        onChange={(next) => setDraft((previous) => ({ ...previous, ...next }))}
+        size={size}
+        id={`${fieldId}-city`}
+        labelClassName={label}
+        valueClassName={cn(fieldText, isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5')}
+        className={cn(
+          segment,
+          isHero
+            ? 'sm:flex-1 sm:pr-3.5 sm:pl-3.5 lg:pr-0 min-[90rem]:pl-4.5'
+            : 'sm:flex-[0.9] sm:pl-3.5',
+        )}
+      />
 
       <span aria-hidden="true" className={divider} />
 
-      <label
-        className={cn(
-          segment,
-          /*
-            The floor is the "Add a date" prompt plus the browser's own
-            calendar glyph, which sits inside the field and is not part of the
-            text's measured width — at 1024 the segment shrank to exactly the
-            prompt and the glyph landed on its last letter. Same rule as the
-            vendor-type segment: the width changes, not the words.
-          */
-          isHero ? 'sm:min-w-28 sm:flex-[0.8] sm:pl-4.5' : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
-        )}
-      >
-        {/*
-          "Event date" on the hero, "Date" in the compact bar. Frame `02` draws
-          the long form, but the five frames that show the compact bar in a
-          working state — `17`, `18` and the three at 1024 — all draw "Date",
-          and the short form is what leaves the segment room for a date. The
-          single frame is the stale one.
-        */}
-        <span className={label}>{isHero ? 'Event date' : 'Date'}</span>
-        {/*
-          An empty date reads "Add a date", not the browser's "mm/dd/yyyy" —
-          the frame draws the prompt, and the placeholder attribute does
-          nothing on a date input. So the native edit field is made transparent
-          while it is empty and unfocused, and the prompt is laid over it;
-          focusing hands the field straight back to the browser's own editor.
-          See design/design-plan/10-landing.md.
-        */}
-        <span className={cn('relative flex min-w-0', isHero && 'mt-0.5')}>
-          <input
-            type="date"
-            value={draft.date}
+      {/*
+        The date is a designed picker, not the browser's (#167, #328).
+
+        What stood here was an elaborate apology for a native `input[type=date]`:
+        the edit field made transparent so `mm/dd/yyyy` would not show, a prompt
+        laid over it, and the whole thing handed back to the browser on focus.
+        The frames draw none of that, and the picker it opened was a different
+        control on every platform — nothing the design could specify. Frame `28`
+        draws the replacement, and it shares the vendor calendar's cell marks.
+      */}
+      <DateDropdown
+        open={dateOpen}
+        onOpenChange={setDateOpen}
+        label={isHero ? 'Event date' : 'Date'}
+        value={draft.date === '' ? null : draft.date}
+        today={today || todayDateString()}
+        width={isHero ? 'hero' : 'compact'}
+        scrim={isHero}
+        onChange={(next) => {
+          setDraft((previous) => ({ ...previous, date: next ?? '' }));
+          setPastDate(false);
+        }}
+        trigger={
+          <button
+            type="button"
+            aria-label={isHero ? 'Event date' : 'Date'}
+            aria-haspopup="dialog"
+            aria-expanded={dateOpen}
             /*
-              Past dates are unselectable, not merely rejected: `min` greys them
-              out in the browser's own calendar, so the rule is visible in the
-              control rather than discovered on submit. Empty until the client
-              knows its own day — see `today` above.
+              `aria-describedby` and not `aria-invalid`: a `button` does not
+              support the second, so it announced nothing. The complaint itself
+              carries `role="alert"`, so it is spoken when it appears, and this
+              ties it to the control it is about for anyone arriving later.
             */
-            min={today || undefined}
-            aria-invalid={pastDate || undefined}
             aria-describedby={pastDate ? `${fieldId}-date-error` : undefined}
-            onChange={(event) => {
-              setDraft((previous) => ({ ...previous, date: event.target.value }));
-              setPastDate(false);
-            }}
             className={cn(
-              'peer w-full min-w-0 bg-transparent text-stone-900 outline-none',
-              'focus-visible:ring-0 focus-visible:ring-offset-0',
-              fieldText,
+              segment,
+              'text-left',
               /*
-                The native edit field is transparent whenever it is not being
-                edited — empty or filled. Empty it would read `mm/dd/yyyy`,
-                filled it would read `09/13/2026`; the frames draw neither.
-                Focusing hands the field straight back to the browser's own
-                editor, so the picker is never taken away, only overlaid.
+                The floor is the "Add a date" prompt plus its caret. Same rule
+                as the vendor-type segment: the width changes, not the words.
               */
-              'text-transparent focus:text-stone-900',
-              draft.date === '' && 'focus:text-stone-600',
+              isHero
+                ? /* .9 at 768, .8 from 1024. 768 also pads the field on both
+                     sides rather than only the left. */
+                  'sm:min-w-28 sm:flex-[0.9] sm:pr-3.5 sm:pl-3.5 lg:flex-[0.8] lg:pr-0 min-[90rem]:pl-4.5'
+                : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
             )}
-          />
-          {draft.date === '' ? (
+          >
+            {/*
+              "Event date" on the hero, "Date" in the compact bar. Frame `02`
+              draws the long form, but the five frames that show the compact bar
+              in a working state — `17`, `18` and the three at 1024 — all draw
+              "Date", and the short form is what leaves the segment room for a
+              date. The single frame is the stale one.
+            */}
+            <span className={label}>{isHero ? 'Event date' : 'Date'}</span>
             <span
-              aria-hidden="true"
               className={cn(
-                'pointer-events-none absolute inset-y-0 left-0 flex items-center text-stone-600 peer-focus:hidden',
-                fieldText,
+                'flex min-w-0 items-center justify-between gap-2 pr-2.5',
+                /* The same baseline ladder as `field` — 0 at 768, 1px at 1024,
+                   2px at 1440. */
+                isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5',
               )}
             >
-              Add a date
+              <span
+                className={cn(
+                  'truncate',
+                  fieldText,
+                  draft.date === '' ? 'text-stone-600' : 'text-stone-900',
+                )}
+              >
+                {draft.date === '' ? (
+                  'Add a date'
+                ) : (
+                  <>
+                    {/*
+                      Both spellings are rendered and one is hidden by width,
+                      rather than picked in JS: a media query in state would
+                      have to be resolved after mount, and the segment would
+                      render the wrong one on the server and then change under
+                      the reader.
+                    */}
+                    <span className="xl:hidden">{formattedDate.short}</span>
+                    <span className="max-xl:hidden">{formattedDate.full}</span>
+                  </>
+                )}
+              </span>
+              <span
+                aria-hidden="true"
+                className={cn('shrink-0 text-[9px]', dateOpen ? 'text-clay-400' : 'text-stone-600')}
+              >
+                {dateOpen ? '▴' : '▾'}
+              </span>
             </span>
-          ) : (
-            <span
-              aria-hidden="true"
-              className={cn(
-                'pointer-events-none absolute inset-y-0 left-0 flex items-center whitespace-nowrap text-stone-900 peer-focus:hidden',
-                fieldText,
-              )}
-            >
-              {/*
-                Both spellings are rendered and one is hidden by width, rather
-                than picked in JS: a media query in state would have to be
-                resolved after mount, and the segment would render the wrong
-                one on the server and then change under the reader.
-              */}
-              <span className="xl:hidden">{formattedDate.short}</span>
-              <span className="max-xl:hidden">{formattedDate.full}</span>
-            </span>
-          )}
-        </span>
-      </label>
+          </button>
+        }
+      />
 
       {pastDate ? (
         /*
@@ -435,11 +490,35 @@ export function SearchBar({
           type="submit"
           className={cn(
             'shrink-0 rounded-full bg-clay-400 font-semibold text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 max-sm:mt-3 max-sm:w-full max-sm:py-2.75',
-            // Inside a white pill the shared 2px cream offset reads as a gap in
-            // the bar, so this ring sits directly on the button's edge.
+            /*
+              Inside a white pill the shared 2px cream offset reads as a gap in
+              the bar, so this ring sits directly on the button's edge.
+
+              **Do not "fix" this by restoring the offset.** #296 tried exactly
+              that and it inverts the intent, because Tailwind's ring is an
+              *outward* box-shadow: with `ring-offset-0` the ring band is
+              already painted outside the border box, directly against the
+              `clay-400` fill, and that boundary measures **3.18:1** — the one
+              edge of this indicator that clears SC 1.4.11. Adding a 2px
+              `stone-0` offset inserts the colour that was already there and
+              pushes the coloured band two pixels off the button, leaving it
+              bounded by cream on *both* sides at **1.52:1**. Measured in
+              Chromium by scanning a pixel row outward through the button edge.
+
+              The ring is faint against cream either way, and that is a property
+              of `ring-clay-400/30`, not of where the band sits: #73 filed it
+              for **#306** — the token measures 1.49:1 where the law wants 3:1,
+              and clay needs alpha >= 0.80. Re-grounding the offset here cannot
+              fix a token problem, and it costs the one good edge.
+            */
             'focus-visible:ring-offset-0',
             isHero
-              ? 'sm:px-7 sm:py-3.25 sm:text-cta'
+              ? /*
+                  13px at `12 24` at 768, 13px at `11 20` at 1024, 14px at
+                  `13 28` at 1440 — the pill shrinks with the bar around it
+                  rather than staying the 1440 control in a 50px bar.
+                */
+                'sm:px-6 sm:py-3 sm:text-[13px] lg:px-5 lg:py-2.75 min-[90rem]:px-7 min-[90rem]:py-3.25 min-[90rem]:text-cta'
               : 'sm:ml-1.5 sm:px-5 sm:py-2.5 sm:text-[12.5px]',
           )}
         >

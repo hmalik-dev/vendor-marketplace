@@ -48,13 +48,7 @@ import { TagPicker } from '@/components/tags/tag-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { Switch, SWITCH_TOUCH_TARGET } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -310,6 +304,27 @@ function ErrorCard({ children }: { children: React.ReactNode }): React.ReactElem
   );
 }
 
+/**
+ * The trigger shape both selects on this form share.
+ *
+ * 44px below `lg` where the input method is a finger, 38px above it — the same
+ * ladder every other control on the form takes.
+ */
+const FORM_SELECT_TRIGGER =
+  'mt-1.5 flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-stone-0 px-[13px] text-base text-stone-900 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 sm:h-[38px]';
+
+/** The caret, which flips and turns clay while its panel is open. */
+function SelectCaret({ open }: { open: boolean }): React.ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('shrink-0 text-[9px]', open ? 'text-clay-400' : 'text-stone-600')}
+    >
+      {open ? '▴' : '▾'}
+    </span>
+  );
+}
+
 /** The red line under a control. `40-states.md`: it says how to fix it. */
 function FieldMessage({ issue }: { issue: FieldIssue | null }): React.ReactElement | null {
   if (issue === null) {
@@ -347,6 +362,8 @@ export function VendorProfileForm({
    * The client-side half is recomputed from the current values instead, so it
    * clears itself; only the server's half needs remembering.
    */
+  /** One open select at a time; two panels over one form is two answers. */
+  const [openSelect, setOpenSelect] = useState<string | null>(null);
   const [serverProblem, setServerProblem] = useState<ProfileSaveProblem>(NO_PROBLEM);
   const [justSaved, setJustSaved] = useState(false);
   const [publishBlockers, setPublishBlockers] = useState<readonly PublishBlockerKey[]>(
@@ -756,22 +773,34 @@ export function VendorProfileForm({
 
                 <div>
                   <Label htmlFor="state">State</Label>
-                  <Select value={form.state} onValueChange={(value) => update('state', value)}>
-                    <SelectTrigger
-                      id="state"
-                      className="mt-1.5 w-full bg-stone-0 data-[size=default]:h-11 sm:data-[size=default]:h-[38px]"
-                      {...errorProps(validation.issueFor('state'))}
-                    >
-                      <SelectValue placeholder="Choose a state" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {US_STATES.map((state) => (
-                        <SelectItem key={state} value={state}>
-                          {state}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/*
+                    The one dropdown (#167). Fifty states is the longest list in
+                    the product and the only place the 360px cap actually bites
+                    — which is what makes it the right one to prove the scroll
+                    against rather than the eleven-row lists.
+                  */}
+                  <SingleSelectDropdown
+                    open={openSelect === 'state'}
+                    onOpenChange={(next) => setOpenSelect(next ? 'state' : null)}
+                    label="State"
+                    countNoun="states"
+                    options={US_STATES.map((state) => ({ value: state, label: state }))}
+                    value={form.state === '' ? null : form.state}
+                    onChange={(value) => update('state', value)}
+                    trigger={
+                      <button
+                        type="button"
+                        id="state"
+                        aria-haspopup="listbox"
+                        aria-expanded={openSelect === 'state'}
+                        className={cn(FORM_SELECT_TRIGGER, form.state === '' && 'text-stone-600')}
+                        {...errorProps(validation.issueFor('state'))}
+                      >
+                        {form.state === '' ? 'Choose a state' : form.state}
+                        <SelectCaret open={openSelect === 'state'} />
+                      </button>
+                    }
+                  />
                   <FieldMessage issue={validation.issueFor('state')} />
                 </div>
 
@@ -828,29 +857,42 @@ export function VendorProfileForm({
                 */}
                 <div id={SECTION_IDS.responseTime} className="scroll-mt-6">
                   <Label htmlFor="responseTime">Typical response time</Label>
-                  <Select
-                    value={form.responseTimeHours}
-                    onValueChange={(value) => update('responseTimeHours', value)}
-                  >
-                    <SelectTrigger
-                      id="responseTime"
-                      {...errorProps(validation.issueFor('responseTime'), 'responseTime-help')}
-                      className={cn(
-                        'mt-1.5 w-full bg-stone-0 data-[size=default]:h-11 sm:data-[size=default]:h-[38px]',
-                        responseTimeBlocks && 'border-gold-400',
-                      )}
-                    >
-                      <SelectValue placeholder="Choose one" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_RESPONSE_TIME}>Not specified</SelectItem>
-                      {RESPONSE_TIME_HOURS_OPTIONS.map((hours) => (
-                        <SelectItem key={hours} value={String(hours)}>
-                          {RESPONSE_TIME_LABELS[hours]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SingleSelectDropdown
+                    open={openSelect === 'responseTime'}
+                    onOpenChange={(next) => setOpenSelect(next ? 'responseTime' : null)}
+                    label="Typical response time"
+                    countNoun="windows"
+                    options={[
+                      { value: NO_RESPONSE_TIME, label: 'Not specified' },
+                      ...RESPONSE_TIME_HOURS_OPTIONS.map((hours) => ({
+                        value: String(hours),
+                        label: RESPONSE_TIME_LABELS[hours],
+                      })),
+                    ]}
+                    value={form.responseTimeHours === '' ? null : form.responseTimeHours}
+                    onChange={(value) => update('responseTimeHours', value)}
+                    trigger={
+                      <button
+                        type="button"
+                        id="responseTime"
+                        aria-haspopup="listbox"
+                        aria-expanded={openSelect === 'responseTime'}
+                        {...errorProps(validation.issueFor('responseTime'), 'responseTime-help')}
+                        className={cn(
+                          FORM_SELECT_TRIGGER,
+                          responseTimeBlocks && 'border-gold-400',
+                          form.responseTimeHours === '' && 'text-stone-600',
+                        )}
+                      >
+                        {form.responseTimeHours === ''
+                          ? 'Choose one'
+                          : form.responseTimeHours === NO_RESPONSE_TIME
+                            ? 'Not specified'
+                            : RESPONSE_TIME_LABELS[Number(form.responseTimeHours)]}
+                        <SelectCaret open={openSelect === 'responseTime'} />
+                      </button>
+                    }
+                  />
                   <FieldMessage issue={validation.issueFor('responseTime')} />
                   <p
                     id="responseTime-help"

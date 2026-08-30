@@ -2,8 +2,17 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Logo, LOGO_SIZES } from './logo';
+
+/* The inset is per-route, so the nav has to be rendered on a vendor path. */
+let pathname = '/';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname,
+}));
+
+const { HeaderNav } = await import('@/components/header-nav');
 
 const require = createRequire(import.meta.url);
 const themeCss = readFileSync(
@@ -51,7 +60,17 @@ describe('the shared header matches the frame on the Layout axis', () => {
    * to 40px, three to 26px, the rest at smaller widths. The vendor chrome
    * frames take the bare class, so they get the default the rule states.
    */
-  it('gives the vendor chrome the frame’s default header inset', () => {
+  /*
+   * Asserted on the **rendered** class, not on the constant.
+   *
+   * This used to grep `header-nav.tsx` for the literal
+   * `const VENDOR_INSET = 'lg:px-8'` — which stayed true while the composed
+   * class silently gained `min-[90rem]:px-10` from `BASE`, taking the vendor
+   * chrome to 40px at 1440. tailwind-merge keeps utilities under *different*
+   * modifiers, so a route override has to answer every step the base declares,
+   * and only resolving the real class can see whether it does.
+   */
+  it('gives the vendor chrome the frame’s default header inset at every step', () => {
     const padding = headerRule.match(/padding:0 (\d+)px/);
 
     expect(padding).not.toBeNull();
@@ -59,8 +78,39 @@ describe('the shared header matches the frame on the Layout axis', () => {
     const px = Number(padding?.[1]);
     expect(px).toBeGreaterThan(0);
 
+    pathname = '/vendor/dashboard';
+    render(
+      <HeaderNav>
+        <span>content</span>
+      </HeaderNav>,
+    );
+
+    const className = screen.getByRole('navigation', { name: 'Main' }).className;
+    const unit = px / 4;
+
+    /*
+     * Every desktop step must be this frame's number — `lg` and up, since
+     * frames `08`/`09`/`10`/`11` are drawn at 1440 and the narrower vendor
+     * frames (`14 … mobile`) draw their own smaller inset at the base step.
+     *
+     * Collecting *all* of them is the point: a stray step surviving from `BASE`
+     * is exactly the defect, and it is invisible to anything that checks only
+     * the widest variant or only the declared constant.
+     */
+    const desktopSteps = [...className.matchAll(/(?:^|\s)(\S+?:)px-([\d.]+)(?=\s|$)/g)]
+      .map((match) => ({ variant: match[1] as string, value: Number(match[2]) }))
+      .filter((step) => step.variant === 'lg:' || step.variant.startsWith('min-['));
+
+    expect(desktopSteps.length, `no desktop \`px-*\` step in "${className}"`).toBeGreaterThan(0);
+
+    for (const step of desktopSteps) {
+      expect(
+        step.value,
+        `\`${step.variant}px-${step.value}\` is not the frame's ${px}px inset`,
+      ).toBe(unit);
+    }
+
     const nav = readFileSync(join(process.cwd(), 'src/components/header-nav.tsx'), 'utf8');
-    expect(nav).toContain(`const VENDOR_INSET = 'lg:px-${px / 4}'`);
     // Frame `10 Messaging` draws the same chrome, down to the chip.
     expect(nav).toContain("'/vendor'");
     expect(nav).toContain("'/messages'");
