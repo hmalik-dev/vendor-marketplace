@@ -216,3 +216,38 @@ describe('shadcn slot bindings', () => {
     }
   });
 });
+
+/**
+ * #196 — `Sign in` on the sign-up panel drew Clerk's default `clay-400`.
+ *
+ * The contrast table in `01-foundations.md` names `clay-500` as *the* token for
+ * clay as text on any cream and puts `clay-400` in the Never column. On
+ * `stone-50` the banned pair measures 4.51:1 — it scrapes past 4.5 by 0.01,
+ * which is precisely why the rule is written as a token pair and not as a
+ * ratio: passing the number does not make it the right colour.
+ */
+describe('clay as text', () => {
+  const globals = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
+
+  function declarationsFor(selector: string): string {
+    const match = globals.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`));
+    expect(match).not.toBeNull();
+
+    return match?.[1] ?? '';
+  }
+
+  it('gives the auth footer link clay-500, never clay-400', () => {
+    const rule = declarationsFor('\\[data-auth-screen\\] \\.cl-footerActionLink');
+
+    expect(rule).toContain('var(--color-clay-500)');
+    expect(rule).not.toContain('clay-400');
+  });
+
+  it('clears 4.5:1 as clay-500 on stone-50, where clay-400 only scraped it', () => {
+    const good = contrast('clay-500', 'stone-50');
+    const banned = contrast('clay-400', 'stone-50');
+
+    expect(good).toBeGreaterThan(5.3);
+    expect(banned).toBeLessThan(4.6);
+  });
+});

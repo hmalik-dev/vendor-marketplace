@@ -304,6 +304,61 @@ body:has([data-auth-screen]) > footer {
 }
 
 /*
+ * #195, #196. Clerk's auth form, corrected against the frames and the laws.
+ *
+ * **Unlayered on purpose, and it has to stay that way.** Clerk injects its own
+ * styles into a later cascade layer, so the `@layer base :focus-visible` rule
+ * above cannot reach these nodes — the same reason `.cl-userButtonTrigger`
+ * below is written unlayered. Nodes Clerk does *not* style itself (its footer
+ * link, its logo link) already pick the product ring up correctly from that
+ * base rule; only the ones it styles need this.
+ *
+ * Clerk draws a single 4px clay at 50% alpha with no offset layer, where
+ * `04-laws.md` asks for 2px at 30% over a 2px stone-50 offset.
+ */
+[data-auth-screen] .cl-formFieldInput.cl-formFieldInput:focus-visible,
+[data-auth-screen] .cl-formButtonPrimary.cl-formButtonPrimary:focus-visible,
+[data-auth-screen]
+  .cl-formFieldInputShowPasswordButton.cl-formFieldInputShowPasswordButton:focus-visible {
+  /*
+   * The class is repeated on purpose. Clerk's own rule for the submit is
+   * `.cl-internal-…[data-variant="solid"][data-color="primary"]` — specificity
+   * (0,3,0), exactly tying `[data-auth-screen] .cl-formButtonPrimary:focus-visible`.
+   * On a tie the later declaration wins, and Clerk injects its styles at
+   * runtime, so it was always later. Repeating the class takes this to (0,4,0)
+   * and settles it on specificity instead of on load order, which is not
+   * something we control. Measured, not guessed: with the single class the
+   * input and the show-password button took the product ring and the submit
+   * kept Clerk's.
+   *
+   * Do not reset the shadow property here, however tempting. Tailwind's
+   * `ring-*` utilities are themselves drawn with it, so clearing it after
+   * applying them removes the product's ring along with Clerk's and the
+   * control ends up with no focus affordance at all. Being unlayered is
+   * already enough to win: an unlayered declaration beats any layered one
+   * regardless of specificity, which is why this sits outside `@layer base`.
+   */
+  @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
+}
+
+/*
+ * #196. `Sign in` is clay as text, and the contrast table in
+ * `01-foundations.md` is explicit about which clay that is: `clay-500` is the
+ * token, `clay-400` is in the Never column. Clerk's default lands on clay-400
+ * — 4.51:1 on stone-50, which scrapes past 4.5 by 0.01 and is still the banned
+ * pair. `clay-500` gives 5.41:1. Frame `12` draws this span at `#A34A28` and
+ * `font-weight:600`, and its sibling label a step darker than Clerk's default.
+ */
+[data-auth-screen] .cl-footerActionLink {
+  color: var(--color-clay-500);
+  font-weight: 600;
+}
+
+[data-auth-screen] .cl-footerActionText {
+  color: var(--color-stone-700);
+}
+
+/*
  * On a cream panel the input fill goes stone-0, per the input spec in
  * design/design-plan/03-components.md and the `.inp` override on frame
  * `12 Sign up`.

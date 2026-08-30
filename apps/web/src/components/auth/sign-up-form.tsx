@@ -99,7 +99,9 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
                 key={choice.role}
                 className={cn(
                   'cursor-pointer rounded-xl px-3.5 py-4 transition-colors duration-(--duration-fast)',
-                  'has-focus-visible:ring-2 has-focus-visible:ring-clay-400/30 has-focus-visible:ring-offset-2',
+                  // The offset colour is not optional: without it the ring's offset
+                  // band draws Tailwind's default white on the panel's stone-50.
+                  'has-focus-visible:ring-2 has-focus-visible:ring-clay-400/30 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
                   isSelected
                     ? choice.selectedCard
                     : 'border border-stone-300 bg-stone-0 hover:border-stone-400',
