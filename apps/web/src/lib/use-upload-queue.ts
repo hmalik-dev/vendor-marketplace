@@ -269,7 +269,17 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
 
       return previous.filter((task) => task.status !== 'queued');
     });
-    setHeldBackNotice(null);
+
+    /*
+     * The held-back notice deliberately survives.
+     *
+     * It names files that were never in this batch — `splitBatch` dropped them
+     * over the per-batch ceiling before anything started — and it is the only
+     * record the vendor has of which ones. Clearing it on cancel would take
+     * that list away as a side effect of stopping something unrelated.
+     * `dismissAllFailed` clears it because that *is* the vendor tidying the
+     * batch's aftermath; this is not.
+     */
   }, []);
 
   const retryAll = useCallback((): void => {

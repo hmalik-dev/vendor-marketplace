@@ -268,6 +268,37 @@ describe('useUploadQueue', () => {
       expect(started).not.toContain('b2.jpg');
     });
 
+    /*
+     * The held-back files were never in the batch — they were dropped over the
+     * per-batch ceiling before anything started — and the notice is the only
+     * record of which ones. Stopping the upload must not take that away.
+     */
+    it('keeps the held-back notice, which is about files it never started', async () => {
+      const tooMany = Array.from({ length: MAX_UPLOAD_BATCH_FILES + 3 }, (_unused, index) =>
+        jpeg(`shot-${index}.jpg`),
+      );
+      const held = deferred();
+      uploadOne.mockImplementation(async () => {
+        await held.promise;
+        return stored;
+      });
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles(tooMany));
+      await waitFor(() => expect(result.current.heldBackNotice).not.toBeNull());
+      const notice = result.current.heldBackNotice;
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        held.resolve(stored);
+      });
+
+      expect(result.current.heldBackNotice).toBe(notice);
+    });
+
     it('is harmless when nothing is in flight', () => {
       const { result } = renderHook(() =>
         useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),

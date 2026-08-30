@@ -210,7 +210,8 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
         {/* One aggregate line for the batch, in steel — never a second spinner. */}
         {progressLine ? (
           <div className="mt-3 flex items-center gap-2.5">
-            <p role="status" className="text-sm text-steel-600">
+            {/* `flex-1` so `Cancel` is pushed to the right edge, as frame `24` draws it. */}
+            <p role="status" className="flex-1 text-sm text-steel-600">
               {progressLine}
             </p>
             {/*
