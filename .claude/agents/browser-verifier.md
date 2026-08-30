@@ -20,6 +20,16 @@ Check what is already running before starting anything.
    caller names. Confirm each is serving before navigating.
 4. Sign in with the saved E2E accounts from `.env.e2e.local`. Never print their
    values.
+5. **After loading a `storageState`, warm the context before trusting it.**
+   Navigate once and discard that render, then navigate/reload again — only
+   that second render, and anything after it, is evidence of auth chrome.
+   The first navigation of a restored context routinely renders the
+   signed-out header even though the account is really signed in (#321: the
+   stored session token has aged past its TTL, and the dev instance can only
+   refresh it through a visible handshake round trip). See
+   `.claude/rules/e2e-auth.md` § "First-paint auth chrome cannot be asserted
+   from a restored context" for the full mechanism and
+   `scripts/e2e-handshake.mjs` for the hop-count check behind it.
 
 ## Walk every behavioral requirement the caller lists
 
@@ -27,10 +37,13 @@ Happy path, redirects, rejections, permission boundaries, error states, empty
 states. Snapshot at each checkpoint. Confirm the database changed where the
 requirement says it should.
 
-Four rules that have each cost a shipped defect:
+Five rules that have each cost a shipped defect:
 
 - **Verify in both auth states.** Signed-out and signed-in render different
   elements and a defect in one is invisible from the other.
+- **Never read auth chrome off a restored context's first navigation.** See
+  step 5 above — it reads signed-out by construction and is not evidence of
+  anything about the product (#321/#259).
 - **Read the browser console at every checkpoint, not just the page.** Blocked
   requests, CSP violations and failed images do not change the accessibility
   snapshot. Treat any console error as a finding until you have explained it.
