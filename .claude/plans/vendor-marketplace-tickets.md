@@ -520,8 +520,9 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **327** | **01 Landing — the hero query has no seed value, and the frame hard-codes one** | P1 | M3 | **P2 Medium** | **Deferred — needs a human** | — | **A product ruling on the hero's seed** | `core` | **Filed 2026-08-30 by lane 296**, carved out of **#296** (originally #88), which instructs in its own acceptance to return `BLOCKED` with this question rather than invent a seed. Frame `01 Landing` draws the City segment as the **literal** `Austin, TX` in `#23201C` (stone-900, the filled tone). Live renders an empty `input` with `placeholder="Anywhere"` in `#6B6459` (stone-600, the placeholder tone). **The measurement pass found the question is wider than City.** The frame *templates* the vendor type (`{{ searchValue }}`, hint "Photography") but *hard-codes* the city, and live renders `Any vendor type` in the placeholder tone too — so the hero's centrepiece reads as three empty fields where the frame reads as a seeded query. Whatever is decided for City decides the vendor-type tone with it; ruling on one alone leaves the two segments disagreeing. **The options, none of them free:** seed a real city (which city, and on what basis — geolocation is not MVP and a hard-coded `Austin, TX` is a claim about where the marketplace operates); seed nothing and accept the placeholder tone as the honest empty state, correcting frame `01` in a design pass; or seed nothing but draw the empty value in the filled tone, which reads as a value that is not there. **Do not guess.** |
 | **328** | **The hero and search date field is a native picker the frames do not draw** | P1 | M3 | **P2 Medium** | **Done** | — | **None** | `core` | **Closed by #167 on 2026-08-30, not worked separately.** The native `input[type=date]` is gone from every surface — the hero, the compact header bar, the profile booking rail and the booking-request form — along with the transparent-input-and-overlaid-prompt workaround that existed only to hide the browser's `mm/dd/yyyy`. The replacement is frame `28`'s date body, and on the two surfaces that have a vendor in scope it draws that vendor's own availability marks, so a day they are booked on is refused in the picker rather than accepted and then rejected on the next screen. |
 | **329** | **Remove the `style` tag group from every input, dropdown and filter** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30, user-directed — reverses #281 and #92.** The Style filter was built inside **#297** and then ruled out of the MVP the same day, so the product now disagrees with itself three ways: the **code** ships a `Style ▾` chip (`TAG_CATEGORIES` carries `'style'`), the **frames** no longer draw one (`c4c8fa2` removed it from four screens), and **`11-search.md`** still specifies it at lines 109 and 154. Supersedes **#25**. Removal is wider than the chip — the group is also a section in the vendor profile editor's Tags picker, a `tag_category` enum member, and seed data. **Note the enum:** Postgres cannot drop a value in place, so this needs the create-new-type / swap-column / drop-old migration, plus a data step for any `tags` and `vendor_tags` rows already on `style`. |
+| **330** | **`state` is unvalidated free text, so one city splits into two search results** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30, user-reported: `Austin, TX` and `Austin, Texas` appear as separate cities.** Confirmed in the dev database — `Austin/TX` has **11** published vendors and `Austin/Texas` has **1**, and `/vendors/cities` builds its picker by `GROUP BY city, state`, so the split is an option a customer can pick. Search then matches `lower(state) = lower(?)`, so picking either one **hides the other's vendors**. **The form is the source, and it points the wrong way:** `US_STATES` (`apps/web/src/lib/us-states.ts`) holds full names, so every vendor saving through the editor today writes `Texas` while the seeds hold `TX` — the split widens with each new vendor. `state` on `createVendorProfileSchema` is `z.string().trim().min(1).max(100)`, so the API accepts anything. Canonical form is the **two-letter USPS code**, validated in the shared schema, not in the web list. Needs a data repair for existing rows. |
 
-Rows are ordered by build sequence, not by ticket number. **323 rows — 164 Done, 131 Superseded, 19 Backlog, 7 Deferred, 2 Blocked.** Recounted 2026-08-30 by lane 297, programmatically from this table rather than by hand — the previous count was written on 2026-08-29 and four lanes have landed since. **28 tickets are open**: nothing in flight, 10 waiting on a human or an external account, and 18 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
+Rows are ordered by build sequence, not by ticket number. **324 rows — 164 Done, 131 Superseded, 20 Backlog, 7 Deferred, 2 Blocked.** Recounted 2026-08-30 by lane 297, programmatically from this table rather than by hand — the previous count was written on 2026-08-29 and four lanes have landed since. **28 tickets are open**: nothing in flight, 10 waiting on a human or an external account, and 18 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -13357,5 +13358,113 @@ work, which is its own ticket.
 - [ ] A migration test that seeds a `style` tag and a `vendor_tags` row on it, runs the
       migration, and asserts both are gone and the vendor's other tags survived
 - [ ] A seed idempotency test: seed, seed again, assert three tag groups
+
+---
+
+### #330: `state` is unvalidated free text, so one city splits into two search results
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30, user-reported.** `Austin, TX` and `Austin, Texas` appear as two separate
+cities in search. They are two rows, and a customer who picks one never sees the other's
+vendors.
+
+**Measured in the dev database, not inferred:**
+
+```
+    city    | state | count
+------------+-------+-------
+ Austin     | TX    |    11
+ Austin     | Texas |     1
+ Buda       | TX    |     2
+ Oakland    | CA    |     1
+ Round Rock | TX    |     2
+```
+
+**The split is in `state`, not `city`.** Both columns are plain `varchar(100)`
+(`vendor-profiles.ts:50-51`) and neither is constrained anywhere.
+
+**How it reaches the customer.** `findVendorCities` (`vendor-profile.dao.ts:174`) derives the
+picker with `GROUP BY city, state` over published profiles — deliberately, so the control can
+only offer places that have vendors. That design is right and should not change; it just
+faithfully reproduces whatever the profiles hold, so a dirty column becomes a dirty picker.
+`vendor-search.dao.ts:89` then filters `lower(state) = lower(?)`, so the two Austins are
+disjoint result sets.
+
+**The form is the source, and it points the wrong way from what the data suggests.** State is
+already the shared dropdown (#167, Done) rather than free text — but its option list,
+`apps/web/src/lib/us-states.ts`, holds **full names**: `'Alabama'`, `'Alaska'`, … `'Texas'`.
+Its own comment says "Display data only — the column is a plain `varchar`". So:
+
+- The **11** `TX` rows are seed data.
+- Every vendor who saves through the editor today writes **`Texas`**.
+- The split therefore **widens with each new vendor**, and the majority value is the one
+  nothing produces any more.
+
+**Nothing server-side stops it.** `createVendorProfileSchema` (`schemas/index.ts:408`) is
+`z.string().trim().min(1, 'Choose the state you serve').max(MAX_NAME_LENGTH)`, so
+`POST /vendor/profile` accepts `TX`, `Texas`, `texas` or `Republic of Texas` equally. A web
+list is not validation; the API is the boundary.
+
+**Canonical form: the two-letter USPS code**, per the user's ruling — `Austin, TX`. Chosen
+over the full name because it is what the majority of rows already hold, what the search
+result card and frames `02`/`17`/`27` draw, and a fixed-width token that cannot be
+half-typed.
+
+**Where the enum belongs.** `packages/shared/src/constants`, beside `TAG_CATEGORIES` — the
+same place the other closed vocabularies live, so the API schema and the web dropdown read
+one list. `us-states.ts` becomes `{ value: 'TX', label: 'Texas' }` pairs and stops being a
+second source of truth: the vendor still reads "Texas" in the dropdown, and `TX` is stored.
+
+**City is the harder half, and it is deliberately scoped down here.** A true "only real
+cities" guarantee needs a US city dataset — a product decision about which one, how it is
+kept current, and what happens to a vendor in a town it omits. **That is not this ticket.**
+This ticket makes city *consistent* (trim, collapse internal whitespace, reject a city that
+is only punctuation) and leaves it free text. If a validated city list is wanted, file it
+separately with the dataset chosen first — the same reasoning that kept **#25** out of the
+MVP. What makes the current bug fixable without a dataset is that the duplication is
+entirely in `state`.
+
+**The data repair is part of this ticket, not a follow-up.** Repointing `Texas` → `TX` and
+title-casing city has to land with the constraint, or the constraint is true only of rows
+written after it. Verify the repair against a clone of the dev database, which holds the
+five pairs above. Do not hand-edit `packages/db/drizzle/`; edit the schema and regenerate.
+
+**Watch for the `vendor_profiles_city_state_idx` index** (`vendor-profiles.ts:82`) — it is on
+the pair being rewritten, so confirm it is still used by the search plan after the repair.
+
+**Non-goals:** a validated city dataset (above); geocoding, `latitude`/`longitude` or
+`serviceRadiusKm`, none of which this touches; the customer's own `users.city`
+(`users.ts:34`), which is profile display and not a search axis; changing how
+`findVendorCities` derives the picker.
+
+**Acceptance:**
+
+- [ ] A `US_STATE_CODES` constant in `packages/shared/src/constants` is the single list, and
+      `createVendorProfileSchema.state` is an enum over it with a message naming the field
+- [ ] `POST /vendor/profile` and the update route reject `Texas`, `texas` and `Republic of
+      Texas` with a 400, and accept `TX`
+- [ ] The editor's State dropdown still shows full names and stores the code; `us-states.ts`
+      derives its labels from the shared list rather than restating them
+- [ ] City is trimmed and internal whitespace collapsed on write; a city of only punctuation
+      or whitespace is rejected
+- [ ] The migration leaves **one** `Austin` row in the dev-database clone, with **12**
+      vendors, and no profile loses its state
+- [ ] `GET /vendors/cities` returns one Austin entry, and a search for it returns all 12
+- [ ] `pnpm db:seed` and `db:seed:e2e` write codes, so a fresh database cannot reintroduce
+      the split
+
+**Tests (required):**
+
+- [ ] A schema test rejecting the full name and the lowercase code, and accepting the code —
+      asserting the message, not just the failure
+- [ ] A route test that `POST /vendor/profile` with `state: 'Texas'` is a 400 and writes no row
+- [ ] A migration test seeding an `Austin/Texas` and an `Austin/TX` profile, running the
+      repair, and asserting one pair and both vendors survive
+- [ ] A `findVendorCities` test over both spellings asserting a single row with the summed
+      count — the defect stated as a test
+- [ ] A test that every `US_STATE_CODES` entry is two uppercase letters and the list has 51
+      members, so DC cannot be dropped silently
 
 ---

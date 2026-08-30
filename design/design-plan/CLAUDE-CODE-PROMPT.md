@@ -58,7 +58,7 @@ the free-text query field on the main path with a category select.
 - The header query is **three inputs: Vendor type ▾ | City | Event date**, then a Search button. Vendor type is a **select/combobox over the eleven categories that cannot hold an unrecognised value** — typing filters the list; a non-matching string shows "No matching type" plus the three closest categories; it resolves to a category id or stays empty. Never a free-text query field.
 - **Delete the 280px filter rail entirely.** It held a permanent column for controls touched once a session and capped results at 3 across.
 - **Do not add a category chip strip.** Category belongs to the header select and nowhere else — three controls for one value was the defect being fixed.
-- **Add a horizontal "Refine" bar** below the header, prefixed by a `REFINE` micro-label: dropdown-trigger chips for `$500 – $3,200 ▾`, rating, `Style ▾` (category-specific tags, option set changes with the selected type), `Languages ▾`, `Cultural ▾`, `Dietary ▾`, a `Clear` ghost link, and Sort at the far right.
+- **Add a horizontal "Refine" bar** below the header, prefixed by a `REFINE` micro-label: dropdown-trigger chips for `$500 – $3,200 ▾`, rating, `Languages ▾`, `Cultural ▾`, `Dietary ▾`, a `Clear` ghost link, and Sort at the far right. (This line originally listed a `Style ▾` chip; **Change 7 removes it** — do not build it.)
 - **The date must not appear in the Refine bar.** It is a search input; a filter chip for it would be a second control for the same value.
 - An active filter is shown by its own chip's filled state and label value — **do not render a separate active-filter pill row**.
 - Facet counts move inside each popover, beside the options they belong to.
@@ -150,16 +150,61 @@ Copy only. No layout, no styling changes.
 The premise is published pricing **and** published availability — both halves.
 Never use the word "transparent"; demonstrate it instead.
 
+## Change 7 — There is no Style filter (screens 11, 17)
+
+Specs: `design-plan/11-search.md`, `design-plan/17-vendor-profile-editor.md`
+
+An earlier version gave the Refine bar a `Style ▾` chip over category-specific
+tags. **Style is out of the MVP.** It was built and then ruled out, so unlike the
+other changes here this one removes shipped code, not just drawings.
+
+- The Refine bar has **four** tag chips, not five: Price, Rating, Languages,
+  Cultural, Dietary — no `Style ▾` in any state, at any width.
+- The profile editor's Tags section has **three** peer multi-selects — languages,
+  cultural, dietary. Not four.
+- Remove `style` from the tag vocabulary itself, not just from the controls: the
+  shared constant, the `tag_category` enum, and any seeded rows. A group that
+  still exists in the data is a group that comes back.
+- Screen 28's multi-select example demonstrates **Languages**. An example body has
+  to demonstrate a filter that exists.
+
+## Change 8 — One place is one option (screens 10, 11, 17)
+
+Specs: `design-plan/11-search.md`, `design-plan/17-vendor-profile-editor.md`
+
+`Austin, TX` and `Austin, Texas` are currently two markets. The City picker is
+derived by grouping published vendor profiles, so a second spelling becomes a
+second option a customer can pick — and picking either one hides the other's
+vendors.
+
+- **A market is `city` + the two-letter state code, written `Austin, TX`** — city,
+  comma, code — everywhere it is displayed: card, profile, search count sentence,
+  picker.
+- The editor's State field is a closed list that **stores the code and displays
+  the name**: the vendor reads "Texas", the column holds `TX`. The closed list
+  belongs to the API schema, not to a web-only display array — a dropdown is not
+  validation.
+- **City stays free text**, trimmed, with internal whitespace collapsed and a
+  punctuation-only value rejected. Do not introduce a city dataset: a vendor whose
+  town it omits has nowhere to go. The duplication being fixed here is entirely in
+  the state field.
+- Existing rows are repaired in the same change as the constraint, or the
+  constraint is true only of rows written after it.
+
 ## Out of scope — do not change
 
 Screens 13 (booking request), 14
-(checkout), 15 (confirmation), 16 (vendor dashboard), 17 (profile editor), 18
+(checkout), 15 (confirmation), 16 (vendor dashboard), 18
 (messaging), 19 (availability), 22 (admin). Design tokens, the logo component,
 the brand-name constant, the component library, and all responsive behaviour not
 named above.
 
 Screen 12 (vendor profile) is in scope **only** for the reply-time removals in
 Change 4 — do not touch its layout, tabs, or booking rail otherwise.
+
+Screen 17 (profile editor) is in scope **only** for the Tags section in Change 7
+and the Location row in Change 8 — do not touch its other fields, its rail, or
+its save behaviour.
 
 Also unchanged and still correct: **no platform statistics on public pages** (no
 vendor counts, no "events booked", no average rating). If you find yourself adding
@@ -183,4 +228,10 @@ a number to a public page, stop — see `98-post-mvp.md`.
 - [ ] Header shows both sign-up paths; `/sign-up?role=vendor` pre-selects the vendor card
 - [ ] Search, category and profile pages still render fully for a signed-out visitor
 - [ ] Requesting a booking while signed out routes to sign-up and returns to the request afterwards
-- [ ] `git diff --stat` touches only the bookings page, the two search surfaces, the marketing header, the sign-up screen, the vendor profile's meta/stat block, and their tests
+- [ ] `grep -rn "'style'\|\"style\"" packages/shared/src/constants packages/db/src/schema` returns nothing for the tag vocabulary
+- [ ] The Refine bar renders exactly four tag chips, asserted by name — a count alone passes if the wrong group went missing
+- [ ] The profile editor's Tags section renders three multi-selects
+- [ ] `POST /vendor/profile` with `state: 'Texas'` is a 400; with `state: 'TX'` it succeeds
+- [ ] `GET /vendors/cities` returns one Austin row, and a search for it returns every Austin vendor
+- [ ] `grep -rn "US_STATES" apps/web/src` shows labels derived from the shared list, not a second copy of it
+- [ ] `git diff --stat` touches only the bookings page, the two search surfaces, the marketing header, the sign-up screen, the vendor profile's meta/stat block, the profile editor's Tags and Location rows, the tag vocabulary, the state list, their migrations, and their tests

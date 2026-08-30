@@ -14,11 +14,11 @@ where, and when**. Those three values are the entire query, and each is
 constrained, so a search can only ever resolve to something the platform
 recognises.
 
-| Input           | Control                                      | Normalisation                                                                                                                                                                                                              |
-| --------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Vendor type** | Select / combobox over the eleven categories | **Cannot hold an unrecognised value.** Typing filters the list; a non-matching string shows "No matching type" plus the three closest categories. It resolves to a category id or the field stays empty — never free text. |
-| **City**        | Typeahead over live markets                  | Resolves to a market id. Unmatched input returns the nearest market plus a "we're not in [city] yet" state.                                                                                                                |
-| **Event date**  | Single date picker                           | Optional. When set, every card carries an availability chip.                                                                                                                                                               |
+| Input           | Control                                      | Normalisation                                                                                                                                                                                                                                     |
+| --------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vendor type** | Select / combobox over the eleven categories | **Cannot hold an unrecognised value.** Typing filters the list; a non-matching string shows "No matching type" plus the three closest categories. It resolves to a category id or the field stays empty — never free text.                        |
+| **City**        | Typeahead over live markets                  | Resolves to a market id. Unmatched input returns the nearest market plus a "we're not in [city] yet" state. A market is the pair `city` + two-letter state code, written `Austin, TX`; one place is one option, never two spellings of one place. |
+| **Event date**  | Single date picker                           | Optional. When set, every card carries an availability chip.                                                                                                                                                                                      |
 
 ### Why the type field is a select, not a search box
 
@@ -92,11 +92,11 @@ frame `02` is current and remains the acceptance criterion.
 An earlier draft had category selectable in the header bar, a chip strip, _and_ a
 rail checkbox group at once — three controls that could disagree. Now:
 
-| Control               | Owns                                               |
-| --------------------- | -------------------------------------------------- |
-| **Header search bar** | The query: vendor type, city, date.                |
-| **Refine bar**        | Refinement only: price, rating, style, tag groups. |
-| **"Search by name"**  | The referral case.                                 |
+| Control               | Owns                                        |
+| --------------------- | ------------------------------------------- |
+| **Header search bar** | The query: vendor type, city, date.         |
+| **Refine bar**        | Refinement only: price, rating, tag groups. |
+| **"Search by name"**  | The referral case.                          |
 
 **Date never appears as a filter chip.** It's a search input; echoing it in Refine
 would be a second control for a value the bar already owns.
@@ -106,7 +106,7 @@ would be a second control for a value the bar already owns.
 ```
 header 64px — logo | [ Vendor type ▾ | City | Date | Search ] | by name | account
 ┌───────────────────────────────────────────────────────────────────────┐
-│ REFINE  [$500–$3,200 ▾] [4★ & up ✕] [Style ▾] [Languages ▾]           │ sticky
+│ REFINE  [$500–$3,200 ▾] [4★ & up ✕] [Languages ▾]                     │ sticky
 │         [Cultural ▾] [Dietary ▾]  Clear                    Sort ▾     │
 ├───────────────────────────────────────────────────────────────────────┤
 │ 24 photographers in Austin · free on Sun, Jun 14                      │
@@ -147,13 +147,12 @@ Grid: **3 columns at 1024–1439** (310px cards, 3:2 cover 207px tall — frame
 One row, wrapping to two if needed, prefixed by a `REFINE` micro-label so it
 reads as secondary to the query above it. Each chip is a dropdown trigger:
 
-| Chip                                   | Behaviour                                                                                        |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `$500 – $3,200 ▾`                      | Dual-handle range popover; the label carries the live range                                      |
-| `4★ & up ✕`                            | Active state — `clay-100` fill, `clay-600` text, `✕` clears                                      |
-| `Style ▾`                              | Category-specific tags (documentary, editorial…) — the option set changes with the selected type |
-| `Languages ▾` `Cultural ▾` `Dietary ▾` | Multi-select popovers, options in seed `displayOrder`                                            |
-| `Clear`                                | Ghost link, only when a filter is set                                                            |
+| Chip                                   | Behaviour                                                   |
+| -------------------------------------- | ----------------------------------------------------------- |
+| `$500 – $3,200 ▾`                      | Dual-handle range popover; the label carries the live range |
+| `4★ & up ✕`                            | Active state — `clay-100` fill, `clay-600` text, `✕` clears |
+| `Languages ▾` `Cultural ▾` `Dietary ▾` | Multi-select popovers, options in seed `displayOrder`       |
+| `Clear`                                | Ghost link, only when a filter is set                       |
 
 Sort sits at the far right of the same row. **An active filter is shown by its own
 chip** (filled state + value in the label), so there's no separate active-pill row —

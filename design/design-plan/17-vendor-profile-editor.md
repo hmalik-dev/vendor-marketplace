@@ -66,6 +66,18 @@ steps, value in the label) beside **Typical response time**.
 Radius is stored as `service_radius_km` and converted at the display boundary.
 Miles at every boundary — slider, label, profile, search.
 
+**State is a closed list, and it stores the two-letter code.** The dropdown reads
+"Texas" because that is what a vendor recognises; the column holds `TX`. One
+canonical spelling per place is not tidiness — the City picker on search is
+derived by grouping published profiles, so a second spelling becomes a second
+option a customer can pick, and picking either one hides the other's vendors.
+Free text in this field is the defect, whatever it looks like on screen.
+
+**City is trimmed but not enumerated.** Written form is `Austin, TX` — city,
+comma, code — everywhere it is displayed. The field itself stays open: a closed
+city list needs a dataset, and a vendor whose town it omits has nowhere to go.
+Trim, collapse internal whitespace, and reject a value that is only punctuation.
+
 **6.** Tags — languages, cultural, dietary as three peer multi-selects on one row.
 Options in seed `displayOrder`, never alphabetical. Each keeps its "Don't see
 yours?" suggestion flow, deduped on submit.
