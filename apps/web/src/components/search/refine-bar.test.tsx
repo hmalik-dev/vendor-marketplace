@@ -229,3 +229,96 @@ describe('RefineBar layout', () => {
     expect(bar.className).toContain('lg:flex-row');
   });
 });
+
+/*
+ * #69. Every option in every filter has to be reachable, and a panel that has
+ * been answered has to get out of the way.
+ *
+ * The measured failures were a 719px Languages panel in a 768px viewport with
+ * no internal scroll — its last two options clicked but never fired — and a
+ * Rating panel that applied the choice and then sat over the results heading
+ * and the first result card.
+ */
+describe('filter popovers are reachable and know when they are finished', () => {
+  const TAGS = [
+    { id: 'a1111111-1111-4111-8111-111111111111', name: 'English', category: 'language' },
+    { id: 'a2222222-2222-4222-8222-222222222222', name: 'Spanish', category: 'language' },
+  ] as const;
+
+  function renderWithTags(overrides: Partial<SearchState> = {}, setState = vi.fn()) {
+    render(
+      <RefineBar
+        state={state(overrides)}
+        setState={setState}
+        clearRefinements={vi.fn()}
+        tags={TAGS as unknown as React.ComponentProps<typeof RefineBar>['tags']}
+        facets={[]}
+      />,
+    );
+
+    return setState;
+  }
+
+  /*
+   * The cap is on the primitive, so it holds for popovers nobody measured.
+   * jsdom runs no layout and Radix computes the variable from real measurement,
+   * so what is asserted is the rule: a height bounded by the available space,
+   * and a scroll container to absorb the overflow.
+   */
+  it('caps every panel against the space it opens into, and scrolls inside', async () => {
+    const user = userEvent.setup();
+    renderWithTags();
+
+    await user.click(screen.getByRole('button', { name: /^Language/ }));
+
+    const panel = document.querySelector('[data-slot="popover-content"]');
+    expect(panel, 'no popover panel').not.toBeNull();
+
+    const className = (panel as HTMLElement).className;
+    expect(className).toContain('max-h-(--radix-popover-content-available-height)');
+    expect(className).toContain('overflow-y-auto');
+  });
+
+  /* Single-select: the choice answers the panel, so the panel closes. */
+  it('closes the rating panel once a rating is chosen', async () => {
+    const user = userEvent.setup();
+    const setState = renderWithTags();
+
+    const trigger = screen.getByRole('button', { name: 'Rating' });
+    await user.click(trigger);
+
+    const option = screen.getByRole('button', { name: '4.5★ & up' });
+    await user.click(option);
+
+    expect(setState).toHaveBeenCalledWith({ minRating: 4.5 });
+    expect(screen.queryByRole('button', { name: '4.5★ & up' })).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  /*
+   * Multi-select: staying open is the point, so it has to be the stated
+   * behaviour rather than the same defect the rating panel just lost.
+   */
+  it('keeps a multi-select panel open across a choice, and says why', async () => {
+    const user = userEvent.setup();
+    const setState = renderWithTags();
+
+    await user.click(screen.getByRole('button', { name: /^Language/ }));
+    expect(screen.getByText(/this stays open/)).toBeDefined();
+
+    await user.click(screen.getByRole('checkbox', { name: 'English' }));
+
+    expect(setState).toHaveBeenCalledWith({ tags: [TAGS[0].id] });
+    expect(screen.getByRole('checkbox', { name: 'Spanish' })).toBeDefined();
+  });
+
+  it('says the price panel stays open too, since a range has two ends', async () => {
+    const user = userEvent.setup();
+    renderWithTags();
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+
+    expect(screen.getByText('Set either end — this stays open.')).toBeDefined();
+    expect(screen.getByLabelText(/Minimum/i)).toBeDefined();
+  });
+});

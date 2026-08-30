@@ -14,21 +14,21 @@ they must not break, and they never dictate the desktop layout.
 
 ## Degradation table
 
-| Screen                | 1440 (design target)                                 | 1280                                | 1024                                                                                                                                     | 768                                                                       | 390                                                                                                        |
-| --------------------- | ---------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Header                | Full nav, never hides                                | Same                                | Full nav, labels intact; the query bar sits in the header and must still fit its three inputs in full                                    | Hamburger → drawer                                                        | Hamburger, 56px tall                                                                                       |
-| Landing               | Hero 56/44 split                                     | Same                                | **Drawn.** Hero split kept; all **three** photo cards stay _beside_ the headline at 0.73 scale; category row visible at 640              | Stacked, cluster → 2 photos                                               | Stacked, search becomes a stacked card                                                                     |
-| Search                | 3-input query bar + horizontal Refine bar, 4 col     | 3 col                               | **Drawn. 3 col** — 310px cards, 3:2 cover 207px. Refine stays **one row**; Sort is the only right-aligned item                           | Query bar keeps 3 inputs; Refine wraps to 2 rows, 2 col                   | Query bar stacks to a 3-row card; sticky bottom "Filters · 3" + "Sort", 1 col                              |
-| Vendor profile        | Identity card + 380px sticky rail, tabs              | Card + 320px rail                   | **Drawn.** Card + **320px** sticky rail — never stacks; cover 280px                                                                      | Card + rail → sticky bottom bar                                           | Card stacks (identity above cover); **rail becomes a sticky bottom bar** with from-price + Request booking |
-| Booking request       | Form + 400px rail                                    | Same                                | Rail narrows to **340px**, never stacks                                                                                                  | Rail → summary card above the form                                        | Summary accordion, sticky Continue                                                                         |
-| Checkout              | Form + 420px rail                                    | Same                                | **Drawn.** Rail 420 → **340px**; **Due today stays above the fold** — the hard constraint on this screen                                 | Same, narrower                                                            | Summary accordion above, total always visible                                                              |
-| Vendor dashboard      | Sidebar + content + 340px rail                       | Rail wraps under content            | **Drawn.** Sidebar stays **220px with labels**; right column 300px, **never wraps**; calendar shows the booking week, not the month grid | Icon rail 72px                                                            | Bottom tab bar; **rail content leads** — requests first, then stats, then checklist                        |
-| Customer bookings hub | Sidebar + content + rail                             | Rail wraps under                    | Sidebar **220px with labels**; rail narrows to 340px rather than wrapping                                                                | Icon rail; tabs stay, month groups stack                                  | Bottom tabs; month groups stack, tabs become a scrollable row                                              |
-| Editor                | 200px nav + fields + 308px preview rail + submit bar | Nav → dots rail, preview rail 280px | Section nav **keeps its labels** — no dots rail, no icon rail; preview rail **280px**                                                    | Nav on top, preview → panel above the fields, 2-col fields                | 1 col, preview panel above the fields, submit bar sticky                                                   |
-| Messaging             | 3 panes                                              | 2 panes + context toggle            | 2 panes + context toggle, per `18-messaging.md`                                                                                          | **2 panes 40/60**, context as a collapsible strip under the thread header | List → thread with back arrow; context behind a "Booking ▾" chip                                           |
-| Availability          | 3 months + rail                                      | 2 months                            | 2 months, per `19-availability.md`                                                                                                       | 1 month + rail below                                                      | 1 month, swipe, tap to toggle                                                                              |
-| Sign up               | Split screen                                         | Split                               | Split                                                                                                                                    | Auth column centred, photo drops                                          | Single column                                                                                              |
-| Admin                 | Fixed header, 15 rows                                | ~13 rows                            | ~13 rows                                                                                                                                 | Horizontal scroll                                                         | Card list, not a table                                                                                     |
+| Screen                | 1440 (design target)                                 | 1280                                | 1024                                                                                                                                     | 768                                                                                                                     | 390                                                                                                        |
+| --------------------- | ---------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Header                | Full nav, never hides                                | Same                                | Full nav, labels intact; the query bar sits in the header and must still fit its three inputs in full                                    | **Nav stays in the bar, no hamburger on landing** — see the table below                                                 | Hamburger, 56px tall                                                                                       |
+| Landing               | Hero 56/44 split                                     | Same                                | **Drawn.** Hero split kept; all **three** photo cards stay _beside_ the headline at 0.73 scale; category row visible at 640              | **Drawn. Two columns, not stacked** — cluster _beside_ the copy at 0.62 with 2 photos, search bar full width below both | Stacked, search becomes a stacked card                                                                     |
+| Search                | 3-input query bar + horizontal Refine bar, 4 col     | 3 col                               | **Drawn. 3 col** — 310px cards, 3:2 cover 207px. Refine stays **one row**; Sort is the only right-aligned item                           | Query bar keeps 3 inputs; Refine wraps to 2 rows, 2 col                                                                 | Query bar stacks to a 3-row card; sticky bottom "Filters · 3" + "Sort", 1 col                              |
+| Vendor profile        | Identity card + 380px sticky rail, tabs              | Card + 320px rail                   | **Drawn.** Card + **320px** sticky rail — never stacks; cover 280px                                                                      | Card + rail → sticky bottom bar                                                                                         | Card stacks (identity above cover); **rail becomes a sticky bottom bar** with from-price + Request booking |
+| Booking request       | Form + 400px rail                                    | Same                                | Rail narrows to **340px**, never stacks                                                                                                  | Rail → summary card above the form                                                                                      | Summary accordion, sticky Continue                                                                         |
+| Checkout              | Form + 420px rail                                    | Same                                | **Drawn.** Rail 420 → **340px**; **Due today stays above the fold** — the hard constraint on this screen                                 | Same, narrower                                                                                                          | Summary accordion above, total always visible                                                              |
+| Vendor dashboard      | Sidebar + content + 340px rail                       | Rail wraps under content            | **Drawn.** Sidebar stays **220px with labels**; right column 300px, **never wraps**; calendar shows the booking week, not the month grid | Icon rail 72px                                                                                                          | Bottom tab bar; **rail content leads** — requests first, then stats, then checklist                        |
+| Customer bookings hub | Sidebar + content + rail                             | Rail wraps under                    | Sidebar **220px with labels**; rail narrows to 340px rather than wrapping                                                                | Icon rail; tabs stay, month groups stack                                                                                | Bottom tabs; month groups stack, tabs become a scrollable row                                              |
+| Editor                | 200px nav + fields + 308px preview rail + submit bar | Nav → dots rail, preview rail 280px | Section nav **keeps its labels** — no dots rail, no icon rail; preview rail **280px**                                                    | Nav on top, preview → panel above the fields, 2-col fields                                                              | 1 col, preview panel above the fields, submit bar sticky                                                   |
+| Messaging             | 3 panes                                              | 2 panes + context toggle            | 2 panes + context toggle, per `18-messaging.md`                                                                                          | **2 panes 40/60**, context as a collapsible strip under the thread header                                               | List → thread with back arrow; context behind a "Booking ▾" chip                                           |
+| Availability          | 3 months + rail                                      | 2 months                            | 2 months, per `19-availability.md`                                                                                                       | 1 month + rail below                                                                                                    | 1 month, swipe, tap to toggle                                                                              |
+| Sign up               | Split screen                                         | Split                               | Split                                                                                                                                    | Auth column centred, photo drops                                                                                        | Single column                                                                                              |
+| Admin                 | Fixed header, 15 rows                                | ~13 rows                            | ~13 rows                                                                                                                                 | Horizontal scroll                                                                                                       | Card list, not a table                                                                                     |
 
 ## Marketing header
 
@@ -37,11 +37,38 @@ up** pill stays a pill at 390, beside the hamburger, because sign-up is too
 important to bury in a drawer. The vendor path travels with "For vendors" in the
 nav, so it degrades into the drawer with the rest of the nav.
 
-| Control                             | 1440 · 1280 · 1024 | 768 · 390                     |
-| ----------------------------------- | ------------------ | ----------------------------- |
-| Browse / How it works / For vendors | In the bar         | Drawer                        |
-| **Sign in**                         | In the bar         | Drawer                        |
-| **Sign up** (ink)                   | In the bar         | **Stays in the bar**, compact |
+**Corrected 2026-08-30 (#304).** Two rows of the degradation table above were
+corrected in the same pass and for the same reason: `14 Landing tablet` had not
+been read against them. Header/768 said "Hamburger → drawer" and Landing/768
+said "Stacked, cluster → 2 photos"; the frame draws the nav in the bar with no
+hamburger, and a two-column hero with the cluster beside the copy. A ticket
+reading the stale rows would have re-stacked 768 and put the hamburger back.
+
+This table used to put 768 and 390 in one column, sending the whole nav and `Sign in` to the drawer at both. Frame
+`14 Landing tablet` draws neither: at 768 the signed-out landing bar carries
+**two** nav links, `Sign in` and `Sign up`, and **no hamburger at all**. 768 is a
+width with room for navigation; 390 is not.
+
+| Control           | 1440 · 1280 | 1024       | 768                    | 390                           |
+| ----------------- | ----------- | ---------- | ---------------------- | ----------------------------- |
+| Browse            | In the bar  | In the bar | In the bar             | Drawer                        |
+| How it works      | In the bar  | In the bar | **Drawer** — see below | Drawer                        |
+| For vendors       | In the bar  | In the bar | In the bar             | Drawer                        |
+| **Sign in**       | In the bar  | In the bar | **In the bar**         | Drawer                        |
+| **Sign up** (ink) | In the bar  | In the bar | In the bar             | **Stays in the bar**, compact |
+
+`How it works` is the one link 768 sheds, and it is the right one: it is an
+in-page anchor, so what a visitor loses is a scroll shortcut rather than a
+destination. The drawer below 768 still carries all three.
+
+**The hamburger is per screen, not per width.** `14 Search tablet` _does_ draw one
+at 768 — that frame is signed in and fills the nav space with the search bar, so
+it has nowhere to put links. `14 Landing tablet` has the room and draws none.
+A single global breakpoint contradicts one of the two frames whichever way it is
+set, which is exactly the bug #304 found: the nav hid its links at `max-[768px]`
+while the trigger appeared at `min-[769px]`, so 768 — the one width both frames
+are drawn at — rendered every link _and_ a hamburger whose drawer duplicated
+them.
 
 ## Vendor cards below the fold at 768
 
@@ -269,14 +296,31 @@ Closed after the audit: the **768 landing frame now exists** (`14 Landing tablet
 
 ### Rotated art needs clearance on both axes
 
-Hero cards are rotated 2–4°, which grows their **bounding box** well past their
-width and height — a 158px-wide card at 3° gains roughly 30px of horizontal box
-and a 196px-tall one gains a similar amount vertically. Authoring a rotated card
-flush to its container therefore clips it, or lets it spill under the next
-sibling.
+Hero cards are rotated 2–4°, which grows their **bounding box** past their width
+and height. Authoring a rotated card flush to its container therefore clips it,
+or lets it spill under the next sibling.
 
-Rule: **leave ≥16px between a rotated card's authored edges and its container's
-edges on every side**, and size the cluster box to the tallest card's
-`top + height + rotation slack`, not to `top + height`. At 768 the cluster box is
-250px for a 196px card at `top:38px`, and the cards stop 18px short of the 288px
-column.
+**Corrected 2026-08-30 (#304).** This section used to claim a 158px-wide card at
+3° "gains roughly 30px of horizontal box". That figure is wrong by 3x. The
+bounding box of a `w × h` rectangle at angle `θ` is
+`w·cos θ + h·sin θ` wide, so the real growth for 158×196 at 3° is
+`158·cos3° + 196·sin3° − 158` = **+10.0px** horizontally and
+`196·cos3° + 158·sin3° − 196` = **+8.0px** vertically. 30px would need roughly
+9°, which no frame draws. Measured against the running page at 768, the two
+cards grow +12.3/+9.7 and +10.0/+8.0 — matching the arithmetic, not the claim.
+
+The number mattered: #304's acceptance inherited it and asked for ~30px of
+clearance that the frames never had. Read the slack off the frame instead.
+
+Rule: **size the cluster box to the tallest card's
+`top + height + rotation slack`, not to `top + height`**, and take the slack from
+the frame rather than from a rule of thumb. At 768 the cluster box is 250px for a
+196px card at `top:38px` — 16px of authored slack — and the cards stop 18px short
+of the 288px column.
+
+Those two numbers _are_ the spec. They leave the rotated edges 12–13px clear on
+the inside axes and let card 1 overhang the box by ~2px on the left and card 2 by
+~5px on the right, which is intended: the box is `overflow:visible` and the
+overhang lands in the 20px column gap, so nothing clips and nothing overlaps.
+A blanket "≥16px on every side" would have forced the cluster wider than the
+column the frame draws.

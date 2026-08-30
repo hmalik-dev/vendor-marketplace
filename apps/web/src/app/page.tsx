@@ -28,11 +28,20 @@ const LAUNCH_CITY = 'Austin';
 const LAUNCH_REGION = 'TX';
 
 /**
- * The frame is drawn at 1440 with a 40px gutter and no inner max-width — the
- * category row spans the whole page. The cap keeps the six cards from
- * stretching on an ultrawide display without inventing a margin at 1440.
+ * The page gutter, at each width a frame draws one: 20px at `14 Landing
+ * tablet`, 28px at `27 Landing — 1024`, 40px at `01 Landing`. It used to read
+ * `sm:px-8 lg:px-10`, which gave 768 a 32px gutter no frame asks for and 1024
+ * the full desktop 40 — the single biggest reason 1024 read as compressed
+ * desktop rather than its own composition.
+ *
+ * The 1440 step is `min-[90rem]`, not `xl`, because 1440 is the width the
+ * frame is drawn at; `/search` already sets its own gutter the same way.
+ *
+ * There is no inner max-width — the category row spans the whole page. The cap
+ * keeps the six cards from stretching on an ultrawide display without
+ * inventing a margin at 1440.
  */
-const CONTAINER = 'mx-auto w-full max-w-[1440px] px-5 sm:px-8 lg:px-10';
+const CONTAINER = 'mx-auto w-full max-w-[1440px] px-5 lg:px-7 min-[90rem]:px-10';
 
 /** The blurb each landing card carries, by slug. Copy, so it lives in shared. */
 const SHORT_DESCRIPTIONS = new Map(
@@ -185,11 +194,35 @@ export default async function HomePage(): Promise<React.ReactElement> {
         {/* One blob per page. It is the only atmospheric shape in the product. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-27.5 -right-32.5 size-110 rounded-full bg-clay-400/6"
+          /*
+            330 at 1024 and 260 at 768, with the frames' own offsets. It used to
+            carry only the 1440 size, so a 440px circle sat in a 768px viewport
+            — more than half the width of the screen, where the frame draws a
+            quarter of it.
+          */
+          className="pointer-events-none absolute -top-17.5 -right-20 size-65 rounded-full bg-clay-400/6 lg:-top-22.5 lg:-right-25 lg:size-82.5 min-[90rem]:-top-27.5 min-[90rem]:-right-32.5 min-[90rem]:size-110"
         />
 
         <div className={`${CONTAINER} relative`}>
-          <div className="grid pt-10 lg:grid-cols-[56%_44%]">
+          {/*
+            Two drawn tablet/desktop compositions, one DOM.
+
+            `14 Landing tablet` puts the search bar **below both columns** at
+            full width; `27 Landing — 1024` keeps it inside the left column.
+            Rendering `HeroSearch` twice behind breakpoint classes would give
+            the page two instances of a client component with its own state —
+            two different half-filled searches, depending which width the
+            visitor last resized through. So the bar stays one node and the
+            *grid* moves it: row 2 spanning both columns at `md`, row 2 of
+            column 1 at `lg`, which reads identically to sitting inside the
+            copy column because the cluster spans both rows beside it.
+          */}
+          {/*
+            26px at both narrow frames, 40 only at 1440. This single value was
+            14px of the 41px of accumulated drift at 1024 — every block below
+            the headline inherited it.
+          */}
+          <div className="grid pt-6.5 md:grid-cols-[1fr_288px] md:gap-x-5 lg:grid-cols-[56%_44%] lg:gap-x-0 min-[90rem]:pt-10">
             {/*
               34px from the copy to the cluster is the frame's gutter at the
               1440 design target, but at 1024 it was the last 18px the search
@@ -198,15 +231,18 @@ export default async function HomePage(): Promise<React.ReactElement> {
               fit at 1024 the widths change, not the content — so the gutter
               narrows there and the frame's value returns at `xl`.
             */}
-            <div className="lg:pr-4 xl:pr-8.5">
+            <div className="md:col-start-1 md:row-start-1 lg:pr-5.5 min-[90rem]:pr-8.5">
               {/*
                 `text-meta`, not `text-xs`: frame `01 Landing` draws the badge
                 at 12px and `--text-xs` is 11px (#85). The step already existed
                 — #198 added `--text-meta: 12px` — the badge had simply never
                 been moved onto it.
               */}
-              <p className="mb-4.5 inline-flex items-center gap-1.75 rounded-full bg-clay-400/10 px-3 py-1.5 text-meta font-semibold text-clay-600">
-                <span aria-hidden="true" className="size-1.25 rounded-full bg-clay-400" />
+              <p className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-clay-400/10 px-2.5 py-1.25 text-[11px] font-semibold text-clay-600 lg:mb-3.25 lg:px-2.75 lg:text-[11.5px] min-[90rem]:mb-4.5 min-[90rem]:gap-1.75 min-[90rem]:px-3 min-[90rem]:py-1.5 min-[90rem]:text-meta">
+                <span
+                  aria-hidden="true"
+                  className="size-1 rounded-full bg-clay-400 min-[90rem]:size-1.25"
+                />
                 Now booking in {LAUNCH_CITY}
               </p>
 
@@ -220,17 +256,30 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 squeezed 1440: `25 Landing — 1024` sets the headline at 40px so
                 the category row — the fold marker — still clears 640px.
               */}
-              <h1 className="font-display text-display-lg leading-[1.04] tracking-[-.02em] text-stone-900 sm:text-display-hero-md min-[90rem]:text-display-xl">
+              {/*
+                Four drawn sizes, one per drawn width: 34 below the frames, 36
+                at `14 Landing tablet`, 40 at `27 Landing — 1024`, 54 at `01`.
+                The 40 used to start at `sm`, which gave 768 the 1024 size.
+
+                No `leading-` here: each size token carries the ratio its own
+                frame declares (1.06, 1.05, 1.04, 1.04), and a single hardcoded
+                1.04 silently overrode all four. The 768 frame is the one that
+                differs, so that was a real 0.4px-per-line error rather than a
+                tidiness point.
+              */}
+              <h1 className="font-display text-display-lg tracking-[-.02em] text-stone-900 md:text-display-hero-sm lg:text-display-hero-md min-[90rem]:text-display-xl">
                 Book your vendors
                 <br />
                 <span className="text-clay-500 italic">without the back-and-forth.</span>
               </h1>
 
-              <p className="mt-3.75 max-w-112.5 text-base leading-prose text-stone-700 min-[90rem]:text-lg">
+              <p className="mt-2.75 max-w-105 text-base leading-prose text-stone-700 lg:mt-3 min-[90rem]:mt-3.75 min-[90rem]:max-w-112.5 min-[90rem]:text-lg">
                 Compare real availability and pricing from vendors near you, send one request, and
                 pay securely once the date is locked in.
               </p>
+            </div>
 
+            <div className="md:col-span-2 md:row-start-2 lg:col-span-1 lg:col-start-1 lg:pr-5.5 min-[90rem]:pr-8.5">
               <HeroSearch categories={categories} />
 
               {/*
@@ -238,14 +287,22 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 they need. Plain links, so they work before hydration and can
                 be opened in a new tab — the bar is the only part that needs a
                 client boundary.
+
+                `14 Landing tablet` does not draw this row: at 768 the bar has
+                just taken the full width and the category cards are directly
+                beneath it, so a third row of category shortcuts between them
+                repeats the same navigation twice in 120px.
               */}
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="mr-0.5 text-sm text-stone-600">Or jump straight to</span>
+              <div className="mt-3.25 hidden flex-wrap items-center gap-[7px] max-md:flex lg:flex min-[90rem]:mt-4 min-[90rem]:gap-2">
+                {/* Steps with the chips beside it: 11.5px/1px, 12.5px/2px at 1440. */}
+                <span className="mr-px text-[11.5px] text-stone-600 min-[90rem]:mr-0.5 min-[90rem]:text-sm">
+                  Or jump straight to
+                </span>
                 {LANDING_JUMP_CATEGORY_SLUGS.map((slug, index) => (
                   <Link
                     key={slug}
                     href={`/search?category=${slug}`}
-                    className="rounded-full border border-stone-300 bg-stone-0 px-3 py-1.5 text-sm font-semibold text-stone-900 transition-colors duration-(--duration-fast) hover:border-clay-300 hover:text-clay-600"
+                    className="rounded-full border border-stone-300 bg-stone-0 px-2.5 py-1.25 text-[11.5px] font-semibold text-stone-900 transition-colors duration-(--duration-fast) min-[90rem]:px-3 min-[90rem]:py-1.5 min-[90rem]:text-sm hover:border-clay-300 hover:text-clay-600"
                   >
                     {JUMP_CATEGORY_NAMES[index]}
                   </Link>
@@ -255,14 +312,19 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
             {/*
               The cluster is the composition, not an illustration: it only
-              means anything sitting beside the headline. Below `lg` the hero
-              is a single column, so it had become a third block of
-              photographs in a vertical scroll — between the copy and the
-              category cards, which are the row that actually leads somewhere.
-              It is dropped there rather than stacked. The category cards are
-              untouched at every width.
+              means anything sitting beside the headline. `14 Landing tablet`
+              draws it at 768 beside a narrower copy column, which is why it
+              now appears from `md` — it used to be dropped below `lg`, on the
+              reasoning that a single-column hero turned it into a third block
+              of photographs in a vertical scroll. That reasoning still holds
+              *below* 768, where it stays hidden and `14 Landing mobile` draws
+              no cards at all.
+
+              It spans both rows from `lg`, so the search bar sitting in row 2
+              of column 1 reads as part of the copy column rather than pushing
+              the cluster down.
             */}
-            <div className="hidden lg:flex lg:justify-start">
+            <div className="hidden md:col-start-2 md:row-start-1 md:flex md:justify-start lg:row-span-2">
               <PhotoCluster />
             </div>
           </div>
@@ -274,11 +336,21 @@ export default async function HomePage(): Promise<React.ReactElement> {
             door than a hero that simply ends after the search bar.
           */}
           {featured.length > 0 ? (
-            <section aria-labelledby="categories-heading" className="pt-1.5 pb-16">
-              <div className="mb-3.5 flex items-baseline justify-between gap-4">
+            /*
+              Every metric below steps with the frames. The whole section used
+              to render `01 Landing`'s numbers at all three widths, which is
+              the largest single piece of #169's "1024 is compressed desktop":
+              a 6-across grid of 94px covers under a 26px heading does not fit
+              a 640px-tall laptop the way the 1024 frame's 68px covers do.
+            */
+            <section
+              aria-labelledby="categories-heading"
+              className="pt-5.5 pb-16 lg:pt-1 min-[90rem]:pt-1.5"
+            >
+              <div className="mb-2.5 flex items-baseline justify-between gap-4 lg:mb-2.75 min-[90rem]:mb-3.5">
                 <h2
                   id="categories-heading"
-                  className="display-heading text-display-md text-stone-900"
+                  className="display-heading text-display-xs text-stone-900 min-[90rem]:text-display-md"
                 >
                   Browse by category
                 </h2>
@@ -295,15 +367,22 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 */}
                 <Link
                   href="/search"
-                  className="text-action font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+                  className="text-[12px] font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none min-[90rem]:text-action hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
                 >
-                  All {categories.length} categories →
+                  {/*
+                    `14 Landing tablet` shortens this to `All 11 →`; 1024 and
+                    1440 both keep the noun. One element rather than two, so the
+                    link is a single tab stop and a single accessible name at
+                    every width — and the word is hidden with the space in front
+                    of it, or 768 reads "All 11  →".
+                  */}
+                  All {categories.length} <span className="max-lg:hidden">categories</span> →
                 </Link>
               </div>
 
               <ul
                 aria-labelledby="categories-heading"
-                className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-2.75 min-[90rem]:gap-3.5"
               >
                 {featured.map((category) => (
                   <li key={category.slug}>
@@ -315,21 +394,61 @@ export default async function HomePage(): Promise<React.ReactElement> {
                     */}
                     <Link
                       href={`/search?category=${category.slug}`}
-                      className="block h-full overflow-hidden rounded-xl bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) hover:shadow-hover motion-safe:hover:-translate-y-0.5"
+                      /*
+                        The ring is not a parity detail here — these six links
+                        had **no focus indicator of any kind**: no outline, no
+                        ring utility, nothing but the resting shadow. A keyboard
+                        visitor tabbing the front door's primary navigation had
+                        no way to see where they were. Pre-existing rather than
+                        introduced by #304, and the six accessibility laws in
+                        `04-laws.md` are the parity pass's only gate, so it is
+                        fixed here rather than deferred.
+                      */
+                      className="block h-full overflow-hidden rounded-[12px] bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) outline-none min-[90rem]:rounded-xl hover:shadow-hover focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 motion-safe:hover:-translate-y-0.5"
                     >
                       <StockPhoto
                         src={`/categories/${category.slug}.jpg`}
                         sizes="(min-width: 1024px) 15vw, (min-width: 640px) 30vw, 45vw"
-                        className="h-[94px] w-full"
+                        /*
+                          84 at 768, 68 at 1024, 94 at 1440. It is not monotonic
+                          because the grid is not: 768 draws three across and
+                          1024 draws six, so the 1024 card is the narrowest of
+                          the three and its 3:2 cover is the shortest.
+                        */
+                        className="h-[84px] w-full lg:h-[68px] min-[90rem]:h-[94px]"
                       />
-                      <div className="px-3.25 pt-2.75 pb-3.25">
-                        <h3 className="font-display text-[17px] text-stone-900">{category.name}</h3>
+                      <div className="px-2.75 pt-2.25 pb-2.75 min-[90rem]:px-3.25 min-[90rem]:pt-2.75 min-[90rem]:pb-3.25">
+                        {/*
+                          **Named deviation, 1px.** `27 Landing — 1024` draws
+                          this title at 15px in Instrument Serif (`.sh`), and
+                          `01-foundations.md` states 16px as the floor for that
+                          face — "Never below 16px", a rule of the type system
+                          rather than a preference, guarded by
+                          `display-type.test.ts`.
+
+                          The floor wins here, against the usual "build the
+                          frame, correct the plan" order, because the plan's
+                          rule is a legibility law and the frame's 15px is one
+                          pixel of it at one width: `14 Landing tablet` draws
+                          the same title at 16px and `01 Landing` at 17px, so
+                          1024 is the only width that dips below. Weakening the
+                          guard to admit it would open the face to every future
+                          sub-floor use, which is the regression the guard was
+                          written for.
+
+                          Recorded rather than resolved silently — if the
+                          intent is that the floor bends for this card, that is
+                          a foundations change, not a page change.
+                        */}
+                        <h3 className="font-display text-[16px] text-stone-900 min-[90rem]:text-[17px]">
+                          {category.name}
+                        </h3>
                         {/*
                           What the category covers, never a vendor count and
                           never a from-price — both are deferred until the
                           numbers are real (design/design-plan/98-post-mvp.md).
                         */}
-                        <p className="mt-0.75 text-helper text-stone-600">
+                        <p className="mt-0.5 text-[10.5px] text-stone-600 min-[90rem]:text-helper">
                           {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
                         </p>
                       </div>

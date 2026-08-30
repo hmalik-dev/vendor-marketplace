@@ -115,3 +115,51 @@ describe('the notifications panel dismisses on Escape', () => {
     });
   });
 });
+
+/*
+ * #70: the panel has to render on screen at every width, not just the ones the
+ * frames draw.
+ *
+ * It hangs off the **bell's** right edge at a fixed 360px, and the bell is not
+ * the last thing in the header — `UserButton` and the drawer trigger follow it.
+ * So the room to its left is the viewport less everything to its right, which
+ * at 390 is about 118px. A first attempt bounded it at one gutter
+ * (`100vw - 2.75rem`), the number that would be right if the panel were flush
+ * to the screen edge; that removed 14px of a 92px overflow and left the
+ * timestamps and `Mark all read` still clipped.
+ *
+ * jsdom performs no layout, so the rendered result is the browser's to settle —
+ * see `.claude/rules/web-design-parity.md`. What is checkable here is the
+ * arithmetic: the reserve must be at least as wide as the controls that sit
+ * between the panel's right edge and the screen's. Asserting the literal string
+ * could not fail, which is why the wrong bound survived a green test.
+ */
+describe('the notifications panel stays inside the viewport', () => {
+  /** Everything between the panel's right edge and the viewport's, at 390. */
+  const CHROME_TO_THE_RIGHT_PX = 12 + 44 + 12 + 44 - 10 + 16;
+
+  it('reserves at least the width of the controls beside it', async () => {
+    const user = userEvent.setup();
+    render(<NotificationBell />);
+
+    await user.click(screen.getByRole('button', { name: /Notifications/ }));
+
+    const panel = screen.getByText('Notifications').closest('div')?.parentElement;
+    expect(panel, 'no notifications panel').toBeDefined();
+
+    const className = (panel as HTMLElement).className;
+
+    /* 360px where it fits. */
+    expect(className).toContain('w-90');
+
+    const bound = /max-w-\[calc\(100vw-([\d.]+)rem\)\]/.exec(className);
+    expect(bound, `no viewport bound in "${className}"`).not.toBeNull();
+
+    const reservedPx = Number((bound as RegExpExecArray)[1]) * 16;
+    expect(
+      reservedPx,
+      `the panel reserves ${reservedPx}px but ${CHROME_TO_THE_RIGHT_PX}px of header ` +
+        'chrome sits between it and the screen edge',
+    ).toBeGreaterThanOrEqual(CHROME_TO_THE_RIGHT_PX);
+  });
+});

@@ -268,14 +268,33 @@ describe('SearchBar — pill and circle discipline', () => {
    * height follows its tallest child, so this is also what puts the bar back
    * on the frame's 58px — it had dropped to 52 when the button shrank.
    */
-  it('draws the hero submit at the padding and size frame 01 Landing measures', () => {
+  /*
+   * Three landing frames draw this pill, not one: `13px / 12 24` at 768,
+   * `13px / 11 20` at 1024 and `14px / 13 28` at 1440. It used to carry only
+   * the 1440 values, pinned to `sm` — so a 102x44 control sat in the 50px bar
+   * the 1024 frame draws.
+   */
+  it('steps the hero submit through all three frames that draw it', () => {
     render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     const submit = screen.getByRole('button', { name: 'Search' });
 
-    expect(submit.className).toContain('sm:px-7');
-    expect(submit.className).toContain('sm:py-3.25');
-    expect(submit.className).toContain('sm:text-cta');
+    // 768 — the unprefixed `sm` step.
+    expect(submit.className).toContain('sm:px-6');
+    expect(submit.className).toContain('sm:py-3');
+    expect(submit.className).toContain('sm:text-[13px]');
+
+    // 1024.
+    expect(submit.className).toContain('lg:px-5');
+    expect(submit.className).toContain('lg:py-2.75');
+
+    // 1440 — frame `01 Landing`, which is where these values came from.
+    expect(submit.className).toContain('min-[90rem]:px-7');
+    expect(submit.className).toContain('min-[90rem]:py-3.25');
+    expect(submit.className).toContain('min-[90rem]:text-cta');
+
+    // The 1440 size must not start at 640 again.
+    expect(submit.className).not.toContain('sm:text-cta');
     expect(submit.className).not.toContain('sm:text-base');
   });
 
