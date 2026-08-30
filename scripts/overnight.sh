@@ -209,15 +209,15 @@ while [ "$batch" -lt "$MAX_BATCHES" ]; do
 
   # Fresh supervisor. Exits when the batch is dispatched and supervised.
   #
-  # The ordering steer is not optional. /orchestrate reads the queue as
-  # orchestration-policy.md defines it — highest priority, then oldest — which
-  # selects #9 (Stripe Connect) first: the largest and riskiest ticket in the
-  # backlog, ahead of three small changes that release ~60 tickets behind them.
-  # The tracker's own "Overnight queue" section says so explicitly, so point the
-  # supervisor at it rather than relying on it to find that section unprompted.
+  # The ordering steer that used to live here pointed at the tracker's
+  # "## Overnight queue" section, which was deleted on 2026-08-29 with the
+  # backlog consolidation. It existed because ~90 single-measurement parity
+  # findings sat behind three unblockers; those have landed (#74, #165, #198,
+  # #235) and the findings are batched by frame, so priority-then-oldest is
+  # safe again. What remains is the ordering that lives inside the tickets.
   claude -p "/orchestrate $LANES
 
-Order the batch by the '## Overnight queue' section of .claude/plans/vendor-marketplace-tickets.md, not by raw priority. Wave 1 (#165, #74, #198) comes first: they change the computed metrics of most of the ~83 per-finding parity tickets, so fixing those first means measuring everything twice. Do not sweep parity (#82-#164) until #74 and #165 have landed. Skip any ticket whose Blocked By names a person, a credential or a dashboard rather than a ticket number." \
+Read each ticket before starting it; several carry their own internal order. The change order goes first within its frame: #287 in #298, #288 in #299, #166 in #301, #169 in #304. The parity tickets (#296, #297, #298, #300, #301, #302) open by re-measuring with parity-checker and closing what already matches, before any code change. #73 builds the shared focus-ring, hit-area and overlay primitives that #296-#301 and #304 consume, and #306 carries the design rulings that #301 and #304 are blocked on, so both go early. Skip any ticket whose Blocked By names a person, a credential or a dashboard rather than a ticket number." \
     --model "$MODEL" \
     --permission-mode bypassPermissions \
     >"$LOGDIR/orchestrate-$batch.log" 2>&1

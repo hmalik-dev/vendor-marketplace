@@ -27,12 +27,20 @@ and was removed on 2026-08-28. Do not re-add it.
 Status Board table and write transitions back to it (Backlog -> In Progress ->
 Done), filling the Branch column and recording the commit SHA in Notes.
 
-**For an unattended or overnight run, follow the `## Overnight queue` section at
-the top of the tracker instead of raw `/next-ticket`.** Priority-then-oldest
-ordering would start on #9, the largest ticket in the backlog, ahead of the
-three small changes that unblock sixty others. That section also carries the
-rules an unattended run needs: worktree isolation, preflight before every
-ticket, and defer-rather-than-guess.
+The `## Overnight queue` section was **deleted on 2026-08-29**, along with the
+backlog shape that made it necessary. It existed because the queue held ~90
+single-measurement parity findings that priority-then-oldest ordering would have
+worked one at a time, behind three unblockers; those unblockers (#74, #165, #198,
+#235) have all landed, and the findings are now batched by frame. Raw
+`/next-ticket` and `/orchestrate` are safe on this board again — do not
+reintroduce a hand-ordered queue.
+
+**Read the ticket before starting it anyway.** Several carry an explicit order
+inside them: the change order goes first within its frame (#287 in #298, #288 in
+#299, #166 in #301, #169 in #304), the parity tickets open by **re-measuring**
+rather than fixing, and #73 and #306 build primitives and rulings that other
+tickets consume. An unattended run still needs worktree isolation, `pnpm
+preflight` before every ticket, and defer-rather-than-guess.
 
 **Trust the repository over the ticket's prose.** A ticket's "current state"
 section goes stale the moment another ticket touches the same files. Verify each
