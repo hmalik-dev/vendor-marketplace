@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WireBookingRequest } from '@/lib/wire-schemas';
@@ -212,6 +212,26 @@ describe('RequestRow', () => {
       // destructive confirm always offers an escape hatch, not just a dismissal.
       expect(screen.getByRole('dialog').textContent).toContain('You can’t undo this');
       expect(screen.getByRole('dialog').textContent).toContain('send a quote or message them');
+    });
+
+    /*
+     * Radix restores focus to its own `DialogTrigger`; this dialog is opened
+     * from a plain button under controlled `open`, so without an explicit
+     * restore focus lands on `<body>` and a keyboard user who backs out is
+     * returned to the top of the document.
+     */
+    it.each(['{Escape}', null])('returns focus to Decline after closing (%s)', async (key) => {
+      render(<RequestRow request={booking()} isFirst />);
+      const decline = screen.getByRole('button', { name: 'Decline' });
+
+      await userEvent.click(decline);
+      if (key === null) {
+        await userEvent.click(screen.getByRole('button', { name: 'Keep it open' }));
+      } else {
+        await userEvent.keyboard(key);
+      }
+
+      await waitFor(() => expect(document.activeElement).toBe(decline));
     });
 
     it('sends nothing when the vendor backs out of the confirmation', async () => {

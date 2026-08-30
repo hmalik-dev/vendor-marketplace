@@ -7,7 +7,7 @@ import {
   type EventType,
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -97,6 +97,14 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
    * asking first, and saying plainly that there is no undo.
    */
   const [confirmingDecline, setConfirmingDecline] = useState(false);
+  /*
+   * Where focus goes when the confirmation closes. Radix restores focus to its
+   * own `DialogTrigger`, and this dialog is opened from a plain button under
+   * controlled `open` instead, so without this focus lands on `<body>` — a
+   * keyboard user who backs out of the dialog is returned to the top of the
+   * document and has to tab all the way back to the row they were on.
+   */
+  const declineRef = useRef<HTMLButtonElement>(null);
 
   const isPackage = request.package !== null;
 
@@ -204,6 +212,7 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
             Send quote
           </Button>
           <Button
+            ref={declineRef}
             type="button"
             variant="ghost"
             size="sm"
@@ -262,7 +271,15 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
           }
         }}
       >
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            // Escape, the overlay and "Keep it open" all land here. Taking the
+            // default away and focusing explicitly is what puts a keyboard user
+            // back on the control they opened this from.
+            event.preventDefault();
+            declineRef.current?.focus();
+          }}
+        >
           <DialogHeader>
             {/*
               Names the customer and the date, because the vendor is confirming
