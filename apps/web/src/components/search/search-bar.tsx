@@ -372,6 +372,17 @@ export function SearchBar({
               */
               'text-transparent focus:text-stone-900',
               draft.date === '' && 'focus:text-stone-600',
+              /*
+                Frame `01` draws this segment as plain text — no icon at all
+                (#282, residual from the #235 re-measurement). Chrome paints
+                its own calendar glyph inside every `type="date"` input
+                regardless of text colour, so hiding the pseudo-element is the
+                only way to match. Opacity, not `display:none`: the element
+                still occupies its box and stays clickable, which is how
+                Chrome opens the picker from anywhere in the field, not just
+                the icon.
+              */
+              '[&::-webkit-calendar-picker-indicator]:opacity-0',
             )}
           />
           {draft.date === '' ? (

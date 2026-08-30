@@ -528,4 +528,60 @@ describe('the category cards are reachable by keyboard', () => {
       expect(card.className).toContain('outline-none');
     }
   });
+
+  /*
+   * #296/#280's required test: a ring that computes correctly and still
+   * renders nothing is exactly the failure this repo's rules warn about
+   * twice over (`web-design-parity.md`, `focus-ring-guard.test.ts`) — two
+   * distinct, real ways for that to happen, both checkable as class-level
+   * facts without a real layout engine:
+   *
+   * 1. An outward ring on a element that is a *descendant* of a smaller or
+   *    equal `overflow:hidden` ancestor is 100% clipped (#73's original
+   *    vendor-card finding, `01/02` both). Each card here draws its own
+   *    ring on the exact element that also carries `overflow-hidden` — not
+   *    a child of some other clipping box — which is the one shape that
+   *    can never be clipped: an element's own `overflow` does not clip its
+   *    own box-shadow, only a descendant's.
+   * 2. Transitioning the `box-shadow` property the ring is painted with
+   *    ramps it in over `--duration-base`, so every keyboard stop reads as
+   *    ring-less for the transition's whole duration — measured and fixed
+   *    once already, on this exact element, per the comment beside it in
+   *    `page.tsx`.
+   *
+   * A rendered-pixel check belongs to the browser pass, not jsdom — this
+   * asserts the two structural facts a real browser needs true before a
+   * geometry check could ever pass.
+   */
+  it('draws its ring on the same element that clips it, and never ramps it in', async () => {
+    const { container } = render(await HomePage());
+
+    const grid = container.querySelector('ul[aria-labelledby="categories-heading"]');
+    const cards = [...(grid as HTMLElement).querySelectorAll('a')];
+    expect(cards.length).toBeGreaterThan(0);
+
+    for (const card of cards) {
+      // The ring-bearing element is its own clip boundary, not a
+      // full-bleed child of a separately-clipping ancestor.
+      expect(card.className, 'ring element must carry its own overflow-hidden').toContain(
+        'overflow-hidden',
+      );
+
+      // No ancestor up to the grid re-clips this element either — that
+      // would be the #73 vendor-card shape reintroduced one level up.
+      let ancestor = card.parentElement;
+      while (ancestor && ancestor !== grid) {
+        expect(
+          ancestor.className,
+          `${ancestor.tagName.toLowerCase()} ancestor must not itself clip the ring`,
+        ).not.toContain('overflow-hidden');
+        ancestor = ancestor.parentElement;
+      }
+
+      expect(
+        card.className,
+        'must not transition the box-shadow the ring is painted with',
+      ).not.toMatch(/transition-(?:all\b|\[[^\]]*box-shadow)/);
+    }
+  });
 });

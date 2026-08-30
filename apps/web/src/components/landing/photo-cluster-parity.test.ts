@@ -43,6 +43,7 @@ interface Card {
   readonly caption: string;
   readonly width: number;
   readonly height: number;
+  readonly radius: number;
 }
 
 /** The hero photo cards a frame draws, in source order. */
@@ -60,7 +61,12 @@ function heroCards(label: string): Card[] {
       return Number((found as RegExpExecArray)[1]);
     };
 
-    return { caption: (match[2] as string).trim(), width: read('width'), height: read('height') };
+    return {
+      caption: (match[2] as string).trim(),
+      width: read('width'),
+      height: read('height'),
+      radius: read('border-radius'),
+    };
   });
 }
 
@@ -163,6 +169,36 @@ describe('hero cluster parity across the drawn viewports', () => {
         expect(
           carries('w', card.width),
           `no class in photo-cluster.tsx gives ${card.caption} width ${card.width}px for ${label}`,
+        ).toBe(true);
+      }
+    },
+  );
+
+  /*
+   * #249. Cards 1 and 2 shipped `rounded-2xl` at 1440 — 18px in this theme's
+   * scale, where the frame draws 16px — while card 3's `rounded-[14px]` was
+   * already correct. Reads the frame's own `border-radius` per card per
+   * viewport, so a design re-import that moves a radius fails here instead
+   * of the class staying stale beside a corrected doc comment.
+   */
+  it.each(VIEWPORTS)(
+    'the component carries every card radius the $width frame draws',
+    ({ label }) => {
+      /*
+       * Arbitrary bracket values only, deliberately not Tailwind's named
+       * `rounded-2xl` etc: `--radius-2xl` is 18px in this theme (vendor cards,
+       * modals), and none of the three cards' 13/14/16px radii lands on a
+       * named step, so a class carrying one here is never a coincidence worth
+       * accepting — see photo-cluster.tsx's own comment on card 1.
+       */
+      const variant = String.raw`(?:[a-z-]+:|min-\[[^\]]+\]:)?`;
+
+      for (const card of heroCards(label)) {
+        const arbitrary = new RegExp(`(?:^|[\\s'\`])${variant}rounded-\\[${card.radius}px\\]`);
+
+        expect(
+          arbitrary.test(clusterSource),
+          `no class in photo-cluster.tsx gives ${card.caption} radius ${card.radius}px for ${label}`,
         ).toBe(true);
       }
     },

@@ -403,8 +403,19 @@ export default async function HomePage(): Promise<React.ReactElement> {
                         introduced by #304, and the six accessibility laws in
                         `04-laws.md` are the parity pass's only gate, so it is
                         fixed here rather than deferred.
+
+                        `box-shadow` is deliberately NOT in the transition list
+                        (#280, #73's own postmortem on this exact trap). The
+                        ring is painted with `box-shadow`, so transitioning the
+                        property ramps it in over `--duration-base` — a
+                        focused card reads as ring-less for the first ~150ms of
+                        every keyboard stop, which is the same "renders
+                        nothing" failure `focus-ring-guard.test.ts` exists to
+                        catch, just slower and outside that guard's scan root.
+                        The hover shadow snaps instead, same trade as
+                        `vendor-card.tsx`.
                       */
-                      className="block h-full overflow-hidden rounded-[12px] bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) outline-none min-[90rem]:rounded-xl hover:shadow-hover focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 motion-safe:hover:-translate-y-0.5"
+                      className="block h-full overflow-hidden rounded-[12px] bg-stone-0 shadow-sm transition-transform duration-(--duration-base) outline-none min-[90rem]:rounded-xl hover:shadow-hover focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 motion-safe:hover:-translate-y-0.5"
                     >
                       <StockPhoto
                         src={`/categories/${category.slug}.jpg`}

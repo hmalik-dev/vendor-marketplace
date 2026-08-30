@@ -43,7 +43,13 @@ const CARDS = [
     geometry:
       'top-[6px] left-[4px] h-[182px] w-[146px] lg:top-0 lg:left-[14px] lg:h-[213px] lg:w-[172px] min-[90rem]:top-0 min-[90rem]:left-5 min-[90rem]:h-73 min-[90rem]:w-59',
     style:
-      'rotate-[-4deg] rounded-[13px] shadow-[0_10px_26px_rgba(35,32,28,.16)] lg:rounded-[14px] lg:shadow-[0_12px_32px_rgba(35,32,28,.16)] min-[90rem]:rounded-2xl min-[90rem]:shadow-[0_14px_40px_rgba(35,32,28,.16)]',
+      /*
+        16px at 1440, not `rounded-2xl` — that token is 18px (#249). The
+        frame draws 13/14/16px across 768/1024/1440 and there is no 16px
+        step in the scale to reach for instead, so this states the frame's
+        pixel value directly, the same way the other two breakpoints already do.
+      */
+      'rotate-[-4deg] rounded-[13px] shadow-[0_10px_26px_rgba(35,32,28,.16)] lg:rounded-[14px] lg:shadow-[0_12px_32px_rgba(35,32,28,.16)] min-[90rem]:rounded-[16px] min-[90rem]:shadow-[0_14px_40px_rgba(35,32,28,.16)]',
   },
   {
     src: '/stock/portrait.jpg',
@@ -51,7 +57,8 @@ const CARDS = [
     geometry:
       'top-[38px] left-[112px] h-[196px] w-[158px] lg:top-[51px] lg:left-[138px] lg:h-[231px] lg:w-[185px] min-[90rem]:top-17.5 min-[90rem]:left-47.5 min-[90rem]:h-79 min-[90rem]:w-63.5',
     style:
-      'rotate-[3deg] rounded-[13px] shadow-[0_12px_30px_rgba(35,32,28,.2)] lg:rounded-[14px] lg:shadow-[0_15px_38px_rgba(35,32,28,.2)] min-[90rem]:rounded-2xl min-[90rem]:shadow-[0_18px_46px_rgba(35,32,28,.2)]',
+      // 16px at 1440 — see the florals card above (#249).
+      'rotate-[3deg] rounded-[13px] shadow-[0_12px_30px_rgba(35,32,28,.2)] lg:rounded-[14px] lg:shadow-[0_15px_38px_rgba(35,32,28,.2)] min-[90rem]:rounded-[16px] min-[90rem]:shadow-[0_18px_46px_rgba(35,32,28,.2)]',
   },
   {
     src: '/stock/venue.jpg',

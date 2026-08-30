@@ -102,6 +102,23 @@ describe('SearchBar', () => {
     expect(screen.queryByText('Add a date')).toBeNull();
   });
 
+  /*
+   * #282, residual from the #235 re-measurement. Frame `01` draws this
+   * segment as plain text with no icon at all; a bare `type="date"` input
+   * paints Chrome's own calendar glyph regardless of the prompt text laid
+   * over it. Asserted as a class-level fact — jsdom does not render the
+   * pseudo-element, so there is nothing here for a rendered-pixel check to
+   * read; see `web-design-parity.md` on asserting what a check can actually
+   * fail on.
+   */
+  it('hides the native calendar glyph the frame does not draw', () => {
+    const { container } = renderBar();
+
+    expect(dateInput(container).className).toContain(
+      '[&::-webkit-calendar-picker-indicator]:opacity-0',
+    );
+  });
+
   it('offers no free-text query field — the first segment is a picker', () => {
     renderBar();
 
