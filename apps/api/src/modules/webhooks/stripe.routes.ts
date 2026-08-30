@@ -30,8 +30,23 @@ const webhookResponseSchema = z.object({
  */
 const ACCOUNT_EVENT_PREFIXES = ['v2.core.account.', 'v2.core.account['] as const;
 
+/**
+ * The v1 snapshot Connect types that say the same thing.
+ *
+ * These are the ones that actually arrive today — a v2 account still emits
+ * them, and thin `v2.core.*` delivery needs an event destination provisioned
+ * before it produces anything. Enumerated rather than prefix-matched, because
+ * the v1 namespace is flat and `account.` would also catch
+ * `account.external_account.*` and `account.application.*`, whose payload
+ * objects are not the account.
+ */
+const SNAPSHOT_ACCOUNT_EVENTS = new Set(['account.updated', 'capability.updated']);
+
 function isAccountEvent(type: string): boolean {
-  return ACCOUNT_EVENT_PREFIXES.some((prefix) => type.startsWith(prefix));
+  return (
+    SNAPSHOT_ACCOUNT_EVENTS.has(type) ||
+    ACCOUNT_EVENT_PREFIXES.some((prefix) => type.startsWith(prefix))
+  );
 }
 
 export const stripeWebhookRoutes: FastifyPluginAsyncZod = async (app) => {

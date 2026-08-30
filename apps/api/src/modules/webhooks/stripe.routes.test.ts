@@ -200,6 +200,46 @@ describe('POST /webhooks/stripe', () => {
     expect(await readOnboarded()).toBe(false);
   });
 
+  /*
+   * The shape that actually arrives. Until thin `v2.core.*` delivery is
+   * provisioned through an event destination, a v2 account announces itself
+   * with the v1 snapshot Connect events, and a handler that ignores those never
+   * fires at all.
+   */
+  it('answers the v1 snapshot account.updated a v2 account really emits', async () => {
+    const accountId = await seedOnboardingVendor();
+    harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
+    harness.stripe.nextEvent = { type: 'account.updated', accountId };
+
+    const response = await post();
+
+    expect(response.json()).toEqual({ received: true, outcome: 'onboarded' });
+    expect(await readOnboarded()).toBe(true);
+  });
+
+  it('answers capability.updated, whose payload object is not the account', async () => {
+    const accountId = await seedOnboardingVendor();
+    harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
+    harness.stripe.nextEvent = { type: 'capability.updated', accountId };
+
+    const response = await post();
+
+    expect(response.json()).toEqual({ received: true, outcome: 'onboarded' });
+    expect(await readOnboarded()).toBe(true);
+  });
+
+  /** The flat v1 namespace means these must be enumerated, not prefix-matched. */
+  it('ignores the neighbouring v1 account events that are about something else', async () => {
+    const accountId = await seedOnboardingVendor();
+    harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
+    harness.stripe.nextEvent = { type: 'account.external_account.created', accountId };
+
+    const response = await post();
+
+    expect(response.json()).toEqual({ received: true, outcome: 'ignored' });
+    expect(await readOnboarded()).toBe(false);
+  });
+
   it('answers the bracketed capability event, not just the dotted one', async () => {
     const accountId = await seedOnboardingVendor();
     harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });

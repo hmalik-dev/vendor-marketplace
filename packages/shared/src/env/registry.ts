@@ -132,16 +132,18 @@ const STRIPE_SETUP: EnvSetup = {
 };
 
 /*
- * `--forward-thin-to`, not `--forward-to`. Connect onboarding runs on Accounts
- * v2, which emits **thin** events, and the plain forwarder does not carry them
- * — a lane that uses it sees the hosted form complete and the vendor stay
- * unonboarded forever, with nothing in either log to say why.
+ * All four streams. A v2 connected account announces itself on the v1 **snapshot
+ * Connect** stream — probed 2026-08-30, an onboarding attempt emitted three v1
+ * events and no thin one, because thin `v2.core.*` delivery needs an event
+ * destination provisioned separately. Forwarding only one stream is a lane that
+ * watches onboarding finish and the vendor stay blocked, with nothing in either
+ * log to say why.
  */
 const STRIPE_WEBHOOK_SETUP: EnvSetup = {
   url: 'https://dashboard.stripe.com/test/webhooks',
   steps: [
-    'stripe listen --forward-thin-to localhost:4000/webhooks/stripe',
-    'Copy the printed `whsec_...` into STRIPE_WEBHOOK_SECRET',
+    'stripe listen --forward-to localhost:4000/webhooks/stripe --forward-connect-to localhost:4000/webhooks/stripe --forward-thin-to localhost:4000/webhooks/stripe --forward-thin-connect-to localhost:4000/webhooks/stripe',
+    'Copy the printed `whsec_...` into STRIPE_WEBHOOK_SECRET — it is minted per listener, so a stale one in `.env` makes every delivery 401',
   ],
 };
 

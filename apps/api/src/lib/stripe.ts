@@ -91,6 +91,52 @@ export function isOnboarded(status: StripeAccountStatus): boolean {
  * "not active" rather than as an error — an account mid-onboarding legitimately
  * has neither.
  */
+/**
+ * Names the account a verified webhook body is about, whichever shape it
+ * arrived in.
+ *
+ * **Both shapes are real and both have to be handled.** A v2 account still
+ * emits the v1 snapshot Connect events - `account.updated`, `capability.updated`
+ * - and those are what actually arrive today: probed against this platform's
+ * test account, a full onboarding attempt produced three v1 events and no thin
+ * ones, because thin `v2.core.*` delivery needs an event destination to be
+ * provisioned separately. Listening only for the v2 shape is therefore a
+ * webhook that never fires, and a vendor who never leaves the payout gate.
+ *
+ * Accepting both costs nothing: the handler re-reads the account from Stripe
+ * rather than trusting the payload, so an event is only ever a nudge saying
+ * "look again". Whichever shape does the nudging, the answer is the same.
+ */
+export function describeAccountEvent(verified: unknown): StripeEventNotification {
+  const event = (verified ?? {}) as {
+    type?: unknown;
+    account?: unknown;
+    related_object?: { id?: unknown } | null;
+    data?: { object?: { id?: unknown } | null } | null;
+  };
+
+  const type = typeof event.type === 'string' ? event.type : '';
+
+  // v2 thin: the affected object is named in `related_object`.
+  const relatedId = event.related_object?.id;
+  if (typeof relatedId === 'string') {
+    return { type, accountId: relatedId };
+  }
+
+  /*
+   * v1 snapshot Connect: the connected account is the top-level `account`.
+   * `data.object.id` is the fallback for `account.updated`, where the object in
+   * the payload *is* the account and there is no separate `account` field.
+   */
+  if (typeof event.account === 'string') {
+    return { type, accountId: event.account };
+  }
+
+  const objectId = event.data?.object?.id;
+
+  return { type, accountId: typeof objectId === 'string' ? objectId : null };
+}
+
 function readRecipientStatus(account: Stripe.V2.Core.Account): StripeAccountStatus {
   const balance = account.configuration?.recipient?.capabilities?.stripe_balance;
 
@@ -164,25 +210,19 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
     },
 
     parseEventNotification(payload, signature) {
-      const notification = stripe.parseEventNotification(
+      /*
+       * Both event shapes are signed the same way, so the signature is checked
+       * once and the shape is read afterwards. `constructEvent` verifies the
+       * HMAC over the exact bytes and enforces its timestamp tolerance, then
+       * JSON-parses — it does not care which shape it got.
+       */
+      const verified: unknown = stripe.webhooks.constructEvent(
         payload,
         signature,
         credentials.webhookSecret,
       );
 
-      /*
-       * `EventNotification` is a union, and the one v1 member the SDK models
-       * explicitly carries no `related_object`. Narrowing by presence rather
-       * than by type keeps this correct as Stripe adds members, and the `in`
-       * check is what tells TypeScript the property is there at all.
-       */
-      const relatedObject =
-        'related_object' in notification ? notification.related_object : undefined;
-
-      return {
-        type: notification.type,
-        accountId: relatedObject?.id ?? null,
-      };
+      return describeAccountEvent(verified);
     },
   };
 }
