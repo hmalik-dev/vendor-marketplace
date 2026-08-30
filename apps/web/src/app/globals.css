@@ -155,8 +155,23 @@ body:has([data-auth-screen]) > footer {
   body {
     @apply bg-background text-foreground;
   }
+  /*
+   * #235. `tailwindcss/preflight.css` sets `html, :host { line-height: 1.5 }`,
+   * and Tailwind emits a line-height alongside a font-size only for a *named*
+   * scale step — an arbitrary `text-[10.5px]` compiles to `font-size` alone and
+   * inherits. That put a 1.5 line box under 82 arbitrary sizes the frames draw
+   * at `normal`, which is why a category card measured 163.75px against the
+   * frame's 157.50.
+   *
+   * One declaration rather than a `leading-*` per call site: an element with no
+   * text utility at all still inherits, so the per-site route cannot close the
+   * class. It must be the CSS keyword — Tailwind's `leading-normal` is 1.5, the
+   * very value being removed. Prose that wants a looser measure asks for one
+   * explicitly.
+   */
   html {
     @apply font-sans;
+    line-height: normal;
   }
 }
 
