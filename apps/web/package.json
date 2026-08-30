@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev ${WEB_PORT:+--port $WEB_PORT}",
+    "dev": "ulimit -n 65536 2>/dev/null; next dev ${WEB_PORT:+--port $WEB_PORT}",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

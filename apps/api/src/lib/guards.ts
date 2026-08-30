@@ -72,3 +72,28 @@ export function requireRole(...roles: readonly UserRole[]): preHandlerAsyncHookH
     assertRole(request.auth, roles);
   };
 }
+
+/**
+ * The same guard, moved to `onRequest` for the same reason
+ * `requireAuthBeforeValidation` exists — but here the stage that runs early
+ * is Fastify's own **body parser**, not schema validation.
+ *
+ * A route with no `body` schema still parses the body before `preHandler`
+ * runs: `POST /vendor/stripe/connect` with `content-type: application/json`
+ * and an empty payload answered `400 VALIDATION_ERROR` to a signed-in
+ * customer, because the parser's own `FST_ERR_CTP_EMPTY_JSON_BODY` reached
+ * the error handler before `requireRole`'s `preHandler` guard ever ran. The
+ * customer was still denied — no route below this ever executed — but the
+ * wrong status code reads like a broken endpoint in an audit rather than the
+ * refusal it actually was.
+ *
+ * Reach for this on a route a wrong-role caller might reach with a body
+ * malformed enough to trip the parser — a POST or PUT guarded by role alone.
+ */
+export function requireRoleBeforeValidation(
+  ...roles: readonly UserRole[]
+): onRequestAsyncHookHandler {
+  return async (request) => {
+    assertRole(request.auth, roles);
+  };
+}

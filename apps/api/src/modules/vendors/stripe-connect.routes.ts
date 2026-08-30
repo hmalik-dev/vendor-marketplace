@@ -1,6 +1,6 @@
 import { stripeOnboardingLinkSchema, vendorPayoutStatusSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { assertRole, requireRole } from '../../lib/guards.js';
+import { assertRole, requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { readPayoutStatus, startPayoutOnboarding } from './stripe-connect.service.js';
 
 export interface StripeConnectRoutesOptions {
@@ -26,7 +26,14 @@ export const stripeConnectRoutes: FastifyPluginAsyncZod<StripeConnectRoutesOptio
    */
   app.post(
     '/vendor/stripe/connect',
-    { preHandler: vendorOnly, schema: { response: { 200: stripeOnboardingLinkSchema } } },
+    {
+      // Before body parsing, not preHandler: a wrong-role caller can send a
+      // body malformed enough to trip Fastify's own JSON parser, and that
+      // 400 must not outrun the 403 this route owes them. See
+      // `requireRoleBeforeValidation`.
+      onRequest: requireRoleBeforeValidation('vendor'),
+      schema: { response: { 200: stripeOnboardingLinkSchema } },
+    },
     async (request) =>
       startPayoutOnboarding(
         { db: app.db, stripe: app.stripe, returnOrigin: options.returnOrigin },
