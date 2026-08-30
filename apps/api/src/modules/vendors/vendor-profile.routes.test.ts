@@ -72,6 +72,8 @@ describe('GET /vendors/:slug', () => {
     'vendor-e',
     'vendor-f',
     'vendor-g',
+    'vendor-h',
+    'vendor-i',
   ];
 
   /** A `YYYY-MM-DD` date `days` from today, inside the availability window. */
@@ -210,6 +212,55 @@ describe('GET /vendors/:slug', () => {
     const profile = (await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` })).json();
 
     expect(profile.completedEventCount).toBe(0);
+  });
+
+  /**
+   * #113 — `duration_hours` is a `decimal`, and the driver hands those back as
+   * strings while `publicVendorProfileSchema` declares a number. Every seeded
+   * package had `null`, which satisfies the nullable schema, so the route
+   * answered 200 for as long as nobody set a duration — and 500 for every
+   * vendor with a package the moment one did.
+   */
+  describe('a package that carries a duration', () => {
+    it('returns it as a number, not the drivers decimal string', async () => {
+      const vendor = await seedVendor({ user: 'vendor-h', businessName: 'Duration Co' });
+
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/packages',
+        headers: bearer('vendor-h'),
+        payload: {
+          name: 'Eight hour coverage',
+          description: 'A package with a description long enough to pass validation.',
+          priceCents: 200_000,
+          durationHours: 8,
+        },
+      });
+
+      const response = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+
+      expect(response.statusCode).toBe(200);
+
+      const withDuration = response
+        .json()
+        .packages.find((pkg: { name: string }) => pkg.name === 'Eight hour coverage');
+
+      expect(withDuration.durationHours).toBe(8);
+      expect(typeof withDuration.durationHours).toBe('number');
+    });
+
+    /*
+     * The null case is the one that was passing all along, and it has to keep
+     * passing: a vendor who never set a duration must not start 500ing either.
+     */
+    it('still returns null for a package with no duration set', async () => {
+      const vendor = await seedVendor({ user: 'vendor-i', businessName: 'No Duration Co' });
+
+      const response = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().packages[0].durationHours).toBeNull();
+    });
   });
 
   describe('GET /vendors/:slug/availability', () => {

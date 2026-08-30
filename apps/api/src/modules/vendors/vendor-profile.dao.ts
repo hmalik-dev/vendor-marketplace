@@ -124,13 +124,29 @@ export async function findPublicVendorTags(db: AppDatabase, vendorId: string) {
     .orderBy(asc(tags.name));
 }
 
-/** Active packages only: an inactive one is a draft the vendor took down. */
+/**
+ * Active packages only: an inactive one is a draft the vendor took down.
+ *
+ * `durationHours` is a `decimal` column, and the driver hands those back as
+ * strings while the shared contract declares a number — the same mismatch the
+ * profile already corrects for `avgRating`. It is coerced here rather than in
+ * the service so every caller gets the contract's type, and because the defect
+ * is invisible until a row actually carries a duration: every seeded package
+ * had `null`, which satisfies the nullable schema, so `/vendors/:slug` answered
+ * 200 right up until the column was populated and then answered 500 for every
+ * vendor with a package.
+ */
 export async function findActivePackages(db: AppDatabase, vendorId: string) {
-  return db
+  const rows = await db
     .select()
     .from(servicePackages)
     .where(and(eq(servicePackages.vendorId, vendorId), eq(servicePackages.isActive, true)))
     .orderBy(asc(servicePackages.displayOrder), asc(servicePackages.createdAt));
+
+  return rows.map((row) => ({
+    ...row,
+    durationHours: row.durationHours === null ? null : Number(row.durationHours),
+  }));
 }
 
 export async function findPortfolio(db: AppDatabase, vendorId: string) {
