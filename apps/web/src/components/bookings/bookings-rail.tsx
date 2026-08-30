@@ -1,3 +1,4 @@
+import { MONEY_COPY } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import type { BookingEntry } from '@/lib/booking-entries';
 
@@ -13,7 +14,13 @@ import type { BookingEntry } from '@/lib/booking-entries';
 const MECHANISM_PROMISES = [
   { title: 'Real availability.', body: 'Calendars come from the vendor, not a guess.' },
   { title: 'Payment is held.', body: 'Your money reaches the vendor after the event.' },
-  { title: 'No service fee.', body: "The price you're quoted is the price you pay." },
+  /*
+    Both halves of the fee story come from one place — `PLATFORM_FEE_COPY` —
+    because this line and the vendor dashboard's "your share, after the
+    platform fee" were written independently, were each true, and read as a
+    flat contradiction to anyone who saw both.
+  */
+  MONEY_COPY.customer,
   { title: 'Reviews from real bookings.', body: 'Only events that happened here.' },
 ] as const;
 
@@ -53,14 +60,13 @@ export function BookingsRail({ needsYou }: BookingsRailProps): React.ReactElemen
                       {entry.vendorName} sent a quote
                     </p>
                     <p className="mt-0.75 text-sm leading-normal text-stone-700">{entry.subline}</p>
-                    {entry.vendorSlug ? (
-                      <Link
-                        href={`/vendors/${entry.vendorSlug}`}
-                        className="mt-2.5 inline-block rounded-md bg-clay-400 px-3.25 py-1.75 text-sm font-semibold text-stone-0 hover:bg-clay-500"
-                      >
-                        Review quote
-                      </Link>
-                    ) : null}
+                    {/* The request, not the storefront — see `bookings-hub.tsx`. */}
+                    <Link
+                      href={`/bookings/${entry.id}`}
+                      className="mt-2.5 inline-block rounded-md bg-clay-400 px-3.25 py-1.75 text-sm font-semibold text-stone-0 hover:bg-clay-500"
+                    >
+                      Review quote
+                    </Link>
                   </div>
                 </div>
               </li>

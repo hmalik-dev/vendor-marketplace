@@ -186,14 +186,19 @@ export function BookingsHub({
                 {entry.vendorName} sent a quote
               </span>
               <span className="text-sm text-stone-700">{entry.subline}</span>
-              {entry.vendorSlug ? (
-                <Link
-                  href={`/vendors/${entry.vendorSlug}`}
-                  className="ml-auto text-sm font-semibold text-clay-500 hover:underline"
-                >
-                  Review quote
-                </Link>
-              ) : null}
+              {/*
+                The request, not the storefront. This pointed at
+                `/vendors/<slug>` — a page whose only controls are `Request
+                booking` and `Send a message`, so the customer arrived at a
+                marketing page with no way to accept the quote they came to
+                accept.
+              */}
+              <Link
+                href={`/bookings/${entry.id}`}
+                className="ml-auto text-sm font-semibold text-clay-500 hover:underline"
+              >
+                Review quote
+              </Link>
             </li>
           ))}
         </ul>

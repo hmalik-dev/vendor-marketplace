@@ -1,4 +1,8 @@
-import { DEFAULT_PLATFORM_FEE_RATE, MAX_SLUG_LENGTH } from '../constants/index.js';
+import {
+  BOOKING_REQUEST_EXPIRY_DAYS,
+  DEFAULT_PLATFORM_FEE_RATE,
+  MAX_SLUG_LENGTH,
+} from '../constants/index.js';
 
 const SLUG_FALLBACK = 'vendor';
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -62,6 +66,51 @@ export function formatPrice(cents: number): string {
   const dollars = centsToDollars(rounded);
 
   return rounded % 100 === 0 ? USD_WHOLE_FORMATTER.format(dollars) : USD_FORMATTER.format(dollars);
+}
+
+/**
+ * How long a vendor has to answer, for copy written **before** the request
+ * exists and therefore before there is an `expiresAt` to read.
+ *
+ * Four surfaces stated this deadline as a literal and three of them disagreed:
+ * the review rail promised 48 hours, the success screen "after a week", the
+ * booking card "expires in 7d", the vendor's notification "a week to reply".
+ * The API had always written exactly `BOOKING_REQUEST_EXPIRY_DAYS`, so the
+ * 48-hour claim was simply wrong — and it was the one shown at the moment of
+ * commitment, which is the worst place to be wrong.
+ *
+ * Anything rendered **after** the row exists must use `expiryCountdown` against
+ * the stored `expiresAt` instead. This is only for the promise made beforehand.
+ */
+export function bookingRequestWindowPhrase(): string {
+  return `${BOOKING_REQUEST_EXPIRY_DAYS} days`;
+}
+
+/**
+ * The countdown to a stored deadline, in one voice.
+ *
+ * There were two implementations of this under the same name, and they
+ * disagreed on the same row: the vendor's queue counted in hours below 48
+ * ("expires in 60h") where the customer's card counted whole days ("expires in
+ * 3d"), and only one of them had a same-day case. Two people comparing notes
+ * saw two different deadlines.
+ *
+ * Days, everywhere, because the deadline is a week and an hour count implies a
+ * precision the vendor cannot act on. `null` when there is no deadline, so a
+ * caller renders nothing rather than inventing "no deadline".
+ */
+export function expiryCountdown(expiresAt: Date | null, now: Date = new Date()): string | null {
+  if (expiresAt === null) {
+    return null;
+  }
+
+  const days = Math.ceil((expiresAt.getTime() - now.getTime()) / MS_PER_DAY);
+
+  if (days <= 0) {
+    return 'expired';
+  }
+
+  return days === 1 ? 'expires today' : `expires in ${days}d`;
 }
 
 export interface FeeBreakdown {

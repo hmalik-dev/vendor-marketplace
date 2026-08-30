@@ -1,4 +1,9 @@
-import { EVENT_TYPE_LABELS, formatPrice, type EventType } from '@vendor-marketplace/shared';
+import {
+  EVENT_TYPE_LABELS,
+  expiryCountdown,
+  formatPrice,
+  type EventType,
+} from '@vendor-marketplace/shared';
 import type { StatusTone } from '@/components/ui/status-pill';
 import type { WireBooking, WireBookingRequest } from './wire-schemas';
 
@@ -73,20 +78,12 @@ export function daysUntil(date: string, today: string): number {
   return Math.round((to - from) / 86_400_000);
 }
 
-/** "expires in 3d", or "expires today" on the last day. */
-function expiryPhrase(expiresAt: Date | null, now: Date): string | null {
-  if (!expiresAt) {
-    return null;
-  }
-
-  const days = Math.ceil((expiresAt.getTime() - now.getTime()) / 86_400_000);
-
-  if (days <= 0) {
-    return 'expired';
-  }
-
-  return days === 1 ? 'expires today' : `expires in ${days}d`;
-}
+/*
+ * The countdown moved to `expiryCountdown` in the shared package. There were
+ * two implementations of it under the same name — this one and the vendor
+ * queue's — and they rendered the same deadline differently, so a customer and
+ * a vendor comparing notes saw two answers.
+ */
 
 export function requestToEntry(request: WireBookingRequest, now: Date = new Date()): BookingEntry {
   const presentation = REQUEST_PRESENTATION[request.status] ?? {
@@ -101,7 +98,7 @@ export function requestToEntry(request: WireBookingRequest, now: Date = new Date
    * · 2d" and a paid one "$1,450 paid · Barr Mansion". Leading a pending
    * request with its price would state a number nobody has agreed to yet.
    */
-  const expiry = expiryPhrase(request.expiresAt, now);
+  const expiry = expiryCountdown(request.expiresAt, now);
   const subline =
     request.status === 'pending'
       ? ['awaiting reply', expiry].filter(Boolean).join(' · ')

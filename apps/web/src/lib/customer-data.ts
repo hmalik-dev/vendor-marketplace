@@ -6,6 +6,7 @@ import { signInPathReturningHere } from './requested-path';
 import {
   wireBookingListSchema,
   wireBookingRequestListSchema,
+  wireBookingRequestSchema,
   wireCustomerReviewListSchema,
   type WireBooking,
   type WireBookingRequest,
@@ -56,6 +57,47 @@ export async function getOwnBookingRequests(): Promise<WireBookingRequest[]> {
   return degradeToEmpty(() =>
     apiRequest('/booking-requests', { schema: wireBookingRequestListSchema, token }),
   );
+}
+
+/**
+ * One request this customer sent, or `null` when it is not theirs.
+ *
+ * The API answers another customer's request with a 404 rather than a 403 —
+ * whether a row exists is not something a stranger gets to learn — so both
+ * cases arrive here identically and the caller renders the same not-found page.
+ * Deliberately not routed through `degradeToEmpty`: an empty list is a
+ * reasonable degraded read for a hub, but a missing request is not a reasonable
+ * degraded read for a page that is only about that request.
+ */
+export async function getOwnBookingRequest(requestId: string): Promise<WireBookingRequest | null> {
+  const token = await customerToken();
+
+  try {
+    return await apiRequest(`/booking-requests/${requestId}`, {
+      schema: wireBookingRequestSchema,
+      token,
+    });
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+    if (error instanceof ApiClientError && error.statusCode === 401) {
+      redirect(await signInPathReturningHere());
+    }
+    /*
+     * 400 as well as 404. `web-route-boundaries.md` puts "a 400 caused by an
+     * identifier that cannot exist" in the `notFound()` column, not the error
+     * boundary — an id the API refuses to parse is a request that cannot exist,
+     * and answering it with a 500 page turns a pasteable URL into a crash. The
+     * page validates the id before calling, so this is the second line rather
+     * than the first.
+     */
+    if (error instanceof ApiClientError && (error.statusCode === 404 || error.statusCode === 400)) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 /** Bookings that reached payment, carrying their occasion and venue. */

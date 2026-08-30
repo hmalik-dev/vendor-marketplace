@@ -68,8 +68,27 @@ export function notificationHref(row: NotificationRow): string | null {
   }
 
   if (typeof data.bookingRequestId === 'string') {
-    // Both sides have a surface listing their requests; the role decides which.
-    return row.type === 'new_request' ? '/vendor/dashboard' : '/bookings';
+    if (row.type === 'new_request') {
+      return '/vendor/dashboard';
+    }
+
+    /*
+     * `request_quoted` is the one type that is always addressed to the customer
+     * and always has something for them to do, so it is the one that deep-links
+     * to the request itself. Its body says "open the request to see the price
+     * and accept it", and until that page existed the link landed on the hub
+     * and the promise went unmet.
+     *
+     * The rest stay on the hub deliberately. `request_accepted` goes to
+     * whichever party did *not* accept, so it reaches vendors too, and
+     * `/bookings/<id>` is a customer-only route — deep-linking it by type alone
+     * would send a vendor to a page that refuses them.
+     */
+    if (row.type === 'request_quoted') {
+      return `/bookings/${data.bookingRequestId}`;
+    }
+
+    return '/bookings';
   }
 
   return null;
