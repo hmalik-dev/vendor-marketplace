@@ -189,7 +189,20 @@ export default async function HomePage(): Promise<React.ReactElement> {
         />
 
         <div className={`${CONTAINER} relative`}>
-          <div className="grid pt-10 lg:grid-cols-[56%_44%]">
+          {/*
+            Two drawn tablet/desktop compositions, one DOM.
+
+            `14 Landing tablet` puts the search bar **below both columns** at
+            full width; `27 Landing — 1024` keeps it inside the left column.
+            Rendering `HeroSearch` twice behind breakpoint classes would give
+            the page two instances of a client component with its own state —
+            two different half-filled searches, depending which width the
+            visitor last resized through. So the bar stays one node and the
+            *grid* moves it: row 2 spanning both columns at `md`, row 2 of
+            column 1 at `lg`, which reads identically to sitting inside the
+            copy column because the cluster spans both rows beside it.
+          */}
+          <div className="grid pt-10 md:grid-cols-[1fr_288px] md:gap-x-5 lg:grid-cols-[56%_44%] lg:gap-x-0">
             {/*
               34px from the copy to the cluster is the frame's gutter at the
               1440 design target, but at 1024 it was the last 18px the search
@@ -198,7 +211,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
               fit at 1024 the widths change, not the content — so the gutter
               narrows there and the frame's value returns at `xl`.
             */}
-            <div className="lg:pr-4 xl:pr-8.5">
+            <div className="md:col-start-1 md:row-start-1 lg:pr-4 xl:pr-8.5">
               {/*
                 `text-meta`, not `text-xs`: frame `01 Landing` draws the badge
                 at 12px and `--text-xs` is 11px (#85). The step already existed
@@ -230,7 +243,9 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 Compare real availability and pricing from vendors near you, send one request, and
                 pay securely once the date is locked in.
               </p>
+            </div>
 
+            <div className="md:col-span-2 md:row-start-2 lg:col-span-1 lg:col-start-1 lg:pr-4 xl:pr-8.5">
               <HeroSearch categories={categories} />
 
               {/*
@@ -238,8 +253,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 they need. Plain links, so they work before hydration and can
                 be opened in a new tab — the bar is the only part that needs a
                 client boundary.
+
+                `14 Landing tablet` does not draw this row: at 768 the bar has
+                just taken the full width and the category cards are directly
+                beneath it, so a third row of category shortcuts between them
+                repeats the same navigation twice in 120px.
               */}
-              <div className="mt-4 flex flex-wrap items-center gap-2">
+              <div className="mt-4 hidden flex-wrap items-center gap-2 max-md:flex lg:flex">
                 <span className="mr-0.5 text-sm text-stone-600">Or jump straight to</span>
                 {LANDING_JUMP_CATEGORY_SLUGS.map((slug, index) => (
                   <Link
@@ -255,14 +275,19 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
             {/*
               The cluster is the composition, not an illustration: it only
-              means anything sitting beside the headline. Below `lg` the hero
-              is a single column, so it had become a third block of
-              photographs in a vertical scroll — between the copy and the
-              category cards, which are the row that actually leads somewhere.
-              It is dropped there rather than stacked. The category cards are
-              untouched at every width.
+              means anything sitting beside the headline. `14 Landing tablet`
+              draws it at 768 beside a narrower copy column, which is why it
+              now appears from `md` — it used to be dropped below `lg`, on the
+              reasoning that a single-column hero turned it into a third block
+              of photographs in a vertical scroll. That reasoning still holds
+              *below* 768, where it stays hidden and `14 Landing mobile` draws
+              no cards at all.
+
+              It spans both rows from `lg`, so the search bar sitting in row 2
+              of column 1 reads as part of the copy column rather than pushing
+              the cluster down.
             */}
-            <div className="hidden lg:flex lg:justify-start">
+            <div className="hidden md:col-start-2 md:row-start-1 md:flex md:justify-start lg:row-span-2">
               <PhotoCluster />
             </div>
           </div>

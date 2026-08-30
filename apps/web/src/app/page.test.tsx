@@ -327,12 +327,17 @@ describe('HomePage', () => {
 
   /*
    * The hero cluster is the composition, and it only reads as one beside the
-   * headline. Below `lg` the hero is a single column, so it had become a third
-   * block of photographs in a vertical scroll ahead of the category cards —
-   * which are the row that actually leads somewhere, and which stay at every
-   * width.
+   * headline — so it is drawn wherever a frame gives it a column beside the
+   * copy, and dropped where none does.
+   *
+   * **This replaces the old "below `lg`" rule**, which #304's new
+   * `14 Landing tablet` frame overrides: that frame draws two cards beside a
+   * narrower copy column at 768. The reasoning behind the old rule still holds
+   * below 768, where the hero really is one column and `14 Landing mobile`
+   * draws no cards at all — so the cutoff moved from `lg` to `md` rather than
+   * disappearing.
    */
-  it('drops the hero photo cluster below lg and keeps the category cards', async () => {
+  it('draws the hero cluster from md, where a frame gives it a column', async () => {
     const { container } = render(await HomePage());
 
     // next/image rewrites src through the optimiser, so this matches the
@@ -342,11 +347,28 @@ describe('HomePage', () => {
 
     const clusterColumn = cluster?.closest('div.hidden');
     expect(clusterColumn?.className).toContain('hidden');
-    expect(clusterColumn?.className).toContain('lg:flex');
+    expect(clusterColumn?.className).toContain('md:flex');
+    // And not still gated on `lg`, which would leave 768 empty.
+    expect(clusterColumn?.className).not.toContain('lg:flex');
 
     // The category cards are a different row and are not gated on width.
     const categoryCard = container.querySelector('img[src*="categories%2Fphotography.jpg"]');
     expect(categoryCard?.closest('div.hidden')).toBeNull();
+  });
+
+  /*
+   * `14 Landing mobile` draws no cards, so the third card's own gate has to
+   * survive: it is the one the tablet frame sheds, and it must not reappear at
+   * 768 just because the cluster now renders there.
+   */
+  it('still sheds the third card below lg, as the tablet frame draws it', async () => {
+    const { container } = render(await HomePage());
+
+    // `StockPhoto` puts the caller's classes on its wrapper, not the `img`.
+    const venue = container.querySelector('img[src*="venue.jpg"]')?.parentElement;
+    expect(venue).not.toBeNull();
+    expect(venue?.className).toContain('hidden');
+    expect(venue?.className).toContain('lg:block');
   });
 
   /*
