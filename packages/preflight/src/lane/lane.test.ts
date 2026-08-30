@@ -163,6 +163,45 @@ describe('laneUp', () => {
   });
 
   /*
+   * #256. A resumed lane's manifest used to be handed back unexamined: whatever
+   * `worktreePath` and `branch` it was provisioned with, even after the caller
+   * passed a different, real worktree. `lane:exec` and `lane:pr` both read the
+   * manifest rather than their own arguments, so a stale path there is a lane
+   * that silently operates on a directory nothing points at any more.
+   */
+  it("re-derives a resumed lane's worktree path and branch instead of handing back stale ones", async () => {
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+    const first = await laneUp(root, worktree, '42', deps());
+
+    const rebuilt = mkdtempSync(path.join(tmpdir(), 'lane-wt-rebuilt-'));
+
+    try {
+      const resumedDeps: LaneUpDeps = {
+        ...deps(),
+        branchOf: vi.fn().mockReturnValue('worktree-42-rebuilt'),
+      };
+      const resumed = await laneUp(root, rebuilt, '42', resumedDeps);
+
+      // The manifest now reports the worktree that actually exists on disk…
+      expect(resumed.worktreePath).toBe(rebuilt);
+      expect(resumed.branch).toBe('worktree-42-rebuilt');
+      expect(existsSync(resumed.worktreePath)).toBe(true);
+
+      // …and the write persisted, so a later read sees the same thing.
+      expect(readManifest(root, '42')?.worktreePath).toBe(rebuilt);
+      expect(readManifest(root, '42')?.branch).toBe('worktree-42-rebuilt');
+
+      // Ports and the database are unchanged — only location and branch moved.
+      expect(resumed.apiPort).toBe(first.apiPort);
+      expect(resumed.database).toBe(first.database);
+      expect(resumedDeps.branchOf).toHaveBeenCalledWith(rebuilt);
+      expect(resumedDeps.createDatabase).not.toHaveBeenCalled();
+    } finally {
+      rmSync(rebuilt, { recursive: true, force: true });
+    }
+  });
+
+  /*
    * The manifest lives in the main checkout and the env file in the worktree,
    * so the two can part company: the env file is gitignored and a clean takes
    * it while the manifest survives. Returning the manifest alone left the lane
