@@ -51,7 +51,12 @@ const VENDOR_INSET = 'lg:px-8';
  */
 const VENDOR_ROUTES = ['/vendor', '/messages'] as const;
 
-const BASE = 'flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-10';
+/*
+ * The header's gutter is the page's gutter — the frames draw the logo flush
+ * with the hero copy at every width, so a header on its own ladder puts the
+ * two out of line by 8-12px at exactly the widths #169 is about.
+ */
+const BASE = 'flex h-full items-center justify-between gap-4 px-5 lg:px-7 min-[90rem]:px-10';
 
 export interface HeaderNavProps {
   children: React.ReactNode;

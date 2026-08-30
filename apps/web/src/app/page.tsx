@@ -28,11 +28,20 @@ const LAUNCH_CITY = 'Austin';
 const LAUNCH_REGION = 'TX';
 
 /**
- * The frame is drawn at 1440 with a 40px gutter and no inner max-width — the
- * category row spans the whole page. The cap keeps the six cards from
- * stretching on an ultrawide display without inventing a margin at 1440.
+ * The page gutter, at each width a frame draws one: 20px at `14 Landing
+ * tablet`, 28px at `27 Landing — 1024`, 40px at `01 Landing`. It used to read
+ * `sm:px-8 lg:px-10`, which gave 768 a 32px gutter no frame asks for and 1024
+ * the full desktop 40 — the single biggest reason 1024 read as compressed
+ * desktop rather than its own composition.
+ *
+ * The 1440 step is `min-[90rem]`, not `xl`, because 1440 is the width the
+ * frame is drawn at; `/search` already sets its own gutter the same way.
+ *
+ * There is no inner max-width — the category row spans the whole page. The cap
+ * keeps the six cards from stretching on an ultrawide display without
+ * inventing a margin at 1440.
  */
-const CONTAINER = 'mx-auto w-full max-w-[1440px] px-5 sm:px-8 lg:px-10';
+const CONTAINER = 'mx-auto w-full max-w-[1440px] px-5 lg:px-7 min-[90rem]:px-10';
 
 /** The blurb each landing card carries, by slug. Copy, so it lives in shared. */
 const SHORT_DESCRIPTIONS = new Map(
@@ -233,7 +242,18 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 squeezed 1440: `25 Landing — 1024` sets the headline at 40px so
                 the category row — the fold marker — still clears 640px.
               */}
-              <h1 className="font-display text-display-lg leading-[1.04] tracking-[-.02em] text-stone-900 sm:text-display-hero-md min-[90rem]:text-display-xl">
+              {/*
+                Four drawn sizes, one per drawn width: 34 below the frames, 36
+                at `14 Landing tablet`, 40 at `27 Landing — 1024`, 54 at `01`.
+                The 40 used to start at `sm`, which gave 768 the 1024 size.
+
+                No `leading-` here: each size token carries the ratio its own
+                frame declares (1.06, 1.05, 1.04, 1.04), and a single hardcoded
+                1.04 silently overrode all four. The 768 frame is the one that
+                differs, so that was a real 0.4px-per-line error rather than a
+                tidiness point.
+              */}
+              <h1 className="font-display text-display-lg tracking-[-.02em] text-stone-900 md:text-display-hero-sm lg:text-display-hero-md min-[90rem]:text-display-xl">
                 Book your vendors
                 <br />
                 <span className="text-clay-500 italic">without the back-and-forth.</span>

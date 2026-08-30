@@ -25,7 +25,12 @@ export function SignedOutDrawer(): React.ReactElement | null {
     return null;
   }
 
-  return <NavDrawer links={MARKETING_LINKS} />;
+  /*
+   * `hideTriggerFrom="md"` because `14 Landing tablet` draws this bar at 768
+   * with its links showing and no hamburger. The signed-in drawer keeps the
+   * default, which `14 Search tablet` draws.
+   */
+  return <NavDrawer links={MARKETING_LINKS} hideTriggerFrom="md" />;
 }
 
 const SIGNED_IN_LINKS = [

@@ -78,7 +78,8 @@ export function SiteFooter(): React.ReactElement {
     // The split CTA above it is also ink, so the hairline is what keeps the
     // two from reading as one undifferentiated block on the landing page.
     <footer className="border-t border-stone-0/10 bg-stone-900">
-      <div className="mx-auto w-full max-w-[1440px] px-5 py-14 sm:px-8 lg:px-10">
+      {/* Same gutter ladder as the page and the header — see `page.tsx`. */}
+      <div className="mx-auto w-full max-w-[1440px] px-5 py-14 lg:px-7 min-[90rem]:px-10">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:pr-10">
             <Link href="/" className="inline-block transition-opacity hover:opacity-80">

@@ -23,15 +23,34 @@ import { cn } from '@/lib/utils';
 export interface NavDrawerLink {
   label: string;
   href: string;
+  /**
+   * Hidden from the 768 bar, but never from the drawer. The drawer is the
+   * narrow-width fallback, so it carries every link — a link shed for width in
+   * the bar is exactly the one a drawer exists to keep reachable.
+   */
+  tabletHidden?: boolean;
 }
 
 export interface NavDrawerProps {
   /** Rendered above the links — the account cluster, when there is one. */
   children?: ReactNode;
   links: readonly NavDrawerLink[];
+  /**
+   * The width the trigger disappears at, because the frames disagree by screen.
+   *
+   * `14 Landing tablet` draws the signed-out landing bar at 768 with its links
+   * showing and **no** hamburger, while `14 Search tablet` draws one at the same
+   * width — that frame is signed in and fills the nav space with the search bar,
+   * so it has nowhere to put links. One default would contradict one of them.
+   */
+  hideTriggerFrom?: 'md' | '769px';
 }
 
-export function NavDrawer({ links, children }: NavDrawerProps): React.ReactElement {
+export function NavDrawer({
+  links,
+  children,
+  hideTriggerFrom = '769px',
+}: NavDrawerProps): React.ReactElement {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -54,11 +73,14 @@ export function NavDrawer({ links, children }: NavDrawerProps): React.ReactEleme
           screen, so the target is stated here rather than inferred from the
           artwork.
 
-          Hidden from 769 up rather than from 768: frame `14 Search tablet` is
-          drawn at exactly 768 and holds the hamburger, so `md:hidden` — which
-          hides it *at* the breakpoint — would miss the frame by one pixel.
+          The width it hides at is the caller's, because the frames disagree —
+          see `hideTriggerFrom`. `min-[769px]` keeps the hamburger *at* 768 for
+          `14 Search tablet`; `md` removes it at 768 for `14 Landing tablet`.
         */
-        className="-mr-2.5 flex size-11 items-center justify-center rounded-lg text-stone-900 min-[769px]:hidden"
+        className={cn(
+          '-mr-2.5 flex size-11 items-center justify-center rounded-lg text-stone-900',
+          hideTriggerFrom === 'md' ? 'md:hidden' : 'min-[769px]:hidden',
+        )}
       >
         {/* Three 18x1.6 bars, 3px apart — frame `14 Landing mobile`. */}
         <span aria-hidden="true" className="flex flex-col gap-[3px]">
@@ -72,6 +94,13 @@ export function NavDrawer({ links, children }: NavDrawerProps): React.ReactEleme
         <DialogPrimitive.Overlay className="fixed inset-0 z-(--z-header) bg-stone-900/20 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
         <DialogPrimitive.Content
           aria-label="Menu"
+          /*
+            Radix sets `role="dialog"` but not `aria-modal` — it isolates the
+            rest of the page with `aria-hidden` on the siblings instead. Both
+            are true here and `04-laws.md` asks for the attribute, so it is
+            stated rather than inferred from the Root's `modal` default.
+          */
+          aria-modal="true"
           className={cn(
             // Anchored to the right edge and full height: a drawer, not a card.
             'fixed inset-y-0 right-0 z-(--z-header) flex w-72 max-w-[85vw] flex-col gap-1 border-l border-stone-300 bg-stone-0 p-4 shadow-xl outline-none',
@@ -88,7 +117,12 @@ export function NavDrawer({ links, children }: NavDrawerProps): React.ReactEleme
 
           <DialogPrimitive.Close
             aria-label="Close menu"
-            className="mb-2 self-end rounded-lg p-2.5 text-stone-700 hover:text-stone-900"
+            /*
+              44x44, the same law as the trigger that opened it. `p-2.5` around
+              an 18px glyph measured 38x38 — 6px short on both axes, and it is
+              the one control a drawer must not make hard to hit.
+            */
+            className="mb-2 flex size-11 items-center justify-center self-end rounded-lg text-stone-700 hover:text-stone-900"
           >
             <span aria-hidden="true" className="relative block size-4.5">
               <span className="absolute top-1/2 left-0 block h-[1.6px] w-full rotate-45 bg-current" />

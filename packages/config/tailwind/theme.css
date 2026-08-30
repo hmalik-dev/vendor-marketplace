@@ -142,6 +142,15 @@
   --text-display-lg: 34px;
   --text-display-lg--line-height: 1.06;
   /*
+   * The hero headline's 768 step. `14 Landing tablet` draws it at 36px, between
+   * the 34 of `display-lg` and the 40 of the 1024 step — the headline does not
+   * jump straight from its narrow size to its laptop size, because at 768 the
+   * copy column has already given ~40% of the row to the photo cluster and a
+   * 40px headline wraps to a fourth line inside it.
+   */
+  --text-display-hero-sm: 36px;
+  --text-display-hero-sm--line-height: 1.05;
+  /*
    * The hero headline's 1024 step. `30-responsive.md` takes display type from
    * 54 to 40px at that width, and frame `25 Landing — 1024` draws it at 40 —
    * a size between `display-lg` and `display-xl` that exists only because
@@ -185,7 +194,7 @@
   --shadow-hover: 0 8px 24px rgba(35, 32, 28, 0.12);
 
   /* Chrome the full-height app shells are measured against. */
-  --header-height: 4rem; /* 64px; 56px below `md` — see the override below */
+  --header-height: 4rem; /* 64px at 1440; 56px below it — see the override */
   --sidebar-width: 15rem; /* 240px */
   --sidebar-width-sm: 12.5rem; /* 200px — also the sticky form section nav */
   /*
@@ -282,7 +291,14 @@
 }
 
 /*
- * 56px below `md`, per `30-responsive.md`'s Header row.
+ * 56px below 1440, per the frames.
+ *
+ * This used to read `width < 48rem`, which is 768 — so every width from 768 to
+ * 1439 kept the 64px desktop bar. Both `27 Landing — 1024` and `14 Landing
+ * tablet` draw `height:56px` explicitly, and 64px is the `.hd` default that
+ * only `01 Landing` and the other 1440 frames take. On a 640px-tall laptop
+ * viewport those 8px come straight out of the fold, which is the whole point
+ * of #169 treating height as the binding constraint at 1024.
  *
  * An override on the same variable rather than a second token, so every
  * `app-shell`, sticky offset and `scroll-mt` that already reads
@@ -291,7 +307,7 @@
  * these 8px on every phone — which is the failure #4 already had to fix a
  * 1px version of.
  */
-@media (width < 48rem) {
+@media (width < 90rem) {
   :root {
     --header-height: 3.5rem;
   }

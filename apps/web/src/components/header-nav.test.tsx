@@ -84,7 +84,15 @@ describe('HeaderNav', () => {
     expect(frameHeaderInset('18 Search no results')).toBe(frameHeaderInset('02 Search'));
   });
 
-  it('leaves the landing inset alone, which frame 01 draws wider', () => {
+  /*
+   * This used to assert `lg` against frame `01 Landing` and forbid a
+   * `min-[90rem]` step — which read `lg` as "desktop" and so pinned 1024 to the
+   * 1440 gutter. That is the #169 defect stated as a test: `lg` is 1024, and
+   * 1024 has a frame of its own drawing a narrower inset.
+   *
+   * Now each step is checked against the frame drawn at that width.
+   */
+  it('steps the landing inset at each width the frames draw one', () => {
     pathname = '/';
     render(
       <HeaderNav>
@@ -94,10 +102,32 @@ describe('HeaderNav', () => {
 
     const className = navClass();
 
-    // The regression this guards: a global inset change would have pulled the
-    // marketing header in by 14px too.
-    expect(insetFromClass(className, 'lg')).toBe(frameHeaderInset('01 Landing'));
-    expect(className).not.toContain('min-[90rem]:px-');
+    expect(insetFromClass(className, 'lg')).toBe(frameHeaderInset('27 Landing — 1024'));
+    expect(insetFromClass(className, 'min-[90rem]')).toBe(frameHeaderInset('01 Landing'));
+
+    /*
+     * The base step is unprefixed, so it is read separately. 768 is the
+     * narrowest width the frames draw a landing header at.
+     */
+    const base = /(?:^|\s)px-([\d.]+)(?=\s|$)/.exec(className);
+    expect(base, `no unprefixed \`px-*\` in "${className}"`).not.toBeNull();
+    expect(Number((base as RegExpExecArray)[1]) * 4).toBe(frameHeaderInset('14 Landing tablet'));
+  });
+
+  /*
+   * The three are deliberately different, and that is the whole point of the
+   * ticket — asserted against the frames rather than as constants, so a
+   * re-import that genuinely unifies two widths updates this instead of
+   * failing it.
+   */
+  it('does not put 768, 1024 and 1440 on one inset', () => {
+    const insets = [
+      frameHeaderInset('14 Landing tablet'),
+      frameHeaderInset('27 Landing — 1024'),
+      frameHeaderInset('01 Landing'),
+    ];
+
+    expect(new Set(insets).size, `the frames draw ${insets.join('/')}`).toBe(3);
   });
 
   it('renders its children inside the labelled nav', () => {
