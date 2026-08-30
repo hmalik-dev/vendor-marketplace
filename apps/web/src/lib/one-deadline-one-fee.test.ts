@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BOOKING_REQUEST_EXPIRY_DAYS, PLATFORM_FEE_COPY } from '@vendor-marketplace/shared';
+import { BOOKING_REQUEST_EXPIRY_DAYS, MONEY_COPY } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -18,14 +18,19 @@ import { describe, expect, it } from 'vitest';
  * differently, so the vendor saw "expires in 60h" where the customer saw
  * "expires in 3d".
  *
- * **The fee.** The customer was told "No service fee", the vendor "your share,
- * after the platform fee". Both were true — the commission comes out of the
- * total rather than on top of it — but nothing said so, and a beta user
- * comparing notes with their vendor would read a contradiction.
+ * **The money.** The customer was told "No service fee", the vendor "your
+ * share, after the platform fee", and #217 asked for the two to be reconciled.
+ * Reconciling them was the wrong fix: `98-post-mvp.md` defers **all** fee
+ * language on vendor surfaces, so the vendor line was never an inconsistency to
+ * explain — it was a Post-MVP claim that should not have shipped, and writing
+ * more fee copy to reconcile it would have inverted the deferral. The customer
+ * keeps its half, the vendor is told the mechanism, and the claim is kept out
+ * by `components/vendor/no-vendor-fee-language.test.ts`.
  *
  * Neither is the kind of defect a type checker or a rendering test finds: every
  * one of those strings was individually well-formed. What was wrong was that
- * there was more than one of them.
+ * there was more than one of them — and, in the fee's case, that one of them
+ * should not have existed at all.
  */
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -115,34 +120,34 @@ describe('one deadline', () => {
   });
 });
 
-describe('one fee model', () => {
-  it('draws both sides of the fee story from one shared source', async () => {
+describe('one money story', () => {
+  it('draws the customer promise from the shared source', async () => {
     const railSource = await readFile(
       path.join(SRC, 'components', 'bookings', 'bookings-rail.tsx'),
       'utf8',
     );
+
+    expect(railSource).toContain('MONEY_COPY.customer');
+    // It may not restate its half as a literal beside the shared one.
+    const railCode = railSource.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(railCode).not.toMatch(/'The price you.re quoted is the price you pay\.'/);
+  });
+
+  /*
+   * The vendor half is not a second phrasing of the fee — it is the absence of
+   * one. `98-post-mvp.md` defers every fee claim on a vendor surface, so the
+   * dashboard states the payment mechanism and nothing about the money split.
+   * `components/vendor/no-vendor-fee-language.test.ts` holds that line across
+   * every vendor component; this only pins the one string.
+   */
+  it('tells the vendor the mechanism, not the fee', async () => {
     const dashboardSource = await readFile(
       path.join(SRC, 'components', 'vendor', 'dashboard-stats.tsx'),
       'utf8',
     );
 
-    expect(railSource).toContain('PLATFORM_FEE_COPY.customer');
-    expect(dashboardSource).toContain('PLATFORM_FEE_COPY.vendor.delta');
-
-    // Neither may restate its half as a literal beside the shared one.
-    const railCode = railSource.replace(/\/\*[\s\S]*?\*\//g, '');
-    const dashboardCode = dashboardSource.replace(/\/\/[^\n]*/g, '');
-    expect(railCode).not.toMatch(/'The price you.re quoted is the price you pay\.'/);
-    expect(dashboardCode).not.toMatch(/"Your share, after the platform fee"/);
-  });
-
-  /*
-   * The two voices have to be compatible, not identical. The customer's half
-   * says nothing is added; the vendor's half has to say where the commission
-   * comes from, or the pair reads as a contradiction again.
-   */
-  it('has the vendor line explain that the customer pays nothing on top', () => {
-    expect(PLATFORM_FEE_COPY.customer.title).toBe('No service fee.');
-    expect(PLATFORM_FEE_COPY.vendor.delta).toMatch(/never pays on top/);
+    expect(dashboardSource).toContain('MONEY_COPY.vendorPayout');
+    expect(dashboardSource).not.toMatch(/platform fee/i);
+    expect(MONEY_COPY.vendorPayout).toBe('Paid out after each event');
   });
 });

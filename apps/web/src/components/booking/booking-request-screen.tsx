@@ -282,6 +282,7 @@ export function BookingRequestScreen({
         businessName={vendor.businessName}
         vendorSlug={vendorSlug}
         responseTimeHours={responseTimeHours}
+        isPackaged={servicePackage !== null}
       />
     );
   }
@@ -691,6 +692,12 @@ interface SuccessPanelProps {
   businessName: string;
   vendorSlug: string;
   responseTimeHours: number | null;
+  /**
+   * Whether the request carried a package. A packaged request has a locked
+   * price the vendor cannot re-quote, so promising a revised quote here would
+   * be false on the default path every customer takes.
+   */
+  isPackaged: boolean;
 }
 
 /**
@@ -705,6 +712,7 @@ function SuccessPanel({
   businessName,
   vendorSlug,
   responseTimeHours,
+  isPackaged,
 }: SuccessPanelProps): React.ReactElement {
   return (
     <div className="mx-auto w-full max-w-[660px] px-6 py-14 xl:px-10">
@@ -725,7 +733,7 @@ function SuccessPanel({
           <p className="mb-5 text-md leading-prose text-stone-700">
             {responseTimeHours
               ? `${businessName} usually replies within ${responseTimeHours} ${responseTimeHours === 1 ? 'hour' : 'hours'}.`
-              : `${businessName} has ${bookingRequestWindowPhrase()} to confirm the date or send a revised quote.`}{' '}
+              : `${businessName} has ${bookingRequestWindowPhrase()} ${isPackaged ? 'to confirm the date or decline' : 'to confirm or send a quote'}.`}{' '}
             You will get a notification either way, and the request closes on its own after{' '}
             {bookingRequestWindowPhrase()} if it goes unanswered.
           </p>

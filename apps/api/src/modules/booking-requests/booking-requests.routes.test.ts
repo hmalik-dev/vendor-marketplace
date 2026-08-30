@@ -8,7 +8,14 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { addDays, BOOKING_REQUEST_EXPIRY_DAYS, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  BOOKING_REQUEST_EXPIRY_DAYS,
+  ERROR_CODES,
+  MAX_PACKAGE_PRICE_CENTS,
+  MIN_BOOKING_AMOUNT_CENTS,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -631,6 +638,75 @@ describe('/booking-requests', () => {
       const body = accepted.json() as RequestBody;
       expect(body.status).toBe('accepted');
       expect(body.finalPriceCents).toBe(90_000);
+    });
+
+    /*
+     * Both bounds, asserted at the boundary rather than deep inside it.
+     *
+     * They failed in opposite ways in the browser: below the minimum the client
+     * sent nothing at all and said nothing, while above the maximum the request
+     * went out and the vendor was shown the API's own `Request validation
+     * failed`. The endpoint's job is to refuse both with a code the client can
+     * turn into a written sentence, which is what these pin.
+     */
+    it('refuses a quote below the minimum booking amount', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+
+      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+        quotedPriceCents: MIN_BOOKING_AMOUNT_CENTS - 1,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: ERROR_CODES.VALIDATION_ERROR });
+    });
+
+    it('refuses a quote above the maximum package price', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+
+      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+        quotedPriceCents: MAX_PACKAGE_PRICE_CENTS + 1,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: ERROR_CODES.VALIDATION_ERROR });
+    });
+
+    it('accepts a quote exactly on each bound', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const atMinimum = await createRequest(vendorId, {
+        customDetails: 'A single hour of portraits, nothing more than that.',
+      });
+
+      const response = await post(VENDOR, `/booking-requests/${atMinimum.json().id}/quote`, {
+        quotedPriceCents: MIN_BOOKING_AMOUNT_CENTS,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as RequestBody).quotedPriceCents).toBe(MIN_BOOKING_AMOUNT_CENTS);
+    });
+
+    /*
+     * The restriction #218 is about, asserted so the customer-facing promise
+     * stays honest: a packaged request carries a locked price, so the vendor's
+     * only routes are to confirm it or decline. The copy on the request screen
+     * now says exactly that, and this is what it is describing.
+     */
+    it('refuses to re-quote a request already priced by its package', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+
+      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+        quotedPriceCents: 90_000,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().message).toBe('This request is already priced by its package');
     });
 
     it('pending -> declined by the vendor', async () => {

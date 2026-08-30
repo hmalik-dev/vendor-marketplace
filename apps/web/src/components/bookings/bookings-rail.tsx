@@ -1,4 +1,4 @@
-import { PLATFORM_FEE_COPY } from '@vendor-marketplace/shared';
+import { MONEY_COPY } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import type { BookingEntry } from '@/lib/booking-entries';
 
@@ -20,7 +20,7 @@ const MECHANISM_PROMISES = [
     platform fee" were written independently, were each true, and read as a
     flat contradiction to anyone who saw both.
   */
-  PLATFORM_FEE_COPY.customer,
+  MONEY_COPY.customer,
   { title: 'Reviews from real bookings.', body: 'Only events that happened here.' },
 ] as const;
 

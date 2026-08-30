@@ -2,6 +2,8 @@
 
 import {
   EVENT_TYPE_LABELS,
+  ERROR_CODES,
+  MAX_PACKAGE_PRICE_CENTS,
   MIN_BOOKING_AMOUNT_CENTS,
   expiryCountdown,
   formatPrice,
@@ -32,6 +34,32 @@ const ROW_DATE = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
   timeZone: 'UTC',
 });
+
+/**
+ * What the vendor is shown when a transition fails.
+ *
+ * A schema rejection is deliberately **not** passed through. The API answers a
+ * malformed body with its own `Request validation failed`, which named nothing
+ * the vendor could act on and is an upstream implementation detail besides —
+ * the same class as #72. The client already refuses both bounds before sending,
+ * so reaching this branch means the two disagreed, and the honest thing is to
+ * state the rule rather than echo the framework.
+ *
+ * Every other `AppError` is written for the reader — "that date is already
+ * booked", "this request has expired" — and those are passed through unchanged,
+ * because the row is exactly where they belong.
+ */
+function vendorFacingError(failure: unknown): string {
+  if (!(failure instanceof ApiClientError)) {
+    return 'That did not reach us. Check your connection and try again.';
+  }
+
+  if (failure.code === ERROR_CODES.VALIDATION_ERROR) {
+    return `Enter a price between ${formatPrice(MIN_BOOKING_AMOUNT_CENTS)} and ${formatPrice(MAX_PACKAGE_PRICE_CENTS)}.`;
+  }
+
+  return failure.message;
+}
 
 /*
  * The countdown moved to `expiryCountdown` in the shared package. This one
@@ -134,18 +162,32 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
        * a date booked out from under it, or a window that closed — and a toast
        * would float away from the row it belongs to.
        */
-      setError(
-        failure instanceof ApiClientError
-          ? failure.message
-          : 'That did not reach us. Check your connection and try again.',
-      );
+      setError(vendorFacingError(failure));
     } finally {
       setBusy(false);
     }
   }
 
+  /*
+   * Both bounds, each with its own sentence.
+   *
+   * They used to fail in opposite and equally unhelpful ways: below the minimum
+   * the button simply went inert with no network request and no message, while
+   * above the maximum the request went out and the vendor was shown the API's
+   * own `Request validation failed`. Neither told them what number to type. The
+   * bound is the same one `priceCentsSchema` enforces, so the client and the
+   * server refuse the same values for the same stated reason.
+   */
   const quoteCents = Math.round(Number.parseFloat(amount) * 100);
-  const quoteValid = Number.isFinite(quoteCents) && quoteCents >= MIN_BOOKING_AMOUNT_CENTS;
+  const quoteEntered = amount.trim() !== '' && Number.isFinite(quoteCents);
+  const quoteIssue: string | null = !quoteEntered
+    ? null
+    : quoteCents < MIN_BOOKING_AMOUNT_CENTS
+      ? `The minimum booking is ${formatPrice(MIN_BOOKING_AMOUNT_CENTS)}.`
+      : quoteCents > MAX_PACKAGE_PRICE_CENTS
+        ? `The most you can quote is ${formatPrice(MAX_PACKAGE_PRICE_CENTS)}.`
+        : null;
+  const quoteValid = quoteEntered && quoteIssue === null;
 
   return (
     <li
@@ -196,12 +238,7 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
             size="sm"
             disabled={busy || isPackage}
             onClick={() => setQuoting((open) => !open)}
-            /*
-              A package request is priced already and its lock is immutable, so
-              there is nothing here to quote — the vendor's route out of a price
-              they no longer want to honour is to decline.
-            */
-            title={isPackage ? 'This request is already priced by its package' : undefined}
+            aria-describedby={isPackage ? `quote-locked-${request.id}` : undefined}
           >
             Send quote
           </Button>
@@ -218,6 +255,19 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
         </div>
       </div>
 
+      {/*
+        The reason `Send quote` is inert, as visible copy rather than a native
+        `title`. A tooltip is not an explanation: it never appears on a touch
+        device, it is not announced, and it does not appear at all on a disabled
+        control in several browsers — so the vendor met a dead button and no
+        account of why.
+      */}
+      {isPackage ? (
+        <p id={`quote-locked-${request.id}`} className="mt-2.5 text-xs text-stone-600">
+          Priced by its package, so the amount is fixed. Decline if you cannot honour it.
+        </p>
+      ) : null}
+
       {quoting && !isPackage ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-stone-200 pt-3">
           <label htmlFor={`quote-${request.id}`} className="text-sm text-stone-700">
@@ -228,6 +278,9 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
             type="number"
             inputMode="decimal"
             min={MIN_BOOKING_AMOUNT_CENTS / 100}
+            // Stated so the browser can help, and so the ceiling is discoverable
+            // before the vendor types past it rather than only after.
+            max={MAX_PACKAGE_PRICE_CENTS / 100}
             step="1"
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
@@ -243,9 +296,9 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
           >
             Send
           </Button>
-          {amount !== '' && !quoteValid ? (
-            <span className="text-xs text-error-500">
-              The minimum booking is {formatPrice(MIN_BOOKING_AMOUNT_CENTS)}.
+          {quoteIssue ? (
+            <span role="alert" className="text-xs text-error-500">
+              {quoteIssue}
             </span>
           ) : null}
         </div>

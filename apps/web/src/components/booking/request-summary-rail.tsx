@@ -149,9 +149,18 @@ export function RequestSummaryRail({
       <div className="flex gap-2.5 bg-gold-50 px-4.5 py-3.5">
         <span aria-hidden="true" className="mt-1.25 size-2 shrink-0 rounded-full bg-gold-400" />
         <p className="text-sm leading-[1.55] text-gold-600">
+          {/*
+            The promise has to match what the vendor can actually do. A package
+            request carries a locked price the API treats as immutable — the
+            vendor's only routes are to confirm it or decline — so promising a
+            revised quote here was false on the default path every customer
+            takes, which is the path that reaches this rail with a package
+            attached. A custom request has no locked price and can be quoted.
+          */}
           You&rsquo;re requesting, not paying. {vendor.businessName} has{' '}
-          {bookingRequestWindowPhrase()} to confirm or send a revised quote — you approve before any
-          card is charged.
+          {bookingRequestWindowPhrase()}{' '}
+          {servicePackage ? 'to confirm the date or decline' : 'to confirm or send a quote'} — you
+          approve before any card is charged.
         </p>
       </div>
 

@@ -588,28 +588,35 @@ export const DEFAULT_PLATFORM_FEE_RATE = 0.12;
 export const BOOKING_REQUEST_EXPIRY_DAYS = 7;
 
 /**
- * The one description of the fee model, in the two voices that need it.
+ * What each side is told about money, in the one place both are decided.
  *
- * Customer and vendor surfaces were each written truthfully and independently
- * — "No service fee, the price you're quoted is the price you pay" against
- * "Your share, after the platform fee" — and read as a flat contradiction to
- * anyone who saw both. They are not in conflict: the commission comes **out of**
- * the total rather than on top of it, which is exactly what `calculateFees`
- * computes. What was missing was any surface saying so.
+ * #217 read this as a contradiction — the customer told "No service fee", the
+ * vendor told "your share, after the platform fee" — and asked for the two to
+ * be reconciled. Reconciling them is the wrong fix, because
+ * `98-post-mvp.md` **defers all fee language on vendor surfaces**: "no
+ * vendor-facing surface makes any fee claim, in either direction. Not 'no
+ * fees', not a rate, not a hint", and the customer's promise "must not be
+ * mirrored, or negated, onto the vendor side". The vendor model is not settled,
+ * and a claim walked back later costs more trust than saying nothing now.
  *
- * Both strings live here so the two sides cannot drift apart again, and each
- * now names the other half of the arrangement rather than only its own.
+ * So the vendor line was not an inconsistency to be explained — it was a
+ * Post-MVP claim that should never have shipped. It is replaced by the payment
+ * **mechanism**, which is true under any pricing model the platform later
+ * picks. The customer's half is a real differentiator on their side of the
+ * transaction and stays exactly as it was.
  */
-export const PLATFORM_FEE_COPY = {
+export const MONEY_COPY = {
   /** Customer-facing: what they pay, and what is not added to it. */
   customer: {
     title: 'No service fee.',
     body: "The price you're quoted is the price you pay.",
   },
-  /** Vendor-facing: what they keep, and why the customer never sees it. */
-  vendor: {
-    delta: 'Your share, after the platform fee the customer never pays on top',
-  },
+  /**
+   * Vendor-facing: the mechanism, never the fee. Anything naming a rate, a
+   * commission or a fee on a vendor surface is a Post-MVP leak — see the guard
+   * in `no-vendor-fee-language.test.ts`.
+   */
+  vendorPayout: 'Paid out after each event',
 } as const;
 
 /** Cancelling at least this many hours before the event earns a full refund. */

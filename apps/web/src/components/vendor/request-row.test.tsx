@@ -164,6 +164,69 @@ describe('RequestRow', () => {
   });
 
   /*
+   * The other bound, which failed in the opposite direction: the request went
+   * out and the vendor was shown the API's own `Request validation failed`,
+   * naming neither the ceiling nor anything they could act on.
+   */
+  it('refuses a quote over the maximum and names the ceiling', async () => {
+    render(<RequestRow request={booking({ package: null, finalPriceCents: null })} isFirst />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send quote' }));
+    await userEvent.type(screen.getByLabelText('Your price'), '100001');
+
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+    expect(screen.getByText('The most you can quote is $100,000.')).toBeDefined();
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it('states the ceiling on the field so the browser can help', async () => {
+    render(<RequestRow request={booking({ package: null, finalPriceCents: null })} isFirst />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send quote' }));
+
+    const field = screen.getByLabelText('Your price');
+    expect(field.getAttribute('min')).toBe('25');
+    expect(field.getAttribute('max')).toBe('100000');
+  });
+
+  /*
+   * `Request validation failed` is the framework's sentence, not the vendor's,
+   * and it names nothing actionable. Reaching this branch means the client and
+   * the server disagreed about the bounds, so the honest answer states the rule.
+   */
+  it('never renders an upstream validation string', async () => {
+    const { ApiClientError } = await import('@/lib/api-client');
+    requestMock.mockRejectedValue(
+      new ApiClientError(400, 'VALIDATION_ERROR', 'Request validation failed'),
+    );
+    render(<RequestRow request={booking()} isFirst />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Enter a price between $25 and $100,000.');
+    expect(alert.textContent).not.toContain('Request validation failed');
+  });
+
+  /*
+   * #218: the reason the control is inert has to be readable. A native `title`
+   * never appears on a touch device, is not announced, and in several browsers
+   * does not render at all on a disabled control.
+   */
+  it('explains in visible copy why a packaged request cannot be quoted', () => {
+    render(<RequestRow request={booking()} isFirst />);
+
+    const quote = screen.getByRole('button', { name: 'Send quote' });
+    expect(quote).toHaveProperty('disabled', true);
+    expect(quote.getAttribute('title')).toBeNull();
+
+    const reason = screen.getByText(
+      'Priced by its package, so the amount is fixed. Decline if you cannot honour it.',
+    );
+    expect(quote.getAttribute('aria-describedby')).toBe(reason.id);
+  });
+
+  /*
    * A date booked out from under the request is about *this* row, so the
    * message belongs on it — a toast would float away from what it describes.
    */
