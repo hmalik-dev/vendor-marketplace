@@ -31,6 +31,16 @@ describe('/vendor/portfolio', () => {
     expect(response.statusCode).toBe(201);
   }
 
+  /** The `users.id` the upload route would write into a key for this account. */
+  async function ownerIdOf(clerkUserId: string): Promise<string> {
+    const [row] = await harness.database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.clerkUserId, clerkUserId));
+
+    return row!.id;
+  }
+
   async function addItem(
     clerkUserId: string,
     overrides: Record<string, unknown> = {},
@@ -236,11 +246,17 @@ describe('/vendor/portfolio', () => {
      */
     it('removes the stored objects, not only the row', async () => {
       await createProfile(VENDOR, 'Sunlit Studio');
-      const item = await addItem(VENDOR);
+      const owner = await ownerIdOf(VENDOR);
+      // Owner-shaped, as the upload route mints them — a URL or a legacy
+      // two-segment key is deliberately never reaped.
+      harness.storedObjects.length = 0;
+      const image = `portfolio/${owner}/3333.webp`;
+      const thumbnail = `portfolio/${owner}/3333-thumb.webp`;
+      const item = await addItem(VENDOR, { imageUrl: image, thumbnailUrl: thumbnail });
 
       harness.storedObjects.push(
-        { key: IMAGE_URL, body: Buffer.alloc(0), contentType: 'image/webp' },
-        { key: THUMBNAIL_URL, body: Buffer.alloc(0), contentType: 'image/webp' },
+        { key: image, body: Buffer.alloc(0), contentType: 'image/webp' },
+        { key: thumbnail, body: Buffer.alloc(0), contentType: 'image/webp' },
       );
 
       const response = await harness.app.inject({
@@ -260,7 +276,11 @@ describe('/vendor/portfolio', () => {
      */
     it('still answers 204 when the object store refuses the reap', async () => {
       await createProfile(VENDOR, 'Sunlit Studio');
-      const item = await addItem(VENDOR);
+      const owner = await ownerIdOf(VENDOR);
+      const item = await addItem(VENDOR, {
+        imageUrl: `portfolio/${owner}/4444.webp`,
+        thumbnailUrl: null,
+      });
 
       const remove = vi
         .spyOn(harness.app.storage, 'remove')
@@ -283,6 +303,66 @@ describe('/vendor/portfolio', () => {
         headers: bearer(VENDOR),
       });
       expect(remaining.json()).toEqual([]);
+    });
+
+    /*
+     * The exploit the reap opened, and the reason keys carry their owner.
+     *
+     * A vendor can read a rival's keys straight off the public
+     * `GET /vendors/:slug`, claim them on a row of their own — `imageRefSchema`
+     * accepts a bare object key — and delete that row. Without the owner
+     * segment, the reap would take the rival's photo with it: permanent, and
+     * leaving the victim's own row pointing at a dead key.
+     */
+    it('never reaps an object minted for a different vendor', async () => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+
+      // A key the attacker did not mint, in the shape the upload route writes.
+      harness.storedObjects.length = 0;
+      const victimKey = 'portfolio/some-other-user-id/1111.webp';
+      const item = await addItem(VENDOR, { imageUrl: victimKey, thumbnailUrl: null });
+
+      harness.storedObjects.push({
+        key: victimKey,
+        body: Buffer.alloc(0),
+        contentType: 'image/webp',
+      });
+
+      const response = await harness.app.inject({
+        method: 'DELETE',
+        url: `/vendor/portfolio/${item.id}`,
+        headers: bearer(VENDOR),
+      });
+
+      // The attacker's own row goes; the victim's object stays.
+      expect(response.statusCode).toBe(204);
+      expect(harness.storedObjects.map((object) => object.key)).toEqual([victimKey]);
+    });
+
+    /*
+     * The cover is a designation on an existing tile, not a second upload —
+     * `syncCoverFromPortfolio` copies a tile's key onto the profile. Reaping on
+     * the strength of one row would destroy an object the other still points
+     * at, and the vendor would have done it to themselves.
+     */
+    it('never reaps an object another row still references', async () => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+
+      harness.storedObjects.length = 0;
+      const shared = `portfolio/${await ownerIdOf(VENDOR)}/2222.webp`;
+      const first = await addItem(VENDOR, { imageUrl: shared, thumbnailUrl: null });
+      // A second row pointing at the same object, as the cover does.
+      await addItem(VENDOR, { imageUrl: shared, thumbnailUrl: null });
+
+      harness.storedObjects.push({ key: shared, body: Buffer.alloc(0), contentType: 'image/webp' });
+
+      await harness.app.inject({
+        method: 'DELETE',
+        url: `/vendor/portfolio/${first.id}`,
+        headers: bearer(VENDOR),
+      });
+
+      expect(harness.storedObjects.map((object) => object.key)).toEqual([shared]);
     });
 
     it('answers 404 for a photo that does not exist', async () => {

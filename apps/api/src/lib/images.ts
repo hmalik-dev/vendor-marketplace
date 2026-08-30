@@ -67,7 +67,12 @@ async function assertDecodableAndWideEnough(buffer: Buffer): Promise<void> {
    * same instruction; saying "your PNG is really a GIF" would be describing our
    * detection rather than their fix.
    */
-  if (format !== undefined && !ACCEPTED_DECODED_FORMATS.includes(format)) {
+  /*
+   * `format === undefined` refuses too. An allowlist that skips itself on a
+   * missing value falls through to the decode, and the decode accepts every
+   * format libvips reads — which is the hole this exists to close.
+   */
+  if (format === undefined || !ACCEPTED_DECODED_FORMATS.includes(format)) {
     throw validationFailed(`Unsupported image type. Upload a ${ACCEPTED_IMAGE_LABEL} file.`);
   }
 

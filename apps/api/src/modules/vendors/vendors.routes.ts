@@ -138,6 +138,7 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
         app.storage,
         assertRole(request.auth, ['vendor']).id,
         request.body,
+        request.log,
       ),
   );
 };

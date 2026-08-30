@@ -57,7 +57,7 @@ export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
        * decode. The query is already validated against the closed prefix set by
        * the time a handler runs, so the lookup cannot miss.
        */
-      assertRole(request.auth, STORAGE_PREFIX_ROLES[request.query.prefix]);
+      const uploader = assertRole(request.auth, STORAGE_PREFIX_ROLES[request.query.prefix]);
 
       const part = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
 
@@ -79,7 +79,9 @@ export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const processed = await processUploadedImage(buffer, part.mimetype);
 
-      const key = buildObjectKey(request.query.prefix, 'webp');
+      // The uploader is written into the key: it is the only record of who
+      // minted it, and the only thing that makes deleting one safe.
+      const key = buildObjectKey(request.query.prefix, uploader.id, 'webp');
       const thumbnailKey = key.replace(/\.webp$/, '-thumb.webp');
 
       const [imageUrl, thumbnailUrl] = await Promise.all([

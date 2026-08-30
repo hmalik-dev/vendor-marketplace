@@ -19,3 +19,5 @@
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body around the `redact` path
 - [Fabricating seeds share one declared-branch guard](fabricating-seeds-share-one-declared-branch-guard.md) — `assertSafeTarget` is mandatory in any `packages/db` seed; it trusts `.neon`/`NEON_BRANCH`, not the URL
 - [The e2e fixture forges stripe_onboarded](e2e-fixture-forges-stripe-onboarded.md) — `true` with a null `stripe_account_id`, a shape Stripe cannot produce; harmless until checkout exists
+- [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — no upload owns its key, and `GET /vendors/:slug` hands every key to anonymous callers
+- [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes were left as low-severity on purpose

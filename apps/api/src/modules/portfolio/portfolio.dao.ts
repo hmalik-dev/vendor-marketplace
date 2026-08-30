@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   portfolioItems,
   vendorProfiles,
@@ -194,4 +194,60 @@ export async function syncCoverFromPortfolio(
     .where(eq(vendorProfiles.id, vendorId));
 
   return cover;
+}
+
+/**
+ * Of `keys`, the ones no surviving row still points at.
+ *
+ * Four columns, because one object can be referenced from more than one of
+ * them: `syncCoverFromPortfolio` copies a portfolio item's key onto
+ * `vendor_profiles.cover_image_url`, so the cover is usually a *second*
+ * reference to a photo rather than an upload of its own.
+ */
+export async function findUnreferencedKeys(
+  db: AppDatabase,
+  keys: readonly string[],
+): Promise<string[]> {
+  if (keys.length === 0) {
+    return [];
+  }
+
+  const [items, profiles] = await Promise.all([
+    db
+      .select({ image: portfolioItems.imageUrl, thumbnail: portfolioItems.thumbnailUrl })
+      .from(portfolioItems)
+      .where(
+        or(
+          inArray(portfolioItems.imageUrl, [...keys]),
+          inArray(portfolioItems.thumbnailUrl, [...keys]),
+        ),
+      ),
+    db
+      .select({ profile: vendorProfiles.profileImageUrl, cover: vendorProfiles.coverImageUrl })
+      .from(vendorProfiles)
+      .where(
+        or(
+          inArray(vendorProfiles.profileImageUrl, [...keys]),
+          inArray(vendorProfiles.coverImageUrl, [...keys]),
+        ),
+      ),
+  ]);
+
+  const referenced = new Set<string>();
+  for (const row of items) {
+    referenced.add(row.image);
+    if (row.thumbnail !== null) {
+      referenced.add(row.thumbnail);
+    }
+  }
+  for (const row of profiles) {
+    if (row.profile !== null) {
+      referenced.add(row.profile);
+    }
+    if (row.cover !== null) {
+      referenced.add(row.cover);
+    }
+  }
+
+  return keys.filter((key) => !referenced.has(key));
 }

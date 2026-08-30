@@ -275,6 +275,7 @@ export async function updateVendorProfile(
   storage: ObjectStorage,
   userId: string,
   input: UpdateVendorProfileInput,
+  log?: { warn: (details: unknown, message: string) => void },
 ): Promise<VendorProfileDetail> {
   const existing = await findVendorProfileByUserId(db, userId);
   if (!existing) {
@@ -378,10 +379,23 @@ export async function updateVendorProfile(
    * succeed. Without it, every photo change left two objects — the WebP and its
    * thumbnail — in the bucket for the life of the account.
    */
-  await reapObjects(storage, [
-    replacedKey(existing.profileImageUrl, row.profileImageUrl),
-    replacedKey(existing.coverImageUrl, row.coverImageUrl),
-  ]);
+  await reapObjects(
+    db,
+    storage,
+    userId,
+    [
+      replacedKey(existing.profileImageUrl, row.profileImageUrl),
+      /*
+       * The cover is a designation on an existing portfolio tile, not an
+       * upload of its own — `syncCoverFromPortfolio` copies a tile's key here.
+       * `reapObjects` refuses to remove a key another row still references, so
+       * passing it is safe; it only ever reaps a cover that was genuinely
+       * uploaded as one and is now referenced by nothing.
+       */
+      replacedKey(existing.coverImageUrl, row.coverImageUrl),
+    ],
+    log,
+  );
 
   return loadDetail(db, row);
 }

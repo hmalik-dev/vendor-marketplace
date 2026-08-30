@@ -62,17 +62,48 @@ export interface ObjectStorage {
 }
 
 /**
- * Builds the key an upload is stored under. The name is a random UUID rather
- * than anything derived from the client's filename, so an attacker cannot
- * choose a path, overwrite someone else's object, or smuggle a traversal
- * sequence into the key.
+ * Builds the key an upload is stored under: `<prefix>/<ownerId>/<uuid>.<ext>`.
+ *
+ * The name is a random UUID rather than anything derived from the client's
+ * filename, so an attacker cannot choose a path, overwrite someone else's
+ * object, or smuggle a traversal sequence into the key.
+ *
+ * **The owner segment is what makes deletion safe.** Nothing else in the
+ * system records who uploaded a key — there is no `uploads` table — while the
+ * key on a row is written by the client, and public vendor pages hand out
+ * every key they render. Without an owner in the path, a vendor could claim
+ * a rival's key on their own row, delete that row, and take the rival's photo
+ * with it. `ownsObjectKey` is the check; this is what makes the check possible.
  */
-export function buildObjectKey(prefix: string, extension: string): string {
+export function buildObjectKey(prefix: string, ownerId: string, extension: string): string {
   if (!(STORAGE_PREFIXES as readonly string[]).includes(prefix)) {
     throw new Error(`Unknown storage prefix: ${prefix}`);
   }
 
-  return `${prefix}/${randomUUID()}.${extension}`;
+  if (!ownerId || ownerId.includes('/')) {
+    throw new Error('An object key needs a single-segment owner id');
+  }
+
+  return `${prefix}/${ownerId}/${randomUUID()}.${extension}`;
+}
+
+/**
+ * Whether `key` was minted for `ownerId`.
+ *
+ * Deliberately refuses anything that is not exactly `<prefix>/<owner>/<name>`.
+ * Keys stored before the owner segment existed have two segments and are never
+ * reaped — they stay as the orphans the old behaviour produced on purpose,
+ * which is the safe side of the trade. So does an absolute URL, which some
+ * seeded rows carry.
+ */
+export function ownsObjectKey(key: string, ownerId: string): boolean {
+  const segments = key.split('/');
+
+  return (
+    segments.length === 3 &&
+    (STORAGE_PREFIXES as readonly string[]).includes(segments[0] ?? '') &&
+    segments[1] === ownerId
+  );
 }
 
 export function publicUrlFor(publicBaseUrl: string, key: string): string {
@@ -115,12 +146,24 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
         return;
       }
 
-      await client.send(
+      const result = await client.send(
         new DeleteObjectsCommand({
           Bucket: env.S3_BUCKET,
           Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
         }),
       );
+
+      /*
+       * `DeleteObjects` answers **200** with per-key failures in `Errors`, so a
+       * token missing `s3:DeleteObject` would otherwise reap nothing, forever,
+       * without ever rejecting. `Quiet: true` suppresses the successes, not
+       * these.
+       */
+      if (result.Errors && result.Errors.length > 0) {
+        throw new Error(
+          `Object store refused ${result.Errors.length} of ${keys.length} deletes: ${result.Errors.map((entry) => entry.Code ?? 'unknown').join(', ')}`,
+        );
+      }
     },
 
     async checkAvailable() {

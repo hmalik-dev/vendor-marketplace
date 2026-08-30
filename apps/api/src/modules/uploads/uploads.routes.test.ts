@@ -179,7 +179,11 @@ describe('POST /upload/image', () => {
     expect(response.statusCode).toBe(201);
 
     const body = response.json();
-    expect(body.imageUrl).toMatch(/^http:\/\/cdn\.test\/vendor-profile\/[0-9a-f-]{36}\.webp$/);
+    // `<prefix>/<ownerId>/<uuid>.webp` — the owner segment is what makes
+    // deleting an object safe, since nothing else records who minted a key.
+    expect(body.imageUrl).toMatch(
+      /^http:\/\/cdn\.test\/vendor-profile\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.webp$/,
+    );
     expect(body.thumbnailUrl).toBe(body.imageUrl.replace('.webp', '-thumb.webp'));
     expect(response.headers.location).toBe(body.imageUrl);
     expect(harness.storedObjects).toHaveLength(2);

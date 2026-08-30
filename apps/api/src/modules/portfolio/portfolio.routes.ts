@@ -90,6 +90,7 @@ export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
         app.storage,
         assertRole(request.auth, ['vendor']).id,
         request.params.itemId,
+        request.log,
       );
 
       return reply.status(204).send(null);

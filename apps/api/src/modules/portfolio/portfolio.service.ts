@@ -8,13 +8,14 @@ import type { NewPortfolioItemRow, PortfolioItemRow } from '@vendor-marketplace/
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
 import { assertCompleteOrder } from '../../lib/ordering.js';
-import type { ObjectStorage } from '../../lib/storage.js';
+import { ownsObjectKey, type ObjectStorage } from '../../lib/storage.js';
 import { requireOwnVendorProfile } from '../vendors/vendors.service.js';
 import {
   applyPortfolioOrder,
   deletePortfolioItemById,
   findOwnedPortfolioIds,
   findPortfolioByVendor,
+  findUnreferencedKeys,
   insertPortfolioItem,
   nextDisplayOrder,
   syncCoverFromPortfolio,
@@ -86,6 +87,7 @@ export async function removePortfolioItem(
   storage: ObjectStorage,
   userId: string,
   itemId: string,
+  log?: { warn: (details: unknown, message: string) => void },
 ): Promise<void> {
   const vendor = await requireOwnVendorProfile(db, userId);
   const deleted = await deletePortfolioItemById(db, vendor.id, itemId);
@@ -109,31 +111,62 @@ export async function removePortfolioItem(
    * first; if the reap then fails, the result is one orphaned object, which is
    * exactly the state the old behaviour produced deliberately, every time.
    */
-  await reapObjects(storage, [deleted.imageUrl, deleted.thumbnailUrl]);
+  await reapObjects(db, storage, vendor.userId, [deleted.imageUrl, deleted.thumbnailUrl], log);
 }
 
 /**
- * Best-effort object removal. Never throws.
+ * Best-effort object removal. Never throws, and refuses more than it removes.
  *
- * A vendor who deleted a photo has had their answer the moment the row is gone;
- * failing that request because the bucket was briefly unreachable would undo
- * nothing and tell them something they cannot act on.
+ * **Two checks, and the diff that added this needed both.**
+ *
+ * *Ownership.* The key on a row is written by the client — `imageRefSchema`
+ * exists to accept a bare object key — and every public vendor page hands out
+ * the keys it renders. So a vendor could read a rival's key off
+ * `GET /vendors/:slug`, claim it on a row of their own, delete that row, and
+ * take the rival's photo with it. Nothing else records who uploaded a key, so
+ * the owner segment in the key is the only check available.
+ *
+ * *Still referenced.* The cover is a **designation on an existing tile**, not
+ * a second upload — `syncCoverFromPortfolio` copies a portfolio item's key
+ * onto `vendor_profiles`. Two rows, one object, on purpose. Reaping on the
+ * strength of one row would destroy an object the other still points at, and
+ * the vendor would have done it to themselves with a legal request.
+ *
+ * A key that fails either check is left in the bucket, which is exactly the
+ * state this repository shipped deliberately before. An orphan is recoverable
+ * by a sweep; a deleted photo is not.
  */
 export async function reapObjects(
+  db: AppDatabase,
   storage: ObjectStorage,
+  ownerId: string,
   keys: readonly (string | null)[],
+  log?: { warn: (details: unknown, message: string) => void },
 ): Promise<void> {
-  const present = keys.filter((key): key is string => key !== null && key.length > 0);
+  const owned = keys.filter(
+    (key): key is string => key !== null && key.length > 0 && ownsObjectKey(key, ownerId),
+  );
 
-  if (present.length === 0) {
+  if (owned.length === 0) {
+    return;
+  }
+
+  const unreferenced = await findUnreferencedKeys(db, owned);
+
+  if (unreferenced.length === 0) {
     return;
   }
 
   try {
-    await storage.remove(present);
-  } catch {
-    // An orphan is the old behaviour, and it is recoverable by a sweep. A 500
-    // on a delete that already succeeded is neither.
+    await storage.remove(unreferenced);
+  } catch (error) {
+    /*
+     * An orphan is the old behaviour and a sweep can find it. A 500 on a
+     * delete the caller already watched succeed is neither recoverable nor
+     * explicable — but it is logged, because a token missing `DeleteObject`
+     * would otherwise reap nothing, forever, in silence.
+     */
+    log?.warn({ keys: unreferenced, error }, 'Could not reap storage objects');
   }
 }
 
