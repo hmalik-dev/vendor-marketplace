@@ -25,8 +25,8 @@ browser alongside the live screen; compare, never recall.
 | 2 | 02 Search | `/search` | guest | 1440x900 | **FAIL (13)** | #90–#102 |
 | 3 | 03 Vendor profile | `/vendors/june-harlow` | guest | 1440x900 | **FAIL (14)** | #103–#116 |
 | 4 | 04 Booking request | `/vendors/june-harlow/request` | customer | 1440x900 | **FAIL (16)** | #192–#193 |
-| 5 | 05 Checkout | `blocked by #68` | customer | 1440x900 | todo | — |
-| 6 | 06 Booking confirmed | `blocked by #68` | customer | 1440x900 | todo | — |
+| 5 | 05 Checkout | `/bookings/[requestId]/checkout` | customer | 1440x900 | todo | #9, #10 |
+| 6 | 06 Booking confirmed | `/bookings/[requestId]/confirmed` | customer | 1440x900 | todo | #9, #10 |
 | 7 | 07 Customer bookings hub | `/bookings` | customer | 1440x900 | **FAIL (24)** | #187–#191 |
 | 8 | 08 Vendor dashboard | `/vendor/dashboard` | vendor | 1440x900 | **FAIL (13)** | #124–#136 |
 | 9 | 09 Vendor profile editor | `/vendor/profile/edit` | vendor | 1440x900 | **FAIL (16)** | #137–#152 |
@@ -53,7 +53,7 @@ browser alongside the live screen; compare, never recall.
 | 30 | 18 Search no results | `/search?name=zzzz` | guest | 1440x900 | todo | — |
 | 31 | 19 Bookings hub empty | `/bookings (empty acct)` | guest | 1440x900 | todo | — |
 | 32 | 20 Vendor dashboard empty | `/vendor/dashboard` | vendor | 1440x900 | todo | — |
-| 33 | 21 Checkout declined | `blocked by #68` | customer | 1440x900 | todo | — |
+| 33 | 21 Checkout declined | `/bookings/[requestId]/checkout` (declined state, same route) | customer | 1440x900 | todo | #9, #10 |
 | 34 | 22 Booking request errors | `request (invalid submit)` | customer | 1440x900 | todo | — |
 | 35 | 23 Messaging offline | `/messages (offline)` | customer | 1440x900 | todo | — |
 | 36 | 24 Image upload | `/vendor/portfolio` | vendor | 1440x900 | todo | — |
@@ -120,7 +120,7 @@ could not clean up. Worth clearing before any demo.
 | ID | Sev | Finding |
 |----|-----|---------|
 | S-1 | MED | **Vendor nav diverges from frame 08.** Frame: `Dashboard, Requests, Bookings, Messages, Availability, Packages, Edit profile, Payments`. App (`vendor-nav.tsx:23-27`): `Dashboard, Business profile, Packages, Portfolio, Availability`. **"Edit profile" vs "Business profile" is a text-axis failure**; order is a layout-axis failure. Missing items may be MVP scope; the labels are not |
-| S-2 | MED | **Five live routes have no frame**, so parity is unprovable: `/customer/profile`, `/sign-in`, `/suspended`, `/vendor/packages`, `/vendor/portfolio`. (Packages/Portfolio exist as tabs inside frame 09 — the app split them into routes, itself a composition divergence) |
+| S-2 | MED | ~~**Five live routes have no frame**, so parity is unprovable: `/customer/profile`, `/sign-in`, `/suspended`, `/vendor/packages`, `/vendor/portfolio`.~~ **STALE — corrected 2026-08-30 (#306, #319).** `/vendor/portfolio` **is** framed (rows 36-37 above, `24 Image upload` / `25 Upload failures`) — this finding and that mapping were the self-contradiction #319 was filed to stop recurring. The count itself was also stale: nine routes had no frame by the time #306 ruled on it, not five, because four more (`/bookings/[requestId]`, `/vendor/bookings`, `/vendor/payments`, `/vendor/payments/return`) landed afterward. The current, current-checked ruling for every one of them lives in `design/design-plan/00-README.md` under "Routes with no frame," and `route-parity-ledger.test.ts` now fails the build if a route ever again has neither a frame here nor a ruling there. (Packages/Portfolio exist as tabs inside frame 09 — the app split them into routes, itself a composition divergence) |
 | S-3 | MED | **`DrizzleQueryError` is logged without its `cause`** — the actual Postgres error is discarded, so the failures seen during pass 2 cannot be diagnosed. `async-and-errors` class |
 | S-4 | LOW | Commit `b1b8e7c "chore: Reconcile the ticket tracker"` swept 28 lines of unrelated in-progress work from a concurrent session into a mislabeled commit, already pushed to `main` |
 
