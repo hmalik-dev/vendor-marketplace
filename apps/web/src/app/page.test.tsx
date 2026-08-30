@@ -469,3 +469,63 @@ describe('HomePage', () => {
     expect(getCategories).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * The six category cards are the front door's primary navigation, and they
+ * shipped with **no focus indicator of any kind** — no outline, no ring, just
+ * the resting shadow. `globals.css` declares the ring once for anything
+ * focusable, which is why this went unnoticed: the global rule exists, and the
+ * card's own `shadow-sm` composition was what left nothing on screen.
+ *
+ * Asserted as a class-level fact, deliberately. jsdom computes no ring, and
+ * `04-laws.md`'s Access axis is settled by the parity pass in a real browser —
+ * see `.claude/rules/web-design-parity.md`. What this catches is the utilities
+ * going missing again; that the ring actually *paints* is the browser's to say.
+ */
+describe('the category cards are reachable by keyboard', () => {
+  /* Its own fixtures: the suite above leaves the redirect guard rejecting. */
+  beforeEach(() => {
+    authState = 'signed-out';
+    redirectVendorToDashboard.mockResolvedValue(undefined);
+    getCategories.mockResolvedValue(apiCategories());
+    getFeaturedVendors.mockResolvedValue([vendor()]);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  /** The four utilities `04-laws.md` names, in the order it names them. */
+  const RING = [
+    'focus-visible:ring-2',
+    'focus-visible:ring-clay-400/30',
+    'focus-visible:ring-offset-2',
+    'focus-visible:ring-offset-stone-50',
+  ] as const;
+
+  it("gives every category card the law's focus ring", async () => {
+    const { container } = render(await HomePage());
+
+    /*
+     * Scoped to the category grid, not to the href — the four hero jump chips
+     * point at the same `/search?category=` URLs. Those are pills with no
+     * shadow of their own, and the global `:focus-visible` rule reaches them;
+     * the cards are the ones it did not.
+     */
+    const grid = container.querySelector('ul[aria-labelledby="categories-heading"]');
+    expect(grid, 'no category grid').not.toBeNull();
+
+    const cards = [...(grid as HTMLElement).querySelectorAll('a')];
+    expect(cards.length).toBeGreaterThan(0);
+
+    for (const card of cards) {
+      for (const utility of RING) {
+        expect(card.className, `a category card is missing \`${utility}\``).toContain(utility);
+      }
+
+      /* Chrome's own outline must not be left as the only indicator either. */
+      expect(card.className).toContain('outline-none');
+    }
+  });
+});

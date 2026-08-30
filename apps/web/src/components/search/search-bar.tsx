@@ -144,15 +144,16 @@ export function SearchBar({
     isHero ? 'text-[9.5px] min-[90rem]:text-label' : 'text-[9.5px]',
   );
   /*
-   * The hero's value type: 13.5px at 1024, 14px/500 at 768, 15px at 1440. 768
-   * is the odd one — it is the only landing frame that sets a weight on the
-   * value, and it is heavier rather than lighter, because that frame drops the
-   * divider spans for segment borders and the extra weight is what keeps the
-   * three values reading as three fields.
+   * The hero's value type: 14px at 768, 13.5px at 1024, 15px at 1440.
+   *
+   * **No weight here.** `14 Landing tablet` sets `font-weight:500` on the
+   * vendor-type value and on that span alone — City and Event date stay at 400.
+   * An earlier reading of this took the weight for a property of the bar and
+   * put it on all three, which is the sort of generalisation a single sample
+   * invites: one span carried it, so the rule looked like "the 768 bar is
+   * heavier". It is not. `CategorySelect` carries its own 500.
    */
-  const fieldText = isHero
-    ? 'text-[14px] font-medium lg:text-[13.5px] lg:font-normal min-[90rem]:text-md'
-    : 'text-[13.5px]';
+  const fieldText = isHero ? 'text-[14px] lg:text-[13.5px] min-[90rem]:text-md' : 'text-[13.5px]';
   /*
    * No focus ring on the field itself. The bar is one control visually — a
    * single rounded-full pill with hairline dividers, per frame `01` — and a

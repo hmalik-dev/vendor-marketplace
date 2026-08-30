@@ -394,7 +394,17 @@ export default async function HomePage(): Promise<React.ReactElement> {
                     */}
                     <Link
                       href={`/search?category=${category.slug}`}
-                      className="block h-full overflow-hidden rounded-[12px] bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) min-[90rem]:rounded-xl hover:shadow-hover motion-safe:hover:-translate-y-0.5"
+                      /*
+                        The ring is not a parity detail here — these six links
+                        had **no focus indicator of any kind**: no outline, no
+                        ring utility, nothing but the resting shadow. A keyboard
+                        visitor tabbing the front door's primary navigation had
+                        no way to see where they were. Pre-existing rather than
+                        introduced by #304, and the six accessibility laws in
+                        `04-laws.md` are the parity pass's only gate, so it is
+                        fixed here rather than deferred.
+                      */
+                      className="block h-full overflow-hidden rounded-[12px] bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) outline-none min-[90rem]:rounded-xl hover:shadow-hover focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 motion-safe:hover:-translate-y-0.5"
                     >
                       <StockPhoto
                         src={`/categories/${category.slug}.jpg`}
