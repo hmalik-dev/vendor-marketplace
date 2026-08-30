@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   portfolioItems,
+  users,
   vendorProfiles,
   type NewPortfolioItemRow,
   type PortfolioItemRow,
@@ -199,10 +200,18 @@ export async function syncCoverFromPortfolio(
 /**
  * Of `keys`, the ones no surviving row still points at.
  *
- * Four columns, because one object can be referenced from more than one of
- * them: `syncCoverFromPortfolio` copies a portfolio item's key onto
- * `vendor_profiles.cover_image_url`, so the cover is usually a *second*
- * reference to a photo rather than an upload of its own.
+ * **Every column in the database that can hold an object key is queried here,
+ * and the set is pinned by a test.** One object is routinely referenced from
+ * more than one of them — `syncCoverFromPortfolio` copies a portfolio item's
+ * key onto `vendor_profiles.cover_image_url`, so the cover is usually a
+ * *second* reference to a photo rather than an upload of its own, and
+ * `PUT /users/me` accepts a bare key for `users.avatar_url`, which any
+ * authenticated caller may point at an object they also hold on a vendor row.
+ *
+ * A column missed here is not a leak, it is deletion of live data: the reap
+ * concludes "nothing references this" and removes bytes that a surviving row
+ * still renders. `key-bearing-columns.test.ts` fails when the schema grows a
+ * URL column that nobody has classified.
  */
 export async function findUnreferencedKeys(
   db: AppDatabase,
@@ -212,40 +221,36 @@ export async function findUnreferencedKeys(
     return [];
   }
 
-  const [items, profiles] = await Promise.all([
+  const wanted = [...keys];
+
+  const [items, profiles, accounts] = await Promise.all([
     db
-      .select({ image: portfolioItems.imageUrl, thumbnail: portfolioItems.thumbnailUrl })
+      .select({ a: portfolioItems.imageUrl, b: portfolioItems.thumbnailUrl })
       .from(portfolioItems)
       .where(
-        or(
-          inArray(portfolioItems.imageUrl, [...keys]),
-          inArray(portfolioItems.thumbnailUrl, [...keys]),
-        ),
+        or(inArray(portfolioItems.imageUrl, wanted), inArray(portfolioItems.thumbnailUrl, wanted)),
       ),
     db
-      .select({ profile: vendorProfiles.profileImageUrl, cover: vendorProfiles.coverImageUrl })
+      .select({ a: vendorProfiles.profileImageUrl, b: vendorProfiles.coverImageUrl })
       .from(vendorProfiles)
       .where(
         or(
-          inArray(vendorProfiles.profileImageUrl, [...keys]),
-          inArray(vendorProfiles.coverImageUrl, [...keys]),
+          inArray(vendorProfiles.profileImageUrl, wanted),
+          inArray(vendorProfiles.coverImageUrl, wanted),
         ),
       ),
+    db
+      .select({ a: users.avatarUrl, b: users.avatarUrl })
+      .from(users)
+      .where(inArray(users.avatarUrl, wanted)),
   ]);
 
   const referenced = new Set<string>();
-  for (const row of items) {
-    referenced.add(row.image);
-    if (row.thumbnail !== null) {
-      referenced.add(row.thumbnail);
-    }
-  }
-  for (const row of profiles) {
-    if (row.profile !== null) {
-      referenced.add(row.profile);
-    }
-    if (row.cover !== null) {
-      referenced.add(row.cover);
+  for (const row of [...items, ...profiles, ...accounts]) {
+    for (const value of [row.a, row.b]) {
+      if (value !== null) {
+        referenced.add(value);
+      }
     }
   }
 

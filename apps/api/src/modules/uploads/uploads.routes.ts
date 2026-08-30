@@ -4,7 +4,12 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { validationFailed } from '../../lib/errors.js';
 import { assertRole, requireAuthBeforeValidation } from '../../lib/guards.js';
 import { processUploadedImage } from '../../lib/images.js';
-import { buildObjectKey, STORAGE_PREFIXES, STORAGE_PREFIX_ROLES } from '../../lib/storage.js';
+import {
+  buildObjectKey,
+  STORAGE_PREFIXES,
+  STORAGE_PREFIX_ROLES,
+  thumbnailKeyFor,
+} from '../../lib/storage.js';
 
 const uploadQuerySchema = z.object({
   /** Which namespace the object belongs to; a closed set, never client paths. */
@@ -82,7 +87,7 @@ export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
       // The uploader is written into the key: it is the only record of who
       // minted it, and the only thing that makes deleting one safe.
       const key = buildObjectKey(request.query.prefix, uploader.id, 'webp');
-      const thumbnailKey = key.replace(/\.webp$/, '-thumb.webp');
+      const thumbnailKey = thumbnailKeyFor(key);
 
       const [imageUrl, thumbnailUrl] = await Promise.all([
         app.storage.put(key, processed.image, WEBP_CONTENT_TYPE),

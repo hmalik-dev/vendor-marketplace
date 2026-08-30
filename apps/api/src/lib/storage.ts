@@ -88,6 +88,22 @@ export function buildObjectKey(prefix: string, ownerId: string, extension: strin
 }
 
 /**
+ * The key of the thumbnail written alongside `key`.
+ *
+ * Every upload stores two objects, `<name>.webp` and `<name>-thumb.webp`, but
+ * only `portfolio_items` has a column for the second one. `vendor_profiles`
+ * stores a profile image and a cover with no thumbnail column at all, so the
+ * only way to reap a profile photo's sibling is to derive its key — which is
+ * safe precisely because the derivation is total and shared with the writer.
+ *
+ * A derived key is still put through `ownsObjectKey` and the reference check
+ * like any other: deriving a key is not evidence that nothing points at it.
+ */
+export function thumbnailKeyFor(key: string): string {
+  return key.replace(/\.webp$/, '-thumb.webp');
+}
+
+/**
  * Whether `key` was minted for `ownerId`.
  *
  * Deliberately refuses anything that is not exactly `<prefix>/<owner>/<name>`.

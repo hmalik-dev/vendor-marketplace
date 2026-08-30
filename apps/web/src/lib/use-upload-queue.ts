@@ -6,6 +6,7 @@ import { useImageUpload, UploadTransportError } from './use-api';
 import {
   connectionFailure,
   heldBackSentence,
+  isBatchInFlight,
   rejectedFailure,
   screenDimensions,
   screenFile,
@@ -343,7 +344,7 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
    * leaving mid-upload as supported, and a guard that fires on an idle page
    * would be the papercut this is meant to prevent.
    */
-  const inFlight = tasks.some((task) => task.status === 'queued' || task.status === 'uploading');
+  const inFlight = isBatchInFlight(tasks);
 
   useEffect(() => {
     if (!inFlight) {

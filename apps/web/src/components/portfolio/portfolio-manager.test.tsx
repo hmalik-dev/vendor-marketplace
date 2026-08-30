@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UploadQueue } from '@/lib/use-upload-queue';
-import type { UploadTask } from '@/lib/uploads';
+import { isBatchInFlight, type UploadTask } from '@/lib/uploads';
 
 const cancel = vi.fn();
 let tasks: readonly UploadTask[] = [];
@@ -14,7 +14,9 @@ vi.mock('@/lib/use-upload-queue', () => ({
   useUploadQueue: (): UploadQueue => ({
     tasks,
     heldBackNotice: null,
-    inFlight: tasks.some((task) => task.status === 'queued' || task.status === 'uploading'),
+    // The real predicate, not a copy of it — a second definition here would
+    // stay green while the one the hook actually uses drifted.
+    inFlight: isBatchInFlight(tasks),
     addFiles: vi.fn(),
     retryAll: vi.fn(),
     dismiss: vi.fn(),

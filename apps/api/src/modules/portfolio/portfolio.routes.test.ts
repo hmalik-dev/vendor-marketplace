@@ -2,6 +2,7 @@ import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { reapObjects } from './portfolio.service.js';
 
 const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
@@ -620,5 +621,62 @@ describe('the cover follows the first portfolio photo', () => {
     }
 
     expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
+  });
+});
+
+/*
+ * `reapObjects` documents itself as never throwing, and the delete route relies
+ * on that: the row has already committed by the time it runs, so anything
+ * raised here would report failure for work that succeeded. The bucket call was
+ * guarded from the start; the *reference lookup* is a second round trip and was
+ * not. Move either call outside the guard and this fails.
+ */
+describe('reapObjects survives its own dependencies failing', () => {
+  const OWNER = '11111111-1111-4111-8111-111111111111';
+  const KEY = `portfolio/${OWNER}/33333333-3333-4333-8333-333333333333.webp`;
+
+  function storageThatRecords(): {
+    remove(keys: readonly string[]): Promise<void>;
+    removed: string[][];
+  } {
+    const removed: string[][] = [];
+    return {
+      removed,
+      async remove(keys) {
+        removed.push([...keys]);
+      },
+    };
+  }
+
+  it('swallows a failing reference lookup and reaps nothing', async () => {
+    const failing = {
+      select: () => {
+        throw new Error('connection terminated');
+      },
+    } as never;
+    const storage = storageThatRecords();
+    const warn = vi.fn();
+
+    await expect(
+      reapObjects(failing, storage as never, OWNER, [KEY], { warn }),
+    ).resolves.toBeUndefined();
+
+    expect(storage.removed).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[1]).toBe('Could not reap storage objects');
+    expect((warn.mock.calls[0]?.[0] as { keys: string[] }).keys).toEqual([KEY]);
+  });
+
+  /* No owned key means no round trip at all, so nothing can fail. */
+  it('does not touch the database for a key it does not own', async () => {
+    const select = vi.fn();
+    const storage = storageThatRecords();
+
+    await reapObjects({ select } as never, storage as never, OWNER, [
+      'portfolio/22222222-2222-4222-8222-222222222222/x.webp',
+    ]);
+
+    expect(select).not.toHaveBeenCalled();
+    expect(storage.removed).toEqual([]);
   });
 });

@@ -14,7 +14,7 @@ import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-mark
 import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
-import type { ObjectStorage } from '../../lib/storage.js';
+import { thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
 import { reapObjects } from '../portfolio/portfolio.service.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import {
@@ -384,7 +384,7 @@ export async function updateVendorProfile(
     storage,
     userId,
     [
-      replacedKey(existing.profileImageUrl, row.profileImageUrl),
+      ...withThumbnail(replacedKey(existing.profileImageUrl, row.profileImageUrl)),
       /*
        * The cover is a designation on an existing portfolio tile, not an
        * upload of its own — `syncCoverFromPortfolio` copies a tile's key here.
@@ -392,7 +392,7 @@ export async function updateVendorProfile(
        * passing it is safe; it only ever reaps a cover that was genuinely
        * uploaded as one and is now referenced by nothing.
        */
-      replacedKey(existing.coverImageUrl, row.coverImageUrl),
+      ...withThumbnail(replacedKey(existing.coverImageUrl, row.coverImageUrl)),
     ],
     log,
   );
@@ -403,6 +403,20 @@ export async function updateVendorProfile(
 /** The old key, when a write actually replaced it with a different one. */
 function replacedKey(before: string | null, after: string | null): string | null {
   return before !== null && before !== after ? before : null;
+}
+
+/**
+ * A replaced key and the thumbnail written beside it.
+ *
+ * `vendor_profiles` has no thumbnail column, so the sibling every upload
+ * creates is referenced by nothing on this table and was previously orphaned by
+ * every single profile-photo change. Deriving it is safe because `reapObjects`
+ * puts it through the same ownership and reference checks as the key itself —
+ * and a cover copied from a portfolio tile has its sibling in that tile's
+ * `thumbnail_url`, which is precisely the reference check that saves it.
+ */
+function withThumbnail(key: string | null): string[] {
+  return key === null ? [] : [key, thumbnailKeyFor(key)];
 }
 
 /**

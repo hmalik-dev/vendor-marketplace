@@ -151,14 +151,18 @@ export async function reapObjects(
     return;
   }
 
-  const unreferenced = await findUnreferencedKeys(db, owned);
-
-  if (unreferenced.length === 0) {
-    return;
-  }
-
+  /*
+   * The lookup is inside the guard too. It is a database round trip on a
+   * connection whose transaction has already committed the caller's delete —
+   * a 500 raised here would report failure for work that succeeded, which is
+   * the one outcome worse than an orphan.
+   */
   try {
-    await storage.remove(unreferenced);
+    const unreferenced = await findUnreferencedKeys(db, owned);
+
+    if (unreferenced.length > 0) {
+      await storage.remove(unreferenced);
+    }
   } catch (error) {
     /*
      * An orphan is the old behaviour and a sweep can find it. A 500 on a
@@ -166,7 +170,7 @@ export async function reapObjects(
      * explicable — but it is logged, because a token missing `DeleteObject`
      * would otherwise reap nothing, forever, in silence.
      */
-    log?.warn({ keys: unreferenced, error }, 'Could not reap storage objects');
+    log?.warn({ keys: owned, error }, 'Could not reap storage objects');
   }
 }
 

@@ -438,3 +438,21 @@ export function failureSentence(tasks: readonly UploadTask[]): string | null {
 export function retryableTasks(tasks: readonly UploadTask[]): UploadTask[] {
   return tasks.filter((task) => task.status === 'failed' && task.failure?.retryable === true);
 }
+
+/**
+ * Whether a batch still has work that leaving the page would destroy.
+ *
+ * A **queued** file counts. It has not started transferring, and it is just as
+ * gone as one caught mid-transfer if the tab closes — the vendor picked eight
+ * photos and the queue runs them a few at a time, so most of a large batch
+ * spends most of its life in this state.
+ *
+ * Exported rather than inlined into `useUploadQueue` because three places have
+ * to agree on it: the hook, the aggregate line's Cancel control, and the
+ * `beforeunload` guard. A copy of the predicate inside a test's mock of the
+ * hook is not agreement — it is a second definition that stays green while the
+ * real one drifts.
+ */
+export function isBatchInFlight(tasks: readonly UploadTask[]): boolean {
+  return tasks.some((task) => task.status === 'queued' || task.status === 'uploading');
+}

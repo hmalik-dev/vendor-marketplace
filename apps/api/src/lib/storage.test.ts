@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildObjectKey, ownsObjectKey, publicUrlFor } from './storage.js';
+import { buildObjectKey, ownsObjectKey, publicUrlFor, thumbnailKeyFor } from './storage.js';
 
 describe('buildObjectKey', () => {
   it('namespaces the object by prefix and owner, and keeps the extension', () => {
@@ -66,5 +66,30 @@ describe('publicUrlFor', () => {
     expect(publicUrlFor('http://cdn.test/', 'vendor-profile/abc.webp')).toBe(
       'http://cdn.test/vendor-profile/abc.webp',
     );
+  });
+});
+
+/**
+ * The upload route writes `<name>.webp` and `<name>-thumb.webp` for every
+ * prefix, but only `portfolio_items` has a column for the second one. For a
+ * profile image or a cover this derivation is the *only* record that the
+ * sibling exists, so it has to agree with the writer exactly — disagree and the
+ * reap removes nothing while believing it removed everything.
+ */
+describe('thumbnailKeyFor', () => {
+  it('names the sibling the upload route writes beside the image', () => {
+    expect(thumbnailKeyFor('vendor-profile/owner-1/abc.webp')).toBe(
+      'vendor-profile/owner-1/abc-thumb.webp',
+    );
+  });
+
+  it('touches only the extension, never the owner segment', () => {
+    const derived = thumbnailKeyFor('portfolio/owner-1/abc.webp');
+
+    expect(ownsObjectKey(derived, 'owner-1')).toBe(true);
+  });
+
+  it('leaves a key that is not a WebP alone rather than inventing one', () => {
+    expect(thumbnailKeyFor('portfolio/owner-1/abc.png')).toBe('portfolio/owner-1/abc.png');
   });
 });
