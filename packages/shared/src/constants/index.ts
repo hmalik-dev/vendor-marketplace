@@ -637,6 +637,22 @@ export const LATE_CANCELLATION_REFUND_RATE = 0.5;
 /** How far forward the vendor availability calendar runs. */
 export const AVAILABILITY_MONTHS_AHEAD = 12;
 
+/**
+ * The furthest ahead an event date may be booked for.
+ *
+ * `eventDate` was bounded below — a date past everywhere on Earth is refused —
+ * and not above, so `9999-12-31` was accepted and stored. Nothing downstream
+ * expects it: the expiry window, the "days until" arithmetic and every calendar
+ * read are written for dates inside a working horizon.
+ *
+ * Derived from the calendar rather than chosen: a vendor's availability runs
+ * `AVAILABILITY_MONTHS_AHEAD` forward, so a request beyond twice that horizon
+ * is asking about a date the vendor cannot see, let alone answer for. Two years
+ * leaves room for the genuine long-lead case — a wedding booked eighteen months
+ * out — without admitting the fourth millennium.
+ */
+export const MAX_EVENT_DATE_MONTHS_AHEAD = AVAILABILITY_MONTHS_AHEAD * 2;
+
 export const MESSAGE_MAX_LENGTH = 5_000;
 
 /** Largest guest count accepted anywhere a party size is captured. */
@@ -696,6 +712,19 @@ export const DEFAULT_PAGE_SIZE = 20;
 /** Message history loads in larger pages than list endpoints. */
 export const MESSAGES_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 100;
+
+/**
+ * The highest page number any list endpoint will accept.
+ *
+ * `page` was bounded below and not above, so `?page=2147483648` reached the DAO,
+ * where `offset = (page - 1) * pageSize` overflowed `int4` and the query failed
+ * as a 500 rather than a 400. The ceiling is derived from that arithmetic rather
+ * than picked: at `MAX_PAGE_SIZE` per page the largest offset this permits is
+ * 10,000,000, which is three orders of magnitude inside `int4` and still far
+ * past any result set this product will return. A deep offset is a table scan,
+ * not a search — nobody paginates to the hundred-thousandth vendor.
+ */
+export const MAX_PAGE = 100_000;
 
 /*
  * The upload contract, stated once. `design/design-plan/40-states.md` fixes it

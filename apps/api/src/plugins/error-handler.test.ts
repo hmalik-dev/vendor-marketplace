@@ -87,3 +87,64 @@ describe('error handler 4xx passthrough', () => {
     expect(response.body).not.toContain('10.0.0.4');
   });
 });
+
+/**
+ * A wrapped error's `cause` reaches the log.
+ *
+ * Drizzle wraps every failure in a `DrizzleQueryError` whose own message is the
+ * generic "Failed query", and puts the driver's error — the one naming the
+ * constraint, the column and the SQL — in `cause`. #78 was filed on the belief
+ * that this was being dropped, and the fix was to log `cause` as its own field.
+ *
+ * **It was not being dropped.** Removing that field again leaves this test
+ * green: Pino's error serializer already follows `cause`, so the SQL failure
+ * has been reaching the log all along, and the code change was a no-op. It was
+ * reverted rather than kept for reassurance.
+ *
+ * The test stays, because the property is worth pinning and nothing else
+ * asserted it. It guards the serializer's behaviour rather than any code of
+ * ours: swapping the logger, or setting a custom `serializers.err`, would drop
+ * the cause silently and this is what would notice.
+ */
+describe('the log keeps a wrapped error’s cause', () => {
+  let app: FastifyInstance | undefined;
+
+  afterEach(async () => {
+    await app?.close();
+    app = undefined;
+  });
+
+  it('carries the wrapped SQL failure into the log, and still answers opaquely', async () => {
+    const lines: string[] = [];
+    const stream = {
+      write(chunk: string) {
+        lines.push(chunk);
+      },
+    };
+
+    const instance = Fastify({ logger: { level: 'error', stream } });
+    await instance.register(errorHandlerPlugin);
+    instance.get('/boom', async () => {
+      // The shape Drizzle produces: a generic wrapper over the real failure.
+      throw Object.assign(new Error('Failed query'), {
+        cause: new Error(
+          'duplicate key value violates unique constraint "vendor_profiles_user_id_key"',
+        ),
+      });
+    });
+    await instance.ready();
+    app = instance;
+
+    const response = await instance.inject({ method: 'GET', url: '/boom' });
+
+    expect(response.statusCode).toBe(500);
+    // The client is told nothing: a constraint name is an internal detail.
+    expect(response.json().message).toBe('Internal server error');
+    expect(response.body).not.toContain('vendor_profiles_user_id_key');
+
+    // The log is told everything, which is the whole point.
+    const logged = lines.join('');
+    expect(logged).toContain('Unhandled error');
+    expect(logged).toContain('vendor_profiles_user_id_key');
+  });
+});

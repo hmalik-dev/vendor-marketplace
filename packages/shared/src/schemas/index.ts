@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { formatPrice, isUniversallyPastDate } from '../utils/index.js';
+import { formatPrice, isBeyondBookingHorizon, isUniversallyPastDate } from '../utils/index.js';
 import {
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
@@ -21,10 +21,12 @@ import {
   MIN_YEARS_IN_BUSINESS,
   NEARBY_ALTERNATIVES_LIMIT,
   NEARBY_DATE_WINDOW_DAYS,
+  MAX_EVENT_DATE_MONTHS_AHEAD,
   MAX_EMAIL_LENGTH,
   MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
+  MAX_PAGE,
   MAX_PAGE_SIZE,
   MAX_PHONE_LENGTH,
   MAX_SLUG_LENGTH,
@@ -677,7 +679,16 @@ export const createBookingRequestSchema = z
     vendorId: uuidSchema,
     /** Present for a package request, absent for a custom request. */
     packageId: uuidSchema.optional(),
-    eventDate: calendarDateSchema,
+    /*
+     * Bounded at both ends. The floor — a date past everywhere on Earth — was
+     * already enforced by the service; the ceiling was not, so `9999-12-31` was
+     * a bookable event date and nothing downstream expects one. Only the
+     * **input** carries this: the read schemas above and below deliberately do
+     * not, because a bound there would refuse rows that are already stored.
+     */
+    eventDate: calendarDateSchema.refine((value) => !isBeyondBookingHorizon(value), {
+      message: `Event date must be within ${MAX_EVENT_DATE_MONTHS_AHEAD} months`,
+    }),
     eventStartTime: clockTimeSchema.optional(),
     eventType: eventTypeSchema.optional(),
     eventLocation: z.string().trim().max(MAX_ADDRESS_LENGTH).optional(),
@@ -1034,11 +1045,28 @@ export type Notification = z.infer<typeof notificationSchema>;
 
 // --- Search & pagination ---------------------------------------------------
 
+/**
+ * The one definition of a page window, for every endpoint that takes one.
+ *
+ * `page` is bounded **above** as well as below. Without a ceiling,
+ * `?page=2147483648` reached the DAO and overflowed `int4` in
+ * `(page - 1) * pageSize`, answering a 500 where a 400 was owed — see
+ * `MAX_PAGE`.
+ */
 export const paginationQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
+
+/**
+ * The page window as a plain shape, for schemas that build their own object.
+ *
+ * Exported so `vendorSearchQuerySchema` can spread it instead of restating the
+ * two fields — which is what it did, and how `page` came to be bounded in one
+ * place and not the other.
+ */
+export const paginationQueryShape = paginationQuerySchema.shape;
 
 export const vendorSearchQuerySchema = z
   .object({
@@ -1096,8 +1124,10 @@ export const vendorSearchQuerySchema = z
       .optional()
       .transform((value) => (value === undefined || value.length === 0 ? undefined : value)),
     sort: vendorSortOptionSchema.default('relevance'),
-    page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+    // Spread, not restated. These two were declared here as well as in
+    // `paginationQuerySchema`, and the copies disagreed: only one of them ever
+    // gained an upper bound on `page`.
+    ...paginationQueryShape,
   })
   .refine(
     (value) =>
