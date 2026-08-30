@@ -88,7 +88,7 @@ describe('focus rings paint', () => {
    * Scoped to lines that declare a focus ring, so an unrelated `transition-all`
    * on something with no ring is left alone.
    */
-  it('never animates a focus ring in with transition-all', async () => {
+  it('never transitions the property its focus ring is painted with', async () => {
     const files = await sourceFiles(COMPONENTS_DIR);
 
     const offenders: string[] = [];
@@ -96,10 +96,22 @@ describe('focus rings paint', () => {
       const source = await readFile(file, 'utf8');
       const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-      for (const [index, line] of code.split('\n').entries()) {
-        if (/\btransition-all\b/.test(line) && /\bfocus-visible:(?:ring|outline)-/.test(line)) {
-          offenders.push(`${path.relative(COMPONENTS_DIR, file)}:${index + 1}`);
-        }
+      /*
+       * File-scoped, not line-scoped, and that is the point. In `vendor-card`
+       * the ring and the transition that ramps it sit eighteen lines apart on
+       * the same element — a line-scoped check saw neither.
+       *
+       * `has-[a:focus-visible]:ring-2` also declares a ring while containing no
+       * `focus-visible:ring-` substring, because the `]` is in the way; that
+       * blind spot is why the flagship fix of this very ticket shipped a 200ms
+       * ramp on the ring it had just made visible.
+       */
+      const declaresRing = /focus-visible\]?:(?:ring|outline)-\d/.test(code);
+      const transitionsBoxShadow =
+        /\btransition-all\b/.test(code) || /\btransition-\[[^\]]*box-shadow/.test(code);
+
+      if (declaresRing && transitionsBoxShadow) {
+        offenders.push(path.relative(COMPONENTS_DIR, file));
       }
     }
 

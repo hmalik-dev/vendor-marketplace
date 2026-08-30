@@ -116,6 +116,27 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
     panel: refineSheet,
     trigger: refineTrigger,
   });
+
+  /*
+   * The sheet only exists below `lg`; above it the same element is the ordinary
+   * inline Refine bar. Without this, rotating a tablet from 768 to 1024 while
+   * the sheet is open leaves `role="dialog" aria-modal` and the focus trap
+   * installed on the desktop bar — the scrim and the close button are both
+   * `lg:hidden`, so Escape becomes the only way out and the trigger it restores
+   * focus to has itself disappeared.
+   */
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 64rem)');
+    const closeIfDesktop = (): void => {
+      if (desktop.matches) {
+        setIsRefineSheetOpen(false);
+      }
+    };
+
+    closeIfDesktop();
+    desktop.addEventListener('change', closeIfDesktop);
+    return () => desktop.removeEventListener('change', closeIfDesktop);
+  }, []);
   /*
    * Published so the compact bar in the header can show the wait in its own
    * control — frames `17` and `25 — loading`. The results own the fetch; the

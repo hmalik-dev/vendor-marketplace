@@ -83,6 +83,48 @@ describe('useModalSheet', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Last' }));
   });
 
+  /*
+   * The panel's own chips are Radix Popovers, portalled to the end of `<body>`.
+   * A trap that reads `panel.contains(activeElement)` sees an open popover as
+   * OUTSIDE and yanks focus back to the top of the sheet on every Tab, which
+   * made the maximum-price slider and every tag checkbox after the first
+   * unreachable — a keyboard regression shipped by an accessibility fix.
+   */
+  it('leaves Tab alone while focus is in a portalled Radix layer', async () => {
+    render(<Sheet />);
+    await userEvent.click(screen.getByRole('button', { name: 'Filters' }));
+
+    const portal = document.createElement('div');
+    portal.setAttribute('data-radix-popper-content-wrapper', '');
+    portal.innerHTML = '<button type="button">In popover</button>';
+    document.body.append(portal);
+
+    const inPopover = portal.querySelector('button');
+    inPopover?.focus();
+    await userEvent.tab();
+
+    // Not dragged back to the sheet's first control.
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'First' }));
+    portal.remove();
+  });
+
+  /* One Escape dismisses the innermost layer, not the popover AND the sheet. */
+  it('leaves Escape to the portalled layer that owns it', async () => {
+    render(<Sheet />);
+    await userEvent.click(screen.getByRole('button', { name: 'Filters' }));
+
+    const portal = document.createElement('div');
+    portal.setAttribute('data-radix-popper-content-wrapper', '');
+    portal.innerHTML = '<button type="button">In popover</button>';
+    document.body.append(portal);
+    portal.querySelector('button')?.focus();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+    portal.remove();
+  });
+
   /* Nothing is trapped, listened for, or moved while the sheet is the desktop bar. */
   it('does nothing at all while closed', async () => {
     render(<Sheet />);

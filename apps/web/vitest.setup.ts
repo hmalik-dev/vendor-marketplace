@@ -40,3 +40,31 @@ if (!Element.prototype.hasPointerCapture) {
   Element.prototype.setPointerCapture = function setPointerCapture(): void {};
   Element.prototype.releasePointerCapture = function releasePointerCapture(): void {};
 }
+
+/*
+ * jsdom implements no media queries at all, so any component that asks the
+ * viewport a question throws rather than answering. The search shell asks
+ * whether it is past `lg`, because its Refine panel is a modal sheet below that
+ * width and the ordinary inline bar above it — and a sheet that stayed modal
+ * across the breakpoint would leave `aria-modal` and a focus trap on the
+ * desktop bar.
+ *
+ * Reports "not matching", which is the small-viewport answer and therefore the
+ * one that leaves sheet behaviour on for the suites that exercise it.
+ */
+if (!window.matchMedia) {
+  window.matchMedia = function matchMedia(query: string): MediaQueryList {
+    return {
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener(): void {},
+      removeEventListener(): void {},
+      addListener(): void {},
+      removeListener(): void {},
+      dispatchEvent(): boolean {
+        return false;
+      },
+    } as MediaQueryList;
+  };
+}

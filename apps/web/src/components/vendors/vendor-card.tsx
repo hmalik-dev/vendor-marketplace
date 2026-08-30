@@ -76,7 +76,16 @@ export function VendorCard({
           reach for instead, and inventing one would repoint every
           `rounded-2xl` in the product.
         */
-        'group/card overflow-hidden rounded-[16px] bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base)',
+        /*
+          `box-shadow` is deliberately NOT transitioned. The focus ring below is
+          painted with `box-shadow`, so animating the property ramps the ring in
+          over 200ms — a sub-pixel, 4%-alpha ring for the first ~100ms, which is
+          the same "renders nothing" failure this card is being fixed for, just
+          slower. The hover shadow snaps instead; a decorative shadow arriving
+          instantly costs nothing, a focus indicator arriving late costs the
+          keyboard user the indicator.
+        */
+        'group/card overflow-hidden rounded-[16px] bg-stone-0 shadow-sm transition-[transform,translate,scale] duration-(--duration-base)',
         'hover:shadow-hover motion-safe:hover:-translate-y-0.5',
         /*
           The focus ring lives on the card, not on the link inside it (#73).

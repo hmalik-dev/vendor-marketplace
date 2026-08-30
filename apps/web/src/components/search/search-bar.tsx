@@ -165,25 +165,15 @@ export function SearchBar({
   /*
    * #89. The halo on the pill says the bar has focus; it cannot say *which*
    * segment has it, so focusing `Vendor type` and focusing `City` rendered
-   * pixel-identically and a keyboard user could not tell them apart. Each
-   * segment now tints while the control inside it is focused.
+   * pixel-identically and a keyboard user could not tell them apart.
    *
-   * A tint rather than a ring, for the reason the field carries no ring of its
-   * own: a rectangular ring around one segment breaks out past the pill's edge
-   * and reads as a second, misaligned box. A background stays inside the bar
-   * and inherits its shape, so the bar still reads as one control.
-   */
-  /*
-   * #73 law 2 asks each segment to show its own focus ring at the law's value.
-   * #89 had already rejected an *outward* ring here, for a reason that still
-   * holds: a rectangular ring around one segment breaks out past the pill's
-   * edge and reads as a second, misaligned box.
-   *
-   * An **inset** ring satisfies both. It is the law's width and colour, it
-   * stays inside the bar, and it follows the segment's own `rounded-full`
-   * shape — so the bar still reads as one control while the focused segment is
-   * unambiguous. The tint stays as well: two cues cost nothing and the tint is
-   * what reads at a glance.
+   * #73 law 2 then asked for a per-segment ring at the law's value. #89 had
+   * rejected an *outward* one for a reason that still holds — a rectangular
+   * ring around one segment breaks out past the pill's edge and reads as a
+   * second, misaligned box — so this is an **inset** ring: the law's width and
+   * colour, staying inside the bar and following the segment's own
+   * `rounded-full`. The tint #89 added stays alongside it; two cues cost
+   * nothing and the tint is what reads at a glance.
    */
   const segment = cn(
     'flex min-w-0 flex-col max-sm:w-full max-sm:px-0 max-sm:py-1.5',

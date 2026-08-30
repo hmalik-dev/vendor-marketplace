@@ -23,6 +23,21 @@ function focusableIn(panel: HTMLElement): HTMLElement[] {
   );
 }
 
+/**
+ * Whether focus is inside a layer Radix has portalled out of the panel.
+ *
+ * Radix renders `PopoverContent` (and Select, Dropdown, Tooltip) into a
+ * `[data-radix-popper-content-wrapper]` at the end of `<body>`, so a chip
+ * popover opened *from inside* this sheet is structurally outside it. A trap
+ * that does not know this yanks focus back to the top of the sheet on every
+ * Tab — which made the maximum-price slider and every tag checkbox after the
+ * first unreachable by keyboard — and closes the whole sheet on the Escape
+ * that was meant to dismiss the popover.
+ */
+function isInsidePortalledLayer(element: Element | null): boolean {
+  return element?.closest('[data-radix-popper-content-wrapper]') != null;
+}
+
 export interface ModalSheetOptions {
   open: boolean;
   onClose: () => void;
@@ -60,6 +75,16 @@ export function useModalSheet({ open, onClose, panel, trigger }: ModalSheetOptio
     first?.focus();
 
     function onKeyDown(event: KeyboardEvent): void {
+      /*
+       * Every chip in this panel is a Radix `Popover`, and Radix portals its
+       * content to the end of `<body>` — so an open popover is a layer ABOVE
+       * this sheet that `panel.contains()` reports as outside. Both cases below
+       * defer to it, because the innermost layer owns the keystroke.
+       */
+      if (isInsidePortalledLayer(document.activeElement)) {
+        return;
+      }
+
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
@@ -71,6 +96,11 @@ export function useModalSheet({ open, onClose, panel, trigger }: ModalSheetOptio
       }
 
       const focusable = focusableIn(panel.current);
+
+      if (focusable.length === 0) {
+        return;
+      }
+
       const edge = event.shiftKey ? focusable[0] : focusable.at(-1);
 
       // Only the edges wrap; everything between them is the browser's job.
