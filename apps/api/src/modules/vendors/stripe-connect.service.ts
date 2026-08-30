@@ -3,9 +3,9 @@ import {
   VENDOR_PAYMENTS_RETURN_PATH,
   type VendorPayoutStatus,
 } from '@vendor-marketplace/shared';
+import { z } from 'zod';
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
-import { z } from 'zod';
 import { isMissingPayoutsOnly, isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
 import { findUserById } from '../users/users.dao.js';
 import {
