@@ -76,12 +76,31 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
   const [heldBackNotice, setHeldBackNotice] = useState<string | null>(null);
 
   /*
-   * One controller per batch. It is a ref rather than state because the loop
-   * below reads it between files and must see the *current* value — a state
-   * read would be closed over the render that started the batch and would
-   * never observe the cancel.
+   * One controller for **all** work currently in flight, not one per call.
+   *
+   * A ref rather than state because the loops below read it between files and
+   * must see the current value — a state read would be closed over the render
+   * that started the batch and would never observe a cancel.
+   *
+   * Shared deliberately: a vendor who picks three photos and then three more
+   * before the first three finish has two loops running, and `Cancel` means
+   * "stop uploading", not "stop the most recent selection". Giving the second
+   * call its own controller would leave the first batch running behind a
+   * button that claims to have stopped it.
    */
   const batch = useRef<AbortController | null>(null);
+
+  /** The controller for new work, reusing the live one if a batch is running. */
+  const currentBatch = useCallback((): AbortController => {
+    const live = batch.current;
+    if (live && !live.signal.aborted) {
+      return live;
+    }
+
+    const fresh = new AbortController();
+    batch.current = fresh;
+    return fresh;
+  }, []);
 
   /*
    * The File objects never enter React state: they are not serialisable, they
@@ -183,9 +202,7 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
        * they were picked, and each upload re-encodes an image server-side, so
        * twenty at once would queue on the server anyway with worse feedback.
        */
-      const controller = new AbortController();
-      batch.current?.abort();
-      batch.current = controller;
+      const controller = currentBatch();
 
       void (async () => {
         for (const entry of queued) {
@@ -203,13 +220,9 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
             await send(entry.task.id, entry.file, controller.signal);
           }
         }
-
-        if (batch.current === controller) {
-          batch.current = null;
-        }
       })();
     },
-    [send],
+    [currentBatch, send],
   );
 
   /**
@@ -242,9 +255,7 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
       (task) => task.status === 'failed' && task.failure?.retryable === true,
     );
 
-    const controller = new AbortController();
-    batch.current?.abort();
-    batch.current = controller;
+    const controller = currentBatch();
 
     void (async () => {
       for (const task of retryable) {
@@ -257,12 +268,8 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
           await send(task.id, file, controller.signal);
         }
       }
-
-      if (batch.current === controller) {
-        batch.current = null;
-      }
     })();
-  }, [send, tasks]);
+  }, [currentBatch, send, tasks]);
 
   const dismiss = useCallback((id: string): void => {
     filesById.current.delete(id);

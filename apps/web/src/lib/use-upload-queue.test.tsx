@@ -176,6 +176,98 @@ describe('useUploadQueue', () => {
       expect(result.current.tasks.some((task) => task.status === 'failed')).toBe(false);
     });
 
+    /*
+     * The vendor picks three photos, then three more before the first three
+     * land. `Cancel` means "stop uploading" — so the two selections share one
+     * controller. Giving the second its own would leave the first batch
+     * running behind a button claiming to have stopped it; aborting the first
+     * on the second selection would cancel work nobody asked to cancel.
+     */
+    it('does not cancel a running batch just because more files were added', async () => {
+      const started: string[] = [];
+      const first = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          started.push(file.name);
+          if (file.name === 'a1.jpg') {
+            await first.promise;
+            if (options.signal?.aborted === true) {
+              throw new TestTransportError();
+            }
+          }
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles([jpeg('a1.jpg'), jpeg('a2.jpg')]));
+      await waitFor(() => expect(started).toEqual(['a1.jpg']));
+
+      // A second selection while the first is still going.
+      act(() => result.current.addFiles([jpeg('b1.jpg')]));
+      await act(async () => {
+        first.resolve(stored);
+      });
+
+      // The first batch was not aborted: every file it queued still uploaded.
+      await waitFor(() => expect(started).toContain('a2.jpg'));
+      expect(result.current.tasks.some((task) => task.status === 'failed')).toBe(false);
+    });
+
+    it('stops both selections at once, because Cancel means stop uploading', async () => {
+      const started: string[] = [];
+      const held = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          started.push(file.name);
+          await held.promise;
+          if (options.signal?.aborted === true) {
+            throw new TestTransportError();
+          }
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles([jpeg('a1.jpg'), jpeg('a2.jpg')]));
+      await waitFor(() => expect(started).toEqual(['a1.jpg']));
+      act(() => result.current.addFiles([jpeg('b1.jpg'), jpeg('b2.jpg')]));
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        held.resolve(stored);
+      });
+
+      /*
+       * Both selections stop. Each `addFiles` runs its own loop, so at the
+       * moment of the cancel `a1` and `b1` were both in flight — both are
+       * aborted — while `a2` and `b2` were queued behind them and never start.
+       */
+      await waitFor(() => expect(result.current.tasks).toHaveLength(0));
+      expect(started).not.toContain('a2.jpg');
+      expect(started).not.toContain('b2.jpg');
+    });
+
     it('is harmless when nothing is in flight', () => {
       const { result } = renderHook(() =>
         useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
