@@ -1,8 +1,9 @@
-import type { UploadedImage } from '@vendor-marketplace/shared';
+import { ERROR_CODES, type ErrorCode, type UploadedImage } from '@vendor-marketplace/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiClientError } from '@/lib/api-client';
 
 /*
  * The upload transport and the toast are the two things this component does
@@ -19,7 +20,7 @@ vi.mock('@/lib/use-api', () => ({
   UploadTransportError: TestTransportError,
 }));
 
-vi.mock('sonner', () => ({ toast: { success: toastSuccess } }));
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } }));
 
 /*
  * Two different bases, on purpose.
@@ -235,5 +236,68 @@ describe('ImageUpload', () => {
     // No upload in flight, so the key has to resolve through the app's one
     // resolution site rather than reaching `src` raw.
     expect(preview()?.getAttribute('src')).toBe(`${WEB_BASE}/${KEY}`);
+  });
+});
+
+/**
+ * #170. The uploader rendered the API's own authorization sentence at the
+ * reader. `uploads.test.ts` asserts the classifier's return value; this asserts
+ * the **rendered** output, which is what the ticket requires — a leak reaches a
+ * person through the DOM, not through a return value.
+ */
+describe('ImageUpload, when the server refuses the upload', () => {
+  /** Renders the uploader, fails the upload with `code`, returns the shown line. */
+  async function failureLineFor(code: ErrorCode, message: string): Promise<string> {
+    uploadOne.mockRejectedValue(new ApiClientError(403, code, message));
+
+    render(
+      <ImageUpload
+        label="Profile photo"
+        prefix="customer-profile"
+        value={null}
+        onChange={vi.fn()}
+      />,
+    );
+
+    // Clears the client-side screen, so the refusal comes from the server.
+    const file = new File([new Uint8Array(2048)], 'photo.jpg', { type: 'image/jpeg' });
+    await userEvent.upload(screen.getByLabelText('Profile photo'), file);
+
+    const status = await screen.findByRole('status');
+    return status.textContent ?? '';
+  }
+
+  it('never renders the internal authorization sentence', async () => {
+    const line = await failureLineFor(
+      ERROR_CODES.FORBIDDEN,
+      'This endpoint requires the vendor role',
+    );
+
+    expect(line).not.toContain('requires the vendor role');
+    expect(line).not.toContain('endpoint');
+    expect(document.body.textContent).not.toContain('requires the vendor role');
+  });
+
+  it('renders a reason and a matching fix in its place', async () => {
+    const line = await failureLineFor(
+      ERROR_CODES.FORBIDDEN,
+      'This endpoint requires the vendor role',
+    );
+
+    expect(line).toContain("This account can't add a photo here.");
+    expect(line).toContain('Switch to the account this page belongs to.');
+  });
+
+  it('still renders a validation message, which the API writes for a person', async () => {
+    const line = await failureLineFor(ERROR_CODES.VALIDATION_ERROR, 'Image is 900px wide.');
+
+    expect(line).toContain('Image is 900px wide.');
+  });
+
+  it('withholds an internal-error message rather than repeating it', async () => {
+    const line = await failureLineFor(ERROR_CODES.INTERNAL_ERROR, 'ECONNREFUSED 10.0.0.4:5432');
+
+    expect(line).toContain("We couldn't save that photo.");
+    expect(document.body.textContent).not.toContain('10.0.0.4');
   });
 });

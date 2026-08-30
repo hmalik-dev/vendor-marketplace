@@ -19,10 +19,34 @@ _what_ and _where_ without scrolling.
 Title "Your storefront" with the framing line: "This is what a customer sees
 before they decide to message you."
 
-**1. Media pair, first row.** Profile photo (128px circle, dashed `stone-400`
-border) and cover image (128px tall, `aspect-21/9` drop zone) **side by side**,
-photo first. They describe one thing — the vendor's visual identity. A full-width
-cover above a lone circle wastes a third of the screen and reads as an orphan row.
+**1. Media row, first.** Profile photo (128px circle, dashed `stone-400` border)
+and **cover photo** (216×144 drop zone, 3:2) side by side. No instructional copy
+— the drop zone says "Drop a photo or browse · landscape · 1200×800 or larger"
+and the preview rail does the rest of the teaching.
+
+The cover field used to ask for `21:9, 1600×686 min` — a spec nobody shoots,
+stated as arithmetic, aimed at people who are photographers rather than croppers.
+It now asks for one landscape photo, and a vendor sees the result rather than
+reading a promise about it.
+
+## Preview rail — 308px, its own surface
+
+The card preview does **not** live in the form. An earlier version put it in the
+media row as a third column, where it read as a third input and asserted a
+business name _above_ the field where that name is typed.
+
+It is a **308px rail** on the right edge of the editor, `stone-100` with a
+`stone-300` left border, holding: a mono `PREVIEW` label with "Updates as you
+type", an **In search / Your profile** segmented toggle, the vendor's real card
+at full size, and one line of explanation. No link out — `Preview` in the sticky
+submit bar already goes there, and a second route to the same place from a panel
+that _is_ the preview is noise. That makes it what it actually is — a mirror of the whole form rather
+than a step in it — and the toggle shows both placements of the single photo.
+
+**One cover, two placements** — see `12-vendor-profile.md`. There is no separate
+profile banner field and there must never be one; a second image field is a
+second thing to get wrong, and the whole point of the fixed 3:2 is that the card
+and the profile header are the same file.
 
 **2.** Business name + Profile link on one row; the slug preview renders live
 under its field as `{BRAND_DOMAIN}/kessler-co`.

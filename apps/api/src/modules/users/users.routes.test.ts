@@ -227,6 +227,53 @@ describe('/users/me', () => {
       expect(response.json()).toMatchObject({ lastName: 'Byron', phone: '+15551234567' });
     });
 
+    /*
+     * #170. An upload returns an object key, so the key is what the profile
+     * form sends back. Both the request body and the 200 response are
+     * schema-validated, so a URL-only rule fails the save on the way in and
+     * the read on the way out — which is why the customer's photo could not
+     * persist even once the 403 was fixed. Asserted through the route rather
+     * than the schema because it is the round trip that was broken.
+     */
+    it('stores the object key an upload returns, and reads it back', async () => {
+      await signIn(CUSTOMER_CLERK_ID);
+
+      const avatarUrl = 'customer-profile/0f4a1c2e-1111-2222-3333-444455556666.webp';
+
+      const saved = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_CLERK_ID),
+        payload: { firstName: 'Ada', lastName: 'Byron', avatarUrl },
+      });
+
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({ avatarUrl });
+
+      // Survives the reload: the read model has to accept it too.
+      const reloaded = await harness.app.inject({
+        method: 'GET',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_CLERK_ID),
+      });
+
+      expect(reloaded.statusCode).toBe(200);
+      expect(reloaded.json().avatarUrl).toBe(avatarUrl);
+    });
+
+    it('still refuses an avatar reference that would reach an img src', async () => {
+      await signIn(CUSTOMER_CLERK_ID);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_CLERK_ID),
+        payload: { firstName: 'Ada', lastName: 'Byron', avatarUrl: 'javascript:alert(1)' },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
     it('rejects an empty body', async () => {
       await signIn(CUSTOMER_CLERK_ID);
 

@@ -1,6 +1,8 @@
 import {
   ACCEPTED_IMAGE_LABEL,
   ACCEPTED_IMAGE_MIME_TYPES,
+  ERROR_CODES,
+  type ErrorCode,
   MAX_UPLOAD_BATCH_FILES,
   MAX_UPLOAD_BYTES,
   MIN_UPLOAD_IMAGE_WIDTH,
@@ -31,6 +33,7 @@ export interface UploadFailure {
     | 'too-narrow'
     | 'connection-dropped'
     | 'rejected'
+    | 'not-allowed'
     | 'preview-broken';
   tone: UploadFailureTone;
   /** One sentence saying what happened to this file, in these words. */
@@ -121,14 +124,60 @@ export function connectionFailure(): UploadFailure {
   };
 }
 
-/** Whatever the server said, when it said something specific. */
-export function rejectedFailure(message: string): UploadFailure {
+const CONSTRAINT_FIX = `${ACCEPTED_IMAGE_LABEL} · under ${MAX_UPLOAD_MB} MB · at least ${MIN_UPLOAD_IMAGE_WIDTH}px wide.`;
+
+/**
+ * A refusal the server sent, put into words the reader can act on.
+ *
+ * The allow-list runs the safe way round: the server's own sentence is shown
+ * because its code says it was written for a person, never because nothing
+ * recognised it as internal. `VALIDATION_ERROR` is that code ("Image is 900px
+ * wide."). An authorization refusal instead carries a rule written for whoever
+ * wrote the route, and rendering it verbatim is what put "This endpoint
+ * requires the vendor role" on the customer profile page. A caller with no
+ * code to offer gets our copy, so an omitted `code` is the safe path rather
+ * than the leaky one.
+ */
+export function rejectedFailure(message: string, code?: ErrorCode): UploadFailure {
+  if (code === ERROR_CODES.UNAUTHORIZED) {
+    return {
+      kind: 'not-allowed',
+      tone: 'red',
+      reason: "You've been signed out.",
+      fix: 'Sign in again, then add the photo.',
+      retryable: false,
+    };
+  }
+
+  // A different fix from the one above, and not interchangeable with it:
+  // signing in again does not turn this into an account that may upload here.
+  if (code === ERROR_CODES.FORBIDDEN) {
+    return {
+      kind: 'not-allowed',
+      tone: 'red',
+      reason: "This account can't add a photo here.",
+      fix: 'Switch to the account this page belongs to.',
+      retryable: false,
+    };
+  }
+
+  if (code === ERROR_CODES.VALIDATION_ERROR) {
+    return {
+      kind: 'rejected',
+      tone: 'red',
+      reason: message,
+      fix: CONSTRAINT_FIX,
+      retryable: false,
+    };
+  }
+
+  // Nothing said the bytes were wrong, so one more attempt is worth offering.
   return {
     kind: 'rejected',
     tone: 'red',
-    reason: message,
-    fix: `${ACCEPTED_IMAGE_LABEL} · under ${MAX_UPLOAD_MB} MB · at least ${MIN_UPLOAD_IMAGE_WIDTH}px wide.`,
-    retryable: false,
+    reason: "We couldn't save that photo.",
+    fix: 'Try again in a moment.',
+    retryable: true,
   };
 }
 

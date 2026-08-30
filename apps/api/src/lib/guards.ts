@@ -18,6 +18,13 @@ export function authenticated(auth: AuthenticatedUser | null): AuthenticatedUser
 /**
  * Authorization always reads the local `users.role` column rather than Clerk
  * metadata, which the account holder can write.
+ *
+ * The refusal deliberately does **not** name the role it wanted. That sentence
+ * is a rule written for whoever wrote the route, and this message is rendered
+ * verbatim by a dozen call sites — a toast, an upload tile, a form error — so
+ * naming the rule puts "This endpoint requires the vendor role" in front of a
+ * customer who can do nothing with it. Which role a route needs is readable
+ * from the route; what the reader needs is that this account is the wrong one.
  */
 export function assertRole(
   auth: AuthenticatedUser | null,
@@ -26,7 +33,7 @@ export function assertRole(
   const user = authenticated(auth);
 
   if (!roles.includes(user.role)) {
-    throw forbidden(`This endpoint requires the ${roles.join(' or ')} role`);
+    throw forbidden();
   }
 
   return user;

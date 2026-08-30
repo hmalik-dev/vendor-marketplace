@@ -4,65 +4,98 @@
 the product.
 **Scroll budget:** ≤ 2.5×. **The booking rail never scrolls out of view.**
 
-## Composition at 1440
+## Composition at 1440 — the card persists as the profile header
 
 ```
 header 64px
-banner — full-bleed, 196px, box-sizing: border-box
 ┌───────────────── content column ─────────────┬── booking rail 380px ──┐
-│ avatar 82px OVERLAPS the banner by 34px      │  From $1,450           │  sticky
-│ Business name  Instrument Serif 33px         │  Free on June 14       │
-│ ★ 4.9 (127 reviews) · Austin, TX             │  [date] [guests]       │
-│ [category] [languages] [style] [+3 more]     │  [package ▾]           │
-│   ^ category lives HERE only — never also in │                        │
-│     the meta line above                      │                        │
-│ ── About | Packages | Portfolio | Reviews |  │  Request booking       │
-│    Availability ────────────────────────────  │  Send a message        │
-│ tagline (Serif italic 20px)                  │  ───────────────       │
-│ bio, max 640px                               │  · payment held        │
-│ 4 stat tiles                                 │  · full refund 48h+    │
-│ Recent work — 4 thumbnails + See all 34 →    │  · 127 verified        │
-└──────────────────────────────────────────────┴────────────────────────┘
+│╭─ vendor card ─────────────────────────╮│  From $1,450           │  sticky
+││ (MK) Kessler & Co.       ███████████││  Free on June 14       │
+││  ★ 4.9 (127) · Austin    █ cover 3:2 █││  [date] [guests]       │
+││ [Free Jun 14][cat][style]█ flush to  █││  [package ▾]           │
+││ “tagline”                █ 3 edges   █││  Request booking       │
+│╰────────────────────────────────────╯│  Send a message        │
+│ ── About | Packages | Portfolio | Reviews │  · trust lines         │
+│ bio / 3 stat tiles / what's included     │                        │
+└────────────────────────────────────────┴────────────────────────┘
+shell max-width 1400px, centred — a wider window adds margin, not image height
 ```
 
-## Header — the overlap, done the safe way
+## The card persists
 
-**The avatar overlaps the banner again**, and frame `03 Vendor profile` is the
-spec. An earlier build pulled the avatar up with a negative margin that crossed a
-pane's `overflow: hidden` boundary, and the browser sliced the avatar's top edge
-along with part of the name. That is why the previous revision flattened it. The
-fix was never "no overlap" — it was to keep the overlap **inside one positioned
-wrapper containing both the banner and the identity row**, which is exactly what
-the frame now does:
+The object a visitor recognises is the **card they tapped in search**, so that is
+what the profile opens with — the same card, unpacked horizontally into the page
+header. One surface: identity on the left, the cover flush to the card's top,
+right and bottom edges. Nothing floats and nothing is stranded; the photograph's
+edges _are_ the card's edges. The sage `Free Jun 14` chip persists from the card
+too, so the recognisable object arrives intact.
 
-| Element      | Value                                                            |
-| ------------ | ---------------------------------------------------------------- |
-| Banner       | full-bleed, `height: 196px`, `box-sizing: border-box`            |
-| Identity row | `margin-top: -34px`, `position: relative`, `z-index: 2`          |
-| Avatar       | 82px circle, `4px solid stone-50` ring, `box-sizing: border-box` |
+Five directions were tried; four failed:
 
-The `z-index: 2` and `position: relative` on the identity row are load-bearing —
-they are what lift it above the banner instead of letting a clipping ancestor cut
-it. **A negative margin reaching out of a clipping container is still a bug**;
-this one does not, because the wrapper contains both.
+1. **Full-bleed banner** — asks for a 21:9 master nobody shoots. At 2560px an
+   ordinary wedding frame became a slice of waistband with both faces off-screen.
+2. **Matted uploads** (`object-fit: contain` on a stone mat) — the crop was
+   honest, but letterbox bars around someone's wedding photo read as broken
+   layout rather than a frame.
+3. **3-up work strip** — better, but it opened the page with pictures. Someone
+   landing here wants to know _who this is_ first.
+4. **A bare photo beside the identity block** — correct order, but two unrelated
+   objects competing at the top of the page, the photo stranded with no edge
+   continuity to anything and dead space beside it.
 
-This also makes desktop consistent with the tablet and mobile treatments, which
-already overlapped.
+## The cover photo is one asset with two jobs
+
+A vendor uploads **one** cover at 3:2. It is the cover on their **card in search
+results** and the cover inside the **card on their profile** — same file, same
+crop. That continuity is the reason the ratio is fixed and the reason there is
+only one image.
+
+The cover carries **no link, no counter, no gallery affordance**. Every other
+photograph lives in the **Portfolio tab**, reached by the tab like any other
+section. A "view all" link on the cover invited people out of the page before
+they had read who the vendor was, and made the cover look like a gallery entry
+rather than the business's face.
+
+3:2 is what every camera produces, so the frame crops almost nothing — a 3:2
+upload loses nothing and a 4:3 trims a few percent off the sides. Nothing is
+letterboxed and nothing is a band.
+
+| width | card                          | cover                | rail              |
+| ----- | ----------------------------- | -------------------- | ----------------- |
+| 1440  | horizontal, min-height 200    | 300px flush right    | 380px sticky card |
+| 1024  | horizontal, min-height 187    | 280px flush right    | 320px sticky card |
+| 768   | horizontal, min-height 179    | 268px flush right    | bottom bar        |
+| 390   | stacked: identity above cover | full card width, 3:2 | bottom bar        |
+
+**One setup translates everywhere.** No second cover field, no device-specific
+crop, no mobile hero asset. 390 is the only width that stacks, and it stacks
+_identity above cover_ so the business still leads — the one place the profile
+card deliberately differs from the search card, which puts its cover on top.
+
+**Identity is never on the photograph.** No overlap, no negative margin, nothing
+crossing an `overflow: hidden` boundary, and the name never competes with a white
+dress for contrast. The old overlapping-avatar treatment is retired at every
+width including mobile — do not reintroduce it.
+
+The tagline lives in the card (it is part of who the vendor is), so the About
+pane no longer repeats it: bio, three stat tiles, what's included.
 
 ## Tabs, not anchors
 
-At ≥1024 the five tabs **swap the content pane**. Five sections stacked into one
+At ≥1280 the five tabs **swap the content pane**. Five sections stacked into one
 long scroll is a phone pattern and it buries the reviews people came to read.
 Active tab: 13.5px / 600 ink with `inset 0 -2px 0 clay-400`. State in `?tab=` so
-tabs are shareable and the back button works. Below 1024 they become anchored
+tabs are shareable and the back button works. Below 1280 they become anchored
 sections with a scroll-spy indicator.
 
 ## Tab content
 
-**About** — tagline as a Serif italic pull-quote, bio at max 640px, **three** stat
-tiles (Experience / Events / Travels) each a `stone-0` 12px-radius card with an
-uppercase label over a 22px Serif number, then a 4-up recent-work strip linking
-into the portfolio.
+**About** — bio at max 640px, **three** stat tiles (Experience / Events /
+Travels) each a `stone-0` 12px-radius card with an uppercase label over a 22px
+Serif number, then "What's included" as three sage-dot lines and a
+`See all packages →` link into the Packages tab. The tagline is not here — it
+lives in the identity block. The old "Recent work" 4-up is removed: the hero's
+photo and the Portfolio tab cover it.
 
 All three read from what the vendor entered on their own profile — years in
 business, events shot, travel radius — so they're true from the first day a
@@ -119,13 +152,16 @@ per-vendor fact, shown only for vendors who have one.
 ## Acceptance
 
 - [ ] Name, rating, from-price and both CTAs visible without scrolling
-- [ ] Banner is 196px, `box-sizing: border-box`
-- [ ] Avatar is 82px and overlaps the banner by 34px, with nothing clipped by a pane boundary
+- [ ] Profile header is one card object — identity and cover share a surface; the cover is flush to the card's edges, never a floating rectangle
+- [ ] Exactly one photograph in the header — the cover, 3:2, byte-identical to the vendor's search-card cover — at every breakpoint
+- [ ] The cover carries no link, counter or gallery affordance; Portfolio is reached only by its tab
+- [ ] Identity (name, rating, location, chips, tagline) reads before the cover at all four widths
+- [ ] Avatar and name never sit over an image; nothing clipped by a pane boundary
 - [ ] No reply-time claim on any customer-facing part of this page
 - [ ] Three stat tiles, all sourced from vendor-entered profile data
 - [ ] Meta line is two segments — rating and location. Category is the chip row's job and appears once on the page
 - [ ] Rail sticky through the whole page
-- [ ] Tabs swap the pane at ≥1024 and write to the URL
+- [ ] Tabs swap the pane at ≥1280 and write to the URL
 - [ ] Document height ≤ 2.5 viewports on the longest tab
 
 ## Post-MVP

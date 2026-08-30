@@ -130,6 +130,11 @@ under it.
 
 ## B2. Vendor profile header (screen 03)
 
+> **SUPERSEDED 2026-08-29 — do not implement.** The full-bleed banner and the
+> overlapping avatar are removed at every width. See
+> `CHANGE-ORDER-2026-08-29.md` and the rewritten `12-vendor-profile.md`. The
+> section is kept only so a stale copy of this file is recognisable.
+
 Banner **196px**. Avatar **82px** with a 4px `#F8F5EF` ring and
 `0 4px 14px rgba(35,32,28,.10)`, overlapping the banner's lower edge by **16px
 (20%)** — the row uses `margin-top:-34px` against the content column's 18px

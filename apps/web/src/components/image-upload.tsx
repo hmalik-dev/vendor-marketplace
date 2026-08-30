@@ -131,9 +131,9 @@ export function ImageUpload({
       setFailure(
         error instanceof UploadTransportError
           ? connectionFailure()
-          : rejectedFailure(
-              error instanceof ApiClientError ? error.message : 'The server would not take it.',
-            ),
+          : error instanceof ApiClientError
+            ? rejectedFailure(error.message, error.code)
+            : rejectedFailure('The server would not take it.'),
       );
     } finally {
       setProgress(null);
