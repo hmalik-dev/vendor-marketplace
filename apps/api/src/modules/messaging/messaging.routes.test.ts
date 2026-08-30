@@ -275,6 +275,138 @@ describe('messaging', () => {
     });
   });
 
+  /*
+   * #219: `Send a message` on a vendor's profile was permanently disabled,
+   * because `/messages` could only open a thread that already existed. This is
+   * the endpoint that gave it one to open.
+   */
+  describe('opening a thread from a profile', () => {
+    /** Publishes a vendor and returns the slug a customer would be reading. */
+    async function publishedVendor(): Promise<string> {
+      const profile = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: {
+          businessName: 'Sunlit Studio',
+          categoryIds: [photographyId],
+          city: 'Austin',
+          state: 'TX',
+          bio: 'Documentary wedding photography for people who hate posing.',
+        },
+      });
+      expect(profile.statusCode).toBe(201);
+
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ isPublished: true, stripeOnboarded: true })
+        .where(eq(vendorProfiles.id, profile.json().id));
+
+      return profile.json().slug;
+    }
+
+    async function open(
+      actor: string,
+      vendorSlug: string,
+    ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
+      return harness.app.inject({
+        method: 'POST',
+        url: '/conversations',
+        headers: bearer(actor),
+        payload: { vendorSlug },
+      });
+    }
+
+    it('opens a thread the customer can then read', async () => {
+      const slug = await publishedVendor();
+
+      const opened = await open(CUSTOMER, slug);
+
+      expect(opened.statusCode).toBe(201);
+      expect(opened.headers.location).toBe(`/conversations/${opened.json().id}`);
+
+      const thread = await harness.app.inject({
+        method: 'GET',
+        url: `/conversations/${opened.json().id}/messages`,
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(thread.statusCode).toBe(200);
+      expect(thread.json().items).toEqual([]);
+    });
+
+    /*
+     * The button is safe to press twice. Without the partial unique index a
+     * `NULL` booking request is distinct from every other `NULL`, so each click
+     * would open another empty thread with the same vendor.
+     */
+    it('returns the same thread on a second press, and answers 200', async () => {
+      const slug = await publishedVendor();
+
+      const first = await open(CUSTOMER, slug);
+      const again = await open(CUSTOMER, slug);
+
+      expect(first.statusCode).toBe(201);
+      expect(again.statusCode).toBe(200);
+      expect(again.json().id).toBe(first.json().id);
+
+      const threads = await harness.database.db.select().from(conversations);
+      expect(threads).toHaveLength(1);
+      expect(threads[0]!.bookingRequestId).toBeNull();
+    });
+
+    /*
+     * The unattached thread and a request's own thread are different threads:
+     * the rail is headed **This request**, and the one opened from the profile
+     * has no request to show.
+     */
+    it('leaves a later request its own thread beside the unattached one', async () => {
+      const conversationId = await openConversation();
+      const vendor = await harness.database.db.select().from(vendorProfiles);
+
+      const opened = await open(CUSTOMER, vendor[0]!.slug);
+
+      expect(opened.statusCode).toBe(201);
+      expect(opened.json().id).not.toBe(conversationId);
+
+      const list = await harness.app.inject({
+        method: 'GET',
+        url: '/conversations',
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(list.json()).toHaveLength(2);
+      expect(
+        list.json().map((row: { bookingContext: string | null }) => row.bookingContext),
+      ).toEqual(expect.arrayContaining([null, expect.stringMatching(/wedding$/)]));
+    });
+
+    it('refuses a vendor messaging their own listing', async () => {
+      const slug = await publishedVendor();
+
+      expect((await open(VENDOR, slug)).statusCode).toBe(403);
+    });
+
+    it('will not open a thread with an unpublished vendor', async () => {
+      const slug = await publishedVendor();
+      await harness.database.db.update(vendorProfiles).set({ isPublished: false });
+
+      expect((await open(CUSTOMER, slug)).statusCode).toBe(404);
+    });
+
+    it('rejects an unauthenticated open', async () => {
+      const slug = await publishedVendor();
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/conversations',
+        payload: { vendorSlug: slug },
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
   describe('messages', () => {
     it('returns a thread oldest first — a thread is read downwards', async () => {
       const conversationId = await openConversation();
@@ -359,6 +491,92 @@ describe('messaging', () => {
       // Resolved here rather than in the client, which should not have to know
       // how an id becomes a route.
       expect(response.json().items[0].href).toBe('/vendor/dashboard');
+    });
+
+    /*
+     * #229: a message pushed live to an open stream and nothing else, so a
+     * reply that arrived while the tab was closed left no trace at all. The row
+     * is what is asserted here, not the push — the push is best-effort and the
+     * row is the source of truth.
+     */
+    it('raises a notification for the recipient, in both directions', async () => {
+      const conversationId = await openConversation();
+      const vendorId = await idOf(VENDOR);
+      const customerId = await idOf(CUSTOMER);
+
+      await send(CUSTOMER, conversationId, 'Are you free that weekend?');
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/conversations/${conversationId}/read`,
+        headers: bearer(VENDOR),
+      });
+      await send(VENDOR, conversationId, 'I am — let me put a quote together.');
+
+      const rows = await harness.database.db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.type, 'new_message'));
+
+      expect(rows).toHaveLength(2);
+      expect(rows.map((row) => row.userId).sort()).toEqual([vendorId, customerId].sort());
+      // Each party is named to the other the way the thread list names them.
+      expect(rows.find((row) => row.userId === vendorId)?.body).toBe(
+        'Test U sent you a message. Open the thread to reply.',
+      );
+      expect(rows.find((row) => row.userId === customerId)?.body).toBe(
+        'Sunlit Studio sent you a message. Open the thread to reply.',
+      );
+    });
+
+    it('points the notification straight at the thread', async () => {
+      const conversationId = await openConversation();
+      await send(CUSTOMER, conversationId, 'Are you free that weekend?');
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/notifications',
+        headers: bearer(VENDOR),
+      });
+
+      const message = response
+        .json()
+        .items.find((item: { type: string }) => item.type === 'new_message');
+
+      expect(message.title).toBe('New message');
+      expect(message.href).toBe(`/messages?conversation=${conversationId}`);
+    });
+
+    /*
+     * One row per unread run. Thirty messages in a back-and-forth are one thing
+     * to be told about, and thirty rows would bury every other notification in
+     * the panel under a conversation the reader can already see.
+     */
+    it('raises one notification per unread run, not one per message', async () => {
+      const conversationId = await openConversation();
+
+      await send(CUSTOMER, conversationId, 'Are you free that weekend?');
+      await send(CUSTOMER, conversationId, 'Also, do you travel?');
+      await send(CUSTOMER, conversationId, 'Sorry — one more.');
+
+      const unread = await harness.database.db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.type, 'new_message'));
+      expect(unread).toHaveLength(1);
+
+      // Once they have read the thread, the next message is news again.
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/conversations/${conversationId}/read`,
+        headers: bearer(VENDOR),
+      });
+      await send(CUSTOMER, conversationId, 'Thought of something else.');
+
+      const after = await harness.database.db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.type, 'new_message'));
+      expect(after).toHaveLength(2);
     });
 
     it('does not leak another user notifications', async () => {

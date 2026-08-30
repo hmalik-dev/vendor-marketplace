@@ -1,10 +1,23 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BRAND_NAME, type ServicePackage } from '@vendor-marketplace/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import { BRAND_NAME, ERROR_CODES, type ServicePackage } from '@vendor-marketplace/shared';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BookingRail } from './booking-rail';
+import { ApiClientError } from '@/lib/api-client';
+
+const requestMock = vi.fn();
+const pushMock = vi.fn();
+
+vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
+
+beforeEach(() => {
+  requestMock.mockReset();
+  requestMock.mockResolvedValue({ id: 'conv-1' });
+  pushMock.mockReset();
+});
 
 function servicePackage(overrides: Partial<ServicePackage> = {}): ServicePackage {
   return {
@@ -46,12 +59,7 @@ describe('BookingRail', () => {
     expect(screen.getByText('$1,750')).toBeDefined();
   });
 
-  /*
-   * `40-states.md`: a blocked primary action stays visible and its helper line
-   * explains the block. Hiding it would leave the page with no visible ask,
-   * which is the one thing this screen exists for.
-   */
-  it('sends the selected package through to the request form, and still blocks messaging', () => {
+  it('sends the selected package through to the request form', () => {
     render(
       <BookingRail
         businessName="Kessler & Co."
@@ -65,25 +73,102 @@ describe('BookingRail', () => {
     );
 
     const request = screen.getByRole('link', { name: 'Request booking' });
-    const message = screen.getByRole('button', { name: 'Send a message' });
 
     expect(request.getAttribute('href')).toBe('/vendors/kessler-and-co/request?package=pkg-1');
-    expect(message).toHaveProperty('disabled', true);
     // The reassurance line carries the frame's sentence and nothing in front
-    // of it — see #114. The blocker's own explanation belongs on the button.
+    // of it — see #114.
     expect(screen.queryByText(/Messaging opens shortly/)).toBeNull();
+  });
+
+  /*
+   * #110, answered by #310. This control was `disabled` under an `sr-only`
+   * line reading "Messaging is not available yet", because `/messages` could
+   * only open a thread that already existed — and #219 found that a customer
+   * who had *just sent a request* still could not reach the vendor from
+   * either surface.
+   *
+   * Frame `03` draws it enabled, and it now is: it opens the thread and goes
+   * to it. The blocked-state copy is asserted gone rather than left behind to
+   * contradict a working control.
+   */
+  describe('Send a message', () => {
+    function renderRail(): void {
+      render(
+        <BookingRail
+          businessName="Kessler & Co."
+          slug="kessler-and-co"
+          startingPriceCents={175_000}
+          packages={[servicePackage()]}
+          reviewCount={0}
+          today="2026-01-01"
+          calendar={{}}
+        />,
+      );
+    }
+
+    it('opens the thread with this vendor and goes to it', async () => {
+      renderRail();
+      const message = screen.getByRole('button', { name: 'Send a message' });
+
+      expect(message).toHaveProperty('disabled', false);
+      expect(message.getAttribute('aria-describedby')).toBeNull();
+      expect(screen.queryByText(/Messaging is not available yet/)).toBeNull();
+
+      await userEvent.click(message);
+
+      expect(requestMock).toHaveBeenCalledWith('/conversations', {
+        method: 'POST',
+        body: { vendorSlug: 'kessler-and-co' },
+        schema: expect.anything(),
+      });
+      await waitFor(() => {
+        expect(pushMock).toHaveBeenCalledWith('/messages?conversation=conv-1');
+      });
+    });
 
     /*
-     * #110's ruling: disabled until #310 exists, with the blocker named to
-     * assistive technology rather than in visible copy, because frame `03`
-     * draws no helper line under this button.
+     * A signed-out visitor is sent to sign in carrying this page, not dropped
+     * on a bare `/sign-in` — the profile is where they were and where the
+     * button they pressed lives.
      */
-    const describedBy = message.getAttribute('aria-describedby');
-    expect(describedBy).toBe('send-message-blocked');
-    expect(document.getElementById(describedBy as string)?.textContent).toContain(
-      'Messaging is not available yet',
-    );
-    expect(document.getElementById(describedBy as string)?.className).toBe('sr-only');
+    it('sends a signed-out visitor to sign in carrying this page', async () => {
+      window.history.replaceState({}, '', '/vendors/kessler-and-co?date=2026-06-14');
+      requestMock.mockRejectedValue(
+        new ApiClientError(401, ERROR_CODES.UNAUTHORIZED, 'Session expired'),
+      );
+      renderRail();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Send a message' }));
+
+      await waitFor(() => {
+        expect(pushMock).toHaveBeenCalledWith(
+          `/sign-in?returnTo=${encodeURIComponent('/vendors/kessler-and-co?date=2026-06-14')}`,
+        );
+      });
+    });
+
+    /*
+     * `40-states.md`: the failure is named beside the control that failed, in
+     * the reader's words with one thing to do — and the upstream sentence is
+     * not what gets printed.
+     */
+    it('names a failure beside the button rather than navigating', async () => {
+      requestMock.mockRejectedValue(
+        new ApiClientError(500, ERROR_CODES.INTERNAL_ERROR, 'Request validation failed'),
+      );
+      renderRail();
+      const message = screen.getByRole('button', { name: 'Send a message' });
+
+      await userEvent.click(message);
+
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toBe('That did not go through. Try again in a moment.');
+      expect(alert.textContent).not.toContain('Request validation failed');
+      expect(pushMock).not.toHaveBeenCalled();
+      // Still pressable: the retry is the one action the copy offers.
+      expect(message).toHaveProperty('disabled', false);
+      expect(message.getAttribute('aria-describedby')).toBe(alert.id);
+    });
   });
 
   it('omits the package when the vendor has none to choose from', () => {

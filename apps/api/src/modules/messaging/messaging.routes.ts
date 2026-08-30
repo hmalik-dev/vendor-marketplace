@@ -1,6 +1,8 @@
 import {
   conversationSummarySchema,
   notificationItemSchema,
+  openConversationSchema,
+  openedConversationSchema,
   paginatedSchema,
   paginationQuerySchema,
   sendMessageResultSchema,
@@ -17,6 +19,7 @@ import {
   listConversations,
   listMessages,
   listNotifications,
+  openConversation,
   readAllNotifications,
   readConversation,
   readNotification,
@@ -74,6 +77,39 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
     '/conversations',
     { preHandler: requireAuth, schema: { response: { 200: z.array(conversationSummarySchema) } } },
     async (request) => listConversations(app.db, authenticated(request.auth)),
+  );
+
+  /*
+   * Opening a thread is a POST because it can create one, and it answers 201
+   * or 200 on whether it did — the same distinction `POST /booking-requests`
+   * draws, so a second click on `Send a message` is legible as "this is the
+   * thread you already have" rather than as a duplicate.
+   */
+  app.post(
+    '/conversations',
+    {
+      preHandler: requireAuth,
+      schema: {
+        body: openConversationSchema,
+        response: { 200: openedConversationSchema, 201: openedConversationSchema },
+      },
+    },
+    async (request, reply) => {
+      const { conversation, created } = await openConversation(
+        app.db,
+        authenticated(request.auth),
+        request.body.vendorSlug,
+      );
+
+      if (created) {
+        return reply
+          .status(201)
+          .header('location', `/conversations/${conversation.id}`)
+          .send(conversation);
+      }
+
+      return reply.status(200).send(conversation);
+    },
   );
 
   app.get(
