@@ -56,6 +56,37 @@ query runs, and the results say so: the category and city are still a good
 question. Only the client can judge this, because "today" is the viewer's local
 day; the API validates the date's shape and nothing more.
 
+## The compact bar is the five siblings, not frame `02` — ruled 2026-08-30 (#248 via #306)
+
+Six frames draw the compact header bar. **Five agree and frame `02 Search` is the
+outlier**, so the five are the spec:
+
+|             | The five siblings                             | `02 Search`                    |
+| ----------- | --------------------------------------------- | ------------------------------ |
+| Height      | **fixed** — 42px at 1440, 40px at 1024        | none declared; auto, ≈45px     |
+| Padding     | `0 5px 0 18px` (1440) · `0 4px 0 14px` (1024) | `4px 4px 4px 16px`             |
+| Border      | `1px solid #E4DDD1` (`stone-300`)             | `1px solid #DDD5C7`            |
+| Shadow      | `0 2px 10px rgba(35,32,28,.06)`               | `0 1px 3px rgba(35,32,28,.04)` |
+| Submit      | 32px clay **circle**, no label (30px at 1024) | labelled `Search` text pill    |
+| Third label | `Date`                                        | `Event date`                   |
+| Dividers    | `border-right` on the segment                 | standalone 1px `<div>`s        |
+
+The five are `17 Search loading`, `18 Search no results`, `27 Search results — 1024`,
+`27 Search — loading · 1024` and `27 Search — no results · 1024`, and the
+`28 Dropdown variants` component tile matches them too (42px, `#E4DDD1`,
+`0 2px 10px`) — seven drawings against one.
+
+**This confirms rather than reverses #37 and #57**, which already built the circle
+and the fixed height from these frames. `02 Search` is the only screen frame that
+was not redrawn when the compact bar was settled, and it is a stale drawing rather
+than a competing intent.
+
+**`02 Search` is not edited.** `Orla - Screens.dc.html` stays byte-identical to the
+export so the next import diffs cleanly; the divergence is recorded here and
+against the source design project. A parity pass on `/search` reads this ruling,
+not frame `02`'s header — and **only its header**: everything below the bar in
+frame `02` is current and remains the acceptance criterion.
+
 ## One control per value
 
 An earlier draft had category selectable in the header bar, a chip strip, _and_ a
