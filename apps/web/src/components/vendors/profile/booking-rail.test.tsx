@@ -72,6 +72,18 @@ describe('BookingRail', () => {
     // The reassurance line carries the frame's sentence and nothing in front
     // of it — see #114. The blocker's own explanation belongs on the button.
     expect(screen.queryByText(/Messaging opens shortly/)).toBeNull();
+
+    /*
+     * #110's ruling: disabled until #310 exists, with the blocker named to
+     * assistive technology rather than in visible copy, because frame `03`
+     * draws no helper line under this button.
+     */
+    const describedBy = message.getAttribute('aria-describedby');
+    expect(describedBy).toBe('send-message-blocked');
+    expect(document.getElementById(describedBy as string)?.textContent).toContain(
+      'Messaging is not available yet',
+    );
+    expect(document.getElementById(describedBy as string)?.className).toBe('sr-only');
   });
 
   it('omits the package when the vendor has none to choose from', () => {

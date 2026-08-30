@@ -1,27 +1,34 @@
-import { kmToMiles } from '@vendor-marketplace/shared';
+import { kmToMiles, type ServicePackage } from '@vendor-marketplace/shared';
 import { cn } from '@/lib/utils';
-import type { WirePortfolioItem } from '@/lib/wire-schemas';
-import { PortfolioStrip } from './portfolio-strip';
+
+/** The frame draws three included lines; a fourth would push the CTA off. */
+const VISIBLE_INCLUSION_COUNT = 3;
 
 export interface AboutPaneProps {
   bio: string | null;
-  tagline: string | null;
   yearsInBusiness: number | null;
   completedEventCount: number;
   serviceRadiusKm: number | null;
-  portfolio: readonly WirePortfolioItem[];
-  onSeeAllHref: string;
+  /** The vendor's active packages, cheapest first is not assumed. */
+  packages: readonly ServicePackage[];
+  onSeePackagesHref: string;
 }
 
 /**
- * Frame `03`'s About tab: the pull-quote, the bio, three stat tiles, and a
- * four-up strip of recent work.
+ * Frame `03`'s About tab: the bio, three stat tiles, and **What's included**.
  *
- * **Every tile is read from the database**, and every one of them is something
- * the vendor entered about themselves rather than a figure the platform
- * computed. `12-vendor-profile.md` names the three — Experience, Events,
- * Travels — and defers a "Replies" tile explicitly, because reply time is not
- * true on the first day a profile is published the way the other three are.
+ * Two things the pane used to carry are gone, and both were removed by the
+ * design rather than by a judgement here. The **tagline pull-quote** moved into
+ * the identity card, so About stopped repeating it. The **four-up Recent work
+ * strip** is deleted outright — the header cover and the Portfolio tab already
+ * carry the photography, and a third place to put it was the reason the same
+ * image appeared three times on one screen.
+ *
+ * **Every tile is read from the database**, and every one is something the
+ * vendor entered about themselves rather than a figure the platform computed.
+ * `12-vendor-profile.md` names the three — Experience, Events, Travels — and
+ * defers a "Replies" tile explicitly, because reply time is not true on the
+ * first day a profile is published the way the other three are.
  *
  * Any of them can be absent. Two tiles is a valid state, and so is none: a
  * vendor who has not said how long they have been working gets no Experience
@@ -42,14 +49,31 @@ function experienceValue(years: number): string {
 
   return `${years} yr${years === 1 ? '' : 's'}`;
 }
+
+/**
+ * What the cheapest package includes.
+ *
+ * The cheapest one specifically, because the rail two columns over prices the
+ * page from the same package — "From $1,450" and these lines have to describe
+ * one thing, or the screen quietly advertises inclusions the starting price
+ * does not buy.
+ */
+function startingInclusions(packages: readonly ServicePackage[]): readonly string[] {
+  const cheapest = packages.reduce<ServicePackage | null>(
+    (best, current) => (best === null || current.priceCents < best.priceCents ? current : best),
+    null,
+  );
+
+  return cheapest?.inclusions.slice(0, VISIBLE_INCLUSION_COUNT) ?? [];
+}
+
 export function AboutPane({
   bio,
-  tagline,
   yearsInBusiness,
   completedEventCount,
   serviceRadiusKm,
-  portfolio,
-  onSeeAllHref,
+  packages,
+  onSeePackagesHref,
 }: AboutPaneProps): React.ReactElement {
   const tiles: Array<{ label: string; value: string }> = [];
 
@@ -65,41 +89,14 @@ export function AboutPane({
     tiles.push({ label: 'Travels', value: `${Math.round(kmToMiles(serviceRadiusKm))} mi` });
   }
 
+  const inclusions = startingInclusions(packages);
+
   return (
     <div>
-      {tagline ? (
-        /*
-          The vendor's own words, exactly as entered — never truncated and
-          never re-cased. The quotation marks are the frame's, and the frame's
-          are STRAIGHT: the pull-quote opens on U+0022 and frame `03` contains
-          no curly character at all. This shipped curly on the belief that the
-          frame drew it that way, which is what #115 corrects. Curly marks
-          would nest a quote inside the tagline more gracefully, but the frame
-          is the contract and consistency across the screen is worth more.
-        */
-        <p className="max-w-[620px] font-display text-[20px] leading-[1.4] text-stone-700 italic">
-          &quot;{tagline}&quot;
-        </p>
-      ) : null}
-
       {bio ? (
-        <p
-          className={cn(
-            'max-w-[640px] text-[14.5px] leading-[1.7] text-stone-700',
-            // 14px under the pull-quote when there is one; otherwise the tab's
-            // own top padding already places it.
-            tagline && 'mt-3.5',
-          )}
-        >
-          {bio}
-        </p>
+        <p className="max-w-[640px] text-[14.5px] leading-[1.7] text-stone-700">{bio}</p>
       ) : (
-        <p
-          className={cn(
-            'max-w-[640px] text-[14.5px] leading-[1.7] text-stone-600',
-            tagline && 'mt-3.5',
-          )}
-        >
+        <p className="max-w-[640px] text-[14.5px] leading-[1.7] text-stone-600">
           This vendor hasn&apos;t written an introduction yet.
         </p>
       )}
@@ -122,7 +119,32 @@ export function AboutPane({
         </dl>
       ) : null}
 
-      <PortfolioStrip items={portfolio} seeAllHref={onSeeAllHref} />
+      {/*
+        Absent rather than empty when the vendor has listed no inclusions. A
+        heading over nothing states a promise the page cannot keep, and the
+        Packages tab is still one click away from the tab row.
+      */}
+      {inclusions.length > 0 ? (
+        <section className={cn('max-w-[640px]', tiles.length > 0 ? 'mt-5.5' : 'mt-5')}>
+          <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">
+            What&apos;s included
+          </h2>
+          <ul className="mt-2.5 flex flex-col gap-1.75 text-[14px] text-stone-700">
+            {inclusions.map((inclusion) => (
+              <li key={inclusion} className="flex items-center gap-2.5">
+                <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-sage-400" />
+                {inclusion}
+              </li>
+            ))}
+          </ul>
+          <a
+            href={onSeePackagesHref}
+            className="mt-2 inline-block rounded-xs text-sm font-semibold text-clay-500 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay-400"
+          >
+            See all packages →
+          </a>
+        </section>
+      ) : null}
     </div>
   );
 }

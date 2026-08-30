@@ -22,10 +22,12 @@ function renderHeader(overrides: Partial<Parameters<typeof ProfileHeader>[0]> = 
       businessName="Kessler & Co."
       coverImageUrl={null}
       profileImageUrl={null}
+      tagline={null}
       avgRating={4.9}
       reviewCount={127}
       city="Austin"
       state="TX"
+      freeOn={null}
       categories={CATEGORIES}
       tags={[]}
       rail={<div data-testid="rail-slot" />}
@@ -92,68 +94,127 @@ describe('ProfileHeader', () => {
   });
 
   /*
-   * Frame `03` reinstates the overlap that an earlier revision flattened. All
-   * three declarations are asserted together because they are what make it
-   * safe: the lift alone reintroduces the bug where the avatar's top edge was
-   * sliced off, and without `relative`/`z-index` the banner paints over it.
+   * The five rules of `CHANGE-ORDER-2026-08-29.md` that a rebuild must not
+   * break. Rules 2 and 3 are the ones every previous build got wrong, and both
+   * are asserted structurally rather than visually: a browser check only proves
+   * them at the widths it visits, and the failure was a negative margin
+   * crossing a clipping boundary, which is a property of the markup.
    */
-  it('lifts the identity row into the banner, positioned and stacked above it', () => {
-    renderHeader();
+  describe('the cover rework', () => {
+    it('draws no banner and no overlap anywhere in the header', () => {
+      const { container } = renderHeader();
 
-    const row = screen.getByTestId('profile-identity');
+      const markup = container.innerHTML;
+      expect(markup).not.toMatch(/-mt-\[/);
+      expect(markup).not.toContain('h-[196px]');
+      expect(markup).not.toContain('z-[2]');
+    });
 
-    expect(row.className).toContain('-mt-[34px]');
-    expect(row.className).toContain('relative');
-    expect(row.className).toContain('z-[2]');
+    /*
+     * Rule 2: identity is never on the photograph. Nothing is pulled, so the
+     * old failure is unreachable rather than merely avoided — there is no
+     * negative margin left for a clipping ancestor to slice against.
+     */
+    it('puts identity and cover side by side rather than one over the other', () => {
+      renderHeader();
+
+      const card = screen.getByTestId('profile-identity-card');
+      const cover = screen.getByTestId('profile-cover');
+
+      expect(card.className).toContain('flex');
+      expect(cover.parentElement).toBe(card);
+      expect(cover.className).not.toMatch(/absolute|-mt-|z-/);
+    });
+
+    /*
+     * Rule 3: identity reads before the cover at every width, and 390 is the
+     * only width that stacks — identity ABOVE cover. In DOM order that means
+     * the identity pane is the first child and the stack is `flex-col`, never
+     * `flex-col-reverse`.
+     */
+    it('reads identity before the cover, and stacks it above at the narrow width', () => {
+      renderHeader();
+
+      const card = screen.getByTestId('profile-identity-card');
+      const cover = screen.getByTestId('profile-cover');
+
+      expect(card.firstElementChild).not.toBe(cover);
+      expect(card.lastElementChild).toBe(cover);
+      expect(card.className).toContain('flex-col');
+      expect(card.className).not.toContain('flex-col-reverse');
+      expect(card.className).not.toContain('flex-row-reverse');
+    });
+
+    it('sizes the cover to the frame width at each breakpoint it draws', () => {
+      renderHeader();
+
+      const cover = screen.getByTestId('profile-cover');
+
+      expect(cover.className).toContain('md:w-[268px]');
+      expect(cover.className).toContain('lg:w-[280px]');
+      expect(cover.className).toContain('xl:w-[300px]');
+    });
+
+    /* One cover file per vendor, and it carries no link and no counter. */
+    it('makes the cover inert — no link, no gallery affordance', () => {
+      renderHeader({ coverImageUrl: 'https://cdn.test/cover.jpg' });
+
+      const cover = screen.getByTestId('profile-cover');
+
+      expect(cover.querySelector('a')).toBeNull();
+      expect(cover.querySelector('button')).toBeNull();
+    });
+
+    it('sizes the avatar to the frame and gives it no ring', () => {
+      renderHeader();
+
+      const avatar = screen.getByText('KC');
+
+      expect(avatar.getAttribute('style')).toContain('60px');
+      expect(avatar.className).not.toContain('border-4');
+    });
   });
 
-  /*
-   * The lift is only safe while nothing between the row and the banner clips.
-   * This is the structural half of the same guarantee — a browser check can
-   * only prove it for the widths it visits, this proves it for the markup.
-   */
-  it('puts nothing that clips between the banner and the lifted row', () => {
-    const { container } = renderHeader();
+  describe('the identity card', () => {
+    /*
+      The chip that persists from the vendor's search card, and the reason the
+      header reads as that card unpacked rather than as a new composition.
+    */
+    it('leads the chips with the availability chip when there is a free date', () => {
+      renderHeader({ freeOn: 'Jun 14' });
 
-    const row = screen.getByTestId('profile-identity');
-    const wrapper = container.firstElementChild;
+      const chips = Array.from(document.querySelectorAll('li')).map((node) => node.textContent);
+      expect(chips[0]).toBe('Free Jun 14');
+    });
 
-    expect(wrapper).not.toBeNull();
-    for (let node = row.parentElement; node && node !== container; node = node.parentElement) {
-      expect(node.className.toString()).not.toMatch(/\boverflow-hidden\b/);
-    }
-    expect(wrapper?.className).toContain('overflow-visible');
-  });
+    it('omits the availability chip entirely when nothing is free', () => {
+      renderHeader({ freeOn: null });
 
-  it('keeps the banner at a fixed 196px with a border box', () => {
-    renderHeader();
+      expect(screen.queryByText(/^Free /)).toBeNull();
+    });
 
-    const cover = screen.getByTestId('profile-cover');
+    /* The tagline moved here out of the About pane, which no longer repeats it. */
+    it('carries the tagline, in straight quotation marks', () => {
+      renderHeader({ tagline: 'Quiet, documentary, never asks you to pose.' });
 
-    expect(cover.className).toContain('h-[196px]');
-    expect(cover.className).toContain('box-border');
-  });
+      expect(screen.getByText('"Quiet, documentary, never asks you to pose."')).toBeDefined();
+    });
 
-  /*
-   * The ring matches the page ground rather than the card surface, so the
-   * avatar reads as cut out of the banner instead of outlined on it.
-   */
-  it('rings the avatar in stone-50 at 82px, with the ring inside the size', () => {
-    renderHeader();
+    it('renders no tagline element when the vendor has not written one', () => {
+      const { container } = renderHeader({ tagline: null });
 
-    const avatar = screen.getByRole('img', { name: 'Kessler & Co.' });
+      expect(container.querySelector('.italic')).toBeNull();
+    });
 
-    expect(avatar.className).toContain('border-4');
-    expect(avatar.className).toContain('border-stone-50');
-    expect(avatar.className).toContain('box-border');
-    expect(avatar.getAttribute('style')).toContain('82px');
-  });
+    /*
+      The frame's own character. A filled clay SVG was a heavier mark than the
+      design draws and sat off the line's baseline.
+    */
+    it('draws the rating star as the frame glyph rather than an icon', () => {
+      const { container } = renderHeader();
 
-  /** A vendor with no cover still gets the full banner, and the overlap. */
-  it('keeps the 196px banner and the overlap when there is no cover', () => {
-    renderHeader({ coverImageUrl: null });
-
-    expect(screen.getByTestId('profile-cover').className).toContain('h-[196px]');
-    expect(screen.getByTestId('profile-identity').className).toContain('-mt-[34px]');
+      expect(screen.getByText('★')).toBeDefined();
+      expect(container.querySelector('svg')).toBeNull();
+    });
   });
 });

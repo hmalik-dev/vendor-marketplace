@@ -85,8 +85,35 @@ describe('frame 03 — the profile is full-bleed (#103)', () => {
     expect(contentRight).toBe(28);
   });
 
-  it('sizes the rail column to the frame width', () => {
-    expect(headerSource).toContain(`lg:grid-cols-[minmax(0,1fr)_${railWidth}px]`);
+  /*
+   * Both widths, read from both frames. `03` draws the 1440 rail and
+   * `27 Vendor profile — 1024` draws the 1024 one, and they are different
+   * numbers — carrying 1440's 380px down to 1024 is the drift this asserts
+   * against. `30-responsive.md` is explicit that 1024 renders the desktop
+   * composition rather than a tablet one, so the columns are the same two;
+   * only the fixed one narrows.
+   */
+  const rail1024Style = (() => {
+    const frame27 = frame('27 Vendor profile — 1024');
+    const found = [...frame27.matchAll(/style="([^"]*)"/g)]
+      .map((match) => match[1] as string)
+      .find(
+        (style) =>
+          /width:\d+px/.test(style) && style.includes('flex:none') && !style.includes('background'),
+      );
+    expect(found, 'frame 27 has no fixed-width rail column').toBeDefined();
+    return found as string;
+  })();
+  const rail1024Width = Number.parseFloat(declaration(rail1024Style, 'width'));
+
+  it('reads the 1024 rail contract too', () => {
+    expect(rail1024Width).toBe(320);
+    expect(rail1024Width).not.toBe(railWidth);
+  });
+
+  it('sizes the rail column to each frame width at its own breakpoint', () => {
+    expect(headerSource).toContain(`lg:grid-cols-[minmax(0,1fr)_${rail1024Width}px]`);
+    expect(headerSource).toContain(`xl:grid-cols-[minmax(0,1fr)_${railWidth}px]`);
   });
 
   it('pads the shell to the frame gutter instead of centring a max-width box', () => {
@@ -131,19 +158,37 @@ describe('frame 03 — the rail starts level with the identity row (#104)', () =
     expect(headerSource).toContain(`lg:pt-${railTop / 4}`);
   });
 
-  it('opens both columns inside the wrapper that also holds the banner', () => {
-    // The banner, the identity row and the rail slot are all one wrapper deep,
-    // which is both the frame's layout and the non-clipping guarantee the
-    // avatar overlap depends on.
-    const wrapper = headerSource.indexOf('relative overflow-visible');
-    const banner = headerSource.indexOf('data-testid="profile-cover"');
-    const row = headerSource.indexOf('lg:grid-cols-[minmax(0,1fr)_380px]');
+  /*
+   * Re-derived for the 2026-08-29 header. The old version asserted that the
+   * banner, the identity row and the rail slot all sat inside one
+   * `overflow-visible` wrapper — a structure that existed to keep the avatar's
+   * negative margin from crossing a clipping boundary. There is no banner, no
+   * negative margin and no wrapper any more, so the ordering claim is made
+   * against what the frame still draws: one grid row, the identity card in its
+   * first column, the rail in its second.
+   */
+  it('opens both columns in the same row, card first and rail second', () => {
+    const row = headerSource.indexOf('lg:grid-cols-[minmax(0,1fr)_');
+    const card = headerSource.indexOf('data-testid="profile-identity-card"');
+    const cover = headerSource.indexOf('data-testid="profile-cover"');
     const railSlot = headerSource.indexOf('{rail}');
 
-    expect(wrapper).toBeGreaterThan(-1);
-    expect(banner).toBeGreaterThan(wrapper);
-    expect(row).toBeGreaterThan(banner);
-    expect(railSlot).toBeGreaterThan(row);
+    expect(row).toBeGreaterThan(-1);
+    expect(card).toBeGreaterThan(row);
+    expect(cover).toBeGreaterThan(card);
+    expect(railSlot).toBeGreaterThan(cover);
+  });
+
+  /*
+   * The guarantee that replaces the non-clipping wrapper. The card DOES clip —
+   * that is what crops the cover to its rounded corner — so the rule is not
+   * "nothing clips" but "nothing is pulled out of what clips". A negative
+   * margin anywhere in this component is the exact defect that shipped twice.
+   */
+  it('pulls nothing out of the card that crops the cover', () => {
+    expect(headerSource).not.toMatch(/-mt-\[|-ml-\[|-mr-\[|-mb-\[/);
+    expect(headerSource).not.toContain('overflow-visible');
+    expect(headerSource).toContain('overflow-hidden');
   });
 
   it('no longer lays the rail out in a second row below the header', () => {
@@ -402,12 +447,14 @@ describe('frame 03 — the punctuation is straight (#115)', () => {
   /** The tagline pull-quote, the one place the import left curly marks. */
   const TAGLINE = /\u201CQuiet, documentary, never asks you to pose.\u201D/;
 
-  const components = [
-    'about-pane.tsx',
-    'booking-rail.tsx',
-    'profile-header.tsx',
-    'portfolio-strip.tsx',
-  ];
+  /*
+   * Three, not four: `portfolio-strip.tsx` was the Recent-work strip and the
+   * 2026-08-29 rework deletes it, so the guard covers the components that
+   * still exist. The tagline moved into `profile-header.tsx`, which is where
+   * the one string the frame draws curly now lives — and it is still shipped
+   * straight, deliberately, until #306 rules on the flip.
+   */
+  const components = ['about-pane.tsx', 'booking-rail.tsx', 'profile-header.tsx'];
 
   it('reads the frame contract it is asserting against', () => {
     expect(TAGLINE.test(FRAME_03)).toBe(true);

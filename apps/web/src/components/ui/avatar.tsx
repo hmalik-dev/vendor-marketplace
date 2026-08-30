@@ -23,12 +23,13 @@ export const AVATAR_SIZES = {
   md: 38,
   lg: 64,
   /*
-   * The public vendor profile's identity row. Frame `03` reinstates the
-   * overlap the previous revision flattened, and sizes the avatar at 82 with
-   * the 4px ring drawn *inside* it — hence `box-border` below, so the ring
-   * comes out of the 82 rather than adding to it.
+   * The public vendor profile's identity row. Frame `03` drew this at 82 while
+   * the avatar overlapped a full-bleed banner; the 2026-08-29 cover rework
+   * retires that header outright and draws a plain 60px circle sitting inside
+   * the identity card, on the card's own ground. There is no ring, because
+   * there is no longer any imagery for it to be cut out of.
    */
-  xl: 82,
+  xl: 60,
 } as const;
 
 export type AvatarSize = keyof typeof AVATAR_SIZES;
@@ -44,7 +45,14 @@ export type AvatarSize = keyof typeof AVATAR_SIZES;
  */
 const GLYPH_FRACTION = 0.42;
 
-const GLYPH_SIZES: Partial<Record<AvatarSize, number>> = { sm: 13 };
+const GLYPH_SIZES: Partial<Record<AvatarSize, number>> = {
+  sm: 13,
+  /*
+   * Frame `03` sets the identity monogram at 23px in a 60px circle — 0.38,
+   * not the 0.42 the default fraction would give, which would render 25.2.
+   */
+  xl: 23,
+};
 
 function glyphSize(size: AvatarSize): number {
   return GLYPH_SIZES[size] ?? AVATAR_SIZES[size] * GLYPH_FRACTION;
@@ -80,16 +88,17 @@ export function initialsFor(name: string): string {
 }
 
 /**
- * The two ring treatments the design draws, each matching the ground it sits
- * against so the avatar reads as cut out of it rather than outlined.
+ * The ring treatment the design draws, matching the ground it sits against so
+ * the avatar reads as cut out of it rather than outlined.
  *
- * `card` is the 2px `stone-0` ring on a vendor card's seam; `banner` is the
- * 4px `stone-50` ring where the profile avatar overlaps its banner — the page
- * ground, deliberately not `stone-0`.
+ * `card` is the 2px `stone-0` ring on a vendor card's seam. There was a second,
+ * `banner`, for the profile avatar that overlapped its cover; the 2026-08-29
+ * cover rework forbids identity on the photograph at any width, so the
+ * treatment is deleted rather than left available. A ring for overlapping
+ * imagery is only reachable by overlapping imagery.
  */
 const AVATAR_RINGS = {
   card: 'border-2 border-stone-0',
-  banner: 'border-4 border-stone-50',
 } as const;
 
 export type AvatarRing = keyof typeof AVATAR_RINGS;
@@ -113,8 +122,8 @@ export function Avatar({
 }: AvatarProps): React.ReactElement {
   const pixels = AVATAR_SIZES[size];
   const shared = cn(
-    // `box-border` keeps the ring inside the declared size, so an 82px avatar
-    // occupies 82px whether or not it is ringed and the overlap stays exact.
+    // `box-border` keeps the ring inside the declared size, so an avatar
+    // occupies its declared width whether or not it is ringed.
     'box-border inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full',
     ring && AVATAR_RINGS[ring],
     className,

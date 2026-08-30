@@ -116,7 +116,7 @@ matching file. Do not duplicate it here.
 - **A development default must never be able to reach production.** Derive it from
   something the platform sets, or throw.
 - **One ticket per worktree — the staging hook makes it mandatory, not advisory.**
-  The hook refuses any commit while *any* unrelated path in the tree is dirty, so
+  The hook refuses any commit while _any_ unrelated path in the tree is dirty, so
   two sessions with work in flight in the same checkout can never both commit:
   each one's edits block the other's, in both directions. Verified 2026-08-30,
   when two overnight lanes deadlocked in the shared checkout. Stage explicit
