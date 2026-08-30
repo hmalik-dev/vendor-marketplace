@@ -311,14 +311,36 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           comes from the URL. It is capped at 100 characters, but 100 characters
           with no space in them still overflow a column that has no rule for it.
         */}
-        <h1 className="min-w-0 display-heading text-[22px] break-words text-stone-900">
-          {isLoading ? searchingLine(state) : heading}
+        {/*
+          The date clause is a **sibling** of the heading, not a child of it
+          (#242). Nested inside, it joined the accessible name with no
+          separator — `11 photographers in Austinfree on Mon, Jun 14` — and it
+          inherited the heading role's `letter-spacing: -0.22px` where the frame
+          computes `normal`. Frame `02` draws the two as siblings inside one
+          baseline-aligned box, which is exactly what fixes both.
+        */}
+        {/*
+          A plain block box with inline children, exactly as the frame draws it
+          — NOT a flex row. As flex items the clause would re-apply its 10px
+          `ml-2.5` at the start of every wrapped line, which put it at x=30 at
+          390px where both the frame and the previous markup leave it flush at
+          x=20.
+        */}
+        <div className="min-w-0">
+          {/*
+            `inline`, so the heading and the clause share a line and wrap as one
+            run of text — the frame's `<span class="h2">` is inline, and a block
+            `<h1>` would put the clause on its own line inside this box.
+          */}
+          <h1 className="inline display-heading text-[22px] break-words text-stone-900">
+            {isLoading ? searchingLine(state) : heading}
+          </h1>
           {state.date ? (
-            <span className="ml-2.5 font-sans text-[13px] text-stone-600">
+            <span className="ml-2.5 text-[13px] text-stone-600">
               free on {AVAILABILITY_DATE_FORMATTER.format(new Date(`${state.date}T00:00:00Z`))}
             </span>
           ) : null}
-        </h1>
+        </div>
 
         {/*
           Not a statistic — a statement about how the marketplace works, which
@@ -372,6 +394,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           <>
             <EmptyState
               icon={<SearchX />}
+              scale="marketing"
               headline={noResultsHeadline(state)}
               description={
                 // With nothing filtered there is no culprit to name, so it says
@@ -386,12 +409,38 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
                       type="button"
                       onClick={() => setState(relaxation.patch)}
                       className={cn(
-                        'min-h-11 rounded-full px-4.5 text-sm font-semibold lg:min-h-9',
+                        /*
+                          Frame `18`'s own `.btnP` / `.btnS`: 13.5px/600 at a
+                          10px radius, `padding:11px 20px` primary and `10px
+                          20px` secondary — the secondary's 1px border makes up
+                          the missing pixel, so both boxes are the same height.
+                          Not the full pill this used to draw.
+
+                          `min-h-11` survives below `lg` and only there: the
+                          frame's padding gives ~40px, which is under the law's
+                          44 for touch, and no frame draws this state narrow.
+                        */
+                        'min-h-11 rounded-[10px] px-5 text-base font-semibold lg:min-h-0',
                         // The first is the one most likely to bring results back,
                         // so it is the primary action rather than one of a row.
                         index === 0
-                          ? 'bg-clay-500 text-stone-0 hover:bg-clay-600'
-                          : 'border border-stone-300 bg-stone-0 text-stone-800 hover:bg-stone-100',
+                          ? /*
+                              clay-400, not clay-500. `01-foundations.md` labels
+                              clay-400 PRIMARY FILL and clay-500 "clay as text";
+                              `03-components.md`'s Primary is `bg-clay-400`, and
+                              the frame's `.btnP` draws `#B4552F`, which is
+                              clay-400. clay-500 was a step off in the one place
+                              the palette names explicitly.
+                            */
+                            'bg-clay-400 py-2.75 text-stone-0 hover:bg-clay-500'
+                          : /*
+                              `text-stone-800` resolved to Tailwind's built-in
+                              `#292524` — the theme defines no `stone-800`, so
+                              the class fell through the token layer entirely
+                              and put an off-palette colour on a public page.
+                              The frame's `.btnS` draws `#23201C`: stone-900.
+                            */
+                            'border border-stone-300 bg-stone-0 py-2.5 text-stone-900 hover:bg-stone-100',
                       )}
                     >
                       {relaxation.label}

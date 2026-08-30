@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import {
+  categories,
   tagSuggestions,
   tags,
   vendorTags,
@@ -10,10 +11,37 @@ import {
 import type { TagCategory } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
-export async function findActiveTags(db: AppDatabase): Promise<TagRow[]> {
+/**
+ * A tag plus the slug of the vendor category it is scoped to, which is `null`
+ * for every group except `style`.
+ */
+export type ScopedTagRow = TagRow & { vendorCategorySlug: string | null };
+
+/**
+ * The one projection every tag read uses, so the scope cannot be present on one
+ * surface and missing on another.
+ *
+ * The join is a **left** one: the three global groups have no scope, and an
+ * inner join would drop every language, culture and dietary tag from the
+ * picker — a bug that would look like an empty section rather than a bad query.
+ */
+const SCOPED_TAG_COLUMNS = {
+  id: tags.id,
+  name: tags.name,
+  slug: tags.slug,
+  category: tags.category,
+  vendorCategoryId: tags.vendorCategoryId,
+  displayOrder: tags.displayOrder,
+  isActive: tags.isActive,
+  createdAt: tags.createdAt,
+  vendorCategorySlug: categories.slug,
+} as const;
+
+export async function findActiveTags(db: AppDatabase): Promise<ScopedTagRow[]> {
   return db
-    .select()
+    .select(SCOPED_TAG_COLUMNS)
     .from(tags)
+    .leftJoin(categories, eq(tags.vendorCategoryId, categories.id))
     .where(eq(tags.isActive, true))
     .orderBy(asc(tags.category), asc(tags.displayOrder), asc(tags.name));
 }
@@ -22,14 +50,15 @@ export async function findActiveTags(db: AppDatabase): Promise<TagRow[]> {
 export async function findActiveTagsByIds(
   db: AppDatabase,
   tagIds: readonly string[],
-): Promise<TagRow[]> {
+): Promise<ScopedTagRow[]> {
   if (tagIds.length === 0) {
     return [];
   }
 
   return db
-    .select()
+    .select(SCOPED_TAG_COLUMNS)
     .from(tags)
+    .leftJoin(categories, eq(tags.vendorCategoryId, categories.id))
     .where(and(inArray(tags.id, [...tagIds]), eq(tags.isActive, true)));
 }
 
@@ -41,14 +70,15 @@ export async function findActiveTagByCategoryAndName(
   db: AppDatabase,
   category: TagCategory,
   normalizedName: string,
-): Promise<TagRow | null> {
+): Promise<ScopedTagRow | null> {
   if (!normalizedName) {
     return null;
   }
 
   const rows = await db
-    .select()
+    .select(SCOPED_TAG_COLUMNS)
     .from(tags)
+    .leftJoin(categories, eq(tags.vendorCategoryId, categories.id))
     .where(
       and(
         eq(tags.category, category),

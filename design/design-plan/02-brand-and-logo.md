@@ -16,20 +16,31 @@ diameter          D
 offset            0.45 D  (left edge of the right circle sits at 0.45 D)
 stroke            0.08 D
 total mark width  1.45 D
-wordmark gap      0.50 D from the right circle's right edge
+wordmark gap      whole pixels, per D — see the table below (0.60 D elsewhere)
 wordmark size     1.60 D, Instrument Serif, ink
 ```
 
 ## Sizes
 
-| Context                    | D         | Mark width | Wordmark |
-| -------------------------- | --------- | ---------- | -------- |
-| Desktop header             | 15px      | 22px       | 24px     |
-| Mobile header              | 14px      | 20px       | 21px     |
-| Auth panel                 | 19px      | 28px       | 29px     |
-| Marketing footer           | 20px      | 29px       | 32px     |
-| App icon (52px tile, r=12) | 24px      | 35px       | —        |
-| Favicon 32 / 16            | 16 / 14px | 23 / 20px  | —        |
+| Context                    | D         | Mark width | Gap  | Wordmark |
+| -------------------------- | --------- | ---------- | ---- | -------- |
+| Desktop header             | 15px      | 22px       | 9px  | 24px     |
+| Mobile header              | 14px      | 20px       | 9px  | 21px     |
+| Auth panel                 | 19px      | 28px       | 10px | 29px     |
+| Marketing footer           | 20px      | 29px       | 12px | 32px     |
+| App icon (52px tile, r=12) | 24px      | 35px       | —    | —        |
+| Favicon 32 / 16            | 16 / 14px | 23 / 20px  | —    | —        |
+
+**The gap is stated per size, not as a ratio (#244, 2026-08-30).** It read
+`0.50 D` until the parity pass measured every lockup the frames draw and found
+no single ratio behind them — the design rounds to whole pixels: D=15 → 9px in
+22 frames (0.600), D=14 → 9px in ten and 8px in three, D=18 → 10px in three,
+D=19 → 10px in `12 Sign up` (0.526). `0.50 D` was wrong at every one of them,
+and a corrected single ratio would only move the error around: 0.60 is exact at
+D=15 and D=20 and 1.4px out at the auth panel. So the measured sizes are stated
+here and `logo.tsx` reads them; 0.60 D is what an unmeasured diameter falls back
+to. **Mark width and wordmark size are still ratios** — 1.45 D and 1.60 D — and
+the wordmark's disagreement with the frames' 23px is still open under #118.
 
 The favicon and the app icon ask for the mark alone (`variant="mark"`), where
 the wordmark would be illegible. That is the caller's choice, not an automatic

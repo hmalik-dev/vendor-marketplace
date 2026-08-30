@@ -133,23 +133,51 @@ export async function seedCategories<
 }
 
 /**
- * Inserts the launch tags (languages, cultural specialties, dietary
- * preferences). Idempotent on the unique `slug` index in the same way as
+ * Inserts the launch tags: style, languages, cultural specialties and dietary
+ * preferences. Idempotent on the unique `slug` index in the same way as
  * `seedCategories`, so edits to `TAG_SEEDS` propagate without orphaning the
  * `vendor_tags` rows that point at existing tag ids.
+ *
+ * **Runs after `seedCategories`, and depends on it.** A style tag is scoped to
+ * one vendor category, so its row needs that category's id — which means this
+ * reads the categories back rather than assuming an order.
  */
 export async function seedTags<
   TQueryResult extends PgQueryResultHKT,
   TFullSchema extends Record<string, unknown>,
   TSchema extends TablesRelationalConfig,
 >(db: AnyPgDatabase<TQueryResult, TFullSchema, TSchema>): Promise<number> {
-  const rows = TAG_SEEDS.map((tag) => ({
-    name: tag.name,
-    slug: tag.slug,
-    category: tag.category,
-    displayOrder: tag.displayOrder,
-    isActive: true,
-  }));
+  const categoryRows = await db
+    .select({ id: categories.id, slug: categories.slug })
+    .from(categories);
+  const categoryIdBySlug = new Map(categoryRows.map((row) => [row.slug, row.id]));
+
+  const rows = TAG_SEEDS.map((tag) => {
+    /*
+     * A scoped tag whose category is missing is a seed bug, not a row to write
+     * null and move on from: it would land in the `style` group with no scope,
+     * where the global uniqueness key applies and "Documentary" collides with
+     * itself on the next category. Failing here names the seed that is wrong.
+     */
+    const vendorCategoryId = tag.vendorCategorySlug
+      ? categoryIdBySlug.get(tag.vendorCategorySlug)
+      : null;
+
+    if (tag.vendorCategorySlug && !vendorCategoryId) {
+      throw new Error(
+        `seedTags: tag "${tag.slug}" is scoped to unknown category "${tag.vendorCategorySlug}"`,
+      );
+    }
+
+    return {
+      name: tag.name,
+      slug: tag.slug,
+      category: tag.category,
+      vendorCategoryId: vendorCategoryId ?? null,
+      displayOrder: tag.displayOrder,
+      isActive: true,
+    };
+  });
 
   const inserted = await db
     .insert(tags)
@@ -159,6 +187,13 @@ export async function seedTags<
       set: {
         name: sql`excluded.name`,
         category: sql`excluded.category`,
+        /*
+         * Carried through the upsert like every other column. A tag that was
+         * seeded before the style group existed has a null scope, and leaving
+         * it out here would strand exactly the rows this change exists to
+         * scope — the legacy trap `db-schema.md` names.
+         */
+        vendorCategoryId: sql`excluded.vendor_category_id`,
         displayOrder: sql`excluded.display_order`,
         isActive: sql`excluded.is_active`,
       },

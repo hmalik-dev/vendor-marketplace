@@ -100,6 +100,39 @@ describe('SearchShell loading state — frame 17', () => {
   });
 
   /*
+   * #242. The `free on …` clause used to be nested INSIDE the `<h1>`, so the
+   * heading's accessible name concatenated with no separator — a screen reader
+   * announced `11 photographers in Austinfree on Sun, Jun 14` — and the clause
+   * inherited the heading role's `letter-spacing: -0.22px`. Frame `02` draws
+   * the two as siblings.
+   *
+   * Asserted on the accessible name rather than on the DOM shape: what was
+   * wrong is what the heading is *called*, and a later refactor that keeps the
+   * two apart by some other means should still pass.
+   */
+  it('keeps the date clause out of the heading’s accessible name', async () => {
+    apiRequest.mockResolvedValue({
+      items: [],
+      total: 24,
+      page: 1,
+      pageSize: 20,
+      facets: { categories: [] },
+    });
+    state = baseState({ category: 'photography', city: 'Austin', date: '2026-06-14' });
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    const heading = await screen.findByRole('heading', { level: 1 });
+
+    expect(heading.textContent).not.toContain('free on');
+    expect(heading.textContent).toContain('photographers in Austin');
+    // The clause is still on the screen — it moved out of the heading, it was
+    // not deleted.
+    expect(screen.getByText(/free on/)).toBeTruthy();
+    expect(heading.contains(screen.getByText(/free on/))).toBe(false);
+  });
+
+  /*
    * `40-states.md`: chrome the user already filled in is never skeletonised.
    * The query bar and the Refine bar stay real while the grid loads — only the
    * part that is actually unknown is replaced.
@@ -188,12 +221,56 @@ describe('SearchShell no results — frame 18', () => {
 
     render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
+    // Frame 18 spells the count — "all three filters", not "all 3".
     await waitFor(() =>
-      expect(screen.getByText('No photographers match all 2 filters')).toBeDefined(),
+      expect(screen.getByText('No photographers match all two filters')).toBeDefined(),
     );
     expect(
-      screen.getByText('The date is the narrowest filter here. Loosen one and results come back.'),
+      screen.getByText(
+        'The date is the narrowest filter here. Loosen one filter and results come back.',
+      ),
     ).toBeDefined();
+  });
+
+  /*
+   * #260. The component carries both of `40-states.md`'s sizes; this is the
+   * assertion that THIS state asks for the marketing one. Without it, deleting
+   * `scale="marketing"` from the call site left the whole suite green while
+   * frame 18's headline silently went back to 26px on a 420px measure — which
+   * is the entire user-visible content of the finding.
+   */
+  it('draws its empty state at the marketing scale frame 18 uses', async () => {
+    state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    const headline = await screen.findByRole('heading', {
+      name: 'No photographers match all two filters',
+    });
+
+    expect(headline.className).toContain('text-display-empty');
+    expect(headline.className).not.toContain('text-display-md');
+  });
+
+  /*
+   * Frame 18's `.btnP` is `#B4552F` — clay-400, which `01-foundations.md` names
+   * PRIMARY FILL — and its `.btnS` text is `#23201C`, stone-900. `text-stone-800`
+   * shipped here for a while and the theme defines no `stone-800`, so it fell
+   * straight through to Tailwind's built-in `#292524`: an off-palette colour on
+   * a public page that no token could account for.
+   */
+  it('paints the relaxations in palette', async () => {
+    state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    const primary = await screen.findByRole('button', { name: 'Any date' });
+    const secondary = screen.getByRole('button', { name: 'Any rating' });
+
+    expect(primary.className).toContain('bg-clay-400');
+    expect(primary.className).not.toContain('bg-clay-500 ');
+    expect(secondary.className).toContain('text-stone-900');
+    expect(secondary.className).not.toContain('text-stone-800');
   });
 
   it('offers a one-tap relaxation per filter, loosening exactly one thing', async () => {

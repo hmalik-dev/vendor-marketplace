@@ -147,6 +147,18 @@
   --text-display-sm--line-height: normal;
   --text-display-md: 26px;
   --text-display-md--line-height: normal;
+  /*
+   * The marketing empty-state headline. `40-states.md` fixes the empty-state
+   * headline at "26px in-app / 30px marketing", and frame `18 Search no
+   * results` draws the marketing one at 30 — between `display-md`'s 26 and
+   * `display-lg`'s 34, so neither step can express it.
+   *
+   * A role step rather than a ramp step, like the two hero sizes below: it
+   * exists because one law names one number, not because the scale needed
+   * another rung. No line-height, because the frame declares none.
+   */
+  --text-display-empty: 30px;
+  --text-display-empty--line-height: normal;
   --text-display-lg: 34px;
   --text-display-lg--line-height: 1.06;
   /*

@@ -8,3 +8,4 @@
 - [Abort listener registered after an await](review-checklist-abort-listener-after-await.md) — count the awaits before `addEventListener('abort')`; a mocked uploader models abort as always effective
 - [Tailwind v4 transition lists](review-checklist-tailwind-v4-transition-lists.md) — `transform` is not `scale`/`translate`/`rotate`/`filter`, and leaving `box-shadow` in keeps the ring ramping; compile + probe in Chromium
 - [Hand-rolled focus trap vs portals](review-checklist-handrolled-focus-trap-vs-portals.md) — Radix popover content lives at `<body>`, so `panel.contains(activeElement)` yanks focus on every Tab and Escape closes both layers
+- [Source-grep substring collisions](review-checklist-source-grep-substring-collisions.md) — `toContain('gap-2')` passes on the file's unrelated `gap-2.5`; count the matches, then mutate the intended line

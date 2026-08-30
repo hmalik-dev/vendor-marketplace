@@ -113,7 +113,14 @@ function Chip({
           aria-label={triggerName}
           className={cn(
             'flex items-center gap-1.5 py-1.75 pl-3.25',
-            onClear ? 'pr-1.5' : 'pr-3.25',
+            /*
+              An active chip's trigger ends flush with its label, and the 6px
+              that used to sit here moves to the clear button's `pl` instead.
+              The paint is identical — the gap between the label and the `✕` is
+              the same 10px either way — but the 6px now belongs to the box that
+              needs the width. See the hit area below.
+            */
+            onClear ? 'pr-0' : 'pr-3.25',
           )}
         >
           {label}
@@ -149,7 +156,36 @@ function Chip({
         <button
           type="button"
           onClick={onClear}
-          className="py-1.75 pr-2.75 pl-1 hover:text-clay-500"
+          className={cn(
+            'relative py-1.75 pr-2.75 pl-2.5 hover:text-clay-500',
+            /*
+              `04-laws.md`: an icon-only control carries a 44x44 hit area. Its
+              only visible content is the glyph — the name is `sr-only` — so the
+              rule applies, and the paint measured 24.5 x 29 (#245).
+
+              The target grows past the paint rather than the paint growing: the
+              chip's own geometry is the frame's (`padding:7px 13px`), so
+              widening the *chip* would fail the Style axis to pass the Access
+              one. What can move without repainting anything is where the 6px
+              between the label and the glyph is charged — see `pr-0` above.
+
+              Anchored to the **right**, not centred, because that side is free:
+              the chip row is `gap-2`, so the target reaches 8px into the gutter
+              and stops ~2px short of the next chip. Budget, measured in
+              Chromium at 1440: 30.5px button + 8px gutter = 38.5, so **5.5px
+              falls left onto the trigger**.
+
+              That 5.5px is a real overlap, not a claim of clearance: a click
+              there clears the filter instead of opening the panel. It is the
+              floor, not a choice — 44 is wider than the chip's whole right side
+              — and it is what the padding shift bought, down from the 11.47px
+              measured before it. Centring instead would put 19.5px there. The
+              only ways to reach zero are a taller chip or a 44px-wide glyph
+              button, and both repaint a control the frame draws exactly; that
+              is a frame question, filed rather than guessed.
+            */
+            "after:absolute after:top-1/2 after:-right-2 after:size-11 after:-translate-y-1/2 after:content-['']",
+          )}
         >
           <span aria-hidden="true">✕</span>
           <span className="sr-only">Clear {label}</span>
@@ -197,8 +233,25 @@ export function RefineBar({
   };
 
   const tagChip = (tagCategory: TagCategory): React.ReactElement | null => {
-    // Seed `displayOrder`, never alphabetical — the order is the design.
-    const options = tags.filter((tag) => tag.category === tagCategory);
+    /*
+     * Seed `displayOrder`, never alphabetical — the order is the design.
+     *
+     * `style` is the one group whose options are scoped: `11-search.md` has its
+     * set change with the selected vendor type, because "Documentary" means one
+     * thing to a photographer and another to a videographer, and "Family style"
+     * means nothing at all to a florist. Every other group is the same list
+     * whoever is being filtered.
+     *
+     * With no type selected the chip renders nothing rather than everything —
+     * offering fifty styles across eleven trades is not a filter, and the
+     * `options.length === 0` return below is what makes that a chip that is
+     * absent rather than a chip that is empty.
+     */
+    const options = tags.filter(
+      (tag) =>
+        tag.category === tagCategory &&
+        (tag.vendorCategorySlug === null || tag.vendorCategorySlug === state.category),
+    );
     if (options.length === 0) {
       return null;
     }
@@ -382,17 +435,13 @@ export function RefineBar({
           )}
         </Chip>
 
-        {TAG_CATEGORIES.map(tagChip)}
-
         {/*
-        Frame `02` also draws a `Style ▾` chip — category-specific tags whose
-        option set changes with the selected vendor type (documentary,
-        editorial, …). There is no `style` tag category in the data model and no
-        link from a tag to a vendor category, so the chip has nothing to offer
-        yet. Seeding a style taxonomy for eleven categories is a product
-        decision, not a rendering one, so it is a ticket of its own (#25) rather
-        than invented here. Recorded as a named deviation from the frame.
-      */}
+          Six chips, in the frame's order: Price and Rating above, then Style,
+          Languages, Cultural and Dietary from `TAG_CATEGORIES`. `Style ▾` was a
+          named deviation until #281 gave it a group to read from — the chip was
+          never the missing part, the data model was.
+        */}
+        {TAG_CATEGORIES.map(tagChip)}
 
         {hasAnyRefinement ? (
           <button
