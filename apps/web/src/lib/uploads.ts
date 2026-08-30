@@ -4,6 +4,7 @@ import {
   ERROR_CODES,
   type ErrorCode,
   MAX_UPLOAD_BATCH_FILES,
+  BYTES_PER_MB,
   MAX_UPLOAD_BYTES,
   MIN_UPLOAD_IMAGE_WIDTH,
 } from '@vendor-marketplace/shared';
@@ -60,14 +61,55 @@ export interface UploadTask {
   failure?: UploadFailure;
 }
 
-const MEGABYTE = 1024 * 1024;
+/**
+ * A file's size in the units its owner sees.
+ *
+ * Decimal, matching `BYTES_PER_MB` and the file manager. This divided by
+ * 1024² while labelling the result "MB", so a 70,062,643-byte file read as
+ * `66.8 MB` where Finder said `70.1 MB` — a 4.8% under-report against the only
+ * number the vendor can check.
+ *
+ * Small files are reported in **kB** rather than as a fraction of a megabyte:
+ * `340 kB` is a size, `0.3 MB` is a rounding artefact, and a vendor refused for
+ * a too-narrow 200 kB image should not be shown `0.2 MB`.
+ */
+export function formatFileSize(bytes: number, decimals = 1): string {
+  if (bytes < BYTES_PER_MB) {
+    return `${Math.round(bytes / 1_000)} kB`;
+  }
 
-/** One decimal, so `18.2 MB` rather than `18.2000000001 MB`. */
-export function formatMegabytes(bytes: number): string {
-  return `${Math.round((bytes / MEGABYTE) * 10) / 10} MB`;
+  const factor = 10 ** decimals;
+  return `${Math.round((bytes / BYTES_PER_MB) * factor) / factor} MB`;
 }
 
-const MAX_UPLOAD_MB = Math.floor(MAX_UPLOAD_BYTES / MEGABYTE);
+const MAX_UPLOAD_MB = MAX_UPLOAD_BYTES / BYTES_PER_MB;
+
+/**
+ * The refused size, at whatever precision it takes to not read as the limit.
+ *
+ * The check is `size > MAX_UPLOAD_BYTES`, so every refused file is strictly
+ * larger — but at one decimal a file 4 kB over rendered as `12 MB`, and the
+ * vendor was told "12 MB is over the 12 MB limit." Correct arithmetic, useless
+ * sentence, and no number they could act on.
+ *
+ * Adding decimals until the two differ keeps the message honest without
+ * overstating the excess the way rounding up would: 4 kB over reads `12.004 MB`,
+ * not `12.1 MB`.
+ */
+function formatRefusedSize(bytes: number): string {
+  const limit = `${MAX_UPLOAD_MB} MB`;
+
+  for (const decimals of [1, 2, 3]) {
+    const rendered = formatFileSize(bytes, decimals);
+    if (rendered !== limit) {
+      return rendered;
+    }
+  }
+
+  // Beyond a thousandth of a megabyte the excess is a handful of bytes; state
+  // it exactly rather than pretending to a rounder number.
+  return `${bytes.toLocaleString('en-US')} bytes`;
+}
 
 /**
  * The export advice that accompanies a format or size refusal. It is concrete
@@ -84,7 +126,13 @@ export function unsupportedFormatFailure(fileName: string): UploadFailure {
   return {
     kind: 'unsupported-format',
     tone: 'red',
-    reason: `${extension} isn't a format we can publish.`,
+    /*
+      Capitalised at the front, which the extensionless branch was not: a JPG
+      renamed `noextension` produced "file isn't a format we can publish."
+      Every other failure sentence starts with a capital, and this one only
+      escaped because its first word is interpolated.
+    */
+    reason: `${extension[0]?.toUpperCase() ?? ''}${extension.slice(1)} isn't a format we can publish.`,
     fix: `${ACCEPTED_IMAGE_LABEL} only. ${EXPORT_ADVICE}`,
     retryable: false,
   };
@@ -94,7 +142,7 @@ export function tooLargeFailure(sizeBytes: number): UploadFailure {
   return {
     kind: 'too-large',
     tone: 'red',
-    reason: `${formatMegabytes(sizeBytes)} is over the ${MAX_UPLOAD_MB} MB limit.`,
+    reason: `${formatRefusedSize(sizeBytes)} is over the ${MAX_UPLOAD_MB} MB limit.`,
     fix: EXPORT_ADVICE,
     retryable: false,
   };
@@ -286,10 +334,20 @@ export function splitBatch<T>(files: readonly T[], limit = MAX_UPLOAD_BATCH_FILE
   };
 }
 
-/** "3 files were held back" — named in the banner so nothing vanishes silently. */
+/**
+ * "3 files were held back" — named in the banner so nothing vanishes silently.
+ *
+ * The noun agreed for one file and the verb did not, so picking 21 read
+ * "1 file **were** held back". Both inflect together now, and the trailing
+ * "Add them next" follows the same count — "Add it next" for one.
+ */
 export function heldBackSentence(names: readonly string[], limit = MAX_UPLOAD_BATCH_FILES): string {
-  const noun = names.length === 1 ? 'file' : 'files';
-  return `${limit} files upload at a time, so ${names.length} ${noun} were held back: ${names.join(', ')}. Add them next.`;
+  const single = names.length === 1;
+  const noun = single ? 'file' : 'files';
+  const verb = single ? 'was' : 'were';
+  const pronoun = single ? 'it' : 'them';
+
+  return `${limit} files upload at a time, so ${names.length} ${noun} ${verb} held back: ${names.join(', ')}. Add ${pronoun} next.`;
 }
 
 export interface BatchProgress {
@@ -322,12 +380,22 @@ export function aggregateLine(tasks: readonly UploadTask[]): string | null {
     return null;
   }
 
-  return `Uploading ${Math.min(settled + 1, total)} of ${total} — ${formatMegabytes(uploadedBytes)} of ${formatMegabytes(totalBytes)}`;
+  return `Uploading ${Math.min(settled + 1, total)} of ${total} — ${formatFileSize(uploadedBytes)} of ${formatFileSize(totalBytes)}`;
 }
 
 /**
  * The failure banner's sentence. It counts rather than repeating each reason,
  * because every reason is already on its own tile.
+ *
+ * **"Everything else saved" is only true once nothing is still in flight.** It
+ * was said the moment the first file failed: with ten files and two failing
+ * client-side, the banner claimed everything else had saved at ~800ms, when one
+ * was uploading and seven were still queued and nothing had been persisted at
+ * all. The sentence described the end of a batch that had barely started.
+ *
+ * While work remains it says what is still happening instead, and the count
+ * keeps climbing as further files fail — so the banner always describes the
+ * state at the moment it is read rather than the state it expects to reach.
  */
 export function failureSentence(tasks: readonly UploadTask[]): string | null {
   const failed = tasks.filter((task) => task.status === 'failed');
@@ -336,7 +404,20 @@ export function failureSentence(tasks: readonly UploadTask[]): string | null {
   }
 
   const noun = failed.length === 1 ? 'photo' : 'photos';
-  return `${failed.length} ${noun} didn't upload. Everything else saved.`;
+  const inFlight = tasks.filter(
+    (task) => task.status === 'queued' || task.status === 'uploading',
+  ).length;
+
+  if (inFlight > 0) {
+    return `${failed.length} ${noun} didn't upload. ${inFlight} still going.`;
+  }
+
+  const saved = tasks.filter((task) => task.status === 'done').length;
+  // Nothing else to claim when every file in the batch failed; saying
+  // "everything else saved" of an empty remainder is the same false note.
+  return saved === 0
+    ? `${failed.length} ${noun} didn't upload.`
+    : `${failed.length} ${noun} didn't upload. Everything else saved.`;
 }
 
 /** The subset "Retry all that can" would actually re-send. */
