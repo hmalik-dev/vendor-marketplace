@@ -2,9 +2,9 @@ import { MAX_UPLOAD_BYTES, uploadedImageSchema } from '@vendor-marketplace/share
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { validationFailed } from '../../lib/errors.js';
-import { requireRole } from '../../lib/guards.js';
+import { assertRole, requireAuth } from '../../lib/guards.js';
 import { processUploadedImage } from '../../lib/images.js';
-import { buildObjectKey, STORAGE_PREFIXES } from '../../lib/storage.js';
+import { buildObjectKey, STORAGE_PREFIXES, STORAGE_PREFIX_ROLES } from '../../lib/storage.js';
 
 const uploadQuerySchema = z.object({
   /** Which namespace the object belongs to; a closed set, never client paths. */
@@ -27,18 +27,29 @@ function isFileTooLarge(error: unknown): boolean {
  * Accepts one image, normalises it, and stores both variants. The bytes are
  * decoded and re-encoded before they ever reach storage, so what is served is
  * always a WebP this process produced rather than whatever the client sent.
+ *
+ * Authorization is **per prefix**: `requireAuth` settles only that there is a
+ * caller, and `STORAGE_PREFIX_ROLES` decides who may write to the namespace.
  */
 export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/upload/image',
     {
-      preHandler: requireRole('vendor'),
+      preHandler: requireAuth,
       schema: {
         querystring: uploadQuerySchema,
         response: { 201: uploadedImageSchema },
       },
     },
     async (request, reply) => {
+      /*
+       * Before a byte is read: `request.file()` is what pipes the request into
+       * the multipart parser, so refusing here costs no parse, no buffer and no
+       * decode. The query is already validated against the closed prefix set by
+       * the time a handler runs, so the lookup cannot miss.
+       */
+      assertRole(request.auth, STORAGE_PREFIX_ROLES[request.query.prefix]);
+
       const part = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
 
       if (!part) {

@@ -1,4 +1,4 @@
-import { MAX_UPLOAD_BATCH_FILES, MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
+import { ERROR_CODES, MAX_UPLOAD_BATCH_FILES, MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
 import { describe, expect, it, vi } from 'vitest';
 import {
   aggregateLine,
@@ -6,6 +6,7 @@ import {
   failureSentence,
   formatMegabytes,
   heldBackSentence,
+  rejectedFailure,
   retryableTasks,
   screenDimensions,
   screenFile,
@@ -218,5 +219,66 @@ describe('an eight-file batch with two failures', () => {
   it('says nothing at all when every file landed', () => {
     expect(failureSentence(tasks.slice(0, 6))).toBeNull();
     expect(retryableTasks(tasks.slice(0, 6))).toEqual([]);
+  });
+});
+
+/*
+ * #170. The customer profile uploader rendered the API's own authorization
+ * sentence at the reader — "This endpoint requires the vendor role" — under
+ * export advice that had nothing to do with the refusal.
+ */
+describe('a refusal the server explained to a developer', () => {
+  const INTERNAL_MESSAGE = 'This endpoint requires the vendor role';
+
+  it('never renders the internal authorization sentence', () => {
+    const failure = rejectedFailure(INTERNAL_MESSAGE, ERROR_CODES.FORBIDDEN);
+
+    expect(`${failure.reason} ${failure.fix}`).not.toContain('requires the vendor role');
+  });
+
+  it('names the account rather than the role the server wanted', () => {
+    expect(rejectedFailure(INTERNAL_MESSAGE, ERROR_CODES.FORBIDDEN)).toEqual({
+      kind: 'not-allowed',
+      tone: 'red',
+      reason: "This account can't add a photo here.",
+      fix: 'Switch to the account this page belongs to.',
+      retryable: false,
+    });
+  });
+
+  it('tells an expired session to sign in, which is a different fix', () => {
+    expect(rejectedFailure('Authentication required', ERROR_CODES.UNAUTHORIZED)).toEqual({
+      kind: 'not-allowed',
+      tone: 'red',
+      reason: 'Your session has expired.',
+      fix: 'Sign in again, then add the photo.',
+      retryable: false,
+    });
+  });
+
+  it('withholds the message when no code identifies it as user-facing', () => {
+    // Retryable: nothing said the bytes were wrong, unlike a stated rule.
+    expect(rejectedFailure(INTERNAL_MESSAGE)).toMatchObject({
+      reason: "We couldn't save that photo.",
+      fix: 'Try again in a moment.',
+      retryable: true,
+    });
+  });
+
+  it('withholds an internal-error message too, not just an authorization one', () => {
+    const failure = rejectedFailure('ECONNREFUSED 10.0.0.4:5432', ERROR_CODES.INTERNAL_ERROR);
+
+    expect(failure.reason).toBe("We couldn't save that photo.");
+  });
+
+  it('still renders a validation message, which the API writes for a person', () => {
+    const failure = rejectedFailure('Image is 900px wide.', ERROR_CODES.VALIDATION_ERROR);
+
+    expect(failure).toMatchObject({
+      kind: 'rejected',
+      reason: 'Image is 900px wide.',
+      retryable: false,
+    });
+    expect(failure.fix).toContain('at least');
   });
 });

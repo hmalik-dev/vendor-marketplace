@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { STORAGE_PREFIXES, type StoragePrefix } from '../../lib/storage.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
@@ -62,29 +63,76 @@ describe('POST /upload/image', () => {
     await harness.close();
   });
 
-  it('rejects an unauthenticated upload', async () => {
-    const response = await harness.app.inject({
-      method: 'POST',
-      url: '/upload/image?prefix=vendor-profile',
-      headers: MULTIPART_HEADERS,
-      payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
-    });
+  /*
+   * Authorization is a matrix, not an example. The bug this replaces gated the
+   * whole route on the vendor role, which made the `customer-profile` prefix
+   * the route itself declares unreachable by the only role that would use it.
+   *
+   * The rows are derived from `STORAGE_PREFIXES` rather than retyped, and
+   * `Record<StoragePrefix, ...>` makes a prefix added later a compile error
+   * here as well as in the source — so a new namespace cannot ship untested.
+   */
+  const MAY_UPLOAD: Record<StoragePrefix, 'vendor' | 'customer'> = {
+    'vendor-profile': 'vendor',
+    'vendor-cover': 'vendor',
+    portfolio: 'vendor',
+    'customer-profile': 'customer',
+  };
 
-    expect(response.statusCode).toBe(401);
+  const CALLERS = { vendor: VENDOR, customer: CUSTOMER } as const;
+
+  for (const prefix of STORAGE_PREFIXES) {
+    for (const role of ['vendor', 'customer'] as const) {
+      const allowed = MAY_UPLOAD[prefix] === role;
+
+      it(`a ${role} ${allowed ? 'may' : 'may not'} upload to ${prefix}`, async () => {
+        const response = await harness.app.inject({
+          method: 'POST',
+          url: `/upload/image?prefix=${prefix}`,
+          headers: { ...MULTIPART_HEADERS, ...bearer(CALLERS[role]) },
+          payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
+        });
+
+        expect(response.statusCode).toBe(allowed ? 201 : 403);
+
+        if (allowed) {
+          expect(response.json().imageKey.startsWith(`${prefix}/`)).toBe(true);
+          expect(harness.storedObjects).toHaveLength(2);
+        } else {
+          // A refused upload stores nothing at all, not even the thumbnail.
+          expect(harness.storedObjects).toHaveLength(0);
+        }
+      });
+    }
+  }
+
+  it('refuses every prefix to a signed-out caller', async () => {
+    for (const prefix of STORAGE_PREFIXES) {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/upload/image?prefix=${prefix}`,
+        headers: MULTIPART_HEADERS,
+        payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
+      });
+
+      expect(response.statusCode).toBe(401);
+    }
+
     expect(harness.storedObjects).toHaveLength(0);
   });
 
-  it('rejects a customer', async () => {
-    const response = await harness.app.inject({
-      method: 'POST',
-      url: '/upload/image?prefix=vendor-profile',
-      headers: { ...MULTIPART_HEADERS, ...bearer(CUSTOMER) },
-      payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
-    });
-
-    expect(response.statusCode).toBe(403);
-    expect(harness.storedObjects).toHaveLength(0);
-  });
+  it('never names the role it wanted in the refusal a caller can read', () =>
+    harness.app
+      .inject({
+        method: 'POST',
+        url: '/upload/image?prefix=vendor-profile',
+        headers: { ...MULTIPART_HEADERS, ...bearer(CUSTOMER) },
+        payload: multipartBody('a.jpg', 'image/jpeg', Buffer.from('x')),
+      })
+      .then((response) => {
+        expect(response.statusCode).toBe(403);
+        expect(response.json().message).not.toMatch(/\brole\b/);
+      }));
 
   it('stores both variants and returns their public URLs', async () => {
     const response = await harness.app.inject({

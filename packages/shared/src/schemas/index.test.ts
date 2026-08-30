@@ -19,6 +19,7 @@ import {
   tagSuggestionResponseSchema,
   uploadedImageSchema,
   updateUserSchema,
+  fullCustomerProfileSchema,
   userSchema,
   vendorProfileDetailSchema,
   vendorSearchQuerySchema,
@@ -127,6 +128,44 @@ describe('userSchema', () => {
     const deletedAt = new Date('2026-02-01T00:00:00.000Z');
 
     expect(userSchema.parse({ ...valid, deletedAt }).deletedAt).toEqual(deletedAt);
+  });
+});
+
+/*
+ * #170. The #47 migration moved stored images from URLs to object keys and
+ * converted the vendor's images, but missed the user avatar on both the read
+ * and the write model. The customer profile uploader therefore returned a key
+ * the save then refused as an "Invalid URL" — so the upload appeared to work
+ * and the photo never persisted. Read and write are asserted together because
+ * fixing only the write side stores a value the response cannot serialise.
+ */
+describe('a user avatar is an image reference, not a URL', () => {
+  const KEY = 'customer-profile/0f4a1c2e-1111-2222-3333-444455556666.webp';
+
+  it('accepts the object key an upload returns, on the way in', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: KEY }).success).toBe(true);
+  });
+
+  it('accepts the same key on the way out', () => {
+    expect(userSchema.shape.avatarUrl.safeParse(KEY).success).toBe(true);
+  });
+
+  it('accepts it on the customer profile a vendor reads', () => {
+    expect(fullCustomerProfileSchema.shape.avatarUrl.safeParse(KEY).success).toBe(true);
+  });
+
+  it('still rejects a javascript: reference, which reaches an img src', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: 'javascript:alert(1)' }).success).toBe(false);
+  });
+
+  it('still accepts the absolute Clerk URL a synced account arrives with', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: 'https://img.clerk.com/abc' }).success).toBe(
+      true,
+    );
+  });
+
+  it('still allows the avatar to be cleared', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: null }).success).toBe(true);
   });
 });
 

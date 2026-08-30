@@ -165,7 +165,13 @@ export const userSchema = z.object({
   firstName: trimmedString(MAX_NAME_LENGTH, 0),
   lastName: trimmedString(MAX_NAME_LENGTH, 0),
   phone: phoneSchema.nullable(),
-  avatarUrl: urlSchema.nullable(),
+  /*
+   * An image **reference**, not a URL. Since #47 an upload returns an object
+   * key, and the resolver turns it into a URL on the way out — the same shape
+   * `vendorProfile`'s images already use. This was missed by that migration,
+   * which is why a customer's uploaded avatar could not be saved or read back.
+   */
+  avatarUrl: imageRefSchema.nullable(),
   stripeCustomerId: z.string().max(255).nullable(),
   bio: z.string().max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
   city: z.string().max(MAX_NAME_LENGTH).nullable(),
@@ -207,7 +213,8 @@ export const updateUserSchema = z
     firstName: trimmedString(MAX_NAME_LENGTH),
     lastName: trimmedString(MAX_NAME_LENGTH),
     phone: phoneSchema.nullable(),
-    avatarUrl: urlSchema.nullable(),
+    /** The object key the uploader returns — see `userSchema.avatarUrl`. */
+    avatarUrl: imageRefSchema.nullable(),
     /*
      * `null` clears the bio; a string has to survive trimming. Without the
      * minimum, "   " stored as an empty string and rendered as a bio that was
@@ -313,7 +320,7 @@ export const fullCustomerProfileSchema = z.object({
   lastName: trimmedString(MAX_NAME_LENGTH, 0),
   email: emailSchema,
   phone: phoneSchema.nullable(),
-  avatarUrl: urlSchema.nullable(),
+  avatarUrl: imageRefSchema.nullable(),
 });
 
 export const customerProfileSchema = z.discriminatedUnion('visibility', [
@@ -619,7 +626,8 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     businessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
     city: z.string().max(MAX_NAME_LENGTH).nullable(),
     state: z.string().max(MAX_NAME_LENGTH).nullable(),
-    avatarUrl: urlSchema.nullable(),
+    /** Read from `vendorProfile.profileImageUrl`, which is already a key. */
+    avatarUrl: imageRefSchema.nullable(),
     avgRating: z.number().min(0).max(REVIEW_RATING_MAX),
     reviewCount: z.int().min(0),
   }),

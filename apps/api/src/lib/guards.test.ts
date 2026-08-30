@@ -45,7 +45,14 @@ describe('assertRole', () => {
       expect(error).toBeInstanceOf(AppError);
       expect((error as AppError).statusCode).toBe(403);
       expect((error as AppError).code).toBe('FORBIDDEN');
-      expect((error as AppError).message).toBe('This endpoint requires the vendor role');
+      /*
+       * #170: the message is rendered verbatim by callers, so it states the
+       * reader's situation rather than the route's rule. Naming the required
+       * role here is what put "This endpoint requires the vendor role" on the
+       * customer profile page.
+       */
+      expect((error as AppError).message).toBe('You do not have access to this resource');
+      expect((error as AppError).message).not.toMatch(/\brole\b/);
     }
   });
 
