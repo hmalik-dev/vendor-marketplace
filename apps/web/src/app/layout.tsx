@@ -96,7 +96,7 @@ export default function RootLayout({
       lang="en"
       className={`${instrumentSerif.variable} ${instrumentSans.variable} ${jetBrainsMono.variable}`}
     >
-      <body className="flex min-h-screen flex-col antialiased">
+      <body className="flex min-h-screen flex-col">
         {/*
           Clerk inherits the palette through the shadcn slots bound in
           `globals.css`. Where its own chrome fights the layout — the auth

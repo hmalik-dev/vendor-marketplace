@@ -28,7 +28,7 @@ export default function GlobalError({
 
   return (
     <html lang="en">
-      <body className="flex min-h-screen flex-col bg-stone-50 antialiased">
+      <body className="flex min-h-screen flex-col bg-stone-50">
         <ErrorScreen digest={error.digest} reset={reset} />
       </body>
     </html>
