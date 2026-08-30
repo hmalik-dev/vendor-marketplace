@@ -598,8 +598,9 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **291** | **[DESIGN] The tab-swap threshold contradicts the 1024 frame it ships beside** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 merging the design drop.** The rewritten `12-vendor-profile.md` moves the tab threshold from `≥1024` to **`≥1280`** ("below 1280 they become anchored sections"), but the drop's own new frame **`27 Vendor profile — 1024` draws all five tabs and a 320px rail**, and `30-responsive.md` §1024 states that *1024 renders the desktop composition, not a tablet one* — the rule change order **B4** exists to enforce. Three parts of the contract disagree. **The repo law is that the frame is the tiebreak**, which would keep `≥1024`; the prose change may still be deliberate. Needs a ruling, not a guess — resolve before **#287** builds the tab row. |
 | **292** | **[DESIGN] Frame `28 Dropdown open — hero` hardcodes the brand name where every peer frame uses the token** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Found 2026-08-29 merging the design drop.** The 2026-08-29 export regressed `28 Dropdown open — hero`'s wordmark from `{{ brandName }}` to the literal `Orla`; nine sibling frames still carry the token. The `.dc.html` is **left byte-identical to the export on purpose** so the next import diffs cleanly, so this is a note against the source design project, not a file to patch here. (`15 404` and `16 Server error` carried the literal before this drop too.) **The code law is unchanged and binding: the user-facing name is read from `BRAND_NAME` and never written as a literal** — no ticket may copy this frame's string. |
 | **293** | **`nearby-availability` builds test dates in UTC while the route reads server-local time, so the suite fails locally every evening** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 170** while running the API suite. Not caused by any diff — reproduced on a clean tree with `git stash`. See detail section |
+| **294** | **`main` is red — the design re-import broke four parity tests, and every new lane is born red** | P0 | M3 | **P0 Critical** | Backlog | — | None | `core` | **Found 2026-08-29 by lanes 171 and 215 independently.** `00ef8f6` replaced the frames; `#287`–`#290`, which would bring the app up to them, are all still Backlog. **Three distinct causes, not one** — see detail section. Blocks #171 (PR #23), #215 and #222 |
 
-Rows are ordered by build sequence, not by ticket number. **291 rows — 143 Done, 4 In Progress, 122 Backlog, 4 Deferred, 18 Blocked (9 plain, 7 needing a human, 1 needing demo data, 1 needing a product decision).** Recounted 2026-08-29 after the design drop added #287–#292.
+Rows are ordered by build sequence, not by ticket number. **292 rows — 143 Done, 4 In Progress, 123 Backlog, 4 Deferred, 18 Blocked (9 plain, 7 needing a human, 1 needing demo data, 1 needing a product decision).** Recounted 2026-08-29 after the design drop added #287–#292, then #293 and #294.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -11457,6 +11458,80 @@ both sides, never from a screenshot.
 **Test (required):**
 
 - [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #294: `main` is red — the design re-import broke four parity tests, and every new lane is born red
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 by lane 171 and lane 215 independently, from opposite directions:
+171 merged `origin/main` into a green branch and inherited the failures; 215 branched
+*from* `origin/main` and started red before writing a line. **Where:** CI on every branch.
+
+| | |
+| --- | --- |
+| **Expected** | `main` is green, so a lane's own gate means something |
+| **Observed** | `pnpm test` fails **4 tests across 3 files** at `main`'s tip. `gh run list --branch main --workflow CI` shows the last success at `docs: Record #222 as started`, immediately before the design commits, and failure from `33cbbd4` onward. Nothing merges: PR #23 is enqueued with `--auto` and cannot land, #215 is held unpushed, #222 is recorded done but unmerged |
+
+**Cause.** `00ef8f6` "docs: Replace design contract with the 2026-08-29 vendor cover
+rework" swapped `design/Orla - Screens.dc.html` without re-deriving the tests that read
+it. **#287–#290 are the tickets that would bring the app up to the new frames and all
+four are still Backlog**, so this is the gap between the import landing and the rework
+starting — which is why no existing ticket covers it.
+
+**The four failures have three different causes and must not be treated alike.**
+A blanket re-derivation would delete real parity requirements, which is worse than the red.
+
+**1. `vendor-profile-editor-parity.test.ts` ×3 — a test-helper bug. No design or app change.**
+
+`frameBlock()` slices from a screen's `data-screen-label` to the next `<div class="sc">`.
+The new bundle puts **four labelled screens inside one card**, so the slice for
+`09 Vendor profile editor` now swallows `27 Vendor profile editor — 768`,
+`14 Profile editor mobile` and `14 Profile editor preview sheet` as well. Verified by
+slicing both ways over the real file:
+
+| Boundary | `class="h2"` | headings | `<div class="inp">` |
+| --- | --- | --- | --- |
+| to next `<div class="sc">` (today) | 2 | `Your storefront` ×2 | 15 |
+| to next `data-screen-label` | **1** | **`Your storefront`** | **7** |
+
+1 and 7 are exactly what the three failing tests assert. **The assertions are right and
+the slicing is wrong** — bound the block at the next `data-screen-label=` as well as the
+next card, whichever comes first. `frame-03-parity.test.ts` already does it that way and
+is the model.
+
+**2. `type-scale-parity.test.ts` ×1 — real app drift, not a stale test.**
+
+`--text-display-lg--line-height` is `1.15` in `theme.css`; the frames now measure `1.06`.
+The test derives the expected value from the frames at test time, so it is reporting a
+genuine disagreement. This is the ruling `#74`/`#198` settled applied to a frame that
+moved, and it overlaps `#186`. **Fix the token, not the test.**
+
+**3. `frame-03-parity.test.ts` — fails to LOAD, and legitimately.**
+
+`no inline style in frame 03 contains padding:18px 28px 0 40px`. Its helper already
+bounds on `data-screen-label`, so this is not cause 1. Frame `03 Vendor profile` really
+was re-cut — which is `#287`, "retire the banner and the overlapping avatar". Re-derive
+the selectors that still have a counterpart in the new frame; anything that does not
+belongs to **#287** and should move there rather than being weakened here.
+
+**Acceptance:**
+
+- [ ] `pnpm test` is green on `main`
+- [ ] `frameBlock()` bounds on the next `data-screen-label` as well as the next card, and a test covers a frame that shares a card with its responsive variants
+- [ ] The editor parity assertions are **unchanged** — they pass because the slicing was fixed
+- [ ] `--text-display-lg--line-height` matches the frames' measure, derived not hard-coded
+- [ ] Any frame-03 expectation with no counterpart in the new frame is moved to #287, named, not deleted
+
+**Tests (required):**
+
+- [ ] A test asserting `frameBlock('09 Vendor profile editor')` excludes `27 Vendor profile editor — 768` — the exact over-capture, so a future bundle that nests frames fails here rather than in three unrelated assertions.
+- [ ] The existing type-scale assertion stands as the regression; it already reads the frames at test time.
+
+**Note.** The frames themselves are not to be edited (`design/` is owned by the design
+pass). This ticket changes test helpers, one token, and nothing in `design/`.
 
 ---
 
