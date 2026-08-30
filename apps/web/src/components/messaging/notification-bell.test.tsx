@@ -115,3 +115,28 @@ describe('the notifications panel dismisses on Escape', () => {
     });
   });
 });
+
+/*
+ * #70: the panel has to render on screen at every width, not just the ones the
+ * frames draw.
+ *
+ * It hangs off the bell's right edge at a fixed 360px, so at 375px it ran past
+ * the left edge of the viewport and clipped its own content — timestamps and
+ * the "Mark all read" control first. jsdom does no layout, so what is asserted
+ * is the bound itself: a width rule that cannot exceed the viewport.
+ */
+describe('the notifications panel stays inside the viewport', () => {
+  it('caps its width at the viewport less both gutters', async () => {
+    const user = userEvent.setup();
+    render(<NotificationBell />);
+
+    await user.click(screen.getByRole('button', { name: /Notifications/ }));
+
+    const panel = screen.getByText('Notifications').closest('div')?.parentElement;
+    expect(panel, 'no notifications panel').toBeDefined();
+
+    /* 360px where it fits, and never wider than the screen where it does not. */
+    expect((panel as HTMLElement).className).toContain('w-90');
+    expect((panel as HTMLElement).className).toContain('max-w-[calc(100vw-2.75rem)]');
+  });
+});

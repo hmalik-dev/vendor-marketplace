@@ -155,7 +155,17 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
 
       {open ? (
         <div /* Inside the header's own stacking context, so a local z is enough. */
-          className="absolute right-0 z-10 mt-2 w-90 overflow-hidden rounded-xl border border-stone-300 bg-stone-0 shadow-lg"
+          /*
+           * 360px, bounded by the viewport it is anchored in.
+           *
+           * The panel hangs off the bell's right edge, so at 375px a fixed
+           * 360px panel plus the header's own gutter ran past the left edge of
+           * the screen and clipped the notification text — the timestamps and
+           * the "Mark all read" control were the first things to go. The bound
+           * is the viewport less both gutters, so the panel narrows instead of
+           * escaping. It never binds at 768 and up, where the frames draw it.
+           */
+          className="absolute right-0 z-10 mt-2 w-90 max-w-[calc(100vw-2.75rem)] overflow-hidden rounded-xl border border-stone-300 bg-stone-0 shadow-lg"
         >
           <div className="flex items-center justify-between border-b border-stone-200 px-4 py-2.5">
             <p className="text-base font-semibold text-stone-900">Notifications</p>
