@@ -46,7 +46,7 @@ import {
   setHeldDate,
   statusesOnDate,
 } from './booking-requests.dao.js';
-import type { CustomerIdentityRow } from './booking-requests.dao.js';
+import type { CustomerIdentityRow, VendorSummaryRow } from './booking-requests.dao.js';
 
 /** The four things either party can do to a live request. */
 export type RequestAction = 'quote' | 'accept' | 'decline' | 'cancel';
@@ -99,7 +99,7 @@ function toClockTime(value: string | null): string | null {
   return value === null ? null : value.slice(0, 5);
 }
 
-function toVendorSummary(vendor: VendorProfileRow): BookingRequestDetail['vendor'] {
+function toVendorSummary(vendor: VendorSummaryRow): BookingRequestDetail['vendor'] {
   return {
     id: vendor.id,
     slug: vendor.slug,
@@ -107,6 +107,7 @@ function toVendorSummary(vendor: VendorProfileRow): BookingRequestDetail['vendor
     city: vendor.city,
     state: vendor.state,
     avatarUrl: vendor.profileImageUrl,
+    categoryName: vendor.categoryName,
     avgRating: parseRating(vendor.avgRating),
     reviewCount: vendor.reviewCount,
   };
@@ -134,7 +135,7 @@ const NO_CUSTOMER: CustomerIdentityRow = {
 
 function toDetail(
   row: BookingRequestRow,
-  vendor: VendorProfileRow,
+  vendor: VendorSummaryRow,
   servicePackage: ServicePackageRow | null,
   customer: CustomerIdentityRow,
 ): BookingRequestDetail {

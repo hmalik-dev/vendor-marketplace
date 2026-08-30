@@ -41,27 +41,40 @@ export async function findConversationsFor(
   db: AppDatabase,
   userId: string,
 ): Promise<ConversationListRow[]> {
-  return db
-    .select({
-      id: conversations.id,
-      customerId: conversations.customerId,
-      vendorUserId: vendorProfiles.userId,
-      vendorSlug: vendorProfiles.slug,
-      vendorBusinessName: vendorProfiles.businessName,
-      vendorAvatarUrl: vendorProfiles.profileImageUrl,
-      customerFirstName: users.firstName,
-      customerLastName: users.lastName,
-      customerAvatarUrl: users.avatarUrl,
-      lastMessageAt: conversations.lastMessageAt,
-      requestEventDate: bookingRequests.eventDate,
-      requestEventType: bookingRequests.eventType,
-    })
-    .from(conversations)
-    .innerJoin(vendorProfiles, eq(conversations.vendorId, vendorProfiles.id))
-    .innerJoin(users, eq(conversations.customerId, users.id))
-    .leftJoin(bookingRequests, eq(conversations.bookingRequestId, bookingRequests.id))
-    .where(or(eq(conversations.customerId, userId), eq(vendorProfiles.userId, userId)))
-    .orderBy(desc(conversations.lastMessageAt), desc(conversations.createdAt));
+  return (
+    db
+      .select({
+        id: conversations.id,
+        customerId: conversations.customerId,
+        vendorUserId: vendorProfiles.userId,
+        vendorSlug: vendorProfiles.slug,
+        vendorBusinessName: vendorProfiles.businessName,
+        vendorAvatarUrl: vendorProfiles.profileImageUrl,
+        customerFirstName: users.firstName,
+        customerLastName: users.lastName,
+        customerAvatarUrl: users.avatarUrl,
+        lastMessageAt: conversations.lastMessageAt,
+        requestEventDate: bookingRequests.eventDate,
+        requestEventType: bookingRequests.eventType,
+      })
+      .from(conversations)
+      .innerJoin(vendorProfiles, eq(conversations.vendorId, vendorProfiles.id))
+      .innerJoin(users, eq(conversations.customerId, users.id))
+      .leftJoin(bookingRequests, eq(conversations.bookingRequestId, bookingRequests.id))
+      .where(or(eq(conversations.customerId, userId), eq(vendorProfiles.userId, userId)))
+      /*
+       * `NULLS LAST` is load-bearing, not tidiness. `ensureConversation` opens a
+       * thread with **every** booking request and leaves `last_message_at` null
+       * until somebody writes, and Postgres sorts nulls *first* under `DESC` — so
+       * the default ordering led with every thread that had never been used.
+       *
+       * On `/messages` that was merely wrong-looking, because the whole list
+       * renders. Frame `07`'s bookings rail draws only the first three, so it
+       * turned into lost data: three rows reading "No messages yet." above a reply
+       * that arrived an hour ago (#302).
+       */
+      .orderBy(sql`${conversations.lastMessageAt} DESC NULLS LAST`, desc(conversations.createdAt))
+  );
 }
 
 /**

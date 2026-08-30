@@ -136,7 +136,7 @@ export function requestToEntry(request: WireBookingRequest, now: Date = new Date
     vendorSlug: request.vendor.slug,
     vendorName: request.vendor.businessName,
     vendorImageUrl: request.vendor.avatarUrl,
-    categoryName: null,
+    categoryName: request.vendor.categoryName,
     occasion: occasionOf(request.eventType),
     eventDate: request.eventDate,
     venue: request.eventLocation,
@@ -148,7 +148,11 @@ export function requestToEntry(request: WireBookingRequest, now: Date = new Date
   };
 }
 
-export function bookingToEntry(booking: WireBooking, vendorName: string): BookingEntry {
+export function bookingToEntry(
+  booking: WireBooking,
+  vendorName: string,
+  categoryName: string | null = null,
+): BookingEntry {
   const presentation = BOOKING_PRESENTATION[booking.status] ?? {
     label: booking.status,
     tone: 'inert' as StatusTone,
@@ -161,7 +165,7 @@ export function bookingToEntry(booking: WireBooking, vendorName: string): Bookin
     vendorSlug: null,
     vendorName,
     vendorImageUrl: null,
-    categoryName: null,
+    categoryName,
     occasion: occasionOf(booking.eventType),
     eventDate: booking.eventDate,
     venue: booking.venue,
@@ -187,11 +191,25 @@ export function toEntries(
   const nameByVendorId = new Map(
     requests.map((request) => [request.vendorId, request.vendor.businessName]),
   );
+  /*
+   * The booking read model carries no category, and it does not need to: every
+   * booking was a request first, and the request list still holds that row even
+   * once it has been paid — `paidRequestIds` only removes it from the *rendered*
+   * list, below. So the category rides across on the vendor it shares, rather
+   * than being denormalised onto a second table.
+   */
+  const categoryByVendorId = new Map(
+    requests.map((request) => [request.vendorId, request.vendor.categoryName]),
+  );
   const paidRequestIds = new Set(bookings.map((booking) => booking.requestId));
 
   return [
     ...bookings.map((booking) =>
-      bookingToEntry(booking, nameByVendorId.get(booking.vendorId) ?? 'Your vendor'),
+      bookingToEntry(
+        booking,
+        nameByVendorId.get(booking.vendorId) ?? 'Your vendor',
+        categoryByVendorId.get(booking.vendorId) ?? null,
+      ),
     ),
     ...requests
       .filter((request) => !paidRequestIds.has(request.id))
@@ -250,13 +268,18 @@ export function groupByMonth(entries: readonly BookingEntry[]): MonthGroup[] {
     groups.set(key, [...(groups.get(key) ?? []), entry]);
   }
 
-  return [...groups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, grouped]) => ({
-      key,
-      label: MONTH_LABEL.format(new Date(`${key}-01T00:00:00Z`)).toUpperCase(),
-      entries: grouped,
-    }));
+  /*
+   * Insertion order, not a second sort. A `Map` preserves the order keys were
+   * first written, so the months come out in the order the entries arrived —
+   * oldest first for the ascending list this is normally given, and newest first
+   * once `Latest first` reverses it. Re-sorting here instead would leave the
+   * months climbing while the cards inside them descended.
+   */
+  return [...groups.entries()].map(([key, grouped]) => ({
+    key,
+    label: MONTH_LABEL.format(new Date(`${key}-01T00:00:00Z`)).toUpperCase(),
+    entries: grouped,
+  }));
 }
 
 const CARD_DATE = new Intl.DateTimeFormat('en-US', {
@@ -291,4 +314,69 @@ export function summarise(
     nextVendor: next.vendorName,
     inDays: daysUntil(next.eventDate, today),
   };
+}
+
+/**
+ * How the hub's `Soonest first ▾` chip orders the list.
+ *
+ * The event date and nothing else — not created-at, not price. The hub is a
+ * calendar of commitments, and "soonest" means the next thing the customer has
+ * to turn up to.
+ */
+export type BookingSort = 'soonest' | 'latest';
+
+export const BOOKING_SORTS: readonly BookingSort[] = ['soonest', 'latest'];
+
+export interface BookingRefinements {
+  /** A category name as it is drawn, or `null` for "All categories". */
+  category: string | null;
+  sort: BookingSort;
+}
+
+/**
+ * The categories actually present in this customer's bookings, for the chip's
+ * option list.
+ *
+ * Derived from the rows rather than from the category table: offering "Florals"
+ * to someone who has never booked a florist is a filter whose only possible
+ * effect is to empty the list. Entries with no category are omitted rather than
+ * becoming a blank option.
+ */
+export function categoryNamesOf(entries: readonly BookingEntry[]): string[] {
+  const names = new Set<string>();
+
+  for (const entry of entries) {
+    if (entry.categoryName) {
+      names.add(entry.categoryName);
+    }
+  }
+
+  return [...names].sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Applies the two Refine chips — the category filter and the date sort.
+ *
+ * A `category` no entry carries is **dropped rather than applied**. It arrives
+ * from a stale link or a hand-typed URL, and matching nothing would render an
+ * empty hub that gives the customer no way to tell a filter with no results from
+ * a hub with no bookings at all.
+ *
+ * Returns a new array: the caller's list is a server-rendered prop, and sorting
+ * it in place would reorder the same array the tab counts were taken from.
+ */
+export function applyRefinements(
+  entries: readonly BookingEntry[],
+  { category, sort }: BookingRefinements,
+): BookingEntry[] {
+  const known = category !== null && entries.some((entry) => entry.categoryName === category);
+  const filtered = known
+    ? entries.filter((entry) => entry.categoryName === category)
+    : [...entries];
+
+  return filtered.sort((left, right) =>
+    sort === 'soonest'
+      ? left.eventDate.localeCompare(right.eventDate)
+      : right.eventDate.localeCompare(left.eventDate),
+  );
 }

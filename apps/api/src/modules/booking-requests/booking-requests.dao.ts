@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, inArray, isNull, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -21,6 +21,53 @@ import type { AppDatabase } from '../../lib/database.js';
 
 /** Newest first — both hubs read a request queue, and the queue is a stack. */
 const newestFirst = [desc(bookingRequests.createdAt)];
+
+/**
+ * A vendor row plus the one category the request read model draws.
+ *
+ * `bookingRequestDetailSchema`'s comment has always said every surface listing
+ * requests renders "Photography · Wedding" beside the business name, but the
+ * vendor block carried no category, so the bookings hub hardcoded it to null and
+ * its category filter had nothing to filter on (#302/#187).
+ */
+export type VendorSummaryRow = VendorProfileRow & { categoryName: string | null };
+
+/**
+ * The vendor's primary category, as a correlated subquery.
+ *
+ * A join would be the obvious shape and the wrong one: a vendor may hold several
+ * categories, so joining multiplies the vendor row and every caller that expects
+ * one row per vendor silently starts seeing duplicates. This returns exactly one
+ * value per row, or null.
+ *
+ * "Primary" is the lowest `display_order` among the vendor's **active**
+ * categories — the same order the profile and the picker draw them in, so the
+ * hub names the category the vendor is listed under rather than an arbitrary one.
+ *
+ * **Written out rather than interpolated, deliberately.** Drizzle renders a
+ * `${table.column}` inside a raw `sql` template as a *bare* name — the first
+ * draft of this emitted `JOIN "categories" ON "id" = "category_id"` and
+ * `WHERE "vendor_id" = "id"`, so the correlation compared
+ * `vendor_categories.vendor_id` to `categories.id`. That is not an error in
+ * Postgres, it is merely always false, so every row came back null and only the
+ * assertion on a real category name caught it. Aliases here are explicit for the
+ * same reason: nothing in this string depends on drizzle guessing a scope.
+ */
+const primaryCategoryName = sql<string | null>`(
+  SELECT c.name
+    FROM vendor_categories vc
+    JOIN categories c ON c.id = vc.category_id
+   WHERE vc.vendor_id = vendor_profiles.id
+     AND c.is_active = true
+   ORDER BY c.display_order
+   LIMIT 1
+)`;
+
+/** Every vendor column plus the primary category, for the request read model. */
+const vendorSummaryColumns = {
+  ...getTableColumns(vendorProfiles),
+  categoryName: primaryCategoryName,
+};
 
 export async function findRequestById(
   db: AppDatabase,
@@ -188,13 +235,13 @@ export async function applyTransition(
 export async function findVendorById(
   db: AppDatabase,
   vendorId: string,
-): Promise<VendorProfileRow | null> {
+): Promise<VendorSummaryRow | null> {
   if (!vendorId) {
     return null;
   }
 
   const rows = await db
-    .select()
+    .select(vendorSummaryColumns)
     .from(vendorProfiles)
     .where(eq(vendorProfiles.id, vendorId))
     .limit(1);
@@ -205,13 +252,13 @@ export async function findVendorById(
 export async function findVendorsByIds(
   db: AppDatabase,
   vendorIds: readonly string[],
-): Promise<VendorProfileRow[]> {
+): Promise<VendorSummaryRow[]> {
   if (vendorIds.length === 0) {
     return [];
   }
 
   return db
-    .select()
+    .select(vendorSummaryColumns)
     .from(vendorProfiles)
     .where(inArray(vendorProfiles.id, [...vendorIds]));
 }

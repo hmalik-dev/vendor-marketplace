@@ -1,6 +1,6 @@
 'use client';
 
-import { MESSAGE_MAX_LENGTH } from '@vendor-marketplace/shared';
+import { MESSAGE_MAX_LENGTH, shortTimeAgo } from '@vendor-marketplace/shared';
 import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
@@ -35,24 +35,6 @@ const CLOCK = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-dig
  * page of prose, so nobody writing an ordinary message ever sees it.
  */
 const MESSAGE_COUNTER_THRESHOLD = 200;
-/** "2h", "5h", "3d" — the age of the last message, at a glance. */
-function ago(date: Date | null, now: number): string {
-  if (!date) {
-    return '';
-  }
-
-  const minutes = Math.floor((now - date.getTime()) / 60_000);
-
-  if (minutes < 60) {
-    return `${Math.max(minutes, 1)}m`;
-  }
-  if (minutes < 1_440) {
-    return `${Math.floor(minutes / 60)}h`;
-  }
-
-  return `${Math.floor(minutes / 1_440)}d`;
-}
-
 export interface MessagesScreenProps {
   initialConversations: readonly WireConversation[];
   /** The signed-in user, so a bubble knows which side it belongs on. */
@@ -242,7 +224,7 @@ export function MessagesScreen({
                       {row.otherPartyName}
                     </span>
                     <span className="shrink-0 text-xs text-stone-600">
-                      {ago(row.lastMessageAt, now)}
+                      {shortTimeAgo(row.lastMessageAt, now)}
                     </span>
                   </span>
                   <span className="mt-0.5 block truncate text-sm text-stone-700">

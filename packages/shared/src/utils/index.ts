@@ -116,6 +116,36 @@ export function expiryCountdown(expiresAt: Date | null, now: Date = new Date()):
   return days === 1 ? 'expires today' : `expires in ${days}d`;
 }
 
+/**
+ * How long ago something happened, in the shortest form a list can carry —
+ * `2h`, `1d`, `14m`. Frames `07` and `16` both draw it beside a message.
+ *
+ * Shared rather than copied for the reason `expiryCountdown` above records: two
+ * implementations of one time format is how a customer and a vendor come to see
+ * different answers for the same row. This one was local to `messages-screen`
+ * until the bookings rail needed the same string.
+ *
+ * Floors at `1m` rather than counting seconds — a message sent nine seconds ago
+ * reads as "now" to a person, and "0m" reads as a bug. Empty string for a null
+ * date, so a caller renders nothing rather than the word "never".
+ */
+export function shortTimeAgo(date: Date | null, now: number = Date.now()): string {
+  if (!date) {
+    return '';
+  }
+
+  const minutes = Math.floor((now - date.getTime()) / 60_000);
+
+  if (minutes < 60) {
+    return `${Math.max(minutes, 1)}m`;
+  }
+  if (minutes < 1_440) {
+    return `${Math.floor(minutes / 60)}h`;
+  }
+
+  return `${Math.floor(minutes / 1_440)}d`;
+}
+
 /** What cancelling right now returns, and which side of the cutoff it falls. */
 export interface RefundQuote {
   refundCents: number;
