@@ -57,12 +57,34 @@ each was a right value answering a question nobody had asked**:
   behaviour and hiding it from a passing suite.
 
 The shared tell: **an automated check confidently reporting something it never
-established, with one instant standing in for a behaviour over time.**
+established.** Time is the commonest way that happens, but not the only one.
 
 Separate the two halves in any finding. A **class-level fact** read from the
 source — `focus-visible:ring-0` is a static suppression — survives, because no
 timing explains it away. A **number measured mid-interpolation** does not, and
 must not be quoted as though it were reproducible.
+
+### A property is not a measurement until the element has extent
+
+Two more from the same night, neither of them about timing:
+
+- A hero divider was given `h-full` to draw a full-height rule. `height:100%` on
+  a flex item resolves against the container's height, and that container's
+  height came from its own content — indefinite — so it computed to **0**. Both
+  hairlines were invisible and the bar read as one undivided field, while a
+  `background-color` assertion still passed: it was reading a real colour off a
+  zero-height box.
+- `scrollWidth <= clientWidth` in jsdom is `0 <= 0`. It passes against the
+  broken version, because jsdom performs no layout.
+
+**Assert extent alongside the property.** A colour, a border or a radius on an
+element of zero width or height has passed on nothing. Where a check cannot
+fail — jsdom geometry, an unrendered node — assert the class-level fact instead
+and say in the test's own comment that the rendered result is unverified. Owed
+and named beats faked.
+
+The general form, covering all six: **before trusting a check, ask what state
+would make it fail. If nothing would, it is not a check.**
 
 ## `40-states.md` is a law, not a screen file
 

@@ -48,8 +48,12 @@ export async function SiteHeader(): Promise<React.ReactElement> {
         `HeaderNav` holds that choice.
       */}
       <HeaderNav>
-        {/* 34px from the wordmark to the nav — frame `01`. */}
-        <div className="flex min-w-0 flex-none items-center gap-8.5">
+        {/*
+          34px from the wordmark to the nav at 1440 (frame `01`), 26px at 1024
+          and 20px at 768 — the narrow frames tighten the whole bar, not just
+          its gutter.
+        */}
+        <div className="flex min-w-0 flex-none items-center gap-5 lg:gap-6.5 min-[90rem]:gap-8.5">
           {/*
             The chip is a child of the wordmark's own row, not a sibling of it,
             so it takes that row's 9px gap *and* its own 4px margin — 13px from
@@ -73,7 +77,8 @@ export async function SiteHeader(): Promise<React.ReactElement> {
         {/* Present only on `/search`, and only from `lg` — frame `02`. */}
         <HeaderQuery categories={categories} />
 
-        <div className="flex flex-none items-center gap-4">
+        {/* 16 / 14 / 12px, per frame, same as the cluster on the left. */}
+        <div className="flex flex-none items-center gap-3 lg:gap-3.5 min-[90rem]:gap-4">
           <Show when="signed-out">
             {/*
               "Sign in" is a nav link, not a ghost button: the frame draws it in
@@ -99,7 +104,29 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               The route is a full page rather than a modal: sign-up has to
               collect the customer/vendor role before Clerk's form renders.
             */}
-            <Button variant="ink" asChild>
+            {/*
+              Stepped at the call site rather than in the variant: `ink` is one
+              control in one place, and its padding comes from `size`, so a
+              breakpoint inside the variant string would race the size variant
+              through `twMerge` rather than override it. The frames draw
+              `12.5px / 8 15` below 1440 and `13px / 10 18` at it.
+            */}
+            <Button
+              variant="ink"
+              asChild
+              /*
+                The frame's pill is 31px tall and `30-responsive.md` asks for a
+                44px target, so the target is grown without moving the pill: a
+                44px-tall pseudo-element centred on it, full width, which is the
+                idiom `search-bar.tsx` already uses for its icon action. Padding
+                alone would have to redraw a control the frames measure.
+
+                Stepping the padding down to the frame's `8 15` made this worse
+                before the pseudo-element existed — it took the pill from ~36px
+                to 31 while the nav links beside it were being raised to 44.
+              */
+              className="relative px-3.75 py-2 text-[12.5px] after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] min-[90rem]:px-4.5 min-[90rem]:py-2.5 min-[90rem]:text-action"
+            >
               <Link href="/sign-up">Sign up</Link>
             </Button>
 

@@ -226,6 +226,13 @@ export function RefineBar({
           <legend className="text-sm font-semibold text-stone-900">
             {TAG_CATEGORY_LABELS[tagCategory]}
           </legend>
+          {/*
+            Multi-select, so it deliberately outlives a choice — and says so
+            rather than reading as the single-select panels that now close.
+          */}
+          <p className="mt-0.5 text-xs text-stone-600">
+            Choose as many as you like — this stays open.
+          </p>
           <ul className="mt-2 flex flex-col gap-2">
             {options.map((tag) => (
               <li key={tag.id}>
@@ -286,6 +293,8 @@ export function RefineBar({
         <Chip label={priceLabel} tone={hasPrice ? 'valued' : 'resting'}>
           <fieldset>
             <legend className="text-sm font-semibold text-stone-900">Price range</legend>
+            {/* A range has two ends, so a single move never completes it. */}
+            <p className="mt-0.5 text-xs text-stone-600">Set either end — this stays open.</p>
             <div className="mt-2 flex flex-col gap-2">
               <label className="text-xs text-stone-600" htmlFor="minPrice">
                 Minimum
@@ -334,32 +343,43 @@ export function RefineBar({
           </fieldset>
         </Chip>
 
+        {/*
+          Single-select, so the choice completes the panel and the panel closes
+          — the same contract `Sort` already keeps. Left open, the 280x147 panel
+          sat over the results heading and the first result card, hiding the
+          answer to the question it had just been asked.
+        */}
         <Chip
           label={ratingLabel}
           tone={state.minRating !== null ? 'active' : 'resting'}
           {...(state.minRating !== null ? { onClear: () => setState({ minRating: null }) } : {})}
         >
-          <fieldset>
-            <legend className="text-sm font-semibold text-stone-900">Minimum rating</legend>
-            <div className="mt-2 flex flex-col gap-1.5">
-              {RATING_STEPS.map((step) => (
-                <button
-                  key={step.label}
-                  type="button"
-                  aria-pressed={state.minRating === step.value}
-                  onClick={() => setState({ minRating: step.value })}
-                  className={cn(
-                    'rounded-md py-1.75 text-center text-xs font-semibold transition-colors duration-(--duration-fast)',
-                    state.minRating === step.value
-                      ? 'bg-clay-400 text-stone-0'
-                      : 'bg-stone-150 text-stone-700 hover:bg-stone-200',
-                  )}
-                >
-                  {step.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          {(close) => (
+            <fieldset>
+              <legend className="text-sm font-semibold text-stone-900">Minimum rating</legend>
+              <div className="mt-2 flex flex-col gap-1.5">
+                {RATING_STEPS.map((step) => (
+                  <button
+                    key={step.label}
+                    type="button"
+                    aria-pressed={state.minRating === step.value}
+                    onClick={() => {
+                      setState({ minRating: step.value });
+                      close();
+                    }}
+                    className={cn(
+                      'rounded-md py-1.75 text-center text-xs font-semibold transition-colors duration-(--duration-fast)',
+                      state.minRating === step.value
+                        ? 'bg-clay-400 text-stone-0'
+                        : 'bg-stone-150 text-stone-700 hover:bg-stone-200',
+                    )}
+                  >
+                    {step.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
         </Chip>
 
         {TAG_CATEGORIES.map(tagChip)}

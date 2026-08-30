@@ -31,7 +31,8 @@ export function HeroSearch({ categories }: HeroSearchProps): React.ReactElement 
       categories={categories}
       value={EMPTY_QUERY}
       size="hero"
-      className="mt-6"
+      /* 18px at both narrow frames, 24 only at 1440. */
+      className="mt-4.5 min-[90rem]:mt-6"
       onSubmit={(values) => {
         const params = new URLSearchParams();
 

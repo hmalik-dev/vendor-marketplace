@@ -1,6 +1,7 @@
 'use client';
 
 import { MESSAGE_MAX_LENGTH } from '@vendor-marketplace/shared';
+import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 import { Banner } from '@/components/ui/banner';
@@ -86,6 +87,20 @@ export function MessagesScreen({
 
   const bottom = useRef<HTMLDivElement>(null);
   const now = Date.now();
+
+  /*
+   * Below `md` the two panes become one screen, so exactly one of them shows.
+   *
+   * `14 Messaging tablet` draws both panes at 768 and there is no frame below
+   * it, so this is the usability floor #70 asks for rather than a drawn
+   * composition: `activeId` defaults to the first conversation, which meant a
+   * narrow screen opened straight into a thread with the list hidden and no
+   * control anywhere to get back to it. Every other conversation was
+   * unreachable without reloading.
+   *
+   * Derived once rather than tested twice, so the panes cannot both hide.
+   */
+  const listOwnsSmallScreen = activeId === null && conversations.length > 0;
 
   const active = useMemo(
     () => conversations.find((row) => row.id === activeId) ?? null,
@@ -186,7 +201,12 @@ export function MessagesScreen({
 
   return (
     <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-stone-300 bg-stone-0 max-md:hidden">
+      <aside
+        className={cn(
+          'flex w-[300px] shrink-0 flex-col border-r border-stone-300 bg-stone-0',
+          listOwnsSmallScreen ? 'max-md:w-full' : 'max-md:hidden',
+        )}
+      >
         <div className="flex items-center justify-between border-b border-stone-200 px-4.5 py-3.5">
           <h1 className="text-md font-semibold text-stone-900">Messages</h1>
           {conversations.some((row) => row.unreadCount > 0) ? (
@@ -248,7 +268,12 @@ export function MessagesScreen({
         </ul>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-stone-50">
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 flex-col overflow-hidden bg-stone-50',
+          listOwnsSmallScreen && 'max-md:hidden',
+        )}
+      >
         {active === null ? (
           <EmptyState
             headline="No conversations yet"
@@ -258,6 +283,20 @@ export function MessagesScreen({
         ) : (
           <>
             <div className="flex shrink-0 items-center gap-3 border-b border-stone-300 bg-stone-0 px-5.5 py-3">
+              {/*
+                The way out, and only where there is no list beside the thread
+                to go back to. 44px, because `04-laws.md` sizes an icon-only
+                control by the finger that presses it — and below `md` this is
+                the only navigation on the screen.
+              */}
+              <button
+                type="button"
+                onClick={() => setActiveId(null)}
+                aria-label="Back to messages"
+                className="-ml-2.5 flex size-11 shrink-0 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 md:hidden"
+              >
+                <ArrowLeft aria-hidden="true" className="size-4.5" />
+              </button>
               <Avatar name={active.otherPartyName} src={active.otherPartyAvatarUrl} size="md" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-md font-semibold text-stone-900">

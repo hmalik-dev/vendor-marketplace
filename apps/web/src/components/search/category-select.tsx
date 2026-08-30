@@ -111,13 +111,25 @@ export function CategorySelect({
               floor wide enough for its longest value, and the space comes from
               City, whose "Anywhere" needs a quarter of what it is given.
             */
-            isHero ? 'sm:min-w-36 sm:flex-[1.3]' : 'sm:min-w-33 sm:flex-[1.15]',
+            /* 1.2 at 768, 1.3 from 1024 — `14 Landing tablet` widens the
+               two fields either side of it instead. */
+            /*
+              `padding-right:14px` at 768, where the frame gives this segment a
+              border rather than a divider beside it. `flex-basis` is 0, so the
+              missing 14px was redistributed and every boundary in the bar
+              moved — the vendor-type segment came out 9.6px narrow and both
+              hairlines sat left of where the frame draws them.
+            */
+            isHero
+              ? 'sm:min-w-36 sm:flex-[1.2] sm:pr-3.5 lg:flex-[1.3] lg:pr-0'
+              : 'sm:min-w-33 sm:flex-[1.15]',
           )}
         >
           <span
             className={cn(
               'font-semibold tracking-label text-stone-600 uppercase',
-              isHero ? 'text-label' : 'text-[9.5px]',
+              /* `.lbl` is 10.5px and only `01 Landing` takes it unmodified. */
+              isHero ? 'text-[9.5px] min-[90rem]:text-label' : 'text-[9.5px]',
             )}
           >
             Vendor type
@@ -125,13 +137,19 @@ export function CategorySelect({
           <span
             className={cn(
               'flex items-center justify-between',
-              isHero ? 'mt-0.5 gap-2.5 pr-3.5' : 'gap-1.5 pr-2.5',
+              isHero
+                ? 'gap-2 pr-2.5 lg:mt-0.25 min-[90rem]:mt-0.5 min-[90rem]:gap-2.5 min-[90rem]:pr-3.5'
+                : 'gap-1.5 pr-2.5',
             )}
           >
             <span
               className={cn(
                 'truncate',
-                isHero ? 'text-md' : 'text-[13.5px]',
+                /* Matches `SearchBar`'s own ladder — the two must agree, they
+                 sit side by side in the same pill. */
+                isHero
+                  ? 'text-[14px] font-medium lg:text-[13.5px] lg:font-normal min-[90rem]:text-md'
+                  : 'text-[13.5px]',
                 selected ? 'text-stone-900' : 'text-stone-600',
               )}
             >
@@ -139,7 +157,10 @@ export function CategorySelect({
             </span>
             <span
               aria-hidden="true"
-              className={cn('shrink-0 text-stone-600', isHero ? 'text-[11px]' : 'text-[9px]')}
+              className={cn(
+                'shrink-0 text-stone-600',
+                isHero ? 'text-[9px] lg:text-[10px] min-[90rem]:text-[11px]' : 'text-[9px]',
+              )}
             >
               ▾
             </span>
