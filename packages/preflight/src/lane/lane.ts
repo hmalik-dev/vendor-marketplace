@@ -282,15 +282,25 @@ const defaultUpDeps: LaneUpDeps = {
   seed: async (worktreePath) => {
     await pnpmInLane(worktreePath, ['db:seed']);
     /*
-     * The end-to-end fixtures need Clerk to resolve the accounts' real ids,
-     * so they are best-effort: a lane whose ticket needs no browser pass
-     * should still come up. `pnpm preflight` fails loudly for the lanes that
-     * do need it, which is where the demand belongs.
+     * The end-to-end fixtures need Clerk to resolve the accounts' real ids, so
+     * they are best-effort: a lane whose ticket needs no browser pass should
+     * still come up. `pnpm preflight` fails loudly for the lanes that do need
+     * it, which is where the demand belongs.
+     *
+     * The reason is printed rather than swallowed. One of the things this can
+     * now catch is `assertSafeTarget` refusing the target outright — "refusing
+     * to seed end-to-end fixtures into the production branch" is not a message
+     * to discard, and a silent skip would also hide a partial application where
+     * the vendor role was granted before the profile insert failed.
      */
     try {
       await pnpmInLane(worktreePath, ['db:seed:e2e']);
-    } catch {
-      // Reported by preflight's reachability check, not by lane bring-up.
+    } catch (error: unknown) {
+      process.stderr.write(
+        'Lane seed: end-to-end fixtures were not applied — ' +
+          `${error instanceof Error ? error.message : String(error)}\n` +
+          '  `pnpm preflight` will fail on this lane if the ticket needs a browser pass.\n',
+      );
     }
   },
 };

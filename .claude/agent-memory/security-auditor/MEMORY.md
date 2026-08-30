@@ -15,3 +15,5 @@
 - [availability.status literals are load-bearing](availability-status-literals-are-load-bearing.md) — three double-booking guards compare to `'booked'`; redefining what a lifecycle writes needs a migration, not a code change
 - [The error handler's 4xx passthrough leaks SDK messages](error-handler-4xx-passthrough-leaks-sdk-messages.md) — any thrown object with `statusCode` 4xx answers with its own `message`; Stripe errors carry both
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body around the `redact` path
+- [Fabricating seeds share one declared-branch guard](fabricating-seeds-share-one-declared-branch-guard.md) — `assertSafeTarget` is mandatory in any `packages/db` seed; it trusts `.neon`/`NEON_BRANCH`, not the URL
+- [The e2e fixture forges stripe_onboarded](e2e-fixture-forges-stripe-onboarded.md) — `true` with a null `stripe_account_id`, a shape Stripe cannot produce; harmless until checkout exists
