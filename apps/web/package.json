@@ -13,6 +13,8 @@
   "dependencies": {
     "@clerk/nextjs": "^7.8.2",
     "@clerk/ui": "^1.30.8",
+    "@stripe/react-stripe-js": "^6.8.2",
+    "@stripe/stripe-js": "^9.14.0",
     "@vendor-marketplace/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

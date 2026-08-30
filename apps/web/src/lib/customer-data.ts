@@ -7,9 +7,12 @@ import {
   wireBookingListSchema,
   wireBookingRequestListSchema,
   wireBookingRequestSchema,
+  wireBookingSchema,
+  wireCheckoutIntentSchema,
   wireCustomerReviewListSchema,
   type WireBooking,
   type WireBookingRequest,
+  type WireCheckoutIntent,
   type WireCustomerReview,
 } from './wire-schemas';
 
@@ -92,6 +95,83 @@ export async function getOwnBookingRequest(requestId: string): Promise<WireBooki
      * page validates the id before calling, so this is the second line rather
      * than the first.
      */
+    if (error instanceof ApiClientError && (error.statusCode === 404 || error.statusCode === 400)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Opens checkout for one accepted request.
+ *
+ * A POST from a Server Component, which is unusual and is the right call here:
+ * the intent must exist before the page can render the card form at all, and
+ * the alternative — render, then create the intent from the browser — shows the
+ * customer a payment form that is not yet backed by a charge, and turns every
+ * checkout into two round trips. It is safe to repeat because the endpoint is
+ * idempotent, so a refresh reaches the same intent rather than a second one.
+ *
+ * `null` covers every reason there is nothing to pay: the request is not
+ * theirs, it was never accepted, or it has since lapsed. The page renders the
+ * same not-found surface for all of them, because a customer who cannot pay for
+ * something does not need to be told which of those it was.
+ */
+export async function openCheckout(requestId: string): Promise<WireCheckoutIntent | null> {
+  const token = await customerToken();
+
+  try {
+    return await apiRequest(`/customer/booking-requests/${requestId}/checkout`, {
+      method: 'POST',
+      schema: wireCheckoutIntentSchema,
+      token,
+    });
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+    if (error instanceof ApiClientError && error.statusCode === 401) {
+      redirect(await signInPathReturningHere());
+    }
+
+    /*
+     * 402 is the vendor's payout setup, and it reaches the page as `null` like
+     * the rest. It is a real difference — the booking could become payable
+     * later — but there is nothing the customer can do about it from here, and
+     * naming the vendor's Stripe status to their customer is not information
+     * they are owed.
+     */
+    if (error instanceof ApiClientError && [400, 402, 404, 409, 422].includes(error.statusCode)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * The booking a request produced, or `null` while the charge has not settled.
+ *
+ * This is also the reconciliation trigger: the API asks Stripe directly when no
+ * webhook ever arrived, so a customer who paid and then watched the confirmed
+ * screen fail to appear gets their booking by reloading it.
+ */
+export async function getBookingForRequest(requestId: string): Promise<WireBooking | null> {
+  const token = await customerToken();
+
+  try {
+    return await apiRequest(`/customer/booking-requests/${requestId}/booking`, {
+      schema: wireBookingSchema,
+      token,
+    });
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+    if (error instanceof ApiClientError && error.statusCode === 401) {
+      redirect(await signInPathReturningHere());
+    }
     if (error instanceof ApiClientError && (error.statusCode === 404 || error.statusCode === 400)) {
       return null;
     }
