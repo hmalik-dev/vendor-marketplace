@@ -521,8 +521,9 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **328** | **The hero and search date field is a native picker the frames do not draw** | P1 | M3 | **P2 Medium** | **Done** | — | **None** | `core` | **Closed by #167 on 2026-08-30, not worked separately.** The native `input[type=date]` is gone from every surface — the hero, the compact header bar, the profile booking rail and the booking-request form — along with the transparent-input-and-overlaid-prompt workaround that existed only to hide the browser's `mm/dd/yyyy`. The replacement is frame `28`'s date body, and on the two surfaces that have a vendor in scope it draws that vendor's own availability marks, so a day they are booked on is refused in the picker rather than accepted and then rejected on the next screen. |
 | **329** | **Remove the `style` tag group from every input, dropdown and filter** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30, user-directed — reverses #281 and #92.** The Style filter was built inside **#297** and then ruled out of the MVP the same day, so the product now disagrees with itself three ways: the **code** ships a `Style ▾` chip (`TAG_CATEGORIES` carries `'style'`), the **frames** no longer draw one (`c4c8fa2` removed it from four screens), and **`11-search.md`** still specifies it at lines 109 and 154. Supersedes **#25**. Removal is wider than the chip — the group is also a section in the vendor profile editor's Tags picker, a `tag_category` enum member, and seed data. **Note the enum:** Postgres cannot drop a value in place, so this needs the create-new-type / swap-column / drop-old migration, plus a data step for any `tags` and `vendor_tags` rows already on `style`. |
 | **330** | **`state` is unvalidated free text, so one city splits into two search results** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30, user-reported: `Austin, TX` and `Austin, Texas` appear as separate cities.** Confirmed in the dev database — `Austin/TX` has **11** published vendors and `Austin/Texas` has **1**, and `/vendors/cities` builds its picker by `GROUP BY city, state`, so the split is an option a customer can pick. Search then matches `lower(state) = lower(?)`, so picking either one **hides the other's vendors**. **The form is the source, and it points the wrong way:** `US_STATES` (`apps/web/src/lib/us-states.ts`) holds full names, so every vendor saving through the editor today writes `Texas` while the seeds hold `TX` — the split widens with each new vendor. `state` on `createVendorProfileSchema` is `z.string().trim().min(1).max(100)`, so the API accepts anything. Canonical form is the **two-letter USPS code**, validated in the shared schema, not in the web list. Needs a data repair for existing rows. |
+| **331** | **`vendor_profiles.state` should be a database enum, not a `varchar(100)` Zod happens to guard** | P1 | M3 | **P2 Medium** | **Backlog** | — | **#330** | `core` | **Filed 2026-08-30, user-directed — the layer below #330.** #330 puts the state vocabulary in `createVendorProfileSchema`, which is the right place for a 400 with a message but is **not** a guarantee: the column stays `varchar(100)` (`vendor-profiles.ts:51`), so `db:seed`, a migration, `db:studio` or any future route that forgets the schema can still write `Texas` and reopen the split. This makes the column itself unable to hold a bad value — `us_state` enum, or a `CHECK` against the 51 codes. **Runs after #330**, which does the data repair; a constraint added before the repair fails on the rows that motivated it. The same argument applies to `users.state` if that column exists — check before assuming. |
 
-Rows are ordered by build sequence, not by ticket number. **324 rows — 164 Done, 131 Superseded, 20 Backlog, 7 Deferred, 2 Blocked.** Recounted 2026-08-30 by lane 297, programmatically from this table rather than by hand — the previous count was written on 2026-08-29 and four lanes have landed since. **28 tickets are open**: nothing in flight, 10 waiting on a human or an external account, and 18 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
+Rows are ordered by build sequence, not by ticket number. **325 rows — 164 Done, 131 Superseded, 21 Backlog, 7 Deferred, 2 Blocked.** Recounted 2026-08-30 by lane 297, programmatically from this table rather than by hand — the previous count was written on 2026-08-29 and four lanes have landed since. **28 tickets are open**: nothing in flight, 10 waiting on a human or an external account, and 18 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -13437,7 +13438,9 @@ the pair being rewritten, so confirm it is still used by the search plan after t
 **Non-goals:** a validated city dataset (above); geocoding, `latitude`/`longitude` or
 `serviceRadiusKm`, none of which this touches; the customer's own `users.city`
 (`users.ts:34`), which is profile display and not a search axis; changing how
-`findVendorCities` derives the picker.
+`findVendorCities` derives the picker; **the database-level constraint, which is #331** —
+this ticket closes the route a real user takes and repairs the data, #331 makes the column
+itself unable to hold a bad value and runs after this one.
 
 **Acceptance:**
 
@@ -13466,5 +13469,74 @@ the pair being rewritten, so confirm it is still used by the search plan after t
       count — the defect stated as a test
 - [ ] A test that every `US_STATE_CODES` entry is two uppercase letters and the list has 51
       members, so DC cannot be dropped silently
+
+---
+
+### #331: `vendor_profiles.state` should be a database enum, not a `varchar(100)` Zod happens to guard
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #330
+
+**Filed 2026-08-30, user-directed.** This is the layer below **#330**, not a duplicate of it.
+
+**What #330 does and does not do.** #330 makes `createVendorProfileSchema.state` an enum over
+the 51 USPS codes. That is the right place for a **400 with a message a vendor can act on**,
+and it closes the route a real user takes. It is not a guarantee: the column stays
+`varchar(100)` (`vendor-profiles.ts:51`), so every writer that does not go through that
+schema can still reopen the split —
+
+- `pnpm db:seed` and `db:seed:e2e`, which write directly
+- a data migration, including the repair in #330 itself
+- `pnpm db:studio`, which is a text box over the column
+- any future route or admin surface that forgets the schema
+
+A validation layer that eleven of twelve writers happen to pass through is a convention. The
+column is the only thing that can make the value impossible.
+
+**Storage is the two-letter code.** Ruled 2026-08-30 with the alternative considered: the
+display format is `Austin, TX` on the card, the profile, the search count sentence and the
+picker, so storing the code makes those four surfaces need **no** lookup and leaves the
+editor's dropdown as the single place a code→name map is read. Storing full names inverts
+that — one free surface, four that need a map. USPS codes also have no variants, where full
+names carry `District of Columbia` / `Washington DC`.
+
+**Enum or `CHECK`.** Prefer the enum: it is the pattern the schema already uses for closed
+vocabularies (`tag_category`, the status enums), it shows up in `db:studio` as a picker, and
+`type-parity.test.ts` already has a place to hold it to the shared constant. A `CHECK` is
+acceptable if the enum's migration cost is judged too high — say which was chosen and why.
+
+**Order matters, and getting it wrong is the likely failure.** This runs **after** #330's
+data repair. A constraint added while `Austin/Texas` still exists fails on exactly the row
+that motivated the ticket.
+
+**Check `users.state` before assuming.** It exists — `users.ts:35`, also `varchar(100)` — and
+it is a customer's own location rather than a search axis, so it may not warrant the same
+constraint. Decide deliberately and record the answer; do not silently constrain one and
+leave the other. Note that `state` appears in **eleven** schema positions in
+`packages/shared/src/schemas/index.ts`; most are response shapes that read the column, and
+only the write paths need the vocabulary.
+
+**Non-goals:** `city`, which stays free text for the reasons in #330; the display format,
+which #330 settles; geocoding or a market entity.
+
+**Acceptance:**
+
+- [ ] `vendor_profiles.state` cannot hold a value outside the 51 codes — proven by an insert
+      that is rejected, not by reading the DDL
+- [ ] The constraint is generated from the shared constant, so the enum and the vocabulary
+      cannot drift
+- [ ] `db:seed` and `db:seed:e2e` write codes and still run clean against the constrained
+      column
+- [ ] A decision is recorded for `users.state`, either way
+- [ ] The migration applies to a clone of the dev database **after** #330's repair, and its
+      failure against an unrepaired clone is confirmed rather than assumed
+
+**Tests (required):**
+
+- [ ] A test asserting the rejected insert — the constraint stated as a test, at the database
+      boundary rather than the Zod one
+- [ ] `type-parity.test.ts` holds the enum's values to the shared constant, matching how
+      `tagCategoryEnum` is already guarded
+- [ ] A seed test that runs both seeds against the constrained column
 
 ---
