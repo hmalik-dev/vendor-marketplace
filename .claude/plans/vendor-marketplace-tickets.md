@@ -513,7 +513,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **320** | **`31-content-voice.md` still carries the 48-hour deadline the API contradicts** | P1 | M3 | **P1 High** | **Backlog** | — | **None** — ruled 2026-08-30 | `core` | **Filed 2026-08-30 while tracing #302.** #216 (in **#308**) found the request deadline stated four ways, three of them wrong, and ruled the API authoritative: `BOOKING_REQUEST_EXPIRY_DAYS` is **7 days**. #308 fixed every code site and derives the phrase from the constant. **It did not fix the approved-strings file, and could not:** `31-content-voice.md` is `design-plan/`, and *Design passes edit the plan; tickets write the code, never the reverse.* So the row headed **Request reassurance** still reads *"You're requesting, not paying. Maya has 48 hours to confirm or send a revised quote — you approve before any card is charged."* — the exact literal #216 identified as false, sitting in the file every future ticket is told to take approved strings from. **#216's own acceptance asked for this** ("`31-content-voice.md` carries one approved phrasing") and #308 closed without it; that is an omission in #308, recorded here rather than left silent. **Doubly stale:** #308 also made the sentence conditional — a packaged request cannot be re-quoted, so it now reads *confirm the date or decline*, and only a custom request is offered a quote. **Needs:** a design pass to restate that row from `bookingRequestWindowPhrase()`'s wording and both branches. Until then the risk is quiet: a ticket copying the approved string reintroduces a deadline the API refuses, at the moment of commitment. **RULED 2026-08-30 — unblocked. The 7-day window stands** (48 hours was judged too quick a turnaround to ask of a vendor; revisit later with real reply-time data). This ticket is granted a **one-off, scoped exception** to edit `design-plan/31-content-voice.md` for this correction — it does not generalise, and `web-design-parity.md`'s rule is otherwise unchanged. See D12. |
 | **321** | **Focus is three mechanisms, not one blanket ring** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 from the design re-import.** `03-components.md` § Inputs is now the single source for focus and specifies **three mechanisms chosen by what the element already has, never mixed**; `04-laws.md`'s blanket offset-ring rule was the original conflict and now points at it. **The app implements the blanket rule instead**, from `app/globals.css:153` (plus copies at `:203` and `:341`), so the offset ring lands on element classes the spec forbids it on. **Measured live at 1440x900** on `/search`'s price panel: the min input composes **both** mechanisms at once — `stone-50 0 0 0 2px` + `clay/0.30 0 0 0 4px` (the forbidden offset ring) **and** `clay/0.15 0 0 0 3px` with a `clay-400` border (the correct one). That is the "never mixed" law broken by construction. Also retires the hero bar's three stacked cues — the bar halo, #89's tint and #73's inset ring all go, replaced by a `stone-200` fill and a clay label. **Supersedes the D13 focus ruling of 2026-08-30**, which chose "inset ring only" before this spec existed. Frame: screen `26`, first four blocks. See D14 |
 | **322** | **Retire every native `date`, `time` and `select`** | P1 | M3 | **P1 High** | **Backlog** | — | **#167** | `core` | **Filed 2026-08-30 from the design re-import.** New law in `03-components.md` § Inputs and screen `26`: **never a native `date`, `time` or `select`** — they bring their own selection colour and OS glyphs, so a single field renders in three palettes (Orla clay, Chrome blue, OS black). **Seven controls on `main`:** `type="date"` in `search-bar.tsx:292`, `booking-rail.tsx:127` and `booking-request-screen.tsx:377`; `type="time"` in `booking-request-screen.tsx:416`; `<select>` in `booking-rail.tsx:162`, `booking-request-screen.tsx:391` and `customer-profile-form.tsx:165`. Each moves onto **#167**'s shared dropdown — date body for the first four, single-select body for the rest. Carries the **calendar-icon placement rule** with it: **no icon in the hero search bar** (three labelled segments and one clay pill — an icon there competes with the only element that should pull the eye), and in forms a **13px `stone-600` glyph right-aligned where the caret would sit**, never left, never clay. Frame: screen `26`, `Calendar icon` block. See D14 |
-| **323** | **Tag filters: no search field, and Dietary only where food is served** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30, user-directed.** Two defects in how tags are offered. (1) **A search field sits over the tag lists** — `tags/tag-category-section.tsx:92` renders a `CommandInput`, which `42-dropdowns.md` forbids: typing narrows the list in place, there is no field to focus, and no ring to get wrong. This settles the open question #322 raised rather than leaving it. (2) **Dietary is offered on searches where it means nothing** — `refine-bar.tsx:199` renders a tag chip whenever *any* tag of that category exists in the database, not when it is relevant to the vendor type being searched, so a photography search offers **Vegan / Vegetarian / Halal / Kosher**. Language and cultural stay category-agnostic by design — a photographer who speaks Spanish is a real filter — but dietary is bound to food. Needs a `servesFood` flag derived once in the taxonomy, not a slug list in the UI. **Style needs no code**: it never reached the data model (#25), and the four frames still drawing a `Style ▾` chip were corrected in this same pass. See D15 |
+| **323** | **The category taxonomy, and the filters it drives** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30, user-directed.** One ticket because all four parts rewrite `CATEGORY_SEEDS`/`TAG` data in `packages/shared/src/constants` and the Refine bar that reads them; split across lanes they collide on the same constant. (1) **Merge `Decor` into `Florals` as `Decor & Florals`** — 11 categories become 10, then 11 again with `Other`. **The successor map has a chain trap**: `decoration → decor` and `lighting → decor` already exist, so retiring `decor` leaves two entries pointing at a slug that no longer seeds, and the loop's single pass would *resurrect* it by renaming. Repoint both at `florals` directly. (2) **Three taglines advertise a sibling category** — Catering says `carts`, Photography says `film`, Florals says `decor`. Only the third is being merged; the other two are reworded so no category sells a neighbour. (3) **Add `Other`**, ordered last, never on the landing row. (4) **Tag filters**: no search field over a tag list (`tag-category-section.tsx:92`), and Dietary only where food is served (`refine-bar.tsx:199` tests only whether tags exist at all, so photography searches offer Halal). **Henna needed nothing** — it is already in Beauty's description. **Attire stays out** by ruling; `Other` absorbs it. See D15 |
 
 Rows are ordered by build sequence, not by ticket number. **319 rows — 162 Done, 130 Superseded, 2 In Progress, 18 Backlog, 5 Deferred, 2 Blocked.** Recounted 2026-08-29 after the backlog consolidation, which merged **130 open tickets into 21** (`#296`–`#316`) and re-scoped **#73** as the shared-cause accessibility ticket. **40 tickets are open**, down from 150: 5 in flight, 6 waiting on a human or an external account, and 29 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
 
@@ -13042,80 +13042,121 @@ named exception. Raise it rather than guessing.
 
 ---
 
-### #323: Tag filters: no search field, and Dietary only where food is served
+### #323: The category taxonomy, and the filters it drives
 
 **Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
 **Blocked by:** None
 
-**Filed 2026-08-30**, user-directed, from a live read of the tag surfaces.
+**Filed 2026-08-30**, user-directed. **One ticket, four parts**, because every part rewrites
+seed data in `packages/shared/src/constants` and the Refine bar that reads it. Split across
+lanes they would collide on the same constant and the same file.
 
-**Where tags actually live**, since this was not obvious from the product:
+**Where tags live**, since this was not discoverable from the product: vendors claim them in
+the profile editor's **Tags** section (`vendor-profile-form.tsx:890` → `TagPicker`);
+customers filter by them in the **Refine bar** on `/search`. Three groups — **language
+(23)**, **cultural (16)**, **dietary (4)**. There is no `style` group and never was (#25).
 
-| Side | Surface | What it does |
-| --- | --- | --- |
-| Vendor | Profile editor → **Tags** section (`vendor-profile-form.tsx:890` → `TagPicker`) | The vendor claims languages, cultural specialisms and dietary capability |
-| Customer | `/search` → Refine bar (`refine-bar.tsx`) | Filters by those claims |
+---
 
-Three groups, seeded in `packages/shared/src/constants`: **language (23)**, **cultural
-(16)**, **dietary (4)**. There is no `style` group and there never was — #25 ruled it out of
-the MVP before any migration was written.
+#### Part 1 — Merge `Decor` into `Florals`, as **Decor & Florals**
 
-**Defect 1 — a search field over the tag lists.** `tags/tag-category-section.tsx:92` renders
+| | |
+| --- | --- |
+| Surviving slug | `florals`, renamed **Decor & Florals** |
+| Tagline | `Bouquets, styling & lighting` |
+| Description | Bouquets, centerpieces, arches, backdrops, table styling and uplighting |
+| Retired | `decor` → `florals`, through `CATEGORY_SLUG_SUCCESSORS` |
+
+**The chain trap, and it will bite silently.** `CATEGORY_SLUG_SUCCESSORS` already contains
+`decoration: 'decor'` and `lighting: 'decor'`. Retiring `decor` leaves two entries pointing
+at a slug the seeds no longer describe, and `seedCategories`' loop is a **single pass in
+object-key order with no chain resolution** — for a retired row whose successor row does not
+exist it takes the rename branch (`.set({ slug: successorSlug })`), which would **resurrect
+`decor` as a live category**. Whether it breaks depends on key insertion order, which is not
+a property to rely on.
+
+**Fix:** repoint `decoration` and `lighting` at `florals` **directly**, and add
+`decor: 'florals'`. Then no entry depends on another having run first.
+
+#### Part 2 — No category advertises a sibling
+
+Three taglines name another category. Only the third is being merged; the other two are
+reworded, because the collision is what sends a customer to the wrong tile.
+
+| Category | Was | Becomes | Collided with |
+| --- | --- | --- | --- |
+| Photography | `Photo & film` | **`Photo & portraits`** | Videography (`Films & drone`) |
+| Catering | `Food, bar, carts` | **`Food, bar & chefs`** | Carts (`Coffee & dessert`) |
+| Florals | `Bouquets & decor` | **`Bouquets, styling & lighting`** | Decor — **merged**, Part 1 |
+| Beauty | `Hair & makeup` | **`Hair, makeup & henna`** | — surfaces what the description already covers |
+
+**Photography/Videography and Catering/Carts stay separate** by ruling — a videographer is a
+different booking from a photographer, and a coffee cart is a different booking from a
+caterer, even where one vendor does both.
+
+#### Part 3 — Add `Other`
+
+- Slug `other`, **ordered last**, tagline `Anything not listed`
+- **Never appears on the landing row.** `page.tsx:166` takes `slice(0, LANDING_CATEGORY_COUNT)`
+  of the seed order, so last position handles it — but assert it rather than rely on it
+- Selectable as a vendor type in search and claimable by a vendor
+- It is the release valve that makes a short taxonomy safe: attire, jewelry, transport and
+  officiants have nowhere else to go, and **attire was deliberately left out as a category**
+  because no vendor sells it yet and an empty tile is worse than a missing one
+
+#### Part 4 — Tag filters
+
+**No search field over a tag list.** `tags/tag-category-section.tsx:92` renders
 `<CommandInput placeholder={\`Search ${label.toLowerCase()}…\`} />`. `42-dropdowns.md` and
-screen `26`'s third block forbid it: the list *is* the interface, typing narrows it in
-place, and an autofocused field shows its focus ring every single time the panel opens —
-decoration, not feedback. **23 languages is the case that makes this feel necessary and it
-is still the wrong answer**: narrowing in place gives the same reach with nothing to focus.
-This closes the question #322 raised rather than leaving it open.
+screen `26` forbid it: the list *is* the interface, typing narrows in place, and an
+autofocused field shows its ring every time the panel opens. **23 languages is the case that
+makes a search box feel necessary and it is still the wrong answer.**
 
-**Defect 2 — Dietary is offered where it means nothing.** `refine-bar.tsx:199`:
+**Dietary only where food is served.** `refine-bar.tsx:199` renders a chip whenever tags of
+that group exist **in the database at all**, never checking relevance — so a photography
+search offers Vegan / Vegetarian / Halal / Kosher. Language and cultural stay
+category-agnostic (a photographer who speaks Spanish is a real filter); dietary is bound to
+food: **Catering** and **Carts**.
 
-```ts
-const options = tags.filter((tag) => tag.category === tagCategory);
-if (options.length === 0) return null;
-```
+**Derive it from the taxonomy, not the component.** Add `servesFood` to those two seed rows
+and read that. A `['catering','carts']` list inside `refine-bar.tsx` is a second source of
+truth that rots the next time a food category is added.
 
-The only test is whether tags of that category exist **in the database at all**, so every
-search offers every group. A photography search offers **Vegan / Vegetarian / Halal /
-Kosher**, which cannot narrow anything and reads as the product not understanding its own
-taxonomy.
+**Judgment call, implemented strictly:** with **no** vendor type selected, Dietary does not
+render — a category-specific filter with no category cannot narrow anything (#25's
+reasoning). The flag makes it a one-line change if that proves wrong in use.
 
-**The rule:** language and cultural stay category-agnostic — a photographer who speaks
-Spanish, or specialises in Hindu ceremonies, is a real and useful filter. **Dietary is bound
-to food** and appears only when the searched vendor type serves it: **Catering** and
-**Carts**.
+---
 
-**Implementation note, and it matters:** derive this from the taxonomy, not from a slug list
-in the Refine bar. Add a `servesFood` flag to the two category seed rows in
-`packages/shared/src/constants` and read it — a hardcoded `['catering', 'carts']` in a
-component is a second source of truth that silently rots the next time a food category is
-added.
-
-**Judgment call, implemented the strict way and recorded here:** when **no** vendor type is
-selected, Dietary does **not** render. That follows #25's reasoning — a category-specific
-filter with no category selected is meaningless and would offer a control that cannot narrow
-the result set. If that proves wrong in use, the flag makes it a one-line change.
-
-**Non-goals:** the shared dropdown itself (**#167**); the `Style` chip (never existed in
-code, and the frames were corrected in this pass); language and cultural scoping.
+**Non-goals:** merging Photography/Videography or Catering/Carts (ruled against); attire
+categories (ruled against); the shared dropdown itself (**#167**).
 
 **Acceptance:**
 
-- [ ] No `CommandInput`, and no search field of any kind, renders over a tag list
-- [ ] Typing inside an open tag list **narrows it in place**, using #167's behaviour rather
-      than a second implementation
-- [ ] `servesFood` exists on the category seed rows and is the only thing the Refine bar
-      consults — no category slug appears in `refine-bar.tsx`
-- [ ] A photography search renders **no** Dietary chip; a catering search renders one
-- [ ] A search with no vendor type selected renders no Dietary chip
-- [ ] Language and cultural chips are unchanged and still render for every vendor type
-- [ ] `parity-checker` returns MATCH on frames `02` and `18` — both now draw the Refine bar
-      **without** a `Style` chip
+- [ ] `Decor & Florals` exists on slug `florals`; `decor` is retired and every vendor
+      previously on it is listed under `florals`, with no duplicate `vendor_categories` row
+- [ ] `decoration` and `lighting` point at `florals` directly, and **no** successor entry
+      depends on another having run first — asserted against the map, not by running it once
+- [ ] Running the seed **twice** leaves ten seeded categories plus `Other`, and does not
+      resurrect `decor`
+- [ ] No category's tagline names another category
+- [ ] `Other` seeds last, is absent from the landing row, and is selectable in search
+- [ ] No search field renders over a tag list; typing narrows in place via **#167**
+- [ ] `servesFood` is the only thing the Refine bar consults — no category slug appears in
+      `refine-bar.tsx`
+- [ ] A photography search renders no Dietary chip; a catering search does; a search with no
+      vendor type renders none
+- [ ] Frames updated: the landing count reads **11**, the category tiles carry the new
+      taglines, and screen `28`'s caption no longer says `11 categories` if the count moved
 
 **Tests (required):**
 
-- [ ] A test that the tag picker renders zero `input` elements — assert the absence, since
-      the defect is a control that should not exist
-- [ ] A table-driven test over all eleven categories asserting exactly which tag groups the
-      Refine bar offers for each, so adding a category forces a deliberate answer
-- [ ] A test that the no-vendor-type case offers no Dietary chip
+- [ ] A test that walks `CATEGORY_SLUG_SUCCESSORS` and fails if any successor is itself a
+      retired slug — the chain trap is invisible to a test that only seeds once
+- [ ] A seed test asserting a vendor on `decor` ends up on `florals` exactly once
+- [ ] An idempotency test: seed, seed again, assert the category set is unchanged
+- [ ] A test that no `shortDescription` contains another category's name, so the collision
+      class cannot come back
+- [ ] A test that the tag picker renders zero `input` elements
+- [ ] A table-driven test over every category asserting which tag groups the Refine bar
+      offers, so a new category forces a deliberate answer

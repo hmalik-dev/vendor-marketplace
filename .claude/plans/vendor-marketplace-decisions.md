@@ -553,9 +553,31 @@ Three groups, seeded in `packages/shared/src/constants`: **language (23)**, **cu
 
 **Filed:** **#323**, carrying rulings 1 and 2. Ruling 3 needed no code.
 
-**Open, and deliberately not decided here:** `Catering`'s short description reads
-**"Food, bar, carts"** while **Carts is its own category** (`carts`, "Coffee & dessert").
-The landing card therefore advertises carts on the tile that does not contain them. Both the
-constant and frame `01` carry the string, so it is a taxonomy question rather than a typo,
-and it has two defensible answers — reword Catering, or fold Carts back in. Put to the user
-rather than guessed.
+**4. The taxonomy, ruled the same evening.** The carts question turned out to be three
+instances of one defect: **Catering** said `carts`, **Photography** said `film`, and
+**Florals** said `decor` — every one a category advertising a sibling in its own tagline.
+
+The ruling, against an example list the user supplied:
+
+- **`Decor` merges into `Florals`** as **Decor & Florals**. The only merge taken.
+- **Photography/Videography and Catering/Carts stay separate** — a videographer is a
+  different booking from a photographer, and a coffee cart from a caterer, even where one
+  vendor does both. Their taglines are reworded so neither sells a neighbour.
+- **`Other` is added**, ordered last and never on the landing row. It is what makes a short
+  taxonomy safe: attire, jewelry, transport and officiants have nowhere else to go.
+- **Attire gets no category.** The user's example listed Jewelry and Clothing separately;
+  no vendor sells attire today, and an empty tile is worse than a missing one — the same
+  reasoning that dropped the Style filter. `Other` absorbs it until that changes.
+- **Henna needed nothing.** Beauty's description already reads "Makeup artists, hair
+  stylists, henna, and grooming"; only its tagline was hiding it.
+
+**The finding that will cost someone a day if missed:** `CATEGORY_SLUG_SUCCESSORS` already
+maps `decoration → decor` and `lighting → decor`. Retiring `decor` leaves both pointing at a
+slug the seeds no longer describe, and `seedCategories` resolves no chains — for a retired
+row whose successor is absent it takes the **rename** branch and would resurrect `decor` as
+a live category. It breaks or not depending on object key insertion order. Both entries are
+repointed at `florals` directly, and a test walks the map for any successor that is itself
+retired.
+
+All four parts landed in **#323** as one ticket rather than four, because they rewrite the
+same constant and the same component; separate lanes would have collided on both.
