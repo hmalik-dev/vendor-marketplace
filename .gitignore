@@ -53,6 +53,14 @@ coverage/
 # would swallow package.json and tsconfig.json.
 /f[0-9][0-9].json
 
+# The same dumps under the names sweeps actually give them once lanes are told
+# to prefix scratch files with their lane number — `parity82-ours.json`,
+# `frame01.json`. `f01.json` was only ever one sweep's convention, and each new
+# spelling has arrived as an untracked file failing `format:check` tree-wide and
+# blocking another lane's commit through the staging hook.
+/parity*.json
+/frame*.json
+
 # The frame-vs-live screenshot pairs a parity sweep writes while it measures.
 # `/*.png` above only reaches the root, and these land in a directory, so a
 # running sweep left them untracked in the shared checkout — where the staging
