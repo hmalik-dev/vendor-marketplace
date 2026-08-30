@@ -38,14 +38,30 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
   const call = useApi();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const price = request.quotedPriceCents ?? request.finalPriceCents;
   const countdown = expiryCountdown(request.expiresAt, new Date());
+
+  /*
+   * A request the vendor has not answered yet. It reaches this component too —
+   * the detail page routes everything that is not `accepted` here — and it was
+   * being told "<vendor> sent a quote" above a price of "No price yet", beside
+   * an `Accept quote` that could not be pressed and a `Decline` that answered
+   * 403. Three of the four things on the screen were false.
+   *
+   * What it actually has is one action, and the state machine already allows
+   * it: `pending -> cancelled`. The product calls that **withdrawing** — the
+   * hub renders a cancelled request as "Withdrawn", separately from a
+   * cancelled booking's "Cancelled" — so this is the existing word for it
+   * rather than a new one.
+   */
+  const awaiting = request.status === 'pending';
   const occasion = request.eventType
     ? (EVENT_TYPE_LABELS[request.eventType as keyof typeof EVENT_TYPE_LABELS] ?? request.eventType)
     : null;
 
-  async function act(action: 'accept' | 'decline'): Promise<void> {
+  async function act(action: 'accept' | 'decline' | 'cancel'): Promise<void> {
     setBusy(true);
     setError(null);
 
@@ -75,7 +91,9 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
     >
       <div className="border-b border-stone-200 px-6 py-5">
         <h1 id="quote-heading" className="font-display text-[26px] text-stone-900">
-          {request.vendor.businessName} sent a quote
+          {awaiting
+            ? `Waiting on ${request.vendor.businessName}`
+            : `${request.vendor.businessName} sent a quote`}
         </h1>
         <p className="mt-1 text-sm text-stone-600">
           {[occasion, request.eventDate, request.eventLocation].filter(Boolean).join(' · ')}
@@ -83,17 +101,30 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
       </div>
 
       <div className="flex flex-col gap-4 px-6 py-5">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[12.5px] text-stone-600">Quoted price</span>
-          {/*
-            The number is the vendor's, read back from the row. Nothing here
-            computes a total or a fee — the customer's price is the quoted price
-            and that is the whole of the arrangement on their side.
-          */}
-          <span className="font-display text-[36px] text-stone-900">
-            {price === null ? 'No price yet' : formatPrice(price)}
-          </span>
-        </div>
+        {awaiting ? (
+          /*
+            No price row while there is no price. A "Quoted price" label above
+            "No price yet" is a field pretending to be a value — `40-states.md`
+            wants the state named, not an empty slot rendered.
+          */
+          <p className="text-sm leading-[1.6] text-stone-700">
+            Your request is with {request.vendor.businessName}. They&apos;ll send a price, and
+            you&apos;ll get a notification the moment they do. Nothing is charged and the date
+            isn&apos;t held until you accept a quote.
+          </p>
+        ) : (
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[12.5px] text-stone-600">Quoted price</span>
+            {/*
+              The number is the vendor's, read back from the row. Nothing here
+              computes a total or a fee — the customer's price is the quoted price
+              and that is the whole of the arrangement on their side.
+            */}
+            <span className="font-display text-[36px] text-stone-900">
+              {price === null ? 'No price yet' : formatPrice(price)}
+            </span>
+          </div>
+        )}
 
         {request.quoteNote ? (
           <p className="text-sm leading-[1.6] text-stone-700">{request.quoteNote}</p>
@@ -101,7 +132,8 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
 
         {countdown ? (
           <p className="text-[12.5px] text-stone-600">
-            This quote {countdown === 'expired' ? 'has expired' : countdown}.
+            {awaiting ? 'This request' : 'This quote'}{' '}
+            {countdown === 'expired' ? 'has expired' : countdown}.
           </p>
         ) : null}
 
@@ -111,10 +143,12 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
           `20-customer-bookings-hub.md` puts it on this surface in plain
           language rather than behind a link.
         */}
-        <p className="text-[12.5px] leading-[1.55] text-stone-600">
-          Accepting holds the date. You are not charged yet, and a full refund applies if you cancel
-          at least {FULL_REFUND_CUTOFF_HOURS} hours before the event.
-        </p>
+        {awaiting ? null : (
+          <p className="text-[12.5px] leading-[1.55] text-stone-600">
+            Accepting holds the date. You are not charged yet, and a full refund applies if you
+            cancel at least {FULL_REFUND_CUTOFF_HOURS} hours before the event.
+          </p>
+        )}
 
         {error ? (
           <p role="alert" className="text-xs text-error-500">
@@ -123,17 +157,57 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
         ) : null}
 
         <div className="flex flex-wrap gap-3">
-          <Button
-            type="button"
-            variant="primary"
-            disabled={busy || price === null}
-            onClick={() => void act('accept')}
-          >
-            Accept quote
-          </Button>
-          <Button type="button" variant="ghost" disabled={busy} onClick={() => void act('decline')}>
-            Decline
-          </Button>
+          {awaiting ? (
+            /*
+              One action, and it is destructive, so it takes a second press
+              rather than a dialog — the same shape `AcceptedRequest` uses for
+              cancelling a paid booking. Nothing to state above it about money:
+              an unanswered request has taken none.
+            */
+            confirming ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => void act('cancel')}
+                >
+                  {busy ? 'Withdrawing…' : 'Yes, withdraw it'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => setConfirming(false)}
+                >
+                  Keep waiting
+                </Button>
+              </>
+            ) : (
+              <Button type="button" variant="ghost" onClick={() => setConfirming(true)}>
+                Withdraw request
+              </Button>
+            )
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={busy || price === null}
+                onClick={() => void act('accept')}
+              >
+                Accept quote
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void act('decline')}
+              >
+                Decline
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </section>

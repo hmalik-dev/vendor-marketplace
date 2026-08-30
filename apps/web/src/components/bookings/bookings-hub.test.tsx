@@ -144,4 +144,79 @@ describe('BookingsHub', () => {
 
     expect(container.textContent?.toLowerCase()).not.toContain('dashboard');
   });
+
+  /*
+   * #309. Every card here opened `/vendors/<slug>` — the vendor's marketing
+   * page, whose only controls are `Request booking` and `Send a message`. A
+   * customer opening the request they had already sent arrived somewhere
+   * offering to send it again.
+   *
+   * The rail's `Review quote` link was corrected when that surface was built.
+   * The cards were not, and they are how everything that is *not* a live quote
+   * is reached — so `pending`, `accepted` and every settled row had no route to
+   * their own detail at all. Withdrawing an unanswered request is unreachable
+   * from this page without this.
+   */
+  describe('where a card opens', () => {
+    /*
+     * Found by the card's own content, not by position. The status tabs are
+     * `li > a` too, and a positional selector picked those up instead — a
+     * reading that would have "passed" against the wrong element entirely.
+     */
+    function linkFor(
+      overrides: Partial<BookingEntry>,
+      tab: 'upcoming' | 'history' = 'upcoming',
+    ): string | null {
+      render(
+        <BookingsHub
+          entries={[entry({ vendorName: 'Kessler & Co.', ...overrides })]}
+          tab={tab}
+          today={TODAY}
+          city="Austin"
+          needsYou={[]}
+        />,
+      );
+
+      const card = screen
+        .getAllByRole('link')
+        .find((link) => link.textContent?.includes('Kessler & Co.'));
+
+      return card ? (card.getAttribute('href') ?? null) : null;
+    }
+
+    it('opens a pending request at the request, not the storefront', () => {
+      expect(linkFor({ kind: 'request', id: 'req-9', status: 'pending' })).toBe('/bookings/req-9');
+    });
+
+    it('opens a quoted request at the request', () => {
+      expect(linkFor({ kind: 'request', id: 'req-9', status: 'quoted' })).toBe('/bookings/req-9');
+    });
+
+    /*
+     * "What did I agree to, and what happened to it" is exactly what a
+     * customer opens a finished request for, so a settled row keeps its own
+     * detail rather than falling back to a page about selling to them.
+     */
+    it('opens a settled request at the request too', () => {
+      // Settled rows live under History; asking for one on `upcoming` renders
+      // no card at all, which is a null that looks like a failing assertion.
+      expect(
+        linkFor({ kind: 'request', id: 'req-9', status: 'cancelled', isSettled: true }, 'history'),
+      ).toBe('/bookings/req-9');
+    });
+
+    /*
+     * A booking row is a different table with no detail route of its own yet,
+     * so it keeps the storefront rather than linking somewhere that 404s.
+     */
+    it('leaves a booking row pointing at the vendor, which is the route that exists', () => {
+      expect(linkFor({ kind: 'booking', id: 'bk-9', status: 'confirmed' })).toBe(
+        '/vendors/kessler-co',
+      );
+    });
+
+    it('renders no link at all when there is nowhere to go', () => {
+      expect(linkFor({ kind: 'booking', vendorSlug: null })).toBeNull();
+    });
+  });
 });

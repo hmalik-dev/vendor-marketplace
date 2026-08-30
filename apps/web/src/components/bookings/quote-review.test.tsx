@@ -109,16 +109,92 @@ describe('QuoteReview', () => {
    * This originally asserted against exactly that impossible row: `quoted`
    * with a null price. Every field was checked and the object described could
    * not exist, which no assertion on values can see.
+   *
+   * #309 then found the assertion itself was pinning a broken screen. A
+   * `pending` request rendered a **disabled** `Accept quote` above the words
+   * "No price yet" — a field pretending to be a value, and a control offered
+   * for a decision nobody has put to the customer. There is nothing to accept
+   * before a quote exists, so the screen offers nothing to accept.
    */
-  it('cannot accept a custom request that has not been quoted yet', () => {
+  it('offers nothing to accept before the vendor has quoted', () => {
     render(
       <QuoteReview
         request={quotedRequest({ status: 'pending', quotedPriceCents: null, quoteNote: null })}
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Accept quote' })).toHaveProperty('disabled', true);
-    expect(screen.getByText('No price yet')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Accept quote' })).toBeNull();
+    expect(screen.queryByText('No price yet')).toBeNull();
+    expect(screen.queryByText('Quoted price')).toBeNull();
+  });
+
+  /*
+   * #309 / #214. `POST /booking-requests/:id/cancel` had existed the whole
+   * time and nothing on any customer surface reached it, so a request sent to
+   * a vendor who never answered could not be taken back.
+   *
+   * The word is the product's own: the hub renders a cancelled *request* as
+   * "Withdrawn", separately from a cancelled *booking*'s "Cancelled".
+   */
+  describe('withdrawing a request the vendor has not answered', () => {
+    it('names the state honestly rather than claiming a quote arrived', () => {
+      render(
+        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+      );
+
+      expect(screen.getByRole('heading', { name: /Waiting on/ })).toBeDefined();
+      expect(screen.queryByText(/sent a quote/)).toBeNull();
+    });
+
+    /* Destructive, so it takes a deliberate second press rather than one. */
+    it('asks twice before withdrawing', async () => {
+      render(
+        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
+
+      expect(requestMock).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Yes, withdraw it' })).toBeDefined();
+    });
+
+    it('withdraws through the API on the second press', async () => {
+      render(
+        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Yes, withdraw it' }));
+
+      expect(requestMock).toHaveBeenCalledWith(
+        '/booking-requests/req-1/cancel',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('lets the customer back out of withdrawing', async () => {
+      render(
+        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Keep waiting' }));
+
+      expect(requestMock).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Withdraw request' })).toBeDefined();
+    });
+
+    /*
+     * Withdrawing belongs to the unanswered state. Once a price is on the
+     * table the customer's "no" is `Decline`, and two controls that both end
+     * the request would be two names for one thing.
+     */
+    it('is absent once a quote is on the table', () => {
+      render(<QuoteReview request={quotedRequest({ status: 'quoted' })} />);
+
+      expect(screen.queryByRole('button', { name: 'Withdraw request' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Decline' })).toBeDefined();
+    });
   });
 
   it('shows a failure inline rather than losing it', async () => {

@@ -820,6 +820,48 @@ describe('/booking-requests', () => {
       expect((response.json() as RequestBody).status).toBe('declined');
     });
 
+    /*
+     * #309. The customer's own quote screen draws "Decline" beside "Accept" —
+     * `quote-review.tsx` renders it, and frame `06` puts it there. The service
+     * refused it: `prepareTransition` allowed `decline` for the vendor only,
+     * so the one control the frame gives the customer for saying no answered
+     * 403.
+     *
+     * Nothing caught it because the web test mocks the transport and asserts
+     * the URL it called. A test that asserts a request was *sent* cannot see
+     * the answer coming back, so it passed on a button that never worked.
+     */
+    it('quoted -> declined by the customer turning the quote down', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+
+      const response = await post(CUSTOMER, `/booking-requests/${requestId}/decline`);
+
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as RequestBody).status).toBe('declined');
+    });
+
+    /*
+     * The asymmetry is deliberate and it is the whole authorization rule.
+     * Declining a `pending` request means "I will not take this booking",
+     * which is the vendor's answer to make. A customer with no quote in front
+     * of them has nothing to decline — withdrawing is `cancel`, and it is
+     * theirs.
+     */
+    it('refuses a customer declining before any quote exists', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+
+      const response = await post(CUSTOMER, `/booking-requests/${created.json().id}/decline`);
+
+      expect(response.statusCode).toBe(403);
+      expect((response.json() as { message: string }).message).toContain('quote');
+    });
+
     it('pending -> cancelled by the customer', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });

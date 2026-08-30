@@ -663,9 +663,23 @@ async function prepareTransition({
     return {};
   }
 
+  /*
+   * **Who may decline depends on what is on the table.**
+   *
+   * From `pending` there is no offer yet, so declining means "I will not take
+   * this booking" — the vendor's answer to make. A customer with nothing in
+   * front of them is not declining anything; withdrawing is `cancel`, and that
+   * one is theirs alone.
+   *
+   * From `quoted` there is a price, and either party may end it: the vendor
+   * withdrawing the offer, or the customer turning it down. Frame `06` draws
+   * the customer's half — `Decline` sits beside `Accept` on their quote screen
+   * — and #309 found it answering 403, because this branch read the actor
+   * without reading the status.
+   */
   if (action === 'decline') {
-    if (party !== 'vendor') {
-      throw forbidden('Only the vendor can decline a request');
+    if (party === 'customer' && row.status !== 'quoted') {
+      throw forbidden('You can only decline a request once the vendor has sent a quote');
     }
     return {};
   }
