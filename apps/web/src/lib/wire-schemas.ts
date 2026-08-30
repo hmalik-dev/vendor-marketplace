@@ -10,6 +10,7 @@ import {
   paginatedSchema,
   sendMessageResultSchema,
   vendorDashboardSchema,
+  vendorPayoutStatusSchema,
   portfolioItemSchema,
   nearbyAvailabilityResultSchema,
   nearbyVendorSchema,
@@ -179,6 +180,10 @@ export type WireCustomerProfile = z.infer<typeof wireCustomerProfileSchema>;
 /** The vendor dashboard's figures. No date fields, so no coercion is needed. */
 export const wireVendorDashboardSchema = vendorDashboardSchema;
 export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
+
+/** The vendor's payout state — plain JSON, so the shared schema stands as-is. */
+export const wireVendorPayoutStatusSchema = vendorPayoutStatusSchema;
+export type WireVendorPayoutStatus = z.infer<typeof wireVendorPayoutStatusSchema>;
 
 /** Messaging, as JSON — every timestamp coerced back at the boundary. */
 export const wireConversationSchema = conversationSummarySchema.extend({

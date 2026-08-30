@@ -1,6 +1,6 @@
 import { findVariable, registryKeys } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
-import { OVERRIDDEN_KEYS, allowedOrigins, parseEnv } from './env.js';
+import { OVERRIDDEN_KEYS, allowedOrigins, canonicalWebOrigin, parseEnv } from './env.js';
 
 // Shaped like real values, because the schema now enforces each row's shape —
 // `sk_test_key` is indistinguishable from a placeholder and is rejected.
@@ -15,6 +15,21 @@ const REQUIRED: NodeJS.ProcessEnv = {
   S3_BUCKET: 'vendor-marketplace-uploads',
   S3_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads',
 };
+
+/*
+ * Stripe's two server credentials take exactly the shapes Clerk's fixture
+ * already demonstrates — an `sk_` key and a `whsec_` signing secret — so the
+ * fixture reuses that pair instead of adding a second set of realistic-looking
+ * strings. Fewer credential-shaped literals in the tree is the point: every one
+ * of them is something the secret scanner and the pre-tool credential hook have
+ * to be taught to forgive.
+ */
+for (const [stripeKey, clerkKey] of [
+  ['STRIPE_SECRET_KEY', 'CLERK_SECRET_KEY'],
+  ['STRIPE_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
+] as const) {
+  REQUIRED[stripeKey] = REQUIRED[clerkKey];
+}
 
 describe('parseEnv', () => {
   it('fills in the development defaults', () => {
@@ -80,7 +95,9 @@ describe('parseEnv', () => {
   });
 
   it('does not require a capability the API has not wired up yet', () => {
-    expect(Object.keys(parseEnv(REQUIRED))).not.toContain('STRIPE_SECRET_KEY');
+    // `email` is the next capability the registry carries and the API does not
+    // read. Stripe used to stand here; #9 wired it up, so the example moved.
+    expect(Object.keys(parseEnv(REQUIRED))).not.toContain('RESEND_API_KEY');
   });
 });
 
@@ -88,7 +105,7 @@ describe('registry derivation', () => {
   it('reads exactly the keys the registry assigns to the API', () => {
     const expected = registryKeys({
       consumer: 'api',
-      capabilities: ['core', 'auth', 'storage'],
+      capabilities: ['core', 'auth', 'storage', 'stripe'],
     });
 
     expect(Object.keys(parseEnv(REQUIRED)).sort()).toEqual([...expected].sort());
@@ -117,6 +134,48 @@ describe('allowedOrigins', () => {
     const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://orla.app,' });
 
     expect(allowedOrigins(env)).toEqual(['https://orla.app']);
+  });
+
+  /*
+   * The allow-list and the origin handed to Stripe are the same value, so a
+   * stray slash must not be able to make them disagree about one deployment.
+   */
+  it('strips a trailing slash so every reader sees one origin', () => {
+    const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://orla.app/, http://localhost:3000//' });
+
+    expect(allowedOrigins(env)).toEqual(['https://orla.app', 'http://localhost:3000']);
+  });
+});
+
+describe('canonicalWebOrigin', () => {
+  it('takes the first origin, which is written canonical-first', () => {
+    const env = parseEnv({
+      ...REQUIRED,
+      WEB_URL: 'https://orla.app, https://www.orla.app',
+    });
+
+    expect(canonicalWebOrigin(env)).toBe('https://orla.app');
+  });
+
+  it('joins cleanly onto a path, because the slash is already gone', () => {
+    const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://orla.app/' });
+
+    expect(`${canonicalWebOrigin(env)}/vendor/payments/return`).toBe(
+      'https://orla.app/vendor/payments/return',
+    );
+  });
+
+  /*
+   * A plaintext origin is correct locally — Stripe accepts an `http://localhost`
+   * return URL in test mode, and that is what makes the redirect leg verifiable
+   * on a laptop. It is `WEB_URL`'s `productionShape`, checked by
+   * `pnpm preflight --env production`, that keeps it out of a deployment;
+   * `NODE_ENV` cannot tell a release from a `tsc` run, so nothing here reads it.
+   */
+  it('allows a plaintext localhost origin, which is what local onboarding needs', () => {
+    const env = parseEnv({ ...REQUIRED, WEB_URL: 'http://localhost:3038' });
+
+    expect(canonicalWebOrigin(env)).toBe('http://localhost:3038');
   });
 });
 

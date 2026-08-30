@@ -4,6 +4,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized, validationFailed } from '../../lib/errors.js';
 import { applyClerkUserEvent } from './clerk.service.js';
 import { clerkWebhookEventSchema } from './clerk.schemas.js';
+import { keepRawJsonBody, rawBodyOf } from './raw-body.js';
 
 /** Verifies a svix signature over the raw request body. */
 export type WebhookVerifier = (payload: string, headers: Record<string, string>) => unknown;
@@ -30,20 +31,13 @@ export const clerkWebhookRoutes: FastifyPluginAsyncZod<ClerkWebhookRoutesOptions
     ((payload: string, headers: Record<string, string>) =>
       new Webhook(options.signingSecret).verify(payload, headers));
 
-  /*
-   * svix signs the exact bytes Clerk sent, so this route — and only this route,
-   * since content type parsers are encapsulated — keeps the body as a string
-   * instead of letting Fastify parse it into an object first.
-   */
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_request, body, done) => {
-    done(null, body);
-  });
+  keepRawJsonBody(app);
 
   app.post(
     '/webhooks/clerk',
     { schema: { response: { 200: webhookResponseSchema } } },
     async (request, reply) => {
-      const rawBody = typeof request.body === 'string' ? request.body : '';
+      const rawBody = rawBodyOf(request.body);
 
       const headers: Record<string, string> = {};
       for (const name of SVIX_HEADERS) {

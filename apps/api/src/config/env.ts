@@ -6,7 +6,7 @@ import { z } from 'zod';
  * new service's variables required — the keys themselves live in the env
  * registry, so this schema cannot drift from `.env.example` or `turbo.json`.
  */
-const API_CAPABILITIES = ['core', 'auth', 'storage'] as const;
+const API_CAPABILITIES = ['core', 'auth', 'storage', 'stripe'] as const;
 
 /**
  * Every environment variable the API reads, validated once at boot. Failing
@@ -81,9 +81,45 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): ApiEnv {
   return result.data;
 }
 
-/** Origins accepted by CORS, derived from the comma-separated `WEB_URL`. */
-export function allowedOrigins(env: ApiEnv): string[] {
-  return env.WEB_URL.split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
+/**
+ * Origins accepted by CORS, derived from the comma-separated `WEB_URL`.
+ *
+ * Takes the one field it reads rather than the whole environment, so callers
+ * that hold a narrower slice — Stripe's onboarding return origin, for one — can
+ * reuse it instead of parsing `WEB_URL` a second way.
+ */
+export function allowedOrigins(env: Pick<ApiEnv, 'WEB_URL'>): string[] {
+  return (
+    env.WEB_URL.split(',')
+      /*
+       * The trailing slash goes here rather than in the schema, so `WEB_URL`
+       * keeps the registry's default instead of restating it. Stripping it is
+       * right for both readers: a browser's `Origin` header never carries one,
+       * so `https://x.com/` in the allow-list would match nothing, and the
+       * origin handed to Stripe is joined onto a path.
+       */
+      .map((origin) => origin.trim().replace(/\/+$/, ''))
+      .filter((origin) => origin.length > 0)
+  );
+}
+
+/**
+ * The one origin the product calls its own — the first entry of `WEB_URL`,
+ * which is written canonical-first.
+ *
+ * Used wherever a single absolute URL has to be handed to a third party, such
+ * as the return and refresh URLs Stripe sends an onboarding vendor back to.
+ * There is deliberately no `https` assertion here: `NODE_ENV` cannot tell a
+ * deployment from a `tsc` run (see above), and `WEB_URL` already carries a
+ * `productionShape` of https-only that `pnpm preflight --env production`
+ * enforces against the real environment.
+ */
+export function canonicalWebOrigin(env: Pick<ApiEnv, 'WEB_URL'>): string {
+  const origin = allowedOrigins(env)[0];
+
+  if (origin === undefined) {
+    throw new Error('WEB_URL is empty, so the API has no origin to hand out');
+  }
+
+  return origin;
 }

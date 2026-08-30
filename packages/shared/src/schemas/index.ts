@@ -763,6 +763,36 @@ export type BookingWithContext = z.infer<typeof bookingWithContextSchema>;
 // --- Vendor dashboard ------------------------------------------------------
 
 /**
+ * Whether a vendor can be paid yet. Two fields rather than one because the
+ * surfaces need different things from it: the banner asks only "is this done",
+ * while the payouts page distinguishes a vendor who has never started from one
+ * who started and stopped, and only the account id can tell those apart.
+ *
+ * Picked from `vendorProfileSchema` rather than restated, because
+ * `GET /vendor/profile` already returns both fields off the same row — two
+ * hand-written copies of one contract is how they drift.
+ *
+ * There is deliberately no fee figure here. The platform charges vendors
+ * nothing in MVP, and a rate rendered anywhere on this flow would be a claim
+ * the product has not made.
+ */
+export const vendorPayoutStatusSchema = vendorProfileSchema.pick({
+  /** `null` until the vendor has begun onboarding at least once. */
+  stripeAccountId: true,
+  /** True only when Stripe can both transfer to and pay out from the account. */
+  stripeOnboarded: true,
+});
+
+export type VendorPayoutStatus = z.infer<typeof vendorPayoutStatusSchema>;
+
+/** What `POST /vendor/stripe/connect` answers: where to send the vendor next. */
+export const stripeOnboardingLinkSchema = z.object({
+  url: urlSchema,
+});
+
+export type StripeOnboardingLink = z.infer<typeof stripeOnboardingLinkSchema>;
+
+/**
  * The vendor's own numbers, on their own private surface.
  *
  * Every figure here is a query result over the vendor's own rows — none is a
@@ -788,6 +818,13 @@ export const vendorDashboardSchema = z.object({
   isPublished: z.boolean(),
   /** The **real** publish gate, so the checklist cannot disagree with it. */
   publishBlockers: z.array(z.enum(PUBLISH_BLOCKER_KEYS)),
+  /**
+   * Whether Stripe can both pay this vendor and pay out to their bank. It rides
+   * on the dashboard payload rather than a second request because it is the
+   * same class of state as `publishBlockers` — what this vendor still cannot do
+   * — and it is read off the same row the rest of this object comes from.
+   */
+  stripeOnboarded: z.boolean(),
   /** Bookings on today's date, for the rail once the profile is published. */
   todaysBookings: z.array(
     z.object({

@@ -56,7 +56,21 @@ export const WEBHOOK_FORWARDERS: Readonly<Partial<Record<Capability, WebhookForw
   stripe: {
     command: 'stripe',
     install: 'brew install stripe/stripe-cli/stripe',
-    forward: 'stripe listen --forward-to localhost:4000/webhooks/stripe',
+    /*
+     * All four streams, because a v2 connected account announces itself on the
+     * v1 **snapshot Connect** stream, not the thin one. Probed on 2026-08-30: a
+     * full onboarding attempt emitted `capability.updated`,
+     * `account.application.authorized` and `account.updated` — all v1, all
+     * Connect-scoped — and no thin event at all, because thin `v2.core.*`
+     * delivery needs an event destination provisioned separately.
+     *
+     * A lane forwarding only `--forward-to` therefore watches the hosted form
+     * complete and the vendor stay unonboarded forever, with nothing in either
+     * log saying why. The thin flags are kept so the integration keeps working
+     * once event destinations exist.
+     */
+    forward:
+      'stripe listen --forward-to localhost:4000/webhooks/stripe --forward-connect-to localhost:4000/webhooks/stripe --forward-thin-to localhost:4000/webhooks/stripe --forward-thin-connect-to localhost:4000/webhooks/stripe',
   },
 };
 

@@ -94,6 +94,7 @@ export async function getVendorDashboard(
     earningsThisMonthCents,
     isPublished: vendor.isPublished,
     publishBlockers: publishBlockers(vendor, categoryIds, activePackageCount),
+    stripeOnboarded: vendor.stripeOnboarded,
     todaysBookings,
   };
 }

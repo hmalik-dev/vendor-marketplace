@@ -22,6 +22,8 @@ import {
   type WireVendorCard,
   type WireVendorDashboard,
   type WireVendorProfile,
+  type WireVendorPayoutStatus,
+  wireVendorPayoutStatusSchema,
 } from './wire-schemas';
 
 /**
@@ -332,5 +334,33 @@ export async function getPublicVendorAvailability(slug: string): Promise<WireAva
     }
 
     throw error;
+  }
+}
+
+/**
+ * The vendor's payout state, read on every dashboard render.
+ *
+ * The API answers this from its own row rather than from Stripe, so this is a
+ * cheap read — see `readPayoutStatus`. A vendor with no profile yet has no
+ * payout state either, and that is the onboarding case rather than a failure.
+ */
+export async function getPayoutStatus(): Promise<WireVendorPayoutStatus | null> {
+  const { token, signInPath } = await vendorSession();
+
+  try {
+    return await apiRequest('/vendor/stripe/status', {
+      schema: wireVendorPayoutStatusSchema,
+      token,
+    });
+  } catch (error) {
+    if (!(error instanceof ApiClientError)) {
+      throw error;
+    }
+
+    if (error.statusCode === 404) {
+      return null;
+    }
+
+    rethrowUnlessSessionFailure(error, signInPath);
   }
 }
