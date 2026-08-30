@@ -518,7 +518,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **219** | **A new request opens no message thread, and the profile's message button is permanently dead** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
 | **220** | **No booking can be created by anyone — accept is walled behind payout setup that does not exist** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **#9, #10** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **221** | **The customer cannot accept a quote — `Review quote` links to the vendor's marketing page** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
-| **222** | **Vendor onboarding cannot be completed through the UI — a 400 is swallowed with no feedback at all** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **222** | **Vendor onboarding cannot be completed through the UI — a 400 is swallowed with no feedback at all** | **P1** | **M3** | **P0 Critical** | **In Progress** | `worktree-222` | **None** | `core` | Vendor onboarding + quote pass 2026-08-29. **Started 2026-08-29** in lane `worktree-222`; preflight `--ticket 222` passed 23/23 |
 | **223** | **A below-minimum quote makes Send a dead control** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **224** | **An above-maximum quote shows the raw API error string to the vendor** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **225** | **The success toast covers the submit button it confirms** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
@@ -9860,7 +9860,7 @@ onboarding from nothing and the quote path. **Where:** `/bookings`, customer.
 
 ### #222: Vendor onboarding cannot be completed through the UI — a 400 is swallowed with no feedback at all
 
-**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
