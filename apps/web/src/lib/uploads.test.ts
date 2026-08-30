@@ -244,6 +244,33 @@ describe('batch reporting', () => {
     expect(aggregateLine(tasks)).toBe('Uploading 4 of 8 — 14.7 MB of 33.6 MB');
   });
 
+  /*
+   * #176. A locally-refused file enters the list already `failed` with its full
+   * size and is then never sent, so counting it made the denominator include
+   * bytes that cannot go out. Worst where it shows most: the over-size refusal
+   * is by definition the biggest file in the batch.
+   */
+  it('leaves a locally-refused file out of the byte total', () => {
+    const line = aggregateLine([
+      { id: '1', name: 'a.jpg', sizeBytes: 1_000_000, status: 'uploading', progress: 50 },
+      // Refused before any byte left the machine.
+      { id: '2', name: 'huge.jpg', sizeBytes: 40_000_000, status: 'failed', progress: 0 },
+    ] as never);
+
+    expect(line).toContain('of 1 MB');
+    expect(line).not.toContain('41 MB');
+  });
+
+  it('keeps the bytes of a file that failed after sending some', () => {
+    const { uploadedBytes, totalBytes } = summarise([
+      { id: '1', name: 'a.jpg', sizeBytes: 1_000_000, status: 'failed', progress: 40 },
+    ] as never);
+
+    // Those bytes really did go out; dropping them runs the line backwards.
+    expect(totalBytes).toBe(1_000_000);
+    expect(uploadedBytes).toBe(400_000);
+  });
+
   it('has no aggregate line once every file has settled', () => {
     expect(
       aggregateLine([

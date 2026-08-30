@@ -7,7 +7,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { ArrowLeft, ArrowRight, ImagePlus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { ApiClientError } from '@/lib/api-client';
@@ -73,6 +73,30 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
   );
 
   const queue = useUploadQueue({ prefix: 'portfolio', onUploaded: persist });
+
+  /*
+   * #183. The header count is server-rendered from `items.length` in
+   * `page.tsx`, so it is a different value from the client `items` this
+   * component owns. Delete already called `router.refresh()` and the count
+   * moved; upload only did `setItems`, so the grid grew while the pill stayed
+   * at whatever the server last rendered.
+   *
+   * Refreshed once the batch settles rather than once per file: `persist` runs
+   * per upload, and refreshing there fires N times for an N-file batch.
+   */
+  const batchWasInFlight = useRef(false);
+
+  useEffect(() => {
+    if (queue.inFlight) {
+      batchWasInFlight.current = true;
+      return;
+    }
+
+    if (batchWasInFlight.current) {
+      batchWasInFlight.current = false;
+      router.refresh();
+    }
+  }, [queue.inFlight, router]);
 
   const inFlight = queue.tasks.filter((task) => task.status !== 'done');
   const progressLine = aggregateLine(queue.tasks);

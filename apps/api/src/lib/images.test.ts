@@ -18,6 +18,9 @@ async function jpeg(width: number, height: number): Promise<Buffer> {
     .toBuffer();
 }
 
+/** Wide enough to clear the publish floor, so format is the only variable. */
+const BLANK = { width: 1600, height: 1200, channels: 3 as const, background: { r: 1, g: 2, b: 3 } };
+
 describe('processUploadedImage', () => {
   it('returns both variants as WebP', async () => {
     const processed = await processUploadedImage(await jpeg(1600, 1200), 'image/jpeg');
@@ -107,5 +110,40 @@ describe('processUploadedImage', () => {
     await expect(
       processUploadedImage(Buffer.from('this is not an image'), 'image/png'),
     ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  /*
+   * #172. The declared type is a claim, and the allow-list used to take it at
+   * its word — so renaming any file sharp could read and declaring `image/png`
+   * walked straight past a two-format allow-list. The decode was the only thing
+   * behind it, and a decode accepts every format libvips supports.
+   *
+   * These are all **valid, decodable images**. That is the point: the previous
+   * "rejects bytes that only claim to be an image" test sends undecodable
+   * garbage, which proves the decoder works rather than that the allow-list
+   * does.
+   */
+  it.each([
+    ['gif', async () => sharp({ create: BLANK }).gif().toBuffer()],
+    ['tiff', async () => sharp({ create: BLANK }).tiff().toBuffer()],
+    ['webp', async () => sharp({ create: BLANK }).webp().toBuffer()],
+  ])('refuses a decodable %s renamed to claim it is a PNG', async (_format, encode) => {
+    const bytes = await encode();
+
+    await expect(processUploadedImage(bytes, 'image/png')).rejects.toMatchObject({
+      statusCode: 400,
+      // The same sentence a wrongly-picked file gets: the fix is identical.
+      message: 'Unsupported image type. Upload a JPG or PNG file.',
+    });
+  });
+
+  it.each([
+    ['jpeg', async () => sharp({ create: BLANK }).jpeg().toBuffer(), 'image/jpeg'],
+    ['png', async () => sharp({ create: BLANK }).png().toBuffer(), 'image/png'],
+  ])('still accepts a genuine %s', async (_format, encode, mime) => {
+    const processed = await processUploadedImage(await encode(), mime);
+
+    expect(processed.image.length).toBeGreaterThan(0);
+    expect(processed.thumbnail.length).toBeGreaterThan(0);
   });
 });

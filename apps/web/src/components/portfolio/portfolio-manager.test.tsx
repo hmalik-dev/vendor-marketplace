@@ -7,12 +7,14 @@ import type { UploadTask } from '@/lib/uploads';
 const cancel = vi.fn();
 let tasks: readonly UploadTask[] = [];
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+const refresh = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => vi.fn() }));
 vi.mock('@/lib/use-upload-queue', () => ({
   useUploadQueue: (): UploadQueue => ({
     tasks,
     heldBackNotice: null,
+    inFlight: tasks.some((task) => task.status === 'queued' || task.status === 'uploading'),
     addFiles: vi.fn(),
     retryAll: vi.fn(),
     dismiss: vi.fn(),
@@ -113,5 +115,41 @@ describe('PortfolioManager upload cancel', () => {
 
     await userEvent.keyboard('{Enter}');
     expect(cancel).toHaveBeenCalled();
+  });
+});
+
+/*
+ * #183. The header count is server-rendered in `page.tsx` from a value this
+ * component does not own, so only a router refresh moves it. Delete already
+ * did one; upload did not, and the grid grew while the pill stood still.
+ */
+describe('PortfolioManager header count', () => {
+  it('refreshes once when the batch settles, not once per file', () => {
+    refresh.mockClear();
+    tasks = [
+      { id: '1', name: 'a.jpg', sizeBytes: 10, status: 'uploading', progress: 20 },
+      { id: '2', name: 'b.jpg', sizeBytes: 10, status: 'queued', progress: 0 },
+    ] as never;
+
+    const view = render(<PortfolioManager initialItems={[]} />);
+    expect(refresh).not.toHaveBeenCalled();
+
+    // Both files land: the queue reports nothing in flight.
+    tasks = [
+      { id: '1', name: 'a.jpg', sizeBytes: 10, status: 'done', progress: 100 },
+      { id: '2', name: 'b.jpg', sizeBytes: 10, status: 'done', progress: 100 },
+    ] as never;
+    view.rerender(<PortfolioManager initialItems={[]} />);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh on a render where nothing was ever in flight', () => {
+    refresh.mockClear();
+    tasks = [];
+
+    render(<PortfolioManager initialItems={[]} />);
+
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

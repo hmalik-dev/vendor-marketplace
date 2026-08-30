@@ -63,11 +63,25 @@ services:
     depends_on:
       storage:
         condition: service_healthy
+    #
+    # `set-json` with an object-read-only statement, NOT `mc anonymous set
+    # download`. That canned policy grants `s3:ListBucket` on the bucket ARN as
+    # well as `s3:GetObject` on its contents, so anyone could enumerate every
+    # key in the bucket — every portfolio photo, profile picture and cover, for
+    # every user.
+    #
+    # Both the key builder and the portfolio delete path lean on keys being
+    # random UUIDs and therefore unguessable. Open listing makes that property
+    # worthless: you do not have to guess a key you can read off a list.
+    #
+    # There is no `mc anonymous set` verb for object-read-without-list, which is
+    # why this is a written policy rather than a shorter word.
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://storage:9000 vendor-marketplace vendor_marketplace_dev &&
       mc mb --ignore-existing local/vendor-marketplace-uploads &&
-      mc anonymous set download local/vendor-marketplace-uploads
+      echo '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"*\"]},\"Action\":[\"s3:GetObject\"],\"Resource\":[\"arn:aws:s3:::vendor-marketplace-uploads/*\"]}]}' > /tmp/uploads-policy.json &&
+      mc anonymous set-json /tmp/uploads-policy.json local/vendor-marketplace-uploads
       "
 
 volumes:

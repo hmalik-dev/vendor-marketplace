@@ -30,22 +30,45 @@ function isAcceptedMimeType(value: string): boolean {
 }
 
 /**
- * Refuses an image that is too narrow to publish.
+ * What sharp reports for each format we accept.
  *
- * This is a quality floor rather than a validity one, and the message says so:
- * the file is fine, it would simply render soft on a cover, and the fix is a
- * larger export. Reading the metadata is a header parse, not a full decode, so
- * it costs far less than the resize it saves.
+ * The declared `Content-Type` is a claim; this is what the bytes are. Renaming
+ * a GIF to `.png` and declaring `image/png` satisfied the allow-list, and the
+ * only thing standing behind it was a decode that accepts **every** format
+ * libvips supports — so the two-format allow-list was in practice "anything
+ * sharp can read", which includes SVG, TIFF, AVIF and GIF.
  */
-async function assertWideEnough(buffer: Buffer): Promise<void> {
+const ACCEPTED_DECODED_FORMATS: readonly string[] = ['jpeg', 'png'];
+
+/**
+ * Refuses an image whose bytes are not what it says they are, or that is too
+ * narrow to publish.
+ *
+ * One `metadata()` call answers both. It is a header parse rather than a full
+ * decode, so it costs far less than the resize it can save — and it is the only
+ * place the *actual* format is knowable before the re-encode throws away the
+ * evidence.
+ */
+async function assertDecodableAndWideEnough(buffer: Buffer): Promise<void> {
   let width: number | undefined;
+  let format: string | undefined;
 
   try {
-    ({ width } = await sharp(buffer).metadata());
+    ({ width, format } = await sharp(buffer).metadata());
   } catch {
     // A buffer sharp cannot read at all is reported by the decode below, which
     // has the better message for it.
     return;
+  }
+
+  /*
+   * The same sentence the declared-type check uses. A caller who renamed a file
+   * and a caller who picked the wrong one are in the same position and need the
+   * same instruction; saying "your PNG is really a GIF" would be describing our
+   * detection rather than their fix.
+   */
+  if (format !== undefined && !ACCEPTED_DECODED_FORMATS.includes(format)) {
+    throw validationFailed(`Unsupported image type. Upload a ${ACCEPTED_IMAGE_LABEL} file.`);
   }
 
   if (width !== undefined && width < MIN_UPLOAD_IMAGE_WIDTH) {
@@ -59,8 +82,9 @@ async function assertWideEnough(buffer: Buffer): Promise<void> {
  * Normalises an untrusted upload into two WebP variants.
  *
  * The client-declared MIME type is checked first as a cheap filter, but it is
- * not trusted: `sharp` decodes the actual bytes, so a `.png` full of something
- * else fails here rather than reaching storage. `rotate()` bakes in the EXIF
+ * not trusted, and neither is the declared type: `sharp` reads the actual
+ * bytes, so a `.png` that is really a GIF is refused by its decoded format
+ * rather than reaching storage on the strength of its header. `rotate()` bakes in the EXIF
  * orientation before the metadata is discarded, otherwise stripping EXIF would
  * silently turn portrait photos sideways.
  */
@@ -82,7 +106,7 @@ export async function processUploadedImage(
     throw validationFailed('Image file is empty.');
   }
 
-  await assertWideEnough(buffer);
+  await assertDecodableAndWideEnough(buffer);
 
   try {
     // `sharp` instances are single-use once consumed, so each variant reads

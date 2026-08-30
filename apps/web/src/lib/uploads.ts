@@ -360,11 +360,25 @@ export interface BatchProgress {
 }
 
 export function summarise(tasks: readonly UploadTask[]): BatchProgress {
+  /*
+   * Bytes that can still be sent. A file refused locally — wrong format, over
+   * the size ceiling, too narrow — enters the list already `failed`, carrying
+   * its full size, and is then skipped by the send loop. Counting it put bytes
+   * in the denominator that are structurally impossible to send, and it failed
+   * worst exactly where it showed most: an over-size rejection is by definition
+   * the largest file in the batch, so a 40 MB refusal inflated "of X MB" by
+   * 40 MB and the line could never converge.
+   *
+   * A file that failed *after* sending something keeps its bytes: those really
+   * did go out, and removing them would make the line run backwards.
+   */
+  const sendable = tasks.filter((task) => task.status !== 'failed' || task.progress > 0);
+
   return {
     settled: tasks.filter((task) => task.status === 'done' || task.status === 'failed').length,
     total: tasks.length,
-    uploadedBytes: tasks.reduce((sum, task) => sum + (task.sizeBytes * task.progress) / 100, 0),
-    totalBytes: tasks.reduce((sum, task) => sum + task.sizeBytes, 0),
+    uploadedBytes: sendable.reduce((sum, task) => sum + (task.sizeBytes * task.progress) / 100, 0),
+    totalBytes: sendable.reduce((sum, task) => sum + task.sizeBytes, 0),
     failed: tasks.filter((task) => task.status === 'failed').length,
   };
 }

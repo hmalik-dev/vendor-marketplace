@@ -14,6 +14,8 @@ import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-mark
 import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
+import type { ObjectStorage } from '../../lib/storage.js';
+import { reapObjects } from '../portfolio/portfolio.service.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import {
   findActiveCategoryIds,
@@ -270,6 +272,7 @@ export async function createVendorProfile(
  */
 export async function updateVendorProfile(
   db: AppDatabase,
+  storage: ObjectStorage,
   userId: string,
   input: UpdateVendorProfileInput,
 ): Promise<VendorProfileDetail> {
@@ -368,7 +371,24 @@ export async function updateVendorProfile(
     throw notFound('You have not created a vendor profile yet');
   }
 
+  /*
+   * The images the vendor just replaced. Reaped after the row commits and
+   * never on the way to it: the profile has already changed, and failing this
+   * request because the bucket blinked would undo a save the vendor watched
+   * succeed. Without it, every photo change left two objects — the WebP and its
+   * thumbnail — in the bucket for the life of the account.
+   */
+  await reapObjects(storage, [
+    replacedKey(existing.profileImageUrl, row.profileImageUrl),
+    replacedKey(existing.coverImageUrl, row.coverImageUrl),
+  ]);
+
   return loadDetail(db, row);
+}
+
+/** The old key, when a write actually replaced it with a different one. */
+function replacedKey(before: string | null, after: string | null): string | null {
+  return before !== null && before !== after ? before : null;
 }
 
 /**

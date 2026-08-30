@@ -87,6 +87,7 @@ export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       await removePortfolioItem(
         app.db,
+        app.storage,
         assertRole(request.auth, ['vendor']).id,
         request.params.itemId,
       );

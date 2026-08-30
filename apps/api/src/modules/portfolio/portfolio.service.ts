@@ -8,6 +8,7 @@ import type { NewPortfolioItemRow, PortfolioItemRow } from '@vendor-marketplace/
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
 import { assertCompleteOrder } from '../../lib/ordering.js';
+import type { ObjectStorage } from '../../lib/storage.js';
 import { requireOwnVendorProfile } from '../vendors/vendors.service.js';
 import {
   applyPortfolioOrder,
@@ -82,19 +83,57 @@ export async function updatePortfolioItem(
 
 export async function removePortfolioItem(
   db: AppDatabase,
+  storage: ObjectStorage,
   userId: string,
   itemId: string,
 ): Promise<void> {
   const vendor = await requireOwnVendorProfile(db, userId);
+  const deleted = await deletePortfolioItemById(db, vendor.id, itemId);
+
+  if (!deleted) {
+    throw notFound('That portfolio photo does not exist');
+  }
 
   /*
-   * The stored object is deliberately left in the bucket. Keys are immutable
-   * and unguessable, an orphaned WebP costs a few kilobytes, and a delete that
-   * half-succeeds — row gone, object gone, but the row's sibling still pointing
-   * at it — is the worse failure. Reaping is a housekeeping job, not a request.
+   * The objects are reaped **after** the row is gone, and never inside its
+   * transaction.
+   *
+   * This used to leave them in the bucket on purpose, reasoning that keys are
+   * unguessable and an orphaned WebP costs a few kilobytes. Two things undid
+   * that: the bucket was enumerable (#180), so "unguessable" was worth nothing;
+   * and every profile-photo change leaks two objects, for the life of the
+   * account, with no reaper anywhere in the product.
+   *
+   * The original worry — a half-succeeded delete — is answered by the ordering
+   * rather than by not deleting. The row is the source of truth, so it commits
+   * first; if the reap then fails, the result is one orphaned object, which is
+   * exactly the state the old behaviour produced deliberately, every time.
    */
-  if (!(await deletePortfolioItemById(db, vendor.id, itemId))) {
-    throw notFound('That portfolio photo does not exist');
+  await reapObjects(storage, [deleted.imageUrl, deleted.thumbnailUrl]);
+}
+
+/**
+ * Best-effort object removal. Never throws.
+ *
+ * A vendor who deleted a photo has had their answer the moment the row is gone;
+ * failing that request because the bucket was briefly unreachable would undo
+ * nothing and tell them something they cannot act on.
+ */
+export async function reapObjects(
+  storage: ObjectStorage,
+  keys: readonly (string | null)[],
+): Promise<void> {
+  const present = keys.filter((key): key is string => key !== null && key.length > 0);
+
+  if (present.length === 0) {
+    return;
+  }
+
+  try {
+    await storage.remove(present);
+  } catch {
+    // An orphan is the old behaviour, and it is recoverable by a sweep. A 500
+    // on a delete that already succeeded is neither.
   }
 }
 

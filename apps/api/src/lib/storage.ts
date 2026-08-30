@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectsCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import type { UserRole } from '@vendor-marketplace/shared';
 import type { ApiEnv } from '../config/env.js';
 
@@ -41,6 +46,12 @@ const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 export interface ObjectStorage {
   /** Stores `body` and returns the public URL it is served from. */
   put(key: string, body: Buffer, contentType: string): Promise<string>;
+  /**
+   * Removes stored objects. Missing keys are not an error — S3 delete is
+   * idempotent, and a caller reaping the objects behind a deleted row should
+   * not care whether a previous attempt already got there.
+   */
+  remove(keys: readonly string[]): Promise<void>;
   /**
    * Resolves when the configured bucket is reachable and rejects otherwise.
    * Used by the readiness probe, which has to fail on a missing bucket and not
@@ -97,6 +108,19 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
       );
 
       return publicUrlFor(env.S3_PUBLIC_URL, key);
+    },
+
+    async remove(keys) {
+      if (keys.length === 0) {
+        return;
+      }
+
+      await client.send(
+        new DeleteObjectsCommand({
+          Bucket: env.S3_BUCKET,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        }),
+      );
     },
 
     async checkAvailable() {

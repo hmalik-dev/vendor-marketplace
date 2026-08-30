@@ -1,6 +1,6 @@
 import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
@@ -220,6 +220,63 @@ describe('/vendor/portfolio', () => {
 
       expect(response.statusCode).toBe(204);
 
+      const remaining = await harness.app.inject({
+        method: 'GET',
+        url: '/vendor/portfolio',
+        headers: bearer(VENDOR),
+      });
+      expect(remaining.json()).toEqual([]);
+    });
+
+    /*
+     * #178. The row and the objects behind it used to part company: the delete
+     * removed the row and deliberately left the WebP and its thumbnail in the
+     * bucket forever. That reasoning leaned on the keys being unguessable, and
+     * the bucket turned out to enumerate them (#180) — so the objects go too.
+     */
+    it('removes the stored objects, not only the row', async () => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+      const item = await addItem(VENDOR);
+
+      harness.storedObjects.push(
+        { key: IMAGE_URL, body: Buffer.alloc(0), contentType: 'image/webp' },
+        { key: THUMBNAIL_URL, body: Buffer.alloc(0), contentType: 'image/webp' },
+      );
+
+      const response = await harness.app.inject({
+        method: 'DELETE',
+        url: `/vendor/portfolio/${item.id}`,
+        headers: bearer(VENDOR),
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(harness.storedObjects.map((object) => object.key)).toEqual([]);
+    });
+
+    /*
+     * The row is the source of truth and it has already committed, so a bucket
+     * that blinks must not turn a delete the vendor watched succeed into a 500.
+     * One orphan is recoverable by a sweep; a failed delete is not.
+     */
+    it('still answers 204 when the object store refuses the reap', async () => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+      const item = await addItem(VENDOR);
+
+      const remove = vi
+        .spyOn(harness.app.storage, 'remove')
+        .mockRejectedValue(new Error('bucket unreachable'));
+
+      const response = await harness.app.inject({
+        method: 'DELETE',
+        url: `/vendor/portfolio/${item.id}`,
+        headers: bearer(VENDOR),
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(remove).toHaveBeenCalled();
+      remove.mockRestore();
+
+      // And the row is gone, which is what the vendor was told.
       const remaining = await harness.app.inject({
         method: 'GET',
         url: '/vendor/portfolio',

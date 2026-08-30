@@ -85,9 +85,9 @@ export async function deletePortfolioItemById(
   db: AppDatabase,
   vendorId: string,
   itemId: string,
-): Promise<boolean> {
+): Promise<{ imageUrl: string; thumbnailUrl: string | null } | null> {
   if (!vendorId || !itemId) {
-    return false;
+    return null;
   }
 
   /*
@@ -100,15 +100,20 @@ export async function deletePortfolioItemById(
     const deleted = await tx
       .delete(portfolioItems)
       .where(and(eq(portfolioItems.vendorId, vendorId), eq(portfolioItems.id, itemId)))
-      .returning({ id: portfolioItems.id });
+      // Returns the keys, so the caller can reap the objects behind the row.
+      .returning({
+        imageUrl: portfolioItems.imageUrl,
+        thumbnailUrl: portfolioItems.thumbnailUrl,
+      });
 
-    if (deleted.length === 0) {
-      return false;
+    const row = deleted[0];
+    if (!row) {
+      return null;
     }
 
     await syncCoverFromPortfolio(tx, vendorId);
 
-    return true;
+    return { imageUrl: row.imageUrl, thumbnailUrl: row.thumbnailUrl };
   });
 }
 
