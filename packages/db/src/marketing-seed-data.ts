@@ -24,6 +24,16 @@ export interface MarketingPackageSeed {
   readonly name: string;
   readonly description: string;
   readonly priceCents: number;
+  /**
+   * How long the vendor is on site, in hours.
+   *
+   * The profile's booking rail reads this to draw `· N hour coverage` beside
+   * the price. It was left unset while the same fact lived only as free text
+   * in `inclusions`, so the rail's line never rendered for any seeded vendor
+   * and #113 read as a missing feature rather than missing data. Keep it
+   * consistent with the matching `inclusions` entry.
+   */
+  readonly durationHours: number;
   readonly inclusions: readonly string[];
 }
 
@@ -67,6 +77,7 @@ function photographyPackages(fromCents: number): readonly MarketingPackageSeed[]
       name: 'Half-day coverage',
       description: 'Four hours on the day, for a ceremony and portraits without the full timeline.',
       priceCents: fromCents,
+      durationHours: 4,
       inclusions: ['4 hours coverage', '150 edited images', 'Online gallery'],
     },
     {
@@ -74,12 +85,14 @@ function photographyPackages(fromCents: number): readonly MarketingPackageSeed[]
       description:
         'Getting ready through to the last dance, with a second shooter for the ceremony.',
       priceCents: Math.round((fromCents * 1.8) / 5000) * 5000,
+      durationHours: 8,
       inclusions: ['8 hours coverage', 'Second shooter', '450 edited images', 'Online gallery'],
     },
     {
       name: 'Full day and album',
       description: 'Full-day coverage plus a hand-bound album chosen from your gallery.',
       priceCents: Math.round((fromCents * 2.7) / 5000) * 5000,
+      durationHours: 10,
       inclusions: [
         '10 hours coverage',
         'Second shooter',

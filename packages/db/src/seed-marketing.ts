@@ -357,6 +357,8 @@ export async function seedMarketingData<
           name: pkg.name,
           description: pkg.description,
           priceCents: pkg.priceCents,
+          // `decimal` columns round-trip as strings in Drizzle.
+          durationHours: pkg.durationHours.toFixed(1),
           priceType: 'starting_at' as const,
           inclusions: [...pkg.inclusions],
           isActive: true,

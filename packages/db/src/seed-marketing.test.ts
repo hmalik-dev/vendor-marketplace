@@ -123,6 +123,44 @@ describe('the vendor cast', () => {
   });
 });
 
+/**
+ * #113 — the profile rail draws `· N hour coverage` beside the price, and it
+ * never rendered for any seeded vendor because `durationHours` was null on all
+ * 48 package rows. The hours were in the seed all along, as free text in
+ * `inclusions`, which the rail does not read. These keep the two in step so
+ * the column cannot silently drift back to null.
+ */
+describe('package duration', () => {
+  const seededPackages = MARKETING_VENDORS.flatMap((vendor) => vendor.packages);
+
+  it('gives every seeded package a duration the rail can render', () => {
+    expect(seededPackages.length).toBeGreaterThan(0);
+
+    for (const pkg of seededPackages) {
+      expect(pkg.durationHours).toBeGreaterThan(0);
+    }
+  });
+
+  /*
+   * The same fact is stated twice — once as a number the rail reads, once as a
+   * bullet the customer reads. A package claiming "8 hours coverage" beside a
+   * rail reading "4 hour coverage" is worse than either alone.
+   */
+  it('states the same hours in the inclusions bullet and the column', () => {
+    for (const pkg of seededPackages) {
+      const bullet = pkg.inclusions.find((entry) => /\bhours?\b/i.test(entry));
+
+      if (bullet === undefined) {
+        continue;
+      }
+
+      const stated = Number(bullet.match(/(\d+(?:\.\d+)?)\s*hours?/i)?.[1]);
+
+      expect(stated).toBe(pkg.durationHours);
+    }
+  });
+});
+
 describe('seedMarketingData', () => {
   beforeEach(async () => {
     await clearMarketingData(testDb.db);
