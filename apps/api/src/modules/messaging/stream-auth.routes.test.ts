@@ -1,6 +1,6 @@
 import { users } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Writable } from 'node:stream';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { readStreamTicket } from './messaging.routes.js';
@@ -78,7 +78,9 @@ describe('the event stream authenticates with a ticket, not the session', () => 
     const body = response.json();
     expect(typeof body.ticket).toBe('string');
     expect(body.ticket.length).toBeGreaterThan(20);
-    expect(Date.parse(body.expiresAt)).toBeGreaterThan(Date.now());
+    // The ticket and nothing else: no expiry is published, because the client
+    // connects immediately and re-exchanges on every reconnect.
+    expect(Object.keys(body)).toEqual(['ticket']);
   });
 
   /** The ticket must not itself be a session token, or nothing has changed. */
@@ -136,10 +138,18 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   it('refuses a ticket that has already opened a stream', async () => {
     const ticket = await issueTicket();
 
+    const heldBefore = harness.app.streamTickets.size;
+
     // The stream never ends, so the connection is abandoned rather than
     // awaited — spending the ticket is what this asserts, not the body.
     void harness.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
-    await new Promise((resolve) => setImmediate(resolve));
+    /*
+     * Waits for the ticket to actually be spent rather than assuming it
+     * happens within one macrotask. Any hook ahead of the handler that awaits
+     * I/O would break that assumption, and the failure mode would be this test
+     * hanging on a stream that never resolves instead of failing an assertion.
+     */
+    await vi.waitFor(() => expect(harness.app.streamTickets.size).toBe(heldBefore - 1));
 
     const replay = await harness.app.inject({
       method: 'GET',
@@ -149,11 +159,34 @@ describe('the event stream authenticates with a ticket, not the session', () => 
     expect(replay.statusCode).toBe(401);
   });
 
-  it('will not let one caller spend another caller’s ticket twice', async () => {
+  it('issues a distinct ticket every time, so none is guessable from another', async () => {
     const first = await issueTicket();
     const second = await issueTicket();
 
     expect(first).not.toBe(second);
+  });
+
+  /*
+   * The wiring the whole scheme depends on, and the one thing no other test
+   * sees: the stream must subscribe **the user the ticket named**. Subscribing
+   * any other id leaves every test green while every message silently fails to
+   * arrive and the connection looks healthy.
+   */
+  it('subscribes the user the ticket named, not whoever connected', async () => {
+    const subscribe = vi.spyOn(harness.app.events, 'subscribe');
+    const ticket = await issueTicket();
+
+    void harness.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1));
+
+    const [subscribedId] = subscribe.mock.calls[0] ?? [];
+    const [row] = await harness.database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.clerkUserId, CUSTOMER));
+
+    expect(subscribedId).toBe(row?.id);
+    subscribe.mockRestore();
   });
 
   /*
@@ -176,13 +209,17 @@ describe('the event stream authenticates with a ticket, not the session', () => 
       url: `/events/stream?ticket=${ticket}`,
     });
 
-    expect(response.statusCode).toBe(403);
-    expect(response.json().error).toBe('FORBIDDEN');
-
-    await harness.database.db
-      .update(users)
-      .set({ isBanned: false })
-      .where(eq(users.clerkUserId, CUSTOMER));
+    try {
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('FORBIDDEN');
+    } finally {
+      // Restored even when the assertion fails, so a failure here does not
+      // leave the row banned for everything appended to this describe.
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: false })
+        .where(eq(users.clerkUserId, CUSTOMER));
+    }
   });
 });
 

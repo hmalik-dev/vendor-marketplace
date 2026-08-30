@@ -16,6 +16,16 @@ const JWT_SHAPED = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/;
 
 /** Every `EventSource` the component under test opened, in order. */
 const opened: string[] = [];
+const sources: FakeEventSource[] = [];
+
+/** The most recently opened fake, for tests that drive open/error by hand. */
+function latestSource(): FakeEventSource {
+  const source = sources.at(-1);
+  if (!source) {
+    throw new Error('No EventSource has been opened yet');
+  }
+  return source;
+}
 
 class FakeEventSource {
   onopen: (() => void) | null = null;
@@ -25,6 +35,7 @@ class FakeEventSource {
 
   constructor(url: string) {
     opened.push(url);
+    sources.push(this);
   }
 
   close(): void {
@@ -34,14 +45,13 @@ class FakeEventSource {
 
 beforeEach(() => {
   opened.length = 0;
+  sources.length = 0;
   signedIn = true;
   getTokenMock.mockReset().mockResolvedValue(SESSION_JWT);
   vi.stubGlobal('EventSource', FakeEventSource);
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () =>
-      Response.json({ ticket: 'ticket-abc123', expiresAt: new Date().toISOString() }),
-    ),
+    vi.fn(async () => Response.json({ ticket: 'ticket-abc123' })),
   );
 });
 
@@ -119,10 +129,109 @@ describe('useEventStream', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('asks for a ticket before every connection, so none is replayed', async () => {
+  /*
+   * The property the whole scheme rests on, and the one the previous version of
+   * this test only claimed. A ticket is single-use, so a reconnect that reuses
+   * the last one 401s forever: notifications stop and nothing on screen says so.
+   *
+   * Caching the ticket in the effect closure left the old assertion green,
+   * which is why this one fires `onerror` and reads the SECOND url.
+   */
+  it('exchanges a fresh ticket on every reconnect, never replaying the last', async () => {
+    vi.useFakeTimers();
+    let issued = 0;
+    vi.mocked(fetch).mockImplementation(async () => {
+      issued += 1;
+      return Response.json({ ticket: `ticket-${issued}` });
+    });
+
+    render(<Subscriber />);
+    await vi.waitFor(() => expect(opened).toHaveLength(1));
+    expect(opened[0]).toContain('ticket=ticket-1');
+
+    const first = latestSource();
+    first.onopen?.();
+    first.onerror?.();
+
+    // The browser's own retry is suppressed by closing the source.
+    expect(first.closed).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1_500);
+    await vi.waitFor(() => expect(opened).toHaveLength(2));
+    expect(opened[1]).toContain('ticket=ticket-2');
+
+    vi.useRealTimers();
+  });
+
+  /*
+   * A transient failure of the exchange itself — an API restart, a 429 — must
+   * back off rather than end live updates for the life of the tab. Deleting the
+   * retry from the catch left every other test in this file green.
+   */
+  it('retries after the exchange itself fails', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response('nope', { status: 503 }))
+      .mockResolvedValue(Response.json({ ticket: 'ticket-after-retry' }));
+
     render(<Subscriber />);
 
+    await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1));
+    expect(opened).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(1_500);
+    await vi.waitFor(() => expect(opened).toHaveLength(1));
+    expect(opened[0]).toContain('ticket=ticket-after-retry');
+
+    vi.useRealTimers();
+  });
+
+  /*
+   * A rejected session is not transient. Retrying it spends a ticket every
+   * thirty seconds and can never succeed — which is what a suspended account
+   * did, because the ban check runs after the ticket is consumed.
+   */
+  it.each([401, 403])(
+    'stops rather than looping when the session is rejected (%s)',
+    async (status) => {
+      vi.useFakeTimers();
+      vi.mocked(fetch).mockResolvedValue(new Response('no', { status }));
+
+      render(<Subscriber />);
+      await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1));
+
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+      expect(opened).toHaveLength(0);
+
+      vi.useRealTimers();
+    },
+  );
+
+  it('opens nothing when unmounted while the exchange is in flight', async () => {
+    let release: (value: Response) => void = () => {};
+    vi.mocked(fetch).mockImplementation(
+      async () => new Promise<Response>((resolve) => (release = resolve)),
+    );
+
+    const { unmount } = render(<Subscriber />);
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1));
+
+    unmount();
+    release(Response.json({ ticket: 'ticket-too-late' }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(opened).toHaveLength(0);
+  });
+
+  it('closes the stream when the subscriber unmounts', async () => {
+    const { unmount } = render(<Subscriber />);
     await waitFor(() => expect(opened).toHaveLength(1));
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+
+    const source = latestSource();
+    unmount();
+
+    expect(source.closed).toBe(true);
   });
 });

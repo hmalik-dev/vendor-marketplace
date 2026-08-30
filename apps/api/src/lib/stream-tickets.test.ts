@@ -90,12 +90,28 @@ describe('StreamTicketStore', () => {
     expect(encodeURIComponent(ticket)).toBe(ticket);
   });
 
-  it('reports when the ticket expires, so a client can refresh before it does', () => {
-    const { store } = storeAt(1_000);
+  /*
+   * The expiry is enforced, not published. No client reads a deadline — the
+   * browser connects immediately and re-exchanges on every reconnect — so the
+   * property worth pinning is that the store stops accepting the ticket, not
+   * that it announces when it will.
+   */
+  it('stops accepting a ticket once its window has passed', () => {
+    const { store, advance } = storeAt(1_000);
 
-    const { expiresAt } = store.issue(USER);
+    const { ticket } = store.issue(USER);
+    advance(STREAM_TICKET_TTL_MS + 1);
 
-    expect(expiresAt.getTime()).toBe(1_000 + STREAM_TICKET_TTL_MS);
+    expect(store.consume(ticket)).toBeNull();
+  });
+
+  it('still accepts one a millisecond inside the window', () => {
+    const { store, advance } = storeAt(1_000);
+
+    const { ticket } = store.issue(USER);
+    advance(STREAM_TICKET_TTL_MS - 1);
+
+    expect(store.consume(ticket)).toBe(USER);
   });
 
   /** Minutes, per the ticket — long enough to connect, short enough to matter. */

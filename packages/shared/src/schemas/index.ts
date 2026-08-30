@@ -1260,7 +1260,7 @@ export interface Paginated<T> {
   pageSize: number;
 }
 
-// --- Errors ----------------------------------------------------------------
+// --- Event stream ----------------------------------------------------------
 
 /**
  * What `POST /events/stream-ticket` answers with.
@@ -1269,14 +1269,18 @@ export interface Paginated<T> {
  * travel in the stream's URL. This is that something: an opaque, single-use,
  * minutes-long ticket exchanged for the session over a normal authenticated
  * request — never the session JWT itself, which is what #215 found in the
- * API's own logs. `expiresAt` lets a client refresh before connecting rather
- * than discover the expiry as a failed stream.
+ * API's own logs.
+ *
+ * The ticket alone: no expiry is published. The client connects immediately
+ * and re-exchanges on every reconnect, so it has nothing to do with a
+ * deadline, and a field no caller reads is a contract to keep for nothing.
  */
 export const streamTicketSchema = z.object({
   ticket: z.string().min(1),
-  expiresAt: z.date(),
 });
 export type StreamTicket = z.infer<typeof streamTicketSchema>;
+
+// --- Errors ----------------------------------------------------------------
 
 export const apiErrorSchema = z.object({
   statusCode: z.int(),

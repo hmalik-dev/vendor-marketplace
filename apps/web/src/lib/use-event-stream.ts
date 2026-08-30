@@ -2,6 +2,7 @@
 
 import { useAuth } from '@clerk/nextjs';
 import { useEffect, useRef, useState } from 'react';
+import { ApiClientError, apiRequest } from '@/lib/api-client';
 import { wireStreamTicketSchema } from '@/lib/wire-schemas';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -9,27 +10,36 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 /**
  * Trades the session for one stream ticket.
  *
- * Deliberately a plain `fetch` rather than `useApi`: this runs inside an
- * effect that already holds a token, and routing it through the hook would
- * make the effect depend on a value that changes identity on every render.
+ * Goes through `apiRequest` like every other call. The effect this runs in
+ * cannot depend on `useApi` — a hook identity that changes each render would
+ * tear the socket down and rebuild it — but `apiRequest` is a plain function
+ * taking the token, so there is nothing to avoid. Using it is what makes the
+ * failure legible: an `ApiClientError` carries the status, and the caller has
+ * to know 401 from 503 to decide between stopping and backing off.
  */
-export async function requestStreamTicket(token: string): Promise<string> {
-  const response = await fetch(`${BASE_URL}/events/stream-ticket`, {
+export async function requestStreamTicket(token: string, signal?: AbortSignal): Promise<string> {
+  const { ticket } = await apiRequest('/events/stream-ticket', {
+    schema: wireStreamTicketSchema,
     method: 'POST',
-    headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+    token,
+    ...(signal ? { signal } : {}),
   });
 
-  if (!response.ok) {
-    throw new Error(`Could not obtain a stream ticket (${response.status})`);
-  }
+  return ticket;
+}
 
-  const parsed = wireStreamTicketSchema.safeParse(await response.json());
-
-  if (!parsed.success) {
-    throw new Error('Stream ticket response did not match its schema');
-  }
-
-  return parsed.data.ticket;
+/**
+ * Whether a failed exchange is worth retrying.
+ *
+ * A dropped connection is ordinary and self-resolving; a rejected session is
+ * not. Retrying a 401 or a 403 spends a fresh ticket every thirty seconds for
+ * the life of the tab and can never succeed — a suspended account did exactly
+ * that, because the ban check runs after the ticket is consumed.
+ */
+function isRetryable(error: unknown): boolean {
+  return (
+    !(error instanceof ApiClientError) || (error.statusCode !== 401 && error.statusCode !== 403)
+  );
 }
 
 /** The two things the stream carries. One connection serves both. */
@@ -92,6 +102,7 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
     let attempt = 0;
     let cancelled = false;
     let hasConnectedBefore = false;
+    const aborter = new AbortController();
 
     async function connect(): Promise<void> {
       const token = await getToken();
@@ -106,12 +117,18 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
        */
       let ticket: string;
       try {
-        ticket = await requestStreamTicket(token);
-      } catch {
-        // Indistinguishable from the stream itself failing, and handled the
-        // same way — back off and try again rather than give up on live
-        // updates for the rest of the session.
-        scheduleRetry();
+        ticket = await requestStreamTicket(token, aborter.signal);
+      } catch (error) {
+        /*
+         * A transient failure is indistinguishable from the stream itself
+         * dropping and is handled the same way — back off rather than give up
+         * on live updates for the rest of the session. A rejected session is
+         * not transient: retrying it spends a ticket every thirty seconds and
+         * can never succeed, so the stream stays down and says so.
+         */
+        if (!cancelled && isRetryable(error)) {
+          scheduleRetry();
+        }
         return;
       }
 
@@ -169,6 +186,9 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
 
     return () => {
       cancelled = true;
+      // An exchange in flight outlives the effect otherwise, and lands a
+      // ticket nothing will ever spend.
+      aborter.abort();
       if (retry) {
         clearTimeout(retry);
       }

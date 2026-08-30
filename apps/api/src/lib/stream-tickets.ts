@@ -17,8 +17,6 @@ const TICKET_BYTES = 32;
 export interface IssuedStreamTicket {
   /** The opaque value handed to the browser. Never stored. */
   readonly ticket: string;
-  /** When it stops being accepted, so a client can refresh before it does. */
-  readonly expiresAt: Date;
 }
 
 interface StoredTicket {
@@ -41,10 +39,22 @@ export interface StreamTicketStoreOptions {
  * longer the session: it names one user, dies on first use, and expires in a
  * minute regardless.
  *
- * In memory, and deliberately so: `EventHub` already holds its subscribers in
- * the process that owns the socket, so a stream is only ever served by the
- * instance that issued its ticket. A shared store would buy nothing that the
- * event bus itself does not already need.
+ * **In memory, and that binds the deployment.** Issue and connect are two
+ * independent HTTP requests, so nothing pins them to the same replica: with N
+ * API instances and no sticky sessions, a connect attempt finds its ticket
+ * with probability 1/N and 401s otherwise, and the client's backoff stretches
+ * to 30s after six failures. That is a real regression against the session-JWT
+ * scheme, which verified on any instance — so this is a single-instance
+ * assumption, not merely an optimisation.
+ *
+ * It is the same assumption `vendor-marketplace-decisions.md` already records
+ * for the in-memory rate limiter, and MVP runs one API instance. **A rolling
+ * deploy briefly runs two**, which is where it will first be felt. Moving the
+ * store to Redis, or pinning by session, is the fix when that happens — not
+ * widening the TTL.
+ *
+ * `EventHub`'s in-process subscriber map is a separate constraint. It governs
+ * event *delivery*, not connection admission, and does not justify this one.
  */
 export class StreamTicketStore {
   readonly #tickets = new Map<string, StoredTicket>();
@@ -63,7 +73,7 @@ export class StreamTicketStore {
 
     this.#tickets.set(fingerprint(ticket), { userId, expiresAtMs });
 
-    return { ticket, expiresAt: new Date(expiresAtMs) };
+    return { ticket };
   }
 
   /**

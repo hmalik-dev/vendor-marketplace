@@ -10,9 +10,9 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { forbidden, unauthorized } from '../../lib/errors.js';
+import { unauthorized } from '../../lib/errors.js';
 import { authenticated, requireAuth } from '../../lib/guards.js';
-import { findUserById } from '../users/users.dao.js';
+import { resolveStreamSubject } from '../users/users.service.js';
 import {
   listConversations,
   listMessages,
@@ -186,7 +186,10 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
    * value that ends up in the stream URL, and therefore in access logs,
    * browser history and `Referer`, is worth nothing to whoever finds it.
    *
-   * POST because it creates something and must not be replayed from a cache.
+   * POST rather than GET because the exchange has a side effect and must not
+   * be replayed from a cache. It answers 200 with no `Location`, per
+   * `api-layering.md`: this is a POST-as-action, not a POST that creates an
+   * addressable resource — a ticket has no URL of its own and is spent once.
    */
   app.post(
     '/events/stream-ticket',
@@ -219,22 +222,11 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
     }
 
     /*
-     * The account is re-checked here rather than trusted from the ticket.
-     * `requireAuth` used to do this on the way in and no longer sees this
-     * route, so without it a ban landing between issue and connect would be
-     * ignored — and a stream, once open, stays open.
+     * The admission decision `requireAuth` would have made, made in the
+     * service instead — a ban landing between issue and connect must not be
+     * ignored, because a stream, once open, stays open.
      */
-    const account = await findUserById(app.db, userId);
-
-    if (!account) {
-      throw unauthorized('No account is linked to this stream ticket');
-    }
-
-    if (account.isBanned) {
-      throw forbidden('This account has been suspended');
-    }
-
-    const user = { id: account.id };
+    const user = await resolveStreamSubject(app.db, userId);
 
     // Echoed only when it is on the list, never reflected blindly.
     const origin = request.headers.origin;
