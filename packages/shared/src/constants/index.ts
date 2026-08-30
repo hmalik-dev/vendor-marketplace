@@ -152,6 +152,32 @@ export const EXPIRABLE_BOOKING_REQUEST_STATUSES = ['pending', 'quoted'] as const
 export const LIVE_BOOKING_REQUEST_STATUSES: readonly BookingRequestStatus[] =
   BOOKING_REQUEST_STATUSES.filter((status) => BOOKING_REQUEST_TRANSITIONS[status].length > 0);
 
+/**
+ * The statuses at which the vendor may see the customer's full name and
+ * contact details.
+ *
+ * The rule is deliberate and it is stated once, here, because three layers
+ * enforce it (the DAO's projection, the response mapper, and the Zod response
+ * schema) and they must not be able to disagree. Before acceptance a vendor is
+ * deciding whether to take the work, which does not require being able to
+ * identify the person — they see a first name and a last initial. Acceptance
+ * is a commitment to turn up, so from that point the vendor can reach the
+ * customer outside the app: full name, email, and phone if the customer gave
+ * one.
+ *
+ * `declined`, `cancelled` and `expired` are absent on purpose. A vendor who
+ * turned the work down has no reason to keep the contact details, and a
+ * request that lapsed never created the obligation that justified them.
+ */
+export const CONTACT_DISCLOSING_BOOKING_REQUEST_STATUSES = ['accepted'] as const;
+
+/** Whether this request has reached the point that discloses contact details. */
+export function disclosesCustomerContact(status: BookingRequestStatus): boolean {
+  return (CONTACT_DISCLOSING_BOOKING_REQUEST_STATUSES as readonly BookingRequestStatus[]).includes(
+    status,
+  );
+}
+
 /** Longest "anything else we should know" note on a request — frame `04`. */
 export const BOOKING_REQUEST_NOTES_MAX_LENGTH = 600;
 

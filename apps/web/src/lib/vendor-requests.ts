@@ -11,7 +11,9 @@ import { wireBookingRequestListSchema, type WireBookingRequest } from './wire-sc
  * The endpoint scopes to the caller's own vendor profile — there is no
  * parameter naming whose queue to read, so a vendor cannot ask for another's.
  */
-export async function getOwnBookingRequests(): Promise<WireBookingRequest[]> {
+export async function getOwnBookingRequests(
+  options: { onFailure?: 'empty' | 'throw' } = {},
+): Promise<WireBookingRequest[]> {
   const { getToken } = await auth();
   const token = await getToken();
 
@@ -33,7 +35,16 @@ export async function getOwnBookingRequests(): Promise<WireBookingRequest[]> {
      * The dashboard's subject is the request queue, but its stats and its
      * checklist are separate reads — one failing list costs the list, not the
      * page, and the empty state it falls back to is a designed surface.
+     *
+     * `/vendor/bookings` is the opposite case and passes `throw`: the list is
+     * the entire page, and "you have no bookings" is a specific, alarming claim
+     * to make at a vendor who has four. There, a failed read has to reach the
+     * error boundary and say so.
      */
+    if (options.onFailure === 'throw') {
+      throw error;
+    }
+
     return [];
   }
 }

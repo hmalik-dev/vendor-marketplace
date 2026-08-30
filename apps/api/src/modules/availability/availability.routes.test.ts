@@ -1,4 +1,10 @@
-import { availability, categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import {
+  availability,
+  bookingRequests,
+  categories,
+  users,
+  vendorProfiles,
+} from '@vendor-marketplace/db/schema';
 import { addDays, toDateString } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -13,6 +19,8 @@ const TOMORROW = toDateString(addDays(NOW, 1));
 const NEXT_WEEK = toDateString(addDays(NOW, 7));
 const YESTERDAY = toDateString(addDays(NOW, -1));
 const TODAY = toDateString(NOW);
+/** Inside the twelve-month window, and far from every other date here. */
+const FAR_DATE = toDateString(addDays(NOW, 90));
 
 interface AvailabilityBody {
   date: string;
@@ -150,6 +158,149 @@ describe('/vendor/availability', () => {
       });
 
       expect(response.json()).toEqual([]);
+    });
+  });
+
+  /**
+   * `#212`: a live request has to read `Pending request` on the vendor's own
+   * calendar, but must not be stored — search excludes any date row that is not
+   * `available`, so a stored one would take the vendor out of the market for a
+   * week over a request they have not answered.
+   */
+  describe('the requests overlaid on the calendar', () => {
+    /** A published vendor with one package, and a customer request on `date`. */
+    async function requestOn(date: string): Promise<string> {
+      const vendorId = await createProfile(VENDOR, 'Sunlit Studio');
+
+      const created = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/packages',
+        headers: bearer(VENDOR),
+        payload: {
+          name: 'Full day coverage',
+          description: 'Six hours of coverage with two photographers on site.',
+          priceCents: 145_000,
+          priceType: 'fixed',
+          inclusions: ['6 hours'],
+        },
+      });
+      expect(created.statusCode).toBe(201);
+
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ isPublished: true, stripeOnboarded: true })
+        .where(eq(vendorProfiles.id, vendorId));
+
+      const request = await harness.app.inject({
+        method: 'POST',
+        url: '/booking-requests',
+        headers: bearer(CUSTOMER),
+        payload: { vendorId, packageId: created.json().id, eventDate: date },
+      });
+      expect(request.statusCode).toBe(201);
+
+      return request.json().id;
+    }
+
+    async function calendar(): Promise<{ date: string; status: string }[]> {
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/vendor/availability',
+        headers: bearer(VENDOR),
+      });
+
+      expect(response.statusCode).toBe(200);
+      return (response.json() as { date: string; status: string }[]).map(({ date, status }) => ({
+        date,
+        status,
+      }));
+    }
+
+    it('shows a live request as pending without storing a row for it', async () => {
+      await requestOn(TOMORROW);
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'pending' }]);
+
+      const stored = await harness.database.db.select().from(availability);
+      expect(stored).toEqual([]);
+    });
+
+    it('shows the date booked, and stored, once the vendor accepts', async () => {
+      const requestId = await requestOn(TOMORROW);
+
+      const accepted = await harness.app.inject({
+        method: 'POST',
+        url: `/booking-requests/${requestId}/accept`,
+        headers: bearer(VENDOR),
+      });
+      expect(accepted.statusCode).toBe(200);
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'booked' }]);
+
+      const stored = await harness.database.db
+        .select({ status: availability.status })
+        .from(availability);
+      expect(stored).toEqual([{ status: 'booked' }]);
+    });
+
+    it('drops the overlay once the request is declined', async () => {
+      const requestId = await requestOn(TOMORROW);
+
+      await harness.app.inject({
+        method: 'POST',
+        url: `/booking-requests/${requestId}/decline`,
+        headers: bearer(VENDOR),
+      });
+
+      expect(await calendar()).toEqual([]);
+    });
+
+    /* The vendor's own decision outranks somebody else's hope for the date. */
+    it('keeps a date the vendor blocked reading blocked, not pending', async () => {
+      await requestOn(TOMORROW);
+      await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }]);
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'blocked' }]);
+    });
+
+    /*
+     * The PUT response IS the calendar as far as the client is concerned — it
+     * calls `setEntries` with it. When only the GET overlaid, blocking one
+     * unrelated date turned every pending cell on screen white and clickable
+     * until a reload, and a pending cell is not the vendor's to touch.
+     */
+    it('keeps the overlay on the response to an unrelated edit', async () => {
+      await requestOn(TOMORROW);
+
+      const response = await put(VENDOR, [{ date: FAR_DATE, status: 'blocked' }]);
+
+      expect(response.statusCode).toBe(200);
+      expect(
+        (response.json() as { date: string; status: string }[]).map(({ date, status }) => ({
+          date,
+          status,
+        })),
+      ).toEqual([
+        { date: TOMORROW, status: 'pending' },
+        { date: FAR_DATE, status: 'blocked' },
+      ]);
+    });
+
+    /*
+     * Expiry is lazy and is applied when the *request* is read; this read never
+     * does that. Without its own deadline a request the customer gave up on a
+     * week ago holds the cell at `Pending request` — and `pending` is locked, so
+     * the vendor cannot free or block their own Saturday.
+     */
+    it('drops a request that has run past its expiry', async () => {
+      const requestId = await requestOn(TOMORROW);
+
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: addDays(NOW, -7) })
+        .where(eq(bookingRequests.id, requestId));
+
+      expect(await calendar()).toEqual([]);
     });
   });
 

@@ -637,14 +637,23 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     reviewCount: z.int().min(0),
   }),
   /**
-   * Who sent it, as the vendor may see them before accepting: a first name and
-   * a last initial, never the full name. The same rule the tiered customer
-   * profile applies — a vendor deciding whether to take the work does not yet
-   * need to be able to identify the person.
+   * Who sent it. Before acceptance the vendor sees a first name and a last
+   * initial only — deciding whether to take the work does not require being
+   * able to identify the person. `CONTACT_DISCLOSING_BOOKING_REQUEST_STATUSES`
+   * owns where that line sits; past it the three contact fields carry a value
+   * instead of `null`, because a vendor who has committed to the date needs a
+   * way to reach the customer that does not depend on them opening the app.
+   *
+   * The fields are `nullable` rather than `optional` so the shape is the same
+   * on both sides of the line and a caller cannot mistake "not disclosed yet"
+   * for "the API forgot".
    */
   customer: z.object({
     firstName: trimmedString(MAX_NAME_LENGTH, 0),
     lastInitial: z.string().max(1),
+    lastName: trimmedString(MAX_NAME_LENGTH, 0).nullable(),
+    email: emailSchema.nullable(),
+    phone: phoneSchema.nullable(),
   }),
   /** `null` for a custom request, and for a package the vendor later deleted. */
   package: z

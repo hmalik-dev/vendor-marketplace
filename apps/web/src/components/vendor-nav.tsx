@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, Images, LayoutDashboard, Package, Store } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Images, LayoutDashboard, Package, Store } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +21,9 @@ const EDITOR_PATH = '/vendor/profile/edit';
 
 const ITEMS: readonly VendorNavItem[] = [
   { href: '/vendor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  // `16-vendor-dashboard.md` puts Bookings in the sidebar: accepting a request
+  // has to lead somewhere, and this is where the vendor's committed work lives.
+  { href: '/vendor/bookings', label: 'Bookings', icon: CalendarCheck },
   { href: '/vendor/profile/edit', label: 'Business profile', icon: Store },
   { href: '/vendor/packages', label: 'Packages', icon: Package },
   { href: '/vendor/portfolio', label: 'Portfolio', icon: Images },

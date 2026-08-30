@@ -297,21 +297,63 @@ export async function findAvailabilityOn(
   return rows?.[0] ?? null;
 }
 
+/** Every request status this vendor holds on one date, live or settled. */
+export async function statusesOnDate(
+  db: AppDatabase,
+  vendorId: string,
+  date: string,
+): Promise<BookingRequestStatus[]> {
+  const rows = await db
+    .select({ status: bookingRequests.status })
+    .from(bookingRequests)
+    .where(and(eq(bookingRequests.vendorId, vendorId), eq(bookingRequests.eventDate, date)));
+
+  return rows.map((row) => row.status);
+}
+
 /**
- * Holds the date while the accepted request waits for payment.
+ * Marks the date `booked`, or clears the row the request lifecycle wrote.
  *
- * `pending` is the request lifecycle's own status — `available` and `blocked`
- * are the vendor's to set, `booked` belongs to #10 — so an accept never
- * overwrites a `booked` row it did not create.
+ * `booked` is the only status the lifecycle stores: `available` and `blocked`
+ * are the vendor's own, and a live request stores nothing at all (see
+ * `syncHeldDate`). An accept does overwrite a `blocked` row, because it is an
+ * explicit commitment the vendor has just made and it outranks a stale block
+ * of their own.
+ *
+ * Clearing is narrow in two directions. It leaves `blocked` alone, so a vendor
+ * who held a day for themselves keeps it after declining the request that
+ * asked for it. And it refuses to delete a date backed by a real `bookings`
+ * row: #10 turns payment into one of those, and a later request on the same
+ * date being declined must not quietly free a date somebody has paid for.
  */
-export async function holdDate(db: AppDatabase, vendorId: string, date: string): Promise<void> {
+export async function setHeldDate(
+  db: AppDatabase,
+  vendorId: string,
+  date: string,
+  status: 'booked' | null,
+): Promise<void> {
+  if (status === null) {
+    await db.delete(availability).where(
+      and(
+        eq(availability.vendorId, vendorId),
+        eq(availability.date, date),
+        inArray(availability.status, ['booked', 'pending']),
+        sql`not exists (
+          select 1 from ${bookings}
+          where ${bookings.vendorId} = ${vendorId}
+            and ${bookings.eventDate} = ${date}
+        )`,
+      ),
+    );
+    return;
+  }
+
   await db
     .insert(availability)
-    .values({ vendorId, date, status: 'pending' })
+    .values({ vendorId, date, status })
     .onConflictDoUpdate({
       target: [availability.vendorId, availability.date],
-      set: { status: 'pending' },
-      where: sql`${availability.status} <> 'booked'`,
+      set: { status },
     });
 }
 
@@ -383,19 +425,41 @@ export async function findBookings(
     .orderBy(desc(bookings.eventDate));
 }
 
-/** The sender's name, for the vendor's request queue. */
+/**
+ * The sender's identity, for the vendor's request queue.
+ *
+ * Selects the contact columns as well as the name, because the caller cannot
+ * know whether to disclose them until it has the request's status beside the
+ * row. Narrowing happens in `toDetail`, which is the single place that reads
+ * `disclosesCustomerContact` — projecting conditionally here would put the
+ * privacy rule in two places.
+ */
 export async function findCustomerNames(
   db: AppDatabase,
   customerIds: readonly string[],
-): Promise<{ id: string; firstName: string; lastName: string }[]> {
+): Promise<CustomerIdentityRow[]> {
   if (customerIds.length === 0) {
     return [];
   }
 
   return db
-    .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+    .select({
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      email: users.email,
+      phone: users.phone,
+    })
     .from(users)
     .where(inArray(users.id, [...customerIds]));
+}
+
+export interface CustomerIdentityRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
 }
 
 /** Whether a user row exists — guards a notification insert against a stale id. */

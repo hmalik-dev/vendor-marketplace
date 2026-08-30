@@ -292,6 +292,47 @@ the description in the same change** — leaving the description behind an
 enabled control would be worse than never having added it.
 
 ---
+
+### D11: Acceptance Is What Discloses the Customer's Contact Details — *2026-08-30*
+
+**Decision.** A vendor sees a customer's **first name and last initial** while deciding
+whether to take the work, and their **full name, email and phone** from the moment they
+accept. Nothing in between, and nothing after a decline.
+
+**Why it needed deciding.** #211 found the vendor never learns who the customer is, and
+#307 required the rule be "explicit, not an accident". The old behaviour was not a rule at
+all — `toDetail` truncated the surname unconditionally and a code comment asserted that
+"the full name arrives with acceptance", which nothing implemented. Three layers enforced
+the truncation (the DAO projection, the mapper, the Zod response schema) and they agreed
+only by coincidence.
+
+**Where it lives.** `CONTACT_DISCLOSING_BOOKING_REQUEST_STATUSES` in
+`packages/shared/src/constants`, read in exactly one place — `toDetail`. Adding a status
+to that array is the whole of changing the policy.
+
+**The reasoning.**
+
+1. **Before acceptance the vendor is judging the work, not the person.** A name and an
+   initial are enough to write a reply that does not read like a form letter. Contact
+   details at this stage would let anyone with a vendor profile harvest the address book
+   by sending nothing and declining everything.
+2. **Acceptance is a commitment to turn up.** From that point the vendor has an obligation
+   to a specific person on a specific date, and needs a channel that does not depend on
+   the customer opening the app. Messaging alone is not that channel — it fails exactly
+   when it matters, the week of the event.
+3. **`declined`, `cancelled` and `expired` disclose nothing.** A vendor who turned the
+   work down has no reason to retain the details, and a lapsed request never created the
+   obligation that justified them. The fields go back to `null` rather than persisting.
+
+**What this is not.** It is not a GDPR posture — the Constraints table sets compliance at
+"minimal viable". It is the smallest rule that makes an accepted booking usable without
+handing out contact details for free.
+
+**Consequence for #10.** Payment turns an accepted request into a `bookings` row. That
+must not narrow the disclosure back — a paid booking is at least as committed as an
+accepted one.
+
+---
 ---
 
 ## Constraints (Settled)

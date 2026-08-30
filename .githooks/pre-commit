@@ -1,11 +1,22 @@
 #!/usr/bin/env sh
 #
-# Blocks a commit that would put a credential in the repository. Scans the
-# staged blobs, not the working tree, so editing a file after `git add` cannot
-# sneak a value past.
+# Two gates, both of which CI also runs — the point is to fail here, in five
+# seconds, rather than eight minutes into a pipeline.
+#
+# 1. Blocks a commit that would put a credential in the repository. Scans the
+#    staged blobs, not the working tree, so editing a file after `git add`
+#    cannot sneak a value past.
+# 2. Blocks a commit that is not Prettier-formatted. `pnpm format:check` is the
+#    FIRST thing the required CI check runs and it covers `.md` and `.json` as
+#    well as source, so a docs-only commit that never touches TypeScript could
+#    still redden main — which is exactly what happened on 2026-08-30, when one
+#    italic written `*any*` instead of `_any_` in CLAUDE.md took the whole
+#    pipeline down and blocked two lanes behind it.
 #
 # Installed by the root `prepare` script, which points `core.hooksPath` here on
-# every `pnpm install`. To run it by hand: `pnpm secrets:scan`.
+# every `pnpm install`. To run these by hand: `pnpm secrets:scan` and
+# `pnpm format:check`; `pnpm format` fixes the second.
 set -e
 
-exec pnpm --silent secrets:scan
+pnpm --silent secrets:scan
+exec pnpm --silent format:check

@@ -5,6 +5,7 @@ import {
   type Availability,
   type AvailabilityBulkUpdateInput,
 } from '@vendor-marketplace/shared';
+import { randomUUID } from 'node:crypto';
 import type { AvailabilityRow, NewAvailabilityRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict } from '../../lib/errors.js';
@@ -13,6 +14,7 @@ import {
   applyAvailability,
   findAvailabilityInRange,
   findAvailabilityOnDates,
+  findLiveRequestDates,
 } from './availability.dao.js';
 
 export function toAvailability(row: AvailabilityRow): Availability {
@@ -33,16 +35,64 @@ export function availabilityWindow(now: Date = new Date()): { from: string; to: 
   return { from, to: toDateString(end) };
 }
 
+/**
+ * The vendor's own calendar, from the two sources it has.
+ *
+ * Stored rows carry what someone decided — `blocked` by the vendor, `booked` by
+ * their own acceptance. Live requests are overlaid here at read time as
+ * `pending`, because a request is not yet a commitment: storing it would drop
+ * the vendor out of every date-filtered search over a message they have not
+ * answered.
+ *
+ * The overlay never covers a stored row. A date the vendor blocked reads
+ * `blocked` even with a request sitting on it — that is the vendor's own
+ * decision and it outranks somebody else's hope — and an accepted date already
+ * reads `booked`.
+ *
+ * **Both** the GET and the PUT return through here, and that is the point of
+ * extracting it. When only the GET overlaid, blocking any single date returned
+ * a calendar with no overlay at all, and the client stores that response as the
+ * whole calendar — so one unrelated edit turned every pending cell on screen
+ * white and clickable until a reload.
+ */
+async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promise<Availability[]> {
+  const { from, to } = availabilityWindow(now);
+  const [rows, liveDates] = await Promise.all([
+    findAvailabilityInRange(db, vendorId, from, to),
+    findLiveRequestDates(db, vendorId, from, to, now),
+  ]);
+
+  const stored = new Set(rows.map((row) => row.date));
+
+  const pending: Availability[] = liveDates
+    .filter((date) => !stored.has(date))
+    .map((date) => ({
+      /*
+       * A derived row has no stored id to carry. The calendar keys on `date`
+       * and never sends one of these back — the bulk update only accepts
+       * vendor-settable statuses — so a fresh id satisfies the contract
+       * without inventing a reference to a row that does not exist.
+       */
+      id: randomUUID(),
+      vendorId,
+      date,
+      status: 'pending' as const,
+      note: null,
+    }));
+
+  return [...rows.map(toAvailability), ...pending].sort((left, right) =>
+    left.date.localeCompare(right.date),
+  );
+}
+
 export async function listOwnAvailability(
   db: AppDatabase,
   userId: string,
   now: Date = new Date(),
 ): Promise<Availability[]> {
   const vendor = await requireOwnVendorProfile(db, userId);
-  const { from, to } = availabilityWindow(now);
-  const rows = await findAvailabilityInRange(db, vendor.id, from, to);
 
-  return rows.map(toAvailability);
+  return readCalendar(db, vendor.id, now);
 }
 
 /**
@@ -110,8 +160,5 @@ export async function setOwnAvailability(
     await applyAvailability(db, vendor.id, clearedDates, blocked);
   }
 
-  const { from, to } = availabilityWindow(now);
-  const rows = await findAvailabilityInRange(db, vendor.id, from, to);
-
-  return rows.map(toAvailability);
+  return readCalendar(db, vendor.id, now);
 }

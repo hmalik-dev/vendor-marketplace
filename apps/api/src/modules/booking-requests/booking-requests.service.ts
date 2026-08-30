@@ -4,6 +4,7 @@ import {
   ERROR_CODES,
   EXPIRABLE_BOOKING_REQUEST_STATUSES,
   addDays,
+  disclosesCustomerContact,
   isUniversallyPastDate,
   type BookingRequestDetail,
   type BookingRequestStatus,
@@ -39,10 +40,12 @@ import {
   findVendorUserId,
   findCustomerNames,
   findVendorsByIds,
-  holdDate,
   insertNotification,
   insertRequest,
+  setHeldDate,
+  statusesOnDate,
 } from './booking-requests.dao.js';
+import type { CustomerIdentityRow } from './booking-requests.dao.js';
 
 /** The four things either party can do to a live request. */
 export type RequestAction = 'quote' | 'accept' | 'decline' | 'cancel';
@@ -119,39 +122,54 @@ function toPackageSummary(row: ServicePackageRow): NonNullable<BookingRequestDet
   };
 }
 
-interface CustomerName {
-  firstName: string;
-  lastName: string;
-}
+/** The empty identity, for a customer row that has since been deleted. */
+const NO_CUSTOMER: CustomerIdentityRow = {
+  id: '',
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: null,
+};
 
 function toDetail(
   row: BookingRequestRow,
   vendor: VendorProfileRow,
   servicePackage: ServicePackageRow | null,
-  customer: CustomerName,
+  customer: CustomerIdentityRow,
 ): BookingRequestDetail {
+  /*
+   * The one place the privacy line is drawn, so the three layers that enforce
+   * it cannot disagree. Before acceptance the vendor is judging whether to take
+   * the work, which does not require being able to identify the person; accept
+   * is a commitment to turn up, and the contact details come with it.
+   */
+  const disclosed = disclosesCustomerContact(row.status);
+
   return {
     ...row,
     eventStartTime: toClockTime(row.eventStartTime),
     vendor: toVendorSummary(vendor),
-    /*
-     * A first name and one initial. The vendor is judging whether to take the
-     * work, which does not require being able to identify the person — the
-     * full name arrives with acceptance, through the tiered customer profile.
-     */
     customer: {
       firstName: customer.firstName,
       lastInitial: customer.lastName.trim().slice(0, 1).toUpperCase(),
+      lastName: disclosed ? customer.lastName : null,
+      /*
+       * An empty string is what a user row carries before Clerk has supplied a
+       * name, and it is not an address — send `null` rather than fail the
+       * response schema on a row that is merely incomplete.
+       */
+      email: disclosed && customer.email !== '' ? customer.email : null,
+      phone: disclosed ? customer.phone : null,
     },
     package: servicePackage ? toPackageSummary(servicePackage) : null,
   };
 }
 
-/** One customer's name, or empty strings when the row has gone. */
-async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerName> {
+/** One customer's identity, or the empty one when the row has gone. */
+async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIdentityRow> {
   const [found] = await findCustomerNames(db, [customerId]);
 
-  return { firstName: found?.firstName ?? '', lastName: found?.lastName ?? '' };
+  return found ?? NO_CUSTOMER;
 }
 
 /**
@@ -176,6 +194,13 @@ async function ageIfExpired(
     // Something else moved it first; that decision stands.
     return (await findRequestById(db, row.id)) ?? row;
   }
+
+  /*
+   * A lapsed request stops holding the date. Without this the calendar keeps
+   * reading `pending` for a request nobody can act on any more, and the vendor
+   * loses a Saturday to a customer who went elsewhere a week ago.
+   */
+  await syncHeldDate(db, expired.vendorId, expired.eventDate);
 
   await notifyParty(db, expired, 'customer', 'request_expired', {
     title: 'Your request expired',
@@ -329,6 +354,11 @@ export async function createBookingRequest(
    * end in a decline. `blocked` is not: frame `22` explicitly lets the customer
    * send anyway, in gold rather than red, because a vendor who has held a day
    * for themselves may still say yes to the right event.
+   */
+  /*
+   * This is also why creation writes nothing to the calendar: a `booked` date
+   * is refused here, so by the time a request exists there is no accepted
+   * request on the date and nothing for a recompute to find.
    */
   const calendar = await findAvailabilityOn(db, vendor.id, input.eventDate);
   if (calendar?.status === 'booked') {
@@ -504,10 +534,12 @@ export async function listBookingRequests(
     }
 
     return [
-      toDetail(row, vendor, row.packageId ? (packageById.get(row.packageId) ?? null) : null, {
-        firstName: nameById.get(row.customerId)?.firstName ?? '',
-        lastName: nameById.get(row.customerId)?.lastName ?? '',
-      }),
+      toDetail(
+        row,
+        vendor,
+        row.packageId ? (packageById.get(row.packageId) ?? null) : null,
+        nameById.get(row.customerId) ?? NO_CUSTOMER,
+      ),
     ];
   });
 }
@@ -558,9 +590,7 @@ export async function transitionRequest(
     throw invalidTransition(row.status, target);
   }
 
-  if (action === 'accept') {
-    await holdDate(db, updated.vendorId, updated.eventDate);
-  }
+  await syncHeldDate(db, updated.vendorId, updated.eventDate);
 
   await announce(db, updated, action, row.status, vendor.businessName, options.hub);
 
@@ -569,6 +599,35 @@ export async function transitionRequest(
     : null;
 
   return toDetail(updated, vendor, servicePackage, await nameOf(db, updated.customerId));
+}
+
+/**
+ * Recomputes the vendor's calendar cell for one date from the requests that
+ * actually exist on it.
+ *
+ * Derived rather than patched, because the cell has to survive edges a
+ * per-action write cannot: two live requests on one date where the vendor
+ * declines only one, an accept landing on a date a rival request already held,
+ * and a request ageing out on read. Recomputing is idempotent, so calling it
+ * after every write costs one indexed read and can never leave the stored
+ * calendar disagreeing with the queue.
+ *
+ * `#212` fixed the mapping: accepted is **`booked`**, because acceptance is the
+ * commitment — payment turns it into a `bookings` row in #10, but the vendor
+ * has already promised to turn up. Before this, accept wrote `pending`, so the
+ * cell read one state below the truth and the `Booked` counter stayed at zero.
+ *
+ * A *live* request deliberately writes **nothing**. Search excludes any vendor
+ * whose row for the date is not `available`, so persisting `pending` here would
+ * take a vendor out of the market for a week on a request they have not
+ * answered and never agreed to. The vendor's own calendar still shows those
+ * dates as `Pending request` — `listOwnAvailability` overlays them at read
+ * time, which is the one place that view is wanted.
+ */
+async function syncHeldDate(db: AppDatabase, vendorId: string, date: string): Promise<void> {
+  const statuses = await statusesOnDate(db, vendorId, date);
+
+  await setHeldDate(db, vendorId, date, statuses.includes('accepted') ? 'booked' : null);
 }
 
 const TARGET_STATUS: Record<RequestAction, BookingRequestStatus> = {
