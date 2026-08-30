@@ -615,6 +615,15 @@ export const MONEY_COPY = {
    * Vendor-facing: the mechanism, never the fee. Anything naming a rate, a
    * commission or a fee on a vendor surface is a Post-MVP leak — see the guard
    * in `no-vendor-fee-language.test.ts`.
+   *
+   * **This is an interim string and #300 owns replacing it.** Frame `08` draws
+   * this line as `Next payout Jun 18` — a real payout date, not a statement
+   * about the arrangement — so the shipped copy was wrong twice over: a
+   * Post-MVP fee claim *and* off-frame. Removing the claim is #308's to do;
+   * stating the date is not, because there is no payout schedule to read one
+   * from until #10, and a date the platform invents is exactly what the
+   * no-invented-numbers rule forbids. So this says something true and
+   * dateless in the meantime, and frame `08`'s Text axis stays open.
    */
   vendorPayout: 'Paid out after each event',
 } as const;
