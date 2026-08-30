@@ -16,7 +16,7 @@ import { StockPhoto } from '@/components/ui/stock-photo';
 import { VendorCard } from '@/components/vendors/vendor-card';
 import { siteOrigin } from '@/config/env';
 import { redirectVendorToDashboard } from '@/lib/current-user';
-import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
+import { getCategories, getFeaturedVendors, getVendorCities } from '@/lib/vendor-data';
 
 /**
  * The one market that is live. It is a fact about the business rather than a
@@ -178,7 +178,11 @@ function landingCategories(categories: readonly Category[]): Category[] {
 export default async function HomePage(): Promise<React.ReactElement> {
   await redirectVendorToDashboard();
 
-  const [categories, featuredVendors] = await Promise.all([getCategories(), getFeaturedVendors()]);
+  const [categories, cities, featuredVendors] = await Promise.all([
+    getCategories(),
+    getVendorCities(),
+    getFeaturedVendors(),
+  ]);
   const featured = landingCategories(categories);
 
   return (
@@ -295,7 +299,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
             </div>
 
             <div className="md:col-span-2 md:row-start-2 lg:col-span-1 lg:col-start-1 lg:pr-5.5 min-[90rem]:pr-8.5">
-              <HeroSearch categories={categories} />
+              <HeroSearch categories={categories} cities={cities} />
 
               {/*
                 The shortcut past the bar for a visitor who already knows what

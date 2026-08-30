@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import {
   categories,
   portfolioItems,
@@ -155,4 +155,51 @@ export async function findPortfolio(db: AppDatabase, vendorId: string) {
     .from(portfolioItems)
     .where(eq(portfolioItems.vendorId, vendorId))
     .orderBy(asc(portfolioItems.displayOrder), asc(portfolioItems.createdAt));
+}
+
+/**
+ * Every city a customer can actually search, with how many vendors are in it.
+ *
+ * Derived from the published profiles themselves rather than from a list of US
+ * cities: a picker offering somewhere with nobody in it is a picker that
+ * guarantees an empty result, and the point of making City a select at all is
+ * that it can only ask questions the platform can answer — the same rule the
+ * vendor-type field already follows.
+ *
+ * City **and** state, always. "Springfield" names a place in thirty-odd states,
+ * and a customer who picks the wrong Portland has been misled by the control
+ * rather than by their own typing. Rows missing either half are dropped: half a
+ * location cannot be matched against, and it is not a place a customer could
+ * mean on purpose.
+ */
+export async function findVendorCities(db: AppDatabase) {
+  const rows = await db
+    .select({
+      city: vendorProfiles.city,
+      state: vendorProfiles.state,
+      vendorCount: sql<number>`count(*)::int`,
+    })
+    .from(vendorProfiles)
+    .where(
+      and(
+        VISIBLE,
+        isNotNull(vendorProfiles.city),
+        isNotNull(vendorProfiles.state),
+        ne(vendorProfiles.city, ''),
+        ne(vendorProfiles.state, ''),
+      ),
+    )
+    .groupBy(vendorProfiles.city, vendorProfiles.state)
+    .orderBy(asc(vendorProfiles.city), asc(vendorProfiles.state));
+
+  /*
+   * The `NOT NULL` guard is in the query; this narrows the *type*, which
+   * Drizzle cannot do from a `where` clause. A cast would have been shorter and
+   * would also have been a lie the next reader had to check.
+   */
+  return rows.flatMap((row) =>
+    row.city === null || row.state === null
+      ? []
+      : [{ city: row.city, state: row.state, vendorCount: row.vendorCount }],
+  );
 }

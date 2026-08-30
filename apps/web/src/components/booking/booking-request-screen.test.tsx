@@ -69,6 +69,16 @@ function renderScreen(
   );
 }
 
+/**
+ * Picks the occasion. A dropdown now, not a native `<select>` (#167), so the
+ * choice is two clicks rather than a `selectOptions` on an element the platform
+ * owned.
+ */
+async function chooseEventType(label = 'Wedding'): Promise<void> {
+  await userEvent.click(screen.getByLabelText('Event type'));
+  await userEvent.click(await screen.findByRole('option', { name: label }));
+}
+
 /** The frame's own two-column pairing: only the textareas get a row to themselves. */
 describe('field layout', () => {
   it('pairs every field except the two textareas', () => {
@@ -98,7 +108,7 @@ describe('the date question', () => {
     expect(screen.getByText(/has this date blocked/)).toBeDefined();
     expect(screen.queryByText(/fields need fixing/)).toBeNull();
 
-    await userEvent.selectOptions(screen.getByLabelText('Event type'), 'wedding');
+    await chooseEventType();
     await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
 
     expect(screen.getByRole('heading', { name: 'Check this over before it goes' })).toBeDefined();
@@ -157,7 +167,7 @@ describe('validation', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
     expect(screen.getByText(/needs fixing/)).toBeDefined();
 
-    await userEvent.selectOptions(screen.getByLabelText('Event type'), 'wedding');
+    await chooseEventType();
 
     expect(screen.queryByText(/needs fixing/)).toBeNull();
   });
@@ -165,7 +175,7 @@ describe('validation', () => {
   it('names the vendor guest ceiling rather than saying the number is invalid', async () => {
     renderScreen();
 
-    await userEvent.selectOptions(screen.getByLabelText('Event type'), 'wedding');
+    await chooseEventType();
     await userEvent.type(screen.getByLabelText('Guest count'), '450');
     await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
 
@@ -200,7 +210,7 @@ describe('sending', () => {
     requestMock.mockResolvedValue({ id: '22222222-2222-4222-8222-222222222222' });
     renderScreen();
 
-    await userEvent.selectOptions(screen.getByLabelText('Event type'), 'wedding');
+    await chooseEventType();
     await userEvent.type(screen.getByLabelText('Venue or location'), 'Barr Mansion');
     await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
 
@@ -231,7 +241,7 @@ describe('sending', () => {
     requestMock.mockRejectedValue(new Error('offline'));
     renderScreen();
 
-    await userEvent.selectOptions(screen.getByLabelText('Event type'), 'wedding');
+    await chooseEventType();
     await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
     await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
 
@@ -293,7 +303,7 @@ describe('the request survives leaving the page', () => {
     requestMock.mockResolvedValue({ id: '33333333-3333-4333-8333-333333333333' });
     renderScreen();
 
-    await userEvent.selectOptions(screen.getByLabelText('Event type'), 'wedding');
+    await chooseEventType();
     await typeVenue('The Marfa barn');
     await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
     await userEvent.click(screen.getByRole('button', { name: 'Send request' }));

@@ -212,6 +212,17 @@
   --shadow-lg: 0 8px 28px rgba(35, 32, 28, 0.1);
   --shadow-xl: 0 12px 40px rgba(35, 40, 38, 0.2);
   --shadow-hover: 0 8px 24px rgba(35, 32, 28, 0.12);
+  /*
+   * The dropdown pair, from section 28 of the frames (`42-dropdowns.md`).
+   *
+   * Neither is `--shadow-xl` — the panel is two pixels further out and four
+   * wider than it, and the sheet casts *upward*, which no existing token does.
+   * Minted rather than approximated because a dropdown floats over the page's
+   * own cards, and matching one of those cards' shadows is what makes a panel
+   * read as part of the page rather than above it.
+   */
+  --shadow-dropdown: 0 14px 44px rgba(35, 40, 38, 0.2);
+  --shadow-sheet: 0 -10px 40px rgba(35, 40, 38, 0.24);
 
   /* Chrome the full-height app shells are measured against. */
   --header-height: 4rem; /* 64px at 1440; 56px below it — see the override */

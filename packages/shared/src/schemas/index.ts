@@ -1444,6 +1444,24 @@ export const categoryFacetSchema = z.object({
 });
 export type CategoryFacet = z.infer<typeof categoryFacetSchema>;
 
+/**
+ * One place a customer can actually search, and how many vendors are in it.
+ *
+ * City and state travel **together**, always. "Springfield" names a place in
+ * thirty-odd states and "Portland" names two people would fly between; a city
+ * field that took either on its own could not tell a customer which one they
+ * had asked for. The pair is also the unit the vendor profile stores and the
+ * search filters on, so nothing has to be re-joined to use it.
+ */
+export const vendorCitySchema = z.object({
+  city: z.string().max(MAX_NAME_LENGTH),
+  state: z.string().max(MAX_NAME_LENGTH),
+  /** Published vendors there — a query result, never a platform statistic. */
+  vendorCount: z.int().min(1),
+});
+export type VendorCity = z.infer<typeof vendorCitySchema>;
+export const vendorCityListSchema = z.array(vendorCitySchema);
+
 export const vendorSearchResultSchema = z.object({
   items: z.array(vendorCardSchema),
   total: z.int().min(0),
