@@ -395,7 +395,13 @@ async function ensureBookingRequest(
   },
 ): Promise<{ id: string; eventDate: string }> {
   const [existing] = await tx
-    .select({ id: bookingRequests.id, eventDate: bookingRequests.eventDate })
+    .select({
+      id: bookingRequests.id,
+      eventDate: bookingRequests.eventDate,
+      packageId: bookingRequests.packageId,
+      finalPriceCents: bookingRequests.finalPriceCents,
+      expiresAt: bookingRequests.expiresAt,
+    })
     .from(bookingRequests)
     .where(
       and(
@@ -407,7 +413,38 @@ async function ensureBookingRequest(
     .limit(1);
 
   if (existing) {
-    return existing;
+    /*
+     * Repair, don't just adopt.
+     *
+     * Reusing the row untouched leaves every database seeded before this
+     * fixture learned to lock a price showing "quote needed" and no countdown
+     * — for ever, because the early return means re-seeding never reaches the
+     * insert that would get it right. An already-seeded database is precisely
+     * one of the states this fixture has to survive.
+     *
+     * Only nulls are filled. A request that legitimately carries no package is
+     * left alone, and a price already locked is never overwritten.
+     */
+    const repair: { finalPriceCents?: number; expiresAt?: Date } = {};
+
+    if (existing.finalPriceCents === null && existing.packageId !== null) {
+      repair.finalPriceCents = input.servicePackage.priceCents;
+    }
+
+    if (existing.expiresAt === null) {
+      const expires = new Date(input.now);
+      expires.setDate(expires.getDate() + BOOKING_REQUEST_EXPIRY_DAYS);
+      repair.expiresAt = expires;
+    }
+
+    if (Object.keys(repair).length > 0) {
+      await tx
+        .update(bookingRequests)
+        .set({ ...repair, updatedAt: sql`now()` })
+        .where(eq(bookingRequests.id, existing.id));
+    }
+
+    return { id: existing.id, eventDate: existing.eventDate };
   }
 
   const wanted = new Date(input.now);

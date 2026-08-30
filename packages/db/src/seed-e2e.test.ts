@@ -256,6 +256,53 @@ describe('seedE2eFixtures', () => {
   });
 
   /*
+   * The state every database seeded before this fixture learned to lock a price
+   * is already in. Adopting the row untouched leaves the dashboard showing
+   * "quote needed" and no countdown for ever, because the early return means
+   * re-seeding never reaches the insert that would get it right.
+   */
+  it('repairs a live request left without a price or an expiry', async () => {
+    const first = await seedE2eFixtures(database.db, INPUT);
+
+    // Exactly what the previous fixture wrote.
+    await database.db
+      .update(bookingRequests)
+      .set({ finalPriceCents: null, expiresAt: null })
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    const second = await seedE2eFixtures(database.db, INPUT);
+
+    expect(second.bookingRequestId).toBe(first.bookingRequestId);
+
+    const [repaired] = await database.db
+      .select()
+      .from(bookingRequests)
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    expect(repaired?.finalPriceCents).toBe(145_000);
+    expect(repaired?.expiresAt).toBeInstanceOf(Date);
+  });
+
+  /** A price already locked is never overwritten — repair fills nulls only. */
+  it('leaves a price that is already locked alone', async () => {
+    const first = await seedE2eFixtures(database.db, INPUT);
+
+    await database.db
+      .update(bookingRequests)
+      .set({ finalPriceCents: 99_000 })
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    await seedE2eFixtures(database.db, INPUT);
+
+    const [untouched] = await database.db
+      .select()
+      .from(bookingRequests)
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    expect(untouched?.finalPriceCents).toBe(99_000);
+  });
+
+  /*
    * After an accept marks the date `booked`, a re-seed landing on that same
    * date would create a request that can never be accepted — 409 from
    * `prepareTransition`. The fixture has to survive its own previous run.
