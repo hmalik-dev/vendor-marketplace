@@ -74,7 +74,18 @@ export async function startPayoutOnboarding(
      * second — is what strands an account nobody can look up again.
      */
     const claimed = await claimStripeAccountId(deps.db, vendor.id, created.accountId);
-    accountId = claimed?.stripeAccountId ?? created.accountId;
+
+    /*
+     * `null` means the row is gone — soft-deleted during the Stripe round trip.
+     * Falling back to the account just created would mint a link against an
+     * account no row names, which is exactly the stranding the claim exists to
+     * prevent, so this refuses instead.
+     */
+    if (!claimed?.stripeAccountId) {
+      throw notFound('You have not created a vendor profile yet');
+    }
+
+    accountId = claimed.stripeAccountId;
   }
 
   return deps.stripe.createOnboardingLink({

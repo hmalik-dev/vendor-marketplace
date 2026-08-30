@@ -15,13 +15,24 @@ const webhookResponseSchema = z.object({
 /**
  * Accounts v2 emits *thin* events: the notification carries the event type and
  * the id of the account it concerns, and nothing else. That shape is what makes
- * the prefix test below the right predicate rather than a lazy one — every
- * `v2.core.account…` type means "something about this account changed", the
- * handler answers all of them by re-reading the account, and enumerating the
- * subset that happens to matter today would silently drop a type Stripe adds
- * tomorrow.
+ * a prefix test the right predicate rather than a lazy one — every event about
+ * an account means "something about this account changed", the handler answers
+ * all of them by re-reading the account, and enumerating the subset that
+ * matters today would silently drop a type Stripe adds tomorrow.
+ *
+ * The two forms are `v2.core.account.updated` and
+ * `v2.core.account[configuration.recipient].capability_status_updated`. Both
+ * separators are matched, and a bare `v2.core.account` prefix is deliberately
+ * **not**: it would also catch `v2.core.account_person.*`, whose
+ * `related_object` is a person rather than an account, so every one of those
+ * would look up a `person_…` id, find no vendor and log `ignored` — a lookup
+ * that was never going to succeed, reported as though it might have.
  */
-const ACCOUNT_EVENT_PREFIX = 'v2.core.account';
+const ACCOUNT_EVENT_PREFIXES = ['v2.core.account.', 'v2.core.account['] as const;
+
+function isAccountEvent(type: string): boolean {
+  return ACCOUNT_EVENT_PREFIXES.some((prefix) => type.startsWith(prefix));
+}
 
 export const stripeWebhookRoutes: FastifyPluginAsyncZod = async (app) => {
   keepRawJsonBody(app);
@@ -56,7 +67,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       const outcome =
-        event.type.startsWith(ACCOUNT_EVENT_PREFIX) && event.accountId
+        isAccountEvent(event.type) && event.accountId
           ? await applyAccountStatusChange({ db: app.db, stripe: app.stripe }, event.accountId)
           : 'ignored';
 

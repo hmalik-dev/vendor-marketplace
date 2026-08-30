@@ -184,6 +184,36 @@ describe('POST /webhooks/stripe', () => {
     expect(await readOnboarded()).toBe(false);
   });
 
+  /*
+   * `v2.core.account_person.updated` shares the first sixteen characters with
+   * a real account event, but its related object is a person — looking a
+   * `person_…` id up as an account was never going to find a vendor.
+   */
+  it('ignores a person event that merely starts like an account event', async () => {
+    const accountId = await seedOnboardingVendor();
+    harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
+    harness.stripe.nextEvent = { type: 'v2.core.account_person.updated', accountId };
+
+    const response = await post();
+
+    expect(response.json()).toEqual({ received: true, outcome: 'ignored' });
+    expect(await readOnboarded()).toBe(false);
+  });
+
+  it('answers the bracketed capability event, not just the dotted one', async () => {
+    const accountId = await seedOnboardingVendor();
+    harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
+    harness.stripe.nextEvent = {
+      type: 'v2.core.account[configuration.recipient].capability_status_updated',
+      accountId,
+    };
+
+    const response = await post();
+
+    expect(response.json()).toEqual({ received: true, outcome: 'onboarded' });
+    expect(await readOnboarded()).toBe(true);
+  });
+
   it('ignores an event that is not about an account', async () => {
     const accountId = await seedOnboardingVendor();
     harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
