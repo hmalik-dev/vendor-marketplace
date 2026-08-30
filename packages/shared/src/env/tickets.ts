@@ -39,7 +39,15 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   11: ['auth', 'email'],
   12: ['auth'],
   13: ['auth'], // RETIRED — merged into #8 (Messaging + Notification Center)
-  14: [...CAPABILITIES],
+  /*
+   * Narrowed from `all` on 2026-08-30. The demo seed reaches no external
+   * service at all: every identity is a local row under the `seed_demo_`
+   * prefix and the Stripe ids are demo strings no API is asked about. It was
+   * gated on a placeholder SENTRY_DSN purely because the row said `all`,
+   * which deferred a ticket that needed nothing. The Playwright suites are
+   * #336 and carry their own keys.
+   */
+  14: [],
   15: ['auth', 'sentry'],
   16: ['auth', 'storage'],
   17: [],
