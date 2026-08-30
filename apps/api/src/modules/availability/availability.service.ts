@@ -22,12 +22,23 @@ export function toAvailability(row: AvailabilityRow): Availability {
 }
 
 /**
- * The window the calendar covers: today through `AVAILABILITY_MONTHS_AHEAD`
- * months out. Built by month arithmetic on the UTC components rather than by
- * adding days, so it lands on the same day-of-month regardless of month length.
+ * The window the calendar covers: the **first of the current month** through
+ * `AVAILABILITY_MONTHS_AHEAD` months out. Built by month arithmetic on the UTC
+ * components rather than by adding days, so it lands on the same day-of-month
+ * regardless of month length.
+ *
+ * It starts at the month rather than at today because the calendar renders
+ * whole months, and the days already behind us in this one are not blank: a
+ * `booked` date that has passed is a **completed event**, and the frame keeps
+ * it on screen rather than letting delivered work vanish. Starting at today
+ * put those cells outside the read, so `completed` could never appear and its
+ * counter could only ever read zero.
+ *
+ * Only the read widens. `setOwnAvailability` still refuses to write a past
+ * date, and that guard is `isPastDate` against today, not this floor.
  */
 export function availabilityWindow(now: Date = new Date()): { from: string; to: string } {
-  const from = toDateString(now);
+  const from = toDateString(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
   const end = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + AVAILABILITY_MONTHS_AHEAD, now.getUTCDate()),
   );
@@ -80,9 +91,28 @@ async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promi
       note: null,
     }));
 
-  return [...rows.map(toAvailability), ...pending].sort((left, right) =>
+  return [...rows.map(toCalendarRow(toDateString(now))), ...pending].sort((left, right) =>
     left.date.localeCompare(right.date),
   );
+}
+
+/**
+ * A stored row as the calendar reads it, with `completed` derived.
+ *
+ * A `booked` date the vendor has already worked is a **delivered event**, and
+ * the frame keeps it on the calendar rather than letting finished work vanish.
+ * That is derived from the date rather than stored, because storing it needs a
+ * writer that runs at midnight — and until it ran, the status would be lying.
+ *
+ * Derived here rather than in the component so the `Completed` counter is a
+ * query result and not a number the UI invented. Only `booked` becomes
+ * `completed`: a past date the vendor merely blocked was never work.
+ */
+function toCalendarRow(today: string): (row: AvailabilityRow) => Availability {
+  return (row) =>
+    row.status === 'booked' && row.date < today
+      ? { ...toAvailability(row), status: 'completed' as const }
+      : toAvailability(row);
 }
 
 export async function listOwnAvailability(

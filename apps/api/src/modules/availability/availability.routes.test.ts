@@ -304,6 +304,118 @@ describe('/vendor/availability', () => {
     });
   });
 
+  /**
+   * `completed` is derived from `booked` plus the date, never stored — a booked
+   * day behind us is a delivered event, and the frame keeps it on the calendar
+   * rather than letting finished work vanish. Storing it would need a writer
+   * that runs at midnight, and until it ran the status would be lying.
+   *
+   * Its own harness on a **pinned mid-month clock**. The read window starts at
+   * the first of the current month, so on the 1st there is no past day inside
+   * it — correct behaviour, and a real-clock test would fail twelve days a year
+   * on an assertion that has nothing to do with month boundaries.
+   */
+  describe('a booked date that has passed', () => {
+    const PINNED = new Date('2026-06-15T12:00:00.000Z');
+    const PINNED_YESTERDAY = '2026-06-14';
+    const PINNED_TOMORROW = '2026-06-16';
+
+    let derived: TestHarness;
+    // Its own PGlite database, so it needs its own category id.
+    let derivedCategoryId: string;
+
+    beforeAll(async () => {
+      derived = await createTestHarness({ clock: () => PINNED });
+      derived.clerkUsers.set(VENDOR, {
+        clerkUserId: VENDOR,
+        email: 'grace@example.com',
+        firstName: 'Test',
+        lastName: 'User',
+        roleHint: 'vendor',
+        avatarUrl: null,
+      });
+
+      const rows = await derived.database.db
+        .select({ id: categories.id })
+        .from(categories)
+        .where(eq(categories.slug, 'photography'))
+        .limit(1);
+      derivedCategoryId = rows[0]!.id;
+    });
+
+    afterEach(async () => {
+      await derived.database.db.delete(vendorProfiles);
+      await derived.database.db.delete(users);
+    });
+
+    afterAll(async () => {
+      await derived.close();
+    });
+
+    async function profileFor(): Promise<string> {
+      const response = await derived.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: {
+          businessName: 'Sunlit Studio',
+          categoryIds: [derivedCategoryId],
+          city: 'Austin',
+          state: 'TX',
+          bio: 'Documentary wedding photography.',
+        },
+      });
+      expect(response.statusCode).toBe(201);
+      return response.json().id;
+    }
+
+    async function read(): Promise<{ date: string; status: string }[]> {
+      const response = await derived.app.inject({
+        method: 'GET',
+        url: '/vendor/availability',
+        headers: bearer(VENDOR),
+      });
+      expect(response.statusCode).toBe(200);
+      return (response.json() as { date: string; status: string }[]).map(({ date, status }) => ({
+        date,
+        status,
+      }));
+    }
+
+    it('reads as completed, while the stored row still says booked', async () => {
+      const vendorId = await profileFor();
+      await derived.database.db
+        .insert(availability)
+        .values({ vendorId, date: PINNED_YESTERDAY, status: 'booked' });
+
+      expect(await read()).toEqual([{ date: PINNED_YESTERDAY, status: 'completed' }]);
+
+      const stored = await derived.database.db
+        .select({ status: availability.status })
+        .from(availability);
+      expect(stored).toEqual([{ status: 'booked' }]);
+    });
+
+    it('leaves a future booked date booked', async () => {
+      const vendorId = await profileFor();
+      await derived.database.db
+        .insert(availability)
+        .values({ vendorId, date: PINNED_TOMORROW, status: 'booked' });
+
+      expect(await read()).toEqual([{ date: PINNED_TOMORROW, status: 'booked' }]);
+    });
+
+    /* A past date the vendor merely blocked was never work, so it is not one. */
+    it('does not turn a past blocked date into a completed one', async () => {
+      const vendorId = await profileFor();
+      await derived.database.db
+        .insert(availability)
+        .values({ vendorId, date: PINNED_YESTERDAY, status: 'blocked' });
+
+      expect(await read()).toEqual([{ date: PINNED_YESTERDAY, status: 'blocked' }]);
+    });
+  });
+
   describe('PUT', () => {
     it('blocks a future date and returns the whole calendar', async () => {
       await createProfile(VENDOR, 'Sunlit Studio');

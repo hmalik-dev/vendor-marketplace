@@ -6,9 +6,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { WireAvailability } from '@/lib/wire-schemas';
 
 const requestMock = vi.fn();
+const push = vi.fn();
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// A completed cell navigates to the bookings surface, so the calendar now
+// reaches for the router — which jsdom has no app-router context for.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
 const { AvailabilityCalendar, cellAppearance, formatRange } =
   await import('./availability-calendar');
@@ -78,28 +82,75 @@ describe('formatRange', () => {
  * appearance wins, and this is where that is decided.
  */
 describe('cellAppearance', () => {
+  /*
+   * #279. `toContain` on a class string is not a safe assertion: `bg-clay-400`
+   * is a substring of `bg-clay-400/30`, and `bg-clay-50` is a substring of
+   * `bg-clay-500` — so a `not.toContain('bg-clay-50')` guard fails the moment
+   * an unrelated `bg-clay-500` appears. Every class assertion here is an exact
+   * token match against the split string.
+   */
+  const tokens = (classes: string): string[] => classes.split(/\s+/).filter(Boolean);
+
   it('lets the selecting fill beat whatever the date currently is', () => {
     for (const status of ['available', 'blocked', 'booked', 'pending'] as const) {
-      const classes = cellAppearance(status, { isPast: false, isSelected: true });
+      const classes = tokens(cellAppearance(status, { isPast: false, isSelected: true }));
       expect(classes).toContain('bg-clay-400');
       expect(classes).toContain('text-stone-0');
-      expect(classes).not.toContain('hover:');
+      expect(classes.some((token) => token.startsWith('hover:'))).toBe(false);
     }
   });
 
   it('never emits a hover fill alongside the selecting fill', () => {
-    const selected = cellAppearance('available', { isPast: false, isSelected: true });
-    const idle = cellAppearance('available', { isPast: false, isSelected: false });
+    const selected = tokens(cellAppearance('available', { isPast: false, isSelected: true }));
+    const idle = tokens(cellAppearance('available', { isPast: false, isSelected: false }));
 
     expect(idle).toContain('hover:bg-clay-50');
+    expect(selected).not.toContain('hover:bg-clay-50');
     expect(selected).not.toContain('bg-clay-50');
   });
 
   it('puts a past date on the inert token and nothing else', () => {
-    const classes = cellAppearance('available', { isPast: true, isSelected: true });
+    const classes = tokens(cellAppearance('available', { isPast: true, isSelected: true }));
 
     expect(classes).toContain('text-stone-500');
+    expect(classes).toContain('bg-stone-50');
     expect(classes).not.toContain('bg-clay-400');
+  });
+
+  /*
+   * A completed event is *defined* by being in the past, so the plain past
+   * branch would erase the one state it exists to show. This is the only
+   * status that outranks `isPast`, and it is worth its own assertion because
+   * getting the branch order wrong looks like nothing at all — the cell simply
+   * renders inert and the check never draws.
+   */
+  it('keeps a completed date sage rather than inert, though it is always past', () => {
+    const classes = tokens(cellAppearance('completed', { isPast: true, isSelected: false }));
+
+    expect(classes).toContain('bg-sage-50');
+    expect(classes).toContain('text-sage-600');
+    expect(classes).not.toContain('text-stone-500');
+  });
+
+  /*
+   * The point of #166: the fill stopped being the signal. Every state has to
+   * be tellable apart with colour removed, so each one carries a shape — and a
+   * test on the fill alone would pass on the calendar this replaced.
+   */
+  it('gives every state a mark that is not its fill', () => {
+    const shapes: Record<string, (classes: string[]) => boolean> = {
+      // dashed border, drawn on the cell itself
+      pending: (c) => c.includes('border-dashed') && c.includes('border-gold-400'),
+      // hatch + strike, neither of which is a flat background colour
+      blocked: (c) => c.includes('line-through') && c.some((t) => t.startsWith('bg-[repeating')),
+    };
+
+    for (const [status, hasShape] of Object.entries(shapes)) {
+      const classes = tokens(
+        cellAppearance(status as 'pending' | 'blocked', { isPast: false, isSelected: false }),
+      );
+      expect(hasShape(classes), status).toBe(true);
+    }
   });
 });
 
@@ -144,9 +195,40 @@ describe('AvailabilityCalendar', () => {
     renderCalendar([entry('2026-06-15', 'booked'), entry('2026-06-17', 'pending')]);
 
     expect(cell('2026-06-15')).toHaveProperty('disabled', true);
-    expect(cell('2026-06-17')).toHaveProperty('disabled', true);
     // An ordinary open date stays editable.
     expect(cell('2026-06-18')).toHaveProperty('disabled', false);
+  });
+
+  /*
+   * Pending and completed are not vendor-settable either, but they are not
+   * inert: `19-availability.md` gives one "opens the request" and the other
+   * "opens the past booking". `disabled` would take them out of the tab order
+   * and their accessible names would never be announced — the promise dies for
+   * a keyboard user before it dies for anyone else.
+   */
+  it('keeps the two states that lead somewhere reachable', async () => {
+    render(
+      <AvailabilityCalendar
+        initialEntries={[entry('2026-06-17', 'pending'), entry('2026-06-02', 'completed')]}
+        today="2026-06-15"
+      />,
+    );
+
+    const pending = cell('2026-06-17');
+    const completed = cell('2026-06-02');
+
+    expect(pending).toHaveProperty('disabled', false);
+    expect(completed).toHaveProperty('disabled', false);
+
+    // Neither advertises a toggle it cannot perform.
+    expect(pending.getAttribute('aria-pressed')).toBeNull();
+    expect(completed.getAttribute('aria-pressed')).toBeNull();
+
+    await userEvent.click(completed);
+    expect(push).toHaveBeenCalledWith('/vendor/bookings');
+
+    await userEvent.click(pending);
+    expect(push).toHaveBeenCalledWith('/vendor/dashboard');
   });
 
   /*
@@ -299,14 +381,14 @@ describe('AvailabilityCalendar', () => {
     renderCalendar([entry('2026-06-15', 'booked'), entry('2026-06-16', 'blocked')]);
 
     expect(quarterCount('Blocked')).toBe('1 dates');
-    expect(quarterCount('Booked')).toBe('1 dates');
+    expect(quarterCount('Booked ahead')).toBe('1 dates');
 
     await user.click(cell('2026-06-18'));
     await user.click(screen.getByRole('button', { name: 'Block these' }));
 
     // Two blocked dates now; the booked count is untouched.
     expect(quarterCount('Blocked')).toBe('2 dates');
-    expect(quarterCount('Booked')).toBe('1 dates');
+    expect(quarterCount('Booked ahead')).toBe('1 dates');
   });
 
   /*
@@ -341,11 +423,16 @@ describe('AvailabilityCalendar', () => {
 
     expect(cell('2026-06-15').getAttribute('aria-label')).toBe('2026-06-15 — Booked — locked');
     expect(cell('2026-06-15')).toHaveProperty('disabled', true);
-    expect(quarterCount('Booked')).toBe('1 dates');
+    expect(quarterCount('Booked ahead')).toBe('1 dates');
 
-    // And the pending sibling is neither counted as booked nor editable.
+    /*
+     * And the pending sibling is not counted as booked, and not settable — but
+     * it IS reachable, because it opens the request. Not settable and not
+     * reachable are different things, and conflating them is what put its
+     * accessible name out of reach of a screen reader.
+     */
     expect(cell('2026-06-16').getAttribute('aria-label')).toBe('2026-06-16 — Pending request');
-    expect(cell('2026-06-16')).toHaveProperty('disabled', true);
+    expect(cell('2026-06-16').getAttribute('aria-pressed')).toBeNull();
   });
 
   it('counts only open future Saturdays, since that is the number that drives action', () => {
@@ -358,6 +445,83 @@ describe('AvailabilityCalendar', () => {
     expect(Number(openSaturdays.replace(/\D/g, ''))).toBeGreaterThan(0);
   });
 
+  /*
+   * #166's acceptance, asserted on the rendered cell rather than on the class
+   * string: every state must be tellable apart with colour removed. The dot and
+   * the check are their own elements; pending and blocked carry theirs as a
+   * border and a strike, which is why this reads two different ways.
+   */
+  it('draws a shape on every state that the frame gives one', () => {
+    renderCalendar([
+      entry('2026-06-15', 'booked'),
+      entry('2026-06-16', 'blocked'),
+      entry('2026-06-17', 'pending'),
+      entry('2026-06-02', 'completed'),
+    ]);
+
+    // Booked — a dot element under the numeral.
+    expect(cell('2026-06-15').querySelector('i')).not.toBeNull();
+    // Completed — a check element, and it survives being in the past.
+    expect(cell('2026-06-02').querySelector('i')).not.toBeNull();
+
+    // Pending — a dashed border on the cell itself, no child element.
+    const pending = cell('2026-06-17').className.split(/\s+/);
+    expect(pending).toContain('border-dashed');
+    expect(pending).toContain('border-gold-400');
+    expect(cell('2026-06-17').querySelector('i')).toBeNull();
+
+    // Blocked — a strike, and a hatch that is not a flat fill.
+    const blocked = cell('2026-06-16').className.split(/\s+/);
+    expect(blocked).toContain('line-through');
+    expect(blocked.some((token) => token.startsWith('bg-[repeating'))).toBe(true);
+  });
+
+  /*
+   * The completed state only means anything if the counter can reach a real
+   * number. It is derived from past booked dates by the API, so the rail row
+   * is a query result rather than a figure the UI invented.
+   */
+  it('counts completed events in the rail, separately from booked ones', () => {
+    renderCalendar([
+      entry('2026-06-02', 'completed'),
+      entry('2026-06-03', 'completed'),
+      entry('2026-06-15', 'booked'),
+    ]);
+
+    expect(quarterCount('Completed')).toBe('2 events');
+    expect(quarterCount('Booked ahead')).toBe('1 dates');
+  });
+
+  /*
+   * The read window starts at the first of the month so completed events can
+   * render, which also brings back elapsed blocked days — and those draw as
+   * ordinary past cells, with no hatch and no strike. Counting them said
+   * "Blocked 1 dates" with nothing hatched anywhere on screen.
+   */
+  it('counts only blocked dates that are still ahead', () => {
+    // Mid-month, so the visible grid actually holds a day already behind us —
+    // the suite's usual 2026-06-01 has none.
+    render(
+      <AvailabilityCalendar
+        initialEntries={[entry('2026-06-02', 'blocked'), entry('2026-06-20', 'blocked')]}
+        today="2026-06-15"
+      />,
+    );
+
+    expect(quarterCount('Blocked')).toBe('1 dates');
+
+    // And the elapsed one is drawn inert, which is why it is not counted.
+    const past = cell('2026-06-02').className.split(/\s+/);
+    expect(past).toContain('text-stone-500');
+    expect(past).not.toContain('line-through');
+  });
+
+  it('says event rather than events for a single completed date', () => {
+    renderCalendar([entry('2026-06-02', 'completed')]);
+
+    expect(quarterCount('Completed')).toBe('1 event');
+  });
+
   it('lists every state in the legend, including the ones it cannot yet produce', () => {
     renderCalendar();
 
@@ -367,10 +531,42 @@ describe('AvailabilityCalendar', () => {
       'Booked — locked',
       'Pending request',
       'Blocked by you',
-      'Selecting',
+      'Completed',
+      'Selecting now',
+      'Today',
     ]) {
-      expect(within(legend!).getByText(label)).toBeDefined();
+      expect(within(legend!).getByText(label, { exact: false })).toBeDefined();
     }
+  });
+
+  /*
+   * #263. A legend of flat colour chips is a key to the one signal this
+   * calendar stopped relying on — the redesign's whole point is that state is
+   * carried by a SHAPE, so the legend has to show the shape or it explains
+   * nothing. Each swatch is the cell it describes.
+   */
+  it('names the mark beside each state, not just its colour', () => {
+    renderCalendar();
+
+    const legend = screen.getByRole('heading', { name: 'Legend' }).parentElement;
+    const text = legend?.textContent ?? '';
+
+    expect(text).toContain('Available — no mark');
+    expect(text).toContain('Booked — locked · dot');
+    expect(text).toContain('Pending request · dashed');
+    expect(text).toContain('Blocked by you · hatch + strike');
+    expect(text).toContain('Completed · check');
+    expect(text).toContain('Today · ink outline');
+  });
+
+  it('draws the real mark in the legend swatch, not a flat chip', () => {
+    const { container } = renderCalendar();
+    const legend = screen.getByRole('heading', { name: 'Legend' }).parentElement;
+
+    // The dot and the check are the two marks that are their own element.
+    const marks = legend?.querySelectorAll('i') ?? [];
+    expect(marks.length).toBe(2);
+    expect(container).toBeDefined();
   });
 
   /*

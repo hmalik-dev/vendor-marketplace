@@ -1,5 +1,6 @@
 import {
   publicVendorProfileSchema,
+  toDateString,
   type Availability,
   type PublicVendorProfile,
 } from '@vendor-marketplace/shared';
@@ -78,7 +79,14 @@ export async function getPublicVendorAvailability(
     throw notFound('That vendor page is not available');
   }
 
-  const { from, to } = availabilityWindow(now);
+  /*
+   * Forward-only, deliberately. `availabilityWindow` starts at the first of
+   * the current month so the vendor's OWN calendar can show completed events;
+   * a customer has no use for the days already behind them, and every past row
+   * returned here would carry the vendor's private `note` — "Sarah & Tom,
+   * deposit paid" — over a public endpoint.
+   */
+  const { to } = availabilityWindow(now);
 
-  return findAvailabilityInRange(db, vendor.id, from, to);
+  return findAvailabilityInRange(db, vendor.id, toDateString(now), to);
 }
