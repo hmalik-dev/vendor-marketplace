@@ -10,6 +10,14 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApiClientError } from '@/lib/api-client';
@@ -82,6 +90,13 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * Decline is the one action on this row that cannot be taken back: the
+   * lifecycle refuses `declined -> accepted`, and the customer has already been
+   * told. The 409 that enforces that is correct and stays; the missing step was
+   * asking first, and saying plainly that there is no undo.
+   */
+  const [confirmingDecline, setConfirmingDecline] = useState(false);
 
   const isPackage = request.package !== null;
 
@@ -193,7 +208,7 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
             variant="ghost"
             size="sm"
             disabled={busy}
-            onClick={() => void act('decline')}
+            onClick={() => setConfirmingDecline(true)}
           >
             Decline
           </Button>
@@ -238,6 +253,58 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
           {error}
         </p>
       ) : null}
+
+      <Dialog
+        open={confirmingDecline}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmingDecline(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            {/*
+              Names the customer and the date, because the vendor is confirming
+              a specific commitment and the dashboard may be showing four rows
+              that look alike.
+            */}
+            <DialogTitle>Decline {customerName}&rsquo;s request?</DialogTitle>
+            <DialogDescription>
+              {declineConsequence(request)} This cannot be undone — declining is final, and you
+              will not be able to accept this request afterwards.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setConfirmingDecline(false)}
+            >
+              Keep it open
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                setConfirmingDecline(false);
+                void act('decline');
+              }}
+            >
+              Decline it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </li>
   );
+}
+
+/** "They asked about Sun Jun 14, and will be told the date is free again." */
+function declineConsequence(request: WireBookingRequest): string {
+  const date = ROW_DATE.format(new Date(`${request.eventDate}T00:00:00Z`)).replace(',', '');
+
+  return `They asked about ${date}, and will be told the date is free again.`;
 }

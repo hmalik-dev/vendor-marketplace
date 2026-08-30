@@ -153,6 +153,109 @@ describe('/vendor/availability', () => {
     });
   });
 
+  /**
+   * `#212`: a live request has to read `Pending request` on the vendor's own
+   * calendar, but must not be stored — search excludes any date row that is not
+   * `available`, so a stored one would take the vendor out of the market for a
+   * week over a request they have not answered.
+   */
+  describe('the requests overlaid on the calendar', () => {
+    /** A published vendor with one package, and a customer request on `date`. */
+    async function requestOn(date: string): Promise<string> {
+      const vendorId = await createProfile(VENDOR, 'Sunlit Studio');
+
+      const created = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/packages',
+        headers: bearer(VENDOR),
+        payload: {
+          name: 'Full day coverage',
+          description: 'Six hours of coverage with two photographers on site.',
+          priceCents: 145_000,
+          priceType: 'fixed',
+          inclusions: ['6 hours'],
+        },
+      });
+      expect(created.statusCode).toBe(201);
+
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ isPublished: true, stripeOnboarded: true })
+        .where(eq(vendorProfiles.id, vendorId));
+
+      const request = await harness.app.inject({
+        method: 'POST',
+        url: '/booking-requests',
+        headers: bearer(CUSTOMER),
+        payload: { vendorId, packageId: created.json().id, eventDate: date },
+      });
+      expect(request.statusCode).toBe(201);
+
+      return request.json().id;
+    }
+
+    async function calendar(): Promise<{ date: string; status: string }[]> {
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/vendor/availability',
+        headers: bearer(VENDOR),
+      });
+
+      expect(response.statusCode).toBe(200);
+      return (response.json() as { date: string; status: string }[]).map(({ date, status }) => ({
+        date,
+        status,
+      }));
+    }
+
+    it('shows a live request as pending without storing a row for it', async () => {
+      await requestOn(TOMORROW);
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'pending' }]);
+
+      const stored = await harness.database.db.select().from(availability);
+      expect(stored).toEqual([]);
+    });
+
+    it('shows the date booked, and stored, once the vendor accepts', async () => {
+      const requestId = await requestOn(TOMORROW);
+
+      const accepted = await harness.app.inject({
+        method: 'POST',
+        url: `/booking-requests/${requestId}/accept`,
+        headers: bearer(VENDOR),
+      });
+      expect(accepted.statusCode).toBe(200);
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'booked' }]);
+
+      const stored = await harness.database.db
+        .select({ status: availability.status })
+        .from(availability);
+      expect(stored).toEqual([{ status: 'booked' }]);
+    });
+
+    it('drops the overlay once the request is declined', async () => {
+      const requestId = await requestOn(TOMORROW);
+
+      await harness.app.inject({
+        method: 'POST',
+        url: `/booking-requests/${requestId}/decline`,
+        headers: bearer(VENDOR),
+      });
+
+      expect(await calendar()).toEqual([]);
+    });
+
+    /* The vendor's own decision outranks somebody else's hope for the date. */
+    it('keeps a date the vendor blocked reading blocked, not pending', async () => {
+      await requestOn(TOMORROW);
+      await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }]);
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'blocked' }]);
+    });
+  });
+
   describe('PUT', () => {
     it('blocks a future date and returns the whole calendar', async () => {
       await createProfile(VENDOR, 'Sunlit Studio');

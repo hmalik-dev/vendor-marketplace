@@ -36,7 +36,14 @@ function booking(overrides: Partial<WireBookingRequest> = {}): WireBookingReques
     expiresAt: new Date(Date.now() + 42 * 3_600_000),
     createdAt: new Date(),
     updatedAt: new Date(),
-    customer: { firstName: 'Priya', lastInitial: 'N' },
+    customer: {
+      firstName: 'Priya',
+      lastInitial: 'N',
+      // Withheld until the request is accepted — the row never shows these.
+      lastName: null,
+      email: null,
+      phone: null,
+    },
     vendor: {
       id: 'ven-1',
       slug: 'kessler-co',
@@ -70,7 +77,12 @@ describe('RequestRow', () => {
 
   it('falls back to a description rather than a blank when the account has no name', () => {
     render(
-      <RequestRow request={booking({ customer: { firstName: '', lastInitial: '' } })} isFirst />,
+      <RequestRow
+        request={booking({
+          customer: { firstName: '', lastInitial: '', lastName: null, email: null, phone: null },
+        })}
+        isFirst
+      />,
     );
 
     expect(screen.getByText('A customer')).toBeDefined();
@@ -166,5 +178,47 @@ describe('RequestRow', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('That date was booked while this request was open');
+  });
+
+  /*
+   * Decline is irreversible — the lifecycle refuses `declined -> accepted` and
+   * the customer is notified — so it is the one action on the row that asks
+   * first. The 409 guard is correct and stays; the missing step was the ask.
+   */
+  describe('declining', () => {
+    it('does not fire the decline until the confirmation is accepted', async () => {
+      render(<RequestRow request={booking()} isFirst />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+      expect(requestMock).not.toHaveBeenCalled();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline it' }));
+
+      expect(requestMock).toHaveBeenCalledWith(
+        '/booking-requests/req-1/decline',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('names the customer and the date, and says the decline is final', async () => {
+      render(<RequestRow request={booking()} isFirst />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+      expect(screen.getByRole('dialog').textContent).toContain('Decline Priya N.’s request?');
+      expect(screen.getByRole('dialog').textContent).toContain('Sun Jun 14');
+      expect(screen.getByRole('dialog').textContent).toContain('This cannot be undone');
+    });
+
+    it('sends nothing when the vendor backs out of the confirmation', async () => {
+      render(<RequestRow request={booking()} isFirst />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Keep it open' }));
+
+      expect(requestMock).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
   });
 });

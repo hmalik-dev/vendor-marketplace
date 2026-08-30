@@ -593,7 +593,7 @@ describe('/booking-requests', () => {
   });
 
   describe('transitions', () => {
-    it('pending -> accepted by the vendor, and holds the date', async () => {
+    it('pending -> accepted by the vendor, and books the date', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
@@ -608,7 +608,7 @@ describe('/booking-requests', () => {
         .select({ status: availability.status })
         .from(availability)
         .where(eq(availability.vendorId, vendorId));
-      expect(held).toEqual([{ status: 'pending' }]);
+      expect(held).toEqual([{ status: 'booked' }]);
     });
 
     it('pending -> quoted -> accepted locks the quoted price', async () => {
@@ -848,6 +848,133 @@ describe('/booking-requests', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual([]);
+    });
+  });
+
+  /**
+   * The privacy line from `CONTACT_DISCLOSING_BOOKING_REQUEST_STATUSES`: a
+   * vendor deciding whether to take the work sees a first name and an initial,
+   * and a vendor who has committed to the date can reach the customer.
+   */
+  describe('customer identity disclosure', () => {
+    async function customerOn(
+      requestId: string,
+      actor: string,
+    ): Promise<Record<string, unknown>> {
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/booking-requests/${requestId}`,
+        headers: bearer(actor),
+      });
+
+      expect(response.statusCode).toBe(200);
+      return (response.json() as { customer: Record<string, unknown> }).customer;
+    }
+
+    it('withholds the surname and contact details while the request is pending', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+
+      expect(await customerOn(created.json().id, VENDOR)).toEqual({
+        firstName: 'Test',
+        lastInitial: 'U',
+        lastName: null,
+        email: null,
+        phone: null,
+      });
+    });
+
+    it('discloses the surname and email once the vendor has accepted', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+
+      await post(VENDOR, `/booking-requests/${requestId}/accept`);
+
+      expect(await customerOn(requestId, VENDOR)).toEqual({
+        firstName: 'Test',
+        lastInitial: 'U',
+        lastName: 'User',
+        email: 'alan@example.com',
+        phone: null,
+      });
+    });
+
+    it('keeps the details withheld when the vendor declined instead', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+
+      await post(VENDOR, `/booking-requests/${requestId}/decline`);
+
+      expect(await customerOn(requestId, VENDOR)).toMatchObject({
+        lastName: null,
+        email: null,
+      });
+    });
+  });
+
+  /**
+   * `#212`: the calendar cell and the request queue are one source of truth.
+   * Before this, accept wrote `pending` and a merely-pending request wrote
+   * nothing, so the cell read one state out of step in both directions.
+   */
+  describe('the calendar the requests hold', () => {
+    async function statusOn(vendorId: string, date: string): Promise<string | null> {
+      const rows = await harness.database.db
+        .select({ status: availability.status, date: availability.date })
+        .from(availability)
+        .where(eq(availability.vendorId, vendorId));
+
+      return rows.find((row) => row.date === date)?.status ?? null;
+    }
+
+    /*
+     * The market stays truthful while a request is merely live. Search excludes
+     * any vendor whose row for the date is not `available`, so storing one here
+     * would take the vendor out of every date-filtered search for a week over a
+     * request they have not answered.
+     */
+    it('stores nothing while the request is only pending', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      await createRequest(vendorId, { packageId });
+
+      expect(await statusOn(vendorId, EVENT_DATE)).toBeNull();
+    });
+
+    it('frees the date when the accepted request on it is the one declined', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+
+      await post(VENDOR, `/booking-requests/${created.json().id}/decline`);
+
+      expect(await statusOn(vendorId, EVENT_DATE)).toBeNull();
+    });
+
+    it('leaves a date the vendor blocked blocked after a request on it is declined', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId, date: OTHER_DATE, status: 'blocked' });
+
+      const created = await createRequest(vendorId, { packageId, eventDate: OTHER_DATE });
+      expect(await statusOn(vendorId, OTHER_DATE)).toBe('blocked');
+
+      await post(VENDOR, `/booking-requests/${created.json().id}/decline`);
+
+      expect(await statusOn(vendorId, OTHER_DATE)).toBe('blocked');
+    });
+
+    it('books the date over a block the vendor set, because accept is explicit', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId, date: OTHER_DATE, status: 'blocked' });
+
+      const created = await createRequest(vendorId, { packageId, eventDate: OTHER_DATE });
+      await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+
+      expect(await statusOn(vendorId, OTHER_DATE)).toBe('booked');
     });
   });
 });
