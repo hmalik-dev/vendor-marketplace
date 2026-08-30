@@ -26,6 +26,14 @@ const DAY = new Intl.DateTimeFormat('en-US', {
 
 const CLOCK = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
 
+/**
+ * How close to the ceiling the counter starts speaking.
+ *
+ * A character count on every message is noise; one that appears only when
+ * the limit is within reach is information. 5000 characters is roughly a
+ * page of prose, so nobody writing an ordinary message ever sees it.
+ */
+const MESSAGE_COUNTER_THRESHOLD = 200;
 /** "2h", "5h", "3d" — the age of the last message, at a glance. */
 function ago(date: Date | null, now: number): string {
   if (!date) {
@@ -302,7 +310,20 @@ export function MessagesScreen({
                         */}
                         <p
                           className={cn(
-                            'px-3.75 py-3 text-base leading-prose whitespace-pre-wrap text-stone-900',
+                            /*
+                              `break-words` is load-bearing, not defensive.
+                              `whitespace-pre-wrap` preserves the newlines a
+                              message was typed with, but neither it nor the
+                              default `overflow-wrap: normal` will break inside
+                              a token — so a 160-character share link measured
+                              680px of bubble against 768px of text and ran
+                              visibly past the rounded edge, and 5000 unbroken
+                              characters reached a scrollWidth of 53,677.
+
+                              Pasting a gallery link to a photographer is close
+                              to the most likely message this product carries.
+                            */
+                            'px-3.75 py-3 text-base leading-prose break-words whitespace-pre-wrap text-stone-900',
                             isOwn
                               ? 'rounded-[14px_14px_4px_14px] bg-clay-100'
                               : 'rounded-[14px_14px_14px_4px] bg-stone-0',
@@ -334,12 +355,26 @@ export function MessagesScreen({
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={`Reply to ${active.otherPartyName}…`}
                 aria-label="Write a message"
-                className="min-h-11 rounded-xl border-stone-300 bg-stone-150 px-3.5 py-3 text-base"
+                /*
+                  `maxLength` as well as the length guard below. The guard
+                  refuses to send an over-length draft, which is correct but
+                  late: without this the field accepted 5000+ characters and
+                  grew to 907px — taller than a 900px viewport — so the Send
+                  button that would have explained the problem was off screen.
+                  The cap stops the growth at the point it becomes unusable.
+                */
+                maxLength={MESSAGE_MAX_LENGTH}
+                className="max-h-56 min-h-11 overflow-y-auto rounded-xl border-stone-300 bg-stone-150 px-3.5 py-3 text-base"
               />
               <div className="mt-2.5 flex items-center justify-between gap-3">
+                {/*
+                  Counts down rather than reporting an overage that `maxLength`
+                  now prevents, and stays quiet until the limit is close enough
+                  to matter — a counter on every message is noise.
+                */}
                 <span className="text-xs text-stone-600">
-                  {draft.length > MESSAGE_MAX_LENGTH
-                    ? `${draft.length - MESSAGE_MAX_LENGTH} characters over`
+                  {draft.length >= MESSAGE_MAX_LENGTH - MESSAGE_COUNTER_THRESHOLD
+                    ? `${MESSAGE_MAX_LENGTH - draft.length} characters left`
                     : ''}
                 </span>
                 <Button
