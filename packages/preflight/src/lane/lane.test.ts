@@ -39,6 +39,7 @@ const deps = (): LaneUpDeps => ({
   install: vi.fn().mockResolvedValue(undefined),
   build: vi.fn().mockResolvedValue(undefined),
   migrate: vi.fn().mockResolvedValue(undefined),
+  seed: vi.fn().mockResolvedValue(undefined),
 });
 
 beforeEach(() => {
@@ -125,10 +126,12 @@ describe('laneUp', () => {
       install: record('install'),
       build: record('build'),
       migrate: record('migrate'),
+      seed: record('seed'),
     });
 
-    // A migration run before the build cannot resolve the db package.
-    expect(order).toEqual(['install', 'build', 'migrate']);
+    // A migration run before the build cannot resolve the db package, and a
+    // seed run before the migration has no tables to write into.
+    expect(order).toEqual(['install', 'build', 'migrate', 'seed']);
   });
 
   /*
@@ -222,6 +225,21 @@ describe('laneUp', () => {
     await laneUp(root, worktree, '42', deps());
 
     expect(statSync(file).mode & 0o777).toBe(0o600);
+  });
+
+  /*
+   * A migrated database is an empty one, and an empty one is not a usable lane:
+   * with no categories every vendor and search surface answers 404 and
+   * redirects, so a browser pass reports the ticket under test as broken when
+   * the fixture is.
+   */
+  it('seeds the lane, because a migrated database is still an empty one', async () => {
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+    const collaborators = deps();
+
+    await laneUp(root, worktree, '42', collaborators);
+
+    expect(collaborators.seed).toHaveBeenCalledWith(worktree);
   });
 
   it('marks a lane active only once install, build and migrate have all run', async () => {

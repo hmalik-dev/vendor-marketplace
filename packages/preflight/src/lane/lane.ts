@@ -230,6 +230,16 @@ export interface LaneUpDeps {
   readonly install: (worktreePath: string) => Promise<void>;
   readonly build: (worktreePath: string) => Promise<void>;
   readonly migrate: (worktreePath: string) => Promise<void>;
+  /**
+   * Reference data and the end-to-end fixtures.
+   *
+   * A migrated database is an *empty* one, and an empty one is not a usable
+   * lane: with no categories every vendor and search surface answers 404 and
+   * redirects, so a browser pass reports the ticket under test as broken when
+   * the fixture is. Two verification passes were lost to exactly that on
+   * 2026-08-30 before this step existed.
+   */
+  readonly seed: (worktreePath: string) => Promise<void>;
 }
 
 /**
@@ -269,6 +279,30 @@ const defaultUpDeps: LaneUpDeps = {
    */
   build: (worktreePath) => pnpmInLane(worktreePath, ['build', '--filter=./packages/*']),
   migrate: (worktreePath) => pnpmInLane(worktreePath, ['db:migrate']),
+  seed: async (worktreePath) => {
+    await pnpmInLane(worktreePath, ['db:seed']);
+    /*
+     * The end-to-end fixtures need Clerk to resolve the accounts' real ids, so
+     * they are best-effort: a lane whose ticket needs no browser pass should
+     * still come up. `pnpm preflight` fails loudly for the lanes that do need
+     * it, which is where the demand belongs.
+     *
+     * The reason is printed rather than swallowed. One of the things this can
+     * now catch is `assertSafeTarget` refusing the target outright — "refusing
+     * to seed end-to-end fixtures into the production branch" is not a message
+     * to discard, and a silent skip would also hide a partial application where
+     * the vendor role was granted before the profile insert failed.
+     */
+    try {
+      await pnpmInLane(worktreePath, ['db:seed:e2e']);
+    } catch (error: unknown) {
+      process.stderr.write(
+        'Lane seed: end-to-end fixtures were not applied — ' +
+          `${error instanceof Error ? error.message : String(error)}\n` +
+          '  `pnpm preflight` will fail on this lane if the ticket needs a browser pass.\n',
+      );
+    }
+  },
 };
 
 /**
@@ -394,6 +428,7 @@ export async function laneUp(
   await deps.install(worktreePath);
   await deps.build(worktreePath);
   await deps.migrate(worktreePath);
+  await deps.seed(worktreePath);
 
   // Last, and only on success: this is the flag every retry reads.
   return updateManifest(mainCheckout, ticket, { state: 'active' });
