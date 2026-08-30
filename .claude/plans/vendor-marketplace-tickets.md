@@ -599,6 +599,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **292** | **[DESIGN] Frame `28 Dropdown open — hero` hardcodes the brand name where every peer frame uses the token** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Found 2026-08-29 merging the design drop.** The 2026-08-29 export regressed `28 Dropdown open — hero`'s wordmark from `{{ brandName }}` to the literal `Orla`; nine sibling frames still carry the token. The `.dc.html` is **left byte-identical to the export on purpose** so the next import diffs cleanly, so this is a note against the source design project, not a file to patch here. (`15 404` and `16 Server error` carried the literal before this drop too.) **The code law is unchanged and binding: the user-facing name is read from `BRAND_NAME` and never written as a literal** — no ticket may copy this frame's string. |
 | **293** | **`nearby-availability` builds test dates in UTC while the route reads server-local time, so the suite fails locally every evening** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 170** while running the API suite. Not caused by any diff — reproduced on a clean tree with `git stash`. See detail section |
 | **294** | **`main` is red — the design re-import broke four parity tests, and every new lane is born red** | P0 | M3 | **P0 Critical** | **In Progress** | `worktree-design-parity-fix` | None | `core` | **Found 2026-08-29 by lanes 171 and 215 independently.** `00ef8f6` replaced the frames; `#287`–`#290`, which would bring the app up to them, are all still Backlog. **Three distinct causes, not one** — see detail section. Blocks #171 (PR #23), #215 and #222. **Implemented by [PR #24](https://github.com/hmalik-dev/vendor-marketplace/pull/24) (`worktree-design-parity-fix`), not by this session** — lane 294 was opened against this ticket and torn down on discovering the duplicate, which was already green and enqueued. #24 confirms the slicing diagnosis independently and goes further on two points: the type-scale tie is 4-4 between `1.06` and `1.15` because the four `1.15`s are **one screen repeating a heading** while `1.06` is four different screens once each, so `modalRatio` now counts screens rather than occurrences; and the two frame-03 contracts were **deleted rather than re-derived**, because the new frames make no replacement claim — see #287 and #289. The curly-punctuation flip is filed separately as #295. |
+| **295** | **[DESIGN] Frame 03's tagline pull-quote reverted to curly punctuation, contradicting #115** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Found 2026-08-29 while re-deriving the parity tests after the 2026-08-29 import.** See detail section |
 
 Rows are ordered by build sequence, not by ticket number. **292 rows — 143 Done, 4 In Progress, 123 Backlog, 4 Deferred, 18 Blocked (9 plain, 7 needing a human, 1 needing demo data, 1 needing a product decision).** Recounted 2026-08-29 after the design drop added #287–#292, then #293 and #294.
 
@@ -11465,73 +11466,79 @@ both sides, never from a screenshot.
 
 **Milestone:** M3 | **Priority:** P0 Critical | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
-
 Found 2026-08-29 by lane 171 and lane 215 independently, from opposite directions:
 171 merged `origin/main` into a green branch and inherited the failures; 215 branched
 *from* `origin/main` and started red before writing a line. **Where:** CI on every branch.
-
 | | |
 | --- | --- |
 | **Expected** | `main` is green, so a lane's own gate means something |
 | **Observed** | `pnpm test` fails **4 tests across 3 files** at `main`'s tip. `gh run list --branch main --workflow CI` shows the last success at `docs: Record #222 as started`, immediately before the design commits, and failure from `33cbbd4` onward. Nothing merges: PR #23 is enqueued with `--auto` and cannot land, #215 is held unpushed, #222 is recorded done but unmerged |
-
 **Cause.** `00ef8f6` "docs: Replace design contract with the 2026-08-29 vendor cover
 rework" swapped `design/Orla - Screens.dc.html` without re-deriving the tests that read
 it. **#287–#290 are the tickets that would bring the app up to the new frames and all
 four are still Backlog**, so this is the gap between the import landing and the rework
 starting — which is why no existing ticket covers it.
-
 **The four failures have three different causes and must not be treated alike.**
 A blanket re-derivation would delete real parity requirements, which is worse than the red.
-
 **1. `vendor-profile-editor-parity.test.ts` ×3 — a test-helper bug. No design or app change.**
-
 `frameBlock()` slices from a screen's `data-screen-label` to the next `<div class="sc">`.
 The new bundle puts **four labelled screens inside one card**, so the slice for
 `09 Vendor profile editor` now swallows `27 Vendor profile editor — 768`,
 `14 Profile editor mobile` and `14 Profile editor preview sheet` as well. Verified by
 slicing both ways over the real file:
-
 | Boundary | `class="h2"` | headings | `<div class="inp">` |
 | --- | --- | --- | --- |
 | to next `<div class="sc">` (today) | 2 | `Your storefront` ×2 | 15 |
 | to next `data-screen-label` | **1** | **`Your storefront`** | **7** |
-
 1 and 7 are exactly what the three failing tests assert. **The assertions are right and
 the slicing is wrong** — bound the block at the next `data-screen-label=` as well as the
 next card, whichever comes first. `frame-03-parity.test.ts` already does it that way and
 is the model.
-
 **2. `type-scale-parity.test.ts` ×1 — real app drift, not a stale test.**
-
 `--text-display-lg--line-height` is `1.15` in `theme.css`; the frames now measure `1.06`.
 The test derives the expected value from the frames at test time, so it is reporting a
 genuine disagreement. This is the ruling `#74`/`#198` settled applied to a frame that
 moved, and it overlaps `#186`. **Fix the token, not the test.**
-
 **3. `frame-03-parity.test.ts` — fails to LOAD, and legitimately.**
-
 `no inline style in frame 03 contains padding:18px 28px 0 40px`. Its helper already
 bounds on `data-screen-label`, so this is not cause 1. Frame `03 Vendor profile` really
 was re-cut — which is `#287`, "retire the banner and the overlapping avatar". Re-derive
 the selectors that still have a counterpart in the new frame; anything that does not
 belongs to **#287** and should move there rather than being weakened here.
-
 **Acceptance:**
-
 - [ ] `pnpm test` is green on `main`
 - [ ] `frameBlock()` bounds on the next `data-screen-label` as well as the next card, and a test covers a frame that shares a card with its responsive variants
 - [ ] The editor parity assertions are **unchanged** — they pass because the slicing was fixed
 - [ ] `--text-display-lg--line-height` matches the frames' measure, derived not hard-coded
 - [ ] Any frame-03 expectation with no counterpart in the new frame is moved to #287, named, not deleted
-
 **Tests (required):**
-
 - [ ] A test asserting `frameBlock('09 Vendor profile editor')` excludes `27 Vendor profile editor — 768` — the exact over-capture, so a future bundle that nests frames fails here rather than in three unrelated assertions.
 - [ ] The existing type-scale assertion stands as the regression; it already reads the frames at test time.
-
 **Note.** The frames themselves are not to be edited (`design/` is owned by the design
 pass). This ticket changes test helpers, one token, and nothing in `design/`.
+### #295: [DESIGN] Frame 03's tagline pull-quote reverted to curly punctuation
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+Found 2026-08-29 while re-deriving the parity assertions after the vendor cover import.
+| **Expected** | straight punctuation, which is what #115 ruled and what every shipped component renders |
+| **Observed** | frame `03 Vendor profile` now draws the tagline as `\u201CQuiet, documentary, never asks you to pose.\u201D` — U+201C and U+201D. They are the **only** curly characters in the frame; everything else is straight |
+**Why this is a question and not just a fix.** #115's rule was never written down
+anywhere — not in `31-content-voice.md`, not in `.claude/rules/`. It was derived
+from the frame: the frame drew straight marks, so the components did. The frame
+now draws curly ones, and by that same reasoning the components should follow.
+But `CHANGE-ORDER-2026-08-29.md` does not mention punctuation at all — it is
+entirely about the cover rework — so this reads as an artefact of regenerating
+the document rather than a deliberate reversal. **Someone has to say which it
+is**, because "the frame is the contract" cannot settle a case where the frame
+changed silently.
+Note the pull-quote itself is slated for removal by **#289**, so if the answer is
+"follow the frame", the work may be moot before it is done.
+**Current state.** `frame-03-parity.test.ts` scopes its frame assertion to
+exclude the tagline and pins that everything *else* in frame 03 is still
+straight, so a curly mark appearing anywhere new still fails. The component rule
+(no curly punctuation in any shipped profile component) is unchanged.
+- [ ] A punctuation rule is written down in `31-content-voice.md` — straight or curly, stated once, for the whole product
+- [ ] Frame 03 and the components agree with it
+- [ ] `frame-03-parity.test.ts` drops the tagline exception and asserts the stated rule
 
 ---
 

@@ -140,7 +140,7 @@
   --text-display-md: 26px;
   --text-display-md--line-height: normal;
   --text-display-lg: 34px;
-  --text-display-lg--line-height: 1.15;
+  --text-display-lg--line-height: 1.06;
   /*
    * The hero headline's 1024 step. `30-responsive.md` takes display type from
    * 54 to 40px at that width, and frame `25 Landing — 1024` draws it at 40 —
