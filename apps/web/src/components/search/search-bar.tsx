@@ -25,6 +25,30 @@ import { useSearchStatus } from './search-status';
  * why the segments and their flex weights live here rather than in either page.
  * See design/design-plan/11-search.md and `10-landing.md`.
  */
+/*
+ * The date the customer picked, in the frames' words rather than the browser's.
+ *
+ * Every search frame draws a formatted value and **none** draws a picker:
+ * `Jun 14, 2026` in `17` and `18` at 1440, `Jun 14` in the three at 1024.
+ * Frame `02` draws `Sun, Jun 14`, but it is one frame against five and #102
+ * ruled for the majority.
+ *
+ * Parsed as UTC. A `DATE` is a plain `YYYY-MM-DD` string and must never be
+ * round-tripped through a local-time `Date` — west of UTC that moves the event
+ * a day, which is the defect `shared-contracts.md` calls out by name.
+ */
+const PICKED_DATE_FORMATTERS = {
+  /** 1440 and up. */
+  full: new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }),
+  /** 1024, where the segment has no room for the year. */
+  short: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+} as const;
+
 export interface SearchBarValues {
   /** A category slug, or `''` for "any vendor type". Never free text. */
   category: string;
@@ -62,6 +86,20 @@ export function SearchBar({
 }: SearchBarProps): React.ReactElement {
   const [draft, setDraft] = useState<SearchBarValues>(value);
   const [pastDate, setPastDate] = useState(false);
+
+  /*
+   * Guarded: `draft.date` is whatever the URL carried, and an unparseable value
+   * would otherwise reach `Intl` and throw `RangeError: Invalid time value`,
+   * turning a bad query string into a 500 on a URL anyone can paste.
+   */
+  const pickedDate = draft.date === '' ? null : new Date(`${draft.date}T00:00:00Z`);
+  const formattedDate =
+    pickedDate && !Number.isNaN(pickedDate.getTime())
+      ? {
+          full: PICKED_DATE_FORMATTERS.full.format(pickedDate),
+          short: PICKED_DATE_FORMATTERS.short.format(pickedDate),
+        }
+      : { full: draft.date, short: draft.date };
   const fieldId = useId();
 
   /*
@@ -267,7 +305,15 @@ export function SearchBar({
               'peer w-full min-w-0 bg-transparent text-stone-900 outline-none',
               'focus-visible:ring-0 focus-visible:ring-offset-0',
               fieldText,
-              draft.date === '' && 'text-transparent focus:text-stone-600',
+              /*
+                The native edit field is transparent whenever it is not being
+                edited — empty or filled. Empty it would read `mm/dd/yyyy`,
+                filled it would read `09/13/2026`; the frames draw neither.
+                Focusing hands the field straight back to the browser's own
+                editor, so the picker is never taken away, only overlaid.
+              */
+              'text-transparent focus:text-stone-900',
+              draft.date === '' && 'focus:text-stone-600',
             )}
           />
           {draft.date === '' ? (
@@ -280,7 +326,24 @@ export function SearchBar({
             >
               Add a date
             </span>
-          ) : null}
+          ) : (
+            <span
+              aria-hidden="true"
+              className={cn(
+                'pointer-events-none absolute inset-y-0 left-0 flex items-center whitespace-nowrap text-stone-900 peer-focus:hidden',
+                fieldText,
+              )}
+            >
+              {/*
+                Both spellings are rendered and one is hidden by width, rather
+                than picked in JS: a media query in state would have to be
+                resolved after mount, and the segment would render the wrong
+                one on the server and then change under the reader.
+              */}
+              <span className="xl:hidden">{formattedDate.short}</span>
+              <span className="max-xl:hidden">{formattedDate.full}</span>
+            </span>
+          )}
         </span>
       </label>
 
