@@ -598,6 +598,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **291** | **[DESIGN] The tab-swap threshold contradicts the 1024 frame it ships beside** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 merging the design drop.** The rewritten `12-vendor-profile.md` moves the tab threshold from `≥1024` to **`≥1280`** ("below 1280 they become anchored sections"), but the drop's own new frame **`27 Vendor profile — 1024` draws all five tabs and a 320px rail**, and `30-responsive.md` §1024 states that *1024 renders the desktop composition, not a tablet one* — the rule change order **B4** exists to enforce. Three parts of the contract disagree. **The repo law is that the frame is the tiebreak**, which would keep `≥1024`; the prose change may still be deliberate. Needs a ruling, not a guess — resolve before **#287** builds the tab row. |
 | **292** | **[DESIGN] Frame `28 Dropdown open — hero` hardcodes the brand name where every peer frame uses the token** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Found 2026-08-29 merging the design drop.** The 2026-08-29 export regressed `28 Dropdown open — hero`'s wordmark from `{{ brandName }}` to the literal `Orla`; nine sibling frames still carry the token. The `.dc.html` is **left byte-identical to the export on purpose** so the next import diffs cleanly, so this is a note against the source design project, not a file to patch here. (`15 404` and `16 Server error` carried the literal before this drop too.) **The code law is unchanged and binding: the user-facing name is read from `BRAND_NAME` and never written as a literal** — no ticket may copy this frame's string. |
 | **293** | **`nearby-availability` builds test dates in UTC while the route reads server-local time, so the suite fails locally every evening** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 170** while running the API suite. Not caused by any diff — reproduced on a clean tree with `git stash`. See detail section |
+| **294** | **[DESIGN] Frame 03's tagline pull-quote reverted to curly punctuation, contradicting #115** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Found 2026-08-29 while re-deriving the parity tests after the 2026-08-29 import.** See detail section |
 
 Rows are ordered by build sequence, not by ticket number. **291 rows — 143 Done, 4 In Progress, 122 Backlog, 4 Deferred, 18 Blocked (9 plain, 7 needing a human, 1 needing demo data, 1 needing a product decision).** Recounted 2026-08-29 after the design drop added #287–#292.
 
@@ -11457,6 +11458,45 @@ both sides, never from a screenshot.
 **Test (required):**
 
 - [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #294: [DESIGN] Frame 03's tagline pull-quote reverted to curly punctuation
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 while re-deriving the parity assertions after the vendor cover import.
+
+| | |
+| --- | --- |
+| **Expected** | straight punctuation, which is what #115 ruled and what every shipped component renders |
+| **Observed** | frame `03 Vendor profile` now draws the tagline as `\u201CQuiet, documentary, never asks you to pose.\u201D` — U+201C and U+201D. They are the **only** curly characters in the frame; everything else is straight |
+
+**Why this is a question and not just a fix.** #115's rule was never written down
+anywhere — not in `31-content-voice.md`, not in `.claude/rules/`. It was derived
+from the frame: the frame drew straight marks, so the components did. The frame
+now draws curly ones, and by that same reasoning the components should follow.
+
+But `CHANGE-ORDER-2026-08-29.md` does not mention punctuation at all — it is
+entirely about the cover rework — so this reads as an artefact of regenerating
+the document rather than a deliberate reversal. **Someone has to say which it
+is**, because "the frame is the contract" cannot settle a case where the frame
+changed silently.
+
+Note the pull-quote itself is slated for removal by **#289**, so if the answer is
+"follow the frame", the work may be moot before it is done.
+
+**Current state.** `frame-03-parity.test.ts` scopes its frame assertion to
+exclude the tagline and pins that everything *else* in frame 03 is still
+straight, so a curly mark appearing anywhere new still fails. The component rule
+(no curly punctuation in any shipped profile component) is unchanged.
+
+**Acceptance:**
+
+- [ ] A punctuation rule is written down in `31-content-voice.md` — straight or curly, stated once, for the whole product
+- [ ] Frame 03 and the components agree with it
+- [ ] `frame-03-parity.test.ts` drops the tagline exception and asserts the stated rule
 
 ---
 

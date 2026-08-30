@@ -63,7 +63,7 @@ describe('frame 03 — the profile is full-bleed (#103)', () => {
    * padding — not a centred max-width container — that makes the gutters.
    */
   const railStyle = styleContaining('width:380px', 'flex:none');
-  const contentStyle = styleContaining('padding:18px 28px 0 40px');
+  const contentStyle = styleContaining('padding:24px 28px 0 40px');
 
   const railWidth = Number.parseFloat(declaration(railStyle, 'width'));
   const [, railRight] = pxParts(declaration(railStyle, 'padding'));
@@ -152,56 +152,21 @@ describe('frame 03 — the rail starts level with the identity row (#104)', () =
   });
 });
 
-describe('frame 03 — the avatar overlaps the banner by 16px (#105)', () => {
-  /*
-   * The overlap is the SUM of two frame declarations, which is what made it
-   * easy to get wrong: the content column is padded 18px from the top and the
-   * identity row is then pulled up 34px against that padding. Net, 16px.
-   *
-   * The shipped page copied the -34px and dropped the 18px, so the avatar sank
-   * to a 34px overlap and the business name rendered 11px inside the cover
-   * photograph — text over arbitrary vendor-supplied imagery at a contrast
-   * nothing can guarantee. Note that the sweep ledger recorded this as a 14px
-   * overlap; rendering the frame gives 16px, and the frame is the contract.
-   */
-  const contentStyle = styleContaining('padding:18px 28px 0 40px');
-  const identityStyle = styleContaining('margin-top:-34px');
-
-  const [contentTop] = pxParts(declaration(contentStyle, 'padding'));
-  const identityPull = Number.parseFloat(declaration(identityStyle, 'margin-top'));
-  const overlap = -(contentTop + identityPull);
-
-  const headerSource = readFileSync(
-    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'profile-header.tsx'),
-    'utf8',
-  );
-
-  it('reads the frame contract it is asserting against', () => {
-    expect(contentTop).toBe(18);
-    expect(identityPull).toBe(-34);
-    expect(overlap).toBe(16);
-  });
-
-  it('pads the content column so the pull nets the frame overlap', () => {
-    expect(headerSource).toContain(`pt-[${contentTop}px]`);
-    expect(headerSource).toContain(`-mt-[${Math.abs(identityPull)}px]`);
-  });
-
-  it('leaves the business name clear of the banner', () => {
-    /*
-     * The row is 82px of avatar and the name block is pushed 23px down inside
-     * it, so with a 16px overlap the name starts 7px BELOW the banner. That is
-     * the whole reason the frame's number matters: at 34px it starts inside the
-     * photograph.
-     */
-    const nameOffset = Number.parseFloat(
-      declaration(styleContaining('margin-top:23px'), 'margin-top'),
-    );
-
-    expect(nameOffset - overlap).toBeGreaterThan(0);
-    expect(headerSource).toContain(`mt-[${nameOffset}px]`);
-  });
-});
+/*
+ * The `#105` block that stood here asserted the avatar overlapping the banner
+ * by a net 16px — the content column padded 18px from the top and the identity
+ * row pulled up 34px against it.
+ *
+ * The 2026-08-29 import retires that arrangement: frame 03 now draws no
+ * negative margin at all, and `#287` ("retire the banner and the overlapping
+ * avatar; the search card persists as the header") is the ticket that rebuilds
+ * the header to match. Re-deriving the numbers was not an option — there are no
+ * numbers left to derive, because the elements they measured are gone.
+ *
+ * It is deleted rather than skipped: it asserted a contract the design no
+ * longer makes, and a test that asserts a retired design is worse than no test.
+ * `#287` owns the replacement assertions for the new header.
+ */
 
 describe('frame 03 — the rail pairs Event date with Guests above Package (#107)', () => {
   /*
@@ -319,17 +284,22 @@ describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
   });
 });
 
-describe('frame 03 — chip and tile radii (#109)', () => {
+describe('frame 03 — chip radius (#109)', () => {
   /*
-   * Both shipped 2px over-rounded, because both reached for the nearest token
-   * rather than the frame's number: the chips took `rounded-md` (8px, the
-   * table-control step) and the strip took `rounded-xl` (14px, the card step).
+   * The chips shipped 2px over-rounded, because they reached for the nearest
+   * token rather than the frame's number: `rounded-md` is 8px, the table-control
+   * step.
+   *
+   * This block also covered the Recent-work strip's 12px tiles. The 2026-08-29
+   * import removes that strip from frame 03 entirely — `#289` drops it, and the
+   * frame no longer draws a 118px tile to measure — so those two assertions are
+   * gone with it rather than re-derived against a strip the design deleted.
+   * `portfolio-strip.tsx` is still shipped and still `rounded-[12px]`; `#289`
+   * owns removing it.
    */
   const chipStyle = styleContaining('background:#F7E7E0', 'border-radius');
-  const tileStyle = styleContaining('height:118px', 'border-radius');
 
   const chipRadius = Number.parseFloat(declaration(chipStyle, 'border-radius'));
-  const tileRadius = Number.parseFloat(declaration(tileStyle, 'border-radius'));
 
   const themeCss = readFileSync(
     join(process.cwd(), '..', '..', 'packages', 'config', 'tailwind', 'theme.css'),
@@ -340,14 +310,9 @@ describe('frame 03 — chip and tile radii (#109)', () => {
     join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'profile-header.tsx'),
     'utf8',
   );
-  const stripSource = readFileSync(
-    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'portfolio-strip.tsx'),
-    'utf8',
-  );
 
   it('reads the frame contract it is asserting against', () => {
     expect(chipRadius).toBe(6);
-    expect(tileRadius).toBe(12);
   });
 
   it('rounds the chips on the token that exists for them', () => {
@@ -355,14 +320,6 @@ describe('frame 03 — chip and tile radii (#109)', () => {
     expect(themeCss).toMatch(new RegExp(`--radius-sm:\\s*${chipRadius}px;`));
     expect(headerSource).toContain('rounded-sm');
     expect(headerSource).not.toContain('rounded-md');
-  });
-
-  it('rounds the strip tiles to the frame, which has no token', () => {
-    // 12px sits between `--radius-lg` (10) and `--radius-xl` (14), so it is
-    // written exact — the same call #41 made for the stat tiles.
-    expect(themeCss).not.toMatch(new RegExp(`--radius-[a-z0-9]+:\\s*${tileRadius}px;`));
-    expect(stripSource).toContain(`rounded-[${tileRadius}px]`);
-    expect(stripSource).not.toContain('rounded-xl');
   });
 });
 
@@ -424,13 +381,26 @@ describe('frame 03 — the availability line on the From row (#112)', () => {
 
 describe('frame 03 — the punctuation is straight (#115)', () => {
   /*
-   * The pull-quote shipped curly on a stated belief that the frame drew it
-   * that way. It does not: the frame's pull-quote opens on U+0022 and frame
-   * `03` contains no curly character at all, which the first assertion pins
-   * so the rule stays derived from the contract rather than asserted here.
+   * The pull-quote shipped curly on a stated belief that the frame drew it that
+   * way; at the time it did not, and the rule was derived from the frame rather
+   * than written down anywhere.
+   *
+   * The 2026-08-29 import reintroduced curly marks — but only inside the
+   * tagline pull-quote, and its change order does not mention punctuation, so
+   * this reads as an artefact of regenerating the document rather than a
+   * reversal of #115. Nothing in `design-plan/` or `.claude/rules/` states a
+   * punctuation rule either way. Filed as a [DESIGN] discrepancy; the component
+   * rule below is unchanged, because straight punctuation is still what every
+   * shipped surface uses and #289 removes this pull-quote outright.
+   *
+   * The frame assertion is therefore scoped rather than dropped: everything in
+   * frame 03 except the tagline is still straight, and this pins that so a
+   * curly mark appearing anywhere else still fails.
    */
   const CURLY = /[\u2018\u2019\u201C\u201D]/;
   const CURLY_ENTITY = /&(?:ldquo|rdquo|lsquo|rsquo);/;
+  /** The tagline pull-quote, the one place the import left curly marks. */
+  const TAGLINE = /\u201CQuiet, documentary, never asks you to pose.\u201D/;
 
   const components = [
     'about-pane.tsx',
@@ -440,9 +410,8 @@ describe('frame 03 — the punctuation is straight (#115)', () => {
   ];
 
   it('reads the frame contract it is asserting against', () => {
-    expect(CURLY.test(FRAME_03)).toBe(false);
-    // The pull-quote's own opening mark, straight.
-    expect(FRAME_03).toContain('">"Quiet,');
+    expect(TAGLINE.test(FRAME_03)).toBe(true);
+    expect(CURLY.test(FRAME_03.replace(TAGLINE, ''))).toBe(false);
   });
 
   it.each(components)('renders no curly punctuation from %s', (file) => {

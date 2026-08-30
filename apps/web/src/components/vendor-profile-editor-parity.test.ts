@@ -26,16 +26,26 @@ if (framesFiles.length !== 1) {
 const frames = readFileSync(join(designDirectory, framesFiles[0] as string), 'utf8');
 
 /**
- * The frame block for one screen: from its labelled opening tag up to the start
- * of the next screen card, which is where the canvas separates them.
+ * The frame block for one screen: from its labelled opening tag up to the next
+ * **labelled frame**, or the next screen card if that comes first.
+ *
+ * Ending at the next screen card alone was correct while a card held exactly
+ * one frame. The 2026-08-29 import regrouped the document into "one section per
+ * screen with its 1024 / 768 / 390 views side by side", so a card now holds a
+ * screen's whole responsive set and that slice silently spanned four frames at
+ * once — which is why the pane heading count read 2 and the `.inp` count 15
+ * rather than 7. Every assertion here is about the 1440 frame, so the block has
+ * to end where that frame does.
  */
 function frameBlock(label: string): string {
   const start = frames.indexOf(`data-screen-label="${label}"`);
   expect(start).toBeGreaterThan(-1);
 
-  const after = frames.indexOf('<div class="sc">', start);
+  const nextFrame = frames.indexOf('data-screen-label="', start + label.length);
+  const nextCard = frames.indexOf('<div class="sc">', start);
+  const ends = [nextFrame, nextCard].filter((index) => index !== -1);
 
-  return frames.slice(start, after === -1 ? frames.length : after);
+  return frames.slice(start, ends.length > 0 ? Math.min(...ends) : frames.length);
 }
 
 const editorFrame = frameBlock('09 Vendor profile editor');
