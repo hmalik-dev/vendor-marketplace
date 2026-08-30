@@ -76,6 +76,23 @@ describe('RefineBar layout', () => {
   afterEach(() => cleanup());
 
   /*
+   * The active chip's `✕` carries its 44x44 hit area as an `::after` anchored
+   * 8px to the right (#245), and 8px is free space only because the chip row's
+   * gutter is 8px. At `gap-1` the same overhang would cover 4px of the NEXT
+   * chip's trigger, so the two numbers are one fact and are asserted together.
+   *
+   * Read off the rendered row, not grepped from the source: the file also
+   * contains `gap-2.5` on the tag-option label, so a substring search matched
+   * whatever the row happened to say.
+   */
+  it('leaves the gutter the ✕ hit area is anchored into', () => {
+    const bar = renderBar({ minRating: 4 });
+    const row = bar.querySelector('.flex-wrap');
+
+    expect(row?.className).toMatch(/(?:^|\s)gap-2(?:\s|$)/);
+  });
+
+  /*
    * `30-responsive.md`: a wrapping row wraps for width, never for alignment.
    * With `Sort` inside the wrap carrying `ml-auto`, its own margin ate the
    * line's free space, so the break point depended on where the right-aligned

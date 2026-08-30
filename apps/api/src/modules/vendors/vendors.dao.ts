@@ -7,7 +7,6 @@ import {
   vendorProfiles,
   vendorTags,
   type NewVendorProfileRow,
-  type TagRow,
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';

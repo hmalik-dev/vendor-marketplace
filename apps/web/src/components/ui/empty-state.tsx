@@ -34,6 +34,18 @@ export interface EmptyStateProps {
    * card that already draws the border — a second one would double it.
    */
   panel?: boolean;
+  /**
+   * Which of the two sizes `40-states.md` names this state is drawn at.
+   *
+   * The law is one sentence with two numbers in it — "headline at 26px in-app /
+   * 30px marketing" — so the component carries both rather than letting call
+   * sites override a single default by hand. `marketing` widens the sentence to
+   * the 520px measure frame `18` draws with it; `app` keeps the 420px one.
+   *
+   * The search no-results state is the marketing size because the screen is
+   * public: it is the first thing an unauthenticated visitor sees fail.
+   */
+  scale?: 'app' | 'marketing';
   className?: string;
 }
 
@@ -49,8 +61,11 @@ export function EmptyState({
   description,
   action,
   panel = false,
+  scale = 'app',
   className,
 }: EmptyStateProps): React.ReactElement {
+  const isMarketing = scale === 'marketing';
+
   return (
     <div
       data-slot="empty-state"
@@ -86,11 +101,21 @@ export function EmptyState({
         backtick spans as template literals, so quoting a serif class name in a
         comment registers as a serif element with no size.
       */}
-      <h2 className={cn('font-display text-display-md text-stone-900', panel && 'mb-2.25')}>
+      <h2
+        className={cn(
+          'font-display text-stone-900',
+          isMarketing ? 'text-display-empty' : 'text-display-md',
+          panel && 'mb-2.25',
+        )}
+      >
         {headline}
       </h2>
       <p
-        className={cn('max-w-[420px] text-base leading-prose text-stone-700', panel && 'mb-[18px]')}
+        className={cn(
+          'text-base leading-prose text-stone-700',
+          isMarketing ? 'max-w-[520px]' : 'max-w-[420px]',
+          panel && 'mb-[18px]',
+        )}
       >
         {description}
       </p>

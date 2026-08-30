@@ -113,7 +113,14 @@ function Chip({
           aria-label={triggerName}
           className={cn(
             'flex items-center gap-1.5 py-1.75 pl-3.25',
-            onClear ? 'pr-1.5' : 'pr-3.25',
+            /*
+              An active chip's trigger ends flush with its label, and the 6px
+              that used to sit here moves to the clear button's `pl` instead.
+              The paint is identical — the gap between the label and the `✕` is
+              the same 10px either way — but the 6px now belongs to the box that
+              needs the width. See the hit area below.
+            */
+            onClear ? 'pr-0' : 'pr-3.25',
           )}
         >
           {label}
@@ -149,7 +156,36 @@ function Chip({
         <button
           type="button"
           onClick={onClear}
-          className="py-1.75 pr-2.75 pl-1 hover:text-clay-500"
+          className={cn(
+            'relative py-1.75 pr-2.75 pl-2.5 hover:text-clay-500',
+            /*
+              `04-laws.md`: an icon-only control carries a 44x44 hit area. Its
+              only visible content is the glyph — the name is `sr-only` — so the
+              rule applies, and the paint measured 24.5 x 29 (#245).
+
+              The target grows past the paint rather than the paint growing: the
+              chip's own geometry is the frame's (`padding:7px 13px`), so
+              widening the *chip* would fail the Style axis to pass the Access
+              one. What can move without repainting anything is where the 6px
+              between the label and the glyph is charged — see `pr-0` above.
+
+              Anchored to the **right**, not centred, because that side is free:
+              the chip row is `gap-2`, so the target reaches 8px into the gutter
+              and stops ~2px short of the next chip. Budget, measured in
+              Chromium at 1440: 30.5px button + 8px gutter = 38.5, so **5.5px
+              falls left onto the trigger**.
+
+              That 5.5px is a real overlap, not a claim of clearance: a click
+              there clears the filter instead of opening the panel. It is the
+              floor, not a choice — 44 is wider than the chip's whole right side
+              — and it is what the padding shift bought, down from the 11.47px
+              measured before it. Centring instead would put 19.5px there. The
+              only ways to reach zero are a taller chip or a 44px-wide glyph
+              button, and both repaint a control the frame draws exactly; that
+              is a frame question, filed rather than guessed.
+            */
+            "after:absolute after:top-1/2 after:-right-2 after:size-11 after:-translate-y-1/2 after:content-['']",
+          )}
         >
           <span aria-hidden="true">✕</span>
           <span className="sr-only">Clear {label}</span>

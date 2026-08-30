@@ -5,7 +5,6 @@ import {
   type Tag,
   type TagSuggestionResponse,
 } from '@vendor-marketplace/shared';
-import type { TagRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import type { ScopedTagRow } from './tags.dao.js';
 import { notFound, validationFailed } from '../../lib/errors.js';

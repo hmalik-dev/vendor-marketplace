@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -44,12 +46,44 @@ describe('Logo', () => {
     cleanup();
   });
 
-  it('sets the wordmark at 1.6x the diameter and gaps it by half', () => {
+  /*
+   * The wordmark size is a ratio; the gap is not (#244). `marketingFooter` is
+   * D=20, which no frame draws, so it is the size that exercises the fallback
+   * ratio — and 0.6 lands it on the 12px the design file's own cover chrome
+   * uses.
+   */
+  it('sets the wordmark at 1.6x the diameter and falls back to a 0.6 gap', () => {
     const size = LOGO_SIZES.marketingFooter;
     render(<Logo size={size} />);
 
     expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe(`${size * 1.6}px`);
-    expect(screen.getByTestId('logo').style.gap).toBe(`${size * 0.5}px`);
+    expect(screen.getByTestId('logo').style.gap).toBe(`${size * 0.6}px`);
+  });
+
+  /*
+   * The four diameters the frames DO draw, read out of the plan's own table so
+   * the two cannot drift. A single ratio cannot satisfy them — 0.6 is exact at
+   * D=15 and 1.4px out at the auth panel, which is what the first version of
+   * #244 shipped.
+   */
+  it.each([
+    ['Desktop header', LOGO_SIZES.desktopHeader],
+    ['Mobile header', LOGO_SIZES.mobileHeader],
+    ['Auth panel', LOGO_SIZES.authPanel],
+  ])('gaps the %s lockup by the plan’s own number', (context, size) => {
+    const plan = readFileSync(
+      join(process.cwd(), '../../design/design-plan/02-brand-and-logo.md'),
+      'utf8',
+    );
+    const row = new RegExp(`\\|\\s*${context}\\s*\\|[^|]*\\|[^|]*\\|\\s*(\\d+)px\\s*\\|`).exec(
+      plan,
+    );
+
+    expect(row, `the plan states no gap for ${context}`).not.toBeNull();
+
+    render(<Logo size={size} />);
+
+    expect(screen.getByTestId('logo').style.gap).toBe(`${(row as RegExpExecArray)[1]}px`);
   });
 
   /*

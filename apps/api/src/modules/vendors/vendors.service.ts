@@ -10,7 +10,7 @@ import {
   type VendorProfileDetail,
   type FieldErrorDetails,
 } from '@vendor-marketplace/shared';
-import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
+import type { NewVendorProfileRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import type { ScopedTagRow } from '../tags/tags.dao.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';

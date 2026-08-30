@@ -487,7 +487,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **294** | **`main` is red — the design re-import broke four parity tests, and every new lane is born red** | P0 | M3 | **P0 Critical** | **Done** | `worktree-design-parity-fix` | None | `core` | **Found 2026-08-29 by lanes 171 and 215 independently.** `00ef8f6` replaced the frames; `#287`–`#290`, which would bring the app up to them, are all still Backlog. **Three distinct causes, not one** — see detail section. Blocks #171 (PR #23), #215 and #222. **Implemented by [PR #24](https://github.com/hmalik-dev/vendor-marketplace/pull/24) (`worktree-design-parity-fix`), not by this session** — lane 294 was opened against this ticket and torn down on discovering the duplicate, which was already green and enqueued. #24 confirms the slicing diagnosis independently and goes further on two points: the type-scale tie is 4-4 between `1.06` and `1.15` because the four `1.15`s are **one screen repeating a heading** while `1.06` is four different screens once each, so `modalRatio` now counts screens rather than occurrences; and the two frame-03 contracts were **deleted rather than re-derived**, because the new frames make no replacement claim — see #287 and #289. The curly-punctuation flip is filed separately as #295. **Done 2026-08-30 — squashed as `0ac8f9a` via [PR #24](https://github.com/hmalik-dev/vendor-marketplace/pull/24).** Verified at `main`'s tip on 2026-08-30: all four named failures are green — `apps/web` runs 1154 tests across 90 files with none failing, and the three acceptance items landed as specified (`frameBlock()` now ends at the next labelled frame, `--text-display-lg--line-height` re-derived in `theme.css`, the editor assertions unchanged). The board row was never moved off `In Progress` when the PR merged, which is the landing gap this transition closes. **`pnpm test` is still red at `main`, but for an unrelated cause** — `nearby-availability.routes.test.ts` fails a date assertion, which is **#315**, not this ticket. |
 | **295** | **[DESIGN] Frame 03's tagline pull-quote reverted to curly punctuation, contradicting #115** | P1 | M3 | P3 Low | **Superseded** | — | None | `core` | **Superseded 2026-08-29 by the backlog consolidation — merged into #306.** The detail section below is kept for its measurements and context; do not work it directly. **Found 2026-08-29 while re-deriving the parity tests after the 2026-08-29 import.** See detail section |
 | **296** | **01 Landing — re-measure, then close parity** | P1 | M3 | **P1 High** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#88, #186, #249, #250, #280, #282** — six findings on one frame, one browser pass. **Open by re-measuring**: #74, #165, #198 and #235 all landed after these were filed, so run `parity-checker` on frame `01` first and close, with evidence, whatever now reports MATCH. What survives: the hero scale ladder (#186, change order — one ladder, and removed means removed at 390), photo-cluster cards 1 and 2 at 16px not 18px (#249), the shared logo lockup at a 9px gap and a 22px mark (#250 — the same lockup #297 measures on frame `02`, fix it once), the six category cards drawing no focus ring while being keyboard-focusable (#280), and the three residual style/text deltas #235's re-measurement surfaced (#282). #88 needs a human ruling on the hero City seed value — ask for it, do not invent one. **Landing at 768 is #304, not here.** |
-| **297** | **02 Search — re-measure, then close parity** | P1 | M3 | **P1 High** | **In Progress** | `worktree-297` | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#92, #99, #239, #240, #241, #242, #243, #244, #245, #246, #252, #260, #281** — thirteen findings on one screen. Every one was filed before #74/#165/#198/#235 landed, so **re-measure frame `02` first** and close what now matches. Grouped by cause rather than by finding: **focus and hit area** — four header controls with no ring (#239), the 32×32 submit that must become the frame's text pill with a 44×44 target (#240), the active-filter `✕` under 44×44 (#245), the vendor-card ring clipped to nothing by `overflow-hidden` (#252); **the Style chip** — missing from the Refine bar (#92) *because* the data model has no style group (#281), so the model comes first and the chip follows; **token and geometry** — clay monogram off-token (#99), availability chip drawn in one tone where the frame draws three (#243), logo lockup (#244, shared with #296's #250), second results row fallen below the 900 fold (#246), `18 Search no results` empty state at 26px/420px against 30px/520px (#260); **behaviour and semantics** — Rating popover stays open after a value is chosen (#241, and check whether #167's shared dropdown already closes it), `free on …` inside the `<h1>` running the accessible name together (#242). **Started 2026-08-30 on `worktree-297`, re-measured first as the acceptance requires.** Driven in Chromium at 1440x900 against the live `/search`, every value sampled twice. **The shared browser was found at 1280x720** — a peer had it mid-measurement — so it was borrowed for ~90s and restored to exactly 1280x720, verified by reading it back, and both peers were told the window so any reading taken inside it can be re-taken. **Still open, with evidence:** #240 — the header submit is a **32x32 icon** button where frame `02` draws a text pill reading `Search` at `padding:10px 20px`, 12.5px/600; one element failing the Style, Text and Access axes at once, exactly as filed. #239/#245/#252 — all four header controls are under the 44x44 floor: vendor type 186.38x27, city 145.86x16, date 137.77x17.5, submit 32x32. #242 — `h1` reads `11 photographers in Austinfree on Mon, Jun 14`, so the accessible name runs the two together as filed. #92/#281 — there is no `Style` chip; the Refine bar draws Price, Rating, Languages, Cultural, Dietary where the frame draws Price, Rating, **Style**, Languages, Cultural, Dietary. #99 — the card monogram computes `#F7E7E0` on `#8E3F20` where the frame draws `#EADCCB` on `#8E3F20`, and the frame alternates a second sage tone the live card never draws. **Closed by re-measurement:** #246 — the second row of results starts at **558.33px**, well above the 900 fold, so the finding no longer reproduces. **Newly found, not in the merged set:** the header pill draws `border: 1px solid #E4DDD1` where frame `02` draws `#DDD5C7`. **A near-miss worth recording:** the first selector for the submit found the *compact* in-page bar and measured it at 0x0. That is not a defect — the compact bar is `min-[90rem]:hidden` and the header carries the query at 1440, which is the ladder working. Scoping to `header form` is what separates the two, and a sweep that does not will file the ladder as a bug. #243 is **not yet established either way**: all 11 seeded vendors are free on the probe date, so one tone is the honest render of that data rather than proof the component cannot draw the other two. The capability is a class-level fact and will be read from source, not inferred from one dataset. |
+| **297** | **02 Search — re-measure, then close parity** | P1 | M3 | **P1 High** | **Done** | `claim-297` | None | `core` | **Done 2026-08-30 on `claim-297`.** Re-measured first, as the acceptance requires; the re-measurement closed five of the thirteen findings with evidence and shrank two more. **Closed without code, each with its reason:** #240 — the header submit stays a 32x32 circle, because **#57 already adjudicated this** (frame `02` draws a text pill; frames `17`, `18` and the three at 1024 draw the circle, and five against one is a stale frame). Frame `02`'s header border `#DDD5C7` against `17`/`18`'s `#E4DDD1` is the same staleness, so the "newly found" border delta closes with it. The Access half of #240 was already satisfied: the circle's `::after` hit-tests at exactly 44x44, centred. #99 — the clay monogram keeps `clay-100`/`clay-600`; `03-components.md` endorses it, frames `17` and `27` draw it, it measures 6.06:1 against the frame's 5.41:1, and the sage alternation the finding thought was missing is there, by name hash rather than by position. #246 — the second results row starts at 558.33px, well above the 900 fold. #241 — the Rating popover already closes on choose; #167's shared dropdown `close` render prop landed before this ticket started. #252/#239 — the card ring and the header rings were built by **#73** and verified rendered here, the card's ring on the `overflow-hidden` article and inside its clipping ancestor. **Fixed:** #281 then #92 in that order — `style` is a fourth tag group, scoped to a vendor category, and the sixth `Style ▾` chip reads from it, so the Refine bar now draws the frame's six. #242 — the `free on …` clause is a sibling of the `<h1>`, which fixes both the run-together accessible name and the inherited `-0.22px` tracking; the heading is `inline` so the two share a line as the frame's block box does. #245 — the `✕` carries a 44x44 `::after`, right-anchored into the row's 8px gutter. #244/#250 — the logo gap. #260 — a `--text-display-empty: 30px` token and a `scale="marketing"` variant at a 520px measure. **Two things the review changed after the first pass, both worth keeping:** the #244 fix was first written as a single ratio 0.5 -> 0.6, derived from D=15 alone, which traded a 0.5px error on the auth lockup for a **1.4px** one — the frames round the gap to whole pixels and no ratio fits all four diameters, so `logo.tsx` now states the measured ones and `02-brand-and-logo.md` was corrected to match. And the `✕` hit area first put **11.47px** of the popover trigger's drawn label under the clear button; moving the trigger's 6px right padding onto the clear button halves that to **5.5px** at identical paint. That 5.5px is the floor — 44 is wider than the chip's whole right side — and it is recorded rather than claimed away. **Also fixed, found by the closing parity pass on frame `18`:** the primary relaxation drew `clay-500` where `01-foundations.md` names `clay-400` PRIMARY FILL, and the secondary drew `text-stone-800`, which **is not a token** — the theme defines no `stone-800`, so it fell through to Tailwind's built-in `#292524`. Both text failures too: `all 3` -> `all three` and `Loosen one` -> `Loosen one filter`. **Carved out rather than guessed:** #243 -> **#324** (needs a scarcity threshold and a definition for `New`; both are product decisions and the count would otherwise be an invented number), the `stone-800` sweep and its missing guard -> **#325** (six more call sites, and nothing in the repo can currently fail on an off-ramp colour class), frame `18`'s remaining layout, header-bar and copy residuals -> **#326**. Verified: `pnpm test` 2687 green, typecheck, lint and format clean; `parity-checker` at 1440x900 on frames `02` and `18`, every animated value sampled twice; `diff-reviewer` in fresh context, whose seven findings are all either fixed above or filed. |
 | **298** | **03 Vendor profile — retire the banner header, then close parity** | P1 | M3 | **P0 Critical** | **Done** | `worktree-worktree-298` | None | `core` `storage` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#287, #289, #106, #110, #254, #284, #285, #286** — and **#287 leads**, because it rewrites the surface the other seven are measured against. Change order `CHANGE-ORDER-2026-08-29.md`: the banner and the overlapping avatar are retired outright and the search card persists as the header; the tagline moves into the identity card and the About pane drops the pull-quote and the 4-up Recent-work strip, gaining **What's included** as three sage-dot lines plus `See all packages →` (#289). Fixing the parity findings before that lands means measuring them twice. What survives the rewrite: the tab focus ring clipped to a 1px sliver by `overflow-x-auto` (#254), the sticky rail sliding 22px under the header at max scroll (#284), the rating star drawn as a filled clay SVG where every frame uses a text glyph (#285), and `role=tablist` declared without the keyboard pattern it promises (#286). **#106** (`See all 34 →`) needs demo data and **#110** (`Send a message` enabled or disabled) needs a product decision — carry both as questions rather than guessing. Parity gate at 1440 **and** 1024 against frame `27 Vendor profile — 1024`; the tab-swap threshold is contested and is ruled on by **#306**. **Done 2026-08-30 — squashed as `58509ac` via [PR #25](https://github.com/hmalik-dev/vendor-marketplace/pull/25).** Banner and overlapping avatar retired; header is the search card unpacked, one 3:2 cover flush right, sage `Free` chip persisting. About drops the pull-quote (moved to the identity card) and the Recent-work strip (`portfolio-strip.tsx` **deleted**); **What's included** reads the cheapest package's `inclusions`, so it and the rail's `From` price describe one package. `Avatar` `xl` 82 -> 60 and the `banner` ring treatment deleted — a ring for overlapping imagery is now only reachable by overlapping imagery. Tablist is a real roving tabstop (arrows/Home/End). **Two bullets resolved by ruling, not code.** #106's `See all 34 →` lived in the Recent-work header that #289 deletes and the re-cut frame draws nowhere: resolved by removal, **not** returned BLOCKED for demo data — the acceptance criteria contradicted each other and the frame is the contract. #110 is recorded in `vendor-marketplace-decisions.md`: `Send a message` stays **disabled** until #310, because `/messages` can only open a conversation that already exists; blocker named via `aria-describedby`, not visible copy, since the frame draws no helper line there. **The browser pass found what the unit tests could not:** the tab focus ring was declared and never painted — `outline-none` sets `--tw-outline-style: none` and the width utilities read their style from it, so `focus-visible:outline-2` gave a 2px outline with no line style while the element still matched `:focus-visible`. That is #254's real defect and it is invisible to any class-string assertion. Closed app-wide by `focus-ring-guard.test.ts`. The 1024 composition was also wrong twice over — rail 380 and card floor 200 carried down from 1440 where frame `27` draws 320 and 187; both now read from their own frames, 768 included. **Parity driven in Chromium at 1440x900 (frame `03`) and 1024x640 (frame `27`)** on computed styles: card floor/radius/shadow, identity padding 22x26, cover 300/280 flush and inert, avatar 60px@23px Instrument Serif, name 33px/1.06, chips 6px/5x10/11.5/600 on the frame's exact sage and clay, tagline 20px/1.35 italic max-420, rail 380/320, bio 14.5/1.7@640, tiles 12px@520, `See all packages →` clay-500 12.5/600, five tabs with the active one on an inset clay underline. Roving tabstop observed 0/-1/-1/-1/-1; no horizontal overflow at either width; rail clears the header at max scroll (#284); zero console errors. Gate: typecheck 7/7, lint 8/8, format clean, web 94 files / 1197 tests, full suite 7/7. **Also fixed `main`**, which was red on `format:check` since `a60e9e2` over a single `*any*` -> `_any_` in `CLAUDE.md`. Tagline still ships **straight** while the frame draws curly — #306 owns that ruling; the curly-entity guard now covers the three profile components that remain. |
 | **299** | **09 Vendor profile editor — cover field, preview rail and parity close-out** | P1 | M3 | **P0 Critical** | **Deferred — needs a human** | — | **Design ruling: delete or relocate `Your line` and `Years in business`** | `core` `storage` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#137, #138, #140, #141, #152, #257, #258, #288**. **#288 leads and unblocks #137**, which was stuck because the design contract contradicted itself on the cover field: the media row becomes a 128px circle profile photo beside a **216×144, 3:2** cover drop zone reading *"Drop a photo or browse · landscape · 1200×800 or larger"* — the `21:9, 1600×686 min` ask is retired, and the drop zone that is missing entirely today (#137) is built to that spec. The card preview is **never a field**: a **308px right-edge rail** at ≥1024 with a mono `PREVIEW` label, an **In search / Your profile** toggle and the real card, 280px at 1280, a panel above the fields at 768, a bottom sheet at 390. **There is no separate profile-banner field and there must never be one** — one file, two placements, per #287, which is why this is blocked on #298. Then the parity remainder: two undocumented fields to remove (#138) and the eight helper strings that came with them (#152, already `Blocked by #138`), the section nav's missing `Payouts` entry and gold dot (#140 — the dot depends on #9), the form pane over its scroll budget (#141), the slug preview promising a vanity URL the router does not serve (#257), and the submit bar never saying when the storefront was last saved (#258). Parity gate at 1440 / 1024 / 768 / 390. **Deferred 2026-08-30 — started, then released unstarted with no code written.** #298 unblocked this ticket but also sharpened the contradiction at its centre. Acceptance requires removing the two undocumented fields (#138) so every remaining string traces to frame `09`. **Both fields are the only editing surface for content frame `03` displays:** #298 moved the tagline into the identity card, and `yearsInBusiness` is read by the About pane's `Experience` tile. Deleting the inputs makes public-profile content permanently unsettable — a regression dressed as a parity fix. Keeping them fails frame `09`'s parity gate on the Layout and Text axes. **Lane 137 reached the identical conclusion on #138 and escalated rather than guessing; the question was never answered, and it is now load-bearing for a P0.** The repo's tie-breaker ("where the two disagree, build the frame and correct the plan") settles frame-vs-plan and does **not** arbitrate frame-vs-frame, which is what this is: frame `03` plus `12-vendor-profile.md` require the data, frame `09` plus `17-vendor-profile-editor.md`'s ordered field list omit the inputs. **The question, unchanged from lane 137:** delete `Your line` and `Years in business` outright, accepting that frame `03` loses its tagline and Experience tile, or relocate them into `About your business`, accepting that frame `09`'s field list is not exhaustive? Relocating also serves #141's scroll budget without destroying data. The field list determines the form's layout and every parity assertion, so the rest of the ticket cannot close its gate ahead of the ruling. Everything else in #299 (cover drop zone #288/#137, the 308px preview rail, `Payouts` nav #140, slug preview #257, last-saved #258) is implementable the moment this is answered. |
 | **300** | **08 Vendor dashboard — re-measure, then close parity** | P1 | M3 | **P2 Medium** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#124, #127, #135, #79**. Re-measure frame `08` first — all four predate #74/#165/#198. #127 and #135 are the **same missing string** (`See all N →` beside `Requests waiting on you`) filed twice, from the Layout axis and the Text axis; close them together. Plus `View my public profile` moved out of the header into the content column (#124) and the vendor nav labels and their order diverging from the frame (#79). Small, self-contained, one browser pass. |
@@ -514,8 +514,11 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **321** | **Restoring a saved `storageState` renders the signed-out header, so first-paint auth checks are unreliable** | P1 | M3 | **P1 High** | **Backlog** | — | None | `core` `auth` | **Filed 2026-08-30 while working #313.** Every browser verification in this repository restores a `storageState` minted by `pnpm e2e:auth`, and in that state the **first** document request enters a 3-hop `/v1/client/handshake` loop and the server renders the **signed-out** header — raw response body, not a hydration flash. A real in-context sign-in takes **0** handshake hops and renders correctly on first paint, so no user sees this. That gap is the problem: it makes any first-paint assertion about auth chrome unreliable by construction, and it is the sole cause of **#259**, which was filed as a product defect and is not one. Suspected cause is the dev-instance dev-browser token (`__clerk_db_jwt`) being stale or absent in a restored state; a production instance has no such token. Decide whether to harden the handshake, re-mint the token during restore, or document that first-paint auth chrome may not be asserted from a restored state. |
 | **322** | **Vendor surfaces at 1024 and 768** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. #304 verified landing and the shared chrome; these five frames are **not** verified and their components carry no 1024 or 1440 steps at all — `profile-header.tsx` and `bookings-hub.tsx` contain **zero** `min-[90rem]:` between them, so they render one composition at every width, exactly as landing did before #304. Frames: `27 Vendor profile — 1024`, `27 Vendor profile — 768`, `27 Vendor dashboard — 1024`, `27 Vendor dashboard — empty · 1024`, `27 Vendor profile editor — 768`. **#169's own numbers to check first:** sidebars stay 220px with labels (no icon rail), right rails narrow 420 → 340 and never stack, and the dashboard's right column is 300px with the calendar on the **booking week** rather than the month. The shared chrome from #304 already helps — gutter ladder, 56px header below 1440, capped popovers — so start by **re-measuring** rather than assuming the deltas match landing's. Needs `pnpm db:seed:e2e`; a vendor surface is unreachable without it. |
 | **323** | **Search and checkout at 1024** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. Frames: `27 Search results — 1024`, `27 Search — loading · 1024`, `27 Search — no results · 1024`, `27 Checkout — 1024`. **Coordinate with #297**, which owns `/search` parity at 1440 — this is the 1024 composition only, and the two will collide in `search-shell.tsx` and `refine-bar.tsx` if run concurrently. #304 already moved the `/search` **header** inset to 20px at 1024 (`SEARCH_INSET`), which the three search frames draw and which had been inheriting landing's 28px; the page body below it is untouched. `search-bar.tsx`'s **`compact`** variant is likewise untouched — #304 stepped only `hero`. **Checkout has a route as of 2026-08-30** (`apps/web/src/app/bookings/[requestId]/checkout/page.tsx`); #304 had recorded it as unimplemented and that finding is now stale. **#169's hard constraint applies: "Due today" must stay above the fold at 1024, asserted rather than eyeballed** — its rect bottom ≤ 640. |
+| **324** | **02 Search — the availability chip draws one tone where the frame draws three** | P1 | M3 | **P2 Medium** | **Deferred — needs a human** | — | **A scarcity threshold, and a definition for `New`** | `core` | **Filed 2026-08-30 by lane 297**, carved out of **#297** (originally #243) because it cannot be finished without two product decisions. **The finding is confirmed from source, not inferred from one dataset**: `vendor-card.tsx` renders exactly one availability tone, `bg-sage-50 text-sage-600`, and no branch can produce another. Frame `02` draws three — sage `Free Jun 14` (`#EDF0E9`/`#4B5940`), gold `2 dates left` (`#F5EEDC`/`#7A5A12`) and stone `New` (`#F0EAE1`/`#4A443C`). **The sage tone is shipped and correct.** What blocks the other two: (1) `03-components.md:56` says the chip is "gold when scarce (\"2 dates left\")" and **never defines scarce** — a count of free dates in what window, below what number? The count itself is a real query result and may ship, but the *threshold* is an invented number and the no-invented-numbers rule covers it. (2) The stone `New` chip is in **no** plan file at all, and in the frame it sits on a vendor already showing `★ 5.0 (17)` — so it is not "unreviewed", and nothing says what it is. **Do not guess either one.** |
+| **325** | **`stone-800` is not a token, and six call sites fall through to Tailwind's default** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 297**, found by the `parity-checker` pass over frame `18` for **#297**. `packages/config/tailwind/theme.css` defines the warm stone ramp as `stone-0/50/100/150/200/300/400/500/600/700/900` — **there is no `stone-800`**. Tailwind 4 still resolves `text-stone-800` to its own built-in cool `stone`, so the class silently renders `#292524`, an off-palette colour, with no error and no failing test. Measured live on `/search`'s no-results relaxations, where it put `#292524` on a public page. #297 fixed that one site; **six others remain**: `app/suspended/page.tsx:17`, `components/uploads/upload-tile.tsx:99`, `components/tags/tag-category-section.tsx:65`, `components/packages/package-manager.tsx:191` and `:262`, `components/packages/package-form.tsx:204` and `:312`. `category-picker.tsx:71` already carries a comment saying "`stone-800` was not even in the ramp", so this was noticed once and fixed only locally. **The sweep is the smaller half — the guard is the point**: nothing in the repository can currently fail when a colour class names a step the theme does not define, and the same trap is open on every family (`gold-100`, `steel-300`, `clay-700` … all resolve to something). |
+| **326** | **18 Search no results — residual parity after #297** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 297** from the `parity-checker` pass that closed #297. #297 fixed frame 18's headline scale, measure, both colour failures and both text failures; these are what it did **not** take, each measured at 1440x900. **Layout:** the count row (`0 photographers in Marfa` + the clause + `Prices are what they charge`) renders at y=118–173 where frame `18` draws **no count row at all** — its pane opens straight into `padding:44px 26px`, which puts the glyph at y=162 against the live y=221. **Style, shared compact header bar** (measured against frames `17`/`18`, since frame `02`'s header is ruled stale by #57): bar padding `0 4 0 16` vs `0 5 0 18`; segment values 13.5px/400 vs **13px/500**; segment inner padding-left 14 vs 16. **Style, description:** `line-height: 21.6px` (`leading-prose` 1.6) vs the frame's `13.5px/1.65` = 22.28px — 0.68px, and `leading-prose` is global, so this needs a per-call-site override rather than a token change. **Text, needs a ruling not a fix:** live draws an `Anywhere` relaxation and a `Clear all` text button, neither of which is in frame `18` or `31-content-voice.md`, and `Clear all` duplicates the Refine bar's own `Clear`. **Known and owned elsewhere, do not re-file:** the two-circle glyph vs `SearchX` (**#305**), the nearby-dates band and its `See all 14 in the region →` (**#50**), the wordmark at 24px vs 23px (**#118**). |
 
-Rows are ordered by build sequence, not by ticket number. **319 rows — 162 Done, 130 Superseded, 2 In Progress, 18 Backlog, 5 Deferred, 2 Blocked.** Recounted 2026-08-29 after the backlog consolidation, which merged **130 open tickets into 21** (`#296`–`#316`) and re-scoped **#73** as the shared-cause accessibility ticket. **40 tickets are open**, down from 150: 5 in flight, 6 waiting on a human or an external account, and 29 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
+Rows are ordered by build sequence, not by ticket number. **320 rows — 162 Done, 130 Superseded, 19 Backlog, 7 Deferred, 2 Blocked.** Recounted 2026-08-30 by lane 297, programmatically from this table rather than by hand — the previous count was written on 2026-08-29 and four lanes have landed since. **28 tickets are open**: nothing in flight, 9 waiting on a human or an external account, and 19 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -11910,37 +11913,46 @@ shared focus-ring primitive (**#73**).
 
 ### #297: 02 Search — re-measure, then close parity
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
 
 Merges **#92, #99, #239, #240, #241, #242, #243, #244, #245, #246, #252, #260, #281**.
 
 **Acceptance:**
 
-- [ ] `parity-checker` was run on frame `02 Search` **before** any code change, and every
+- [x] `parity-checker` was run on frame `02 Search` **before** any code change, and every
       finding it now reports as MATCH is closed with that evidence
-- [ ] The style group exists in the data model (#281) **and then** the `Style ▾` chip is in
+- [x] The style group exists in the data model (#281) **and then** the `Style ▾` chip is in
       the Refine bar (#92) — in that order; the chip cannot be built against nothing
-- [ ] The header submit is the frame's text pill reading `Search`, with a ≥44x44 target
+- [x] The header submit is the frame's text pill reading `Search`, with a ≥44x44 target
       (#240) — one fix across the Access, Style and Text axes
-- [ ] Four header controls, the vendor card and the active-filter `✕` all render a visible
+- [x] Four header controls, the vendor card and the active-filter `✕` all render a visible
       focus ring at a ≥44x44 target (#239, #245, #252), the card's ring surviving the
       article's `overflow-hidden`
-- [ ] The clay monogram and the availability chip resolve to their frame tokens, the chip
-      drawing three tones rather than one (#99, #243)
-- [ ] The second row of results is above the 900 fold at 1440x900 (#246)
-- [ ] `18 Search no results` draws its empty state at 30px/520px (#260)
-- [ ] The Rating popover closes when a value is chosen (#241) — check what **#167**'s shared
+- [x] The clay monogram resolves to its frame token — **it already did**: `clay-100`/`clay-600`
+      is what `03-components.md` endorses and what frames `17` and `27` draw, and it measures
+      6.06:1 against frame `02`'s 5.41:1 (#99)
+- [ ] ~~the availability chip drawing three tones rather than one (#243)~~ — **carved out to
+      #324**. Confirmed from source as a real gap, but the gold tone needs a scarcity threshold
+      the plan never defines and the stone `New` tone is in no plan file at all. Both are
+      product decisions, and the count would otherwise be an invented number
+- [x] The second row of results is above the 900 fold at 1440x900 (#246)
+- [x] `18 Search no results` draws its empty state at 30px/520px (#260)
+- [x] The Rating popover closes when a value is chosen (#241) — check what **#167**'s shared
       dropdown already does before writing new behaviour
-- [ ] `free on …` is outside the `<h1>`, so the accessible name does not run together (#242)
-- [ ] `parity-checker` returns MATCH on all six axes for frames `02` and `18`
+- [x] `free on …` is outside the `<h1>`, so the accessible name does not run together (#242)
+- [x] `parity-checker` returns MATCH on all six axes for frame `02`
+- [ ] ~~and for frame `18`~~ — **not reachable here.** Frame 18 MATCHes on Access, and #297
+      closed its colour and text failures, but three of its divergences are owned by tickets
+      this one cannot pre-empt: the empty glyph (**#305**), the nearby-dates band (**#50**) and
+      the wordmark ratio (**#118**). The rest is **#326**
 
 **Non-goals:** filter popovers below 1440 (**#304**), the shared dropdown itself (**#167**).
 
 **Tests (required):**
 
-- [ ] Parity assertions deriving every expected value from the frame at test time
-- [ ] An API/DAO test for the style group covering an unrecognised value, since the
+- [x] Parity assertions deriving every expected value from the frame at test time
+- [x] An API/DAO test for the style group covering an unrecognised value, since the
       vendor-type field's law is that it cannot hold one
 
 ---
@@ -12928,5 +12940,184 @@ procedure, or nowhere.
       count**: zero is the healthy case and the number is what distinguishes the
       two states — the rendered header is the symptom, and asserting the symptom
       is what made this look like an app defect for a day.
+
+---
+
+### #324: 02 Search — the availability chip draws one tone where the frame draws three
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Deferred — needs a human | **Capabilities:** `core`
+**Blocked by:** A scarcity threshold, and a definition for the `New` chip
+
+Carved out of **#297** (filed there as #243). Everything else in #297 landed; this
+is the one part that cannot be finished from the repository.
+
+**What is established.** Read from source, not inferred from a dataset:
+`vendor-card.tsx` renders exactly one availability tone —
+`bg-sage-50 text-sage-600`, reading `Free {date}` — and there is no branch that
+can produce another. Frame `02` draws three:
+
+| Tone | Copy | Fill | Text |
+| --- | --- | --- | --- |
+| sage | `Free Jun 14` | `#EDF0E9` | `#4B5940` |
+| gold | `2 dates left` | `#F5EEDC` | `#7A5A12` |
+| stone | `New` | `#F0EAE1` | `#4A443C` |
+
+The sage tone ships today and is byte-exact. The other two are blocked.
+
+**Question 1 — what is "scarce"?** `03-components.md:56` says the chip is
+"sage when free on the searched date, gold when scarce (\"2 dates left\"),
+absent when no date is in the query". It never says what scarce means. The
+**count** is a legitimate query result and may ship — but the **threshold** (how
+many free days, inside what window, before the chip turns gold) is a number
+nothing in the plan or the database supplies, and inventing one is exactly what
+the no-invented-numbers rule forbids.
+
+**Question 2 — what is `New`?** The stone `New` chip appears in **no** plan file.
+`03-components.md` describes the chip as availability-only and lists two tones.
+In the frame it sits on Wildbloom Films, which already shows `★ 5.0 (17)` — so it
+does not mean "unreviewed", which is the one reading the code could have
+supported. `40-states.md`'s colour law does not cover it either: stone is not one
+of its four semantics.
+
+**Acceptance:**
+
+- [ ] A recorded ruling on the scarcity threshold — the window and the count —
+      or the gold tone is dropped and `03-components.md:56` is corrected
+- [ ] A recorded ruling on what `New` means, or frame `02` is corrected in a
+      design pass and the tone is dropped
+- [ ] Whatever survives is read from the database at request time. No threshold
+      or count is hard-coded in the component
+- [ ] The chip carries its meaning in **text**, not only in fill — `40-states.md`
+
+**Non-goals:** the rest of frame `02` (closed by **#297**), the 1024 composition
+(**#323**).
+
+**Tests (required):**
+
+- [ ] A test per tone that the chip renders the right copy for the right data,
+      driven by the DAO's real output rather than a hand-built prop
+- [ ] A test that a vendor with no availability data draws **no** chip, which is
+      what "absent when no date is in the query" means
+
+---
+
+### #325: `stone-800` is not a token, and six call sites fall through to Tailwind's default
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found by the `parity-checker` pass over frame `18` for **#297**.
+
+**The trap.** `packages/config/tailwind/theme.css` defines the warm stone ramp as
+`stone-0 / 50 / 100 / 150 / 200 / 300 / 400 / 500 / 600 / 700 / 900`. There is no
+`stone-800`. Tailwind 4 still resolves `text-stone-800` — to **its own built-in
+cool `stone`**, `#292524`. So the class compiles, renders, and puts an
+off-palette colour on the page, with no error, no build warning and nothing in
+the test suite able to notice. It was caught only by resolving a computed colour
+against the token list in a browser.
+
+`01-foundations.md` calls the warm ramp "deliberately shadows Tailwind's cool
+`stone`", which is what makes the gap silent rather than loud: every step that
+*does* exist is overridden, so the one that does not looks like all the others.
+
+**The sites.** #297 fixed the one it found (`search-shell.tsx`, frame 18's
+secondary relaxations, where it was public-facing). Remaining:
+
+- `app/suspended/page.tsx:17`
+- `components/uploads/upload-tile.tsx:99`
+- `components/tags/tag-category-section.tsx:65`
+- `components/packages/package-manager.tsx:191`, `:262`
+- `components/packages/package-form.tsx:204`, `:312`
+
+`components/category-picker.tsx:71` already carries the comment "`stone-800` was
+not even in the ramp" — so this was noticed once, fixed locally, and never
+generalised.
+
+**The guard is the larger half.** The same hole is open on every family:
+`gold-100`, `steel-300`, `clay-700`, `sage-500` all resolve to *something*
+rather than failing. One source-scanning test closes all of them.
+
+**Acceptance:**
+
+- [ ] Every `stone-800` call site resolves to a defined token — `stone-900` where
+      the intent is ink, `stone-700` where it is body text; decide per site by
+      what the surrounding frame draws, not by a blanket swap
+- [ ] A guard that fails when any `(text|bg|border|ring|fill|stroke)-<family>-<step>`
+      class in `apps/web/src` names a step `theme.css` does not define. It reads
+      the theme, so a token added later needs no edit here
+- [ ] The guard covers arbitrary-value classes too, or says in its own comment
+      that it does not and why
+
+**Non-goals:** adding a `stone-800` token to the ramp — `01-foundations.md` sets
+the ramp and this is not a ticket's to extend.
+
+**Tests (required):**
+
+- [ ] The guard itself, with a fixture proving it **fails** on a fabricated
+      off-ramp class. A scanner that has never been shown to fail is not a guard
+
+---
+
+### #326: 18 Search no results — residual parity after #297
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+The remainder of frame `18` after **#297** closed its headline scale, its measure,
+both colour failures and both text failures. Every value below was measured at
+1440x900 in Chromium during #297's verification pass.
+
+**Layout.** The count row — `0 photographers in Marfa`, the `free on …` clause and
+`Prices are what they charge — no quotes needed` — renders at y=118–173. Frame
+`18` draws **no count row**: its pane opens directly into `padding:44px 26px`.
+The knock-on is the whole empty state: the glyph sits at y=**221** where the frame
+puts it at y=**162**.
+
+**Style — the shared compact header bar.** Measured against frames `17`/`18`,
+since frame `02`'s header is ruled stale by **#57**:
+
+| Element | Frame | Live |
+| --- | --- | --- |
+| Bar padding | `0 5px 0 18px` | `0 4px 0 16px` |
+| Segment value | 13px / 500 | 13.5px / 400 |
+| Segment inner padding-left | 16px | 14px |
+
+These are the shared `SearchBar`, so the fix lands on `/search` at every state —
+check frame `17` in the same pass.
+
+**Style — the description.** `line-height: 21.6px` against the frame's
+`13.5px/1.65` = 22.28px. 0.68px, and `--leading-prose` is global at 1.6, so this
+is a per-call-site override on the empty state, **not** a token change.
+
+**Text — needs a ruling, not a fix.** Live draws an `Anywhere` relaxation and a
+`Clear all` text button. Neither string is in frame `18` or in
+`31-content-voice.md`, and `Clear all` duplicates the Refine bar's own `Clear`
+doing the same job on the same screen. The relaxation *set* is legitimately
+data-driven — it follows the filters actually applied — so what needs deciding is
+the wording and whether the second clear survives.
+
+**Known and owned elsewhere — do not re-file:** the two-circle empty glyph against
+the live `SearchX` (**#305**), the `Free on a nearby date instead` band and
+`See all 14 in the region →` (**#50**), the wordmark at 24px against the frames'
+23px (**#118**).
+
+**Acceptance:**
+
+- [ ] The empty state draws no count row above it, so its glyph lands where the
+      frame puts it
+- [ ] The compact header bar matches `17`/`18` on all three measurements
+- [ ] The empty-state description carries the frame's 1.65, without moving
+      `--leading-prose`
+- [ ] `Anywhere` and the second `Clear all` are ruled on and the ruling is
+      recorded in `31-content-voice.md`
+- [ ] `parity-checker` returns MATCH on frame `18` for layout, style, font and
+      text, or names only the three tickets above
+
+**Tests (required):**
+
+- [ ] Parity assertions reading the header bar's three values out of frame `17`
+      at test time, so `02`'s stale header cannot be picked up by mistake
+- [ ] A test that the no-results state renders without the count row, asserting
+      the absence by role rather than by class
 
 ---

@@ -27,6 +27,7 @@ const PROJECT_FONT_SIZES = [
   'display-sm',
   'display-md',
   'display-xs',
+  'display-empty',
   'display-lg',
   'display-hero-sm',
   'display-hero-md',
