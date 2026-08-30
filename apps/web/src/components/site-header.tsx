@@ -48,8 +48,12 @@ export async function SiteHeader(): Promise<React.ReactElement> {
         `HeaderNav` holds that choice.
       */}
       <HeaderNav>
-        {/* 34px from the wordmark to the nav — frame `01`. */}
-        <div className="flex min-w-0 flex-none items-center gap-8.5">
+        {/*
+          34px from the wordmark to the nav at 1440 (frame `01`), 26px at 1024
+          and 20px at 768 — the narrow frames tighten the whole bar, not just
+          its gutter.
+        */}
+        <div className="flex min-w-0 flex-none items-center gap-5 lg:gap-6.5 min-[90rem]:gap-8.5">
           {/*
             The chip is a child of the wordmark's own row, not a sibling of it,
             so it takes that row's 9px gap *and* its own 4px margin — 13px from
@@ -73,7 +77,8 @@ export async function SiteHeader(): Promise<React.ReactElement> {
         {/* Present only on `/search`, and only from `lg` — frame `02`. */}
         <HeaderQuery categories={categories} />
 
-        <div className="flex flex-none items-center gap-4">
+        {/* 16 / 14 / 12px, per frame, same as the cluster on the left. */}
+        <div className="flex flex-none items-center gap-3 lg:gap-3.5 min-[90rem]:gap-4">
           <Show when="signed-out">
             {/*
               "Sign in" is a nav link, not a ghost button: the frame draws it in

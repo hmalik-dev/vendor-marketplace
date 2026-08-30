@@ -377,12 +377,19 @@ describe('HomePage', () => {
    * hero gutter is the frame's 34px at the design target and narrower at `lg`,
    * which is the 18px the search bar needed for "Any vendor type".
    */
-  it('narrows the hero gutter at lg so the search bar fits at 1024', async () => {
+  /*
+   * `27 Landing — 1024` draws the copy column's right inset at 22px and `01
+   * Landing` at 34px. This used to assert `lg:pr-4` (16px) with the wide step
+   * on `xl` — but `xl` is 1280, a width nothing in the bundle draws, so the
+   * 1440 value started 160px early and 1024 got a number from neither frame.
+   */
+  it('insets the hero copy column at each width the frames draw one', async () => {
     const { container } = render(await HomePage());
-    const copyColumn = container.querySelector('[class*="lg:pr-4"]');
+    const copyColumn = container.querySelector('[class*="lg:pr-5.5"]');
 
-    expect(copyColumn).not.toBeNull();
-    expect(copyColumn?.className).toContain('xl:pr-8.5');
+    expect(copyColumn, 'no hero copy column carrying the 1024 inset').not.toBeNull();
+    expect(copyColumn?.className).toContain('min-[90rem]:pr-8.5');
+    expect(copyColumn?.className, 'the 1440 inset must not start at 1280').not.toContain('xl:pr-');
   });
 
   it('still renders the front door when the taxonomy is unavailable', async () => {

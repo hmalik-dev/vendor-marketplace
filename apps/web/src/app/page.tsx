@@ -194,7 +194,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
         {/* One blob per page. It is the only atmospheric shape in the product. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-27.5 -right-32.5 size-110 rounded-full bg-clay-400/6"
+          /*
+            330 at 1024 and 260 at 768, with the frames' own offsets. It used to
+            carry only the 1440 size, so a 440px circle sat in a 768px viewport
+            — more than half the width of the screen, where the frame draws a
+            quarter of it.
+          */
+          className="pointer-events-none absolute -top-17.5 -right-20 size-65 rounded-full bg-clay-400/6 lg:-top-22.5 lg:-right-25 lg:size-82.5 min-[90rem]:-top-27.5 min-[90rem]:-right-32.5 min-[90rem]:size-110"
         />
 
         <div className={`${CONTAINER} relative`}>
@@ -211,7 +217,12 @@ export default async function HomePage(): Promise<React.ReactElement> {
             column 1 at `lg`, which reads identically to sitting inside the
             copy column because the cluster spans both rows beside it.
           */}
-          <div className="grid pt-10 md:grid-cols-[1fr_288px] md:gap-x-5 lg:grid-cols-[56%_44%] lg:gap-x-0">
+          {/*
+            26px at both narrow frames, 40 only at 1440. This single value was
+            14px of the 41px of accumulated drift at 1024 — every block below
+            the headline inherited it.
+          */}
+          <div className="grid pt-6.5 md:grid-cols-[1fr_288px] md:gap-x-5 lg:grid-cols-[56%_44%] lg:gap-x-0 min-[90rem]:pt-10">
             {/*
               34px from the copy to the cluster is the frame's gutter at the
               1440 design target, but at 1024 it was the last 18px the search
@@ -220,15 +231,18 @@ export default async function HomePage(): Promise<React.ReactElement> {
               fit at 1024 the widths change, not the content — so the gutter
               narrows there and the frame's value returns at `xl`.
             */}
-            <div className="md:col-start-1 md:row-start-1 lg:pr-4 xl:pr-8.5">
+            <div className="md:col-start-1 md:row-start-1 lg:pr-5.5 min-[90rem]:pr-8.5">
               {/*
                 `text-meta`, not `text-xs`: frame `01 Landing` draws the badge
                 at 12px and `--text-xs` is 11px (#85). The step already existed
                 — #198 added `--text-meta: 12px` — the badge had simply never
                 been moved onto it.
               */}
-              <p className="mb-4.5 inline-flex items-center gap-1.75 rounded-full bg-clay-400/10 px-3 py-1.5 text-meta font-semibold text-clay-600">
-                <span aria-hidden="true" className="size-1.25 rounded-full bg-clay-400" />
+              <p className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-clay-400/10 px-2.5 py-1.25 text-[11px] font-semibold text-clay-600 lg:mb-3.25 lg:px-2.75 lg:text-[11.5px] min-[90rem]:mb-4.5 min-[90rem]:gap-1.75 min-[90rem]:px-3 min-[90rem]:py-1.5 min-[90rem]:text-meta">
+                <span
+                  aria-hidden="true"
+                  className="size-1 rounded-full bg-clay-400 min-[90rem]:size-1.25"
+                />
                 Now booking in {LAUNCH_CITY}
               </p>
 
@@ -259,13 +273,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 <span className="text-clay-500 italic">without the back-and-forth.</span>
               </h1>
 
-              <p className="mt-3.75 max-w-112.5 text-base leading-prose text-stone-700 min-[90rem]:text-lg">
+              <p className="mt-2.75 max-w-105 text-base leading-prose text-stone-700 lg:mt-3 min-[90rem]:mt-3.75 min-[90rem]:max-w-112.5 min-[90rem]:text-lg">
                 Compare real availability and pricing from vendors near you, send one request, and
                 pay securely once the date is locked in.
               </p>
             </div>
 
-            <div className="md:col-span-2 md:row-start-2 lg:col-span-1 lg:col-start-1 lg:pr-4 xl:pr-8.5">
+            <div className="md:col-span-2 md:row-start-2 lg:col-span-1 lg:col-start-1 lg:pr-5.5 min-[90rem]:pr-8.5">
               <HeroSearch categories={categories} />
 
               {/*
@@ -279,13 +293,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 beneath it, so a third row of category shortcuts between them
                 repeats the same navigation twice in 120px.
               */}
-              <div className="mt-4 hidden flex-wrap items-center gap-2 max-md:flex lg:flex">
+              <div className="mt-3.25 hidden flex-wrap items-center gap-2 max-md:flex lg:flex min-[90rem]:mt-4">
                 <span className="mr-0.5 text-sm text-stone-600">Or jump straight to</span>
                 {LANDING_JUMP_CATEGORY_SLUGS.map((slug, index) => (
                   <Link
                     key={slug}
                     href={`/search?category=${slug}`}
-                    className="rounded-full border border-stone-300 bg-stone-0 px-3 py-1.5 text-sm font-semibold text-stone-900 transition-colors duration-(--duration-fast) hover:border-clay-300 hover:text-clay-600"
+                    className="rounded-full border border-stone-300 bg-stone-0 px-2.5 py-1.25 text-[11.5px] font-semibold text-stone-900 transition-colors duration-(--duration-fast) min-[90rem]:px-3 min-[90rem]:py-1.5 min-[90rem]:text-sm hover:border-clay-300 hover:text-clay-600"
                   >
                     {JUMP_CATEGORY_NAMES[index]}
                   </Link>
@@ -330,7 +344,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
               aria-labelledby="categories-heading"
               className="pt-5.5 pb-16 lg:pt-1 min-[90rem]:pt-1.5"
             >
-              <div className="mb-3.5 flex items-baseline justify-between gap-4 lg:mb-2.75 min-[90rem]:mb-3.5">
+              <div className="mb-2.5 flex items-baseline justify-between gap-4 lg:mb-2.75 min-[90rem]:mb-3.5">
                 <h2
                   id="categories-heading"
                   className="display-heading text-display-xs text-stone-900 min-[90rem]:text-display-md"
@@ -421,7 +435,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                           never a from-price — both are deferred until the
                           numbers are real (design/design-plan/98-post-mvp.md).
                         */}
-                        <p className="mt-0.75 text-[10.5px] text-stone-600 min-[90rem]:text-helper">
+                        <p className="mt-0.5 text-[10.5px] text-stone-600 lg:mt-0.75 min-[90rem]:text-helper">
                           {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
                         </p>
                       </div>
