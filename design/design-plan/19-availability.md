@@ -7,9 +7,22 @@ months.
 ## Calendar
 
 Three months across at ≥1280 (two at 1024–1439, one below), which covers a
-typical booking horizon with no month navigation. Month name in Serif 18px;
-weekday initials in 10px `stone-600`; day cells 12px, 7px vertical padding,
-7px radius.
+typical booking horizon at a glance. Month name in Serif 18px; weekday initials
+in 10px `stone-600`; day cells 12px, 7px vertical padding, 7px radius.
+
+**There IS month navigation — ruled 2026-08-30 (#276 via #306).** This file said
+"no month navigation" twice while frame `11 Availability` draws it: two
+`stone-600` chevrons flanking the window label, right-aligned in the pane header
+at 13px `stone-700`. The frame is the tiebreak over the prose, so the chevrons
+ship, and they page the whole three-month window rather than one month.
+
+The intent behind the old sentence survives and is worth keeping: **the vendor
+must not have to click through months to do the ordinary thing.** Three months is
+the booking horizon, it is on screen at once, and the chevrons are for the vendor
+already taking a booking beyond it. That is why the window pages as a unit — a
+control that moved one month at a time would turn "look further ahead" into the
+clicking this screen exists to avoid. The mobile "swipe between" line was already
+navigation by another name.
 
 | State             | Cell                                     | Interactive                            |
 | ----------------- | ---------------------------------------- | -------------------------------------- |
@@ -65,7 +78,7 @@ data or it doesn't ship.
 
 ## Acceptance
 
-- [ ] Three months visible at 1440 with no month navigation
+- [ ] Three months visible at 1440, and the chevrons page the whole window
 - [ ] Booked dates cannot be cleared from this screen
 - [ ] Drag-select works across a month boundary
 - [ ] Rail counts recompute live as dates are blocked
@@ -90,16 +103,67 @@ was carrying the whole signal and could not.
 
 **Every state now carries a shape as well as a fill. The fill is reinforcement.**
 
-| State                | Fill                                                   | Shape                                                       | Interactive                      |
-| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------- |
-| Available            | `stone-0`, hairline `stone-300`                        | none — absence reads as open once everything else is marked | click / drag to block            |
-| Booked — locked      | `clay-100`, ink-clay number                            | **solid clay dot**, centred under the number                | opens the booking                |
-| Pending request      | `gold-50`                                              | **1.5px dashed `gold-500` border**                          | opens the request                |
-| Blocked by you       | `stone-200` + 45° hatch (`stone-200`/`stone-250`, 3px) | **strikethrough** on the number                             | click to unblock                 |
-| Completed            | `sage-50`, `sage-600` number                           | **check glyph**                                             | **yes — opens the past booking** |
-| Selecting now        | solid `clay-500`, cream number                         | fill is the signal (unambiguous at full saturation)         | drag continues                   |
-| Today                | `stone-0`, 1.5px solid ink border                      | ink outline                                                 | normal for its state             |
-| Past, nothing booked | `stone-50`, `stone-400` number                         | none, dimmed                                                | inert                            |
+### The blocked hatch — ruled 2026-08-30 (#278 via #306). **This unblocks #301.**
+
+Frame `11` draws the blocked cell as
+`repeating-linear-gradient(-45deg,#EFE9E0 0 3px,#E0D8CA 3px 6px)` with the numeral
+in `#6B6459`. **A verbatim implementation fails AA**, and the earlier prose
+compounded it by naming a token that does not exist:
+
+| Pair                                               | Ratio      |             |
+| -------------------------------------------------- | ---------- | ----------- |
+| `#6B6459` on `#E0D8CA` — the **dark** stripe alone | **4.13:1** | fails       |
+| `#6B6459` on `#EFE9E0` — the light stripe alone    | 4.84:1     | passes      |
+| `#6B6459` on the perceived ground ≈`#E7E0D5`       | ~4.5:1     | on the line |
+
+The numeral's strokes land on both stripes, so "the average clears" is not an
+answer — a glyph stroke sitting on the dark band is text below 4.5:1.
+
+**Two corrections, both to the prose, neither to the frame:**
+
+1. **The numeral is `stone-700 #4A443C`, not `stone-600`.** On the dark stripe that
+   is **6.80:1**, and on the light stripe better still, so it clears on every part
+   of the hatch rather than on average.
+2. **The stripes are `stone-200 #EFE9E0` and `stone-300 #E4DDD1`** — two sanctioned
+   tokens. `#E0D8CA` appears in no token file, and **`stone-250`, which the old
+   table named, was never minted**: the ramp goes `stone-200` to `stone-300` with
+   nothing between. A table citing a colour nobody can resolve is a defect in its
+   own right.
+
+The hatch and the strike-through are unchanged, and they are what actually carries
+the state — this is a contrast fix to the numeral, not a redesign of the cell.
+`Orla - Screens.dc.html` is untouched; the divergence is recorded against the
+source design project.
+
+### The rail's rationale note does not ship — ruled 2026-08-30 (#275 via #306)
+
+The 300px rail in frame `11` carries a `stone-150` panel between the legend and
+`This quarter` reading _"Every state carries a shape as well as a colour, so the
+calendar still reads in greyscale and for colour-blind vendors. Fill alone is
+never the signal."_
+
+**That is this document talking, not the product.** It is a near-verbatim
+restatement of the line above, addressed to whoever is reading the design — a
+vendor opening their calendar is not told why the calendar is designed as it is.
+It is drawn in the same `#F1ECE4` inset panel as the shipping **Market note** two
+blocks below it, which is exactly why a parity pass cannot separate them
+automatically and why it is written down here instead.
+
+**Do not build it.** The Market note two blocks below **does** ship. This is the
+same class as the reply-time deviation recorded in `16-vendor-dashboard.md`: a
+frame element deliberately not built, recorded so the parity gate reads its
+absence as correct rather than as drift.
+
+| State                | Fill                                            | Shape                                                       | Interactive                      |
+| -------------------- | ----------------------------------------------- | ----------------------------------------------------------- | -------------------------------- |
+| Available            | `stone-0`, hairline `stone-300`                 | none — absence reads as open once everything else is marked | click / drag to block            |
+| Booked — locked      | `clay-100`, ink-clay number                     | **solid clay dot**, centred under the number                | opens the booking                |
+| Pending request      | `gold-50`                                       | **1.5px dashed `gold-500` border**                          | opens the request                |
+| Blocked by you       | 45° hatch, `stone-200`/`stone-300`, 3px stripes | **strikethrough** on the number, in `stone-700`             | click to unblock                 |
+| Completed            | `sage-50`, `sage-600` number                    | **check glyph**                                             | **yes — opens the past booking** |
+| Selecting now        | solid `clay-500`, cream number                  | fill is the signal (unambiguous at full saturation)         | drag continues                   |
+| Today                | `stone-0`, 1.5px solid ink border               | ink outline                                                 | normal for its state             |
+| Past, nothing booked | `stone-50`, `stone-400` number                  | none, dimmed                                                | inert                            |
 
 Notes that matter to the build:
 
