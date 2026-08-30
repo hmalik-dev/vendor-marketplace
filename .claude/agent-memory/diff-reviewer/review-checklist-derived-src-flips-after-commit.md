@@ -7,7 +7,7 @@ metadata:
 
 When a diff shows a value from source A while work is in flight and then commits,
 after which the same slot is **derived** from source B (`pending?.url ?? resolve(value)`),
-the reviewer's question is: *are A and B the same string, and what enforces that?*
+the reviewer's question is: _are A and B the same string, and what enforces that?_
 The swap happens at the exact moment the success toast fires, so any divergence
 turns "success" into a blank or broken slot.
 
