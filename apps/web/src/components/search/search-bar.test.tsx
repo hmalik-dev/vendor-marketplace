@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Category } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -450,5 +452,118 @@ describe('SearchBar — the compact bar’s own measurements', () => {
     render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     expect(screen.getByText('Event date')).toBeDefined();
+  });
+});
+
+/**
+ * #102 — the date segment rendered the browser's own `09/13/2026` edit field
+ * where every search frame draws a formatted value. The expected strings are
+ * read out of the design bundle rather than copied here, so the test tracks
+ * the contract instead of a snapshot of it.
+ */
+describe('SearchBar — the picked date is shown in the frames words', () => {
+  afterEach(cleanup);
+
+  /** The frame bundle, found by content so no brand literal appears in source. */
+  function frameBundle(): string {
+    const designRoot = join(process.cwd(), '../../design');
+    const file = readdirSync(designRoot)
+      .filter((entry) => entry.endsWith('.dc.html'))
+      .map((entry) => readFileSync(join(designRoot, entry), 'utf8'))
+      .find((contents) => contents.includes('data-screen-label'));
+
+    expect(file).toBeDefined();
+
+    return file as string;
+  }
+
+  /** The date literal a named frame draws, read from its own markup. */
+  function dateLiteralIn(frameLabel: string): string {
+    const bundle = frameBundle();
+    const start = bundle.indexOf(`data-screen-label="${frameLabel}"`);
+
+    expect(start).toBeGreaterThan(-1);
+
+    const block = bundle.slice(start, start + 7000);
+    const match = block.match(/>\s*((?:Sun, )?[A-Z][a-z]{2} \d{1,2}(?:, \d{4})?)\s*</);
+
+    expect(match).not.toBeNull();
+
+    return (match as RegExpMatchArray)[1] as string;
+  }
+
+  const PICKED: SearchBarValues = { category: '', city: '', date: '2026-06-14' };
+
+  it('renders the 1440 frames literal, not the browser picker', () => {
+    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
+
+    // `17 Search loading` and `18 Search no results` both draw `Jun 14, 2026`.
+    const literal = dateLiteralIn('17 Search loading');
+
+    expect(screen.getByText(literal).textContent).toBe(literal);
+  });
+
+  it('renders the 1024 frames shorter literal alongside it', () => {
+    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
+
+    const literal = dateLiteralIn('27 Search results — 1024');
+
+    expect(screen.getByText(literal).textContent).toBe(literal);
+  });
+
+  /*
+   * Both spellings are in the DOM and width chooses between them, so the
+   * classes are the assertion: resolving a media query in state would render
+   * the wrong one on the server and change it under the reader after mount.
+   */
+  it('hides the year below 1440 and shows it at 1440', () => {
+    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
+
+    expect(screen.getByText(dateLiteralIn('27 Search results — 1024')).className).toContain(
+      'xl:hidden',
+    );
+    expect(screen.getByText(dateLiteralIn('17 Search loading')).className).toContain(
+      'max-xl:hidden',
+    );
+  });
+
+  /*
+   * The overlay must never replace the picker — focusing hands the field back
+   * to the browser's own editor, which is the only way to change the date.
+   */
+  it('keeps the native date input, so the picker still opens', () => {
+    const { container } = render(
+      <SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />,
+    );
+
+    const input = container.querySelector('input[type="date"]');
+
+    expect(input).not.toBeNull();
+    expect((input as HTMLInputElement).value).toBe('2026-06-14');
+    expect((input as HTMLInputElement).className).toContain('peer');
+  });
+
+  it('still draws the prompt, not a literal, while no date is picked', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
+
+    expect(screen.getByText('Add a date').textContent).toBe('Add a date');
+    expect(screen.queryByText(/2026/)).toBeNull();
+  });
+
+  /*
+   * `?date=` is attacker-writable. An unparseable value reaching `Intl` throws
+   * `RangeError: Invalid time value`, which is a 500 on a URL anyone can paste
+   * — the exact class `web-route-boundaries.md` exists to prevent.
+   */
+  it.each(['not-a-date', '2026-13-45', '0000-00-00'])('renders %s without throwing', (hostile) => {
+    expect(() =>
+      render(
+        <SearchBar
+          categories={CATEGORIES}
+          value={{ category: '', city: '', date: hostile }}
+          onSubmit={vi.fn()}
+        />,
+      ),
+    ).not.toThrow();
   });
 });
