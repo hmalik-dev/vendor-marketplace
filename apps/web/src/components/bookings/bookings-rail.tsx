@@ -1,3 +1,4 @@
+import { PLATFORM_FEE_COPY } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import type { BookingEntry } from '@/lib/booking-entries';
 
@@ -13,7 +14,13 @@ import type { BookingEntry } from '@/lib/booking-entries';
 const MECHANISM_PROMISES = [
   { title: 'Real availability.', body: 'Calendars come from the vendor, not a guess.' },
   { title: 'Payment is held.', body: 'Your money reaches the vendor after the event.' },
-  { title: 'No service fee.', body: "The price you're quoted is the price you pay." },
+  /*
+    Both halves of the fee story come from one place — `PLATFORM_FEE_COPY` —
+    because this line and the vendor dashboard's "your share, after the
+    platform fee" were written independently, were each true, and read as a
+    flat contradiction to anyone who saw both.
+  */
+  PLATFORM_FEE_COPY.customer,
   { title: 'Reviews from real bookings.', body: 'Only events that happened here.' },
 ] as const;
 

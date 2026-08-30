@@ -587,6 +587,31 @@ export const DEFAULT_PLATFORM_FEE_RATE = 0.12;
 /** A pending booking request auto-expires this many days after creation. */
 export const BOOKING_REQUEST_EXPIRY_DAYS = 7;
 
+/**
+ * The one description of the fee model, in the two voices that need it.
+ *
+ * Customer and vendor surfaces were each written truthfully and independently
+ * — "No service fee, the price you're quoted is the price you pay" against
+ * "Your share, after the platform fee" — and read as a flat contradiction to
+ * anyone who saw both. They are not in conflict: the commission comes **out of**
+ * the total rather than on top of it, which is exactly what `calculateFees`
+ * computes. What was missing was any surface saying so.
+ *
+ * Both strings live here so the two sides cannot drift apart again, and each
+ * now names the other half of the arrangement rather than only its own.
+ */
+export const PLATFORM_FEE_COPY = {
+  /** Customer-facing: what they pay, and what is not added to it. */
+  customer: {
+    title: 'No service fee.',
+    body: "The price you're quoted is the price you pay.",
+  },
+  /** Vendor-facing: what they keep, and why the customer never sees it. */
+  vendor: {
+    delta: 'Your share, after the platform fee the customer never pays on top',
+  },
+} as const;
+
 /** Cancelling at least this many hours before the event earns a full refund. */
 export const FULL_REFUND_CUTOFF_HOURS = 48;
 

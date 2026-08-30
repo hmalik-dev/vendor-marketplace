@@ -6,6 +6,7 @@ import {
   EVENT_TYPE_LABELS,
   MAX_GUEST_COUNT,
   bookingRequestDetailSchema,
+  bookingRequestWindowPhrase,
   isUniversallyPastDate,
   type AvailabilityStatus,
   type EventType,
@@ -724,9 +725,9 @@ function SuccessPanel({
           <p className="mb-5 text-md leading-prose text-stone-700">
             {responseTimeHours
               ? `${businessName} usually replies within ${responseTimeHours} ${responseTimeHours === 1 ? 'hour' : 'hours'}.`
-              : `${businessName} has 48 hours to confirm the date or send a revised quote.`}{' '}
-            You will get a notification either way, and the request closes on its own after a week
-            if it goes unanswered.
+              : `${businessName} has ${bookingRequestWindowPhrase()} to confirm the date or send a revised quote.`}{' '}
+            You will get a notification either way, and the request closes on its own after{' '}
+            {bookingRequestWindowPhrase()} if it goes unanswered.
           </p>
 
           <div className="flex flex-wrap gap-3">

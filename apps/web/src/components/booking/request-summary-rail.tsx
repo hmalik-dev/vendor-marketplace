@@ -1,6 +1,6 @@
 'use client';
 
-import { formatPrice } from '@vendor-marketplace/shared';
+import { bookingRequestWindowPhrase, formatPrice } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -149,8 +149,9 @@ export function RequestSummaryRail({
       <div className="flex gap-2.5 bg-gold-50 px-4.5 py-3.5">
         <span aria-hidden="true" className="mt-1.25 size-2 shrink-0 rounded-full bg-gold-400" />
         <p className="text-sm leading-[1.55] text-gold-600">
-          You&rsquo;re requesting, not paying. {vendor.businessName} has 48 hours to confirm or send
-          a revised quote — you approve before any card is charged.
+          You&rsquo;re requesting, not paying. {vendor.businessName} has{' '}
+          {bookingRequestWindowPhrase()} to confirm or send a revised quote — you approve before any
+          card is charged.
         </p>
       </div>
 

@@ -3,6 +3,7 @@
 import {
   EVENT_TYPE_LABELS,
   MIN_BOOKING_AMOUNT_CENTS,
+  expiryCountdown,
   formatPrice,
   type EventType,
 } from '@vendor-marketplace/shared';
@@ -32,20 +33,13 @@ const ROW_DATE = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
-/** "expires in 42h" while it is hours away, then in whole days. */
-function expiryPhrase(expiresAt: Date | null, now: Date): string {
-  if (!expiresAt) {
-    return 'no deadline';
-  }
-
-  const hours = Math.ceil((expiresAt.getTime() - now.getTime()) / 3_600_000);
-
-  if (hours <= 0) {
-    return 'expired';
-  }
-
-  return hours <= 48 ? `expires in ${hours}h` : `expires in ${Math.ceil(hours / 24)}d`;
-}
+/*
+ * The countdown moved to `expiryCountdown` in the shared package. This one
+ * counted hours below 48 where the customer's card counted whole days, so the
+ * same row read "expires in 60h" to the vendor and "expires in 3d" to the
+ * customer. It also invented "no deadline" for a null, where the shared one
+ * returns null and the caller renders nothing.
+ */
 
 /**
  * "Wedding · Sun Jun 14 · Barr Mansion · 120 guests · Full day coverage"
@@ -180,7 +174,7 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
           <p className="text-xs text-stone-600">
             {request.finalPriceCents === null
               ? 'quote needed'
-              : expiryPhrase(request.expiresAt, new Date())}
+              : expiryCountdown(request.expiresAt, new Date())}
           </p>
         </div>
 

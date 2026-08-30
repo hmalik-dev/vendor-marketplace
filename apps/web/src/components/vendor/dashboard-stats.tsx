@@ -1,4 +1,4 @@
-import { formatPrice } from '@vendor-marketplace/shared';
+import { PLATFORM_FEE_COPY, formatPrice } from '@vendor-marketplace/shared';
 import type { WireVendorDashboard } from '@/lib/wire-schemas';
 
 interface StatProps {
@@ -99,7 +99,7 @@ export function DashboardStats({ dashboard, today }: DashboardStatsProps): React
         value={formatPrice(dashboard.earningsThisMonthCents)}
         // Payout scheduling is #9/#10; naming a date before it exists would be
         // a promise nothing keeps.
-        delta="Your share, after the platform fee"
+        delta={PLATFORM_FEE_COPY.vendor.delta}
       />
     </ul>
   );
