@@ -212,15 +212,18 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **324** | **02 Search — the availability chip draws one tone where the frame draws three** | P1 | M3 | **P2 Medium** | **Deferred — needs a human** | — | #335 | `core` | **Re-pointed 2026-08-30: the two decisions this waits on are questions B and C of #335.**  **Filed 2026-08-30 by lane 297**, carved out of **#297** (originally #243) because it cannot be finished without two product decisions. **The finding is confirmed from source, not inferred from one dataset**: `vendor-card.tsx` renders exactly one availability tone, `bg-sage-50 text-sage-600`, and no branch can produce another. Frame `02` draws three — sage `Free Jun 14` (`#EDF0E9`/`#4B5940`), gold `2 dates left` (`#F5EEDC`/`#7A5A12`) and stone `New` (`#F0EAE1`/`#4A443C`). **The sage tone is shipped and correct.** What blocks the other two: (1) `03-components.md:56` says the chip is "gold when scarce (\"2 dates left\")" and **never defines scarce** — a count of free dates in what window, below what number? The count itself is a real query result and may ship, but the *threshold* is an invented number and the no-invented-numbers rule covers it. (2) The stone `New` chip is in **no** plan file at all, and in the frame it sits on a vendor already showing `★ 5.0 (17)` — so it is not "unreviewed", and nothing says what it is. **Do not guess either one.** |
 | **326** | **18 Search no results — residual parity after #297** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 297** from the `parity-checker` pass that closed #297. #297 fixed frame 18's headline scale, measure, both colour failures and both text failures; these are what it did **not** take, each measured at 1440x900. **Layout:** the count row (`0 photographers in Marfa` + the clause + `Prices are what they charge`) renders at y=118–173 where frame `18` draws **no count row at all** — its pane opens straight into `padding:44px 26px`, which puts the glyph at y=162 against the live y=221. **Style, shared compact header bar** (measured against frames `17`/`18`, since frame `02`'s header is ruled stale by #57): bar padding `0 4 0 16` vs `0 5 0 18`; segment values 13.5px/400 vs **13px/500**; segment inner padding-left 14 vs 16. **Style, description:** `line-height: 21.6px` (`leading-prose` 1.6) vs the frame's `13.5px/1.65` = 22.28px — 0.68px, and `leading-prose` is global, so this needs a per-call-site override rather than a token change. **Text, needs a ruling not a fix:** live draws an `Anywhere` relaxation and a `Clear all` text button, neither of which is in frame `18` or `31-content-voice.md`, and `Clear all` duplicates the Refine bar's own `Clear`. **Known and owned elsewhere, do not re-file:** the two-circle glyph vs `SearchX` (**#305**), the nearby-dates band and its `See all 14 in the region →` (**#50**), the wordmark at 24px vs 23px (**#118**). |
 | **327** | **01 Landing — the hero query has no seed value, and the frame hard-codes one** | P1 | M3 | **P2 Medium** | **Deferred — needs a human** | — | #335 | `core` | **Re-pointed 2026-08-30: the ruling this waits on is question A of #335.**  **Filed 2026-08-30 by lane 296**, carved out of **#296** (originally #88), which instructs in its own acceptance to return `BLOCKED` with this question rather than invent a seed. Frame `01 Landing` draws the City segment as the **literal** `Austin, TX` in `#23201C` (stone-900, the filled tone). Live renders an empty `input` with `placeholder="Anywhere"` in `#6B6459` (stone-600, the placeholder tone). **The measurement pass found the question is wider than City.** The frame *templates* the vendor type (`{{ searchValue }}`, hint "Photography") but *hard-codes* the city, and live renders `Any vendor type` in the placeholder tone too — so the hero's centrepiece reads as three empty fields where the frame reads as a seeded query. Whatever is decided for City decides the vendor-type tone with it; ruling on one alone leaves the two segments disagreeing. **The options, none of them free:** seed a real city (which city, and on what basis — geolocation is not MVP and a hard-coded `Austin, TX` is a claim about where the marketplace operates); seed nothing and accept the placeholder tone as the honest empty state, correcting frame `01` in a design pass; or seed nothing but draw the empty value in the filled tone, which reads as a value that is not there. **Do not guess.** |
-| **329** | **Remove the `style` tag group from every input, dropdown and filter** | P1 | M3 | **P1 High** | **In Progress** | worktree-329 | **None** | `core` | **`main` is red on this — `refine-bar.test.tsx`'s "reads six chips out of the frame, Style among them" fails on a clean checkout, confirmed 2026-08-30 by the backlog consolidation. Inverting that test is part of this ticket.** **Filed 2026-08-30, user-directed — reverses #281 and #92.** The Style filter was built inside **#297** and then ruled out of the MVP the same day, so the product now disagrees with itself three ways: the **code** ships a `Style ▾` chip (`TAG_CATEGORIES` carries `'style'`), the **frames** no longer draw one (`c4c8fa2` removed it from four screens), and **`11-search.md`** still specifies it at lines 109 and 154. Supersedes **#25**. Removal is wider than the chip — the group is also a section in the vendor profile editor's Tags picker, a `tag_category` enum member, and seed data. **Note the enum:** Postgres cannot drop a value in place, so this needs the create-new-type / swap-column / drop-old migration, plus a data step for any `tags` and `vendor_tags` rows already on `style`. |
 
 | **332** | **`state` becomes a closed vocabulary, from the form to the column** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the backlog consolidation.** Merges **#330 and #331**. `Austin, TX` and `Austin, Texas` are two rows in the dev database (11 and 1), so a customer who picks one never sees the other's vendors — the split is entirely in `state`, and it **widens with every new vendor**, because `us-states.ts` offers full names while the majority of rows hold codes. Canonical form is the **two-letter USPS code**, ruled 2026-08-30. The two rows were split by layer: #330 put the vocabulary in `createVendorProfileSchema` and repaired the data, #331 constrained the column. Merged because #331 must run **after** #330's repair or it fails on exactly the row that motivated it, and shipping them apart means two migrations on one column and an unconstrained column in between. City stays free text, deliberately — a validated city list needs a dataset decision that is not this ticket. |
 | **333** | **Token scale completion, and the guard against a step that does not exist** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the backlog consolidation.** Merges **#303 and #325**. `text-stone-800` compiles, renders, and puts an off-palette colour on the page: the warm ramp defines no `stone-800`, so Tailwind 4 resolves its own cool `#292524` with no error and nothing in the suite able to notice — **seven call sites are still live**, verified 2026-08-30. The same hole is open on every family (`gold-100`, `steel-300`, `clay-700`, `sage-500`). Alongside it the token-file remainder after #74/#165/#198/#235: the `text-[Npx]` line-height defect, the radius scale's missing **12px step** (confirmed absent from `theme.css`, which runs 6/8/10/14/18), and avatar initials rendering Instrument Serif below its 16px floor. Merged because both halves complete a scale **and** add a source-scanning guard over the same class strings — one scanner closes both, and #325's guard is what stops #303's radius work reopening the class. |
 | **334** | **Repo guardrails — lane tooling, preflight hygiene and the route/frame ledger** | P2 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the backlog consolidation.** Merges **#316 and #319**. Lane hygiene: `lane:up` migrates but never seeds, so a fresh lane's vendor surfaces 404 with nothing to say why; a resumed lane hands back a stale `worktreePath`; three parallel lanes exhaust the file-descriptor limit and `next dev` dies with a Clerk error three steps from the cause; the `stripe listen` secret drifts from `.env` and every webhook 401s; a malformed body answers 400 where a 403 belongs; and a `packages/preflight` test fails only under parallel Turbo runs. Ledger: **#80 named five unframed routes, the count is now nine**, because four arrived after the 2026-08-28 mapping and nothing forced the ledger forward — parity is unprovable on an unframed route. Merged because both ship only tooling and tests: no user-facing behaviour, no parity gate, one verification shape. |
 | **335** | **[DESIGN] Ruling round — four open questions blocking parity** | P1 | M3 | **P1 High** | **Deferred — needs a human** | — | **Four product/design decisions — see the detail section** | `core` | **Filed 2026-08-30 by the backlog consolidation.** Merges **#320** whole and takes the ruling half out of **#327 (A)**, **#324 (B, C)** and **#299 (D)**. Four tickets are each stalled on one decision nobody has made, and every one of them needs a `design-plan/` edit that **a ticket may not make** — `web-design-parity.md` is explicit that design passes edit the plan and tickets write the code. Follows the **#306** precedent, which closed the same way. One sitting answers all four; the code halves stay in their own rows and go `Deferred` → `Backlog` as each is ruled. **Do not guess any of the four** — three of them are invented numbers or claims about the business, which the no-invented-numbers rule covers. |
+| **336** | **01/02 header — the signed-in cluster draws `Dashboard` and a bell where frame `02` draws `Bookings`** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Frame `02`'s signed-in header draws **`Messages` · `Bookings` · avatar**. Live renders **`Messages` · `Dashboard` · a notification bell · the Clerk `UserButton`** — `apps/web/src/components/site-header.tsx` lines 145–162. Two separate deviations: the link **text** is wrong on the Text axis (`site-header.tsx:157`), and the **bell is not in the frame at all** on the Layout axis. Not caused by #329 and not touched by it; the chip removal is on the row below. Decide per element — the bell may be a real surface the frame predates, in which case the frame is what needs the ruling |
+| **337** | **The card focus ring is clipped by the scroll container on the first row of results** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. `div.app-pane` is the `overflow:auto` scroller and has **zero top padding**; its content-box top is `y=173` and the first row of cards starts at exactly `y=173`, so the ring's outward 4px falls at `y=169–172` — outside the scroller. **Measured, not inferred**: pixel-differencing a focused card against a blurred one shows rows 169–172 identical `rgb(248,245,239)` in both, first difference at `y=173`. The ring still paints left, right, bottom and corners, so the indicator is visible and **WCAG 2.4.7 holds** — this is a partial clip, not the "clipped to nothing" failure `04-laws.md` names, which is why it is P2 and not P1. Fix is top padding or `scroll-padding-top` on `.app-pane`; check every other `overflow` scroller for the same shape rather than patching one |
+| **338** | **09 Vendor profile editor — the Storefront nav is missing `Payouts` and its blocker dot** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live renders **six** section-nav items (Business, Location, Tags, Response time, Packages, Portfolio); frame `09` draws **seven**, with **`Payouts` last, carrying a gold blocker dot**. Gold is correct there under `40-states.md` — it is waiting on someone, not a failure. Payouts exists as a surface (#9 shipped Connect onboarding), so this is a missing nav entry rather than a missing feature. **Re-measure frame `09` before fixing**: the parity pass was scoped to the Tags row and read the rest only in passing, so treat the six-vs-seven count as the finding and everything else about that nav as unverified |
+| **339** | **[DESIGN] Search `Sort` has no specified default — the frame draws a chosen one** | P1 | M3 | **P3 Low** | **Deferred — needs a human** | — | **A design ruling on the default sort** | `core` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live defaults to **`Most relevant`** (`sort: 'relevance'`); frame `02` draws **`Top rated ▾`**. Neither `11-search.md` nor `42-dropdowns.md` fixes a default, and the frame draws a *chosen* sort exactly as it draws a chosen price and a chosen rating — so this is **not** evidence the default is wrong, and `parity-checker` correctly did not call it a deviation. It is an unresolved gap in the plan: **a new marketplace defaulting to `Top rated` ranks its thinnest review counts first**, which is a product decision, not a parity one. Needs a one-line ruling, then either the code or the plan changes. Do not "fix" this by matching the frame |
 **This board carries open work only. The 311 closed rows moved to `.claude/plans/vendor-marketplace-tickets-archive.md` on 2026-08-30**, whole — 180 `Done` and 131 `Superseded`, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
-Rows are ordered by build sequence, not by ticket number. **23 rows, all open — 12 Backlog, 9 Deferred, 2 Blocked.** Counted 2026-08-30 by the backlog consolidation, programmatically from this table. **12 tickets are workable**; the other 11 wait on a human, an external account or a design ruling. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
+Rows are ordered by build sequence, not by ticket number. **22 rows, all open — 12 Backlog, 8 Deferred, 2 Blocked.** Recounted programmatically from this table on 2026-08-30 when **#329** closed and moved to the archive; the previous line read "23 rows — 12 Backlog, 9 Deferred", which did not add up against the table it described. **10 tickets are workable** — #14, #300, #302, #305, #322, #323, #326, #332, #333, #334. Two more are `Backlog` but gated: **#20** on #19 and **#15** on #14, so a Backlog count is not a ready count. The other 10 rows wait on a human, an external account or a design ruling. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -1567,85 +1570,6 @@ leaves the two segments disagreeing on tone.
 
 ---
 
-### #329: Remove the `style` tag group from every input, dropdown and filter
-
-**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
-**Blocked by:** None
-
-**Filed 2026-08-30, user-directed.** This reverses **#281** (the data model) and **#92**
-(the chip), both of which landed inside **#297**. It supersedes **#25**, which asked for the
-feature this ticket removes.
-
-**Why it exists.** Style was ruled out of the MVP on 2026-08-30, and `c4c8fa2` removed the
-chip from four frames on that ruling — but the code had already shipped it. The product now
-disagrees with itself three ways:
-
-| Source | Says |
-| --- | --- |
-| Code | `TAG_CATEGORIES = ['style', 'language', 'cultural', 'dietary']`, chip rendered |
-| Frames | No `Style ▾` chip on `02`, `17`, `27`, `28` |
-| `11-search.md` | Still specifies `Style ▾` at lines **109** and **154** |
-
-Any parity run against frame `02` today is comparing a six-chip bar to a five-chip frame and
-calling one of them wrong. That is the cost of leaving this open, not the chip itself.
-
-**The removal is wider than the Refine bar.** The group reaches four places:
-
-| Surface | Where |
-| --- | --- |
-| Refine bar chip | `apps/web/src/components/search/refine-bar.tsx` — the `TAG_CATEGORIES` map |
-| Vendor profile editor | the Tags section → `TagPicker` → `tag-category-section.tsx` |
-| Shared constant | `packages/shared/src/constants/index.ts` — `TAG_CATEGORIES` |
-| Database | `tag_category` enum, plus any `tags` / `vendor_tags` rows on `style` |
-
-**The enum is the hard part, and it is not optional.** Postgres cannot drop a value from an
-enum in place. This needs the standard create-new-type / swap-column / drop-old-type
-migration, and it must run **after** a data step that clears or repoints every existing
-`style` row — `vendor_tags` first, then `tags`, or the column swap fails on rows it cannot
-cast. Do not hand-edit `packages/db/drizzle/`; edit the schema and regenerate.
-
-**Reconcile the contract in the same ticket, or it comes back.** `11-search.md:109` and
-`:154` still specify the chip. A ticket may not edit `design-plan/` directly (see **#320**),
-so this needs the same ruling route those tickets use — but leaving the plan specifying a
-filter that no longer exists is what let this diverge the first time.
-
-**`main` is red on this, today.** Found 2026-08-30 by the backlog consolidation, on a clean
-checkout: `src/components/search/refine-bar.test.tsx` → *"the Style chip › reads six chips out
-of the frame, Style among them"* **fails** — the frames dropped the chip in `c4c8fa2` and the
-test still asserts it is drawn. So the suite is already telling the truth about the
-contradiction; it is just pointed the wrong way. **Inverting that test is part of this ticket**,
-not a side effect of it: it must assert the exact five-chip set by name, and `Style` must be the
-thing whose absence it proves.
-
-**Non-goals:** the other three tag groups (`language`, `cultural`, `dietary`) stay exactly
-as they are; the shared dropdown itself (**#167**, Done); the Dietary-scoping and taxonomy
-work, which is its own ticket.
-
-**Acceptance:**
-
-- [ ] `TAG_CATEGORIES` is `['language', 'cultural', 'dietary']` and nothing in `apps/`
-      references a `style` tag group
-- [ ] The Refine bar renders five chips, matching the frame — no `Style ▾` in any state
-- [ ] The vendor profile editor's Tags section offers three groups, not four
-- [ ] The `tag_category` enum has no `style` member, and no `tags` or `vendor_tags` row
-      survives on it
-- [ ] The migration applies cleanly to a clone of the dev database, with its data step
-      proven on rows that actually exist
-- [ ] `11-search.md` no longer specifies a filter the product does not ship
-- [ ] `parity-checker` returns MATCH on the Layout axis for frame `02`, chip count included
-
-**Tests (required):**
-
-- [ ] `type-parity.test.ts` holds `tagCategoryEnum.enumValues` to `TAG_CATEGORIES`, so the
-      enum and the constant cannot drift apart again
-- [ ] A Refine bar test asserting the exact chip set, by name — a count alone would pass
-      if a different group went missing
-- [ ] A migration test that seeds a `style` tag and a `vendor_tags` row on it, runs the
-      migration, and asserts both are gone and the vendor's other tags survived
-- [ ] A seed idempotency test: seed, seed again, assert three tag groups
-
----
-
 ### #332: `state` becomes a closed vocabulary, from the form to the column
 
 **Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
@@ -1980,5 +1904,135 @@ reintroduces a deadline the API refuses, at the moment of commitment.
       duration for a deadline the code derives — the same guard shape as
       `one-deadline-one-fee.test.ts`, pointed at the plan rather than the app. It is the only
       thing that would have caught E, since the file is prose nothing imports
+
+---
+
+
+### #336: 01/02 header — the signed-in cluster draws `Dashboard` and a bell where frame `02` draws `Bookings`
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Found
+while verifying the Refine bar; **not caused by #329 and not touched by it**.
+
+Frame `02`, signed in, draws `Messages` · `Bookings` · avatar. Live renders `Messages` ·
+`Dashboard` · a notification bell · the Clerk `UserButton`.
+
+| Axis | Expected (frame `02`) | Observed |
+| --- | --- | --- |
+| Text | `Bookings` | `Dashboard` — `apps/web/src/components/site-header.tsx:157` |
+| Layout | no bell in the cluster | `<NotificationBell />` between the nav links and the avatar |
+
+**These are two decisions, not one.** The link text is a plain Text-axis miss and the frame
+is the authority. The bell is different: it is a real surface with real behaviour, and a
+frame that predates it is not evidence it should be removed. **Do not delete the bell to
+pass parity** — establish first whether the frame is stale, and if it is, that is a design
+ruling and this ticket splits.
+
+**Acceptance:**
+
+- [ ] The signed-in header's link reads the string frame `02` draws, verified by
+      `parity-checker` on the Text axis
+- [ ] The bell is either in the frame or out of the header, with the reasoning recorded —
+      not left as an undeclared deviation
+- [ ] A test pins the header's signed-in cluster by name, so the next drift is caught in the
+      suite rather than by a parity pass
+
+---
+
+### #337: The card focus ring is clipped by the scroll container on the first row of results
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329.
+
+`div.app-pane` is the `overflow:auto` scroller and carries **no top padding**. Its
+content-box top is `y=173`; the first row of result cards starts at exactly `y=173`. The
+focus ring paints outward — `ring-2` plus `ring-offset-2` — so its top 4px lands at
+`y=169–172`, outside the scroller, and is clipped.
+
+**Measured, not inferred.** Pixel-differencing a focused card against a blurred one: rows
+169–172 are identical `rgb(248,245,239)` in both, and the first differing pixel is at
+`y=173`. The ring still paints on the left, right, bottom and corners.
+
+**Why P2 and not P1.** The indicator remains visible, so **WCAG 2.4.7 holds**. This is a
+partial clip, not the "clipped to nothing" failure `04-laws.md` describes. It is real and
+worth fixing; it is not an accessibility break.
+
+**Fix the class, not the instance.** `scroll-padding-top` or top padding on `.app-pane`
+closes this row — but any `overflow` scroller whose first focusable child sits flush against
+its content box has the same defect. Sweep them.
+
+**Acceptance:**
+
+- [ ] A focused first-row card's ring is unclipped on all four sides, proven by the same
+      pixel-difference method rather than by a computed-style read
+- [ ] Every other scroll container in the app is checked for the same shape, and what was
+      found is recorded — including "none" if that is the answer
+- [ ] A test that would fail against today's markup. Note that **jsdom performs no layout**,
+      so a geometry assertion there passes on the broken version; this needs a real browser
+      or it needs to assert the class-level fact and say so
+
+---
+
+### #338: 09 Vendor profile editor — the Storefront nav is missing `Payouts` and its blocker dot
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329.
+
+Live renders **six** section-nav items — Business, Location, Tags, Response time, Packages,
+Portfolio. Frame `09` draws **seven**, with **`Payouts` last, carrying a gold blocker dot**.
+
+Gold is correct there under `40-states.md`: payouts not yet set up is waiting on someone, not
+a failure. Red would be wrong. Payouts exists as a surface — #9 shipped Connect onboarding —
+so this is a missing nav entry, not a missing feature.
+
+**Re-measure frame `09` first.** The parity pass that found this was scoped to the Tags row
+and read the rest of the editor only in passing. The six-versus-seven count is the finding;
+**everything else about that nav is unverified**, including the order, the dot's exact token
+and whether the other six match.
+
+**Acceptance:**
+
+- [ ] Frame `09`'s section nav is re-measured in full before any code changes
+- [ ] The nav renders every item the frame draws, in the frame's order
+- [ ] The blocker dot reads the vendor's real Stripe onboarding state — no invented status —
+      and uses gold, never red
+- [ ] `parity-checker` returns MATCH on frame `09`'s nav rail
+
+---
+
+### #339: [DESIGN] Search `Sort` has no specified default — the frame draws a chosen one
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Deferred — needs a human | **Capabilities:** `core`
+**Blocked by:** A design ruling on the default sort
+
+**Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329.
+
+Live defaults to `Most relevant` (`sort: 'relevance'`). Frame `02` draws `Top rated ▾`.
+
+**This is not evidence the default is wrong**, and `parity-checker` correctly did not report
+it as a deviation: frame `02` draws a *chosen* sort exactly as it draws a chosen price
+(`$500 – $3,200`) and a chosen rating (`4★ & up`). Neither `11-search.md` nor
+`42-dropdowns.md` fixes a default anywhere.
+
+What makes it worth a ticket is the product question underneath. **A new marketplace
+defaulting to `Top rated` ranks its thinnest review counts first** — a vendor with one
+five-star review outranks one with sixty at 4.8 — and that is a ranking decision, not a
+parity one. `relevance` may well be right; nothing has ever said so on the record.
+
+**Do not close this by matching the frame.** The output is a ruling, and then either the code
+changes or the plan gains the line it is missing.
+
+**Acceptance:**
+
+- [ ] The default sort is stated in `11-search.md`, with the reasoning
+- [ ] Code and plan agree, whichever way the ruling goes
+- [ ] If the answer is `relevance`, `11-search.md` says so explicitly, so the next parity pass
+      does not re-open this from the frame
 
 ---

@@ -339,6 +339,7 @@ Active tracker: `.claude/plans/vendor-marketplace-tickets.md`
 | **328** | **The hero and search date field is a native picker the frames do not draw** | P1 | M3 | **P2 Medium** | **Done** | — | **None** | `core` | **Closed by #167 on 2026-08-30, not worked separately.** The native `input[type=date]` is gone from every surface — the hero, the compact header bar, the profile booking rail and the booking-request form — along with the transparent-input-and-overlaid-prompt workaround that existed only to hide the browser's `mm/dd/yyyy`. The replacement is frame `28`'s date body, and on the two surfaces that have a vendor in scope it draws that vendor's own availability marks, so a day they are booked on is refused in the picker rather than accepted and then rejected on the next screen. |
 | **330** | **`state` is unvalidated free text, so one city splits into two search results** | P1 | M3 | **P1 High** | ****Superseded**** | — | **None** | `core` | **Superseded 2026-08-30 by the backlog consolidation — the work is #332.** Split from #331 it shipped two migrations on one column and left it unconstrained in between; the detail below carries the measured city/state split #332 was built from. **Filed 2026-08-30, user-reported: `Austin, TX` and `Austin, Texas` appear as separate cities.** Confirmed in the dev database — `Austin/TX` has **11** published vendors and `Austin/Texas` has **1**, and `/vendors/cities` builds its picker by `GROUP BY city, state`, so the split is an option a customer can pick. Search then matches `lower(state) = lower(?)`, so picking either one **hides the other's vendors**. **The form is the source, and it points the wrong way:** `US_STATES` (`apps/web/src/lib/us-states.ts`) holds full names, so every vendor saving through the editor today writes `Texas` while the seeds hold `TX` — the split widens with each new vendor. `state` on `createVendorProfileSchema` is `z.string().trim().min(1).max(100)`, so the API accepts anything. Canonical form is the **two-letter USPS code**, validated in the shared schema, not in the web list. Needs a data repair for existing rows. |
 | **331** | **`vendor_profiles.state` should be a database enum, not a `varchar(100)` Zod happens to guard** | P1 | M3 | **P2 Medium** | ****Superseded**** | — | #332 | `core` | **Superseded 2026-08-30 by the backlog consolidation — the work is #332.** Its own text called it "the layer below #330, not a duplicate"; the layers now land together. The reasoning for the enum over a `CHECK`, and for storing the code, is below and still binds #332. **Filed 2026-08-30, user-directed — the layer below #330.** #330 puts the state vocabulary in `createVendorProfileSchema`, which is the right place for a 400 with a message but is **not** a guarantee: the column stays `varchar(100)` (`vendor-profiles.ts:51`), so `db:seed`, a migration, `db:studio` or any future route that forgets the schema can still write `Texas` and reopen the split. This makes the column itself unable to hold a bad value — `us_state` enum, or a `CHECK` against the 51 codes. **Runs after #330**, which does the data repair; a constraint added before the repair fails on the rows that motivated it. The same argument applies to `users.state` if that column exists — check before assuming. |
+| **329** | **Remove the `style` tag group from every input, dropdown and filter** | P1 | M3 | **P1 High** | **Done** | worktree-329 | **None** | `core` | **Done 2026-08-30 — `eccb760`, PR #63.** The red test on `main` is inverted: `refine-bar.test.tsx` now reads frame `02`'s exact five-chip set by name and proves `Style` absent. Removed at the root, not hidden — `TAG_CATEGORIES` drives the pgEnum, the Zod schema, the picker and the Refine bar, so dropping `'style'` carried all four. **`tags.vendor_category_id` went with it**, plus `tags_scoped_category_name_key`, `SCOPED_TAG_CATEGORY` and the `vendorCategorySlug` wire field: that scoping mechanism existed solely for `style`, and `SCOPED_TAG_CATEGORY = 'style' satisfies TagCategory` would not compile without it. `tags_category_name_key` is now unconditional. Two migrations and the **order is load-bearing** — `0016` clears the rows (`vendor_tags` and `tag_suggestions` before `tags`; the suggestions table carries the same enum and a generated diff would have missed it), `0017` recreates the enum; `drop-style-tags.test.ts` replays the journal to `0015`, builds the fixture, and genuinely fails without the data step. Proven against a pg_dump clone of the dev database — **51 real style tags** → three enum values, three groups, no scope column. `relaxations.ts` named the group twice in customer-facing copy (the chip **and** the empty-state diagnosis, the latter untested and caught by `diff-reviewer`); both now say "tag". `parity-checker` **PASS** on frame `02`, all six axes, no `Style` at 1440/1280/1024/768/390; editor Tags shows three peer multi-selects. 2,818 tests green. **Filed 2026-08-30, user-directed — reverses #281 and #92.** The Style filter was built inside **#297** and then ruled out of the MVP the same day, so the product now disagrees with itself three ways: the **code** ships a `Style ▾` chip (`TAG_CATEGORIES` carries `'style'`), the **frames** no longer draw one (`c4c8fa2` removed it from four screens), and **`11-search.md`** still specifies it at lines 109 and 154. Supersedes **#25**. Removal is wider than the chip — the group is also a section in the vendor profile editor's Tags picker, a `tag_category` enum member, and seed data. **Note the enum:** Postgres cannot drop a value in place, so this needs the create-new-type / swap-column / drop-old migration, plus a data step for any `tags` and `vendor_tags` rows already on `style`. |
 
 ---
 
@@ -11944,3 +11945,83 @@ which #330 settles; geocoding or a market entity.
 - [ ] A seed test that runs both seeds against the constrained column
 
 ---
+
+
+---
+
+### #329: Remove the `style` tag group from every input, dropdown and filter
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30, user-directed.** This reverses **#281** (the data model) and **#92**
+(the chip), both of which landed inside **#297**. It supersedes **#25**, which asked for the
+feature this ticket removes.
+
+**Why it exists.** Style was ruled out of the MVP on 2026-08-30, and `c4c8fa2` removed the
+chip from four frames on that ruling — but the code had already shipped it. The product now
+disagrees with itself three ways:
+
+| Source | Says |
+| --- | --- |
+| Code | `TAG_CATEGORIES = ['style', 'language', 'cultural', 'dietary']`, chip rendered |
+| Frames | No `Style ▾` chip on `02`, `17`, `27`, `28` |
+| `11-search.md` | Still specifies `Style ▾` at lines **109** and **154** |
+
+Any parity run against frame `02` today is comparing a six-chip bar to a five-chip frame and
+calling one of them wrong. That is the cost of leaving this open, not the chip itself.
+
+**The removal is wider than the Refine bar.** The group reaches four places:
+
+| Surface | Where |
+| --- | --- |
+| Refine bar chip | `apps/web/src/components/search/refine-bar.tsx` — the `TAG_CATEGORIES` map |
+| Vendor profile editor | the Tags section → `TagPicker` → `tag-category-section.tsx` |
+| Shared constant | `packages/shared/src/constants/index.ts` — `TAG_CATEGORIES` |
+| Database | `tag_category` enum, plus any `tags` / `vendor_tags` rows on `style` |
+
+**The enum is the hard part, and it is not optional.** Postgres cannot drop a value from an
+enum in place. This needs the standard create-new-type / swap-column / drop-old-type
+migration, and it must run **after** a data step that clears or repoints every existing
+`style` row — `vendor_tags` first, then `tags`, or the column swap fails on rows it cannot
+cast. Do not hand-edit `packages/db/drizzle/`; edit the schema and regenerate.
+
+**Reconcile the contract in the same ticket, or it comes back.** `11-search.md:109` and
+`:154` still specify the chip. A ticket may not edit `design-plan/` directly (see **#320**),
+so this needs the same ruling route those tickets use — but leaving the plan specifying a
+filter that no longer exists is what let this diverge the first time.
+
+**`main` is red on this, today.** Found 2026-08-30 by the backlog consolidation, on a clean
+checkout: `src/components/search/refine-bar.test.tsx` → *"the Style chip › reads six chips out
+of the frame, Style among them"* **fails** — the frames dropped the chip in `c4c8fa2` and the
+test still asserts it is drawn. So the suite is already telling the truth about the
+contradiction; it is just pointed the wrong way. **Inverting that test is part of this ticket**,
+not a side effect of it: it must assert the exact five-chip set by name, and `Style` must be the
+thing whose absence it proves.
+
+**Non-goals:** the other three tag groups (`language`, `cultural`, `dietary`) stay exactly
+as they are; the shared dropdown itself (**#167**, Done); the Dietary-scoping and taxonomy
+work, which is its own ticket.
+
+**Acceptance:**
+
+- [ ] `TAG_CATEGORIES` is `['language', 'cultural', 'dietary']` and nothing in `apps/`
+      references a `style` tag group
+- [ ] The Refine bar renders five chips, matching the frame — no `Style ▾` in any state
+- [ ] The vendor profile editor's Tags section offers three groups, not four
+- [ ] The `tag_category` enum has no `style` member, and no `tags` or `vendor_tags` row
+      survives on it
+- [ ] The migration applies cleanly to a clone of the dev database, with its data step
+      proven on rows that actually exist
+- [ ] `11-search.md` no longer specifies a filter the product does not ship
+- [ ] `parity-checker` returns MATCH on the Layout axis for frame `02`, chip count included
+
+**Tests (required):**
+
+- [ ] `type-parity.test.ts` holds `tagCategoryEnum.enumValues` to `TAG_CATEGORIES`, so the
+      enum and the constant cannot drift apart again
+- [ ] A Refine bar test asserting the exact chip set, by name — a count alone would pass
+      if a different group went missing
+- [ ] A migration test that seeds a `style` tag and a `vendor_tags` row on it, runs the
+      migration, and asserts both are gone and the vendor's other tags survived
+- [ ] A seed idempotency test: seed, seed again, assert three tag groups
