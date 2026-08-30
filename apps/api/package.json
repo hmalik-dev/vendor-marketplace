@@ -29,6 +29,7 @@
     "fastify-plugin": "6.0.0",
     "fastify-type-provider-zod": "7.0.0",
     "sharp": "^0.35.4",
+    "stripe": "^22.6.0",
     "svix": "2.1.0",
     "zod": "4.4.3"
   },

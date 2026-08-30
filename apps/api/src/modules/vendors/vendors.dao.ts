@@ -153,3 +153,26 @@ export async function findVendorTags(db: AppDatabase, vendorId: string): Promise
 
   return rows.map((row) => row.tag);
 }
+
+/**
+ * The webhook's only way back to a vendor: a Stripe notification names the
+ * connected account, never the Orla row. Soft-deleted profiles are excluded
+ * like everywhere else, so a closed account's late events land on nothing
+ * rather than resurrecting a deleted vendor.
+ */
+export async function findVendorProfileByStripeAccountId(
+  db: AppDatabase,
+  stripeAccountId: string,
+): Promise<VendorProfileRow | null> {
+  if (!stripeAccountId) {
+    return null;
+  }
+
+  const rows = await db
+    .select()
+    .from(vendorProfiles)
+    .where(and(eq(vendorProfiles.stripeAccountId, stripeAccountId), live))
+    .limit(1);
+
+  return rows?.[0] ?? null;
+}

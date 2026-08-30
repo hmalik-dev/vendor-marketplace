@@ -8,7 +8,8 @@ import { RequestRow } from '@/components/vendor/request-row';
 import { EmptyState, EmptyStateGlyph } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { getOwnBookingRequests } from '@/lib/vendor-requests';
-import { getOwnVendorProfile, getVendorDashboard } from '@/lib/vendor-data';
+import { Banner } from '@/components/ui/banner';
+import { getOwnVendorProfile, getPayoutStatus, getVendorDashboard } from '@/lib/vendor-data';
 import { requireRole } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 const PROFILE_EDIT_PATH = '/vendor/profile/edit';
+const PAYMENTS_PATH = '/vendor/payments';
 
 /**
  * Frame `08` — every incoming request, actionable without navigating away.
@@ -38,7 +40,11 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
     redirect(PROFILE_EDIT_PATH);
   }
 
-  const [dashboard, requests] = await Promise.all([getVendorDashboard(), getOwnBookingRequests()]);
+  const [dashboard, requests, payouts] = await Promise.all([
+    getVendorDashboard(),
+    getOwnBookingRequests(),
+    getPayoutStatus(),
+  ]);
 
   if (!dashboard) {
     redirect(PROFILE_EDIT_PATH);
@@ -77,6 +83,22 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
             View my public profile
           </Link>
         </div>
+
+        {/*
+          The payout gate. Gold rather than red because nothing has failed —
+          `40-states.md` reserves red for a failure and gold for work waiting on
+          the vendor — and the sentence is the approved one from
+          `31-content-voice.md`. It disappears the moment Stripe reports both
+          capabilities active, so a set-up vendor never sees it.
+        */}
+        {payouts && !payouts.stripeOnboarded ? (
+          <Banner status="pending" title="Payouts not connected" className="mb-4">
+            You can&rsquo;t take payment until payouts are connected. It takes about five minutes.{' '}
+            <Link href={PAYMENTS_PATH} className="font-semibold text-clay-500 hover:underline">
+              Set up payouts &rarr;
+            </Link>
+          </Banner>
+        ) : null}
 
         <DashboardStats dashboard={dashboard} today={today} />
 

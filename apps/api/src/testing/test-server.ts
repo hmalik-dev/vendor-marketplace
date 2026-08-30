@@ -3,6 +3,11 @@ import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/te
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
+import type {
+  StripeAccountStatus,
+  StripeConnectGateway,
+  StripeEventNotification,
+} from '../lib/stripe.js';
 import type { ClerkUserSnapshot } from '../modules/users/users.service.js';
 import { buildServer } from '../server.js';
 import type { Clock } from '../plugins/clock.js';
@@ -17,6 +22,16 @@ export const TEST_ENV: ApiEnv = {
   CLERK_WEBHOOK_SECRET: 'whsec_not_used',
   CLERK_WEBHOOK_ENDPOINT: 'http://localhost:4000/webhooks/clerk',
   WEB_URL: 'http://localhost:3000',
+  /*
+   * Deliberately not shaped like real Stripe credentials, and deliberately too
+   * short to read as one. The suites inject a fake gateway, so no value here is
+   * ever sent to Stripe or verified against a signature, and a realistic-looking
+   * stand-in would only be a string the credential hook and the secret scanner
+   * both have to be taught to ignore.
+   */
+  STRIPE_SECRET_KEY: 'unused',
+  STRIPE_WEBHOOK_SECRET: 'unused',
+  STRIPE_PLATFORM_FEE_RATE: '0.12',
   RATE_LIMIT_MAX: 1_000,
   S3_ENDPOINT: 'http://storage.test',
   S3_ACCESS_KEY_ID: 'test',
@@ -44,6 +59,66 @@ export interface RecordedObject {
   contentType: string;
 }
 
+/**
+ * The Stripe Connect boundary, recorded rather than called. Suites set the
+ * capability statuses they want an account to have and read back what the
+ * service asked Stripe to do.
+ */
+export interface FakeStripe extends StripeConnectGateway {
+  /** Accounts the fake has minted, in creation order. */
+  createdAccounts: { accountId: string; vendorId: string; contactEmail: string }[];
+  /** Every onboarding link minted, so a suite can assert on the URLs sent. */
+  createdLinks: { accountId: string; returnUrl: string; refreshUrl: string }[];
+  /** Capability state per account id; absent means both capabilities inactive. */
+  accountStatuses: Map<string, StripeAccountStatus>;
+  /** Signatures the fake verifier accepts; anything else is rejected. */
+  validSignatures: Set<string>;
+  /** The notification the next verified webhook is parsed into. */
+  nextEvent: StripeEventNotification;
+}
+
+function createFakeStripe(): FakeStripe {
+  const createdAccounts: FakeStripe['createdAccounts'] = [];
+  const createdLinks: FakeStripe['createdLinks'] = [];
+  const accountStatuses = new Map<string, StripeAccountStatus>();
+  const validSignatures = new Set<string>(['valid-signature']);
+
+  const fake: FakeStripe = {
+    createdAccounts,
+    createdLinks,
+    accountStatuses,
+    validSignatures,
+    nextEvent: { type: 'v2.core.account.updated', accountId: null },
+
+    createRecipientAccount: async (input) => {
+      const accountId = `acct_test_${createdAccounts.length + 1}`;
+      createdAccounts.push({
+        accountId,
+        vendorId: input.vendorId,
+        contactEmail: input.contactEmail,
+      });
+      return { accountId };
+    },
+
+    createOnboardingLink: async (input) => {
+      createdLinks.push(input);
+      return { url: `https://connect.stripe.test/setup/${input.accountId}/${createdLinks.length}` };
+    },
+
+    readAccountStatus: async (accountId) =>
+      accountStatuses.get(accountId) ?? { transfersActive: false, payoutsActive: false },
+
+    parseEventNotification: (_payload, signature) => {
+      if (!validSignatures.has(signature)) {
+        throw new Error('Invalid test Stripe signature');
+      }
+      return fake.nextEvent;
+    },
+  };
+
+  return fake;
+}
+
 export interface TestHarness {
   app: FastifyInstance;
   database: TestDatabase;
@@ -53,16 +128,18 @@ export interface TestHarness {
   clerkUsers: Map<string, ClerkUserSnapshot>;
   /** Signatures the fake svix verifier accepts; anything else is rejected. */
   validWebhookSignatures: Set<string>;
+  /** The Stripe Connect boundary, recorded rather than called. */
+  stripe: FakeStripe;
   /** Simulates the storage bucket going away, for the readiness probe. */
   setStorageAvailable: (available: boolean) => void;
   close: () => Promise<void>;
 }
 
 /**
- * Boots the real server against an in-process Postgres, with the two network
- * boundaries (Clerk token verification and svix signature verification)
- * replaced by explicit fakes. Everything between the HTTP edge and SQL is the
- * production code path.
+ * Boots the real server against an in-process Postgres, with the three network
+ * boundaries (Clerk token verification, svix signature verification, and Stripe
+ * Connect) replaced by explicit fakes. Everything between the HTTP edge and SQL
+ * is the production code path.
  */
 export async function createTestHarness(options: TestHarnessOptions = {}): Promise<TestHarness> {
   const database = await createTestDatabase();
@@ -73,6 +150,7 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
 
   const clerkUsers = new Map<string, ClerkUserSnapshot>();
   const validWebhookSignatures = new Set<string>(['valid-signature']);
+  const stripe = createFakeStripe();
   const storedObjects: RecordedObject[] = [];
 
   let storageAvailable = true;
@@ -119,6 +197,7 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
         return undefined;
       },
     },
+    stripe,
   });
 
   return {
@@ -127,6 +206,7 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
     storedObjects,
     clerkUsers,
     validWebhookSignatures,
+    stripe,
     setStorageAvailable: (available) => {
       storageAvailable = available;
     },

@@ -15,6 +15,11 @@ import { allowedOrigins, parseEnv, type ApiEnv } from './config/env.js';
 import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
 import type { AppDatabase } from './lib/database.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
+import {
+  createStripeConnectGateway,
+  onboardingReturnOrigin,
+  type StripeConnectGateway,
+} from './lib/stripe.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
 import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
@@ -33,6 +38,8 @@ import { tagRoutes } from './modules/tags/tags.routes.js';
 import { uploadRoutes } from './modules/uploads/uploads.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { vendorRoutes } from './modules/vendors/vendors.routes.js';
+import { stripeConnectRoutes } from './modules/vendors/stripe-connect.routes.js';
+import { stripeWebhookRoutes } from './modules/webhooks/stripe.routes.js';
 import {
   clerkWebhookRoutes,
   type ClerkWebhookRoutesOptions,
@@ -61,16 +68,25 @@ export interface BuildServerOptions {
   /** Test seams; production wiring uses the real Clerk and svix clients. */
   auth?: Pick<ClerkAuthPluginOptions, 'verifySessionToken' | 'loadClerkUser'>;
   webhooks?: Pick<ClerkWebhookRoutesOptions, 'verifySignature'>;
+  /** Stripe Connect seam; production wiring builds the real gateway from env. */
+  stripe?: StripeConnectGateway;
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
   const { env, db, storage } = options;
+  const stripe = options.stripe ?? createStripeConnectGateway(env);
+  const returnOrigin = onboardingReturnOrigin(env);
 
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
       // Never let a token, cookie, or webhook signature reach the log stream.
-      redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["svix-signature"]'],
+      redact: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'req.headers["svix-signature"]',
+        'req.headers["stripe-signature"]',
+      ],
       ...(options.loggerStream ? { stream: options.loggerStream } : {}),
     },
   }).withTypeProvider<ZodTypeProvider>();
@@ -105,6 +121,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(userRoutes);
   await app.register(customerRoutes);
   await app.register(vendorRoutes);
+  await app.register(stripeConnectRoutes, { stripe, returnOrigin });
   await app.register(packageRoutes);
   await app.register(portfolioRoutes);
   await app.register(availabilityRoutes);
@@ -115,6 +132,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     signingSecret: env.CLERK_WEBHOOK_SECRET,
     ...options.webhooks,
   });
+  await app.register(stripeWebhookRoutes, { stripe, returnOrigin });
 
   await app.ready();
   return app;

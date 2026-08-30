@@ -763,6 +763,32 @@ export type BookingWithContext = z.infer<typeof bookingWithContextSchema>;
 // --- Vendor dashboard ------------------------------------------------------
 
 /**
+ * Whether a vendor can be paid yet. Two fields rather than one because the
+ * surfaces need different things from it: the banner asks only "is this done",
+ * while the payouts page distinguishes a vendor who has never started from one
+ * who started and stopped, and only the account id can tell those apart.
+ *
+ * There is deliberately no fee figure here. Orla charges vendors nothing in
+ * MVP, and a rate rendered anywhere on this flow would be a claim the product
+ * has not made.
+ */
+export const vendorPayoutStatusSchema = z.object({
+  /** `null` until the vendor has begun onboarding at least once. */
+  stripeAccountId: z.string().max(255).nullable(),
+  /** True only when Stripe can both transfer to and pay out from the account. */
+  stripeOnboarded: z.boolean(),
+});
+
+export type VendorPayoutStatus = z.infer<typeof vendorPayoutStatusSchema>;
+
+/** What `POST /vendor/stripe/connect` answers: where to send the vendor next. */
+export const stripeOnboardingLinkSchema = z.object({
+  url: z.url(),
+});
+
+export type StripeOnboardingLink = z.infer<typeof stripeOnboardingLinkSchema>;
+
+/**
  * The vendor's own numbers, on their own private surface.
  *
  * Every figure here is a query result over the vendor's own rows — none is a

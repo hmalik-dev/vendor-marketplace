@@ -2,7 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarCheck, CalendarDays, Images, LayoutDashboard, Package, Store } from 'lucide-react';
+import {
+  CalendarCheck,
+  CalendarDays,
+  CreditCard,
+  Images,
+  LayoutDashboard,
+  Package,
+  Store,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -14,7 +22,7 @@ interface VendorNavItem {
 
 /**
  * Ordered the way a vendor sets a business up: describe it, price it, show the
- * work, then say when you are free.
+ * work, say when you are free, then connect the account that gets paid.
  */
 /** The one vendor route that supplies its own rail. */
 const EDITOR_PATH = '/vendor/profile/edit';
@@ -28,6 +36,13 @@ const ITEMS: readonly VendorNavItem[] = [
   { href: '/vendor/packages', label: 'Packages', icon: Package },
   { href: '/vendor/portfolio', label: 'Portfolio', icon: Images },
   { href: '/vendor/availability', label: 'Availability', icon: CalendarDays },
+  /*
+   * `Payments`, not `Payouts`: that is the word frame `08` puts in this rail,
+   * and the nav item is the frame's string even though the copy inside the
+   * screen talks about payouts. Last, because it is the step a vendor takes
+   * once the storefront is worth booking.
+   */
+  { href: '/vendor/payments', label: 'Payments', icon: CreditCard },
 ];
 
 /**

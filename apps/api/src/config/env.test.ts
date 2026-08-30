@@ -16,6 +16,21 @@ const REQUIRED: NodeJS.ProcessEnv = {
   S3_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads',
 };
 
+/*
+ * Stripe's two server credentials take exactly the shapes Clerk's fixture
+ * already demonstrates — an `sk_` key and a `whsec_` signing secret — so the
+ * fixture reuses that pair instead of adding a second set of realistic-looking
+ * strings. Fewer credential-shaped literals in the tree is the point: every one
+ * of them is something the secret scanner and the pre-tool credential hook have
+ * to be taught to forgive.
+ */
+for (const [stripeKey, clerkKey] of [
+  ['STRIPE_SECRET_KEY', 'CLERK_SECRET_KEY'],
+  ['STRIPE_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
+] as const) {
+  REQUIRED[stripeKey] = REQUIRED[clerkKey];
+}
+
 describe('parseEnv', () => {
   it('fills in the development defaults', () => {
     const env = parseEnv(REQUIRED);
@@ -80,7 +95,9 @@ describe('parseEnv', () => {
   });
 
   it('does not require a capability the API has not wired up yet', () => {
-    expect(Object.keys(parseEnv(REQUIRED))).not.toContain('STRIPE_SECRET_KEY');
+    // `email` is the next capability the registry carries and the API does not
+    // read. Stripe used to stand here; #9 wired it up, so the example moved.
+    expect(Object.keys(parseEnv(REQUIRED))).not.toContain('RESEND_API_KEY');
   });
 });
 
@@ -88,7 +105,7 @@ describe('registry derivation', () => {
   it('reads exactly the keys the registry assigns to the API', () => {
     const expected = registryKeys({
       consumer: 'api',
-      capabilities: ['core', 'auth', 'storage'],
+      capabilities: ['core', 'auth', 'storage', 'stripe'],
     });
 
     expect(Object.keys(parseEnv(REQUIRED)).sort()).toEqual([...expected].sort());
