@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeAccountEvent, isOnboarded } from './stripe.js';
+import { describeAccountEvent, isMissingPayoutsOnly, isOnboarded } from './stripe.js';
 
 describe('isOnboarded', () => {
   /*
@@ -13,6 +13,21 @@ describe('isOnboarded', () => {
     expect(isOnboarded({ transfersActive: true, payoutsActive: false })).toBe(false);
     expect(isOnboarded({ transfersActive: false, payoutsActive: true })).toBe(false);
     expect(isOnboarded({ transfersActive: false, payoutsActive: false })).toBe(false);
+  });
+});
+
+describe('isMissingPayoutsOnly', () => {
+  /*
+   * Both capabilities are granted together, and only `external_account`
+   * restricts payouts on its own — so this state means exactly "identity done,
+   * no bank account", and nothing else does.
+   */
+  it('names only the identity-done, no-bank-account state', () => {
+    expect(isMissingPayoutsOnly({ transfersActive: true, payoutsActive: false })).toBe(true);
+    expect(isMissingPayoutsOnly({ transfersActive: true, payoutsActive: true })).toBe(false);
+    expect(isMissingPayoutsOnly({ transfersActive: false, payoutsActive: false })).toBe(false);
+    // Not reachable through onboarding, and deliberately not claimed as this state.
+    expect(isMissingPayoutsOnly({ transfersActive: false, payoutsActive: true })).toBe(false);
   });
 });
 

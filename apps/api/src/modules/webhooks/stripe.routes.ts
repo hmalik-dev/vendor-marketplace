@@ -83,7 +83,10 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const outcome =
         isAccountEvent(event.type) && event.accountId
-          ? await applyAccountStatusChange({ db: app.db, stripe: app.stripe }, event.accountId)
+          ? await applyAccountStatusChange(
+              { db: app.db, stripe: app.stripe, log: request.log },
+              event.accountId,
+            )
           : 'ignored';
 
       request.log.info({ stripeEvent: event.type, outcome }, 'Applied a Stripe Connect webhook');

@@ -85,6 +85,19 @@ export function isOnboarded(status: StripeAccountStatus): boolean {
 }
 
 /**
+ * The one half-state worth naming out loud.
+ *
+ * Both capabilities are granted together by the recipient configuration, and
+ * only the `external_account` requirement restricts payouts on its own — so a
+ * vendor in this state has finished identity and attached no bank account. They
+ * are stuck behind the payment gate with nothing on any surface saying which of
+ * the two is missing, which is a day of guessing unless the logs say it.
+ */
+export function isMissingPayoutsOnly(status: StripeAccountStatus): boolean {
+  return status.transfersActive && !status.payoutsActive;
+}
+
+/**
  * Reads the recipient configuration off a v2 account. The capabilities hash is
  * only present when `configuration.recipient` was included in the request, and
  * a capability is absent until it has been requested, so both are treated as

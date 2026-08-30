@@ -6,7 +6,7 @@ import {
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
 import { z } from 'zod';
-import { isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
+import { isMissingPayoutsOnly, isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
 import { findUserById } from '../users/users.dao.js';
 import {
   claimStripeAccountId,
@@ -19,6 +19,8 @@ import {
 export interface StripeConnectDeps {
   db: AppDatabase;
   stripe: StripeConnectGateway;
+  /** The request logger, so a half-onboarded account is diagnosable. */
+  log?: { warn: (details: Record<string, unknown>, message: string) => void };
 }
 
 /**
@@ -151,6 +153,13 @@ export async function applyAccountStatusChange(
 
   const status = await deps.stripe.readAccountStatus(accountId);
   const onboarded = isOnboarded(status);
+
+  if (isMissingPayoutsOnly(status)) {
+    deps.log?.warn(
+      { stripeAccountId: accountId, vendorId: vendor.id },
+      'Stripe can transfer to this vendor but not pay them out — no external account attached',
+    );
+  }
 
   if (onboarded === vendor.stripeOnboarded) {
     return 'unchanged';
