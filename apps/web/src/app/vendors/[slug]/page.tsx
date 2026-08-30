@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import {
+  addDays,
   BRAND_NAME,
   pageTitle,
+  parseDateString,
+  toDateString,
   todayDateString,
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
@@ -16,6 +19,56 @@ import { ProfileTabs } from '@/components/vendors/profile/profile-tabs';
 import { EmptyState } from '@/components/ui/empty-state';
 import { siteOrigin } from '@/config/env';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
+
+/**
+ * How far ahead the header chip looks for a free day.
+ *
+ * The chip is a fact about the vendor, not a promise about the year: a vendor
+ * blocked solid for three months has nothing useful to say in a chip, and
+ * saying nothing is the designed state — frame `03` draws the chip beside the
+ * category chips, where an absent one simply closes the gap.
+ */
+const FREE_DATE_HORIZON_DAYS = 90;
+
+/*
+ * `Jun 14`, matching the vendor's card in search exactly — the header IS that
+ * card unpacked, and the chip is the one element that persists between the two
+ * surfaces, so a different month format would break the resemblance the whole
+ * composition is built on. UTC because a calendar date is a `DATE` column and
+ * must not be re-read in the viewer's zone.
+ */
+const FREE_CHIP_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+/**
+ * The nearest day this vendor is free, as the chip draws it, or null.
+ *
+ * Read from the same calendar the booking rail reads, so the header and the
+ * rail cannot contradict each other. A date the calendar does not mention is
+ * available — the endpoint returns only the days a vendor has marked.
+ */
+function nearestFreeDate(
+  calendar: Readonly<Record<string, AvailabilityStatus>>,
+  today: string,
+): string | null {
+  const start = parseDateString(today);
+  if (start === null) {
+    return null;
+  }
+
+  for (let offset = 0; offset < FREE_DATE_HORIZON_DAYS; offset += 1) {
+    const date = toDateString(addDays(start, offset));
+
+    if ((calendar[date] ?? 'available') === 'available') {
+      return FREE_CHIP_FORMATTER.format(new Date(`${date}T00:00:00Z`));
+    }
+  }
+
+  return null;
+}
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -130,10 +183,12 @@ export default async function VendorProfilePage({
         businessName={vendor.businessName}
         coverImageUrl={vendor.coverImageUrl}
         profileImageUrl={vendor.profileImageUrl}
+        tagline={vendor.tagline}
         avgRating={vendor.avgRating}
         reviewCount={vendor.reviewCount}
         city={vendor.city}
         state={vendor.state}
+        freeOn={nearestFreeDate(calendar, today)}
         categories={vendor.categories}
         tags={vendor.tags}
         rail={
@@ -153,12 +208,11 @@ export default async function VendorProfilePage({
             about: (
               <AboutPane
                 bio={vendor.bio}
-                tagline={vendor.tagline}
                 yearsInBusiness={vendor.yearsInBusiness}
                 completedEventCount={vendor.completedEventCount}
                 serviceRadiusKm={vendor.serviceRadiusKm}
-                portfolio={vendor.portfolio}
-                onSeeAllHref={`/vendors/${vendor.slug}?tab=portfolio`}
+                packages={vendor.packages}
+                onSeePackagesHref={`/vendors/${vendor.slug}?tab=packages`}
               />
             ),
             packages: (

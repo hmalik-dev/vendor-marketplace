@@ -184,9 +184,32 @@ export function BookingRail({
         <Button asChild variant="primary" className="mt-1 w-full justify-center py-3.25">
           <Link href={requestHref}>Request booking</Link>
         </Button>
-        <Button variant="secondary" disabled className="w-full justify-center py-3">
+        {/*
+          #110's ruling, recorded in `vendor-marketplace-decisions.md`: the
+          control stays disabled until #310 builds the thread it would open.
+          Frame `03` draws it enabled because the frame draws the finished
+          product, and enabling it here would send a customer to `/messages`,
+          which can only open a thread that already exists — a control that
+          looks like it worked and did nothing is worse than one that says it
+          is not ready.
+
+          `40-states.md` requires the blocker to be named beside the control it
+          blocks. It is named to assistive technology rather than in visible
+          copy, because the frame draws no helper line here and inventing one
+          would fail the Text axis to satisfy the Access axis.
+        */}
+        <Button
+          variant="secondary"
+          disabled
+          aria-describedby="send-message-blocked"
+          className="w-full justify-center py-3"
+        >
           Send a message
         </Button>
+        <span id="send-message-blocked" className="sr-only">
+          Messaging is not available yet. Request a booking to start a conversation with{' '}
+          {businessName}.
+        </span>
 
         {/*
           The frame's charge reassurance, and only that. It previously carried

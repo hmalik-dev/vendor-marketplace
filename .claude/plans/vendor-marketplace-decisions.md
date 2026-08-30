@@ -263,6 +263,35 @@ config was touched, turning #44 into a one-setting fix instead of a guessing loo
 `NEXT_PUBLIC_API_URL` at the Railway domain), #20 (deploy pipeline).
 
 ---
+
+## `Send a message` on the vendor profile is disabled until #310 (2026-08-30, #110 via #298)
+
+**Decision:** the rail's `Send a message` control ships **disabled**, and stays
+disabled until **#310** builds the conversation it would open.
+
+**Why this needed deciding.** Frame `03` draws the control as an ordinary
+enabled secondary button, and the parity rule says the frame is the acceptance
+criterion. #110 was filed against exactly that mismatch. But the frame draws the
+finished product, not the build order: `/messages` can only open a conversation
+that already **exists** — it reads `?conversation=<id>` — and nothing in the
+product creates one from a vendor profile. Enabling the button would land the
+customer on an empty thread list with no indication that anything failed, which
+is the "dead control" defect #302 is open against elsewhere on this screen.
+Creating the thread is #310's work and is an explicit **non-goal of #298**.
+
+**What this is not.** It is not a ruling that the frame is wrong. When #310
+lands, the control is enabled and this decision is spent — the frame already
+describes the end state, so no design change is needed then.
+
+**How it is applied.** `40-states.md` requires the blocker to be named beside
+the control it blocks. It is named to assistive technology via
+`aria-describedby` rather than as visible copy, because frame `03` draws no
+helper line under that button and adding one would fail the Text axis in order
+to satisfy the Access axis. **#310 removes both the `disabled` attribute and
+the description in the same change** — leaving the description behind an
+enabled control would be worse than never having added it.
+
+---
 ---
 
 ## Constraints (Settled)

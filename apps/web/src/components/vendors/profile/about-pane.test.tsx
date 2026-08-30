@@ -1,53 +1,105 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ServicePackage } from '@vendor-marketplace/shared';
+import { afterEach, describe, expect, it } from 'vitest';
 import { AboutPane } from './about-pane';
-
-vi.mock('./portfolio-strip', () => ({
-  PortfolioStrip: () => <div data-testid="portfolio-strip" />,
-}));
 
 afterEach(cleanup);
 
+/** A package with only the fields this pane reads; the rest are unused here. */
+function servicePackage(priceCents: number, inclusions: readonly string[]): ServicePackage {
+  return {
+    id: `pkg-${priceCents}`,
+    name: `Package ${priceCents}`,
+    description: 'A package with a description long enough to pass validation.',
+    priceCents,
+    priceType: 'fixed',
+    durationHours: null,
+    maxGuests: null,
+    inclusions: [...inclusions],
+    isActive: true,
+    displayOrder: 0,
+  } as unknown as ServicePackage;
+}
+
 const BASE = {
   bio: 'Ten years photographing weddings across central Texas.',
-  tagline: null,
   yearsInBusiness: null,
   completedEventCount: 0,
   serviceRadiusKm: null,
-  portfolio: [],
-  onSeeAllHref: '/vendors/june-harlow?tab=portfolio',
+  packages: [] as readonly ServicePackage[],
+  onSeePackagesHref: '/vendors/june-harlow?tab=packages',
 };
 
 function tileValue(label: string): string | undefined {
   return screen.getByText(label).parentElement?.querySelector('dd')?.textContent ?? undefined;
 }
 
-describe('AboutPane — the pull-quote', () => {
-  it("renders the vendor's line in quotation marks", () => {
-    render(<AboutPane {...BASE} tagline="Quiet, documentary, never asks you to pose." />);
-
-    expect(screen.getByText('"Quiet, documentary, never asks you to pose."')).toBeDefined();
-  });
-
-  /* Absent is the common case, and an empty quote would be worse than none. */
-  it('renders nothing where there is no tagline', () => {
+/*
+ * The 2026-08-29 cover rework moves the tagline into the identity card and
+ * deletes the four-up Recent work strip. Both are asserted as ABSENT here
+ * rather than simply untested: the pane rendered each of them for months, and
+ * a test that merely stops mentioning them would let either come back.
+ */
+describe('AboutPane — what the cover rework removed', () => {
+  it('renders no pull-quote, even when the vendor has a tagline', () => {
     const { container } = render(<AboutPane {...BASE} />);
 
     expect(container.querySelector('.italic')).toBeNull();
   });
 
-  it('renders it exactly as entered, neither truncated nor re-cased', () => {
-    const exactly80 = 'a'.repeat(80);
-    render(<AboutPane {...BASE} tagline={exactly80} />);
+  it('renders no Recent work strip and no link into the portfolio', () => {
+    render(<AboutPane {...BASE} />);
 
-    expect(screen.getByText(`"${exactly80}"`)).toBeDefined();
+    expect(screen.queryByText('Recent work')).toBeNull();
+    expect(screen.queryByText(/See all \d+/)).toBeNull();
+  });
+});
+
+describe("AboutPane — What's included", () => {
+  const cheapest = servicePackage(145_000, [
+    'Full-day coverage, two photographers',
+    'Edited gallery in four weeks, print rights included',
+    'Travel inside 60 miles of Austin at no charge',
+  ]);
+  const dearest = servicePackage(320_000, ['Two days', 'Album', 'Second shooter']);
+
+  it("lists the cheapest package's inclusions, not the first in the array", () => {
+    render(<AboutPane {...BASE} packages={[dearest, cheapest]} />);
+
+    expect(screen.getByText('Full-day coverage, two photographers')).toBeDefined();
+    expect(screen.queryByText('Two days')).toBeNull();
   });
 
-  /* Curly wrappers, so a straight quote inside reads as nested. */
-  it('survives a tagline that contains its own quotes', () => {
-    render(<AboutPane {...BASE} tagline={'They said "unforgettable" and meant it.'} />);
+  it('links on to the Packages tab with the frame string', () => {
+    render(<AboutPane {...BASE} packages={[cheapest]} />);
 
-    expect(screen.getByText('"They said "unforgettable" and meant it."')).toBeDefined();
+    const link = screen.getByRole('link', { name: 'See all packages →' });
+    expect(link.getAttribute('href')).toBe('/vendors/june-harlow?tab=packages');
+  });
+
+  /* The frame draws three lines; a fourth would push the CTA off the pane. */
+  it('draws at most three lines', () => {
+    const wordy = servicePackage(100_000, ['One', 'Two', 'Three', 'Four', 'Five']);
+    render(<AboutPane {...BASE} packages={[wordy]} />);
+
+    expect(screen.queryByText('Four')).toBeNull();
+    expect(screen.getByText('Three')).toBeDefined();
+  });
+
+  /*
+   * Absent rather than empty. A heading over nothing states a promise the page
+   * cannot keep, and it is the common case for a vendor mid-setup.
+   */
+  it('renders nothing at all when the vendor has listed no inclusions', () => {
+    render(<AboutPane {...BASE} packages={[servicePackage(100_000, [])]} />);
+
+    expect(screen.queryByText("What's included")).toBeNull();
+  });
+
+  it('renders nothing at all when the vendor has no packages', () => {
+    render(<AboutPane {...BASE} />);
+
+    expect(screen.queryByText("What's included")).toBeNull();
   });
 });
 
