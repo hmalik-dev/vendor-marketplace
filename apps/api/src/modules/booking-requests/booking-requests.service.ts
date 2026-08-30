@@ -593,7 +593,7 @@ export async function transitionRequest(
 
   await syncHeldDate(db, updated.vendorId, updated.eventDate);
 
-  await announce(db, updated, action, row.status, vendor.businessName, options.hub);
+  await announce(db, updated, action, row.status, vendor.businessName, party, options.hub);
 
   const servicePackage = updated.packageId
     ? ((await findPackagesByIds(db, [updated.packageId]))[0] ?? null)
@@ -663,9 +663,23 @@ async function prepareTransition({
     return {};
   }
 
+  /*
+   * **Who may decline depends on what is on the table.**
+   *
+   * From `pending` there is no offer yet, so declining means "I will not take
+   * this booking" — the vendor's answer to make. A customer with nothing in
+   * front of them is not declining anything; withdrawing is `cancel`, and that
+   * one is theirs alone.
+   *
+   * From `quoted` there is a price, and either party may end it: the vendor
+   * withdrawing the offer, or the customer turning it down. Frame `06` draws
+   * the customer's half — `Decline` sits beside `Accept` on their quote screen
+   * — and #309 found it answering 403, because this branch read the actor
+   * without reading the status.
+   */
   if (action === 'decline') {
-    if (party !== 'vendor') {
-      throw forbidden('Only the vendor can decline a request');
+    if (party === 'customer' && row.status !== 'quoted') {
+      throw forbidden('You can only decline a request once the vendor has sent a quote');
     }
     return {};
   }
@@ -738,6 +752,11 @@ async function announce(
   action: RequestAction,
   from: BookingRequestStatus,
   businessName: string,
+  /*
+   * Who acted. `from` alone cannot answer it: both parties may decline a
+   * `quoted` request, and the notification is addressed to the other one.
+   */
+  party: 'customer' | 'vendor',
   hub?: EventHub,
 ): Promise<void> {
   switch (action) {
@@ -772,17 +791,38 @@ async function announce(
       );
       return;
     case 'decline':
-      await notifyParty(
-        db,
-        row,
-        'customer',
-        'request_declined',
-        {
-          title: `${businessName} declined`,
-          body: 'The date is free again — try another vendor for it.',
-        },
-        hub,
-      );
+      /*
+       * Whoever did not decline is the one who needs telling — the same rule
+       * as `accept` above, and for the same reason. Decline used to be the
+       * vendor's alone, so this addressed the customer unconditionally; once
+       * the customer could decline a quote, that sent them a notification
+       * about their own decision, attributed to the vendor ("Sunlit Studio
+       * declined"), and told the vendor nothing at all. `request_declined` is
+       * the only signal either party gets.
+       */
+      await (from === 'quoted' && party === 'customer'
+        ? notifyParty(
+            db,
+            row,
+            'vendor',
+            'request_declined',
+            {
+              title: 'Quote declined',
+              body: `The customer turned down your quote for ${readableDate(row.eventDate)}.`,
+            },
+            hub,
+          )
+        : notifyParty(
+            db,
+            row,
+            'customer',
+            'request_declined',
+            {
+              title: `${businessName} declined`,
+              body: 'The date is free again — try another vendor for it.',
+            },
+            hub,
+          ));
       return;
     case 'cancel':
       await notifyParty(
