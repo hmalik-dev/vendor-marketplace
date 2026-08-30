@@ -6,7 +6,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import { notFound } from '../../lib/errors.js';
+import { forbidden, notFound, unauthorized } from '../../lib/errors.js';
 import {
   findUserByClerkId,
   findUserById,
@@ -89,6 +89,35 @@ export async function resolveUserByClerkId(
 
   const snapshot = await loadSnapshot();
   return syncUserFromClerk(db, snapshot);
+}
+
+/**
+ * Re-checks an account that a stream ticket named, and returns who to serve.
+ *
+ * The event stream cannot use `requireAuth` — its whole point is that no
+ * session token travels in its URL — so the admission decision `requireAuth`
+ * would have made has to be made somewhere, and it belongs here rather than in
+ * the route: routes declare schemas and guards, services hold the rules.
+ *
+ * It is re-checked rather than trusted from the ticket because a ban landing
+ * between issue and connect would otherwise be ignored, and a stream, once
+ * open, stays open.
+ */
+export async function resolveStreamSubject(
+  db: AppDatabase,
+  userId: string,
+): Promise<{ id: string }> {
+  const account = await findUserById(db, userId);
+
+  if (!account) {
+    throw unauthorized('No account is linked to this stream ticket');
+  }
+
+  if (account.isBanned) {
+    throw forbidden('This account has been suspended');
+  }
+
+  return { id: account.id };
 }
 
 export async function getUserProfile(db: AppDatabase, userId: string): Promise<User> {

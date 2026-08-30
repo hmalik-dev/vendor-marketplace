@@ -14,6 +14,7 @@ import { MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
 import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
 import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
 import type { AppDatabase } from './lib/database.js';
+import { redactQueryValues } from './lib/log-redaction.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import type { StripeConnectGateway } from './lib/stripe.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
@@ -82,6 +83,31 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
         'req.headers["svix-signature"]',
         'req.headers["stripe-signature"]',
       ],
+      serializers: {
+        /*
+         * The request line, with every query value redacted (#215).
+         *
+         * `redact` reaches headers but not the URL, and the default request
+         * serializer writes the URL whole — which is how 27 live session JWTs
+         * ended up in one lane's dev log. The stream no longer carries a
+         * credential in its URL, and this stops the logger writing a query
+         * value even if some future route puts one back.
+         *
+         * **It redacts the query string, not the path.** A credential placed in
+         * a path segment — `/events/stream/<ticket>` — would still be logged
+         * whole. No route is shaped that way today, and the fix if one ever is
+         * would be to move the value out of the path rather than to widen this.
+         */
+        req(request) {
+          return {
+            method: request.method,
+            url: redactQueryValues(request.url),
+            host: request.headers.host,
+            remoteAddress: request.socket?.remoteAddress,
+            remotePort: request.socket?.remotePort,
+          };
+        },
+      },
       ...(options.loggerStream ? { stream: options.loggerStream } : {}),
     },
   }).withTypeProvider<ZodTypeProvider>();

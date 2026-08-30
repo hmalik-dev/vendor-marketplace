@@ -41,30 +41,6 @@ export function extractBearerToken(header: string | undefined): string | null {
   return token.length > 0 ? token : null;
 }
 
-/**
- * The one route family that may carry its token in the query string.
- *
- * `EventSource` cannot set request headers — that is a limitation of the
- * browser API, not a choice — so an authenticated stream has nowhere else to
- * put the token. It is confined to this prefix rather than accepted anywhere,
- * because a token in a URL is a token in access logs, browser history and
- * `Referer`, and every other route has a header available to it.
- */
-const QUERY_TOKEN_PATH_PREFIX = '/events/';
-
-export function extractQueryToken(url: string): string | null {
-  const path = url.split('?')[0] ?? '';
-
-  if (!path.startsWith(QUERY_TOKEN_PATH_PREFIX)) {
-    return null;
-  }
-
-  const query = url.slice(path.length + 1);
-  const token = new URLSearchParams(query).get('token')?.trim();
-
-  return token ? token : null;
-}
-
 function defaultVerifier(secretKey: string): TokenVerifier {
   return async (token) => {
     const payload = await verifyToken(token, { secretKey });
@@ -113,8 +89,16 @@ export const clerkAuthPlugin = fp<ClerkAuthPluginOptions>(
     app.decorateRequest('auth', null);
 
     app.addHook('onRequest', async (request) => {
-      const token =
-        extractBearerToken(request.headers.authorization) ?? extractQueryToken(request.url);
+      /*
+       * The header, and nothing else.
+       *
+       * `/events/*` used to be allowed to carry its session token in the query
+       * string, because `EventSource` cannot set headers — and the API's own
+       * request logger then wrote 27 live session JWTs into one lane's dev log
+       * (#215). The stream authenticates with a single-use ticket now, so no
+       * route needs this and accepting it anywhere would reopen the hole.
+       */
+      const token = extractBearerToken(request.headers.authorization);
       if (!token) {
         return;
       }
