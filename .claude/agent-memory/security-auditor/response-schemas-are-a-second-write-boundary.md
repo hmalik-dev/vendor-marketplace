@@ -7,7 +7,7 @@ metadata:
 
 Every API response is re-validated by `serializerCompiler`, and a failure is a
 500 (`apps/api/src/plugins/error-handler.ts`, `isResponseSerializationError`).
-So a column's *write* schema and every *response* schema that reads that column
+So a column's _write_ schema and every _response_ schema that reads that column
 form one boundary: widening only the write side lets a user store a value that
 detonates on someone else's page.
 
@@ -21,5 +21,5 @@ schema file has five separate avatar fields fed by two columns; there is no test
 that walks column -> every schema that carries it.
 
 **How to apply:** when a diff changes a field in `packages/shared/src/schemas`,
-grep the *column* (not the field name) through the DAOs to find every response
+grep the _column_ (not the field name) through the DAOs to find every response
 schema it reaches, and check each one. Related: [[image-ref-scheme-allowlist-is-whitespace-bypassable]].

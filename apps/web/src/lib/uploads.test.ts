@@ -246,11 +246,11 @@ describe('a refusal the server explained to a developer', () => {
     });
   });
 
-  it('tells an expired session to sign in, which is a different fix', () => {
+  it('tells a signed-out reader to sign in, which is a different fix', () => {
     expect(rejectedFailure('Authentication required', ERROR_CODES.UNAUTHORIZED)).toEqual({
       kind: 'not-allowed',
       tone: 'red',
-      reason: 'Your session has expired.',
+      reason: "You've been signed out.",
       fix: 'Sign in again, then add the photo.',
       retryable: false,
     });
@@ -269,6 +269,29 @@ describe('a refusal the server explained to a developer', () => {
     const failure = rejectedFailure('ECONNREFUSED 10.0.0.4:5432', ERROR_CODES.INTERNAL_ERROR);
 
     expect(failure.reason).toBe("We couldn't save that photo.");
+  });
+
+  /*
+   * `31-content-voice.md`: "No jargon: no API, webhook, session, null, entity,
+   * record." Copy is reviewed by eye exactly once and then lives forever, so
+   * the ban is asserted rather than remembered.
+   */
+  it('keeps the banned jargon out of every refusal it writes', () => {
+    const codes = [
+      ERROR_CODES.UNAUTHORIZED,
+      ERROR_CODES.FORBIDDEN,
+      ERROR_CODES.INTERNAL_ERROR,
+      undefined,
+    ] as const;
+
+    for (const code of codes) {
+      const failure = rejectedFailure('Something internal.', code);
+      const copy = `${failure.reason} ${failure.fix}`.toLowerCase();
+
+      for (const word of ['session', 'api', 'webhook', 'null', 'entity', 'record', 'endpoint']) {
+        expect(copy, `code ${code ?? 'none'}`).not.toContain(word);
+      }
+    }
   });
 
   it('still renders a validation message, which the API writes for a person', () => {

@@ -155,7 +155,6 @@ describe('a user avatar is an image reference, not a URL', () => {
     expect(conversationSummarySchema.shape.otherPartyAvatarUrl.safeParse(KEY).success).toBe(true);
   });
 
-
   it('accepts the object key an upload returns, on the way in', () => {
     expect(updateUserSchema.safeParse({ avatarUrl: KEY }).success).toBe(true);
   });

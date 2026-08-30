@@ -142,7 +142,7 @@ export function rejectedFailure(message: string, code?: ErrorCode): UploadFailur
     return {
       kind: 'not-allowed',
       tone: 'red',
-      reason: 'Your session has expired.',
+      reason: "You've been signed out.",
       fix: 'Sign in again, then add the photo.',
       retryable: false,
     };

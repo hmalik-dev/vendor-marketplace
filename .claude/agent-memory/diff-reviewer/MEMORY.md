@@ -1,2 +1,3 @@
 - [Unpinned safety constants](review-checklist-unpinned-safety-constants.md) — flip the literal and re-run the caller's suite; a test of the callee's default pins nothing
 - [Pseudo-element hit areas](review-checklist-pseudo-element-hit-areas.md) — `before:size-11` on a glyph button is clipped by `app-pane`'s overflow; measure with elementFromPoint, not className
+- [Widened write schema vs response schemas](review-checklist-widened-write-schema-vs-response-schemas.md) — this API 500s on response-serialization mismatch; grep every read model for the column a diff relaxed

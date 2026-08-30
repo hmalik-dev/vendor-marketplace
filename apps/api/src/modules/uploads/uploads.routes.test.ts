@@ -1,11 +1,14 @@
 import sharp from 'sharp';
 import { users } from '@vendor-marketplace/db/schema';
+import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { USER_ROLES, type UserRole } from '@vendor-marketplace/shared';
 import { STORAGE_PREFIXES, type StoragePrefix } from '../../lib/storage.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
+const ADMIN = 'user_admin';
 const BOUNDARY = '----vendormarketplacetestboundary';
 
 /** Builds a `multipart/form-data` body containing exactly one file part. */
@@ -42,6 +45,7 @@ describe('POST /upload/image', () => {
     for (const [clerkUserId, role] of [
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
+      [ADMIN, 'admin'],
     ] as const) {
       harness.clerkUsers.set(clerkUserId, {
         clerkUserId,
@@ -72,20 +76,50 @@ describe('POST /upload/image', () => {
    * `Record<StoragePrefix, ...>` makes a prefix added later a compile error
    * here as well as in the source — so a new namespace cannot ship untested.
    */
-  const MAY_UPLOAD: Record<StoragePrefix, 'vendor' | 'customer'> = {
+  const MAY_UPLOAD: Record<StoragePrefix, UserRole> = {
     'vendor-profile': 'vendor',
     'vendor-cover': 'vendor',
     portfolio: 'vendor',
     'customer-profile': 'customer',
   };
 
-  const CALLERS = { vendor: VENDOR, customer: CUSTOMER } as const;
+  /*
+   * Driven off `USER_ROLES`, never a hand-written union — `shared-contracts.md`
+   * forbids redeclaring one even when it currently matches. It is also what
+   * puts `admin` in the matrix: an admin owns no namespace, and nothing else
+   * asserts that a third role is refused everywhere.
+   */
+  const CALLERS: Record<UserRole, string> = {
+    vendor: VENDOR,
+    customer: CUSTOMER,
+    admin: ADMIN,
+  };
+
+  /*
+   * `normalizeRole` refuses to take `admin` from Clerk metadata, which is the
+   * control that stops a user self-promoting — so an admin cannot be minted
+   * through the sync path and has to be written directly. Signing in first is
+   * what creates the row the update then promotes.
+   */
+  async function signInAs(role: UserRole): Promise<void> {
+    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CALLERS[role]) });
+
+    if (role === 'admin') {
+      await harness.database.db
+        .update(users)
+        .set({ role: 'admin' })
+        .where(eq(users.clerkUserId, ADMIN));
+    }
+  }
 
   for (const prefix of STORAGE_PREFIXES) {
-    for (const role of ['vendor', 'customer'] as const) {
+    for (const role of USER_ROLES) {
       const allowed = MAY_UPLOAD[prefix] === role;
+      const article = role === 'admin' ? 'an' : 'a';
 
-      it(`a ${role} ${allowed ? 'may' : 'may not'} upload to ${prefix}`, async () => {
+      it(`${article} ${role} ${allowed ? 'may' : 'may not'} upload to ${prefix}`, async () => {
+        await signInAs(role);
+
         const response = await harness.app.inject({
           method: 'POST',
           url: `/upload/image?prefix=${prefix}`,

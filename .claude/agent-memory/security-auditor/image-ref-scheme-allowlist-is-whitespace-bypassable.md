@@ -7,7 +7,7 @@ metadata:
 
 `packages/shared/src/schemas/index.ts` `imageRefSchema` decides "is this an
 absolute URL?" with `/^[a-z][a-z0-9+.-]*:/i`. A leading space, tab or newline
-makes that fail, so the value falls into the *relative path* branch, which only
+makes that fail, so the value falls into the _relative path_ branch, which only
 rejects `//` and `..`. Verified accepted: `" javascript:alert(1)"`,
 `"\njavascript:alert(1)"`, `"jav\tascript:alert(1)"`, `"/\\evil.com/x.png"`.
 
@@ -22,6 +22,6 @@ or a server-side fetch of a stored ref.
 string, the consumer sees the trimmed one.
 
 **How to apply:** if a diff adds a consumer of a stored image ref, or edits
-`imageRefSchema`, require `.trim()` (and control-character rejection) *before*
+`imageRefSchema`, require `.trim()` (and control-character rejection) _before_
 the refine rather than trusting the resolver. Related:
 [[response-schemas-are-a-second-write-boundary]].
