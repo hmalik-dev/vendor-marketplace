@@ -17,7 +17,14 @@ export default function SuspendedPage(): React.ReactElement {
       <h1 className="font-display text-3xl font-semibold text-stone-800">
         Your account is suspended
       </h1>
-      <p className="mt-4 text-stone-600">
+      {/*
+        `leading-prose` because this is the one wrapped paragraph in the product
+        that was relying on the inherited default. #235 narrowed that from 1.5 to
+        `normal`, which is right for the frames' single-line labels and too tight
+        for three lines of prose — so it asks for its measure explicitly rather
+        than the default being widened back for everything.
+      */}
+      <p className="mt-4 leading-prose text-stone-600">
         You cannot book or list services while this account is suspended. If you think this is a
         mistake, reply to any {BRAND_NAME} email and our team will take another look.
       </p>
