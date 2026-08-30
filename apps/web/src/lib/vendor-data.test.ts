@@ -66,9 +66,50 @@ describe('reference reads', () => {
 
       await expect(getCategories({ required: true })).rejects.toBe(upstream500);
     });
+
+    /*
+     * #222: the storefront editor posts these ids back. A cached id outlives
+     * the row it names — after a reseed the editor offered ids the API no
+     * longer had for an hour, across hard reloads, and every save was refused.
+     */
+    it('caches the taxonomy for a page that only displays it', async () => {
+      apiRequest.mockResolvedValue([]);
+
+      await getCategories();
+
+      expect(apiRequest).toHaveBeenCalledWith(
+        '/categories',
+        expect.objectContaining({ revalidate: 3600 }),
+      );
+    });
+
+    it('reads past the cache for a page that posts the ids back', async () => {
+      apiRequest.mockResolvedValue([]);
+
+      await getCategories({ required: true, fresh: true });
+
+      // Omitted rather than `0`: `apiRequest` sends `cache: 'no-store'` when
+      // there is no `revalidate`, and Next ignores a `revalidate` sent beside
+      // a `cache`.
+      expect(apiRequest).toHaveBeenCalledWith(
+        '/categories',
+        expect.not.objectContaining({ revalidate: expect.anything() }),
+      );
+    });
   });
 
   describe('getActiveTags', () => {
+    it('reads past the cache for a page that posts the ids back', async () => {
+      apiRequest.mockResolvedValue([]);
+
+      await getActiveTags({ required: true, fresh: true });
+
+      expect(apiRequest).toHaveBeenCalledWith(
+        '/tags',
+        expect.not.objectContaining({ revalidate: expect.anything() }),
+      );
+    });
+
     it('returns the vocabulary the API answered with', async () => {
       const tags = [{ slug: 'moody', label: 'Moody', categorySlug: 'photography' }];
       apiRequest.mockResolvedValue(tags);

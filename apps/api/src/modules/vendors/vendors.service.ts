@@ -8,6 +8,7 @@ import {
   type VendorSearchResult,
   type UpdateVendorProfileInput,
   type VendorProfileDetail,
+  type FieldErrorDetails,
 } from '@vendor-marketplace/shared';
 import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
@@ -138,7 +139,17 @@ async function assertCategoriesSelectable(
   const found = await findActiveCategoryIds(db, unique);
 
   if (found.length !== unique.length) {
-    throw validationFailed('One or more selected categories are unavailable.');
+    /*
+     * `field` is what lets the storefront editor put this on the category
+     * picker instead of a toast: matching the prose to a control is not
+     * something a client should have to do. `40-states.md` also requires the
+     * message to say how to fix it, and the only fix for an id the vendor
+     * cannot see is to re-read the list.
+     */
+    throw validationFailed(
+      'One or more selected categories are unavailable. Reload the page and choose from the current list.',
+      { field: 'categoryIds' } satisfies FieldErrorDetails,
+    );
   }
 
   // Preserve the caller's order; `findActiveCategoryIds` returns table order.

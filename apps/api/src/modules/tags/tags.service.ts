@@ -1,6 +1,7 @@
 import {
   MAX_TAGS_PER_CATEGORY,
   type CreateTagSuggestionInput,
+  type FieldErrorDetails,
   type Tag,
   type TagSuggestionResponse,
 } from '@vendor-marketplace/shared';
@@ -50,7 +51,12 @@ export async function setVendorTags(
   const resolved = await findActiveTagsByIds(db, unique);
 
   if (resolved.length !== unique.length) {
-    throw validationFailed('One or more selected tags are unavailable.');
+    // Attributed to the tag picker rather than left as a toast, for the reason
+    // in `assertCategoriesSelectable`: the editor saves tags in the same submit.
+    throw validationFailed(
+      'One or more selected tags are unavailable. Reload the page and choose from the current list.',
+      { field: 'tagIds' } satisfies FieldErrorDetails,
+    );
   }
 
   const perCategory = new Map<string, number>();

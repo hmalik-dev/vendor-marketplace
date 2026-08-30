@@ -233,6 +233,25 @@ describe('tag routes', () => {
       expect(response.json().message).toMatch(/tags are unavailable/i);
     });
 
+    /*
+     * #222: the storefront editor saves tags in the same submit as the profile,
+     * so a refusal here has to reach the tag picker rather than a toast the
+     * vendor has to match to a control by hand.
+     */
+    it('names the offending field, so the editor can mark the right control', async () => {
+      await createVendorProfile();
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/tags',
+        headers: bearer(VENDOR),
+        payload: { tagIds: ['11111111-1111-4111-8111-111111111111'] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details).toEqual({ field: 'tagIds' });
+    });
+
     it('rejects a deactivated tag', async () => {
       await createVendorProfile();
       const spanishId = await tagIdByName('Spanish');

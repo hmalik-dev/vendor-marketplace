@@ -23,6 +23,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';
 import { useApi } from '@/lib/use-api';
+import { describeBlockerCount, useSubmitValidation } from '@/lib/use-submit-validation';
+import type { FieldIssue } from '@/lib/use-submit-validation';
+import {
+  controlIdForStateKey,
+  mergeProblems,
+  NO_PROBLEM,
+  problemFromSaveError,
+  problemFromValidationIssues,
+  type ProfileSaveProblem,
+} from '@/lib/vendor-profile-issues';
 import { cn } from '@/lib/utils';
 import { US_STATES } from '@/lib/us-states';
 import {
@@ -250,6 +260,70 @@ const PUBLISH_BLOCKER_FORM_KEYS = [
 ] as const;
 
 /**
+ * Ties a control's message to it, for anything that is not itself a form
+ * control — the two pickers and the photo, which are groups of buttons.
+ *
+ * `aria-invalid` is not a global attribute: on a generic element it is inert,
+ * so writing it there would look like accessible feedback while announcing
+ * nothing. The group is named and described instead, and the summary card
+ * carries the announcement.
+ */
+function describedByProps(issue: FieldIssue | null): { 'aria-describedby'?: string } {
+  return issue ? { 'aria-describedby': `${issue.field}-error` } : {};
+}
+
+/**
+ * The attributes that tie a real control to its red message.
+ *
+ * Returned as a pair with the message element below rather than written out
+ * per field, because the failure mode is an `aria-describedby` pointing at an
+ * id that is not rendered — which reads as fixed and announces nothing.
+ */
+function errorProps(
+  issue: FieldIssue | null,
+  ...alsoDescribedBy: readonly string[]
+): { 'aria-invalid'?: true; 'aria-describedby'?: string } {
+  const described = [...(issue ? [`${issue.field}-error`] : []), ...alsoDescribedBy];
+
+  return {
+    ...(issue ? { 'aria-invalid': true as const } : {}),
+    ...(described.length > 0 ? { 'aria-describedby': described.join(' ') } : {}),
+  };
+}
+
+/**
+ * Frame `22`'s red card, used for both things that can go wrong at form level:
+ * the counted summary, and a refusal that belongs to no single control.
+ *
+ * `role="alert"` is the part #222 was missing — a save that failed announced
+ * nothing, so the button read as dead.
+ */
+function ErrorCard({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <div
+      role="alert"
+      className="mb-5 flex max-w-[640px] items-start gap-3 rounded-xl border border-error-200 bg-error-50 px-4 py-3.25"
+    >
+      <span aria-hidden="true" className="mt-0.25 size-4.5 shrink-0 rounded-full bg-error-500" />
+      {children}
+    </div>
+  );
+}
+
+/** The red line under a control. `40-states.md`: it says how to fix it. */
+function FieldMessage({ issue }: { issue: FieldIssue | null }): React.ReactElement | null {
+  if (issue === null) {
+    return null;
+  }
+
+  return (
+    <p id={`${issue.field}-error`} className="mt-1.5 text-helper text-error-500">
+      {issue.message}
+    </p>
+  );
+}
+
+/**
  * The vendor's business profile, used for both first-time onboarding and later
  * edits. Saving is explicit rather than autosaved: a half-typed business name
  * would otherwise be published to a live profile.
@@ -268,6 +342,12 @@ export function VendorProfileForm({
   const [form, setForm] = useState<FormState>(() => initialState(profile));
   const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(initialState(profile)));
   const [isSaving, setIsSaving] = useState(false);
+  /*
+   * What the API refused, kept until the vendor changes the control it names.
+   * The client-side half is recomputed from the current values instead, so it
+   * clears itself; only the server's half needs remembering.
+   */
+  const [serverProblem, setServerProblem] = useState<ProfileSaveProblem>(NO_PROBLEM);
   const [justSaved, setJustSaved] = useState(false);
   const [publishBlockers, setPublishBlockers] = useState<readonly PublishBlockerKey[]>(
     profile?.publishBlockers ?? [],
@@ -300,6 +380,28 @@ export function VendorProfileForm({
 
   const responseTimeBlocks = blockers.includes('responseTime');
 
+  /*
+   * Recomputed from the current values on every render, exactly as the booking
+   * request screen does it: a corrected field stops producing an issue and its
+   * message disappears with no per-field bookkeeping to get wrong.
+   */
+  const clientProblem = useMemo((): ProfileSaveProblem => {
+    const schema = isNew ? createVendorProfileSchema : updateVendorProfileSchema;
+    const parsed = schema.safeParse(toPayload(form));
+
+    return parsed.success ? NO_PROBLEM : problemFromValidationIssues(parsed.error.issues);
+  }, [form, isNew]);
+
+  const problem = useMemo(
+    () => mergeProblems(clientProblem, serverProblem),
+    [clientProblem, serverProblem],
+  );
+
+  const validation = useSubmitValidation(problem.fields);
+  const showSummary = validation.attempted && validation.blockers.length > 0;
+  /** Nothing is said in red before a submit attempt (`40-states.md`). */
+  const formMessage = validation.attempted ? problem.formMessage : null;
+
   const sections: FormSection[] = useMemo(
     () =>
       SECTION_ORDER.map((section) => ({
@@ -313,25 +415,32 @@ export function VendorProfileForm({
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
     setForm((previous) => ({ ...previous, [key]: value }));
+
+    /*
+     * "Cleared per-field on correction" (`40-states.md`). The client-side
+     * issues clear themselves by being recomputed; a server message survives
+     * until the vendor touches the control it named, because nothing else here
+     * can know whether the new value is acceptable.
+     */
+    const controlId = controlIdForStateKey(key);
+    if (controlId !== null) {
+      setServerProblem((previous) =>
+        previous.fields.some((issue) => issue.field === controlId)
+          ? {
+              fields: previous.fields.filter((issue) => issue.field !== controlId),
+              formMessage: previous.formMessage,
+            }
+          : previous,
+      );
+    }
   };
 
-  const save = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-
-    const payload = toPayload(form);
-    const schema = isNew ? createVendorProfileSchema : updateVendorProfileSchema;
-    const parsed = schema.safeParse(payload);
-
-    if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? 'Check the highlighted fields.');
-      return;
-    }
-
+  const send = async (payload: Record<string, unknown>): Promise<void> => {
     setIsSaving(true);
     try {
       const saved = await request('/vendor/profile', {
         method: isNew ? 'POST' : 'PUT',
-        body: parsed.data,
+        body: payload,
         schema: wireVendorProfileSchema,
       });
 
@@ -356,13 +465,34 @@ export function VendorProfileForm({
       });
 
       setJustSaved(true);
+      setServerProblem(NO_PROBLEM);
       toast.success(isNew ? 'Profile created.' : 'Changes saved.');
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof ApiClientError ? error.message : 'Could not save your profile.');
+      /*
+       * #222: this used to be a toast and nothing else, so a 400 naming a
+       * field the vendor could not see read as a dead button — the agent that
+       * found it clicked Save four times. The refusal now lands on the control
+       * it belongs to, and on the summary when it belongs to no control.
+       */
+      setServerProblem(problemFromSaveError(error));
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const save = (event: React.FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+
+    validation.attemptSubmit(() => {
+      // A schema failure on a field this form does not lay out still has to
+      // stop the save; it is shown at the form level instead of on a control.
+      if (clientProblem.formMessage !== null) {
+        return;
+      }
+
+      void send(toPayload(form));
+    });
   };
 
   const togglePublished = async (next: boolean): Promise<void> => {
@@ -399,10 +529,7 @@ export function VendorProfileForm({
         className="hidden shrink-0 border-stone-300 bg-stone-0 lg:flex lg:w-(--sidebar-width-sm) lg:border-r"
       />
 
-      <form
-        onSubmit={(event) => void save(event)}
-        className="flex min-w-0 flex-1 flex-col lg:overflow-hidden"
-      >
+      <form onSubmit={save} className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
         <div className="app-pane min-h-0 flex-1 px-4 pt-5.5 sm:px-7">
           <div className="max-w-[65rem]">
             <h1 className="display-heading text-display-md text-stone-900">Your storefront</h1>
@@ -410,6 +537,35 @@ export function VendorProfileForm({
               This is what a customer sees before they decide to message you.
             </p>
           </div>
+
+          {showSummary ? (
+            <ErrorCard>
+              <div>
+                <p className="mb-0.75 text-base font-semibold text-stone-900">
+                  {describeBlockerCount(validation.blockers.length)}
+                </p>
+                <p className="text-sm text-stone-700">
+                  {validation.blockers.map((issue, index) => (
+                    <span key={issue.field}>
+                      {index > 0 ? ' · ' : null}
+                      <a
+                        href={`#${issue.field}`}
+                        className="font-semibold text-error-500 underline underline-offset-2"
+                      >
+                        {issue.label}
+                      </a>
+                    </span>
+                  ))}
+                </p>
+              </div>
+            </ErrorCard>
+          ) : null}
+
+          {formMessage !== null ? (
+            <ErrorCard>
+              <p className="text-base text-stone-900">{formMessage}</p>
+            </ErrorCard>
+          ) : null}
 
           <div className="max-w-[65rem] divide-y divide-stone-200">
             <section id={SECTION_IDS.business} className="scroll-mt-6 pb-6">
@@ -422,7 +578,13 @@ export function VendorProfileForm({
                * sits first in the portfolio is the cover, and the portfolio
                * editor says so on the tile.
                */}
-              <div className="mt-4 w-24 sm:w-32">
+              <div
+                id="profileImage"
+                role="group"
+                aria-label="Profile photo"
+                className="mt-4 w-24 sm:w-32"
+                {...describedByProps(validation.issueFor('profileImage'))}
+              >
                 <ImageUpload
                   label="Profile photo"
                   prefix="vendor-profile"
@@ -432,6 +594,7 @@ export function VendorProfileForm({
                   showHint={false}
                   disabled={isSaving}
                 />
+                <FieldMessage issue={validation.issueFor('profileImage')} />
               </div>
               <p className="mt-2 text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p>
 
@@ -445,7 +608,9 @@ export function VendorProfileForm({
                     required
                     maxLength={200}
                     className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('businessName'))}
                   />
+                  <FieldMessage issue={validation.issueFor('businessName')} />
                 </div>
 
                 <div>
@@ -456,7 +621,9 @@ export function VendorProfileForm({
                     onChange={(event) => update('slug', event.target.value)}
                     placeholder={generateSlug(form.businessName || 'your-business')}
                     className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('slug'))}
                   />
+                  <FieldMessage issue={validation.issueFor('slug')} />
                   <p className="mt-1 truncate text-xs text-stone-600">
                     {BRAND_DOMAIN}/vendors/{slugPreview}
                   </p>
@@ -471,7 +638,9 @@ export function VendorProfileForm({
                     placeholder="Quiet, documentary, never asks you to pose."
                     maxLength={MAX_TAGLINE_LENGTH}
                     className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('tagline'))}
                   />
+                  <FieldMessage issue={validation.issueFor('tagline')} />
                   <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
                     <p className="text-stone-600">
                       One sentence, in your own words. It opens your profile.
@@ -494,7 +663,9 @@ export function VendorProfileForm({
                     onChange={(event) => update('yearsInBusiness', event.target.value)}
                     placeholder="10"
                     className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('yearsInBusiness'))}
                   />
+                  <FieldMessage issue={validation.issueFor('yearsInBusiness')} />
                   <p className="mt-1 text-xs text-stone-600">
                     Counted from when you started, not when you joined here.
                   </p>
@@ -509,7 +680,9 @@ export function VendorProfileForm({
                     placeholder="What you do, who you do it for, and what makes a day with you feel different."
                     maxLength={MAX_VENDOR_BIO_LENGTH}
                     className="mt-1.5 min-h-[140px] bg-stone-0"
+                    {...errorProps(validation.issueFor('bio'))}
                   />
+                  <FieldMessage issue={validation.issueFor('bio')} />
                   <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
                     <p
                       // Warns before the cap rather than only on reaching it, so a
@@ -525,8 +698,16 @@ export function VendorProfileForm({
                 </div>
 
                 <div className="sm:col-span-2">
-                  <Label htmlFor="categories">Categories</Label>
-                  <div id="categories" className="mt-1.5">
+                  <Label id="categories-label" htmlFor="categories">
+                    Categories
+                  </Label>
+                  <div
+                    id="categories"
+                    role="group"
+                    aria-labelledby="categories-label"
+                    className="mt-1.5"
+                    {...describedByProps(validation.issueFor('categories'))}
+                  >
                     <CategoryPicker
                       categories={categories}
                       selectedCategoryIds={form.categoryIds}
@@ -534,6 +715,7 @@ export function VendorProfileForm({
                       disabled={isSaving}
                     />
                   </div>
+                  <FieldMessage issue={validation.issueFor('categories')} />
                 </div>
               </div>
             </section>
@@ -554,7 +736,9 @@ export function VendorProfileForm({
                     value={form.address}
                     onChange={(event) => update('address', event.target.value)}
                     className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('address'))}
                   />
+                  <FieldMessage issue={validation.issueFor('address')} />
                 </div>
 
                 <div>
@@ -565,7 +749,9 @@ export function VendorProfileForm({
                     onChange={(event) => update('city', event.target.value)}
                     required
                     className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('city'))}
                   />
+                  <FieldMessage issue={validation.issueFor('city')} />
                 </div>
 
                 <div>
@@ -574,6 +760,7 @@ export function VendorProfileForm({
                     <SelectTrigger
                       id="state"
                       className="mt-1.5 w-full bg-stone-0 data-[size=default]:h-11 sm:data-[size=default]:h-[38px]"
+                      {...errorProps(validation.issueFor('state'))}
                     >
                       <SelectValue placeholder="Choose a state" />
                     </SelectTrigger>
@@ -585,6 +772,7 @@ export function VendorProfileForm({
                       ))}
                     </SelectContent>
                   </Select>
+                  <FieldMessage issue={validation.issueFor('state')} />
                 </div>
 
                 <div>
@@ -613,7 +801,9 @@ export function VendorProfileForm({
                      * than re-derived there.
                      */
                     style={{ '--range-fill': `${radiusFillPercent}%` } as React.CSSProperties}
+                    {...errorProps(validation.issueFor('serviceRadius'))}
                   />
+                  <FieldMessage issue={validation.issueFor('serviceRadius')} />
                   {/*
                     The frame ends the slider with its two bounds rather than a
                     sentence, which is what tells the vendor how far the track
@@ -644,7 +834,7 @@ export function VendorProfileForm({
                   >
                     <SelectTrigger
                       id="responseTime"
-                      aria-describedby="responseTime-help"
+                      {...errorProps(validation.issueFor('responseTime'), 'responseTime-help')}
                       className={cn(
                         'mt-1.5 w-full bg-stone-0 data-[size=default]:h-11 sm:data-[size=default]:h-[38px]',
                         responseTimeBlocks && 'border-gold-400',
@@ -661,6 +851,7 @@ export function VendorProfileForm({
                       ))}
                     </SelectContent>
                   </Select>
+                  <FieldMessage issue={validation.issueFor('responseTime')} />
                   <p
                     id="responseTime-help"
                     className={cn(
@@ -690,13 +881,19 @@ export function VendorProfileForm({
               <p className="mt-1 text-base leading-prose text-stone-700">
                 How customers find someone who fits their celebration.
               </p>
-              <div className="mt-4">
+              <div
+                role="group"
+                aria-label="Tags"
+                className="mt-4"
+                {...describedByProps(validation.issueFor('tags'))}
+              >
                 <TagPicker
                   allTags={allTags}
                   selectedTagIds={form.tagIds}
                   onTagsChange={(ids) => update('tagIds', ids)}
                   disabled={isSaving}
                 />
+                <FieldMessage issue={validation.issueFor('tags')} />
               </div>
             </section>
           </div>
