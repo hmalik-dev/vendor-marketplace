@@ -278,6 +278,31 @@ describe('SearchBar — pill and circle discipline', () => {
   });
 
   /*
+   * #253. The button's own box was already exact once #84 landed — this is the
+   * *segments*. Frame `01 Landing` gives the hero submit `margin-left: 0`; the
+   * app gave it `sm:ml-2`. The bar's total width matches either way (727.594px),
+   * so those 8px came straight out of the three flex segments: Vendor type
+   * 229.97 against the frame's 233.33, City 194.91 against 197.48, Event date
+   * 159.52 against 161.58.
+   *
+   * The compact bar is a different control and keeps its own `sm:ml-1.5`.
+   */
+  it("gives the hero submit no left margin, so the segments keep the frame's width", () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    const submit = screen.getByRole('button', { name: 'Search' });
+
+    expect(submit.className).not.toContain('sm:ml-2');
+    expect(submit.className).not.toMatch(/(^|\s)ml-/);
+  });
+
+  it("leaves the compact bar's own submit margin alone", () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Search' }).className).toContain('sm:ml-1.5');
+  });
+
+  /*
    * #89. The halo is on the pill, so it is identical whichever segment holds
    * focus — focusing `Vendor type` and focusing `City` rendered pixel-
    * identically and a keyboard user could not tell which was active. Each

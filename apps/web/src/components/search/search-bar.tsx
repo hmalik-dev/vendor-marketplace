@@ -373,7 +373,7 @@ export function SearchBar({
             // the bar, so this ring sits directly on the button's edge.
             'focus-visible:ring-offset-0',
             isHero
-              ? 'sm:ml-2 sm:px-7 sm:py-3.25 sm:text-cta'
+              ? 'sm:px-7 sm:py-3.25 sm:text-cta'
               : 'sm:ml-1.5 sm:px-5 sm:py-2.5 sm:text-[12.5px]',
           )}
         >
