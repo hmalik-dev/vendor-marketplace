@@ -135,6 +135,14 @@
   --text-md--line-height: normal;
   --text-lg: 16px;
   --text-lg--line-height: normal;
+  /*
+   * The section-heading step below 1440. `.h2` is 26px in the bundle and both
+   * `27 Landing — 1024` and `14 Landing tablet` override it to 19px inline —
+   * the same override, so this is one step rather than two. No line-height,
+   * because neither frame declares one and `.h2` does not either: they inherit
+   * `normal`, and naming a ratio here would invent one.
+   */
+  --text-display-xs: 19px;
   --text-display-sm: 21px;
   --text-display-sm--line-height: normal;
   --text-display-md: 26px;

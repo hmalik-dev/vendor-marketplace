@@ -22,6 +22,11 @@ import { StockPhoto } from '@/components/ui/stock-photo';
  * `30-responsive.md`'s two scales come from — but they are the *result* of the
  * frames rather than the rule that produced them.
  *
+ * **Radius and shadow step with the size**, and are stated per breakpoint for
+ * the same reason: the frames draw 13/14/16px radii and progressively lighter
+ * shadows, so carrying the 1440 treatment down made a 146px card wear a
+ * 40px-blur shadow and read heavier than the photograph inside it.
+ *
  * `sizes` is the card's own rendered width at its largest, so the browser
  * fetches for 1440 and reuses that file at the narrower widths.
  */
@@ -31,14 +36,16 @@ const CARDS = [
     sizes: '236px',
     geometry:
       'top-[6px] left-[4px] h-[182px] w-[146px] lg:top-0 lg:left-[14px] lg:h-[213px] lg:w-[172px] xl:top-0 xl:left-5 xl:h-73 xl:w-59',
-    style: 'rotate-[-4deg] rounded-2xl shadow-[0_14px_40px_rgba(35,32,28,.16)]',
+    style:
+      'rotate-[-4deg] rounded-[13px] shadow-[0_10px_26px_rgba(35,32,28,.16)] lg:rounded-[14px] lg:shadow-[0_12px_32px_rgba(35,32,28,.16)] min-[90rem]:rounded-2xl min-[90rem]:shadow-[0_14px_40px_rgba(35,32,28,.16)]',
   },
   {
     src: '/stock/portrait.jpg',
     sizes: '254px',
     geometry:
       'top-[38px] left-[112px] h-[196px] w-[158px] lg:top-[51px] lg:left-[138px] lg:h-[231px] lg:w-[185px] xl:top-17.5 xl:left-47.5 xl:h-79 xl:w-63.5',
-    style: 'rotate-[3deg] rounded-2xl shadow-[0_18px_46px_rgba(35,32,28,.2)]',
+    style:
+      'rotate-[3deg] rounded-[13px] shadow-[0_12px_30px_rgba(35,32,28,.2)] lg:rounded-[14px] lg:shadow-[0_15px_38px_rgba(35,32,28,.2)] min-[90rem]:rounded-2xl min-[90rem]:shadow-[0_18px_46px_rgba(35,32,28,.2)]',
   },
   {
     src: '/stock/venue.jpg',
@@ -52,7 +59,9 @@ const CARDS = [
      */
     geometry:
       'hidden lg:block lg:top-[152px] lg:left-[3px] lg:h-[110px] lg:w-[137px] xl:top-52 xl:left-1 xl:h-37.5 xl:w-47',
-    style: 'rotate-[2deg] rounded-[14px] shadow-[0_12px_32px_rgba(35,32,28,.14)]',
+    /* Shed at 768, so this one only ever needs its 1024 and 1440 steps. */
+    style:
+      'rotate-[2deg] lg:rounded-[12px] lg:shadow-[0_10px_26px_rgba(35,32,28,.14)] min-[90rem]:rounded-[14px] min-[90rem]:shadow-[0_12px_32px_rgba(35,32,28,.14)]',
   },
 ] as const;
 

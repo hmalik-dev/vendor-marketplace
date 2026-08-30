@@ -319,11 +319,21 @@ export default async function HomePage(): Promise<React.ReactElement> {
             door than a hero that simply ends after the search bar.
           */}
           {featured.length > 0 ? (
-            <section aria-labelledby="categories-heading" className="pt-1.5 pb-16">
-              <div className="mb-3.5 flex items-baseline justify-between gap-4">
+            /*
+              Every metric below steps with the frames. The whole section used
+              to render `01 Landing`'s numbers at all three widths, which is
+              the largest single piece of #169's "1024 is compressed desktop":
+              a 6-across grid of 94px covers under a 26px heading does not fit
+              a 640px-tall laptop the way the 1024 frame's 68px covers do.
+            */
+            <section
+              aria-labelledby="categories-heading"
+              className="pt-5.5 pb-16 lg:pt-1 min-[90rem]:pt-1.5"
+            >
+              <div className="mb-3.5 flex items-baseline justify-between gap-4 lg:mb-2.75 min-[90rem]:mb-3.5">
                 <h2
                   id="categories-heading"
-                  className="display-heading text-display-md text-stone-900"
+                  className="display-heading text-display-xs text-stone-900 min-[90rem]:text-display-md"
                 >
                   Browse by category
                 </h2>
@@ -340,15 +350,22 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 */}
                 <Link
                   href="/search"
-                  className="text-action font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+                  className="text-[12px] font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none min-[90rem]:text-action hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
                 >
-                  All {categories.length} categories →
+                  {/*
+                    `14 Landing tablet` shortens this to `All 11 →`; 1024 and
+                    1440 both keep the noun. One element rather than two, so the
+                    link is a single tab stop and a single accessible name at
+                    every width — and the word is hidden with the space in front
+                    of it, or 768 reads "All 11  →".
+                  */}
+                  All {categories.length} <span className="max-lg:hidden">categories</span> →
                 </Link>
               </div>
 
               <ul
                 aria-labelledby="categories-heading"
-                className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-2.75 min-[90rem]:gap-3.5"
               >
                 {featured.map((category) => (
                   <li key={category.slug}>
@@ -360,21 +377,51 @@ export default async function HomePage(): Promise<React.ReactElement> {
                     */}
                     <Link
                       href={`/search?category=${category.slug}`}
-                      className="block h-full overflow-hidden rounded-xl bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) hover:shadow-hover motion-safe:hover:-translate-y-0.5"
+                      className="block h-full overflow-hidden rounded-[12px] bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) min-[90rem]:rounded-xl hover:shadow-hover motion-safe:hover:-translate-y-0.5"
                     >
                       <StockPhoto
                         src={`/categories/${category.slug}.jpg`}
                         sizes="(min-width: 1024px) 15vw, (min-width: 640px) 30vw, 45vw"
-                        className="h-[94px] w-full"
+                        /*
+                          84 at 768, 68 at 1024, 94 at 1440. It is not monotonic
+                          because the grid is not: 768 draws three across and
+                          1024 draws six, so the 1024 card is the narrowest of
+                          the three and its 3:2 cover is the shortest.
+                        */
+                        className="h-[84px] w-full lg:h-[68px] min-[90rem]:h-[94px]"
                       />
-                      <div className="px-3.25 pt-2.75 pb-3.25">
-                        <h3 className="font-display text-[17px] text-stone-900">{category.name}</h3>
+                      <div className="px-2.75 pt-2.25 pb-2.75 min-[90rem]:px-3.25 min-[90rem]:pt-2.75 min-[90rem]:pb-3.25">
+                        {/*
+                          **Named deviation, 1px.** `27 Landing — 1024` draws
+                          this title at 15px in Instrument Serif (`.sh`), and
+                          `01-foundations.md` states 16px as the floor for that
+                          face — "Never below 16px", a rule of the type system
+                          rather than a preference, guarded by
+                          `display-type.test.ts`.
+
+                          The floor wins here, against the usual "build the
+                          frame, correct the plan" order, because the plan's
+                          rule is a legibility law and the frame's 15px is one
+                          pixel of it at one width: `14 Landing tablet` draws
+                          the same title at 16px and `01 Landing` at 17px, so
+                          1024 is the only width that dips below. Weakening the
+                          guard to admit it would open the face to every future
+                          sub-floor use, which is the regression the guard was
+                          written for.
+
+                          Recorded rather than resolved silently — if the
+                          intent is that the floor bends for this card, that is
+                          a foundations change, not a page change.
+                        */}
+                        <h3 className="font-display text-[16px] text-stone-900 min-[90rem]:text-[17px]">
+                          {category.name}
+                        </h3>
                         {/*
                           What the category covers, never a vendor count and
                           never a from-price — both are deferred until the
                           numbers are real (design/design-plan/98-post-mvp.md).
                         */}
-                        <p className="mt-0.75 text-helper text-stone-600">
+                        <p className="mt-0.75 text-[10.5px] text-stone-600 min-[90rem]:text-helper">
                           {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
                         </p>
                       </div>

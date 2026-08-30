@@ -37,11 +37,32 @@ up** pill stays a pill at 390, beside the hamburger, because sign-up is too
 important to bury in a drawer. The vendor path travels with "For vendors" in the
 nav, so it degrades into the drawer with the rest of the nav.
 
-| Control                             | 1440 · 1280 · 1024 | 768 · 390                     |
-| ----------------------------------- | ------------------ | ----------------------------- |
-| Browse / How it works / For vendors | In the bar         | Drawer                        |
-| **Sign in**                         | In the bar         | Drawer                        |
-| **Sign up** (ink)                   | In the bar         | **Stays in the bar**, compact |
+**Corrected 2026-08-30 (#304).** This table used to put 768 and 390 in one
+column, sending the whole nav and `Sign in` to the drawer at both. Frame
+`14 Landing tablet` draws neither: at 768 the signed-out landing bar carries
+**two** nav links, `Sign in` and `Sign up`, and **no hamburger at all**. 768 is a
+width with room for navigation; 390 is not.
+
+| Control           | 1440 · 1280 | 1024       | 768                    | 390                           |
+| ----------------- | ----------- | ---------- | ---------------------- | ----------------------------- |
+| Browse            | In the bar  | In the bar | In the bar             | Drawer                        |
+| How it works      | In the bar  | In the bar | **Drawer** — see below | Drawer                        |
+| For vendors       | In the bar  | In the bar | In the bar             | Drawer                        |
+| **Sign in**       | In the bar  | In the bar | **In the bar**         | Drawer                        |
+| **Sign up** (ink) | In the bar  | In the bar | In the bar             | **Stays in the bar**, compact |
+
+`How it works` is the one link 768 sheds, and it is the right one: it is an
+in-page anchor, so what a visitor loses is a scroll shortcut rather than a
+destination. The drawer below 768 still carries all three.
+
+**The hamburger is per screen, not per width.** `14 Search tablet` _does_ draw one
+at 768 — that frame is signed in and fills the nav space with the search bar, so
+it has nowhere to put links. `14 Landing tablet` has the room and draws none.
+A single global breakpoint contradicts one of the two frames whichever way it is
+set, which is exactly the bug #304 found: the nav hid its links at `max-[768px]`
+while the trigger appeared at `min-[769px]`, so 768 — the one width both frames
+are drawn at — rendered every link _and_ a hamburger whose drawer duplicated
+them.
 
 ## Vendor cards below the fold at 768
 
@@ -269,14 +290,31 @@ Closed after the audit: the **768 landing frame now exists** (`14 Landing tablet
 
 ### Rotated art needs clearance on both axes
 
-Hero cards are rotated 2–4°, which grows their **bounding box** well past their
-width and height — a 158px-wide card at 3° gains roughly 30px of horizontal box
-and a 196px-tall one gains a similar amount vertically. Authoring a rotated card
-flush to its container therefore clips it, or lets it spill under the next
-sibling.
+Hero cards are rotated 2–4°, which grows their **bounding box** past their width
+and height. Authoring a rotated card flush to its container therefore clips it,
+or lets it spill under the next sibling.
 
-Rule: **leave ≥16px between a rotated card's authored edges and its container's
-edges on every side**, and size the cluster box to the tallest card's
-`top + height + rotation slack`, not to `top + height`. At 768 the cluster box is
-250px for a 196px card at `top:38px`, and the cards stop 18px short of the 288px
-column.
+**Corrected 2026-08-30 (#304).** This section used to claim a 158px-wide card at
+3° "gains roughly 30px of horizontal box". That figure is wrong by 3x. The
+bounding box of a `w × h` rectangle at angle `θ` is
+`w·cos θ + h·sin θ` wide, so the real growth for 158×196 at 3° is
+`158·cos3° + 196·sin3° − 158` = **+10.0px** horizontally and
+`196·cos3° + 158·sin3° − 196` = **+8.0px** vertically. 30px would need roughly
+9°, which no frame draws. Measured against the running page at 768, the two
+cards grow +12.3/+9.7 and +10.0/+8.0 — matching the arithmetic, not the claim.
+
+The number mattered: #304's acceptance inherited it and asked for ~30px of
+clearance that the frames never had. Read the slack off the frame instead.
+
+Rule: **size the cluster box to the tallest card's
+`top + height + rotation slack`, not to `top + height`**, and take the slack from
+the frame rather than from a rule of thumb. At 768 the cluster box is 250px for a
+196px card at `top:38px` — 16px of authored slack — and the cards stop 18px short
+of the 288px column.
+
+Those two numbers _are_ the spec. They leave the rotated edges 12–13px clear on
+the inside axes and let card 1 overhang the box by ~2px on the left and card 2 by
+~5px on the right, which is intended: the box is `overflow:visible` and the
+overhang lands in the 20px column gap, so nothing clips and nothing overlaps.
+A blanket "≥16px on every side" would have forced the cluster wider than the
+column the frame draws.
