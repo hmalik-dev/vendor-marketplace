@@ -213,3 +213,49 @@ describe('the hero headline steps at every width a frame draws one', () => {
     ).toBeGreaterThan(1);
   });
 });
+
+/*
+ * The category card's description offset (#296, S4).
+ *
+ * `mt-0.5` is 2px and frame `01` draws 3, which made the card 156px tall
+ * against the frame's 157. One pixel, but it shipped once with nothing pinning
+ * it — reverting the class left the whole 1445-test suite green — so the number
+ * is read from the frame here rather than restated.
+ */
+describe('the category card sets its description off by the frame’s own margin', () => {
+  const landing = frame('01 Landing');
+  const page = readFileSync(join(process.cwd(), 'src', 'app', 'page.tsx'), 'utf8');
+
+  it('offsets the description by the pixels frame 01 draws', () => {
+    /*
+     * The description is the 11.5px `stone-600` line inside a category card —
+     * identified by its own declarations rather than by position, so a
+     * reordering of the card does not silently select a different element.
+     */
+    const drawn = /font-size:11\.5px;color:#6B6459;margin-top:(\d+)px/.exec(landing);
+
+    expect(drawn, 'frame 01 no longer draws the category description').not.toBeNull();
+
+    const px = Number((drawn as RegExpExecArray)[1]);
+    const arbitrary = new RegExp(String.raw`mt-\[${px}px\]`);
+    // Tailwind's scale is 4px per unit, so 3px has no native step and 2px does.
+    const native = new RegExp(String.raw`mt-${px / 4}(?![\d.])`);
+
+    expect(
+      arbitrary.test(page) || native.test(page),
+      `nothing in page.tsx offsets the category description by ${px}px`,
+    ).toBe(true);
+  });
+
+  /*
+   * The specific wrong value, named. The assertion above would still pass if
+   * `mt-0.5` were reintroduced alongside the correct class, and `mt-0.5` is
+   * what shipped.
+   */
+  it('does not fall back to the 2px step the scale offers', () => {
+    const description = /className="[^"]*text-\[10\.5px\][^"]*"/.exec(page);
+
+    expect(description, 'the category description class list moved').not.toBeNull();
+    expect((description as RegExpExecArray)[0]).not.toContain('mt-0.5');
+  });
+});

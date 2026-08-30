@@ -168,3 +168,80 @@ describe('hero cluster parity across the drawn viewports', () => {
     },
   );
 });
+
+describe('hero cluster — radius and loading (#249, #186)', () => {
+  /**
+   * The `border-radius` a frame draws on each hero card, keyed by its caption.
+   */
+  function radii(label: string): Map<string, number> {
+    const block = frame(label);
+    const matches = [
+      ...block.matchAll(/<div class="ph" style="([^"]+)"[^>]*><span class="phl">([^<]*)<\/span>/g),
+    ];
+
+    return new Map(
+      matches.map((match) => {
+        const found = /(?:^|;)border-radius:([\d.]+)px/.exec(match[1] as string);
+        expect(found, `frame "${label}" card has no border-radius`).not.toBeNull();
+        return [(match[2] as string).trim(), Number((found as RegExpExecArray)[1])];
+      }),
+    );
+  }
+
+  /*
+   * #249. The 1440 rung wore `rounded-2xl`, which is the 18px token, where the
+   * frame draws 16 on the two large cards. The same 16-vs-18 the vendor card
+   * resolved the same way: the token is right and the card was reaching for the
+   * wrong step.
+   */
+  /*
+   * Bound to the CARD, not to the file. An earlier version asked only whether
+   * each radius appeared somewhere in the source — and since the frame draws
+   * 16/16/14 and the component holds 16/16/14, every radius had a supplier no
+   * matter which card held it. Putting the wrong radius on card 1, which is
+   * precisely #249, left the suite green.
+   *
+   * `CARDS` is in the frame's own source order, so index is what ties a
+   * measured radius to the card that must carry it.
+   */
+  it('gives each 1440 card the radius frame 01 draws on that card', () => {
+    const drawn = [...radii('01 Landing')];
+    const blocks = clusterSource.split('src:').slice(1);
+
+    expect(drawn).toHaveLength(3);
+    expect(blocks).toHaveLength(3);
+
+    drawn.forEach(([caption, radius], index) => {
+      const block = blocks[index] as string;
+      const arbitrary = new RegExp(String.raw`min-\[90rem\]:rounded-\[${radius}px\]`);
+      const native = new RegExp(String.raw`min-\[90rem\]:rounded-${radius / 4}(?![\d.])`);
+
+      expect(
+        arbitrary.test(block) || native.test(block),
+        `card ${index + 1} (${caption}) does not carry its ${radius}px 1440 radius`,
+      ).toBe(true);
+    });
+  });
+
+  it('reaches for no 18px token at the 1440 rung', () => {
+    expect(clusterSource).not.toContain('min-[90rem]:rounded-2xl');
+  });
+
+  /*
+   * #186. The cluster is `display:none` below 768 and `14 Landing mobile` draws
+   * no cards — but `display:none` does not stop an EAGER image loading, so a
+   * phone fetched all three hero photographs and saw none of them. Measured at
+   * 390x844 on a cold load: three `/_next/image` requests, all three complete.
+   *
+   * Lazy is what makes hidden mean unfetched, because an image inside a
+   * `display:none` ancestor never intersects the viewport. jsdom performs no
+   * layout and Next's loader does not run here, so this asserts the class-level
+   * fact — that no card asks for `priority` — and the rendered result is
+   * verified in the browser, not here.
+   */
+  it('marks no hero card priority, so a hidden cluster fetches nothing', () => {
+    // Anchored to a line that STARTS with the prop, so the word can still be
+    // discussed in the comment explaining why it is gone.
+    expect(clusterSource).not.toMatch(/^\s*priority(?:[={\s/>]|$)/m);
+  });
+});

@@ -1,26 +1,26 @@
-<!--
-  The brand mark: two equal circles overlapping by 45% of their diameter.
+<svg xmlns="http://www.w3.org/2000/svg" width="153" height="153" viewBox="0 0 153 153">
+  <!--
+    The brand mark, at D=100: the same OFFSET_RATIO .45 and STROKE_RATIO .08
+    that `src/components/brand/logo.tsx` holds. Equal means equal as FILLS — a
+    100-wide disc and a 100-wide hole — with the stroke drawn outside the 100
+    (#250). SVG strokes straddle their path, so the hole is `r - stroke/2 = 50`
+    and the ink reaches `r + stroke/2 = 58`, putting the right edge at 153.
+    That is why the canvas is 153 and not the component's 1.45 D: a `viewBox`
+    clips where a CSS box may overflow.
 
-  Every number here is the same ratio `src/components/brand/logo.tsx` holds —
-  OFFSET_RATIO .45 and STROKE_RATIO .08 — at D=100. The stroke is drawn inside
-  the circle's box, matching the component's `box-border`, so the mark spans
-  1.45 D exactly as it does in the header. Keep the two in step: if the mark
-  moves, it moves in both places.
+    Keep all three renderings in step — `logo.test.tsx` checks that they are.
+    The comment sits INSIDE the svg on purpose: Next's metadata image loader
+    sniffs dimensions from the head of the file, and a long leading comment
+    pushes the root element out of its read window and fails the build.
 
-  There is no letterform in it and no name on it, which is why the mark carries
-  any name and why this file needs no brand literal. The canvas is square at 145
-  so the tile is not letterboxed, with the mark centred vertically. The stroke
-  flips to stone-50 in a dark tab strip, where stone-900 would disappear.
-
-  See design/design-plan/02-brand-and-logo.md.
--->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 145 145">
+    See design/design-plan/02-brand-and-logo.md.
+  -->
   <style>
     .stroke { stroke: #23201c }
     @media (prefers-color-scheme: dark) {
       .stroke { stroke: #f8f5ef }
     }
   </style>
-  <circle cx="50" cy="72.5" r="50" fill="#b4552f" />
-  <circle class="stroke" cx="95" cy="72.5" r="46" fill="none" stroke-width="8" />
+  <circle cx="50" cy="76.5" r="50" fill="#b4552f" />
+  <circle class="stroke" cx="95" cy="76.5" r="54" fill="none" stroke-width="8" />
 </svg>
