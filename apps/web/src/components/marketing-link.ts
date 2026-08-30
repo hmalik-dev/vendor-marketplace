@@ -6,6 +6,13 @@
  * 13.5px used to be the only size, which is `01 Landing`'s. Both `27 Landing —
  * 1024` and `14 Landing tablet` draw 12.5px.
  *
+ * `py-3.5` is hit area, not appearance. `30-responsive.md` requires 44x44 touch
+ * targets at 768 and these links measured 16px tall — a 12.5px line in a bar
+ * with no vertical padding. The padding grows the box to 44px and nothing else:
+ * the nav centres its children, so the text does not move, and the link carries
+ * no background or border for the larger box to reveal. It fits inside the 56px
+ * bar the narrow frames draw, and inside the 64px one at 1440.
+ *
  * It lives in its own module rather than beside `MarketingNav` because that
  * component is a Client Component, and a constant imported across the client
  * boundary reaches a Server Component as a client-reference proxy, not a
@@ -14,4 +21,4 @@
  * link silently renders unstyled. A plain module has no boundary to cross.
  */
 export const MARKETING_LINK_CLASS =
-  'text-[12.5px] font-medium text-stone-700 transition-colors duration-(--duration-fast) min-[90rem]:text-[13.5px] hover:text-clay-600';
+  'flex items-center py-3.5 text-[12.5px] font-medium text-stone-700 transition-colors duration-(--duration-fast) min-[90rem]:text-[13.5px] hover:text-clay-600';
