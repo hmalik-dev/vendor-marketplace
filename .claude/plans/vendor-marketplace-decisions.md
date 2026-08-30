@@ -350,3 +350,69 @@ accepted one.
 | Commission | 12% | Configurable via env var, absorbs Stripe fee |
 | Cancellation | Fixed: 100% >48h, 50% <48h | Platform-wide, not vendor-configurable |
 | Roles | Single per account | No dual customer+vendor role |
+
+---
+
+### D12: The Eight Human Decisions — *2026-08-30*
+
+**What this is.** Every ticket sitting in `Deferred — needs a human` or
+`Blocked — needs a human` was put to the account holder in one pass and answered.
+This entry is the record; the Status Board rows carry the same rulings inline.
+
+**Two rulings unblock work now.**
+
+**#299 — `Your line` and `Years in business` are relocated, not deleted.** They move into
+`About your business`. The contradiction was frame-vs-frame, which the repo's usual
+tie-breaker does not arbitrate: frame `03` and `12-vendor-profile.md` require the data,
+frame `09` and `17-vendor-profile-editor.md` omit the inputs. Deleting them would have made
+public-profile content permanently unsettable — a regression dressed as a parity fix — so
+**frame `09`'s ordered field list is recorded as non-exhaustive** and that is the deviation.
+Relocating also serves #141's scroll budget.
+
+**#299 (from #152) — the character counters stay, and spread.** `0 / 80`, `57 / 1200` and
+`1 of 5 chosen.` are affordances on `maxLength`-capped inputs, not prose; the alternative to
+a counter is silent truncation at the cap, and `03-components.md:92` already provides for a
+helper line under a field. Frame `09` shows no counter because it shows no vendor mid-typing.
+**They are additionally to be added to every other capped input in the product**, so the
+affordance is consistent rather than present on three fields by accident. That widens #299's
+scope deliberately.
+
+**#320 — 7 days stands, and one file may be edited.** `BOOKING_REQUEST_EXPIRY_DAYS` is
+correct; 48 hours was judged too quick a turnaround to ask of a vendor, and is revisitable
+later against real reply-time data. Because `31-content-voice.md` is `design-plan/` and
+*design passes edit the plan, tickets write the code, never the reverse*, #320 is granted a
+**one-off, scoped exception** to correct the Request reassurance row. The exception covers
+that correction and the same-pass sweep of other rows quoting a duration. It does not
+generalise.
+
+**One ruling closes a ticket.**
+
+**#25 — the Style refine chip is dropped from MVP.** Answered as a product question rather
+than a vocabulary one: a P2 filter sitting behind a schema change and an unvalidated public
+taxonomy has to earn its place, and it cannot until there are enough vendors for the filter
+to mean anything. A seeded taxonomy is expensive to change once customers filter on it.
+#23's recorded deviation on the Refine bar stands. Revisit post-launch with real data.
+
+**Four are held for launch prep, as one block.**
+
+| Ticket | Ruling |
+| --- | --- |
+| **#19** Production provisioning | Hold **all** of it, Stripe live-mode activation included |
+| **#62** Stripe public business name | Hold — sandbox renders `VendYou` harmlessly, #9/#10 verify with it in place |
+| **#11** Transactional email | Hold — in-app notifications already cover every event row; domain verification needs DNS that does not exist until #19 |
+| **#46** Clerk secret rotation | Hold — scopes 1 and 2 already shipped; only the rotation remains |
+| **#206** Neon Launch plan | Unchanged — already ruled 2026-08-29, lives in `docs/pre-launch.md` §3.2 |
+
+**Two consequences, accepted explicitly rather than discovered later.**
+
+1. **Stripe's live-mode activation is a review, not a toggle.** Holding it means that review
+   time lands on the critical path at launch instead of running in the background now.
+2. **`CLERK_WEBHOOK_SECRET` is a known-leaked value that stays live.** It was pasted into a
+   chat transcript on 2026-08-27. The webhook endpoint is repointed and signature
+   verification is enforced, so nothing is actively broken, but per `CLAUDE.md` a leaked
+   credential is rotated rather than merely deleted — this is a standing exposure with a
+   deferral date, not a closed item.
+
+**What this leaves.** Nothing on the board is blocked on a human. The remaining queue is
+code, and the launch-prep block is a single session with the account holder rather than five
+scattered interruptions.
