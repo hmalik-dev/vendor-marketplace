@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { pageTitle } from '@vendor-marketplace/shared';
+import { pageTitle, uuidSchema } from '@vendor-marketplace/shared';
 import { QuoteReview } from '@/components/bookings/quote-review';
 import { getOwnBookingRequest } from '@/lib/customer-data';
 import { requireRole } from '@/lib/current-user';
@@ -36,7 +36,20 @@ export default async function BookingRequestPage({
 }: PageProps): Promise<React.ReactElement> {
   await requireRole('customer');
   const { requestId } = await params;
-  const request = await getOwnBookingRequest(requestId);
+
+  /*
+   * Parsed before it reaches a query. `requestId` is attacker-controlled — this
+   * URL is the kind people paste to each other — and an id that is not a UUID
+   * makes the API answer 400, which is "an identifier that cannot exist" and so
+   * `notFound()` rather than the error boundary. Handling it here means the
+   * malformed case never reaches the network at all.
+   */
+  const parsed = uuidSchema.safeParse(requestId);
+  if (!parsed.success) {
+    notFound();
+  }
+
+  const request = await getOwnBookingRequest(parsed.data);
 
   /*
    * Missing and not-yours arrive here identically, because the API answers a

@@ -84,7 +84,15 @@ export async function getOwnBookingRequest(requestId: string): Promise<WireBooki
     if (error instanceof ApiClientError && error.statusCode === 401) {
       redirect(await signInPathReturningHere());
     }
-    if (error instanceof ApiClientError && error.statusCode === 404) {
+    /*
+     * 400 as well as 404. `web-route-boundaries.md` puts "a 400 caused by an
+     * identifier that cannot exist" in the `notFound()` column, not the error
+     * boundary — an id the API refuses to parse is a request that cannot exist,
+     * and answering it with a 500 page turns a pasteable URL into a crash. The
+     * page validates the id before calling, so this is the second line rather
+     * than the first.
+     */
+    if (error instanceof ApiClientError && (error.statusCode === 404 || error.statusCode === 400)) {
       return null;
     }
 
