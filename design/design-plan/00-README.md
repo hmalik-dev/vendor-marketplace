@@ -60,6 +60,40 @@ were cut deliberately and are recorded in `98-post-mvp.md`:
 Rule that outlives both: **every number on a public page is read from the
 database at request time, or it does not ship.**
 
+## Routes with no frame — ruled 2026-08-30 (#80 via #306)
+
+Parity is unprovable on a route with no frame, so every live route is either
+drawn or **recorded here as deliberately unframed, with the reason**. Undecided
+is not an outcome.
+
+**The count in #80 was stale.** It named five; the tree has **nine**, because
+four routes were added after the 2026-08-28 mapping and nothing forced the ledger
+forward. That is the actual finding — not which five.
+
+| Route                     | Ruling                                                                                                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/sign-in`                | **Exempt.** The form is Clerk-hosted and we do not control its markup. The surface around it — the marketing panel — **is** framed, by `12 Sign up`, and that panel is on the parity gate.            |
+| `/suspended`              | **Exempt for now.** A dead end for a banned account, reached by no navigation. `#15` owns the admin tooling behind suspensions and draws it then.                                                     |
+| `/vendor/packages`        | **Framed, as a tab.** Drawn inside `09 Vendor profile editor`. The app split the tab into a route; that split is a composition question for `#79`, not a missing frame.                               |
+| `/vendor/portfolio`       | **Framed.** `24 Image upload` and `25 Upload failures` both draw it. The ledger says both things — rows 36–37 map the frames, finding `S-2` calls it unframed — and the rows are right.               |
+| `/customer/profile`       | **Needs a frame.** A four-tab surface with an editable form, booking history and the customer's own reviews, and no drawing anywhere. It has already produced defects that a frame would have caught. |
+| `/bookings/[requestId]`   | **Needs a frame.** The customer's quote-review screen, added by `#308`.                                                                                                                               |
+| `/vendor/bookings`        | **Needs a frame.** Added by `#307`; the one surface that prints a customer's contact details.                                                                                                         |
+| `/vendor/payments`        | **Needs a frame.** Stripe Connect payout onboarding, added by `#9`.                                                                                                                                   |
+| `/vendor/payments/return` | **Exempt.** A redirect landing that exists for the length of one round trip and renders nothing a person reads for longer.                                                                            |
+
+Four exempt, four to draw, one already framed and mis-recorded.
+
+**The reverse gap is real too and is not a defect:** frames `05 Checkout`,
+`06 Booking confirmed` and `21 Checkout declined` have no route yet, because the
+payment lifecycle is `#10`. `13 Admin` has no route because that is `#15`.
+
+**What stops this recurring is a test, not this table.** A route added after a
+mapping is exactly how the count went from five to nine with nobody noticing.
+`#80`'s own acceptance asks for it: enumerate `apps/web/src/app/**/page.tsx` and
+assert each route appears in the parity ledger with either a frame or a recorded
+exemption. That is code, which `#306` does not write — **filed as `#319`.**
+
 ## Non-negotiables
 
 - **Desktop-first.** Every layout is designed at 1440 × 900. Narrower viewports are adaptations, never the source of truth.

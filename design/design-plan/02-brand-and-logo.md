@@ -61,6 +61,20 @@ type LogoProps = { size?: number; variant?: 'full' | 'mark'; tone?: 'light' | 'd
 `BRAND_NAME` — see `00-README.md`. No component may render the brand name from a
 literal.
 
+**Seventeen frames hardcode the wordmark — recorded 2026-08-30 (#292 via #306).**
+Twenty-four frames render `{{ brandName }}`; seventeen render the literal `Orla`.
+The split is clean by frame family rather than random: every primary 1440 screen
+(`01`–`13`) uses the token, while every state frame (`15`–`25`), every `27` frame
+except the three vendor-profile ones, and `28 Dropdown open — hero` use the
+literal. So this is one habit in the source design project, not seventeen slips.
+
+**Nothing is edited here.** `Orla - Screens.dc.html` stays byte-identical to the
+export so the next import diffs cleanly; the divergence is recorded against the
+source design project. **The code law is unchanged and was never at risk** — the
+app reads `BRAND_NAME` and no component renders the name from a literal. A parity
+pass comparing a wordmark against one of those seventeen frames is comparing
+against a hardcode, and should read the token.
+
 ## Voice of the name
 
 Whatever it lands on, the register is **a person or a place you'd be introduced

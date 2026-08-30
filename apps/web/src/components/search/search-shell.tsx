@@ -9,10 +9,11 @@ import {
 } from '@vendor-marketplace/shared';
 import { wireVendorSearchResultSchema } from '@/lib/wire-schemas';
 import { SlidersHorizontal, SearchX } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api-client';
 import type { WireTag } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
+import { useModalSheet } from '@/lib/use-modal-sheet';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { VendorCardSkeleton } from '@/components/ui/skeleton';
@@ -100,6 +101,42 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   const [hasFailed, setHasFailed] = useState(false);
   /** Below `lg` the Refine chips collapse into a sheet. The query never does. */
   const [isRefineSheetOpen, setIsRefineSheetOpen] = useState(false);
+  const refineSheet = useRef<HTMLDivElement>(null);
+  const refineTrigger = useRef<HTMLButtonElement>(null);
+  const closeRefineSheet = useCallback(() => setIsRefineSheetOpen(false), []);
+
+  /*
+   * `04-laws.md`: modals trap focus, close on Escape, restore focus. The sheet
+   * had none of the three — no `role`, no trap, and Escape dismissed nothing
+   * at any width (#73 law 4).
+   */
+  useModalSheet({
+    open: isRefineSheetOpen,
+    onClose: closeRefineSheet,
+    panel: refineSheet,
+    trigger: refineTrigger,
+  });
+
+  /*
+   * The sheet only exists below `lg`; above it the same element is the ordinary
+   * inline Refine bar. Without this, rotating a tablet from 768 to 1024 while
+   * the sheet is open leaves `role="dialog" aria-modal` and the focus trap
+   * installed on the desktop bar — the scrim and the close button are both
+   * `lg:hidden`, so Escape becomes the only way out and the trigger it restores
+   * focus to has itself disappeared.
+   */
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 64rem)');
+    const closeIfDesktop = (): void => {
+      if (desktop.matches) {
+        setIsRefineSheetOpen(false);
+      }
+    };
+
+    closeIfDesktop();
+    desktop.addEventListener('change', closeIfDesktop);
+    return () => desktop.removeEventListener('change', closeIfDesktop);
+  }, []);
   /*
    * Published so the compact bar in the header can show the wait in its own
    * control — frames `17` and `25 — loading`. The results own the fetch; the
@@ -221,12 +258,22 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         <button
           type="button"
           aria-label="Close filters"
-          onClick={() => setIsRefineSheetOpen(false)}
+          onClick={closeRefineSheet}
           className="fixed inset-0 z-(--z-drawer) bg-stone-900/40 lg:hidden"
         />
       ) : null}
 
+      {/*
+        Dialog semantics only while it is a sheet. The same element is the
+        ordinary inline Refine bar from `lg` up, and an `aria-modal` region
+        sitting permanently in the page would tell a screen reader the rest of
+        the document is inert when it is not.
+      */}
       <div
+        ref={refineSheet}
+        {...(isRefineSheetOpen
+          ? { role: 'dialog' as const, 'aria-modal': true, 'aria-label': 'Filters' }
+          : {})}
         className={cn(
           'bg-stone-0',
           'max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-(--z-drawer) max-lg:max-h-[85vh] max-lg:overflow-y-auto max-lg:rounded-t-2xl max-lg:px-4 max-lg:pt-2 max-lg:pb-4',
@@ -250,7 +297,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
 
         <button
           type="button"
-          onClick={() => setIsRefineSheetOpen(false)}
+          onClick={closeRefineSheet}
           className="mt-4 min-h-11 w-full rounded-lg bg-stone-900 text-base font-semibold text-stone-50 lg:hidden"
         >
           Show {total} results
@@ -386,9 +433,11 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
       {/* The primary action of this screen on a phone: refine. */}
       <div className="fixed inset-x-0 bottom-0 z-(--z-sticky) flex items-center gap-3 border-t border-stone-300 bg-stone-0 px-5 py-3 lg:hidden">
         <Button
+          ref={refineTrigger}
           type="button"
           variant="secondary"
           size="sm"
+          aria-expanded={isRefineSheetOpen}
           // Touch targets are ≥44px at 768 and 390 — see 30-responsive.md.
           className="min-h-11 flex-1"
           onClick={() => setIsRefineSheetOpen(true)}

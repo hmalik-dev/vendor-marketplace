@@ -82,11 +82,32 @@ pane no longer repeats it: bio, three stat tiles, what's included.
 
 ## Tabs, not anchors
 
-At ≥1280 the five tabs **swap the content pane**. Five sections stacked into one
+At ≥768 the five tabs **swap the content pane**. Five sections stacked into one
 long scroll is a phone pattern and it buries the reviews people came to read.
 Active tab: 13.5px / 600 ink with `inset 0 -2px 0 clay-400`. State in `?tab=` so
-tabs are shareable and the back button works. Below 1280 they become anchored
+tabs are shareable and the back button works. Below 768 they become anchored
 sections with a scroll-spy indicator.
+
+**Ruled 2026-08-30 (#291 via #306) — this said `≥1280` and it was wrong. This
+unblocks #304.** Two drawn frames contradicted it:
+
+- `27 Vendor profile — 1024` draws **all five tabs**, `About` active with
+  `inset 0 -2px 0 #B4552F`, beside a **320px** rail — and its content pane holds
+  the About section **only**. Packages, Portfolio, Reviews and Availability are
+  not stacked below it. That is tab-swap behaviour, drawn at 1024.
+- `27 Vendor profile — 768` draws the same five tabs, same structure, same active
+  treatment.
+
+`30-responsive.md` independently requires it: _"1024 renders the desktop
+composition, not a tablet one… a rail that wraps under the content is a bug."_
+Anchored sections at 1024 would have been the tablet composition on the very
+screen that file singles out as desktop.
+
+**The 768 frame's caption says the opposite of its own markup** — _"Tabs become
+anchored sections below 1280"_ — and a caption is not spec (`04-laws.md`
+precedence: the rendered frame, then this plan, then the caption). The markup
+twenty lines below it draws the tab row. Anchored sections survive only at 390,
+where there is no room for five tabs and the phone pattern is the right one.
 
 ## Tab content
 
@@ -161,7 +182,7 @@ per-vendor fact, shown only for vendors who have one.
 - [ ] Three stat tiles, all sourced from vendor-entered profile data
 - [ ] Meta line is two segments — rating and location. Category is the chip row's job and appears once on the page
 - [ ] Rail sticky through the whole page
-- [ ] Tabs swap the pane at ≥1280 and write to the URL
+- [ ] Tabs swap the pane at ≥768 and write to the URL
 - [ ] Document height ≤ 2.5 viewports on the longest tab
 
 ## Post-MVP

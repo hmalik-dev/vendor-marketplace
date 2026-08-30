@@ -71,4 +71,50 @@ describe('focus rings paint', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  /*
+   * The third way a ring renders nothing, and the subtlest (#73).
+   *
+   * Tailwind v4 registers `--tw-ring-shadow` and its siblings as animatable
+   * custom properties, so `transition-all` animates the focus ring *in*. A
+   * parity pass measured this primitive as "five all-transparent entries" and
+   * reported a broken ring; it was 0% of the way through a 150ms animation.
+   * The ring was correct and the transition was wrong.
+   *
+   * It still cost every keyboard stop 150ms with no indicator, which is the
+   * one population the ring exists for. `04-laws.md`: functional transitions
+   * survive, decorative ones do not — and a focus indicator is functional.
+   *
+   * Scoped to lines that declare a focus ring, so an unrelated `transition-all`
+   * on something with no ring is left alone.
+   */
+  it('never transitions the property its focus ring is painted with', async () => {
+    const files = await sourceFiles(COMPONENTS_DIR);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = await readFile(file, 'utf8');
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+      /*
+       * File-scoped, not line-scoped, and that is the point. In `vendor-card`
+       * the ring and the transition that ramps it sit eighteen lines apart on
+       * the same element — a line-scoped check saw neither.
+       *
+       * `has-[a:focus-visible]:ring-2` also declares a ring while containing no
+       * `focus-visible:ring-` substring, because the `]` is in the way; that
+       * blind spot is why the flagship fix of this very ticket shipped a 200ms
+       * ramp on the ring it had just made visible.
+       */
+      const declaresRing = /focus-visible\]?:(?:ring|outline)-\d/.test(code);
+      const transitionsBoxShadow =
+        /\btransition-all\b/.test(code) || /\btransition-\[[^\]]*box-shadow/.test(code);
+
+      if (declaresRing && transitionsBoxShadow) {
+        offenders.push(path.relative(COMPONENTS_DIR, file));
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });

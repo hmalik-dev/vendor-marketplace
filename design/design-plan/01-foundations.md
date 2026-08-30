@@ -67,6 +67,37 @@ Tailwind 4 is CSS-first; there is no palette in a JS config.
 Every text node must clear **4.5:1**. `stone-500` is the one exception and is
 reserved for genuinely inert content (out-of-month calendar days).
 
+### Two frame colours were never tokens — ruled 2026-08-30 (#199 via #306)
+
+The frames use two values this file does not carry. They are ruled separately,
+because only one of them cost anything.
+
+**`#C4D6A8` — adopt it as `sage-175`.** Frame `12 Sign up` uses it for the
+`VENDING` role label and three panel dots, over a scrimmed photograph. The app
+substituted the nearest token, `sage-200 #A8C08E`, and that **drops the label from
+4.70:1 to 3.68:1** — a real AA failure on 9.5px/700 uppercase text, which is not
+large text. The substitution is the defect, not the frame: `#C4D6A8` is already
+specified in `21-sign-up.md`'s own panel table, so it was sanctioned by the screen
+plan and merely absent here. It sits between `sage-150 #D9E2C8` and
+`sage-200 #A8C08E`, so it is a new step rather than a repoint of either.
+
+**`#5C4A18` — do not adopt; `gold-600` stands.** Frames `04` and
+`27 Vendor dashboard — 1024` use it for reassurance copy on `gold-50`. The frame
+value measures 7.41:1 and the shipped `gold-600 #7A5A12` measures 5.50:1 — a loss,
+but both clear AA comfortably, and `gold-600` exists precisely because `#8A6716`
+was found at 4.27:1. Minting a second dark gold to gain headroom nobody needs
+would put two near-identical tokens in the ramp. **Recorded as an accepted
+deviation**, so a parity pass reads it as correct rather than as drift.
+
+**A third, found while ruling these:** frame `12 Sign up` draws its disabled
+`Create my account` button as `#9A9184` on `#EFE9E0` — a value the table above
+bans by name. The frame is not edited (`Orla - Screens.dc.html` stays byte-identical
+to the export); the app must reach for a compliant disabled treatment and the
+divergence is recorded against the source design project.
+
+**Minting `sage-175` is code and belongs to the ticket that fixes the sign-up
+panel**, not to the ruling. `#306` records; the consumer implements.
+
 ## Type
 
 ```css
