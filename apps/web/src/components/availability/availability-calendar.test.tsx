@@ -6,9 +6,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { WireAvailability } from '@/lib/wire-schemas';
 
 const requestMock = vi.fn();
+const push = vi.fn();
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// A completed cell navigates to the bookings surface, so the calendar now
+// reaches for the router — which jsdom has no app-router context for.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
 const { AvailabilityCalendar, cellAppearance, formatRange } =
   await import('./availability-calendar');
@@ -450,6 +454,30 @@ describe('AvailabilityCalendar', () => {
 
     expect(quarterCount('Completed')).toBe('2 events');
     expect(quarterCount('Booked ahead')).toBe('1 dates');
+  });
+
+  /*
+   * The read window starts at the first of the month so completed events can
+   * render, which also brings back elapsed blocked days — and those draw as
+   * ordinary past cells, with no hatch and no strike. Counting them said
+   * "Blocked 1 dates" with nothing hatched anywhere on screen.
+   */
+  it('counts only blocked dates that are still ahead', () => {
+    // Mid-month, so the visible grid actually holds a day already behind us —
+    // the suite's usual 2026-06-01 has none.
+    render(
+      <AvailabilityCalendar
+        initialEntries={[entry('2026-06-02', 'blocked'), entry('2026-06-20', 'blocked')]}
+        today="2026-06-15"
+      />,
+    );
+
+    expect(quarterCount('Blocked')).toBe('1 dates');
+
+    // And the elapsed one is drawn inert, which is why it is not counted.
+    const past = cell('2026-06-02').className.split(/\s+/);
+    expect(past).toContain('text-stone-500');
+    expect(past).not.toContain('line-through');
   });
 
   it('says event rather than events for a single completed date', () => {

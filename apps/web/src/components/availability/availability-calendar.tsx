@@ -6,6 +6,7 @@ import {
   LOCKED_AVAILABILITY_STATUSES,
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';
@@ -240,6 +241,7 @@ export function AvailabilityCalendar({
   today,
 }: AvailabilityCalendarProps): React.ReactElement {
   const request = useApi();
+  const router = useRouter();
   const [entries, setEntries] = useState<readonly WireAvailability[]>(initialEntries);
   const [pageStart, setPageStart] = useState(0);
   const [selection, setSelection] = useState<readonly string[]>([]);
@@ -319,7 +321,14 @@ export function AvailabilityCalendar({
       if (status === 'booked') {
         booked += 1;
       }
-      if (status === 'blocked') {
+      /*
+       * Only what is still ahead. The read window starts at the first of the
+       * month so completed events can render, which also brings back elapsed
+       * blocked days — and `cellAppearance` draws those as ordinary past cells,
+       * with no hatch and no strike. Counting them said "Blocked 1 dates" with
+       * nothing hatched anywhere on screen.
+       */
+      if (status === 'blocked' && !isPastDate(date, today)) {
         blocked += 1;
       }
       if (status === 'completed') {
@@ -499,20 +508,27 @@ export function AvailabilityCalendar({
                         const isToday = date === today;
                         const isSelected = selectedSet.has(date);
                         const mark = STATUS_MARKS[status];
+                        const locked = isPast || LOCKED.has(status);
                         /*
-                         * A completed date is past by definition, so the plain
-                         * past rule would lock the one state the frame draws as
-                         * clickable — opening the delivered booking is why it
-                         * stays on the calendar. It is still not vendor-settable:
-                         * `completed` is in `LOCKED_AVAILABILITY_STATUSES`.
+                         * The one past cell that is not inert. It is still not
+                         * vendor-settable — `completed` is in
+                         * `LOCKED_AVAILABILITY_STATUSES` — but the frame draws
+                         * it with a pointer and the instruction above promises
+                         * a click, so it stays focusable and navigates instead
+                         * of being `disabled`.
+                         *
+                         * A `disabled` button is removed from the tab order
+                         * entirely, so its accessible name is never announced:
+                         * the promise would have been dead for a keyboard user
+                         * before it was dead for anyone else.
                          */
-                        const locked = status === 'completed' ? true : isPast || LOCKED.has(status);
+                        const opensBooking = status === 'completed';
 
                         return (
                           <td key={date} className="p-0">
                             <button
                               type="button"
-                              disabled={locked || isSaving}
+                              disabled={(locked && !opensBooking) || isSaving}
                               aria-pressed={isSelected}
                               aria-label={`${date} — ${STATUS_LABELS[status]}${isPast ? ', in the past' : ''}`}
                               onPointerDown={(event) => {
@@ -524,6 +540,17 @@ export function AvailabilityCalendar({
                                 if (isDragging && !locked) extendTo(date);
                               }}
                               onClick={(event) => {
+                                if (opensBooking) {
+                                  /*
+                                   * The calendar knows the date, not which
+                                   * booking sat on it — `availability` carries
+                                   * no request id — so this opens the surface
+                                   * that lists them rather than inventing a
+                                   * deep link the data cannot support.
+                                   */
+                                  router.push('/vendor/bookings');
+                                  return;
+                                }
                                 // Keyboard activation reports no pointer, and
                                 // never fires the pointer handlers above.
                                 if (event.detail === 0) startAt(date, event.shiftKey);
@@ -545,13 +572,20 @@ export function AvailabilityCalendar({
                                   mark, so the numeral stays optically centred
                                   above it rather than being shouldered off.
                                 */
-                                mark !== null && 'pt-[5px] pb-[10px]',
                                 /*
                                   A `1.5px` border, so the padding drops by the
                                   same amount and the cell keeps its height —
                                   the frame does exactly this arithmetic.
+
+                                  Emitted BEFORE the mark padding, because
+                                  `twMerge` lets the later class win and `py`
+                                  conflicts with `pt`/`pb`: the other order
+                                  silently collapsed a booked-today cell's 10px
+                                  clearance to 5.5px and dropped its numeral
+                                  onto the dot.
                                 */
                                 (isToday || status === 'pending') && 'py-[5.5px]',
+                                mark !== null && 'pt-[5px] pb-[10px]',
                                 isToday && TODAY_STYLE,
                               )}
                             >
@@ -643,12 +677,23 @@ export function AvailabilityCalendar({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    'relative flex size-5.5 shrink-0 items-center justify-center rounded-[6px] border-box text-[10px] font-semibold',
+                    'relative flex size-5.5 shrink-0 items-center justify-center rounded-[6px] text-[10px] font-semibold',
+                    /*
+                      Stripped of the cell's interactive utilities: a legend
+                      swatch is not a control, and inheriting them tinted the
+                      Available chip on hover and put a 🚫 cursor on Booked.
+                    */
                     item.status === 'selecting'
                       ? SELECTING_STYLE
                       : item.status === 'today'
                         ? cn('bg-stone-0 text-stone-900', TODAY_STYLE)
-                        : STATUS_STYLES[item.status],
+                        : STATUS_STYLES[item.status]
+                            .split(' ')
+                            .filter(
+                              (token) =>
+                                !token.startsWith('hover:') && token !== 'cursor-not-allowed',
+                            )
+                            .join(' '),
                     item.status === 'available' && 'border border-stone-300',
                     LEGEND_MARK[item.status] !== null && 'pb-1',
                   )}
