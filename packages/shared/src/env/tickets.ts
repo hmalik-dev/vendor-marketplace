@@ -392,6 +392,9 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   337: [],
   338: ['stripe'],
   339: [],
+  // Drives sign-in and the Stripe test-mode payment, and nothing else external.
+  340: ['auth', 'stripe'],
+  341: [],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

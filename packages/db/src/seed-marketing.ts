@@ -1,7 +1,9 @@
 import { DEFAULT_PLATFORM_FEE_RATE, calculateFees, toDateString } from '@vendor-marketplace/shared';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
-import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
+import type { PgQueryResultHKT } from 'drizzle-orm/pg-core';
+import { hashString, makeRandom } from './deterministic.js';
+import { recomputeVendorRatings, type AnyPgDatabase } from './seed-support.js';
 import {
   MARKETING_COVER_BASE,
   MARKETING_CUSTOMERS,
@@ -52,38 +54,6 @@ export interface MarketingSeedResult {
   bookingsCreated: number;
   reviewsCreated: number;
   availabilityRowsCreated: number;
-}
-
-type AnyPgDatabase<
-  TQueryResult extends PgQueryResultHKT,
-  TFullSchema extends Record<string, unknown>,
-  TSchema extends TablesRelationalConfig,
-> = PgDatabase<TQueryResult, TFullSchema, TSchema>;
-
-/**
- * A small deterministic PRNG (mulberry32). The seed must produce identical
- * data on every run and on every machine, so `Math.random` is not an option:
- * two runs that disagree would make a screenshot impossible to reproduce.
- */
-function makeRandom(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** Stable 32-bit hash of a string, so each vendor's stream differs. */
-function hashString(value: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
 }
 
 /**
@@ -489,45 +459,6 @@ async function seedReviewHistory<
   await recomputeVendorRatings(db, [...vendorIdBySlug.values()]);
 
   return { bookingsCreated, reviewsCreated };
-}
-
-/**
- * Recomputes `avg_rating` and `review_count` from the `reviews` table.
- *
- * Only public customer-to-vendor reviews count, matching what the profile
- * page lists — a vendor's private review of a customer must never move the
- * vendor's own score. A vendor with no reviews is reset to zero rather than
- * skipped, so removing reviews cannot leave a stale average behind.
- */
-export async function recomputeVendorRatings<
-  TQueryResult extends PgQueryResultHKT,
-  TFullSchema extends Record<string, unknown>,
-  TSchema extends TablesRelationalConfig,
->(db: AnyPgDatabase<TQueryResult, TFullSchema, TSchema>, vendorIds: string[]): Promise<void> {
-  if (vendorIds.length === 0) {
-    return;
-  }
-
-  await db
-    .update(vendorProfiles)
-    .set({
-      avgRating: sql`COALESCE((
-        SELECT ROUND(AVG(r.rating)::numeric, 2)
-        FROM reviews r
-        WHERE r.vendor_id = ${vendorProfiles.id}
-          AND r.type = 'customer_to_vendor'
-          AND r.is_public = true
-      ), 0)`,
-      reviewCount: sql`(
-        SELECT COUNT(*)
-        FROM reviews r
-        WHERE r.vendor_id = ${vendorProfiles.id}
-          AND r.type = 'customer_to_vendor'
-          AND r.is_public = true
-      )`,
-      updatedAt: sql`now()`,
-    })
-    .where(inArray(vendorProfiles.id, vendorIds));
 }
 
 /**

@@ -34,6 +34,7 @@
     "seed": "tsx src/scripts/seed.ts",
     "seed:marketing": "tsx src/scripts/seed-marketing.ts",
     "seed:e2e": "tsx src/scripts/seed-e2e.ts",
+    "seed:demo": "tsx src/scripts/seed-demo.ts",
     "studio": "drizzle-kit studio",
     "keys:from-urls": "tsx src/scripts/keys-from-urls.ts",
     "cover:from-portfolio": "tsx src/scripts/cover-from-portfolio.ts"
