@@ -199,8 +199,8 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | 19 | Production Environment Provisioning | P1.5 | M4.5 | P0 Critical | Deferred — needs a human | — | #17 | all | **BLOCKED on a human** — external accounts only, no repo code. Parallel with #18; schedule after #10  **Deferred 2026-08-28:** the ticket says so itself — "almost entirely external account configuration rather than repository code", with a provisioned environment rather than a diff as its deliverable. Every value must be newly minted in Clerk, Stripe, R2 and Resend by the account holder; nothing here can be produced autonomously |
 | 20 | Deploy Pipeline | P1.5 | M4.5 | P0 Critical | Backlog | — | #19 | `core` | **Blockers corrected 2026-08-30: #18 and #30 are Done; only #19 remains.**  First production deploy |
 | 11 | Transactional Email Notifications | P3 | M6 | P2 Medium | Backlog | — | None | `core` `auth` `email` | **Unblocked 2026-08-30 by lane 329 — the key is in place.** `pnpm preflight --ticket 11` now passes **35 of 35**, `RESEND_API_KEY — set, shape ok`. It had been `Deferred — needs a human` since 2026-08-28 on a placeholder key that has since been supplied, so the row was holding a solved blocker. The project's own rule is that a ticket does not start until the gate passes, and the acceptance requires verifying that each row of the event table actually sends. **Unblocks with one key** from https://resend.com/api-keys. Everything it hangs off is ready: `NOTIFICATION_TYPES` is the shared enum, and #7/#8 already emit every event at a single call site, so email attaches there without a second source of truth |
-| 14 | Demo Dataset + Playwright E2E | P3 | M6 | P1 High | Deferred — needs a human | — | `SENTRY_DSN` (its `all` capabilities include `sentry`) | all | **Not workable — corrected 2026-08-30 by lane 329.** #12 being Done cleared the *ticket* blocker, but the row read `Blocked By: None` while `pnpm preflight --ticket 14` fails: this ticket carries **`all`** capabilities, so the gate checks `SENTRY_DSN`, which is still the placeholder `https://...@sentry.io/...`. A run that trusts the `Blocked By` column picks this ticket and dies at the gate — which is exactly what happened on run 2 of an unattended batch. **Unblocks with one DSN** from https://sentry.io/settings/projects/, or by narrowing this ticket's capabilities in `tickets.ts` if Sentry is genuinely not needed to seed data and write E2E suites — that is the cheaper fix and worth deciding first.  **Content gap partly closed by ef8b341:** `pnpm db:seed:marketing` now seeds 16 photography vendors with covers, packages, and 918 reviews behind 918 completed bookings. **Still open here:** the other 10 categories (5 of 6 landing cards still lead to an empty search), portfolio images, messages, notifications, the non-completed booking statuses, and the 8 E2E suites. Asset tracking for the covers is **#32** |
-| 15 | Admin Portal + Sentry Integration | P3 | M6 | P1 High | Backlog | — | #14 | `core` `auth` `sentry` | **Blocker corrected 2026-08-30: #12 is Done; only #14 remains.**  Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` |
+| 14 | Demo Dataset (`seed:demo`) | P3 | M6 | P1 High | Done | worktree-14 | None | `core` | **Split 2026-08-30 by lane 14: the eight Playwright E2E suites moved to #340**, which is the half this ticket does not build. What is left is the deterministic demo dataset itself.  **Blocker cleared 2026-08-30: #12 is Done, so this is workable.**  **Content gap partly closed by ef8b341:** `pnpm db:seed:marketing` now seeds 16 photography vendors with covers, packages, and 918 reviews behind 918 completed bookings. **Still open here:** the other 10 categories (5 of 6 landing cards still lead to an empty search), portfolio images, messages, notifications, the non-completed booking statuses, and the 8 E2E suites. Asset tracking for the covers is **#32** **Done 2026-08-30** — squash `5f2a747`, PR #64, CI green. `pnpm preflight --ticket 14` passes 24/24 once the capabilities were narrowed to `core` (the seed reaches no external service), which is the unblock `f1f988c` asked for rather than a human setting SENTRY_DSN |
+| 15 | Admin Portal + Sentry Integration | P3 | M6 | P1 High | Deferred — needs a human | — | `SENTRY_DSN` (Sentry dashboard) | `core` `auth` `sentry` | **#14 landed 2026-08-30 (`5f2a747`), so the ticket blocker is clear — but the *gate* is not. `pnpm preflight --ticket 15` fails 1 of 34 on `SENTRY_DSN`, still the placeholder. Unlike #14, the `sentry` capability here is real: the ticket integrates `@sentry/node` and `@sentry/nextjs`, so narrowing the row is not the unblock and a human must supply the DSN. **The admin portal half needs no Sentry and is independently workable** — split it out if the DSN stays absent, rather than leaving a P1 feature parked behind a key. Found on run 2 of an unattended batch by running the gate, not by reading the board.**  Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` |
 | **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P3 Low** | **Deferred — needs a human** | — | **Launch prep — not current work** | `core` | **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. **Reconciliation 2026-08-29:** overlaps **#19**, which already covers external-account provisioning and is `Deferred — needs a human`. The plan's launch checklist also requires the pooled string on Railway and the unpooled one on Railway *and* GitHub Actions. **Deferred to launch prep 2026-08-29 (user ruling).** Free is the correct plan while there is no real data — usage is **8.9 of 100 CU-hours**, 34 MB of 512 MB, 3 of 10 branches. Nothing here blocks development. **The checklist moved to `docs/pre-launch.md` §3.2**, which is where launch-gated work belongs; this row is a pointer, not a queue item. Do not re-surface it as active work. |
 | **299** | **09 Vendor profile editor — cover field, preview rail and parity close-out** | P1 | M3 | **P0 Critical** | **Deferred — needs a human** | — | #335 | `core` `storage` | **Re-pointed 2026-08-30: the ruling this waits on is question D of #335.**  **Filed 2026-08-29 by the backlog consolidation.** Merges **#137, #138, #140, #141, #152, #257, #258, #288**. **#288 leads and unblocks #137**, which was stuck because the design contract contradicted itself on the cover field: the media row becomes a 128px circle profile photo beside a **216×144, 3:2** cover drop zone reading *"Drop a photo or browse · landscape · 1200×800 or larger"* — the `21:9, 1600×686 min` ask is retired, and the drop zone that is missing entirely today (#137) is built to that spec. The card preview is **never a field**: a **308px right-edge rail** at ≥1024 with a mono `PREVIEW` label, an **In search / Your profile** toggle and the real card, 280px at 1280, a panel above the fields at 768, a bottom sheet at 390. **There is no separate profile-banner field and there must never be one** — one file, two placements, per #287, which is why this is blocked on #298. Then the parity remainder: two undocumented fields to remove (#138) and the eight helper strings that came with them (#152, already `Blocked by #138`), the section nav's missing `Payouts` entry and gold dot (#140 — the dot depends on #9), the form pane over its scroll budget (#141), the slug preview promising a vanity URL the router does not serve (#257), and the submit bar never saying when the storefront was last saved (#258). Parity gate at 1440 / 1024 / 768 / 390. **Deferred 2026-08-30 — started, then released unstarted with no code written.** #298 unblocked this ticket but also sharpened the contradiction at its centre. Acceptance requires removing the two undocumented fields (#138) so every remaining string traces to frame `09`. **Both fields are the only editing surface for content frame `03` displays:** #298 moved the tagline into the identity card, and `yearsInBusiness` is read by the About pane's `Experience` tile. Deleting the inputs makes public-profile content permanently unsettable — a regression dressed as a parity fix. Keeping them fails frame `09`'s parity gate on the Layout and Text axes. **Lane 137 reached the identical conclusion on #138 and escalated rather than guessing; the question was never answered, and it is now load-bearing for a P0.** The repo's tie-breaker ("where the two disagree, build the frame and correct the plan") settles frame-vs-plan and does **not** arbitrate frame-vs-frame, which is what this is: frame `03` plus `12-vendor-profile.md` require the data, frame `09` plus `17-vendor-profile-editor.md`'s ordered field list omit the inputs. **The question, unchanged from lane 137:** delete `Your line` and `Years in business` outright, accepting that frame `03` loses its tagline and Experience tile, or relocate them into `About your business`, accepting that frame `09`'s field list is not exhaustive? Relocating also serves #141's scroll budget without destroying data. The field list determines the form's layout and every parity assertion, so the rest of the ticket cannot close its gate ahead of the ruling. Everything else in #299 (cover drop zone #288/#137, the 308px preview rail, `Payouts` nav #140, slug preview #257, last-saved #258) is implementable the moment this is answered. |
 | **300** | **08 Vendor dashboard — re-measure, then close parity** | P1 | M3 | **P2 Medium** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#124, #127, #135, #79**. Re-measure frame `08` first — all four predate #74/#165/#198. #127 and #135 are the **same missing string** (`See all N →` beside `Requests waiting on you`) filed twice, from the Layout axis and the Text axis; close them together. Plus `View my public profile` moved out of the header into the content column (#124) and the vendor nav labels and their order diverging from the frame (#79). Small, self-contained, one browser pass. |
@@ -221,9 +221,11 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **337** | **The card focus ring is clipped by the scroll container on the first row of results** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. `div.app-pane` is the `overflow:auto` scroller and has **zero top padding**; its content-box top is `y=173` and the first row of cards starts at exactly `y=173`, so the ring's outward 4px falls at `y=169–172` — outside the scroller. **Measured, not inferred**: pixel-differencing a focused card against a blurred one shows rows 169–172 identical `rgb(248,245,239)` in both, first difference at `y=173`. The ring still paints left, right, bottom and corners, so the indicator is visible and **WCAG 2.4.7 holds** — this is a partial clip, not the "clipped to nothing" failure `04-laws.md` names, which is why it is P2 and not P1. Fix is top padding or `scroll-padding-top` on `.app-pane`; check every other `overflow` scroller for the same shape rather than patching one |
 | **338** | **09 Vendor profile editor — the Storefront nav is missing `Payouts` and its blocker dot** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live renders **six** section-nav items (Business, Location, Tags, Response time, Packages, Portfolio); frame `09` draws **seven**, with **`Payouts` last, carrying a gold blocker dot**. Gold is correct there under `40-states.md` — it is waiting on someone, not a failure. Payouts exists as a surface (#9 shipped Connect onboarding), so this is a missing nav entry rather than a missing feature. **Re-measure frame `09` before fixing**: the parity pass was scoped to the Tags row and read the rest only in passing, so treat the six-vs-seven count as the finding and everything else about that nav as unverified |
 | **339** | **[DESIGN] Search `Sort` has no specified default — the frame draws a chosen one** | P1 | M3 | **P3 Low** | **Deferred — needs a human** | — | **A design ruling on the default sort** | `core` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live defaults to **`Most relevant`** (`sort: 'relevance'`); frame `02` draws **`Top rated ▾`**. Neither `11-search.md` nor `42-dropdowns.md` fixes a default, and the frame draws a *chosen* sort exactly as it draws a chosen price and a chosen rating — so this is **not** evidence the default is wrong, and `parity-checker` correctly did not call it a deviation. It is an unresolved gap in the plan: **a new marketplace defaulting to `Top rated` ranks its thinnest review counts first**, which is a product decision, not a parity one. Needs a one-line ruling, then either the code or the plan changes. Do not "fix" this by matching the frame |
+| **340** | **Playwright E2E harness and the eight critical-journey suites** | P3 | M6 | **P1 High** | **Backlog** | — | **#14** | `core` `auth` `stripe` | **Filed 2026-08-30 by lane 14**, split out of #14. The repo has **no `playwright.config`, no `e2e/` directory and no test-runner harness at all** — Playwright is currently MCP-driven for agentic verification only, so this ticket builds the runner from nothing. Depends on #14 for the fixed-UUID dataset the suites select on. Carries the eight suites verbatim from #14: auth, vendor profile, search, booking request, payment, messaging, reviews, admin — plus `@clerk/testing` for programmatic sign-in and the 1440x900 / 1024 / 768 / 390 viewport matrix |
+| **341** | **`seed:marketing` and `seed:e2e` write an event-type label into a slug column** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 14.** `seed-marketing.ts:406` and `seed-e2e.ts:465` both write `eventType: 'Wedding'`. `booking_requests.event_type` holds an `EVENT_TYPES` **slug** — `eventTypeSchema` is `z.enum(EVENT_TYPES)` at the API edge — so the correct value is `'wedding'`. Harmless today because reads are typed as a plain string, wrong the moment anything renders the label via `EVENT_TYPE_LABELS` or validates on read. Same defect was found and fixed in `seed-demo.ts` by #14; **close the class with a guard**, not two edits — a test asserting every seeded `event_type` is in `EVENT_TYPES` |
 **This board carries open work only. The 311 closed rows moved to `.claude/plans/vendor-marketplace-tickets-archive.md` on 2026-08-30**, whole — 180 `Done` and 131 `Superseded`, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
-Rows are ordered by build sequence, not by ticket number. **26 rows, all open — 15 Backlog, 9 Deferred, 2 Blocked.** Recounted programmatically from this table on 2026-08-30, after #329 closed, #336–#339 were filed, and #11 and #14 were corrected. **13 tickets are workable** — #11, #300, #302, #305, #322, #323, #326, #332, #333, #334, #336, #337, #338. Two more are `Backlog` but gated: **#20** on #19 and **#15** on #14, so a Backlog count is not a ready count — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over it, since #14 read `None` while its gate was failing on `SENTRY_DSN`. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
+Rows are ordered by build sequence, not by ticket number. **28 rows — 15 Backlog, 1 In Progress, 9 Deferred, 2 Blocked, and #14 Done pending the next archive sweep.** A Backlog count is not a ready count: run `pnpm preflight --ticket <n>` before trusting a row, which is how #15 was found parked on a placeholder `SENTRY_DSN` while reading as workable. Recounted programmatically from this table on 2026-08-30, after #329 closed, #336–#339 were filed, and #11 and #14 were corrected. **13 tickets are workable** — #11, #300, #302, #305, #322, #323, #326, #332, #333, #334, #336, #337, #338. Two more are `Backlog` but gated: **#20** on #19 and **#15** on #14, so a Backlog count is not a ready count — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over it, since #14 read `None` while its gate was failing on `SENTRY_DSN`. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -582,32 +584,97 @@ campaigns; user-configurable notification preferences (that is #16's surface); S
 
 ---
 
-### #14: Demo Dataset + Playwright E2E
+### #14: Demo Dataset (`seed:demo`)
 
-**Milestone:** M6 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** all
+**Milestone:** M6 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
 
-**User value:** Fully populated realistic marketplace for stress testing. All testing is agentic via Playwright.
+**Split 2026-08-30 by lane 14.** This ticket was filed as "Demo Dataset +
+Playwright E2E" and carried two subsystems. The eight Playwright suites — and
+the test-runner harness they need, which does not exist in this repo at all —
+moved to **#340**. What remains here is the dataset itself, which #340 then
+selects against.
+
+**User value:** Fully populated realistic marketplace for stress testing, demos
+and every empty-versus-populated state the design plan distinguishes.
 
 **Scope:**
+
 - `packages/db`: `seed:demo` script — deterministic, idempotent full dataset
 - 1 admin, 3 customers, 12-15 vendors across all **11** categories
-- 29+ bookings across all statuses, conversations with messages, 20+ reviews
-- Programmatic Stripe test accounts + Clerk test mode accounts
-- 8 Playwright E2E test suites covering all critical user journeys
+- 29+ booking requests across all statuses, conversations with messages, 20+ reviews
+- No external service calls: Clerk and Stripe identities are local rows
 
 **Demo data specification:**
+
 - **Users:** 1 admin, 3 customers (varying profiles: new member, active booker, power user with reviews), 12-15 vendors across all **11** categories from `CATEGORY_SEEDS` (at least 1 per category, some in multiple)
-- **Vendor profiles:** Realistic business names, bios, cities (mix of NYC, LA, Chicago, Miami, Houston), tags (mix of languages/cultural/dietary), profile images (placeholder URLs or local test images)
+- **Vendor profiles:** Realistic business names, bios, cities (mix of NYC, LA, Chicago, Miami, Houston), tags (mix of languages/cultural/dietary)
+- **Imagery — resolved 2026-08-30 by lane 14.** The seed references **only files that already exist** under `apps/web/public/categories/`, and writes `null` everywhere it has none. It does **not** invent placeholder URLs: `VendorCard` and `Avatar` render a designed placeholder for a null image, but a non-null value becomes a raw `<img>` with no error handling, so a path to a missing file is a broken-image glyph on every card — strictly worse than null. Six of the eleven categories have a licensed image; the other five render the placeholder, which is useful rather than a shortfall, because `40-states.md` distinguishes the two card states. No new asset is added and none is borrowed from `apps/web/public/stock/`, whose `CREDITS.md` records unverified provenance as a launch blocker
 - **Packages:** 2-4 per vendor, varying price types and amounts ($500-$15K range)
-- **Portfolios:** 3-6 images per vendor (placeholder URLs)
+- **Portfolios:** 3-6 items for each vendor whose category has a licensed image; none for the rest (see Imagery)
 - **Availability:** Random future dates blocked/booked, most dates available
-- **Booking requests:** 29+ across all statuses — pending (3), quoted (2), accepted (2), declined (2), expired (2), cancelled (2), confirmed (8), completed (6), disputed (2)
+- **Booking requests:** 29+ across all statuses — pending, quoted, accepted, declined, expired, cancelled, and the bookings behind accepted ones: confirmed, completed, cancelled, disputed
 - **Conversations:** 1 per booking request, each with 3-10 messages back and forth
 - **Reviews:** 20+ reviews — mix of 3-5 star ratings, realistic content, both customer→vendor and vendor→customer
 - **Notifications:** Matching the booking lifecycle events
-- **Deterministic:** Use seeded PRNG (e.g., `seedrandom` with fixed seed) so data is identical across runs. Fixed UUIDs for key entities to enable stable Playwright selectors.
+- **Deterministic:** seeded PRNG and derived UUIDs, so data is identical across runs. Fixed UUIDs for key entities to enable stable Playwright selectors in **#340**.
+
+**Non-goals:** load or performance testing; visual-regression snapshots (the design
+parity gate is a human/Playwright comparison against the frames, not a pixel diff);
+seeding the Neon `production` branch, which stays empty until launch (**#48**); the
+Playwright suites themselves, which are **#340**.
+
+**Edge cases:**
+
+- Re-running `seed:demo` over an existing dataset must not duplicate rows.
+- **Re-running must also remove rows an earlier version of the seed wrote and this one no longer emits.** An upsert only repairs rows still in a `values()` list, so a dropped row survives for ever — the `.claude/rules/db-schema.md` "corrected writer leaves a legacy" trap. Hit for real during this ticket: 23 portfolio rows with dead image paths outlived the fix that stopped writing them, and kept rendering broken galleries on five vendors.
+- Missing Clerk/Stripe credentials must skip external calls, not fail the seed.
+- Tearing down must survive a booking made against a demo vendor by a customer the seed does not own — all three `bookings` foreign keys are `RESTRICT`.
+- A booked event date and a derived blocked date for one vendor must not collide
+  on `availability_vendor_date_key`.
+
+**Acceptance:**
+
+- [x] `pnpm db:seed:demo` completes in **<60s** and is idempotent — asserted by running it twice and diffing row counts
+- [x] Re-running converges: rows the seed no longer emits are pruned, not stranded
+- [x] Deterministic: two fresh runs produce identical data, verified by comparing a fingerprint of the seeded rows
+- [x] All **11** categories from `CATEGORY_SEEDS` have at least one published vendor
+- [x] 29+ booking requests covering **every** status in `BOOKING_REQUEST_STATUSES` and `BOOKING_STATUSES`
+- [x] Reviews cover both directions per the resolved asymmetry in `99-open-questions.md` #3 — customer→vendor public, vendor→customer private
+- [x] Seeding works with Clerk/Stripe credentials absent — external calls skipped, local DB still seeded
+- [x] Derived columns (`avg_rating`, `review_count`) are **recomputed** by the seed, never written directly
+- [x] Seed points only at a non-production branch — it must refuse to run against `production`
+
+**Blocked by:** None (#12 landed 2026-08-30)
+
+---
+
+### #340: Playwright E2E harness and the eight critical-journey suites
+
+**Milestone:** M6 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
+
+**Filed 2026-08-30 by lane 14**, split out of #14.
+
+**Current state, verified 2026-08-30:** the repo has **no `playwright.config.*`,
+no `e2e/` directory and no test-runner harness**. Playwright here is MCP-driven,
+for agentic browser verification by the `browser-verifier` and `parity-checker`
+agents — that is a different thing from a committed suite, and none of it is
+reusable as one. `pnpm e2e:auth` and the `.auth/` storage-state files
+(`.claude/rules/e2e-auth.md`) already exist and **are** reusable: agents never
+type a password, they load a role's storage state. The suites should do the same.
+
+**User value:** Every critical user journey is defended by a test that runs in
+CI, so a regression in booking, payment or messaging is caught before a human
+sees it.
+
+**Scope:**
+
+- `apps/web`: `playwright.config.ts`, an `e2e/` directory, and the `test:e2e` script
+- Eight suites covering the critical journeys
+- `@clerk/testing` for programmatic sign-in, reusing the `.auth/` storage state
+- Stripe test mode: `pm_card_visa`, and test webhook events via `stripe trigger`
 
 **Playwright E2E suites (8):**
+
 1. **Auth flow:** Sign up as customer, sign up as vendor, sign in, role-based redirects
 2. **Vendor profile:** Create profile, upload image, select tags, publish
 3. **Search + discovery:** Browse categories, apply filters, view vendor profile
@@ -618,43 +685,73 @@ campaigns; user-configurable notification preferences (that is #16's surface); S
 8. **Admin:** Ban user, moderate tag suggestion, view dashboard metrics
 
 **Behavioral requirements:**
-- `pnpm --filter db seed:demo` completes in <60s, idempotent (uses `ON CONFLICT` patterns from existing seed functions)
-- `pnpm --filter web test:e2e` — all 8 suites pass, E2E tests run at the reference viewport (1440×900) plus 768px and 390px
-- Handles missing Clerk/Stripe credentials gracefully (skips external service calls, seeds local DB only)
-- Clerk test mode: use `@clerk/testing` package for programmatic sign-in without real OAuth
-- Stripe test mode: use `pm_card_visa` test payment method, test webhook events via `stripe trigger`
 
-**Non-goals:** load or performance testing; visual-regression snapshots (the design
-parity gate is a human/Playwright comparison against the frames, not a pixel diff);
-seeding the Neon `production` branch, which stays empty until launch (**#48**).
+- `pnpm --filter web test:e2e` — all 8 suites pass, at the reference viewport (1440×900) plus 1024, 768 and 390
+- Suites select on the fixed UUIDs `seed:demo` derives (`demoVendorProfileId`), not on copy that a text change will break
+- A suite must fail loudly if a fixed UUID it selects on has drifted, rather than silently selecting nothing
+- Suite 8 needs the admin portal, so it lands with or after **#15**
 
-**Edge cases:**
-
-- Re-running `seed:demo` over an existing dataset must not duplicate rows.
-- A suite must fail loudly if a fixed UUID it selects on has drifted, rather than
-  silently selecting nothing.
-- Missing Clerk/Stripe credentials must skip external calls, not fail the seed.
+**Non-goals:** load or performance testing; visual-regression snapshots.
 
 **Acceptance:**
 
-- [ ] `pnpm --filter db seed:demo` completes in **<60s** and is idempotent — asserted by running it twice and diffing row counts
-- [ ] Deterministic: two fresh runs produce identical data, verified by comparing a hash of key tables
-- [ ] All **11** categories from `CATEGORY_SEEDS` have at least one vendor
-- [ ] 29+ booking requests covering **every** status in `BOOKING_REQUEST_STATUSES` and `BOOKING_STATUSES`
-- [ ] Reviews cover both directions per the resolved asymmetry in `99-open-questions.md` #3 — customer→vendor public, vendor→customer private
-- [ ] All 8 Playwright suites pass at 1440×900, and the responsive suites at 1024 / 768 / 390
+- [ ] All 8 suites pass at 1440×900, and the responsive suites at 1024 / 768 / 390
 - [ ] Suites use the fixed UUIDs, not text selectors that copy changes will break
-- [ ] Seeding works with Clerk/Stripe credentials absent — external calls skipped, local DB still seeded
-- [ ] Derived columns (`avg_rating`, `review_count`) are **recomputed** by the seed, never written directly
-- [ ] Seed points only at a non-production branch — it must refuse to run against `production`
+- [ ] A drifted UUID fails the suite with a message naming the missing entity
+- [ ] Sign-in uses the stored `.auth/` state, never a typed password
+- [ ] The suites run against a `seed:demo` database, seeded by the harness
 
-**Blocked by:** #12
+**Blocked by:** #14
+
+---
+
+### #341: `seed:marketing` and `seed:e2e` write an event-type label into a slug column
+
+**Milestone:** M6 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+
+**Filed 2026-08-30 by lane 14**, found while fixing the same defect in the new
+demo seed.
+
+**Observed:** `packages/db/src/seed-marketing.ts:406` and
+`packages/db/src/seed-e2e.ts:465` both write `eventType: 'Wedding'`.
+
+**Expected:** `'wedding'`. `booking_requests.event_type` holds a value from
+`EVENT_TYPES` — the closed vocabulary in `packages/shared/src/constants` — and
+`eventTypeSchema` (`z.enum(EVENT_TYPES)`) enforces it at the API edge. The
+display string lives separately in `EVENT_TYPE_LABELS`.
+
+**Why it matters:** the row is one the product itself would reject on write.
+Nothing fails today because the read schema deliberately types the column as a
+plain string (`packages/shared/src/schemas/index.ts:607`) to tolerate rows
+written before the vocabulary existed — so this is silent until a surface
+renders the label through `EVENT_TYPE_LABELS` and gets `undefined`, or a
+validating read is added.
+
+**Reproduction:** `pnpm db:seed` then `pnpm db:seed:marketing`, then
+`select distinct event_type from booking_requests` — `Wedding` appears
+alongside the slugs.
+
+**Scope:**
+
+- Correct both call sites to a slug.
+- **Close the class rather than the two instances.** Add a guard asserting that
+  every `event_type` any seed writes is in `EVENT_TYPES` — a written rule is what
+  let three seeds make the same mistake independently. `seed-demo.test.ts` already
+  has this assertion for its own seed; generalise it.
+
+**Acceptance:**
+
+- [ ] No seed writes an `event_type` outside `EVENT_TYPES`
+- [ ] A test fails if one is reintroduced, naming the seed and the bad value
+- [ ] Existing rows carrying a label are corrected on the next seed run, not stranded (`.claude/rules/db-schema.md`)
+
+**Blocked by:** None
 
 ---
 
 ### #15: Admin Portal + Sentry Integration
 
-**Milestone:** M6 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `sentry`
+**Milestone:** M6 | **Priority:** P1 High | **Status:** Deferred — needs a human | **Capabilities:** `core` `auth` `sentry`
 
 **Design:** `design/design-plan/22-admin.md`. Frame: `13 Admin`.
 
