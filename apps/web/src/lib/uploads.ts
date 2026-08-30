@@ -25,7 +25,13 @@ export type UploadFailureTone = 'red' | 'gold';
 
 export interface UploadFailure {
   /** Machine name, for tests and for grouping retryable failures. */
-  kind: 'unsupported-format' | 'too-large' | 'too-narrow' | 'connection-dropped' | 'rejected';
+  kind:
+    | 'unsupported-format'
+    | 'too-large'
+    | 'too-narrow'
+    | 'connection-dropped'
+    | 'rejected'
+    | 'preview-broken';
   tone: UploadFailureTone;
   /** One sentence saying what happened to this file, in these words. */
   reason: string;
@@ -122,6 +128,33 @@ export function rejectedFailure(message: string): UploadFailure {
     tone: 'red',
     reason: message,
     fix: `${ACCEPTED_IMAGE_LABEL} · under ${MAX_UPLOAD_MB} MB · at least ${MIN_UPLOAD_IMAGE_WIDTH}px wide.`,
+    retryable: false,
+  };
+}
+
+/**
+ * The store succeeded and the preview still would not render.
+ *
+ * Red rather than gold: nothing about the file is a judgement call, the
+ * picture simply is not on screen. Retryable, because the bytes were fine —
+ * `40-states.md` reserves a non-retryable red for a file that cannot work.
+ *
+ * This exists so a `201` is never announced as success on the strength of the
+ * status code alone. `complete === true` is also true for a broken image, so
+ * the load event is the only honest signal that the vendor can see their photo.
+ */
+export function previewFailure(): UploadFailure {
+  return {
+    kind: 'preview-broken',
+    tone: 'red',
+    reason: 'That photo saved, but the preview would not load.',
+    /*
+     * Not "send it again": the bytes are already stored, so a re-send produces
+     * a second object at a second key that will not render either — one orphan
+     * in the bucket per attempt, and no way out. Reloading is the action that
+     * can actually work, because it re-resolves the URL.
+     */
+    fix: 'Reload the page to see it.',
     retryable: false,
   };
 }

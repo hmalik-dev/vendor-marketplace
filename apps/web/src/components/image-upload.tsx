@@ -4,26 +4,41 @@ import {
   ACCEPTED_IMAGE_MIME_TYPES,
   MAX_UPLOAD_BYTES,
   UPLOAD_CONSTRAINT_LINE,
+  type UploadedImage,
 } from '@vendor-marketplace/shared';
 import { ImagePlus } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';
 import { useImageUpload, UploadTransportError } from '@/lib/use-api';
-import { connectionFailure, rejectedFailure, screenFile, type UploadFailure } from '@/lib/uploads';
+import { toImageSrc } from '@/lib/wire-schemas';
+import {
+  connectionFailure,
+  previewFailure,
+  rejectedFailure,
+  screenFile,
+  type UploadFailure,
+} from '@/lib/uploads';
 import { cn } from '@/lib/utils';
 
 export interface ImageUploadProps {
   label: string;
   /** Storage namespace; must be one of the API's known prefixes. */
   prefix: 'vendor-profile' | 'vendor-cover' | 'customer-profile';
+  /**
+   * What the form holds: an **object key** after an upload, and whatever the
+   * wire schema resolved before one. `toImageSrc` maps either to a `src`, so
+   * the caller never has to know which it is holding.
+   */
   value: string | null;
   /**
-   * Receives the stored **object key**, which is what gets persisted. The
-   * preview uses the resolved URL the upload also returns, so a fresh upload
-   * shows immediately without waiting for a round trip.
+   * Receives the stored **object key**, which is what gets persisted.
+   *
+   * It fires once the preview has actually rendered, not when the request
+   * returns `201`. A form that commits on the status code alone would hold a
+   * key whose image nobody has seen.
    */
-  onChange: (imageKey: string, previewUrl: string) => void;
+  onChange: (imageKey: string) => void;
   /** Sizing utility for the preview frame. Height-based frames stop a wide
    * drop zone growing taller as the pane widens. */
   aspectClassName?: string;
@@ -58,8 +73,31 @@ export function ImageUpload({
   const [progress, setProgress] = useState<number | null>(null);
   const [failure, setFailure] = useState<UploadFailure | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  /**
+   * The upload this component made, kept for as long as it is on screen.
+   *
+   * The preview keeps the URL the API resolved rather than re-deriving one:
+   * the API builds it from `S3_PUBLIC_URL` and the browser would build it from
+   * `NEXT_PUBLIC_S3_PUBLIC_URL`, and nothing makes those agree — a web deploy
+   * missing the public one is accepted by `assertWebEnv`, which validates only
+   * the `core` and `auth` capabilities. Swapping to the derived URL at the
+   * moment of success is exactly how this ticket's symptom comes back: the
+   * circle blanks while the toast says it worked.
+   */
+  const [uploaded, setUploaded] = useState<UploadedImage | null>(null);
+  /*
+   * Held explicitly rather than derived from `uploaded.imageKey !== value`:
+   * derived, it would stay true forever for a caller that ignored `onChange`,
+   * and the zone would sit disabled with no way out.
+   */
+  const [isAwaitingPreview, setIsAwaitingPreview] = useState(false);
 
   const isUploading = progress !== null;
+  /*
+   * `toImageSrc` covers the other direction — a `value` that is a bare object
+   * key — through the one place this app resolves stored images.
+   */
+  const src = uploaded !== null ? uploaded.imageUrl : toImageSrc(value);
 
   const handleFile = async (file: File | undefined): Promise<void> => {
     if (!file) {
@@ -81,8 +119,13 @@ export function ImageUpload({
     setProgress(0);
     try {
       const stored = await upload(file, prefix, { onProgress: setProgress });
-      onChange(stored.imageKey, stored.imageUrl);
-      toast.success(`${label} updated.`);
+      /*
+       * Neither the form nor the toast is touched here. The `<img>` below is
+       * pointed at the resolved URL, and its `load` event — the only evidence
+       * the vendor can actually see their photo — is what commits both.
+       */
+      setUploaded(stored);
+      setIsAwaitingPreview(true);
     } catch (error) {
       // The previous image is left in place: `onChange` never ran.
       setFailure(
@@ -101,7 +144,37 @@ export function ImageUpload({
     }
   };
 
-  const isBusy = isUploading || disabled;
+  /**
+   * Commits a stored file once its preview has rendered. `load` is the whole
+   * signal: the request already returned `201`, so this is what separates a
+   * photograph the vendor can see from one they cannot.
+   */
+  const handlePreviewLoaded = (): void => {
+    if (!isAwaitingPreview || uploaded === null) {
+      return;
+    }
+    setIsAwaitingPreview(false);
+    onChange(uploaded.imageKey);
+    toast.success(`${label} updated.`);
+  };
+
+  /**
+   * A stored file whose preview will not render. The previous image is left in
+   * place — `onChange` never ran — so an empty zone goes back to inviting a
+   * photo rather than sitting blank with nothing to say.
+   */
+  const handlePreviewFailed = (): void => {
+    if (!isAwaitingPreview) {
+      return;
+    }
+    setIsAwaitingPreview(false);
+    setUploaded(null);
+    setFailure(previewFailure());
+  };
+
+  // Verifying the preview is still work in flight: a second file picked during
+  // it would settle against the wrong upload.
+  const isBusy = isUploading || isAwaitingPreview || disabled;
 
   return (
     <div className="space-y-2">
@@ -139,20 +212,26 @@ export function ImageUpload({
            * the uploaded image covers it once there is one.
            */
           'relative flex w-full items-center justify-center overflow-hidden border border-dashed border-stone-400 transition-colors',
-          value ? 'bg-stone-50' : 'placeholder-hatch',
+          src ? 'bg-stone-50' : 'placeholder-hatch',
           // 128px circle from `sm`, the size frame 09 draws the profile photo.
           rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-lg'),
           isDragging && 'border-clay-400 bg-clay-100',
           isBusy && 'opacity-70',
         )}
       >
-        {value ? (
+        {src ? (
           // A plain <img>: these are user uploads on an origin that changes
           // between environments, so next/image's loader would need per-env
           // remote patterns for no benefit at this size.
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={value} alt="" className="size-full object-cover" />
+            <img
+              src={src}
+              alt=""
+              className="size-full object-cover"
+              onLoad={handlePreviewLoaded}
+              onError={handlePreviewFailed}
+            />
             {/*
               The frame labels a filled zone `Replace`, and without it there is
               no visible affordance for changing a photo once one exists — the
@@ -182,12 +261,18 @@ export function ImageUpload({
           Determinate, never a spinner: the percentage is the whole point of
           watching a large photograph go up.
         */}
-        {isUploading ? (
+        {isUploading || isAwaitingPreview ? (
           <span
             role="status"
             className="absolute inset-0 flex items-center justify-center bg-stone-900/40 text-sm font-semibold text-stone-0"
           >
-            {progress}%<span className="sr-only"> uploaded</span>
+            {/*
+              The bytes are in once the request resolves; what is left is the
+              browser drawing them. Holding at 100 keeps the zone determinate
+              rather than disabled with nothing on it, which is the one state
+              `40-states.md` does not allow an uploader to sit in.
+            */}
+            {progress ?? 100}%<span className="sr-only"> uploaded</span>
           </span>
         ) : null}
 
