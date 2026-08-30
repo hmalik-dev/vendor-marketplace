@@ -477,7 +477,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **168** | **Replace the page loader with the mark's two converging rings** | **P1** | **M3** | **P2 Medium** | **Done** | main | **None** | `core` | **Change order B3.** No wordmark — it renders before fonts are guaranteed. **Closed 2026-08-29 by verification, not by new code — it had already shipped out of band** (with frame `26`, alongside #165). Checked against every acceptance criterion rather than assumed: `page-loader.tsx` draws two `size-7.5` (30px) rings, `bg-clay-400` (`#b4552f`) and a `box-border` 2px `border-stone-900` (`#23201c`); `theme.css` defines `mark-converge-left` at `-9px -> 7px` and `mark-converge-right` at `9px -> -7px`, both `1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite` — the ticket's values exactly. No wordmark and no webfont: the loader's only text is an `sr-only` "Loading", and a test asserts the source contains neither `BRAND_NAME` nor `font-display`. Motion is gated behind `motion-safe:` on both rings, asserted. Mounted only at the `/vendor` and `/customer` segment loading boundaries — never the root, which `loading-boundaries.test.ts` enforces because a root `loading.tsx` turns every `notFound()` into a soft 404; `/messages` and `/bookings` use skeletons instead, per `40-states.md`'s one-idiom-per-screen rule. Both required tests already exist. Evidence: `page-loader.test.tsx` + `loading-boundaries.test.ts`, 9 tests green |
 | **169** | **Treat 1024 as a real breakpoint, height-constrained** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order B4.** Seven `27 …` frames. "Due today" above the fold is a hard constraint |
 | **170** | **Uploads — Customer profile photo upload is dead, and leaks an internal role message to the user** | **P1** | **M3** | **P0 Critical** | **In Progress** | `worktree-170` | **None** | `core` `storage` | Uploads pass 2026-08-28. Started 2026-08-29 on `worktree-170` |
-| **171** | **Uploads — A successful upload renders a broken image and a 500, while the toast says it worked** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **171** | **Uploads — A successful upload renders a broken image and a 500, while the toast says it worked** | **P1** | **M3** | **P1 High** | **In Progress** | `worktree-171` | **None** | `core` `storage` | Uploads pass 2026-08-28. Started 2026-08-29 in lane 171; #170 was skipped because a concurrent session holds its worktree lock. |
 | **172** | **Uploads — The image format allow-list is bypassed by renaming the file** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
 | **173** | **Uploads — No Cancel control exists during an upload** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
 | **174** | **Uploads — Size refusal contradicts itself at the byte boundary** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
@@ -518,7 +518,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **219** | **A new request opens no message thread, and the profile's message button is permanently dead** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
 | **220** | **No booking can be created by anyone — accept is walled behind payout setup that does not exist** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **#9, #10** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **221** | **The customer cannot accept a quote — `Review quote` links to the vendor's marketing page** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
-| **222** | **Vendor onboarding cannot be completed through the UI — a 400 is swallowed with no feedback at all** | **P1** | **M3** | **P0 Critical** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
+| **222** | **Vendor onboarding cannot be completed through the UI — a 400 is swallowed with no feedback at all** | **P1** | **M3** | **P0 Critical** | **In Progress** | `worktree-222` | **None** | `core` | Vendor onboarding + quote pass 2026-08-29. **Started 2026-08-29** in lane `worktree-222`; preflight `--ticket 222` passed 23/23 |
 | **223** | **A below-minimum quote makes Send a dead control** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **224** | **An above-maximum quote shows the raw API error string to the vendor** | **P1** | **M3** | **P1 High** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
 | **225** | **The success toast covers the submit button it confirms** | **P1** | **M3** | **P2 Medium** | **Backlog** | - | **None** | `core` | Vendor onboarding + quote pass 2026-08-29 |
@@ -8758,7 +8758,7 @@ Uploads adversarial pass, 2026-08-28. **Where:** `/customer/profile`, customer.
 
 ### #171: Uploads — A successful upload renders a broken image and a 500, while the toast says it worked
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core` `storage`
 **Blocked by:** None
 
 Uploads adversarial pass, 2026-08-28. **Where:** `/vendor/profile/edit`, vendor.
@@ -9861,7 +9861,7 @@ onboarding from nothing and the quote path. **Where:** `/bookings`, customer.
 
 ### #222: Vendor onboarding cannot be completed through the UI — a 400 is swallowed with no feedback at all
 
-**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 Vendor onboarding + quote-flow pass, 2026-08-29 — the first pass to drive vendor
