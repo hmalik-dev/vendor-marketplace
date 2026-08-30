@@ -20,6 +20,17 @@ const TRACKER = fileURLToPath(
   new URL('../../../../.claude/plans/vendor-marketplace-tickets.md', import.meta.url),
 );
 
+/**
+ * Closed rows moved out of the tracker on 2026-08-30, when it had reached 13,500
+ * lines and 311 of its 334 rows were finished work. They are still board rows and
+ * still have to agree with the registry — `pnpm preflight --ticket <old n>` is run
+ * from older branches and commit messages every week — so this test reads both
+ * files and does not care which one a row lives in.
+ */
+const ARCHIVE = fileURLToPath(
+  new URL('../../../../.claude/plans/vendor-marketplace-tickets-archive.md', import.meta.url),
+);
+
 /** `core` and `e2e` are implicit on every ticket: the board writes them, the registry omits them. */
 const IMPLICIT: readonly string[] = ['core', 'e2e'];
 
@@ -34,14 +45,14 @@ interface BoardRow {
 }
 
 /**
- * Parses the Status Board table. Rows added after #64 wrap every cell in `**`,
- * and lettered splits (`6a`, `22b`) share their parent's number, exactly as the
- * registry's own docstring describes.
+ * Parses the Status Board table out of the tracker **and** the closed archive.
+ * Rows added after #64 wrap every cell in `**`, and lettered splits (`6a`, `22b`)
+ * share their parent's number, exactly as the registry's own docstring describes.
  */
-function readBoard(): readonly BoardRow[] {
+function readBoard(path: string): readonly BoardRow[] {
   const rows: BoardRow[] = [];
 
-  for (const line of readFileSync(TRACKER, 'utf8').split('\n')) {
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
     const cells = line.split('|');
     if (cells.length < 11) continue;
 
@@ -63,10 +74,27 @@ function readBoard(): readonly BoardRow[] {
 }
 
 describe('the ticket registry against the status board', () => {
-  const board = readBoard();
+  const openRows = readBoard(TRACKER);
+  const archivedRows = readBoard(ARCHIVE);
+  const board = [...openRows, ...archivedRows];
 
   it('finds the status board where the project convention says it is', () => {
     expect(board.length).toBeGreaterThan(200);
+  });
+
+  it('reads the open tracker and the closed archive, not just whichever is larger', () => {
+    // The archive holds the overwhelming majority of rows, so a tracker repointed at
+    // a file with no board in it would still leave `board.length` over 200 and this
+    // suite green while every *open* ticket silently left the gate. Assert both
+    // files contribute, with the same parser the rest of this suite uses.
+    expect(
+      openRows.length,
+      'the tracker contributed no board rows — has it moved?',
+    ).toBeGreaterThan(0);
+    expect(
+      archivedRows.length,
+      'the archive contributed no board rows — has it moved?',
+    ).toBeGreaterThan(0);
   });
 
   it('declares a row for every ticket on the board', () => {

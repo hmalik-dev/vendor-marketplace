@@ -8,15 +8,16 @@ product is Orla**, read from `BRAND_NAME` and never written as a literal.
 
 ## Where things are
 
-| What                           | Where                                                                                                                        |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Ticket queue                   | `.claude/plans/vendor-marketplace-tickets.md` — the Status Board table                                                       |
-| Plan                           | `.claude/plans/vendor-marketplace-plan.md`                                                                                   |
-| Decisions                      | `.claude/plans/vendor-marketplace-decisions.md`                                                                              |
-| Design contract                | `design/` — `Orla - Screens.dc.html` holds the 1440x900 frames and is the acceptance criterion; `design-plan/` explains them |
-| Path-scoped conventions        | `.claude/rules/` — loaded automatically when you touch matching files                                                        |
-| Auto-memory                    | `.claude/memory/` — `~/.claude/projects/<slug>/memory` is a symlink to it, so what a session writes is committable           |
-| Review and verification agents | `.claude/agents/` and `~/.claude/agents/`                                                                                    |
+| What                           | Where                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Ticket queue                   | `.claude/plans/vendor-marketplace-tickets.md` — the Status Board table, **open rows only**                                     |
+| Closed tickets                 | `.claude/plans/vendor-marketplace-tickets-archive.md` — every `Done` and `Superseded` row and detail section, moved 2026-08-30 |
+| Plan                           | `.claude/plans/vendor-marketplace-plan.md`                                                                                     |
+| Decisions                      | `.claude/plans/vendor-marketplace-decisions.md`                                                                                |
+| Design contract                | `design/` — `Orla - Screens.dc.html` holds the 1440x900 frames and is the acceptance criterion; `design-plan/` explains them   |
+| Path-scoped conventions        | `.claude/rules/` — loaded automatically when you touch matching files                                                          |
+| Auto-memory                    | `.claude/memory/` — `~/.claude/projects/<slug>/memory` is a symlink to it, so what a session writes is committable             |
+| Review and verification agents | `.claude/agents/` and `~/.claude/agents/`                                                                                      |
 
 ## Ticket queue
 
