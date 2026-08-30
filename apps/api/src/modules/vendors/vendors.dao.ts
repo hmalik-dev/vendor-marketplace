@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   categories,
   tags,
@@ -152,6 +152,56 @@ export async function findVendorTags(db: AppDatabase, vendorId: string): Promise
     .orderBy(asc(tags.category), asc(tags.displayOrder));
 
   return rows.map((row) => row.tag);
+}
+
+/**
+ * Claims a Stripe connected account for a vendor, but **only if they do not
+ * already have one**. Returns the row as it stands afterwards, so the caller
+ * can tell whether it won.
+ *
+ * Conditional rather than a plain `SET`, because the read-then-write it
+ * replaces is a race a vendor can lose real money to: two tabs pressing "Set up
+ * payouts" inside one Stripe round trip both see `null`, both create an
+ * account, and the second write wins. The vendor then completes onboarding
+ * against the account the row no longer names, every webhook for it finds no
+ * vendor, and they stay blocked at the payment gate forever with nothing in the
+ * logs to say why.
+ */
+export async function claimStripeAccountId(
+  db: AppDatabase,
+  vendorId: string,
+  stripeAccountId: string,
+): Promise<VendorProfileRow | null> {
+  if (!vendorId || !stripeAccountId) {
+    return null;
+  }
+
+  const claimed = await db
+    .update(vendorProfiles)
+    .set({ stripeAccountId, updatedAt: sql`now()` })
+    .where(and(eq(vendorProfiles.id, vendorId), isNull(vendorProfiles.stripeAccountId), live))
+    .returning();
+
+  // No row means another request claimed it first; read back the winner.
+  return claimed?.[0] ?? (await findVendorProfileById(db, vendorId));
+}
+
+/** A vendor profile by its own id, used to re-read after a lost claim. */
+export async function findVendorProfileById(
+  db: AppDatabase,
+  id: string,
+): Promise<VendorProfileRow | null> {
+  if (!id) {
+    return null;
+  }
+
+  const rows = await db
+    .select()
+    .from(vendorProfiles)
+    .where(and(eq(vendorProfiles.id, id), live))
+    .limit(1);
+
+  return rows?.[0] ?? null;
 }
 
 /**

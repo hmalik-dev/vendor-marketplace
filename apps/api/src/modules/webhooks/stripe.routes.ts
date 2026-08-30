@@ -40,7 +40,18 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod = async (app) => {
       try {
         event = app.stripe.parseEventNotification(rawBodyOf(request.body), signature);
       } catch (error) {
-        request.log.warn({ err: error }, 'Rejected a Stripe webhook with an invalid signature');
+        /*
+         * The message only, never the error object. Stripe's
+         * `SignatureVerificationError` carries `header` and `payload` as own
+         * properties, and pino's `err` serialiser copies every own property —
+         * so logging the error would re-emit the very header `server.ts`
+         * redacts, and would write up to a megabyte of attacker-chosen body
+         * into the log stream on an endpoint that needs no credential.
+         */
+        request.log.warn(
+          { reason: error instanceof Error ? error.message : 'unknown' },
+          'Rejected a Stripe webhook with an invalid signature',
+        );
         throw unauthorized('Webhook signature verification failed');
       }
 

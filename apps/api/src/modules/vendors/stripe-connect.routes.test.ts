@@ -122,6 +122,36 @@ describe('vendor Stripe Connect onboarding', () => {
       expect(second.json().url).not.toBe(first.json().url);
     });
 
+    /*
+     * The failure this prevents costs a vendor real money. Two tabs press the
+     * button inside one Stripe round trip; both see no account and both create
+     * one. If the later write simply won, the vendor could complete onboarding
+     * against the account the row no longer names — every webhook for it would
+     * find no vendor, and they would sit behind the payment gate forever.
+     */
+    it('persists exactly one account when two calls race, and links against it', async () => {
+      await seedVendorProfile('vendor_a');
+
+      const [first, second] = await Promise.all([connect('vendor_a'), connect('vendor_a')]);
+
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(200);
+
+      // Both requests reached Stripe, because both genuinely saw no account…
+      expect(harness.stripe.createdAccounts.length).toBeGreaterThanOrEqual(1);
+
+      // …but exactly one id is stored, and it is one of the two that were made.
+      const stored = (await status('vendor_a')).json().stripeAccountId;
+      expect(harness.stripe.createdAccounts.map((account) => account.accountId)).toContain(stored);
+
+      // And every link minted points at the id that actually won the row, so a
+      // vendor cannot onboard against an account nothing can look up again.
+      expect(harness.stripe.createdLinks).toHaveLength(2);
+      for (const link of harness.stripe.createdLinks) {
+        expect(link.accountId).toBe(stored);
+      }
+    });
+
     it('sends Stripe back to the payments return and resume paths', async () => {
       await seedVendorProfile('vendor_a');
 

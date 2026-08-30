@@ -62,21 +62,25 @@ export default async function VendorPaymentsPage({
           </Banner>
         ) : (
           <>
+            {/*
+              One banner, which is the component's own contract — and on the
+              `?resume=1` path the expired link is the newer, more specific
+              thing to say, so it takes the slot rather than stacking above the
+              gate. Steel there because nothing failed and nothing is waiting on
+              the vendor except pressing the button again; gold otherwise,
+              because the setup is waiting on them. Never red: `40-states.md`.
+            */}
             {linkExpired ? (
-              <Banner status="informational" title="That link had expired" className="mb-3.5">
+              <Banner status="informational" title="That link had expired">
                 Stripe links only last a few minutes. Start again and you will pick up where you
                 left off.
               </Banner>
-            ) : null}
-
-            {/*
-              Gold, because this is waiting on the vendor rather than something
-              that failed — `40-states.md` — and the sentence is the approved one
-              from `31-content-voice.md`.
-            */}
-            <Banner status="pending" title="Payouts not connected">
-              You can&rsquo;t take payment until payouts are connected. It takes about five minutes.
-            </Banner>
+            ) : (
+              <Banner status="pending" title="Payouts not connected">
+                You can&rsquo;t take payment until payouts are connected. It takes about five
+                minutes.
+              </Banner>
+            )}
 
             <div className="mt-6">
               <ConnectPayoutsForm isResuming={hasStarted} />

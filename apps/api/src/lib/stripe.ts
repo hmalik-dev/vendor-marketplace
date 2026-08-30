@@ -114,7 +114,16 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
         contact_email: input.contactEmail,
         display_name: input.displayName,
         dashboard: 'express',
-        identity: { country: 'us', entity_type: 'individual' },
+        /*
+         * Country only. `entity_type` is deliberately not sent: Stripe uses it
+         * to decide which identity fields apply and how the account is
+         * validated, and this product's vendors are as often a catering LLC or
+         * a DJ company as a sole trader. Asserting `individual` for all of them
+         * would ask a company for a personal identity it cannot supply, stall
+         * verification, and leave the capabilities restricted forever. The
+         * hosted form asks instead.
+         */
+        identity: { country: 'us' },
         configuration: {
           recipient: {
             capabilities: { stripe_balance: { stripe_transfers: { requested: true } } },

@@ -16,8 +16,38 @@ function statusCodeOf(error: unknown): number | null {
   return null;
 }
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : 'Request failed';
+/**
+ * Fastify and its plugins signal with a `FST_`-prefixed code, and their
+ * messages are written about the request — "Request file too large", "Unsupported
+ * Media Type" — so they are safe to hand back.
+ */
+function isFastifyError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string' &&
+    (error as { code: string }).code.startsWith('FST_')
+  );
+}
+
+/**
+ * The message a 4xx may carry back to the client.
+ *
+ * **Only Fastify's own errors get to speak.** A third-party SDK error is not
+ * copy anyone wrote for a reader, and several of them carry a numeric
+ * `statusCode` that lands in the same branch: `stripe-node` sets one and a
+ * message naming the API key and its mode, Clerk sets `status`, the AWS SDK
+ * sets `$metadata.httpStatusCode`. Passing those through turned an upstream
+ * misconfiguration into a client-visible disclosure. The status still passes
+ * through, because it is the right answer; the sentence does not.
+ */
+function messageOf(error: unknown, statusCode: number): string {
+  if (isFastifyError(error) && error instanceof Error) {
+    return error.message;
+  }
+
+  return statusCode === 404 ? 'Resource not found' : 'Request failed';
 }
 
 /**
@@ -78,10 +108,20 @@ export const errorHandlerPlugin = fp(
       }
 
       if (statusCode !== null && statusCode >= 400 && statusCode < 500) {
+        // Logged in full even though the reply is generic: the upstream detail
+        // is exactly what a support question needs and exactly what a client
+        // must not be shown.
+        if (!isFastifyError(error)) {
+          request.log.error(
+            { err: error, method: request.method, route: request.routeOptions.url },
+            'Upstream dependency answered 4xx',
+          );
+        }
+
         const body: ApiError = {
           statusCode,
           error: ERROR_CODES.VALIDATION_ERROR,
-          message: messageOf(error),
+          message: messageOf(error, statusCode),
         };
         return reply.status(statusCode).send(body);
       }

@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
 import { findUserById } from '../users/users.dao.js';
 import {
+  claimStripeAccountId,
   findVendorProfileByStripeAccountId,
   findVendorProfileByUserId,
   updateVendorProfileById,
@@ -63,15 +64,17 @@ export async function startPayoutOnboarding(
       contactEmail: user.email,
       displayName: vendor.businessName,
     });
-    accountId = created.accountId;
 
     /*
-     * Persisted before the link is minted. If link creation fails, the vendor
-     * retries against the account that already exists; if the write were the
-     * later of the two, the retry would strand the first account and open a
-     * second, which is the duplicate-account failure this ordering prevents.
+     * Persisted before the link is minted, and claimed conditionally. Two tabs
+     * pressing the button at once both reach here, and only one write can land:
+     * whichever loses discards the account it just created and mints its link
+     * against the winner's, so the row and the account the vendor onboards are
+     * always the same one. Doing it the other way round — link first, write
+     * second — is what strands an account nobody can look up again.
      */
-    await updateVendorProfileById(deps.db, vendor.id, { stripeAccountId: accountId });
+    const claimed = await claimStripeAccountId(deps.db, vendor.id, created.accountId);
+    accountId = claimed?.stripeAccountId ?? created.accountId;
   }
 
   return deps.stripe.createOnboardingLink({
