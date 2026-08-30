@@ -511,7 +511,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **212** | **Accepting a booking labels the date `Pending request` on the vendor's own calendar, and the Booked counter stays at 0** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
 | **213** | **Decline is one click, irreversible, with no confirmation and no undo** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
 | **214** | **A customer cannot cancel, or even review, a request they sent** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
-| **215** | **The Clerk session JWT is sent in a URL query string** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
+| **215** | **The Clerk session JWT is sent in a URL query string** | **P1** | **M3** | **P1 High** | **In Progress** | `worktree-215` | **None** | `core` | Two-sided functional pass 2026-08-28. **Started 2026-08-29** in lane `worktree-215`; preflight `--ticket 215` passed 23/23 |
 | **216** | **Four different expiry promises for the same deadline, and the one shown at commitment is wrong** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
 | **217** | **The two sides disagree about whether there is a platform fee** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
 | **218** | **`Send quote` is dead on the default path, contradicting what the customer was promised** | **P1** | **M3** | **P2 Medium** | **Backlog** | — | **None** | `core` | Two-sided functional pass 2026-08-28 |
@@ -9655,7 +9655,7 @@ customer** across account switches. **Where:** `/bookings`, customer.
 
 ### #215: The Clerk session JWT is sent in a URL query string
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 Two-sided functional pass, 2026-08-28 — the first pass to drive **customer -> vendor ->
