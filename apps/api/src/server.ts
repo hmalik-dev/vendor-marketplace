@@ -16,6 +16,7 @@ import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.j
 import type { AppDatabase } from './lib/database.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
+import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { eventsPlugin } from './plugins/events.js';
@@ -51,6 +52,12 @@ export interface BuildServerOptions {
   storage: ObjectStorage;
   /** Alternate log destination; the suites use it to assert on redaction. */
   loggerStream?: NodeJS.WritableStream;
+  /**
+   * The instant every date-sensitive route reads. Defaults to the real clock;
+   * the suites pin it so "today" is an input rather than whatever hour the
+   * run happens to start at.
+   */
+  clock?: Clock;
   /** Test seams; production wiring uses the real Clerk and svix clients. */
   auth?: Pick<ClerkAuthPluginOptions, 'verifySessionToken' | 'loadClerkUser'>;
   webhooks?: Pick<ClerkWebhookRoutesOptions, 'verifySignature'>;
@@ -83,6 +90,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   // oversized upload is refused rather than read into memory in full.
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
 
+  await app.register(clockPlugin, options.clock ? { clock: options.clock } : {});
   await app.register(databasePlugin, { db });
   await app.register(eventsPlugin);
   await app.register(storagePlugin, { storage });

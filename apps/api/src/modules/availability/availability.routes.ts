@@ -8,13 +8,21 @@ const AVAILABILITY_PATH = '/vendor/availability';
 
 const availabilityListSchema = z.array(availabilitySchema);
 
+/**
+ * Both handlers take today from `app.clock()` rather than letting the service
+ * fall back to `new Date()`. The calendar's floor and the nearby-availability
+ * window are the same day expressed twice; when they came from two independent
+ * clocks a suite could write a blocked date through one and have the other
+ * treat it as unwritten.
+ */
 export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
   const vendorOnly = requireRole('vendor');
 
   app.get(
     AVAILABILITY_PATH,
     { preHandler: vendorOnly, schema: { response: { 200: availabilityListSchema } } },
-    async (request) => listOwnAvailability(app.db, assertRole(request.auth, ['vendor']).id),
+    async (request) =>
+      listOwnAvailability(app.db, assertRole(request.auth, ['vendor']).id, app.clock()),
   );
 
   app.put(
@@ -24,6 +32,11 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { body: availabilityBulkUpdateSchema, response: { 200: availabilityListSchema } },
     },
     async (request) =>
-      setOwnAvailability(app.db, assertRole(request.auth, ['vendor']).id, request.body),
+      setOwnAvailability(
+        app.db,
+        assertRole(request.auth, ['vendor']).id,
+        request.body,
+        app.clock(),
+      ),
   );
 };
