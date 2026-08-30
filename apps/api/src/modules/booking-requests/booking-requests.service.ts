@@ -4,6 +4,7 @@ import {
   ERROR_CODES,
   EXPIRABLE_BOOKING_REQUEST_STATUSES,
   addDays,
+  bookingRequestWindowPhrase,
   disclosesCustomerContact,
   isUniversallyPastDate,
   type BookingRequestDetail,
@@ -415,7 +416,7 @@ export async function createBookingRequest(
 
     const delivery = await recordNotification(tx, row, 'vendor', 'new_request', {
       title: 'New booking request',
-      body: `A customer asked about ${readableDate(row.eventDate)}. You have a week to reply.`,
+      body: `A customer asked about ${readableDate(row.eventDate)}. You have ${bookingRequestWindowPhrase()} to reply.`,
     });
 
     return { row, delivery };

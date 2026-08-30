@@ -58,6 +58,19 @@ export function ErrorScreen({ digest, reset }: ErrorScreenProps): React.ReactEle
           Try again
         </Button>
         <Button asChild variant="secondary">
+          {/*
+            A hard navigation, deliberately. This screen is shared with
+            `global-error.tsx`, which replaces the **root layout** and therefore
+            renders outside the App Router context that `next/link` needs to
+            mount — a `<Link>` here works in `error.tsx` and throws in the one
+            case the user is already looking at a crashed application.
+
+            The rule stopped resolving `/bookings` to a page when the hub moved
+            into a route group, so it began flagging what it had always been
+            fine with; the reasoning below is why the answer is a comment rather
+            than a `<Link>`.
+          */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/bookings">Go to my bookings</a>
         </Button>
       </div>

@@ -587,6 +587,47 @@ export const DEFAULT_PLATFORM_FEE_RATE = 0.12;
 /** A pending booking request auto-expires this many days after creation. */
 export const BOOKING_REQUEST_EXPIRY_DAYS = 7;
 
+/**
+ * What each side is told about money, in the one place both are decided.
+ *
+ * #217 read this as a contradiction — the customer told "No service fee", the
+ * vendor told "your share, after the platform fee" — and asked for the two to
+ * be reconciled. Reconciling them is the wrong fix, because
+ * `98-post-mvp.md` **defers all fee language on vendor surfaces**: "no
+ * vendor-facing surface makes any fee claim, in either direction. Not 'no
+ * fees', not a rate, not a hint", and the customer's promise "must not be
+ * mirrored, or negated, onto the vendor side". The vendor model is not settled,
+ * and a claim walked back later costs more trust than saying nothing now.
+ *
+ * So the vendor line was not an inconsistency to be explained — it was a
+ * Post-MVP claim that should never have shipped. It is replaced by the payment
+ * **mechanism**, which is true under any pricing model the platform later
+ * picks. The customer's half is a real differentiator on their side of the
+ * transaction and stays exactly as it was.
+ */
+export const MONEY_COPY = {
+  /** Customer-facing: what they pay, and what is not added to it. */
+  customer: {
+    title: 'No service fee.',
+    body: "The price you're quoted is the price you pay.",
+  },
+  /**
+   * Vendor-facing: the mechanism, never the fee. Anything naming a rate, a
+   * commission or a fee on a vendor surface is a Post-MVP leak — see the guard
+   * in `no-vendor-fee-language.test.ts`.
+   *
+   * **This is an interim string and #300 owns replacing it.** Frame `08` draws
+   * this line as `Next payout Jun 18` — a real payout date, not a statement
+   * about the arrangement — so the shipped copy was wrong twice over: a
+   * Post-MVP fee claim *and* off-frame. Removing the claim is #308's to do;
+   * stating the date is not, because there is no payout schedule to read one
+   * from until #10, and a date the platform invents is exactly what the
+   * no-invented-numbers rule forbids. So this says something true and
+   * dateless in the meantime, and frame `08`'s Text axis stays open.
+   */
+  vendorPayout: 'Paid out after each event',
+} as const;
+
 /** Cancelling at least this many hours before the event earns a full refund. */
 export const FULL_REFUND_CUTOFF_HOURS = 48;
 
