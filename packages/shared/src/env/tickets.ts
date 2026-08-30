@@ -373,6 +373,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   318: [],
   319: [],
   320: [],
+  321: [],
+  322: [],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

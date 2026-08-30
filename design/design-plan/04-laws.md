@@ -129,7 +129,11 @@ Framer Motion for component animation; CSS transitions for hover and focus.
 
 ## Accessibility
 
-- Focus ring: `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50`
+- Focus ring: **three mechanisms by element type — see `03-components.md` § Inputs.**
+  Bordered field: `border-clay-400 + ring-3 ring-clay-400/15`, no offset. Bar or
+  panel segment: `bg-stone-200` fill + clay label, no outline. Unbordered control:
+  `ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50`. `:focus-visible`
+  only, and an indicator never has a radius the element doesn't have.
 - Icon-only controls carry `aria-label` and a 44×44 hit area
 - Status is never colour alone — pill text always present
 - Modals trap focus, close on Escape, restore focus

@@ -2206,11 +2206,204 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 </div>
 
 <div class="sc">
-<div class="sc-h"><span class="sc-n">26</span><span class="sc-t">State library — everything smaller than a screen</span><span class="sc-mvp">MVP</span><span class="sc-d">The pieces that appear inside the twelve screens rather than replacing them: banners, toasts, field states, loaders, skeleton variants and the four interrupting dialogs. Build these once as components; every screen above composes from them. Rules on each tile.</span></div>
+<div class="sc-h"><span class="sc-n">26</span><span class="sc-t">State library — everything smaller than a screen</span><span class="sc-mvp">MVP</span><span class="sc-rev">Revised</span><span class="sc-d">The pieces that appear inside the twelve screens rather than replacing them: banners, toasts, field states, loaders, skeleton variants and the four interrupting dialogs. Build these once as components; every screen above composes from them. Rules on each tile.</span></div>
 <div style="display:flex;gap:26px;align-items:flex-start">
 <div style="flex:none">
 <div class="bp">1440 · desktop</div>
 <div class="fr" style="height:auto;padding:26px;display:block;background:#F4F0E8;box-sizing:border-box" data-screen-label="26 State library">
+
+<div class="lbl" style="margin-bottom:4px">Focus &mdash; the three cases that are wrong today</div>
+<div style="font-size:12px;line-height:1.6;color:#4A443C;max-width:1180px;margin-bottom:14px">All three screenshots share one mistake: <strong style="font-weight:600;color:#4A443C">a pill-shaped outline drawn around the whole segment</strong>. On a joined bar that fights the container it sits inside, and because the segments are pill-rounded the ring inflates into a balloon. Two of them also leak browser chrome. The fix is not a thinner ring &mdash; it is a different mechanism per context.</div>
+
+<div style="display:flex;gap:14px;margin-bottom:14px;align-items:stretch">
+<div style="flex:1;background:#FBF0EC;border-radius:12px;padding:15px 16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#A8321E;margin-bottom:3px">1 &middot; Today</div>
+<div style="font-size:11.5px;line-height:1.5;color:#6B6459;margin-bottom:12px">Native <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">&lt;input type="date"&gt;</span>. Browser-blue selection on <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">mm</span>, OS calendar glyph, pill ring.</div>
+<div style="background:#F1ECE4;border:2px solid #C98D6E;border-radius:999px;padding:8px 15px"><div class="lbl" style="font-size:9px;margin-bottom:1px">Event date</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;color:#8A8175"><span style="background:#B3D4FC;color:#23201C">mm</span>/dd/yyyy</span><span style="font-size:13px;color:#23201C">&#128197;</span></div></div>
+<div class="tn" style="margin-top:11px">Three palettes at once: Orla clay, Chrome blue, OS black. And an empty field asks the customer to type a format instead of picking a date.</div>
+</div>
+<div style="flex:1;background:#FFFDF9;border-radius:12px;padding:15px 16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#4B5940;margin-bottom:3px">1 &middot; Fix &mdash; never a native date input</div>
+<div style="font-size:11.5px;line-height:1.5;color:#6B6459;margin-bottom:12px">A field that shows a <em>date</em>, opens the Orla calendar, and can't be typed into wrong.</div>
+<div style="background:#EFE9E0;border-radius:12px;padding:9px 15px"><div class="lbl" style="font-size:9px;margin-bottom:1px;color:#8E3F20">Event date</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px;color:#23201C">June 14, 2026</span><div style="width:13px;height:13px;border:1.4px solid #6B6459;border-radius:2.5px;position:relative;flex:none"><div style="position:absolute;left:-1.4px;right:-1.4px;top:2.5px;height:1.4px;background:#6B6459"></div><div style="position:absolute;left:2px;top:-3px;width:1.4px;height:3px;background:#6B6459"></div><div style="position:absolute;right:2px;top:-3px;width:1.4px;height:3px;background:#6B6459"></div></div></div></div>
+<div class="tn" style="margin-top:11px">Focus is the <strong style="font-weight:600">same fill-and-clay-label treatment as every other bar segment</strong> &mdash; identical mechanism, so nothing to learn twice. Icon is ours, <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">stone-600</span>, 13px.</div>
+</div>
+</div>
+
+<div style="display:flex;gap:14px;margin-bottom:14px;align-items:stretch">
+<div style="flex:1;background:#FBF0EC;border-radius:12px;padding:15px 16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#A8321E;margin-bottom:3px">2 &middot; Today</div>
+<div style="font-size:11.5px;line-height:1.5;color:#6B6459;margin-bottom:12px">A pill outline around one segment of a joined bar, plus a bare text caret.</div>
+<div style="background:#F5EDE7;border:2px solid #D8B29B;border-radius:999px;padding:8px 15px"><div class="lbl" style="font-size:9px;margin-bottom:1px">City</div><div style="font-size:15px;color:#4A443C"><span style="border-left:1.5px solid #23201C;padding-left:1px"></span>Anywhere</div></div>
+<div class="tn" style="margin-top:11px">The ring's radius doesn't match the bar's corners, so it reads as a balloon floating over the surface rather than a part of it &mdash; and &ldquo;Anywhere&rdquo; is a placeholder pretending to be a value.</div>
+</div>
+<div style="flex:1;background:#FFFDF9;border-radius:12px;padding:15px 16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#4B5940;margin-bottom:3px">2 &middot; Fix &mdash; the fill moves, not the outline</div>
+<div style="font-size:11.5px;line-height:1.5;color:#6B6459;margin-bottom:12px">Segments inside one surface get no border of their own &mdash; the fill carries it.</div>
+<div style="background:#FFFDF9;border:1px solid #E4DDD1;border-radius:14px;box-shadow:0 3px 14px rgba(35,32,28,.07);display:flex;align-items:stretch;overflow:hidden">
+<div style="flex:1;padding:9px 14px;border-right:1px solid #EFE9E0"><div class="lbl" style="font-size:8.5px;margin-bottom:1px">What</div><div style="font-size:12.5px;color:#23201C">Photography</div></div>
+<div style="flex:1.15;padding:9px 14px;border-right:1px solid #EFE9E0;background:#EFE9E0"><div class="lbl" style="font-size:8.5px;margin-bottom:1px;color:#8E3F20">Where</div><div style="font-size:12.5px;color:#23201C">Austin<span style="border-left:1.5px solid #B4552F;margin-left:1px"></span></div></div>
+<div style="flex:1;padding:9px 14px"><div class="lbl" style="font-size:8.5px;margin-bottom:1px">When</div><div style="font-size:12.5px;color:#23201C">June 14</div></div>
+<div style="display:flex;align-items:center;padding:6px"><span style="font-size:12.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:9px 17px;border-radius:9px">Search</span></div>
+</div>
+<div class="tn" style="margin-top:11px">Focused segment takes a <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">stone-200</span> fill and a clay label &mdash; no border, no edge, no outline of any kind. The fill alone is unmistakable because its neighbours are lighter, and the bar stays one object.</div>
+</div>
+</div>
+
+<div style="display:flex;gap:14px;margin-bottom:6px;align-items:stretch">
+<div style="flex:1;background:#FBF0EC;border-radius:12px;padding:15px 16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#A8321E;margin-bottom:3px">3 &middot; Today</div>
+<div style="font-size:11.5px;line-height:1.5;color:#6B6459;margin-bottom:12px">A filter field the panel didn't need, autofocused &mdash; so this ring shows <em>every single time</em> it opens.</div>
+<div style="background:#FFFDF9;border-radius:12px;padding:12px;box-shadow:0 8px 26px rgba(35,32,28,.14)">
+<div style="background:#F1ECE4;border:2.5px solid #C4744F;border-radius:999px;padding:9px 14px;display:flex;gap:9px;align-items:center"><div style="width:11px;height:11px;border:1.5px solid #6B6459;border-radius:50%;flex:none"></div><span style="font-size:13px;color:#8A8175">Filter vendor types</span></div>
+<div style="padding:10px 4px 2px;display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;color:#23201C">Any vendor type</span><span style="font-size:13px;color:#23201C">Photography</span><span style="font-size:13px;color:#23201C">Entertainment</span></div>
+</div>
+<div class="tn" style="margin-top:11px">A ring that is always on is decoration, not feedback &mdash; and the field itself is the deeper problem: it is the loudest thing in the panel, competing with the list the customer came to read.</div>
+</div>
+<div style="flex:1;background:#FFFDF9;border-radius:12px;padding:15px 16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#4B5940;margin-bottom:3px">3 &middot; Fix &mdash; no filter field at all</div>
+<div style="font-size:11.5px;line-height:1.5;color:#6B6459;margin-bottom:12px">The list <em>is</em> the interface. Typing narrows it in place &mdash; no field to focus, so no ring to get wrong.</div>
+<div style="background:#FFFDF9;border-radius:12px;padding:8px;box-shadow:0 8px 26px rgba(35,32,28,.14)">
+<div style="display:flex;flex-direction:column;gap:1px">
+<span style="font-size:13px;color:#23201C;background:#F1ECE4;border-radius:7px;padding:8px 10px">Any vendor type</span>
+<span style="font-size:13px;color:#23201C;padding:8px 10px">Photography</span>
+<span style="font-size:13px;color:#23201C;padding:8px 10px">Entertainment</span>
+<span style="font-size:13px;color:#23201C;padding:8px 10px">Catering</span>
+<span style="font-size:13px;color:#23201C;padding:8px 10px">Venues</span>
+<span style="font-size:13px;color:#23201C;padding:8px 10px">Florals</span>
+</div>
+</div>
+<div class="tn" style="margin-top:11px">Already the rule in <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">42-dropdowns</span> &mdash; &ldquo;no search field: 11 categories fit one screen.&rdquo; The build added one anyway. The active row gets a <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">stone-150</span> fill and nothing else.</div>
+</div>
+</div>
+
+<div style="background:#F1ECE4;border-radius:12px;padding:14px 16px;margin-top:14px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#6B6459;margin-bottom:10px">The resolved rule &mdash; replaces the conflict between 03-components and 04-laws</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px 22px;font-size:12.5px;line-height:1.55;color:#4A443C">
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><strong style="font-weight:600">Segment in a joined bar</strong> &mdash; deeper fill and a clay label. No border, no edge, no outline.</span></div>
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><strong style="font-weight:600">Standalone bordered field</strong> &mdash; border darkens to clay + 3px inner glow. No offset gap.</span></div>
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><strong style="font-weight:600">Unbordered control</strong> (button, link, avatar) &mdash; 2px clay ring + 2px page-coloured offset.</span></div>
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><strong style="font-weight:600">No filter field in a dropdown.</strong> Typing narrows the list in place.</span></div>
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><strong style="font-weight:600">Never a native date, time or select.</strong> Browser chrome brings its own palette.</span></div>
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><strong style="font-weight:600">A focus indicator never has a radius the element doesn't have.</strong></span></div>
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><strong style="font-weight:600">Open adds to focused, never replaces it.</strong> Same fill, plus a clay value and a flipped caret.</span></div>
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><strong style="font-weight:600">Error beats focus hue</strong> &mdash; <span style="font-family:'JetBrains Mono',monospace;font-size:11px">#B23A30</span> border stays, glow matches it. Never clay on red.</span></div>
+<div style="display:flex;gap:9px"><div class="dot" style="background:#5E6B4F;margin-top:6px;flex:none"></div><span><span style="font-family:'JetBrains Mono',monospace;font-size:11px">:focus-visible</span> only &mdash; a mouse click on a field must not flash a ring.</span></div>
+</div>
+</div>
+
+<div style="height:1px;background:#E4DDD1;margin:22px 0"></div>
+
+<div class="lbl" style="margin-bottom:4px">One ladder, applied everywhere &mdash; each rung adds, none replaces</div>
+<div style="font-size:12px;line-height:1.6;color:#4A443C;max-width:1180px;margin-bottom:12px">The old spec had open <em>replace</em> focus, which meant an open segment could look quieter than a focused one &mdash; backwards. Focus and open now share the same fill; open simply adds a clay value and a flipped caret on top of it.</div>
+<div style="display:flex;gap:14px;margin-bottom:22px">
+<div style="flex:1;background:#FFFDF9;border-radius:12px;padding:16px">
+<div style="display:flex;align-items:center;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:999px;box-shadow:0 3px 14px rgba(35,32,28,.07);padding:6px 6px 6px 20px">
+<div style="flex:1"><div class="lbl" style="font-size:9px">Rest</div><div style="font-size:13.5px;color:#23201C">Photography</div></div>
+<div style="width:1px;height:28px;background:#E4DDD1"></div>
+<div style="flex:1;padding-left:16px;background:#F4F0E8;border-radius:999px;margin-left:-4px"><div class="lbl" style="font-size:9px">Hover</div><div style="font-size:13.5px;color:#23201C">Austin, TX</div></div>
+<div style="width:1px;height:28px;background:#E4DDD1"></div>
+<div style="flex:1;padding-left:16px;background:#EFE9E0;border-radius:999px;margin-left:-4px"><div class="lbl" style="font-size:9px;color:#8E3F20">Focused</div><div style="font-size:13.5px;color:#23201C">Jun 14<span style="border-left:1.5px solid #B4552F;margin-left:1px"></span></div></div>
+<div style="width:1px;height:28px;background:#E4DDD1"></div>
+<div style="flex:1;padding-left:16px;background:#EFE9E0;border-radius:999px;margin-left:-4px"><div class="lbl" style="font-size:9px;color:#8E3F20">Open</div><div style="display:flex;align-items:center;justify-content:space-between;padding-right:12px"><span style="font-size:13.5px;font-weight:600;color:#B4552F">120 guests</span><span style="font-size:9px;color:#B4552F">&#9652;</span></div></div>
+<div style="display:flex;align-items:center;padding-left:8px"><span style="font-size:12.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:9px 17px;border-radius:999px">Search</span></div>
+</div>
+<div class="tn" style="margin-top:12px">Four rungs on one bar for comparison &mdash; in the product only one segment is ever past rest. Hover <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">stone-100</span>, focused <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">stone-200</span> + clay label, open adds clay value + flipped caret. No rung introduces a border, and the pill's own outline is never crossed.</div>
+</div>
+<div style="width:300px;flex:none;background:#F1ECE4;border-radius:12px;padding:16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#6B6459;margin-bottom:11px">Where each mechanism applies</div>
+<div style="display:flex;flex-direction:column;gap:9px;font-size:12px;line-height:1.5;color:#4A443C">
+<div><strong style="font-weight:600;color:#23201C">Fill</strong> &mdash; hero search bar, compact header bar, date/guest/package segments, dropdown rows, tab strips, segmented toggles.</div>
+<div><strong style="font-weight:600;color:#23201C">Border + glow</strong> &mdash; standalone form fields: booking request, checkout, editor, sign-up, price range inputs.</div>
+<div><strong style="font-weight:600;color:#23201C">Offset ring</strong> &mdash; buttons, text links, avatars, whole cards, icon-only controls.</div>
+<div style="padding-top:3px;border-top:1px solid #E4DDD1"><strong style="font-weight:600;color:#23201C">Nothing</strong> &mdash; an autofocused field in an opening panel. There should not be one in the first place.</div>
+</div>
+</div>
+</div>
+
+<div style="height:1px;background:#E4DDD1;margin:22px 0"></div>
+
+<div class="lbl" style="margin-bottom:4px">Standalone field states &mdash; forms, not the search bar</div>
+<div style="font-size:12px;line-height:1.6;color:#4A443C;max-width:1180px;margin-bottom:14px">A field with a border of its own darkens that border rather than growing a ring outside it &mdash; the border <em>is</em> the signal, and the 3px glow only thickens it.</div>
+
+<div style="display:flex;gap:14px;margin-bottom:22px;flex-wrap:wrap">
+<div style="width:236px;background:#FFFDF9;border-radius:12px;padding:14px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#6B6459;margin-bottom:9px">Rest</div>
+<div class="lbl" style="margin-bottom:5px">City</div>
+<div style="background:#F1ECE4;border:1px solid #DDD5C8;border-radius:10px;padding:10px 13px;font-size:13.5px;color:#23201C;display:flex;justify-content:space-between;align-items:center"><span>Austin, TX</span><span style="color:#6B6459;font-size:11px">&#9662;</span></div>
+<div class="tn" style="margin-top:9px">Border <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">stone-300</span> on a <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">stone-150</span> fill.</div>
+</div>
+<div style="width:236px;background:#FFFDF9;border-radius:12px;padding:14px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#6B6459;margin-bottom:9px">Hover</div>
+<div class="lbl" style="margin-bottom:5px">City</div>
+<div style="background:#EFE9E0;border:1px solid #CFC6B7;border-radius:10px;padding:10px 13px;font-size:13.5px;color:#23201C;display:flex;justify-content:space-between;align-items:center"><span>Austin, TX</span><span style="color:#4A443C;font-size:11px">&#9662;</span></div>
+<div class="tn" style="margin-top:9px">Border one step darker. No ring &mdash; hover is not focus.</div>
+</div>
+<div style="width:236px;background:#FFFDF9;border-radius:12px;padding:14px;box-shadow:inset 0 0 0 1px #EFE9E0">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#8E3F20;margin-bottom:9px">Focus-visible &middot; closed</div>
+<div class="lbl" style="margin-bottom:5px">City</div>
+<div style="background:#F1ECE4;border:1.5px solid #B4552F;box-shadow:0 0 0 3px rgba(180,85,47,.15);border-radius:10px;padding:9.5px 12.5px;font-size:13.5px;color:#23201C;display:flex;justify-content:space-between;align-items:center"><span>Austin, TX</span><span style="color:#6B6459;font-size:11px">&#9662;</span></div>
+<div class="tn" style="margin-top:9px">Border goes clay <em>and is the signal</em>; the 3px glow only thickens it. No offset gap on bordered fields.</div>
+</div>
+<div style="width:236px;background:#FFFDF9;border-radius:12px;padding:14px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#8E3F20;margin-bottom:9px">Open &middot; ring suppressed</div>
+<div class="lbl" style="margin-bottom:5px">City</div>
+<div style="background:#F1ECE4;border:1.5px solid #B4552F;border-radius:10px;padding:9.5px 12.5px;font-size:13.5px;color:#B4552F;font-weight:600;display:flex;justify-content:space-between;align-items:center"><span>Austin, TX</span><span style="font-size:11px">&#9652;</span></div>
+<div class="tn" style="margin-top:9px">Value turns clay, caret flips &mdash; a stronger, more specific signal, so the glow drops. Two focus cues at once read as a bug.</div>
+</div>
+<div style="width:236px;background:#FFFDF9;border-radius:12px;padding:14px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#A8321E;margin-bottom:9px">Error &middot; focused</div>
+<div class="lbl" style="margin-bottom:5px">City</div>
+<div style="background:#FBF0EC;border:1.5px solid #B23A30;box-shadow:0 0 0 3px rgba(178,58,48,.18);border-radius:10px;padding:9.5px 12.5px;font-size:13.5px;color:#23201C;display:flex;justify-content:space-between;align-items:center"><span style="color:#6B6459">Choose a city</span><span style="color:#6B6459;font-size:11px">&#9662;</span></div>
+<div class="tn" style="margin-top:9px">Error owns the border at <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">#B23A30</span>; focus only adds its glow in the same hue. Never clay-on-red.</div>
+</div>
+</div>
+
+<div style="background:#FFFDF9;border-radius:12px;padding:14px 16px;margin-bottom:22px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#6B6459;margin-bottom:11px">Unbordered controls &mdash; these get the offset ring</div>
+<div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap">
+<span style="font-size:13.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:11px 20px;border-radius:10px;box-shadow:0 0 0 2px #F4F0E8,0 0 0 4px rgba(180,85,47,.42)">Request booking</span>
+<span style="font-size:13.5px;font-weight:600;color:#23201C;background:#FFFDF9;border:1px solid #DDD5C8;padding:10px 18px;border-radius:10px;box-shadow:0 0 0 2px #F4F0E8,0 0 0 4px rgba(180,85,47,.42)">Send a message</span>
+<span style="font-size:13px;font-weight:600;color:#A34A28;border-radius:5px;padding:2px 3px;box-shadow:0 0 0 2px #F4F0E8,0 0 0 4px rgba(180,85,47,.42)">See all packages &rarr;</span>
+<div style="width:40px;height:40px;border-radius:50%;background:#EADCCB;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:16px;color:#8E3F20;box-shadow:0 0 0 2px #F4F0E8,0 0 0 4px rgba(180,85,47,.42)">MK</div>
+</div>
+<div class="tn" style="margin-top:11px">Buttons, links, avatars and cards have no border of their own to darken &mdash; they grow a <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">ring-2 + offset-2</span>. The 2px gap is page-coloured, so the ring reads as detached at any fill. Radius always matches the element's own.</div>
+</div>
+
+<div class="lbl" style="margin-bottom:4px">Calendar icon &mdash; where it earns its place</div>
+<div style="font-size:12px;line-height:1.6;color:#4A443C;max-width:1180px;margin-bottom:14px">Icon when it <em>disambiguates among siblings</em>, not when the label already does. And on the right, where the caret would sit &mdash; a left icon shifts the text baseline out of line with every other field in the column.</div>
+<div style="display:flex;gap:14px;margin-bottom:6px;align-items:stretch;flex-wrap:wrap">
+<div style="flex:1;min-width:300px;background:#FFFDF9;border-radius:12px;padding:16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#4B5940;margin-bottom:4px">No icon &mdash; hero search bar</div>
+<div style="font-size:11.5px;color:#6B6459;margin-bottom:12px">Three labelled segments and one clay pill. An icon here is decoration competing with the only element that should pull the eye.</div>
+<div style="background:#FFFDF9;border:1px solid #E4DDD1;border-radius:14px;box-shadow:0 3px 14px rgba(35,32,28,.07);display:flex;align-items:stretch;overflow:hidden">
+<div style="flex:1;padding:11px 15px;border-right:1px solid #EFE9E0"><div class="lbl" style="font-size:9px;margin-bottom:2px">What</div><div style="font-size:13px;color:#23201C">Photography</div></div>
+<div style="flex:1;padding:11px 15px;border-right:1px solid #EFE9E0"><div class="lbl" style="font-size:9px;margin-bottom:2px">Where</div><div style="font-size:13px;color:#23201C">Austin, TX</div></div>
+<div style="flex:1;padding:11px 15px"><div class="lbl" style="font-size:9px;margin-bottom:2px">When</div><div style="font-size:13px;color:#23201C">June 14, 2026</div></div>
+<div style="display:flex;align-items:center;padding:7px"><span style="font-size:13px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:10px 20px;border-radius:10px">Search</span></div>
+</div>
+</div>
+<div style="flex:1;min-width:300px;background:#FFFDF9;border-radius:12px;padding:16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#8E3F20;margin-bottom:4px">Icon &mdash; forms</div>
+<div style="font-size:11.5px;color:#6B6459;margin-bottom:12px">A date among six identical-looking fields. The glyph is a type signal, right-aligned where a caret would be.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+<div><div class="lbl" style="margin-bottom:5px">Event date</div><div style="background:#F1ECE4;border:1px solid #DDD5C8;border-radius:10px;padding:10px 12px;font-size:13px;color:#23201C;display:flex;justify-content:space-between;align-items:center"><span>June 14, 2026</span><div style="width:13px;height:13px;border:1.4px solid #6B6459;border-radius:2.5px;position:relative;flex:none"><div style="position:absolute;left:-1.4px;right:-1.4px;top:2.5px;height:1.4px;background:#6B6459"></div><div style="position:absolute;left:2px;top:-3px;width:1.4px;height:3px;background:#6B6459"></div><div style="position:absolute;right:2px;top:-3px;width:1.4px;height:3px;background:#6B6459"></div></div></div></div>
+<div><div class="lbl" style="margin-bottom:5px">Guests</div><div style="background:#F1ECE4;border:1px solid #DDD5C8;border-radius:10px;padding:10px 12px;font-size:13px;color:#23201C">120</div></div>
+<div><div class="lbl" style="margin-bottom:5px">City</div><div style="background:#F1ECE4;border:1px solid #DDD5C8;border-radius:10px;padding:10px 12px;font-size:13px;color:#23201C;display:flex;justify-content:space-between;align-items:center"><span>Austin</span><span style="color:#6B6459;font-size:11px">&#9662;</span></div></div>
+<div><div class="lbl" style="margin-bottom:5px">Start time</div><div style="background:#F1ECE4;border:1px solid #DDD5C8;border-radius:10px;padding:10px 12px;font-size:13px;color:#23201C;display:flex;justify-content:space-between;align-items:center"><span>2:00 PM</span><span style="color:#6B6459;font-size:11px">&#9662;</span></div></div>
+</div>
+<div class="tn" style="margin-top:10px">Same 13px optical size as the caret it replaces, <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">stone-600</span>, never clay &mdash; it is a label, not an action.</div>
+</div>
+<div style="width:250px;flex:none;background:#FBF0EC;border-radius:12px;padding:16px">
+<div style="font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#A8321E;margin-bottom:10px">Don't</div>
+<div><div class="lbl" style="margin-bottom:5px">Event date</div><div style="background:#F1ECE4;border:1px solid #DDD5C8;border-radius:10px;padding:10px 12px;font-size:13px;color:#23201C;display:flex;gap:9px;align-items:center"><div style="width:13px;height:13px;border:1.4px solid #B4552F;border-radius:2.5px;flex:none"></div><span>June 14, 2026</span></div></div>
+<div class="tn" style="margin-top:10px">Left-side icon pushes the value out of alignment with every other field, and clay makes a label look clickable.</div>
+</div>
+</div>
+
+<div style="height:1px;background:#E4DDD1;margin:22px 0"></div>
+
+
 
 <div class="lbl" style="margin-bottom:12px">Inline banners — one per screen, at the top of the pane it concerns</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:28px">
@@ -2322,7 +2515,7 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 </div>
 <div style="position:absolute;left:40px;top:246px;width:840px">
 <div style="display:flex;align-items:center;background:#FFFDF9;border-radius:999px;box-shadow:0 10px 34px rgba(35,32,28,.16);padding:7px 7px 7px 24px">
-<div style="flex:1.3"><div class="lbl">Vendor type</div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-right:14px"><span style="font-size:15px;font-weight:500;color:#23201C">Photography</span><span style="font-size:10px;color:#B4552F">&#9652;</span></div></div>
+<div style="flex:1.3;background:#EFE9E0;border-radius:999px;padding:6px 4px 6px 16px;margin-left:-16px"><div class="lbl" style="color:#8E3F20">Vendor type</div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-right:14px"><span style="font-size:15px;font-weight:600;color:#B4552F">Photography</span><span style="font-size:10px;color:#B4552F">&#9652;</span></div></div>
 <div style="width:1px;height:32px;background:#E4DDD1"></div>
 <div style="flex:1;padding-left:18px"><div class="lbl">City</div><div style="font-size:15px;color:#23201C">Austin, TX</div></div>
 <div style="width:1px;height:32px;background:#E4DDD1"></div>
@@ -2361,7 +2554,7 @@ a{color:#A34A28}a:hover{color:#8E3F20}
 <div class="tile">
 <div class="tl">Compact header bar &middot; same panel, tighter rows</div>
 <div style="display:flex;align-items:center;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:999px;height:42px;padding:0 5px 0 18px;box-shadow:0 2px 10px rgba(35,32,28,.06);margin-bottom:7px">
-<div style="padding-right:14px;border-right:1px solid #EFE9E0"><div style="font:600 9px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">Vendor type</div><div style="font-size:12.5px;font-weight:600;color:#8E3F20;display:flex;align-items:center;gap:5px">Photography <span style="font-size:8px">&#9652;</span></div></div>
+<div style="background:#EFE9E0;border-radius:999px;padding:4px 14px 4px 12px;margin-left:-12px;border-right:1px solid #EFE9E0"><div style="font:600 9px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#8E3F20">Vendor type</div><div style="font-size:12.5px;font-weight:600;color:#8E3F20;display:flex;align-items:center;gap:5px">Photography <span style="font-size:8px">&#9652;</span></div></div>
 <div style="padding:0 14px;border-right:1px solid #EFE9E0"><div style="font:600 9px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">City</div><div style="font-size:12.5px;color:#23201C">Austin</div></div>
 <div style="padding:0 14px"><div style="font:600 9px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459">Date</div><div style="font-size:12.5px;color:#23201C">Jun 14</div></div>
 </div>

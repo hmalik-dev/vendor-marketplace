@@ -359,7 +359,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **164** | **11 Availability — The page has no `<h1>`** | **P1** | **M3** | **P2 Medium** | **Done** | `worktree-153` | **None** | `core` | Parity sweep 2026-08-28, finding `PB2-41`, axis **Access**. Re-confirmed against the current DOM before implementing — `document.querySelectorAll("h1").length === 0`. The screen title is now an `h1`; the rail three section headings stay `h2`, so the hierarchy runs h1 -> h2 instead of three sibling `h2`s with no parent. Visually inert: `.display-heading` is a class role and **#165** removed the tag-level serif rule, so nothing keys off the element name |
 | **165** | **One `globals.css` rule breaks the font axis on every screen in the product** | **P1** | **M3** | **P1 High** | **Done** | `worktree-165` | **None** | `core` | **Root cause** of #131, #150, #160, #161, #162 and every unswept frame (the row previously named #89/#109/#119/#121 — wrong numbers, corrected 2026-08-29). Highest-leverage fix in the sweep | **Merged 2026-08-29 (`8a14155`, PR #7), CI green.** Lane torn down.
 | **166** | **Availability calendar — every cell state carries a shape, not just a fill** | **P1** | **M3** | **P1 High** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-29 by the backlog consolidation — merged into #301.** The detail section below is kept for its measurements and context; do not work it directly. **Change order A1.** Booked/pending/blocked were within ~2 points of luminance — unreadable in greyscale or with CVD. Adds Completed + Today. Resolves #164. **Claimed and released 2026-08-29 with no work done** — preflight passed 23/23 and the lane was torn down unused, so this row is genuinely untouched and free for any session to take |
-| **167** | **Build the shared dropdown component — nothing rolls its own** | **P1** | **M3** | **P1 High** | **Backlog** | `worktree-167` | **None** — #166 is Superseded into #301 (Done, `89c9f7c`) and #306 is Done | `core` | **Change order A2** + `42-dropdowns.md` + frames `28`. **Supersedes #69.** Closes the unreachable-panel and stays-open findings. **Started 2026-08-29 on `worktree-167` — the shell is built and tested (`cbfd2ee`), the seven call-site migrations are not, so this is NOT done.** Landed on the branch: the shell, both mounts, the keyboard model and the Apply footer, under 23 tests covering both mounts, dismissal by outside click / Escape / select, focus return, scroll repositioning rather than dismissing, the 360px cap, arrow movement with wraparound, type-ahead, Tab-closes, and that a multi-select commits nothing until Apply. Adds `--shadow-dropdown` with the frame's own `0 14px 44px rgba(35,40,38,.20)` — neither `shadow-xl` nor the `shadow-lg` the plan names matches it, and the frame outranks the plan. **Remaining:** the range and date bodies, and migrating `category-select`, the four `refine-bar` chips, the booking-request event type, the two vendor-profile selects and `tag-picker`. **Two conflicts with existing documented decisions, both settled by `42-dropdowns.md` and needing no ruling — but they are deletions, so they are recorded here:** the vendor-type select's typed filter and its `closestCategories` fallback go, because the spec says a single-select has "no search field"; and its deliberate `avoidCollisions={false}` pinning goes, because the spec flips above a field within 380px of the viewport bottom. Both have tests that will need rewriting. **Out of scope by the acceptance criterion, which names five surfaces:** `booking-rail`'s package select stays native — `frame-03-parity.test.ts` asserts it and the code documents why — as do `customer-profile-form`'s budget tier, `package-form`'s price type, and `CategoryPicker`, which carries its own documented exception | **Released back to Backlog 2026-08-30 with the head start intact — `worktree-167` is now pushed, so `cbfd2ee` survives.** Inventory taken before releasing, and it is larger than the row implied. **Two of the four bodies do not exist**: range and date are absent entirely, and multi-select has only `DropdownApplyFooter` — no checkbox row primitive, so the shell's arrow-key model (which roves `[role="option"]`) does not reach a checkbox body. **The date body is genuinely blocked**: the spec says it reuses the **A1 cell marks**, which are #166, which sits inside **#301**, which waits on **#306**. Migrating the other four surfaces and leaving the hero/header date segment as a native `<input type="date">` would put two dropdown idioms in the same search bar, which is the exact condition this ticket exists to remove — so it is released whole rather than half-done. Also found: **`SearchBar` has three mounts, not two** (`HeroSearch`, `HeaderQuery`, and a below-`lg` row in `search-shell.tsx`); the Refine bar's price chip auto-applies on every drag tick and the tag chips on every click, both against the "never auto-apply" rule; `RefineBarProps.facets` is a dead prop still being passed; and **ten test suites** assert on the controls being replaced, three of them by source text — `frame-03-parity.test.ts` requires the literal `<select` in `booking-rail.tsx`, which is fine only because the booking rail is **not** one of the five named surfaces. Do #306 -> #301/#166 first. **Unblocked 2026-08-30:** the date body's dependency was #166's A1 cell marks, which shipped inside **#301** (`89c9f7c`); #306's hatch/threshold ruling also landed. The `Blocked By` here was stale, not live. **RULED 2026-08-30 by the user from the live hero:** the vendor-type filter row goes (type-ahead replaces it), the date loses its native control entirely, City focus drops to the inset ring alone, and the ring alpha is raised to >= 0.80 **in `04-laws.md`** under a scoped exception — the ruling **#306 was asked for and closed without making**. That last one moves the focus ring on **every control in the product**, not just this bar. Measured deltas at 1440x900 in the detail section. See D13.
+| **167** | **Build the shared dropdown component — nothing rolls its own** | **P1** | **M3** | **P1 High** | **Backlog** | `worktree-167` | **None** — #166 is Superseded into #301 (Done, `89c9f7c`) and #306 is Done | `core` | **Change order A2** + `42-dropdowns.md` + frames `28`. **Supersedes #69.** Closes the unreachable-panel and stays-open findings. **Started 2026-08-29 on `worktree-167` — the shell is built and tested (`cbfd2ee`), the seven call-site migrations are not, so this is NOT done.** Landed on the branch: the shell, both mounts, the keyboard model and the Apply footer, under 23 tests covering both mounts, dismissal by outside click / Escape / select, focus return, scroll repositioning rather than dismissing, the 360px cap, arrow movement with wraparound, type-ahead, Tab-closes, and that a multi-select commits nothing until Apply. Adds `--shadow-dropdown` with the frame's own `0 14px 44px rgba(35,40,38,.20)` — neither `shadow-xl` nor the `shadow-lg` the plan names matches it, and the frame outranks the plan. **Remaining:** the range and date bodies, and migrating `category-select`, the four `refine-bar` chips, the booking-request event type, the two vendor-profile selects and `tag-picker`. **Two conflicts with existing documented decisions, both settled by `42-dropdowns.md` and needing no ruling — but they are deletions, so they are recorded here:** the vendor-type select's typed filter and its `closestCategories` fallback go, because the spec says a single-select has "no search field"; and its deliberate `avoidCollisions={false}` pinning goes, because the spec flips above a field within 380px of the viewport bottom. Both have tests that will need rewriting. **Out of scope by the acceptance criterion, which names five surfaces:** `booking-rail`'s package select stays native — `frame-03-parity.test.ts` asserts it and the code documents why — as do `customer-profile-form`'s budget tier, `package-form`'s price type, and `CategoryPicker`, which carries its own documented exception | **Released back to Backlog 2026-08-30 with the head start intact — `worktree-167` is now pushed, so `cbfd2ee` survives.** Inventory taken before releasing, and it is larger than the row implied. **Two of the four bodies do not exist**: range and date are absent entirely, and multi-select has only `DropdownApplyFooter` — no checkbox row primitive, so the shell's arrow-key model (which roves `[role="option"]`) does not reach a checkbox body. **The date body is genuinely blocked**: the spec says it reuses the **A1 cell marks**, which are #166, which sits inside **#301**, which waits on **#306**. Migrating the other four surfaces and leaving the hero/header date segment as a native `<input type="date">` would put two dropdown idioms in the same search bar, which is the exact condition this ticket exists to remove — so it is released whole rather than half-done. Also found: **`SearchBar` has three mounts, not two** (`HeroSearch`, `HeaderQuery`, and a below-`lg` row in `search-shell.tsx`); the Refine bar's price chip auto-applies on every drag tick and the tag chips on every click, both against the "never auto-apply" rule; `RefineBarProps.facets` is a dead prop still being passed; and **ten test suites** assert on the controls being replaced, three of them by source text — `frame-03-parity.test.ts` requires the literal `<select` in `booking-rail.tsx`, which is fine only because the booking rail is **not** one of the five named surfaces. Do #306 -> #301/#166 first. **Unblocked 2026-08-30:** the date body's dependency was #166's A1 cell marks, which shipped inside **#301** (`89c9f7c`); #306's hatch/threshold ruling also landed. The `Blocked By` here was stale, not live. **RULED 2026-08-30 by the user from the live hero:** the vendor-type filter row goes (type-ahead replaces it), the date loses its native control entirely, City focus drops to the inset ring alone, and the ring alpha is raised to >= 0.80 **in `04-laws.md`** under a scoped exception — the ruling **#306 was asked for and closed without making**. That last one moves the focus ring on **every control in the product**, not just this bar. Measured deltas at 1440x900 in the detail section. See D13. **SPEC CHANGED UNDER THIS TICKET 2026-08-30 — read before continuing.** The design re-import revised `42-dropdowns.md` in two ways that this ticket is being built against the old version of: (1) **typing narrows the list in place**, explicitly *not* a jump-to-first-letter — the in-flight `dropdown.tsx` implements `startsWith` type-ahead; (2) **open adds to focused rather than replacing it** — same `stone-200` fill and clay label, *plus* the clay value and flipped caret, because the old "open replaces focus" rule let an open segment look quieter than a focused one. The trigger's focus treatment is now **#321**'s fill, not a ring. Frames `28` updated to match. See D14
 | **168** | **Replace the page loader with the mark's two converging rings** | **P1** | **M3** | **P2 Medium** | **Done** | main | **None** | `core` | **Change order B3.** No wordmark — it renders before fonts are guaranteed. **Closed 2026-08-29 by verification, not by new code — it had already shipped out of band** (with frame `26`, alongside #165). Checked against every acceptance criterion rather than assumed: `page-loader.tsx` draws two `size-7.5` (30px) rings, `bg-clay-400` (`#b4552f`) and a `box-border` 2px `border-stone-900` (`#23201c`); `theme.css` defines `mark-converge-left` at `-9px -> 7px` and `mark-converge-right` at `9px -> -7px`, both `1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite` — the ticket's values exactly. No wordmark and no webfont: the loader's only text is an `sr-only` "Loading", and a test asserts the source contains neither `BRAND_NAME` nor `font-display`. Motion is gated behind `motion-safe:` on both rings, asserted. Mounted only at the `/vendor` and `/customer` segment loading boundaries — never the root, which `loading-boundaries.test.ts` enforces because a root `loading.tsx` turns every `notFound()` into a soft 404; `/messages` and `/bookings` use skeletons instead, per `40-states.md`'s one-idiom-per-screen rule. Both required tests already exist. Evidence: `page-loader.test.tsx` + `loading-boundaries.test.ts`, 9 tests green |
 | **169** | **Treat 1024 as a real breakpoint, height-constrained** | **P1** | **M3** | **P1 High** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-29 by the backlog consolidation — merged into #304.** The detail section below is kept for its measurements and context; do not work it directly. **Change order B4.** Seven `27 …` frames. "Due today" above the fold is a hard constraint |
 | **170** | **Uploads — Customer profile photo upload is dead, and leaks an internal role message to the user** | **P1** | **M3** | **P0 Critical** | **Done** | `worktree-170` | **None** | `core` `storage` | Uploads pass 2026-08-28. **Done 2026-08-29 (`afa9c63`, PR #21).** Authorization is now per prefix via `STORAGE_PREFIX_ROLES`, typed `Record<StoragePrefix, readonly UserRole[]>` so a new namespace cannot ship without a role decision. Two further defects fixed with it: `assertRole` no longer interpolates the required role into a message ~11 surfaces render verbatim, and `avatarUrl` was migrated to `imageRefSchema` on **five** schemas — the fifth, `conversationSummarySchema`, would have 500d the conversations list of every vendor a photo-uploading customer had messaged, since a response schema is a second write boundary. Tests: all **12** (role, prefix) pairs derived from `STORAGE_PREFIXES` and `USER_ROLES` (admin refused everywhere), a new `image-upload.test.tsx` asserting the **rendered** DOM carries no internal sentence, and a PUT/GET round trip. Browser-verified at 1440x900 in five states: customer 201 and persisting across a real reload (`naturalWidth: 1600`), customer refused on all three vendor prefixes, vendor refused on `customer-profile`, signed out 401. CI green. Filed #293 (pre-existing UTC/local test failure). Left to their own tickets: #171 (preview renders the key), #175 (too-narrow should be gold) |
@@ -511,6 +511,8 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **318** | **The notification stream connects to a hardcoded port, so it fails in every lane** | P1.5 | M4.5 | **P2 Medium** | **Done** | `worktree-318` | None | `core` | **Found 2026-08-30 while browser-verifying #307.** Every authenticated page in lane 307 logged a tight retry loop of `net::ERR_CONNECTION_REFUSED` against `http://localhost:4028/events/stream?token=...` — dozens of failed attempts within seconds. The lane's API is on **4020**; `4028` is another lane's port, so the SSE client is resolving its origin from something that is not the lane environment. Two things to fix and they are separable: the origin must come from `NEXT_PUBLIC_API_URL` like every other call, and the client must **back off** rather than retrying in a tight loop against a refused connection. Console noise on this scale also degrades every future browser verification, because a real error has to be found among hundreds of these. **Done 2026-08-30 — squashed as `4780cc0` via [PR #30](https://github.com/hmalik-dev/vendor-marketplace/pull/30).** **Most of it was already fixed and was not rebuilt.** #215 landed between the filing and the pickup: the origin already comes from `NEXT_PUBLIC_API_URL` rather than a literal port, and `EventSource`'s own reconnect was already replaced with a growing backoff. Verified in the source before writing anything. What #215 did not add was either required test, or a bound. **Why bound at all, given the 30s ceiling is not a tight loop:** a lane with no API behind it still writes an identical console error every half minute for the rest of the session, and `browser-verifier` reads the console at every checkpoint. It also cost the suite directly — with the bound disabled, **two unrelated tests in the same file hit their 60s timeout**, because the loop keeps timers alive; that was being paid invisibly on every run. **Why bounding alone would have been worse:** a dropped connection is the *normal* case on a phone (screen lock, tunnel, network switch) and #215's own comments say so, so a stream that gave up permanently would leave a device silently stale. The run is bounded at one pass of the ladder and restarted by the browser's own `online` and `visibilitychange` signals — the moments a reconnect is actually likely to succeed — with both listeners removed on unmount. Tests assert the **delays** (1s/2s/4s/8s, checked from both sides of each boundary), that the run stops and stays stopped through five further minutes, and that `online` restarts it with a fresh ticket; confirmed by disabling the bound and watching them fail. **Gotcha recorded for anything similar: `vi.waitFor` advances fake timers itself**, so it cannot be used to reach a known point on the clock — the first version of the ladder test was wrong for exactly that reason. Gate: typecheck 7/7, lint 8/8, format clean, build 5/5, 168 test files / 7 tasks. |
 | **319** | **Nothing checks that a live route has a frame or a recorded exemption** | P1 | M3 | **P2 Medium** | **Backlog** | — | None | `core` | **Filed 2026-08-30 by #306.** #80 said five live routes had no design frame; ruling on it found **nine**, because four routes were added after the 2026-08-28 mapping (`/bookings/[requestId]`, `/vendor/bookings`, `/vendor/payments`, `/vendor/payments/return`) and nothing forced the ledger forward. The count going stale is the actual defect — the individual routes are now ruled in `design/design-plan/00-README.md`. Parity is **unprovable** on an unframed route, so a route that quietly appears without one is a screen nobody can gate. #80's own acceptance already asked for this and it was the part left undone. |
 | **320** | **`31-content-voice.md` still carries the 48-hour deadline the API contradicts** | P1 | M3 | **P1 High** | **Backlog** | — | **None** — ruled 2026-08-30 | `core` | **Filed 2026-08-30 while tracing #302.** #216 (in **#308**) found the request deadline stated four ways, three of them wrong, and ruled the API authoritative: `BOOKING_REQUEST_EXPIRY_DAYS` is **7 days**. #308 fixed every code site and derives the phrase from the constant. **It did not fix the approved-strings file, and could not:** `31-content-voice.md` is `design-plan/`, and *Design passes edit the plan; tickets write the code, never the reverse.* So the row headed **Request reassurance** still reads *"You're requesting, not paying. Maya has 48 hours to confirm or send a revised quote — you approve before any card is charged."* — the exact literal #216 identified as false, sitting in the file every future ticket is told to take approved strings from. **#216's own acceptance asked for this** ("`31-content-voice.md` carries one approved phrasing") and #308 closed without it; that is an omission in #308, recorded here rather than left silent. **Doubly stale:** #308 also made the sentence conditional — a packaged request cannot be re-quoted, so it now reads *confirm the date or decline*, and only a custom request is offered a quote. **Needs:** a design pass to restate that row from `bookingRequestWindowPhrase()`'s wording and both branches. Until then the risk is quiet: a ticket copying the approved string reintroduces a deadline the API refuses, at the moment of commitment. **RULED 2026-08-30 — unblocked. The 7-day window stands** (48 hours was judged too quick a turnaround to ask of a vendor; revisit later with real reply-time data). This ticket is granted a **one-off, scoped exception** to edit `design-plan/31-content-voice.md` for this correction — it does not generalise, and `web-design-parity.md`'s rule is otherwise unchanged. See D12. |
+| **321** | **Focus is three mechanisms, not one blanket ring** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 from the design re-import.** `03-components.md` § Inputs is now the single source for focus and specifies **three mechanisms chosen by what the element already has, never mixed**; `04-laws.md`'s blanket offset-ring rule was the original conflict and now points at it. **The app implements the blanket rule instead**, from `app/globals.css:153` (plus copies at `:203` and `:341`), so the offset ring lands on element classes the spec forbids it on. **Measured live at 1440x900** on `/search`'s price panel: the min input composes **both** mechanisms at once — `stone-50 0 0 0 2px` + `clay/0.30 0 0 0 4px` (the forbidden offset ring) **and** `clay/0.15 0 0 0 3px` with a `clay-400` border (the correct one). That is the "never mixed" law broken by construction. Also retires the hero bar's three stacked cues — the bar halo, #89's tint and #73's inset ring all go, replaced by a `stone-200` fill and a clay label. **Supersedes the D13 focus ruling of 2026-08-30**, which chose "inset ring only" before this spec existed. Frame: screen `26`, first four blocks. See D14 |
+| **322** | **Retire every native `date`, `time` and `select`** | P1 | M3 | **P1 High** | **Backlog** | — | **#167** | `core` | **Filed 2026-08-30 from the design re-import.** New law in `03-components.md` § Inputs and screen `26`: **never a native `date`, `time` or `select`** — they bring their own selection colour and OS glyphs, so a single field renders in three palettes (Orla clay, Chrome blue, OS black). **Seven controls on `main`:** `type="date"` in `search-bar.tsx:292`, `booking-rail.tsx:127` and `booking-request-screen.tsx:377`; `type="time"` in `booking-request-screen.tsx:416`; `<select>` in `booking-rail.tsx:162`, `booking-request-screen.tsx:391` and `customer-profile-form.tsx:165`. Each moves onto **#167**'s shared dropdown — date body for the first four, single-select body for the rest. Carries the **calendar-icon placement rule** with it: **no icon in the hero search bar** (three labelled segments and one clay pill — an icon there competes with the only element that should pull the eye), and in forms a **13px `stone-600` glyph right-aligned where the caret would sit**, never left, never clay. Frame: screen `26`, `Calendar icon` block. See D14 |
 
 Rows are ordered by build sequence, not by ticket number. **319 rows — 162 Done, 130 Superseded, 2 In Progress, 18 Backlog, 5 Deferred, 2 Blocked.** Recounted 2026-08-29 after the backlog consolidation, which merged **130 open tickets into 21** (`#296`–`#316`) and re-scoped **#73** as the shared-cause accessibility ticket. **40 tickets are open**, down from 150: 5 in flight, 6 waiting on a human or an external account, and 29 workable. Every `Superseded` row names its replacement in Notes and keeps its detail section.
 
@@ -8691,6 +8693,22 @@ booking-request event type, and vendor profile editor selects.
 height 360 + scroll), Rating/Price staying open (single-select closes; multi/range get an
 explicit Apply), Escape not dismissing, and the Refine bar's inconsistent auto-apply.
 
+**SPEC CHANGED UNDER THIS TICKET — 2026-08-30, from the design re-import.** Two rules in
+`42-dropdowns.md` were revised after this ticket was written, and work already in flight is
+building against the old text:
+
+1. **Typing narrows the list in place** — explicitly *not* a jump-to-first-letter. The
+   revised Behaviour section says so in those words, and screen `26`'s third block makes it
+   the reason there is no filter field at all: "The list *is* the interface. Typing narrows
+   it in place — no field to focus, so no ring to get wrong."
+2. **Open adds to the focused state rather than replacing it** — the same `stone-200` fill
+   and clay label, *plus* the value turning clay and the caret flipping. The old rule let an
+   open segment render quieter than a focused one, which is backwards. Frames `28 Dropdown
+   open — hero` and `28 Dropdown variants` were updated to carry the fill.
+
+The trigger's focus treatment is **#321**'s segment fill, not a ring of any kind — build
+against #321's table rather than inventing a local treatment here.
+
 **Acceptance:**
 
 - [ ] One component; every select in the five named surfaces uses it
@@ -8698,7 +8716,10 @@ explicit Apply), Escape not dismissing, and the Refine bar's inconsistent auto-a
 - [ ] All four body types built to spec; multi-select uses checkboxes, not checkmarks
 - [ ] Multi-select and range require an explicit Apply — no auto-apply
 - [ ] Dismiss on outside click, Esc and select; **scroll repositions, never dismisses**
-- [ ] Full keyboard model including type-ahead and focus return
+- [ ] Full keyboard model: ↑↓ moves, ↵ commits, **typing narrows the list in place**
+      (not a jump-to-first-letter), `Tab` closes and moves on, focus returns to the field
+- [ ] Open **adds** the clay value and flipped caret on top of the focused `stone-200`
+      fill — an open segment is never quieter than a focused one
 - [ ] Max height 360px with a half-visible cut row; flips when within 380px of the viewport bottom
 - [ ] Scrim on hero and mobile only
 - [ ] Matches frames `28 Dropdown open — hero` and `28 Dropdown variants` on all six axes
@@ -8740,7 +8761,9 @@ See D13.
 - [ ] At 1440, 1024, 768 and 390: every option's rect is fully inside the viewport and a real click changes state. Assert the **rect** — every unreachable option in the sweep existed in the DOM while being unclickable.
 - [ ] A test asserting scroll repositions rather than dismisses.
 - [ ] A test asserting multi-select and range do not apply until Apply is pressed.
-- [ ] A keyboard test: ↑↓, ↵, type-ahead, Tab-closes, and focus returns to the field.
+- [ ] A keyboard test: ↑↓, ↵, Tab-closes, and focus returns to the field.
+- [ ] A test that typing **narrows** the rendered list rather than moving a highlight —
+      assert the row count falls, which a jump-to-first-letter implementation fails.
 - [ ] A test asserting the bottom sheet appears below 640 and the popover at/above it.
 - [ ] A test asserting the vendor-type panel renders **no text input**, and that type-ahead
       selects by first letter — the filter box is the thing being removed, so assert its
@@ -12864,3 +12887,154 @@ at the moment of commitment, which is where #216 found it the first time.
       nothing imports.
 
 ---
+
+---
+
+### #321: Focus is three mechanisms, not one blanket ring
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30** from the design re-import. `03-components.md` § Inputs is now the
+single source of truth for focus, and `04-laws.md` points at it instead of specifying its
+own blanket ring. The frame is **screen `26`, the first four blocks**.
+
+**The rule.** Three mechanisms, chosen by what the element already has. **Never mixed.**
+
+| Element | Focus treatment |
+| --- | --- |
+| Standalone bordered field | `border-clay-400` + `ring-3 ring-clay-400/15`, **no offset** |
+| Segment inside a joined bar or panel | `bg-stone-200` fill + clay label. **No border, edge or outline** |
+| Unbordered control (button, link, avatar, card) | `ring-2 ring-clay-400/40` + `ring-offset-2 ring-offset-stone-50` |
+
+**One cause.** `apps/web/src/app/globals.css:153` applies
+`ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50` to **every** `:focus-visible`,
+with copies at `:203` and `:341`. The primitives already carry the *correct* mechanism —
+`input.tsx` and `textarea.tsx` set `focus-visible:border-ring focus-visible:ring-3`, and
+`button.tsx` sets the offset ring — so the blanket rule does not replace them, it **stacks
+on top of them**.
+
+**Measured live at 1440x900**, the price panel's min input on `/search`:
+
+```
+rgb(248,245,239) 0 0 0 2px      ← stone-50 offset  ┐ the forbidden offset ring,
+oklab(clay / 0.3) 0 0 0 4px     ← clay ring        ┘ from the blanket rule
+rgba(180,85,47,.15) 0 0 0 3px   ← the correct border+glow, from input.tsx
+border-color: rgb(180,85,47)    ← clay-400, correct
+```
+
+Both mechanisms render simultaneously. The law is broken by construction, not by a mistake
+at one call site.
+
+**The hero bar loses two of its three cues.** It currently stacks a bar-wide halo
+(`ring-3 clay-400/20`), a per-segment tint (`bg-clay-400/10`, from **#89**) and a
+per-segment inset ring (`inset-ring-2 clay-400/30`, from **#73** law 2). The spec replaces
+all three with one `stone-200` fill plus a clay label. **This supersedes the D13 ruling of
+2026-08-30**, which chose "inset ring only, at a stronger alpha" before this design existed
+— the answer is now a fill and no ring at all, which also settles the WCAG question for
+segments, since a ring is no longer the indicator there.
+
+**Also in scope, from the same block:**
+
+- **Open adds to focused, never replaces it.** Same fill, plus the value turning clay and
+  the caret flipping. The old "open replaces focus" rule let an open segment look *quieter*
+  than a focused one.
+- **A focus indicator never has a radius the element doesn't have.** A pill ring around a
+  square segment reads as a balloon floating over the surface — the frame names this as the
+  single cause of all three reported cases looking wrong.
+- **Error beats focus hue.** `#B23A30` border stays and the glow matches it at
+  `rgba(178,58,48,.18)`. Never clay on red.
+- **`:focus-visible` only** — a mouse click on a field must not flash a ring.
+- **Hover is not focus**: fill one step deeper (`stone-100` on segments), or border one
+  step darker on standalone fields. It never borrows focus's colour.
+
+**Non-goals:** the dropdown panel itself (**#167**); native controls (**#322**).
+
+**Acceptance:**
+
+- [ ] The blanket `:focus-visible` rule is gone from `globals.css` — all three copies — and
+      no element receives two mechanisms at once
+- [ ] A standalone bordered field focuses with `border-clay-400` + `ring-3 ring-clay-400/15`
+      and **no offset ring**, measured as a composed `box-shadow`
+- [ ] A bar or panel segment focuses with a `stone-200` fill and a clay label, and renders
+      **no** ring, inset ring, tint or outline
+- [ ] Buttons, links, avatars and cards keep the offset ring, at `clay-400/40`
+- [ ] Open state adds the clay value and flipped caret **on top of** the focused fill
+- [ ] Error focus keeps the error hue in both border and glow
+- [ ] `parity-checker` returns MATCH against screen `26`'s focus blocks on all six axes
+
+**Tests (required):**
+
+- [ ] A test that asserts, for one element of each of the three classes, that the composed
+      `box-shadow` contains **exactly one** mechanism — the mixing is invisible to a test
+      that only checks the correct treatment is present
+- [ ] A guard that fails if a blanket `:focus-visible` ring is reintroduced in `globals.css`
+- [ ] A test that a mouse click does not produce a focus indicator, only keyboard focus
+
+---
+
+### #322: Retire every native `date`, `time` and `select`
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #167 — the shared dropdown is what these move onto
+
+**Filed 2026-08-30** from the design re-import. `03-components.md` § Inputs and screen `26`
+add the law: **never a native `date`, `time` or `select`.** A native control brings its own
+selection colour and OS glyphs, so one field renders in three palettes at once — Orla clay,
+Chrome blue, OS black — and an empty native date asks the customer to type a format rather
+than pick a date.
+
+**The seven controls on `main`:**
+
+| Control | Where | Moves to |
+| --- | --- | --- |
+| `type="date"` | `components/search/search-bar.tsx:292` | #167 date body |
+| `type="date"` | `components/vendors/profile/booking-rail.tsx:127` | #167 date body |
+| `type="date"` | `components/booking/booking-request-screen.tsx:377` | #167 date body |
+| `type="time"` | `components/booking/booking-request-screen.tsx:416` | #167 single-select body |
+| `<select>` | `components/vendors/profile/booking-rail.tsx:162` | #167 single-select body |
+| `<select>` | `components/booking/booking-request-screen.tsx:391` | #167 single-select body |
+| `<select>` | `components/customer/customer-profile-form.tsx:165` | #167 single-select body |
+
+`booking-rail.tsx:157` carries a comment defending the native `<select>` for its keyboard
+and mobile behaviour. That reasoning is now overruled by the law, so **delete the comment
+rather than leaving it contradicting the code** — and the replacement has to earn back what
+it defended, which is what #167's keyboard model is for.
+
+**The calendar-icon rule travels with this ticket**, because it only becomes decidable once
+the native glyph is gone:
+
+- **No icon in the hero search bar.** Three labelled segments and one clay pill; an icon
+  there is decoration competing with the only element that should pull the eye. The live bar
+  currently renders the browser's own glyph **0.00px** from the Search pill — measured at
+  1440x900, the date input's right edge and the button's left edge are the same coordinate.
+- **In forms, a 13px `stone-600` glyph, right-aligned** where the caret would sit, never
+  left (a left icon pushes the value out of alignment with every other field in the column)
+  and never clay (clay makes a label look clickable).
+
+**Open question, for whoever takes this:** `components/tags/tag-category-section.tsx:92`
+renders a `CommandInput` search box over the tag lists. 42-dropdowns forbids a search field
+on **single-select** because eleven categories fit one screen — that reasoning does not
+obviously carry to a long language list in a multi-select. **Do not remove it silently**;
+either the rule extends and the list gets the same typing-narrows behaviour, or it is a
+named exception. Raise it rather than guessing.
+
+**Acceptance:**
+
+- [ ] No `type="date"`, `type="time"` or `<select>` remains in `apps/web/src` outside tests
+- [ ] Every one of the seven uses #167's shared dropdown, and none rolls its own
+- [ ] The hero search bar renders **no** calendar glyph, and the date segment's right edge
+      clears the Search control (assert the measured gap, not the absence of a class)
+- [ ] Form date fields render the 13px `stone-600` glyph right-aligned
+- [ ] Keyboard and mobile behaviour that the native `<select>` provided is preserved through
+      #167's keyboard model — arrow keys, Enter, Escape, focus return, and the bottom sheet
+      below 640
+- [ ] `parity-checker` returns MATCH on the affected frames at 1440 / 1024 / 768 / 390
+
+**Tests (required):**
+
+- [ ] A repo-wide guard that fails on a native `date`, `time` or `select` in `apps/web/src`
+      — the law is only worth having if it cannot be reintroduced
+- [ ] A measured-gap assertion between the hero date segment and the Search control; it is
+      **0.00px** today and a class-based assertion cannot see that
+- [ ] A keyboard test per replaced control covering what the native element gave for free

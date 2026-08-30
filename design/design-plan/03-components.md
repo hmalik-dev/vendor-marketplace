@@ -87,7 +87,26 @@ deliberately overlaps.
 
 Rest: `bg-stone-150 border border-stone-300 rounded-lg px-3.5 py-2.5 text-base`.
 On a white card, the fill goes `stone-0`.
-Focus: `border-clay-400` + `ring-3 ring-clay-400/15` — a warm glow, never browser blue.
+Focus: **three mechanisms, chosen by what the element already has** — never mixed.
+
+| Element                                         | Focus treatment                                                   |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| Standalone bordered field                       | `border-clay-400` + `ring-3 ring-clay-400/15`, **no offset**      |
+| Segment inside a joined bar or panel            | `bg-stone-200` fill + clay label. **No border, edge or outline.** |
+| Unbordered control (button, link, avatar, card) | `ring-2 ring-clay-400/40` + `ring-offset-2`                       |
+
+This resolves the old conflict with `04-laws.md`, which specified the offset ring
+for everything. A bordered field already has an edge to darken — giving it a
+detached ring as well reads as browser chrome. Three further laws:
+
+- **`:focus-visible` only.** A mouse click on a field must not flash a ring.
+- **A focus indicator never has a radius the element doesn't have.** A pill ring
+  around a square segment reads as a balloon floating over the surface.
+- **Never a native `date`, `time` or `select`.** They bring their own selection
+  colour and OS glyphs — three palettes in one field.
+
+Hover: fill one step deeper (`stone-100` on bar segments), border one step darker
+on standalone fields. Hover is not focus and never borrows its colour.
 Label above: 10.5px / 600 / `.05em` / uppercase / `stone-600`.
 Helper below: 11.5px `stone-600`; when it names a publish blocker, `gold-600`.
 Error: `border-error-500` + `ring-error-500/20`, message below in `error-500`.

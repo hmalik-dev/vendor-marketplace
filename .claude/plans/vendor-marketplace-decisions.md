@@ -463,3 +463,60 @@ edit lands in `design-plan/`, which the closing ticket had no standing to touch,
 requirement quietly evaporated. **A ticket that cannot make a ruling it depends on must not
 close without leaving that ruling somewhere that blocks.** Two exceptions have now been
 granted rather than one process fix; if a third appears, fix the process instead.
+
+---
+
+### D14: The Focus Re-Import — What It Settled, and What It Nearly Deleted — *2026-08-30*
+
+**What arrived.** A design update covering three plan files (`03-components.md`,
+`04-laws.md`, `42-dropdowns.md`) and three parts of `Orla - Screens.dc.html` — screen `26`'s
+focus blocks, screen `28`'s open segments, and the 390 search frame's scroll position.
+
+**It was merged, not applied.** Per the standing rule that design re-imports are merges, the
+incoming files were diffed against the repo first. **Three local refinements would have been
+silently deleted**, all of them earned in the last three days:
+
+| Would have been lost | Where it came from |
+| --- | --- |
+| The **sixth `Access` parity axis** — incoming reverts to "five axes and all five are hard gates" | #73, 2026-08-28 |
+| `### The focus ring has to be **visible**, not merely declared` — the clipped-ring and styleless-outline failure modes | #73 |
+| `### Decorative text is exempt from 4.5:1 — narrowly, and it must be `aria-hidden`` | #306 |
+
+All three are preserved. **This is the second time an import would have reverted the parity
+gate**; the incoming bundle is generated from a snapshot that does not carry local rulings,
+so a diff before every future re-import is not optional.
+
+**What it settles: focus is three mechanisms, chosen by what the element already has.**
+
+| Element | Treatment |
+| --- | --- |
+| Standalone bordered field | `border-clay-400` + `ring-3 ring-clay-400/15`, no offset |
+| Segment inside a joined bar or panel | `bg-stone-200` fill + clay label, no outline of any kind |
+| Unbordered control | `ring-2 ring-clay-400/40` + `ring-offset-2` |
+
+`03-components.md` § Inputs is now the single source; `04-laws.md` points at it. This ends a
+conflict that had stood since both files were written, and it is the actual reason focus
+"felt wrong" in the build — not a value being off, but two mechanisms rendering at once.
+
+**D13 is partly superseded.** Yesterday's ruling on the hero bar chose "inset ring only, at
+a stronger alpha", made before this spec existed. The answer is now a **fill and no ring at
+all** on bar segments, which dissolves the WCAG contrast question there rather than
+answering it — there is no longer an indicator whose contrast is in question. **D13's other
+three parts stand**: the vendor-type filter box goes, the date loses its native control, and
+`04-laws.md`'s ring token still governs unbordered controls. The alpha it raises is now
+`clay-400/40` per this import, which is **still below the 3:1 that #73 measured as needing
+alpha >= 0.80** — that gap is real, unresolved, and belongs to whoever takes **#321**.
+
+**A ticket was mid-flight against the superseded text.** #167 is being built in a worktree
+against the old `42-dropdowns.md`, which said type-ahead **jumps to first letter** and open
+**replaces** focus. Both were reversed by this import: typing now **narrows the list in
+place**, and open **adds to** the focused state. #167's board row and detail section carry
+the warning; the work is not wasted, but two behaviours in it are now wrong.
+
+**Filed from this import:** **#321** (three focus mechanisms replacing the blanket ring) and
+**#322** (retire every native `date`, `time` and `select`, and place the calendar glyph).
+
+**Not filed, deliberately:** the 390 search frame's frosted bar bisecting a price is a
+**frame** defect, not an app one — the README's own diagnosis is that the padding was
+already correct at 76px against a 68px bar and the frame was frozen at a bad scroll
+position. Filing a ticket for it would have sent someone to fix working code.

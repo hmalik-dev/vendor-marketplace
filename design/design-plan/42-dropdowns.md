@@ -26,8 +26,11 @@ runs off it, which is why mobile switches rather than shrinks.
 ## Bodies
 
 1. **Single-select** (vendor type, city, event type) — commits and closes on click.
-   No search field: 11 categories fit one screen, and a filter box on a list this
-   short is friction, not help.
+   **No search field**, and this is not negotiable: 11 categories fit one screen, a
+   filter box on a list this short is friction rather than help, and because such a
+   field is autofocused its focus ring would appear every single time the panel
+   opened — permanent decoration, not feedback. **Typing narrows the list in
+   place.**
 2. **Multi-select** (style, and any "pick any" filter) — **checkboxes, not
    checkmarks**; the square says "more than one" before anything is read. Footer
    with **Apply · n** and Clear.
@@ -43,7 +46,7 @@ makes the results grid flicker and re-sort under the user's hand.
 ## Behaviour
 
 - **Dismiss:** click outside, `Esc`, or select. Scroll does **not** dismiss — it repositions.
-- **Keyboard:** ↑↓ moves, ↵ commits, type-ahead jumps to first letter, `Tab` closes and moves on. Focus returns to the field on close.
-- **Open state on the field:** the segment's value turns clay and its caret flips. In the compact header bar the open segment is the only clay element.
+- **Keyboard:** ↑↓ moves, ↵ commits, typing **narrows the list in place** (not a jump-to-first-letter), `Tab` closes and moves on. Focus returns to the field on close.
+- **Open state on the field:** open **adds to** the focused state rather than replacing it — same `stone-200` fill and clay label, plus the value turning clay and the caret flipping. (The earlier "open replaces focus" rule made an open segment look quieter than a focused one.) In the compact header bar the open segment is the only clay element. A segment inside a joined bar takes a fill and a clay label at every rung — **never a border, edge or outline**, which would fight the bar it sits inside.
 - **Scrim:** hero and mobile only, where the dropdown is the page's subject. **Never** in the compact header — results must stay readable behind it.
 - **Empty body** (a city with no vendors in that category): one row of `stone-600` copy saying so plus a single action, never a blank panel.
