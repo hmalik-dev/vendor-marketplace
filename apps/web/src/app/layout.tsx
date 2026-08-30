@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
+import { CLERK_COPY } from './clerk-copy';
 import { siteOrigin } from '@/config/env';
 import { PublicChrome } from '@/components/public-chrome';
 import { SiteFooter } from '@/components/site-footer';
@@ -65,25 +66,6 @@ export const metadata: Metadata = {
   // `summary_large_image` is what turns the 1200x630 card into a full-width
   // preview rather than a thumbnail beside the text.
   twitter: { card: 'summary_large_image', title: BRAND_NAME, description: BRAND_DESCRIPTION },
-};
-
-/**
- * The strings frame `12 Sign up` writes, where Clerk's defaults say something
- * else. Scoped keys only: `signUp.start.*` cannot leak onto `/sign-in`.
- *
- * The submit button is deliberately absent. Clerk's `formButtonPrimary` is a
- * single global key shared by every flow, so setting it to the frame's "Create
- * my account" would also put that label on the sign-in form, where it is simply
- * wrong. A wrong string on one screen is worse than a generic one on another —
- * see the deviation note in design/design-plan/21-sign-up.md.
- */
-const CLERK_COPY = {
-  formFieldLabel__emailAddress: 'Email',
-  signUp: {
-    start: {
-      actionText: 'Already with us?',
-    },
-  },
 };
 
 export default function RootLayout({
