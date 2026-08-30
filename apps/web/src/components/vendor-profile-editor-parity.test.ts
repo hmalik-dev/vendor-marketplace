@@ -262,8 +262,10 @@ describe('the profile photo drop zone matches the frame (#143)', () => {
 
   it('uses the frames’ own hatch utility while the zone is empty', () => {
     // `@utility placeholder-hatch` in theme.css carries exactly the frame's
-    // gradient, so the two cannot drift.
-    expect(uploadSource).toContain("value ? 'bg-stone-50' : 'placeholder-hatch'");
+    // gradient, so the two cannot drift. The condition is the resolved preview
+    // `src`, not the form's `value`: since #171 the form holds the object key,
+    // which is never what gets rendered.
+    expect(uploadSource).toContain("src ? 'bg-stone-50' : 'placeholder-hatch'");
   });
 
   it('sizes the circle 128px from `sm`, not 160px', () => {
