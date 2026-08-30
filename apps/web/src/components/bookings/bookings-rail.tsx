@@ -60,14 +60,13 @@ export function BookingsRail({ needsYou }: BookingsRailProps): React.ReactElemen
                       {entry.vendorName} sent a quote
                     </p>
                     <p className="mt-0.75 text-sm leading-normal text-stone-700">{entry.subline}</p>
-                    {entry.vendorSlug ? (
-                      <Link
-                        href={`/vendors/${entry.vendorSlug}`}
-                        className="mt-2.5 inline-block rounded-md bg-clay-400 px-3.25 py-1.75 text-sm font-semibold text-stone-0 hover:bg-clay-500"
-                      >
-                        Review quote
-                      </Link>
-                    ) : null}
+                    {/* The request, not the storefront — see `bookings-hub.tsx`. */}
+                    <Link
+                      href={`/bookings/${entry.id}`}
+                      className="mt-2.5 inline-block rounded-md bg-clay-400 px-3.25 py-1.75 text-sm font-semibold text-stone-0 hover:bg-clay-500"
+                    >
+                      Review quote
+                    </Link>
                   </div>
                 </div>
               </li>
