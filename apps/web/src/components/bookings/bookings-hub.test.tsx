@@ -1,9 +1,24 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BookingsHub } from './bookings-hub';
 import type { BookingEntry } from '@/lib/booking-entries';
 
-afterEach(cleanup);
+/*
+ * The Refine chips push URL state, so the hub now reaches `useRouter`. The push
+ * itself is captured rather than stubbed away: which URL a chip navigates to is
+ * the contract, and #187 is a ticket about controls that looked wired and were
+ * not.
+ */
+const pushed = vi.hoisted(() => ({ calls: [] as string[] }));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: (href: string) => pushed.calls.push(href) }),
+}));
+
+afterEach(() => {
+  cleanup();
+  pushed.calls.length = 0;
+});
 
 const TODAY = '2026-04-26';
 
@@ -30,7 +45,15 @@ function entry(overrides: Partial<BookingEntry> = {}): BookingEntry {
 describe('BookingsHub', () => {
   it('names the next booking and how far off it is', () => {
     render(
-      <BookingsHub entries={[entry()]} tab="upcoming" today={TODAY} city="Austin" needsYou={[]} />,
+      <BookingsHub
+        entries={[entry()]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
     );
 
     expect(screen.getByText(/1 upcoming booking\./)).toBeDefined();
@@ -50,6 +73,8 @@ describe('BookingsHub', () => {
         today={TODAY}
         city={null}
         needsYou={[]}
+        category={null}
+        sort="soonest"
       />,
     );
 
@@ -63,7 +88,15 @@ describe('BookingsHub', () => {
 
   it('writes the card as the frame does — vendor, category and occasion, date, sub-line', () => {
     render(
-      <BookingsHub entries={[entry()]} tab="upcoming" today={TODAY} city={null} needsYou={[]} />,
+      <BookingsHub
+        entries={[entry()]}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
     );
 
     expect(screen.getByText('Photography · Wedding')).toBeDefined();
@@ -80,6 +113,8 @@ describe('BookingsHub', () => {
         today={TODAY}
         city="Austin"
         needsYou={[]}
+        category={null}
+        sort="soonest"
       />,
     );
 
@@ -91,7 +126,15 @@ describe('BookingsHub', () => {
 
   it('omits the city from the invitation when the customer has not set one', () => {
     render(
-      <BookingsHub entries={[entry()]} tab="upcoming" today={TODAY} city={null} needsYou={[]} />,
+      <BookingsHub
+        entries={[entry()]}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
     );
 
     expect(screen.getByText('Search Jun 14')).toBeDefined();
@@ -99,7 +142,17 @@ describe('BookingsHub', () => {
 
   /* Frame `19`. Never a blank pane, and never a dead end. */
   it('explains what will land here when there is nothing yet', () => {
-    render(<BookingsHub entries={[]} tab="upcoming" today={TODAY} city={null} needsYou={[]} />);
+    render(
+      <BookingsHub
+        entries={[]}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
 
     expect(screen.getByText('No bookings yet')).toBeDefined();
     expect(
@@ -114,7 +167,17 @@ describe('BookingsHub', () => {
   });
 
   it('says nothing is coming up rather than naming a booking that is not there', () => {
-    render(<BookingsHub entries={[]} tab="upcoming" today={TODAY} city={null} needsYou={[]} />);
+    render(
+      <BookingsHub
+        entries={[]}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
 
     expect(screen.getByText(/Nothing coming up\./)).toBeDefined();
   });
@@ -127,6 +190,8 @@ describe('BookingsHub', () => {
         today={TODAY}
         city={null}
         needsYou={[]}
+        category={null}
+        sort="soonest"
       />,
     );
 
@@ -139,7 +204,15 @@ describe('BookingsHub', () => {
   /* The word belongs to the vendor's screen, not the customer's. */
   it('never calls itself a dashboard', () => {
     const { container } = render(
-      <BookingsHub entries={[entry()]} tab="upcoming" today={TODAY} city={null} needsYou={[]} />,
+      <BookingsHub
+        entries={[entry()]}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
     );
 
     expect(container.textContent?.toLowerCase()).not.toContain('dashboard');
@@ -174,6 +247,8 @@ describe('BookingsHub', () => {
           today={TODAY}
           city="Austin"
           needsYou={[]}
+          category={null}
+          sort="soonest"
         />,
       );
 
@@ -221,5 +296,168 @@ describe('BookingsHub', () => {
         null,
       );
     });
+  });
+});
+
+/*
+ * #302/#187. The two Refine chips were `<span>`s: the right pixels, nothing
+ * behind them. Every assertion here is about an **observable effect** — which
+ * rows render, in which order — rather than about a handler being attached,
+ * because "a control exists" is exactly what was true before and is what made
+ * the defect invisible.
+ */
+describe('BookingsHub refine chips', () => {
+  const mixed = [
+    entry({ id: 'photo', categoryName: 'Photography', eventDate: '2026-06-14' }),
+    entry({ id: 'cater', categoryName: 'Catering', eventDate: '2026-05-02' }),
+    entry({ id: 'florals', categoryName: 'Florals', eventDate: '2026-07-30' }),
+  ];
+
+  function renderHub(category: string | null, sort: 'soonest' | 'latest') {
+    render(
+      <BookingsHub
+        entries={mixed}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category={category}
+        sort={sort}
+      />,
+    );
+  }
+
+  it('draws both chips as real controls, not decoration', () => {
+    renderHub(null, 'soonest');
+
+    expect(screen.getByRole('button', { name: /All categories/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Soonest first/ })).toBeDefined();
+  });
+
+  it('renders every category when none is chosen', () => {
+    renderHub(null, 'soonest');
+
+    expect(screen.getByText(/Photography/)).toBeDefined();
+    expect(screen.getByText(/Catering/)).toBeDefined();
+    expect(screen.getByText(/Florals/)).toBeDefined();
+  });
+
+  it('renders only the chosen category, and names it on the chip', () => {
+    renderHub('Catering', 'soonest');
+
+    // The chip carries the name too, so the card is read out of the list pane.
+    const list = screen.getByRole('navigation', { name: 'Booking status' }).parentElement
+      ?.nextElementSibling as HTMLElement;
+    expect(within(list).getByText(/Catering/)).toBeDefined();
+    expect(within(list).queryByText(/Photography/)).toBeNull();
+    expect(within(list).queryByText(/Florals/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Catering ▾' })).toBeDefined();
+  });
+
+  /*
+   * The months, not just the cards. Asserted through the rendered headings
+   * because that is the thing a customer sees turn round.
+   */
+  it('reverses the month headings under Latest first', () => {
+    renderHub(null, 'latest');
+
+    const headings = screen.getAllByText(/^(MAY|JUNE|JULY) 2026$/).map((node) => node.textContent);
+    expect(headings).toEqual(['JULY 2026', 'JUNE 2026', 'MAY 2026']);
+  });
+
+  it('keeps them ascending under Soonest first', () => {
+    renderHub(null, 'soonest');
+
+    const headings = screen.getAllByText(/^(MAY|JUNE|JULY) 2026$/).map((node) => node.textContent);
+    expect(headings).toEqual(['MAY 2026', 'JUNE 2026', 'JULY 2026']);
+  });
+
+  /*
+   * One category is not a filter. The chip is absent rather than present and
+   * offering a single option, which is the dead-control shape again.
+   */
+  it('drops the category chip when no booking carries a category at all', () => {
+    render(
+      <BookingsHub
+        entries={[entry({ categoryName: null })]}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /All categories/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Soonest first/ })).toBeDefined();
+  });
+
+  /*
+   * The regression `diff-reviewer` found in the first cut of this fix. The
+   * options were built from *every* entry while the filter was applied to the
+   * *tab's* entries, so a category living only in another tab was offered,
+   * chosen, silently dropped — and the chip still named it. That is #187's own
+   * defect wearing a dropdown: a control that looks wired and does nothing.
+   */
+  it('does not claim a category that lives only in another tab', () => {
+    const acrossTabs = [
+      entry({ id: 'up', categoryName: 'Photography', eventDate: '2026-06-14' }),
+      entry({ id: 'done', categoryName: 'Catering', eventDate: '2026-01-05', isSettled: true }),
+    ];
+
+    render(
+      <BookingsHub
+        entries={acrossTabs}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category="Catering"
+        sort="soonest"
+      />,
+    );
+
+    /*
+     * Catering is settled, so it is not under Upcoming. The filter cannot apply,
+     * and the chip must say `All categories` rather than `Catering` — the whole
+     * point being that the label and the list agree.
+     */
+    expect(screen.getByRole('button', { name: 'All categories ▾' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Catering ▾' })).toBeNull();
+    expect(screen.getByText(/Photography/)).toBeDefined();
+  });
+
+  /*
+   * And when such a category arrives anyway — a stale link, a hand-typed URL —
+   * the chip must not claim it. The list is unfiltered, so the label has to say
+   * so, or the two disagree with the customer watching.
+   */
+  it('does not name a category it is not filtering by', () => {
+    render(
+      <BookingsHub
+        entries={mixed}
+        tab="upcoming"
+        today={TODAY}
+        city={null}
+        needsYou={[]}
+        category="Taxidermy"
+        sort="soonest"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'All categories ▾' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Taxidermy/ })).toBeNull();
+  });
+
+  /*
+   * The tab counts are taken from the unrefined list on purpose: a count that
+   * moved with the filter would be reporting the filter, not the tab.
+   */
+  it('leaves the tab counts alone when a category narrows the list', () => {
+    renderHub('Catering', 'soonest');
+
+    const tabs = screen.getByRole('navigation', { name: 'Booking status' });
+    expect(within(tabs).getByText('3')).toBeDefined();
   });
 });

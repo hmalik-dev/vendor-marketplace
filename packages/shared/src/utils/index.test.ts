@@ -13,6 +13,7 @@ import {
   kmToMiles,
   milesToKm,
   parseDateString,
+  shortTimeAgo,
   toDateString,
   todayDateString,
 } from './index.js';
@@ -291,5 +292,45 @@ describe('isPastDate', () => {
   it('compares across year and month boundaries', () => {
     expect(isPastDate('2026-05-31', '2026-06-01')).toBe(true);
     expect(isPastDate('2026-06-01', '2026-05-31')).toBe(false);
+  });
+});
+
+/*
+ * Extracted from `messages-screen.tsx` by #302, when the bookings rail needed
+ * the same string. It is tested here rather than there for the reason
+ * `expiryCountdown` records above: a duration format with two implementations is
+ * how two surfaces come to disagree about one row.
+ */
+describe('shortTimeAgo', () => {
+  const NOW = new Date('2026-04-26T12:00:00Z').getTime();
+
+  function at(offsetMinutes: number): Date {
+    return new Date(NOW - offsetMinutes * 60_000);
+  }
+
+  it('counts minutes below an hour', () => {
+    expect(shortTimeAgo(at(14), NOW)).toBe('14m');
+    expect(shortTimeAgo(at(59), NOW)).toBe('59m');
+  });
+
+  /*
+   * A message sent nine seconds ago reads as "now" to a person, and "0m" reads
+   * as a bug. The floor is what makes the freshest row the one that looks it.
+   */
+  it('floors at a minute rather than counting seconds', () => {
+    expect(shortTimeAgo(new Date(NOW - 9_000), NOW)).toBe('1m');
+    expect(shortTimeAgo(new Date(NOW), NOW)).toBe('1m');
+  });
+
+  it('counts hours below a day, and days beyond it', () => {
+    expect(shortTimeAgo(at(60), NOW)).toBe('1h');
+    expect(shortTimeAgo(at(23 * 60), NOW)).toBe('23h');
+    expect(shortTimeAgo(at(24 * 60), NOW)).toBe('1d');
+    expect(shortTimeAgo(at(3 * 24 * 60), NOW)).toBe('3d');
+  });
+
+  /* A thread with no messages renders nothing, never the word "never". */
+  it('is empty for a null date', () => {
+    expect(shortTimeAgo(null, NOW)).toBe('');
   });
 });

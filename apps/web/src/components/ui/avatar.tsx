@@ -8,9 +8,16 @@ import { cn } from '@/lib/utils';
  */
 const FALLBACK_TONES = ['bg-clay-100 text-clay-600', 'bg-sage-100 text-sage-600'] as const;
 
-/** The five sizes the design calls for, in px. */
+/** The six sizes the design calls for, in px. */
 export const AVATAR_SIZES = {
   xs: 30,
+  /*
+   * The bookings rail's `Recent messages` rows, frame `07`: a plain 32px circle
+   * with no ring, so unlike `sm` the number is the fill. Two pixels off `xs` and
+   * four off `sm`, which is why it is its own step rather than either of them —
+   * the rows sit against a 1px rule and the seam is visible at that width.
+   */
+  row: 32,
   /*
    * The vendor card's monogram. Frame `02 Search` draws a 32px circle with a
    * 2px ring *outside* it, and the frames are content-box, so it occupies 36.
@@ -47,6 +54,12 @@ const GLYPH_FRACTION = 0.42;
 
 const GLYPH_SIZES: Partial<Record<AvatarSize, number>> = {
   sm: 13,
+  /*
+   * Frame `07`'s message rows set `font-size:13px` on a 32px circle. The
+   * fraction would give 13.44, which rounds up in some engines and down in
+   * others — the same half-pixel disagreement `sm` is pinned for.
+   */
+  row: 13,
   /*
    * Frame `03` sets the identity monogram at 23px in a 60px circle — 0.38,
    * not the 0.42 the default fraction would give, which would render 25.2.

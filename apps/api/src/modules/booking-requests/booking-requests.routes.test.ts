@@ -39,7 +39,7 @@ interface RequestBody {
   eventLocation: string | null;
   eventStartTime: string | null;
   guestCount: number | null;
-  vendor: { id: string; businessName: string; avgRating: number };
+  vendor: { id: string; businessName: string; categoryName: string | null; avgRating: number };
   package: { id: string; name: string; priceCents: number } | null;
 }
 
@@ -213,6 +213,14 @@ describe('/booking-requests', () => {
       expect(body.package?.priceCents).toBe(145_000);
       expect(body.vendor.businessName).toBe('Sunlit Studio');
       expect(body.eventType).toBe('wedding');
+      /*
+       * #302/#187. The bookings hub draws "Photography · Wedding" and filters by
+       * the category half, so the category has to travel on the read model — a
+       * per-row profile fetch to render a list is what this denormalisation
+       * exists to avoid. It was documented on the schema and never implemented,
+       * so the hub hardcoded null and its category filter had nothing to work on.
+       */
+      expect(body.vendor.categoryName).toBe('Photography');
       expect(body.eventLocation).toBe('Barr Mansion, Austin, TX');
       expect(body.eventStartTime).toBe('14:00');
       expect(body.guestCount).toBe(120);

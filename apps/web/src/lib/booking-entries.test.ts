@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyRefinements,
+  categoryNamesOf,
   daysUntil,
   entriesForTab,
   formatCardDate,
@@ -40,12 +42,28 @@ function request(overrides: Partial<WireBookingRequest> = {}): WireBookingReques
       city: 'Austin',
       state: 'TX',
       avatarUrl: null,
+      categoryName: 'Photography',
       avgRating: 4.9,
       reviewCount: 127,
     },
     package: null,
     ...overrides,
   } as WireBookingRequest;
+}
+
+/** A vendor block carrying a specific primary category, for the refinement tests. */
+function vendorWith(categoryName: string | null, id: string): WireBookingRequest['vendor'] {
+  return {
+    id,
+    slug: `vendor-${id}`,
+    businessName: `Vendor ${id}`,
+    city: 'Austin',
+    state: 'TX',
+    avatarUrl: null,
+    categoryName,
+    avgRating: 4.5,
+    reviewCount: 10,
+  };
 }
 
 function booking(overrides: Partial<WireBooking> = {}): WireBooking {
@@ -225,5 +243,121 @@ describe('summarise', () => {
     const settled: BookingEntry[] = toEntries([request({ status: 'declined' })], [], NOW);
 
     expect(summarise(settled, TODAY)).toBeNull();
+  });
+});
+
+/*
+ * #302/#187. Both chips were drawn as `<span>`s — not focusable, no handler, no
+ * URL param — so the hub rendered a filter bar that filtered nothing. These are
+ * the two pure functions behind them; the controls themselves are asserted in
+ * the hub's own test, because a filter that computes correctly and is never
+ * wired reads exactly like the defect it replaces.
+ */
+describe('categoryNamesOf', () => {
+  const mixed = toEntries(
+    [
+      request({ id: 'a', vendorId: 'v1' }),
+      request({ id: 'b', vendorId: 'v2', vendor: vendorWith('Catering', 'v2') }),
+      request({ id: 'c', vendorId: 'v3', vendor: vendorWith('Photography', 'v3') }),
+      request({ id: 'd', vendorId: 'v4', vendor: vendorWith(null, 'v4') }),
+    ],
+    [],
+    NOW,
+  );
+
+  it('lists each category once, alphabetically, and omits the untagged', () => {
+    expect(categoryNamesOf(mixed)).toEqual(['Catering', 'Photography']);
+  });
+
+  /*
+   * A vendor with no active category yields null, and an "All categories"
+   * dropdown carrying a blank row is worse than one that omits it.
+   */
+  it('is empty when nothing carries a category', () => {
+    expect(
+      categoryNamesOf(toEntries([request({ vendor: vendorWith(null, 'v9') })], [], NOW)),
+    ).toEqual([]);
+  });
+});
+
+describe('applyRefinements', () => {
+  const entries = toEntries(
+    [
+      request({ id: 'photo', eventDate: '2026-06-14' }),
+      request({ id: 'cater', eventDate: '2026-05-02', vendor: vendorWith('Catering', 'v2') }),
+      request({ id: 'untagged', eventDate: '2026-07-30', vendor: vendorWith(null, 'v3') }),
+    ],
+    [],
+    NOW,
+  );
+
+  it('returns everything, soonest first, when no category is chosen', () => {
+    expect(
+      applyRefinements(entries, { category: null, sort: 'soonest' }).map((found) => found.id),
+    ).toEqual(['cater', 'photo', 'untagged']);
+  });
+
+  it('keeps only the chosen category', () => {
+    expect(
+      applyRefinements(entries, { category: 'Photography', sort: 'soonest' }).map(
+        (found) => found.id,
+      ),
+    ).toEqual(['photo']);
+  });
+
+  /*
+   * An unknown `?category=` is a stale link or a hand-typed URL, not a reason to
+   * show an empty hub with no explanation — the filter is dropped rather than
+   * matching nothing.
+   */
+  it('ignores a category no entry carries', () => {
+    expect(
+      applyRefinements(entries, { category: 'Taxidermy', sort: 'soonest' }).map(
+        (found) => found.id,
+      ),
+    ).toEqual(['cater', 'photo', 'untagged']);
+  });
+
+  it('sorts by event date in both directions', () => {
+    expect(
+      applyRefinements(entries, { category: null, sort: 'latest' }).map((found) => found.eventDate),
+    ).toEqual(['2026-07-30', '2026-06-14', '2026-05-02']);
+  });
+
+  it('does not mutate the list it was given', () => {
+    const before = entries.map((found) => found.id);
+    applyRefinements(entries, { category: null, sort: 'latest' });
+
+    expect(entries.map((found) => found.id)).toEqual(before);
+  });
+
+  /*
+   * The months have to turn round with the cards. `groupByMonth` used to sort
+   * its keys ascending regardless of the order it was given, so `Latest first`
+   * would have reversed the cards *inside* each month while the month headings
+   * still climbed — a list that is descending in the small and ascending in the
+   * large, which is not an order at all.
+   */
+  it('reverses the month headings too, not just the cards inside them', () => {
+    const spread = toEntries(
+      [
+        request({ id: 'jun', eventDate: '2026-06-14' }),
+        request({ id: 'may', eventDate: '2026-05-02' }),
+        request({ id: 'jul', eventDate: '2026-07-30' }),
+      ],
+      [],
+      NOW,
+    );
+
+    expect(
+      groupByMonth(applyRefinements(spread, { category: null, sort: 'latest' })).map(
+        (group) => group.key,
+      ),
+    ).toEqual(['2026-07', '2026-06', '2026-05']);
+    expect(
+      groupByMonth(applyRefinements(spread, { category: null, sort: 'soonest' })).map(
+        (group) => group.key,
+      ),
+    ).toEqual(['2026-05', '2026-06', '2026-07']);
   });
 });

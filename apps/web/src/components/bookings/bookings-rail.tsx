@@ -1,6 +1,8 @@
-import { MONEY_COPY } from '@vendor-marketplace/shared';
+import { MONEY_COPY, shortTimeAgo } from '@vendor-marketplace/shared';
 import Link from 'next/link';
+import { Avatar } from '@/components/ui/avatar';
 import type { BookingEntry } from '@/lib/booking-entries';
+import type { WireConversation } from '@/lib/wire-schemas';
 
 /**
  * The four mechanism promises. They are what the rail carries when there is
@@ -27,16 +29,39 @@ const MECHANISM_PROMISES = [
 export interface BookingsRailProps {
   /** Entries the customer has to act on — quotes to review, mostly. */
   needsYou: readonly BookingEntry[];
+  /**
+   * Whether this customer has any bookings at all — **not** whether the current
+   * tab or filter shows any. The rail answers "is this a new account", and a
+   * customer who filtered to Catering and found nothing has not become one.
+   */
+  hasBookings: boolean;
+  /** Newest first; the rail draws the first three. */
+  conversations: readonly WireConversation[];
 }
+
+/** Frame `07` draws three rows before the rail's own scroll takes over. */
+const RECENT_MESSAGE_COUNT = 3;
 
 /**
  * The 340px rail of frames `07` and `19`.
  *
  * "Needs you" is clay because clay means *you can act here* — it is the one
- * tone reserved for the reader's own move. When nothing is waiting, the rail
- * explains how booking works instead of standing empty.
+ * tone reserved for the reader's own move.
+ *
+ * **The two frames draw different rails, and until #302 this drew both at
+ * once.** `How booking works here` and its four promises belong to frame `19`,
+ * the empty hub — they are what a new account is told instead of being shown an
+ * empty column. Frame `07` draws `Needs you` and then `Recent messages`. The
+ * mechanism block was rendered unconditionally, so a customer with eleven
+ * bookings was still being told how booking works, and the recent-messages block
+ * did not exist at all.
  */
-export function BookingsRail({ needsYou }: BookingsRailProps): React.ReactElement {
+export function BookingsRail({
+  needsYou,
+  hasBookings,
+  conversations,
+}: BookingsRailProps): React.ReactElement {
+  const recent = conversations.slice(0, RECENT_MESSAGE_COUNT);
   return (
     <aside
       aria-label="What needs your attention"
@@ -75,20 +100,87 @@ export function BookingsRail({ needsYou }: BookingsRailProps): React.ReactElemen
         </>
       ) : null}
 
-      <h2 className="mb-3 text-label font-semibold tracking-label text-stone-600 uppercase">
-        How booking works here
-      </h2>
-      <div className="flex flex-col gap-3.5 text-base leading-prose text-stone-700">
-        {MECHANISM_PROMISES.map((promise, index) => (
-          <div key={promise.title}>
-            {index > 0 ? <span className="mb-3.5 block h-px bg-stone-200" /> : null}
-            <p>
-              <strong className="font-semibold text-stone-900">{promise.title}</strong>{' '}
-              {promise.body}
+      {hasBookings ? (
+        /*
+          Frame `07`'s second block. Rendered even with nothing in it: the rail
+          is never blanked, and a customer with bookings and no replies yet is
+          told so rather than shown a column that stops halfway.
+        */
+        <>
+          <h2 className="mb-2.75 text-label font-semibold tracking-label text-stone-600 uppercase">
+            Recent messages
+          </h2>
+          {recent.length > 0 ? (
+            <ul className="flex flex-col gap-0.5">
+              {recent.map((conversation) => (
+                <li key={conversation.id} className="border-b border-stone-200 last:border-b-0">
+                  <Link
+                    href={`/messages?conversation=${conversation.id}`}
+                    className="flex items-start gap-2.5 py-2.5"
+                  >
+                    <Avatar
+                      name={conversation.otherPartyName}
+                      src={conversation.otherPartyAvatarUrl}
+                      size="row"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex justify-between gap-2">
+                        <span className="truncate text-action font-semibold text-stone-900">
+                          {conversation.otherPartyName}
+                        </span>
+                        <span className="shrink-0 text-xs text-stone-600">
+                          {shortTimeAgo(conversation.lastMessageAt)}
+                        </span>
+                      </span>
+                      {/*
+                        One line, clipped. The frame draws a preview that stops
+                        mid-sentence — it is a pointer into the thread, not the
+                        message.
+                      */}
+                      <span className="mt-0.5 block truncate text-meta text-stone-700">
+                        {conversation.lastMessagePreview ?? 'No messages yet'}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            /*
+              `31-content-voice.md`'s approved line for this exact fact, taken
+              from `/messages`'s own empty state rather than written fresh — a
+              second sentence for one idea is how two surfaces come to describe
+              the same thing differently.
+
+              Near-unreachable in production: `ensureConversation` opens a thread
+              with every booking request, so bookings imply threads. It shows up
+              when requests are written straight to the table, which is what the
+              seeds do.
+            */
+            <p className="text-sm leading-normal text-stone-700">
+              A thread opens the moment you send a booking request, so the whole negotiation stays
+              attached to the booking.
             </p>
+          )}
+        </>
+      ) : (
+        <>
+          <h2 className="mb-3 text-label font-semibold tracking-label text-stone-600 uppercase">
+            How booking works here
+          </h2>
+          <div className="flex flex-col gap-3.5 text-base leading-prose text-stone-700">
+            {MECHANISM_PROMISES.map((promise, index) => (
+              <div key={promise.title}>
+                {index > 0 ? <span className="mb-3.5 block h-px bg-stone-200" /> : null}
+                <p>
+                  <strong className="font-semibold text-stone-900">{promise.title}</strong>{' '}
+                  {promise.body}
+                </p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </aside>
   );
 }

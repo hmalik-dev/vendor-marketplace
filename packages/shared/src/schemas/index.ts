@@ -637,6 +637,18 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     state: z.string().max(MAX_NAME_LENGTH).nullable(),
     /** Read from `vendorProfile.profileImageUrl`, which is already a key. */
     avatarUrl: imageRefSchema.nullable(),
+    /**
+     * The vendor's primary category, by `categories.displayOrder` — the
+     * "Photography" half of the "Photography · Wedding" line this schema's own
+     * comment promises, which until #302 it did not actually carry. Null for a
+     * vendor with no active category, which the bookings hub renders as the
+     * occasion alone rather than as a stray separator.
+     *
+     * The **name**, not the id: every consumer draws it, and the one that
+     * filters by it groups on the same string it shows, so a second lookup
+     * would buy nothing.
+     */
+    categoryName: z.string().max(MAX_NAME_LENGTH).nullable(),
     avgRating: z.number().min(0).max(REVIEW_RATING_MAX),
     reviewCount: z.int().min(0),
   }),

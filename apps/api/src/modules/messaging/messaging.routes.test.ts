@@ -202,6 +202,46 @@ describe('messaging', () => {
       expect(thread.unreadCount).toBe(0);
     });
 
+    /*
+     * `ensureConversation` opens a thread with every booking request and leaves
+     * `last_message_at` null until someone writes, and Postgres sorts nulls
+     * **first** under `DESC`. So the plain `desc(lastMessageAt)` ordering led
+     * with every unused thread and pushed the live ones down.
+     *
+     * On this endpoint that was cosmetic, because the whole list renders. Frame
+     * `07`'s bookings rail draws the first three, so it became lost data: three
+     * rows reading "No messages yet." above a reply that arrived an hour ago.
+     */
+    it('leads with the thread that actually has a message, not the empty ones', async () => {
+      const conversationId = await openConversation();
+      await send(CUSTOMER, conversationId, 'Are you free that weekend?');
+
+      // A second, never-used thread between the same pair — the shape
+      // `Send a message` leaves behind, and the row that used to sort first.
+      const [pair] = await harness.database.db
+        .select({ customerId: conversations.customerId, vendorId: conversations.vendorId })
+        .from(conversations);
+      expect(pair).toBeDefined();
+      await harness.database.db.insert(conversations).values({
+        customerId: pair!.customerId,
+        vendorId: pair!.vendorId,
+        bookingRequestId: null,
+        lastMessageAt: null,
+      });
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/conversations',
+        headers: bearer(CUSTOMER),
+      });
+
+      const threads = response.json() as { id: string; lastMessagePreview: string | null }[];
+      expect(threads).toHaveLength(2);
+      expect(threads[0]?.id).toBe(conversationId);
+      expect(threads[0]?.lastMessagePreview).toBe('Are you free that weekend?');
+      expect(threads[1]?.lastMessagePreview).toBeNull();
+    });
+
     it('shows each party the other one', async () => {
       const conversationId = await openConversation();
       await send(CUSTOMER, conversationId, 'Are you free that weekend?');

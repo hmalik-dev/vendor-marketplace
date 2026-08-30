@@ -11,9 +11,29 @@ import type { ReactNode } from 'react';
  */
 const APP_ROUTE_PREFIXES = ['/bookings', '/customer', '/messages', '/vendor/'] as const;
 
+/**
+ * The one application screen that does not live under an application prefix.
+ *
+ * `/vendors/<slug>` is the public directory; `/vendor/<...>` is the vendor's own
+ * workspace. They are one letter apart, and a prefix test cannot separate the
+ * profile from the request screen beneath it — `'/vendors/x/request'` does not
+ * start with `'/vendor/'`, because index 7 is `s` rather than `/`, so the
+ * request screen fell through to the public branch and drew the marketing
+ * footer under itself (#192). Frame `04` ends at the rail's "Continue to
+ * review".
+ *
+ * Positional rather than a substring test: exactly one segment for the slug,
+ * then `request`, and nothing after it. `/vendors/x/requests` and
+ * `/vendors/x/request/extra` are not this screen.
+ */
+const VENDOR_REQUEST_ROUTE = /^\/vendors\/[^/]+\/request$/;
+
 export function isAppRoute(pathname: string): boolean {
-  return APP_ROUTE_PREFIXES.some(
-    (prefix) => pathname === prefix.replace(/\/$/, '') || pathname.startsWith(prefix),
+  return (
+    VENDOR_REQUEST_ROUTE.test(pathname) ||
+    APP_ROUTE_PREFIXES.some(
+      (prefix) => pathname === prefix.replace(/\/$/, '') || pathname.startsWith(prefix),
+    )
   );
 }
 

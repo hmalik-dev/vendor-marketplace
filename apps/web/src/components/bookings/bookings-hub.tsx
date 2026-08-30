@@ -2,13 +2,17 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
 import {
+  applyRefinements,
+  categoryNamesOf,
   entriesForTab,
   formatCardDate,
   groupByMonth,
   summarise,
   type BookingEntry,
+  type BookingSort,
   type BookingTab,
 } from '@/lib/booking-entries';
+import { BookingsRefineChips } from './bookings-refine-chips';
 import { cn } from '@/lib/utils';
 
 export const BOOKING_TABS: readonly BookingTab[] = ['upcoming', 'history', 'all'];
@@ -55,7 +59,7 @@ function BookingCard({ entry }: BookingCardProps): React.ReactElement {
       <p className="mt-2.25 font-display text-[21px] text-stone-900">
         {formatCardDate(entry.eventDate)}
       </p>
-      <p className="truncate text-xs text-stone-600">{entry.subline}</p>
+      <p className="truncate text-helper text-stone-600">{entry.subline}</p>
     </>
   );
 
@@ -129,8 +133,8 @@ function BookAnother({ date, city }: BookAnotherProps): React.ReactElement {
         >
           +
         </span>
-        <span className="text-base font-semibold text-stone-900">Book another vendor</span>
-        <span className="text-xs text-stone-600">
+        <span className="text-action font-semibold text-stone-900">Book another vendor</span>
+        <span className="text-helper text-stone-600">
           Search {SEARCH_MONTH.format(new Date(`${date}T00:00:00Z`))}
           {city ? ` in ${city}` : ''}
         </span>
@@ -147,6 +151,9 @@ export interface BookingsHubProps {
   city: string | null;
   /** Entries waiting on the customer, for the widths where the rail is hidden. */
   needsYou: readonly BookingEntry[];
+  /** The Refine chips' state, read from the URL by the page. */
+  category: string | null;
+  sort: BookingSort;
 }
 
 /**
@@ -163,8 +170,33 @@ export function BookingsHub({
   today,
   city,
   needsYou,
+  category,
+  sort,
 }: BookingsHubProps): React.ReactElement {
-  const visible = entriesForTab(entries, tab, today);
+  /*
+   * Tab first, then the chips. The tab counts and the summary sentence are taken
+   * from the unrefined list on purpose — a category filter narrows what is
+   * *shown*, and a tab whose count moved because of a filter would be reporting
+   * the filter rather than the tab.
+   */
+  const tabEntries = entriesForTab(entries, tab, today);
+  /*
+   * The chip's options come from **this tab**, not from every booking. Offering
+   * a category the tab does not hold recreates #187's own defect in a subtler
+   * shape: `applyRefinements` correctly drops a filter that matches nothing, so
+   * picking one of those offered categories left the full tab on screen under a
+   * chip naming the category it was supposedly filtered to.
+   */
+  const categoryNames = categoryNamesOf(tabEntries);
+  /*
+   * And the label is the *applied* filter, never the raw param. `?category=` is
+   * URL input: it can name a category this customer does not hold, or arrive
+   * whitespace-padded. Resolving it here is what keeps the chip and the list
+   * telling the same story.
+   */
+  const appliedCategory = category !== null && categoryNames.includes(category) ? category : null;
+
+  const visible = applyRefinements(tabEntries, { category: appliedCategory, sort });
   const groups = groupByMonth(visible);
   const summary = summarise(entries, today);
 
@@ -233,7 +265,14 @@ export function BookingsHub({
             {BOOKING_TABS.map((name) => (
               <li key={name}>
                 <Link
-                  href={`/bookings?tab=${name}`}
+                  /*
+                    The sort travels; the category does not. A sort order is a
+                    reading preference and holds across tabs, but a category is
+                    now scoped to the tab that holds it — carrying `Catering`
+                    from History into Upcoming would name a filter that cannot
+                    apply there, which is the mismatch this ticket just closed.
+                  */
+                  href={`/bookings?tab=${name}${sort === 'soonest' ? '' : `&sort=${sort}`}`}
                   aria-current={name === tab ? 'page' : undefined}
                   className={cn(
                     'inline-block py-2.25 text-base',
@@ -251,22 +290,24 @@ export function BookingsHub({
             ))}
           </ul>
         </nav>
-        {/*
-          Drawn as the frame draws them, and inert until there is more than one
-          month or category to choose between — #31's rule is that a control
-          which opens nothing is furniture.
-        */}
-        <div className="flex gap-2 pb-1.25">
-          <span className="rounded-md border border-stone-300 bg-stone-0 px-3 py-1.5 text-sm font-semibold text-stone-900">
-            All categories ▾
-          </span>
-          <span className="rounded-md border border-stone-300 bg-stone-0 px-3 py-1.5 text-sm font-semibold text-stone-900">
-            Soonest first ▾
-          </span>
-        </div>
+        <BookingsRefineChips
+          tab={tab}
+          categories={categoryNames}
+          category={appliedCategory}
+          sort={sort}
+        />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-5">
+      {/*
+        `px-1 -mx-1` is the focus ring's clearance, not spacing. This scroller is
+        the nearest clipping ancestor and its content box started exactly at the
+        first column's left edge, so the card's 4px outward
+        `ring-offset-2 + ring-2` was clipped away on that side — three sides drawn
+        and the fourth missing, which `04-laws.md` counts as a partial failure of
+        the visible-focus law. The negative margin widens the clip box by the
+        same 4px the padding puts back, so nothing moves and the ring fits.
+      */}
+      <div className="min-h-0 flex-1 -mx-1 overflow-y-auto px-1 pb-5">
         {groups.length === 0 ? (
           <EmptyBookings />
         ) : (
@@ -277,7 +318,7 @@ export function BookingsHub({
                   {group.label}
                 </h2>
                 <span aria-hidden="true" className="h-px flex-1 bg-stone-300" />
-                <span className="text-xs text-stone-600">
+                <span className="text-helper text-stone-600">
                   {group.entries.length} {group.entries.length === 1 ? 'booking' : 'bookings'}
                 </span>
               </div>
