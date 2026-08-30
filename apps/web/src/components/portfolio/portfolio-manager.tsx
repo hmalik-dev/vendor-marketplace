@@ -209,9 +209,25 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
 
         {/* One aggregate line for the batch, in steel — never a second spinner. */}
         {progressLine ? (
-          <p role="status" className="mt-3 text-sm text-steel-600">
-            {progressLine}
-          </p>
+          <div className="mt-3 flex items-center gap-2.5">
+            <p role="status" className="text-sm text-steel-600">
+              {progressLine}
+            </p>
+            {/*
+              Frame `24` draws `Cancel` as a bare underlined span beside the
+              progress, in the same steel as the line. It is a `button` here
+              rather than a span because a span is not reachable from a
+              keyboard, and `04-laws.md` does not bend for a visual — the
+              treatment is the frame's, the element is the accessible one.
+            */}
+            <button
+              type="button"
+              onClick={queue.cancel}
+              className="shrink-0 text-sm font-semibold text-steel-600 underline underline-offset-2 hover:text-steel-700"
+            >
+              Cancel
+            </button>
+          </div>
         ) : null}
 
         <input

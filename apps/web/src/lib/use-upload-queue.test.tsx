@@ -27,6 +27,183 @@ describe('useUploadQueue', () => {
   });
 
   /*
+   * #173. Once a batch started, the only way to stop it was to leave the page.
+   *
+   * The half that matters is what survives: everything already saved stays
+   * saved, because each file is persisted on its own the moment it lands.
+   * Cancelling is not an undo.
+   */
+  describe('cancel', () => {
+    /** Resolves when the test says so, so a file can be caught mid-flight. */
+    function deferred(): { promise: Promise<unknown>; resolve: (value: unknown) => void } {
+      let resolve: (value: unknown) => void = () => {};
+      const promise = new Promise((settle) => {
+        resolve = settle;
+      });
+      return { promise, resolve };
+    }
+
+    it('stops the files still queued behind the one in flight', async () => {
+      const files = Array.from({ length: 6 }, (_unused, index) => jpeg(`shot-${index}.jpg`));
+      const started: string[] = [];
+      const first = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          started.push(file.name);
+
+          if (file.name === 'shot-0.jpg') {
+            await first.promise;
+            // What the real uploader does on abort: the request never completes.
+            if (options.signal?.aborted === true) {
+              throw new TestTransportError();
+            }
+          }
+
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles(files));
+      await waitFor(() => expect(started).toEqual(['shot-0.jpg']));
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        first.resolve(stored);
+      });
+
+      // The five behind it never started, and never will.
+      await waitFor(() => expect(result.current.tasks).toHaveLength(0));
+      expect(started).toEqual(['shot-0.jpg']);
+    });
+
+    it('leaves already-saved files saved — cancelling is not an undo', async () => {
+      const files = Array.from({ length: 5 }, (_unused, index) => jpeg(`shot-${index}.jpg`));
+      const saved: string[] = [];
+      const third = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          if (file.name === 'shot-2.jpg') {
+            await third.promise;
+            if (options.signal?.aborted === true) {
+              throw new TestTransportError();
+            }
+          }
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({
+          prefix: 'portfolio',
+          onUploaded: async () => {
+            saved.push('one');
+          },
+        }),
+      );
+
+      act(() => result.current.addFiles(files));
+      // Two have landed; the third is in flight and two are queued.
+      await waitFor(() => expect(saved).toHaveLength(2));
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        third.resolve(stored);
+      });
+
+      // The two that finished are still saved, and stay `done` on screen.
+      expect(saved).toHaveLength(2);
+      await waitFor(() =>
+        expect(result.current.tasks.filter((task) => task.status === 'done')).toHaveLength(2),
+      );
+      expect(result.current.tasks.some((task) => task.status === 'queued')).toBe(false);
+    });
+
+    /*
+     * A cancelled file is not a failed one. Showing "check your connection"
+     * beside a button the vendor has just pressed would be a lie, and it would
+     * offer a retry for something they asked to stop.
+     */
+    it('does not leave a failed tile behind for the file it aborted', async () => {
+      const inFlight = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          _file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          await inFlight.promise;
+          if (options.signal?.aborted === true) {
+            throw new TestTransportError();
+          }
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles([jpeg('only.jpg')]));
+      await waitFor(() => expect(result.current.tasks[0]?.status).toBe('uploading'));
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        inFlight.resolve(stored);
+      });
+
+      await waitFor(() => expect(result.current.tasks).toHaveLength(0));
+      expect(result.current.tasks.some((task) => task.status === 'failed')).toBe(false);
+    });
+
+    it('is harmless when nothing is in flight', () => {
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      expect(() => act(() => result.current.cancel())).not.toThrow();
+      expect(result.current.tasks).toHaveLength(0);
+    });
+
+    /** A new selection after a cancel must upload, not inherit the abort. */
+    it('accepts a fresh batch after a cancel', async () => {
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles([jpeg('first.jpg')]));
+      act(() => result.current.cancel());
+
+      act(() => result.current.addFiles([jpeg('second.jpg')]));
+
+      await waitFor(() => {
+        const second = result.current.tasks.find((task) => task.name === 'second.jpg');
+        expect(second?.status).toBe('done');
+      });
+    });
+  });
+
+  /*
    * The ticket's headline requirement. Partial success is the normal case: the
    * six that landed are already saved, and the two that did not keep their
    * tiles so the vendor can tell which shots they were.
