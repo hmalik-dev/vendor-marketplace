@@ -117,6 +117,18 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
 
   const send = useCallback(
     async (id: string, file: File, signal?: AbortSignal): Promise<void> => {
+      /*
+       * Read through a call, not a property access: `aborted` is live state,
+       * and TypeScript narrows a repeated property read as though it were not.
+       */
+      const cancelled = (): boolean => signal?.aborted === true;
+
+      /** Drops a tile the vendor asked to stop. Not a failure — they chose it. */
+      const drop = (): void => {
+        filesById.current.delete(id);
+        setTasks((previous) => previous.filter((task) => task.id !== id));
+      };
+
       patch(id, { status: 'uploading', progress: 0, failure: undefined });
 
       /*
@@ -127,6 +139,17 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
       const narrow = await screenDimensions(file);
       if (narrow) {
         patch(id, { status: 'failed', failure: narrow });
+        return;
+      }
+
+      /*
+       * Re-checked after the decode. `screenDimensions` decodes the image,
+       * which takes tens of milliseconds on a large JPEG — a window the vendor
+       * is very likely to click Cancel inside, because the tiles and the
+       * control both render the instant files are picked.
+       */
+      if (cancelled()) {
+        drop();
         return;
       }
 
@@ -150,9 +173,8 @@ export function useUploadQueue({ prefix, onUploaded }: UseUploadQueueOptions): U
          * for that, so showing them "check your connection" beside a button
          * they just pressed would be a lie. The tile is removed instead.
          */
-        if (signal?.aborted === true) {
-          filesById.current.delete(id);
-          setTasks((previous) => previous.filter((task) => task.id !== id));
+        if (cancelled()) {
+          drop();
           return;
         }
 

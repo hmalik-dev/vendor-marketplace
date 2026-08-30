@@ -5,3 +5,4 @@
 - [onConflict target vs other unique indexes](review-checklist-onconflict-target-vs-other-unique-indexes.md) — an "idempotent" upsert absorbs one constraint; read every uniqueIndex, partials included, and reproduce in PGlite
 - [Derived src flips at commit](review-checklist-derived-src-flips-after-commit.md) — "derive, don't cache" swaps the rendered value the instant success fires; check both sources and what validates them
 - [EventSource reconnect goes untested](review-checklist-eventsource-reconnect-untested.md) — mutate the hook to cache its single-use ticket; the shipped suite stays green because nothing drives `onerror`
+- [Abort listener registered after an await](review-checklist-abort-listener-after-await.md) — count the awaits before `addEventListener('abort')`; a mocked uploader models abort as always effective

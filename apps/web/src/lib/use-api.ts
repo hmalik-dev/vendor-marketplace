@@ -98,8 +98,35 @@ export function useImageUpload(): ImageUploader {
 
   return useCallback(
     async (file, prefix, options = {}) => {
-      const token = await getToken();
       const { signal, onProgress } = options;
+
+      /*
+       * Checked before the token, and again below before the send.
+       *
+       * `AbortSignal` dispatches `abort` exactly once, at `abort()` time, so a
+       * listener attached afterwards never runs — and the listener below is
+       * attached after `await getToken()`, which is a network round trip
+       * whenever Clerk refreshes. Without these two checks a cancel landing in
+       * that window is silently lost: the request is sent anyway, the upload
+       * succeeds, and the photo the vendor cancelled appears in their gallery.
+       */
+      /*
+       * Read through a call, not a property access. `aborted` is live state
+       * that changes underneath us, and TypeScript narrows a repeated property
+       * read as though it could not — which turns the second check into a
+       * compile error and, worse, invites deleting it.
+       */
+      const cancelled = (): boolean => signal?.aborted === true;
+
+      if (cancelled()) {
+        throw new UploadTransportError();
+      }
+
+      const token = await getToken();
+
+      if (cancelled()) {
+        throw new UploadTransportError();
+      }
 
       const body = new FormData();
       body.append('file', file);
