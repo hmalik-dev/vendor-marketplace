@@ -85,14 +85,21 @@ export function CategorySelect({
           className={cn(
             'flex min-w-0 flex-col rounded-full text-left outline-none',
             /*
-              No ring: on this trigger alone it would be a rounded box inside
-              the pill. The bar draws the halo that says the bar has focus.
-              But the halo is identical whichever segment holds it, so this
-              tints while it is the focused one — the same treatment the other
-              two segments carry in `search-bar.tsx` (#89). Without it a
-              keyboard user cannot tell `Vendor type` from `City`.
+              No *outward* ring: on this trigger alone it would be a rounded
+              box breaking out past the pill's edge. The bar draws the halo
+              that says the bar has focus, and this tints while it is the
+              focused segment (#89) — without which a keyboard user cannot tell
+              `Vendor type` from `City`.
+
+              The inset ring is #73 law 2, and it has to be spelled out here
+              rather than inherited: this trigger is its own segment and is not
+              wrapped in `search-bar.tsx`'s `segment` class, so when City and
+              Event date gained the ring, measurement showed this one still
+              carrying the tint alone — a materially weaker indicator on the
+              first tab stop into the bar.
             */
             'focus-visible:ring-0 focus-visible:ring-offset-0',
+            'focus-visible:inset-ring-2 focus-visible:inset-ring-clay-400/30',
             'transition-colors duration-(--duration-fast) focus-visible:bg-clay-400/10',
             // Stacks to a full-width row below `sm`, with the bar itself.
             'max-sm:w-full max-sm:py-1.5',
