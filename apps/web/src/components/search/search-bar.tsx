@@ -134,11 +134,25 @@ export function SearchBar({
    */
   const { isSearching } = useSearchStatus();
 
+  /*
+   * `.lbl` is 10.5px in the bundle and `01 Landing` takes it unmodified, but
+   * both narrow landing frames override it inline to 9.5px — the same size the
+   * compact bar already uses everywhere.
+   */
   const label = cn(
     'font-semibold tracking-label text-stone-600 uppercase',
-    isHero ? 'text-label' : 'text-[9.5px]',
+    isHero ? 'text-[9.5px] min-[90rem]:text-label' : 'text-[9.5px]',
   );
-  const fieldText = isHero ? 'text-md' : 'text-[13.5px]';
+  /*
+   * The hero's value type: 13.5px at 1024, 14px/500 at 768, 15px at 1440. 768
+   * is the odd one — it is the only landing frame that sets a weight on the
+   * value, and it is heavier rather than lighter, because that frame drops the
+   * divider spans for segment borders and the extra weight is what keeps the
+   * three values reading as three fields.
+   */
+  const fieldText = isHero
+    ? 'text-[14px] font-medium lg:text-[13.5px] lg:font-normal min-[90rem]:text-md'
+    : 'text-[13.5px]';
   /*
    * No focus ring on the field itself. The bar is one control visually — a
    * single rounded-full pill with hairline dividers, per frame `01` — and a
@@ -150,7 +164,8 @@ export function SearchBar({
     'min-w-0 bg-transparent text-stone-900 outline-none placeholder:text-stone-600',
     'focus-visible:ring-0 focus-visible:ring-offset-0',
     fieldText,
-    isHero && 'mt-0.5',
+    /* 2px at 1440, 1px at 1024, none at 768 — the frames' own baselines. */
+    isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5',
   );
   /*
    * Below `sm` the three segments stack into a three-row card. They are the
@@ -158,9 +173,19 @@ export function SearchBar({
    * three flex segments across 390px squeezes each to a few characters, which
    * is worse than a taller control. See design/design-plan/30-responsive.md.
    */
+  /*
+   * The hero divider is a short hairline at 1440 and 1024 — 32px and 28px in a
+   * bar of 58 and 50 — but `14 Landing tablet` draws no divider element at all:
+   * it puts `border-right: 1px #EFE9E0` on the segments instead, which is a
+   * **full-height** rule in a lighter colour. Rendered as this same span at
+   * full height rather than restructured into borders, because the two are
+   * pixel-identical and one element is easier to keep honest than three.
+   */
   const divider = cn(
     'shrink-0 bg-stone-200 max-sm:h-px max-sm:w-full sm:w-px sm:bg-stone-300',
-    isHero ? 'sm:h-8' : 'sm:h-6.5 sm:bg-stone-200',
+    isHero
+      ? 'sm:h-full sm:bg-stone-200 lg:h-7 lg:bg-stone-300 min-[90rem]:h-8'
+      : 'sm:h-6.5 sm:bg-stone-200',
   );
   /*
    * #89. The halo on the pill says the bar has focus; it cannot say *which*
@@ -220,7 +245,12 @@ export function SearchBar({
         */
         'transition-shadow duration-(--duration-fast) has-[:focus-visible:not([type=submit])]:ring-3 has-[:focus-visible:not([type=submit])]:ring-clay-400/20',
         isHero
-          ? 'shadow-lg sm:py-1.75 sm:pr-1.75 sm:pl-6'
+          ? /*
+              Padding and shadow per frame: `6 6 6 20` at 768, `6 6 6 18` at
+              1024, `7 7 7 24` at 1440, and a 26px blur at 768 against 28
+              elsewhere.
+            */
+            'shadow-[0_8px_26px_rgba(35,32,28,.10)] sm:py-1.5 sm:pr-1.5 sm:pl-5 lg:pl-4.5 min-[90rem]:shadow-lg min-[90rem]:py-1.75 min-[90rem]:pr-1.75 min-[90rem]:pl-6'
           : /*
               A fixed height from `lg`, because the compact bar sits inside a
               header of its own fixed height and the frames measure it: 40px at
@@ -242,7 +272,12 @@ export function SearchBar({
 
       <span aria-hidden="true" className={divider} />
 
-      <label className={cn(segment, isHero ? 'sm:flex-1 sm:pl-4.5' : 'sm:flex-[0.9] sm:pl-3.5')}>
+      <label
+        className={cn(
+          segment,
+          isHero ? 'sm:flex-1 sm:pl-3.5 min-[90rem]:pl-4.5' : 'sm:flex-[0.9] sm:pl-3.5',
+        )}
+      >
         <span className={label}>City</span>
         <input
           value={draft.city}
@@ -268,7 +303,9 @@ export function SearchBar({
             prompt and the glyph landed on its last letter. Same rule as the
             vendor-type segment: the width changes, not the words.
           */
-          isHero ? 'sm:min-w-28 sm:flex-[0.8] sm:pl-4.5' : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
+          isHero
+            ? 'sm:min-w-28 sm:flex-[0.8] sm:pl-3.5 min-[90rem]:pl-4.5'
+            : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
         )}
       >
         {/*
@@ -439,7 +476,12 @@ export function SearchBar({
             // the bar, so this ring sits directly on the button's edge.
             'focus-visible:ring-offset-0',
             isHero
-              ? 'sm:px-7 sm:py-3.25 sm:text-cta'
+              ? /*
+                  13px at `12 24` at 768, 13px at `11 20` at 1024, 14px at
+                  `13 28` at 1440 — the pill shrinks with the bar around it
+                  rather than staying the 1440 control in a 50px bar.
+                */
+                'sm:px-6 sm:py-3 sm:text-[13px] lg:px-5 lg:py-2.75 min-[90rem]:px-7 min-[90rem]:py-3.25 min-[90rem]:text-cta'
               : 'sm:ml-1.5 sm:px-5 sm:py-2.5 sm:text-[12.5px]',
           )}
         >
