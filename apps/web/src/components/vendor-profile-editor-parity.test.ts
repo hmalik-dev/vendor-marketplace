@@ -26,16 +26,26 @@ if (framesFiles.length !== 1) {
 const frames = readFileSync(join(designDirectory, framesFiles[0] as string), 'utf8');
 
 /**
- * The frame block for one screen: from its labelled opening tag up to the start
- * of the next screen card, which is where the canvas separates them.
+ * The frame block for one screen: from its labelled opening tag up to the next
+ * **labelled frame**, or the next screen card if that comes first.
+ *
+ * Ending at the next screen card alone was correct while a card held exactly
+ * one frame. The 2026-08-29 import regrouped the document into "one section per
+ * screen with its 1024 / 768 / 390 views side by side", so a card now holds a
+ * screen's whole responsive set and that slice silently spanned four frames at
+ * once — which is why the pane heading count read 2 and the `.inp` count 15
+ * rather than 7. Every assertion here is about the 1440 frame, so the block has
+ * to end where that frame does.
  */
 function frameBlock(label: string): string {
   const start = frames.indexOf(`data-screen-label="${label}"`);
   expect(start).toBeGreaterThan(-1);
 
-  const after = frames.indexOf('<div class="sc">', start);
+  const nextFrame = frames.indexOf('data-screen-label="', start + label.length);
+  const nextCard = frames.indexOf('<div class="sc">', start);
+  const ends = [nextFrame, nextCard].filter((index) => index !== -1);
 
-  return frames.slice(start, after === -1 ? frames.length : after);
+  return frames.slice(start, ends.length > 0 ? Math.min(...ends) : frames.length);
 }
 
 const editorFrame = frameBlock('09 Vendor profile editor');
@@ -66,6 +76,28 @@ function declaration(rule: string, property: string): string {
 
   return (match?.[1] ?? '').trim();
 }
+
+/*
+ * The boundary itself, pinned.
+ *
+ * Without this, the three assertions below pass again for the right reason
+ * today and fail in those same three places the next time a bundle nests
+ * frames differently — reading as design drift in the editor rather than as a
+ * slicing bug, which is exactly how the 2026-08-29 import presented. The cost
+ * of that misreading is high: the obvious "fix" is to update the expected
+ * counts to whatever the widened slice produces, which encodes the bug.
+ */
+describe('the frame slice covers one frame, not a screen’s responsive set', () => {
+  it('starts at frame 09 and stops before the variants sharing its card', () => {
+    expect(editorFrame).toContain('data-screen-label="09 Vendor profile editor"');
+    expect(editorFrame).not.toContain('27 Vendor profile editor');
+    expect(editorFrame).not.toContain('14 Profile editor mobile');
+  });
+
+  it('carries exactly one screen label', () => {
+    expect(editorFrame.match(/data-screen-label="/g)).toHaveLength(1);
+  });
+});
 
 describe('frame 09 gives the form pane one visible heading', () => {
   /*
