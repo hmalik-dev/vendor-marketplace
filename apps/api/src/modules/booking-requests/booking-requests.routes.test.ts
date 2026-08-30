@@ -857,10 +857,7 @@ describe('/booking-requests', () => {
    * and a vendor who has committed to the date can reach the customer.
    */
   describe('customer identity disclosure', () => {
-    async function customerOn(
-      requestId: string,
-      actor: string,
-    ): Promise<Record<string, unknown>> {
+    async function customerOn(requestId: string, actor: string): Promise<Record<string, unknown>> {
       const response = await harness.app.inject({
         method: 'GET',
         url: `/booking-requests/${requestId}`,

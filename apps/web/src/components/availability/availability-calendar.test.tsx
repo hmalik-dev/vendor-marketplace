@@ -309,6 +309,45 @@ describe('AvailabilityCalendar', () => {
     expect(quarterCount('Booked')).toBe('1 dates');
   });
 
+  /*
+   * The end-to-end claim in #307/#212, pinned in one place.
+   *
+   * The API test asserts that accepting a request makes `GET
+   * /vendor/availability` return `status: 'booked'` for that date; this asserts
+   * that exactly that payload produces the frame's `Booked — locked` cell and a
+   * `Booked` count of one. Without it the two halves meet only in prose, and
+   * the accept -> `booked` mapping could regress with every test still green.
+   *
+   * The entries are written the way the API sends them rather than through the
+   * `entry` helper, so a change to the wire shape breaks this too.
+   */
+  it('turns the API’s accepted-date payload into a locked, counted Booked cell', () => {
+    renderCalendar([
+      {
+        id: crypto.randomUUID(),
+        vendorId: 'ven-1',
+        date: '2026-06-15',
+        status: 'booked',
+        note: null,
+      },
+      {
+        id: crypto.randomUUID(),
+        vendorId: 'ven-1',
+        date: '2026-06-16',
+        status: 'pending',
+        note: null,
+      },
+    ] as unknown as WireAvailability[]);
+
+    expect(cell('2026-06-15').getAttribute('aria-label')).toBe('2026-06-15 — Booked — locked');
+    expect(cell('2026-06-15')).toHaveProperty('disabled', true);
+    expect(quarterCount('Booked')).toBe('1 dates');
+
+    // And the pending sibling is neither counted as booked nor editable.
+    expect(cell('2026-06-16').getAttribute('aria-label')).toBe('2026-06-16 — Pending request');
+    expect(cell('2026-06-16')).toHaveProperty('disabled', true);
+  });
+
   it('counts only open future Saturdays, since that is the number that drives action', () => {
     // June 2026 Saturdays: 6, 13, 20, 27. Blocking the 13th leaves three.
     renderCalendar([entry('2026-06-13', 'blocked')]);

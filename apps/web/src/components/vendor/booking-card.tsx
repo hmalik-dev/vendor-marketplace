@@ -1,8 +1,4 @@
-import {
-  EVENT_TYPE_LABELS,
-  formatPrice,
-  type EventType,
-} from '@vendor-marketplace/shared';
+import { EVENT_TYPE_LABELS, formatPrice, type EventType } from '@vendor-marketplace/shared';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusPill } from '@/components/ui/status-pill';
 import type { WireBookingRequest } from '@/lib/wire-schemas';
@@ -24,11 +20,7 @@ const CARD_DATE = new Intl.DateTimeFormat('en-US', {
  * privacy rule is enforced at the source and this component just renders what
  * it is given rather than deciding a second time.
  */
-export function BookingCard({
-  request,
-}: {
-  request: WireBookingRequest;
-}): React.ReactElement {
+export function BookingCard({ request }: { request: WireBookingRequest }): React.ReactElement {
   const { customer } = request;
   const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
   const displayName = fullName || customer.firstName || 'A customer';

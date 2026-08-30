@@ -1,4 +1,10 @@
-import { availability, categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import {
+  availability,
+  bookingRequests,
+  categories,
+  users,
+  vendorProfiles,
+} from '@vendor-marketplace/db/schema';
 import { addDays, toDateString } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -13,6 +19,8 @@ const TOMORROW = toDateString(addDays(NOW, 1));
 const NEXT_WEEK = toDateString(addDays(NOW, 7));
 const YESTERDAY = toDateString(addDays(NOW, -1));
 const TODAY = toDateString(NOW);
+/** Inside the twelve-month window, and far from every other date here. */
+const FAR_DATE = toDateString(addDays(NOW, 90));
 
 interface AvailabilityBody {
   date: string;
@@ -253,6 +261,46 @@ describe('/vendor/availability', () => {
       await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }]);
 
       expect(await calendar()).toEqual([{ date: TOMORROW, status: 'blocked' }]);
+    });
+
+    /*
+     * The PUT response IS the calendar as far as the client is concerned — it
+     * calls `setEntries` with it. When only the GET overlaid, blocking one
+     * unrelated date turned every pending cell on screen white and clickable
+     * until a reload, and a pending cell is not the vendor's to touch.
+     */
+    it('keeps the overlay on the response to an unrelated edit', async () => {
+      await requestOn(TOMORROW);
+
+      const response = await put(VENDOR, [{ date: FAR_DATE, status: 'blocked' }]);
+
+      expect(response.statusCode).toBe(200);
+      expect(
+        (response.json() as { date: string; status: string }[]).map(({ date, status }) => ({
+          date,
+          status,
+        })),
+      ).toEqual([
+        { date: TOMORROW, status: 'pending' },
+        { date: FAR_DATE, status: 'blocked' },
+      ]);
+    });
+
+    /*
+     * Expiry is lazy and is applied when the *request* is read; this read never
+     * does that. Without its own deadline a request the customer gave up on a
+     * week ago holds the cell at `Pending request` — and `pending` is locked, so
+     * the vendor cannot free or block their own Saturday.
+     */
+    it('drops a request that has run past its expiry', async () => {
+      const requestId = await requestOn(TOMORROW);
+
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: addDays(NOW, -7) })
+        .where(eq(bookingRequests.id, requestId));
+
+      expect(await calendar()).toEqual([]);
     });
   });
 

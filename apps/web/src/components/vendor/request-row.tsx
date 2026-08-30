@@ -271,8 +271,8 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
             */}
             <DialogTitle>Decline {customerName}&rsquo;s request?</DialogTitle>
             <DialogDescription>
-              {declineConsequence(request)} This cannot be undone — declining is final, and you
-              will not be able to accept this request afterwards.
+              {declineConsequence(request)} You can&rsquo;t undo this or accept the request
+              afterwards. If you&rsquo;re unsure, send a quote or message them instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

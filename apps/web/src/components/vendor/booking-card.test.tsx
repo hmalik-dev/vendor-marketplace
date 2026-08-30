@@ -80,7 +80,9 @@ describe('BookingCard', () => {
     render(<BookingCard request={accepted()} />);
 
     expect(screen.getByText(/Wedding · Saturday, February 13, 2027/)).toBeDefined();
-    expect(screen.getByText(/Zilker Park Clubhouse · 120 guests · Full day coverage/)).toBeDefined();
+    expect(
+      screen.getByText(/Zilker Park Clubhouse · 120 guests · Full day coverage/),
+    ).toBeDefined();
     expect(screen.getByText('$1,200')).toBeDefined();
   });
 
@@ -89,7 +91,9 @@ describe('BookingCard', () => {
    * is nullable at the source, and an empty row is worse than an absent one.
    */
   it('omits a contact row the customer never supplied', () => {
-    render(<BookingCard request={accepted({ customer: { ...accepted().customer, phone: null } })} />);
+    render(
+      <BookingCard request={accepted({ customer: { ...accepted().customer, phone: null } })} />,
+    );
 
     expect(screen.getByRole('link', { name: 'priya@example.com' })).toBeDefined();
     expect(screen.queryByText('Phone')).toBeNull();

@@ -208,7 +208,10 @@ describe('RequestRow', () => {
 
       expect(screen.getByRole('dialog').textContent).toContain('Decline Priya N.’s request?');
       expect(screen.getByRole('dialog').textContent).toContain('Sun Jun 14');
-      expect(screen.getByRole('dialog').textContent).toContain('This cannot be undone');
+      // `31-content-voice.md`: contractions always. `40-states.md`: a
+      // destructive confirm always offers an escape hatch, not just a dismissal.
+      expect(screen.getByRole('dialog').textContent).toContain('You can’t undo this');
+      expect(screen.getByRole('dialog').textContent).toContain('send a quote or message them');
     });
 
     it('sends nothing when the vendor backs out of the confirmation', async () => {

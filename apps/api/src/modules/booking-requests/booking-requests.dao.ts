@@ -312,48 +312,49 @@ export async function statusesOnDate(
 }
 
 /**
- * Writes the calendar status the request lifecycle owns, or clears it.
+ * Marks the date `booked`, or clears the row the request lifecycle wrote.
  *
- * The two the lifecycle owns are `booked` (the vendor accepted, and is
- * committed) and `pending` (a request is live and the date is spoken for).
- * `available` and `blocked` are the vendor's own and are never overwritten by a
- * request — except by an accept, which is an explicit commitment the vendor
- * just made and so outranks a stale block.
+ * `booked` is the only status the lifecycle stores: `available` and `blocked`
+ * are the vendor's own, and a live request stores nothing at all (see
+ * `syncHeldDate`). An accept does overwrite a `blocked` row, because it is an
+ * explicit commitment the vendor has just made and it outranks a stale block
+ * of their own.
  *
- * Clearing deletes only a row the lifecycle wrote. A vendor who blocked a date
- * keeps it blocked after the request on it is declined.
+ * Clearing is narrow in two directions. It leaves `blocked` alone, so a vendor
+ * who held a day for themselves keeps it after declining the request that
+ * asked for it. And it refuses to delete a date backed by a real `bookings`
+ * row: #10 turns payment into one of those, and a later request on the same
+ * date being declined must not quietly free a date somebody has paid for.
  */
 export async function setHeldDate(
   db: AppDatabase,
   vendorId: string,
   date: string,
-  status: 'booked' | 'pending' | null,
+  status: 'booked' | null,
 ): Promise<void> {
   if (status === null) {
-    await db
-      .delete(availability)
-      .where(
-        and(
-          eq(availability.vendorId, vendorId),
-          eq(availability.date, date),
-          inArray(availability.status, ['booked', 'pending']),
-        ),
-      );
+    await db.delete(availability).where(
+      and(
+        eq(availability.vendorId, vendorId),
+        eq(availability.date, date),
+        inArray(availability.status, ['booked', 'pending']),
+        sql`not exists (
+          select 1 from ${bookings}
+          where ${bookings.vendorId} = ${vendorId}
+            and ${bookings.eventDate} = ${date}
+        )`,
+      ),
+    );
     return;
   }
 
-  const insert = db.insert(availability).values({ vendorId, date, status });
-
-  await (status === 'booked'
-    ? insert.onConflictDoUpdate({
-        target: [availability.vendorId, availability.date],
-        set: { status },
-      })
-    : insert.onConflictDoUpdate({
-        target: [availability.vendorId, availability.date],
-        set: { status },
-        where: sql`${availability.status} not in ('booked', 'blocked')`,
-      }));
+  await db
+    .insert(availability)
+    .values({ vendorId, date, status })
+    .onConflictDoUpdate({
+      target: [availability.vendorId, availability.date],
+      set: { status },
+    });
 }
 
 /**

@@ -71,6 +71,13 @@
       "when": 1787987152693,
       "tag": "0009_cold_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788073552693,
+      "tag": "0010_book_accepted_dates",
+      "breakpoints": true
     }
   ]
 }

@@ -652,7 +652,7 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     firstName: trimmedString(MAX_NAME_LENGTH, 0),
     lastInitial: z.string().max(1),
     lastName: trimmedString(MAX_NAME_LENGTH, 0).nullable(),
-    email: z.email().nullable(),
+    email: emailSchema.nullable(),
     phone: phoneSchema.nullable(),
   }),
   /** `null` for a custom request, and for a package the vendor later deleted. */

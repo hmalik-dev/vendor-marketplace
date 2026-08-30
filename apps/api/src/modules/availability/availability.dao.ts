@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -22,6 +22,7 @@ export async function findLiveRequestDates(
   vendorId: string,
   from: string,
   to: string,
+  now: Date,
 ): Promise<string[]> {
   if (!vendorId) {
     return [];
@@ -36,6 +37,15 @@ export async function findLiveRequestDates(
         gte(bookingRequests.eventDate, from),
         lte(bookingRequests.eventDate, to),
         inArray(bookingRequests.status, [...LIVE_BOOKING_REQUEST_STATUSES]),
+        /*
+         * Expiry in this product is lazy: a request past its window keeps the
+         * status `pending` in the table until something reads *the request* and
+         * ages it. This read never does, so it has to apply the same deadline
+         * itself — otherwise a request the customer gave up on a week ago holds
+         * the cell at `Pending request`, and because `pending` is locked the
+         * vendor cannot free or block their own Saturday.
+         */
+        or(isNull(bookingRequests.expiresAt), gt(bookingRequests.expiresAt, now)),
       ),
     );
 

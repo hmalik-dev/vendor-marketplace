@@ -355,6 +355,11 @@ export async function createBookingRequest(
    * send anyway, in gold rather than red, because a vendor who has held a day
    * for themselves may still say yes to the right event.
    */
+  /*
+   * This is also why creation writes nothing to the calendar: a `booked` date
+   * is refused here, so by the time a request exists there is no accepted
+   * request on the date and nothing for a recompute to find.
+   */
   const calendar = await findAvailabilityOn(db, vendor.id, input.eventDate);
   if (calendar?.status === 'booked') {
     throw conflict(`${vendor.businessName} is already booked on that date`);
@@ -401,13 +406,6 @@ export async function createBookingRequest(
     if (!row) {
       return null;
     }
-
-    /*
-     * Inside the transaction with the row it derives from: a calendar that
-     * said `pending` for a request the retry then re-created would be holding
-     * a date against a row that no longer exists.
-     */
-    await syncHeldDate(tx, row.vendorId, row.eventDate);
 
     await ensureConversation(tx, {
       customerId: row.customerId,
