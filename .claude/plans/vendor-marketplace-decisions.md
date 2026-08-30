@@ -416,3 +416,50 @@ to mean anything. A seeded taxonomy is expensive to change once customers filter
 **What this leaves.** Nothing on the board is blocked on a human. The remaining queue is
 code, and the launch-prep block is a single session with the account holder rather than five
 scattered interruptions.
+
+---
+
+### D13: One Dropdown, One Focus Cue, and the Ring Token — *2026-08-30*
+
+**How this came up.** The user, looking at the live landing hero, objected to three things:
+the filter box inside the vendor-type panel, the focus treatment on the City field, and the
+calendar glyph crowding the Search button. All three were checked against the design contract
+and all three were right. Measured at 1440x900, the panel was further off than reported —
+233.33px wide against a specified 330px, 28px rows against 44px, 10px radius against 12px.
+
+**1. Single-select dropdowns have no search field.** `42-dropdowns.md` already said so, with
+its reasoning: eleven categories fit one screen, and a filter box on a list that short is
+friction rather than help. Type-ahead on the field replaces it. The shipped `CommandInput`
+was a shadcn default that arrived with the component, not a decision anyone made.
+
+**2. The date field loses its native control.** `input[type="date"]` renders a browser
+glyph that appears in no frame, and at 1440 it abuts the Search pill at **0.00px**. The
+collision is the visible symptom; the real defect is that the picker itself is un-designed
+and looks different on every OS. #167's body 4 — a single-month popover reusing the
+availability cell marks from #301 — is the replacement.
+
+**3. One focus cue on the search bar, not three.** The bar had accumulated a bar-wide halo,
+a per-segment tint (#89) and a per-segment inset ring (#73 law 2). Each was added for a real
+reason and nobody ever removed the previous one. **The inset ring survives** because it is
+the only one that says *which* segment has focus — the thing #89 and #73 were each
+protecting. The halo and the tint go.
+
+**4. The focus-ring token is raised to alpha >= 0.80, and `04-laws.md` is edited to say so.**
+
+This is the ruling **#306 was explicitly asked to make and closed without making**.
+`ring-clay-400/30` measures **1.49:1** where WCAG 2.2 SC 1.4.11 requires **3:1** for a
+non-text indicator; `clay-400` needs alpha >= 0.80 to clear it on `stone-50` (3.24:1).
+
+**#167 carries a scoped `design-plan/` exception** for that one line, on the same terms as
+#320's. **This changes the focus ring on every focused control in the product** — buttons,
+cards, chips, not only the search bar. That is the intended outcome, because the failure was
+never local to the hero, but it means the Access axis has to be re-run on frames already
+closed.
+
+**The pattern worth naming.** This is the second ruling in one day found abandoned at a
+ticket boundary: #308 closed without the `31-content-voice.md` edit #216 asked for (#320),
+and #306 closed without the ring-alpha edit #73 asked for. Both had the same cause — the
+edit lands in `design-plan/`, which the closing ticket had no standing to touch, so the
+requirement quietly evaporated. **A ticket that cannot make a ruling it depends on must not
+close without leaving that ruling somewhere that blocks.** Two exceptions have now been
+granted rather than one process fix; if a third appears, fix the process instead.
