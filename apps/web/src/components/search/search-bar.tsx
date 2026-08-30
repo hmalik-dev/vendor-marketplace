@@ -2,14 +2,16 @@
 
 import {
   isPastDate,
-  MAX_NAME_LENGTH,
   todayDateString,
   type Category,
+  type VendorCity,
 } from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
+import { DateDropdown } from '@/components/ui/dropdown-date';
 import { CategorySelect } from './category-select';
+import { CitySelect } from './city-select';
 import { useSearchStatus } from './search-status';
 
 /**
@@ -52,12 +54,16 @@ const PICKED_DATE_FORMATTERS = {
 export interface SearchBarValues {
   /** A category slug, or `''` for "any vendor type". Never free text. */
   category: string;
+  /** Chosen as a pair with `state`, never typed — see `CitySelect`. */
   city: string;
+  state: string;
   date: string;
 }
 
 export interface SearchBarProps {
   categories: readonly Category[];
+  /** Every city with a published vendor, so City can only ask a real question. */
+  cities: readonly VendorCity[];
   value: SearchBarValues;
   onSubmit: (value: SearchBarValues) => void;
   /** `compact` is the header variant; `hero` is the landing one. */
@@ -78,6 +84,7 @@ export interface SearchBarProps {
 
 export function SearchBar({
   categories,
+  cities,
   value,
   onSubmit,
   size = 'compact',
@@ -86,6 +93,7 @@ export function SearchBar({
 }: SearchBarProps): React.ReactElement {
   const [draft, setDraft] = useState<SearchBarValues>(value);
   const [pastDate, setPastDate] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
 
   /*
    * Guarded: `draft.date` is whatever the URL carried, and an unparseable value
@@ -155,19 +163,11 @@ export function SearchBar({
    */
   const fieldText = isHero ? 'text-[14px] lg:text-[13.5px] min-[90rem]:text-md' : 'text-[13.5px]';
   /*
-   * No focus ring on the field itself. The bar is one control visually — a
-   * single rounded-full pill with hairline dividers, per frame `01` — and a
-   * rectangular ring around one segment breaks out past the pill's edge and
-   * reads as a second, misaligned box. The ring lives on the bar instead, so
-   * it follows the pill's shape. See the form's `has-[:focus-visible]` below.
+   * The `field` class this used to hold is gone with the last text input on the
+   * bar (#167). All three segments are dropdown triggers now, and each carries
+   * its own value type — the ring rule it documented still holds and still
+   * lives on the bar itself, in `segment` below.
    */
-  const field = cn(
-    'min-w-0 bg-transparent text-stone-900 outline-none placeholder:text-stone-600',
-    'focus-visible:ring-0 focus-visible:ring-offset-0',
-    fieldText,
-    /* 2px at 1440, 1px at 1024, none at 768 — the frames' own baselines. */
-    isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5',
-  );
   /*
    * Below `sm` the three segments stack into a three-row card. They are the
    * query, not a refinement, so they never collapse into the filter sheet — but
@@ -281,129 +281,129 @@ export function SearchBar({
 
       <span aria-hidden="true" className={divider} />
 
-      <label
+      {/*
+        City is a select over the places that actually have vendors, and it
+        carries the state with it (#167). Typed, it could not distinguish the
+        two Portlands or the thirty Springfields, and a city nobody works in
+        produced an empty grid with nothing to say about why.
+      */}
+      <CitySelect
+        cities={cities}
+        city={draft.city}
+        state={draft.state}
+        onChange={(next) => setDraft((previous) => ({ ...previous, ...next }))}
+        size={size}
+        id={`${fieldId}-city`}
+        labelClassName={label}
+        valueClassName={cn(fieldText, isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5')}
         className={cn(
           segment,
           isHero
             ? 'sm:flex-1 sm:pr-3.5 sm:pl-3.5 lg:pr-0 min-[90rem]:pl-4.5'
             : 'sm:flex-[0.9] sm:pl-3.5',
         )}
-      >
-        <span className={label}>City</span>
-        <input
-          value={draft.city}
-          onChange={(event) => setDraft((previous) => ({ ...previous, city: event.target.value }))}
-          placeholder="Anywhere"
-          // The API's own cap. Without it a long paste is accepted here and
-          // then silently cleared at the URL boundary, which reads to the
-          // customer as the field losing what they typed.
-          maxLength={MAX_NAME_LENGTH}
-          className={field}
-        />
-      </label>
+      />
 
       <span aria-hidden="true" className={divider} />
 
-      <label
-        className={cn(
-          segment,
-          /*
-            The floor is the "Add a date" prompt plus the browser's own
-            calendar glyph, which sits inside the field and is not part of the
-            text's measured width — at 1024 the segment shrank to exactly the
-            prompt and the glyph landed on its last letter. Same rule as the
-            vendor-type segment: the width changes, not the words.
-          */
-          isHero
-            ? /* .9 at 768, .8 from 1024. 768 also pads the field on both sides
-                 rather than only the left. */
-              'sm:min-w-28 sm:flex-[0.9] sm:pr-3.5 sm:pl-3.5 lg:flex-[0.8] lg:pr-0 min-[90rem]:pl-4.5'
-            : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
-        )}
-      >
-        {/*
-          "Event date" on the hero, "Date" in the compact bar. Frame `02` draws
-          the long form, but the five frames that show the compact bar in a
-          working state — `17`, `18` and the three at 1024 — all draw "Date",
-          and the short form is what leaves the segment room for a date. The
-          single frame is the stale one.
-        */}
-        <span className={label}>{isHero ? 'Event date' : 'Date'}</span>
-        {/*
-          An empty date reads "Add a date", not the browser's "mm/dd/yyyy" —
-          the frame draws the prompt, and the placeholder attribute does
-          nothing on a date input. So the native edit field is made transparent
-          while it is empty and unfocused, and the prompt is laid over it;
-          focusing hands the field straight back to the browser's own editor.
-          See design/design-plan/10-landing.md.
-        */}
-        {/*
-          The same baseline ladder as `field` — 0 at 768, 1px at 1024, 2px at
-          1440. Left on the flat `mt-0.5`, this segment's micro-label sat 1.3px
-          above the other two, where the frame draws all three flush.
-        */}
-        <span className={cn('relative flex min-w-0', isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5')}>
-          <input
-            type="date"
-            value={draft.date}
+      {/*
+        The date is a designed picker, not the browser's (#167, #328).
+
+        What stood here was an elaborate apology for a native `input[type=date]`:
+        the edit field made transparent so `mm/dd/yyyy` would not show, a prompt
+        laid over it, and the whole thing handed back to the browser on focus.
+        The frames draw none of that, and the picker it opened was a different
+        control on every platform — nothing the design could specify. Frame `28`
+        draws the replacement, and it shares the vendor calendar's cell marks.
+      */}
+      <DateDropdown
+        open={dateOpen}
+        onOpenChange={setDateOpen}
+        label={isHero ? 'Event date' : 'Date'}
+        value={draft.date === '' ? null : draft.date}
+        today={today || todayDateString()}
+        width={isHero ? 'hero' : 'compact'}
+        scrim={isHero}
+        onChange={(next) => {
+          setDraft((previous) => ({ ...previous, date: next ?? '' }));
+          setPastDate(false);
+        }}
+        trigger={
+          <button
+            type="button"
+            aria-label={isHero ? 'Event date' : 'Date'}
+            aria-haspopup="dialog"
+            aria-expanded={dateOpen}
             /*
-              Past dates are unselectable, not merely rejected: `min` greys them
-              out in the browser's own calendar, so the rule is visible in the
-              control rather than discovered on submit. Empty until the client
-              knows its own day — see `today` above.
+              `aria-describedby` and not `aria-invalid`: a `button` does not
+              support the second, so it announced nothing. The complaint itself
+              carries `role="alert"`, so it is spoken when it appears, and this
+              ties it to the control it is about for anyone arriving later.
             */
-            min={today || undefined}
-            aria-invalid={pastDate || undefined}
             aria-describedby={pastDate ? `${fieldId}-date-error` : undefined}
-            onChange={(event) => {
-              setDraft((previous) => ({ ...previous, date: event.target.value }));
-              setPastDate(false);
-            }}
             className={cn(
-              'peer w-full min-w-0 bg-transparent text-stone-900 outline-none',
-              'focus-visible:ring-0 focus-visible:ring-offset-0',
-              fieldText,
+              segment,
+              'text-left',
               /*
-                The native edit field is transparent whenever it is not being
-                edited — empty or filled. Empty it would read `mm/dd/yyyy`,
-                filled it would read `09/13/2026`; the frames draw neither.
-                Focusing hands the field straight back to the browser's own
-                editor, so the picker is never taken away, only overlaid.
+                The floor is the "Add a date" prompt plus its caret. Same rule
+                as the vendor-type segment: the width changes, not the words.
               */
-              'text-transparent focus:text-stone-900',
-              draft.date === '' && 'focus:text-stone-600',
+              isHero
+                ? /* .9 at 768, .8 from 1024. 768 also pads the field on both
+                     sides rather than only the left. */
+                  'sm:min-w-28 sm:flex-[0.9] sm:pr-3.5 sm:pl-3.5 lg:flex-[0.8] lg:pr-0 min-[90rem]:pl-4.5'
+                : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
             )}
-          />
-          {draft.date === '' ? (
+          >
+            {/*
+              "Event date" on the hero, "Date" in the compact bar. Frame `02`
+              draws the long form, but the five frames that show the compact bar
+              in a working state — `17`, `18` and the three at 1024 — all draw
+              "Date", and the short form is what leaves the segment room for a
+              date. The single frame is the stale one.
+            */}
+            <span className={label}>{isHero ? 'Event date' : 'Date'}</span>
             <span
-              aria-hidden="true"
               className={cn(
-                'pointer-events-none absolute inset-y-0 left-0 flex items-center text-stone-600 peer-focus:hidden',
-                fieldText,
+                'flex min-w-0 items-center justify-between gap-2 pr-2.5',
+                /* The same baseline ladder as `field` — 0 at 768, 1px at 1024,
+                   2px at 1440. */
+                isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5',
               )}
             >
-              Add a date
+              <span
+                className={cn(
+                  'truncate',
+                  fieldText,
+                  draft.date === '' ? 'text-stone-600' : 'text-stone-900',
+                )}
+              >
+                {draft.date === '' ? (
+                  'Add a date'
+                ) : (
+                  <>
+                    {/*
+                      Both spellings are rendered and one is hidden by width,
+                      rather than picked in JS: a media query in state would
+                      have to be resolved after mount, and the segment would
+                      render the wrong one on the server and then change under
+                      the reader.
+                    */}
+                    <span className="xl:hidden">{formattedDate.short}</span>
+                    <span className="max-xl:hidden">{formattedDate.full}</span>
+                  </>
+                )}
+              </span>
+              <span
+                aria-hidden="true"
+                className={cn('shrink-0 text-[9px]', dateOpen ? 'text-clay-400' : 'text-stone-600')}
+              >
+                {dateOpen ? '▴' : '▾'}
+              </span>
             </span>
-          ) : (
-            <span
-              aria-hidden="true"
-              className={cn(
-                'pointer-events-none absolute inset-y-0 left-0 flex items-center whitespace-nowrap text-stone-900 peer-focus:hidden',
-                fieldText,
-              )}
-            >
-              {/*
-                Both spellings are rendered and one is hidden by width, rather
-                than picked in JS: a media query in state would have to be
-                resolved after mount, and the segment would render the wrong
-                one on the server and then change under the reader.
-              */}
-              <span className="xl:hidden">{formattedDate.short}</span>
-              <span className="max-xl:hidden">{formattedDate.full}</span>
-            </span>
-          )}
-        </span>
-      </label>
+          </button>
+        }
+      />
 
       {pastDate ? (
         /*

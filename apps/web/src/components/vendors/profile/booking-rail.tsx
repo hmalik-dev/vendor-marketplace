@@ -11,10 +11,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { DateDropdown } from '@/components/ui/dropdown-date';
+import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { Label } from '@/components/ui/label';
 import { ApiClientError } from '@/lib/api-client';
 import { signInPathReturningTo } from '@/lib/return-path';
 import { useApi } from '@/lib/use-api';
+import { cn } from '@/lib/utils';
 
 export interface BookingRailProps {
   businessName: string;
@@ -53,6 +56,9 @@ export function BookingRail({
   const router = useRouter();
   const call = useApi();
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
+  const [packageOpen, setPackageOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+
   const [eventDate, setEventDate] = useState('');
   const [guestCount, setGuestCount] = useState('');
   const [opening, setOpening] = useState(false);
@@ -167,13 +173,44 @@ export function BookingRail({
             <Label htmlFor={`${fieldId}-date`} className={FIELD_LABEL}>
               Event date
             </Label>
-            <input
-              id={`${fieldId}-date`}
-              type="date"
-              value={eventDate}
-              min={today}
-              onChange={(event) => setEventDate(event.target.value)}
-              className={FIELD}
+            {/*
+              The designed picker, and the one place it has real marks to draw:
+              this vendor's calendar is already in scope, so a day they are
+              booked on is hatched and struck through here rather than being
+              accepted and then refused on the next screen. Frame `28`'s note is
+              that the customer's picker inherits the vendor calendar's marks
+              exactly — this is that, with the same vendor's data behind it.
+            */}
+            <DateDropdown
+              open={dateOpen}
+              onOpenChange={setDateOpen}
+              label="Event date"
+              value={eventDate === '' ? null : eventDate}
+              onChange={(next) => setEventDate(next ?? '')}
+              today={today}
+              calendar={calendar}
+              trigger={
+                <button
+                  type="button"
+                  id={`${fieldId}-date`}
+                  aria-haspopup="dialog"
+                  aria-expanded={dateOpen}
+                  className={`${FIELD} flex items-center justify-between gap-2 text-left`}
+                >
+                  <span className={cn('truncate', eventDate === '' && 'text-stone-600')}>
+                    {eventDate === '' ? 'Add a date' : formatMonthDay(eventDate)}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'shrink-0 text-base',
+                      dateOpen ? 'text-clay-400' : 'text-stone-600',
+                    )}
+                  >
+                    {dateOpen ? '▴' : '▾'}
+                  </span>
+                </button>
+              }
             />
           </div>
           <div className="flex-[0.7]">
@@ -199,30 +236,49 @@ export function BookingRail({
               Package
             </Label>
             {/*
-              A real `<select>` — the element stays native so the keyboard, the
-              screen reader and the mobile picker all behave — with only the
-              OS-drawn arrow replaced by the frame's own glyph.
+              The one dropdown (#167). This was a native select element, kept for the
+              behaviour the platform gives free — but the platform also draws it,
+              and suppressing the OS arrow to draw our own was already most of
+              the way to replacing it. What it gave away is now provided rather
+              than borrowed: a listbox, roving `aria-activedescendant`, arrows,
+              type-ahead, and a bottom sheet where the OS would have drawn one.
             */}
-            <div className="relative">
-              <select
-                id={`${fieldId}-package`}
-                value={packageId}
-                onChange={(event) => setPackageId(event.target.value)}
-                className={`${FIELD} appearance-none`}
-              >
-                {packages.map((servicePackage) => (
-                  <option key={servicePackage.id} value={servicePackage.id}>
-                    {servicePackage.name} — {formatPrice(servicePackage.priceCents)}
-                  </option>
-                ))}
-              </select>
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 right-[13px] flex items-center text-base text-stone-600"
-              >
-                ▾
-              </span>
-            </div>
+            <SingleSelectDropdown
+              open={packageOpen}
+              onOpenChange={setPackageOpen}
+              label="Package"
+              countNoun="packages"
+              options={packages.map((servicePackage) => ({
+                value: servicePackage.id,
+                label: `${servicePackage.name} — ${formatPrice(servicePackage.priceCents)}`,
+              }))}
+              value={packageId}
+              onChange={setPackageId}
+              trigger={
+                <button
+                  type="button"
+                  id={`${fieldId}-package`}
+                  aria-haspopup="listbox"
+                  aria-expanded={packageOpen}
+                  className={`${FIELD} flex items-center justify-between gap-2 text-left`}
+                >
+                  <span className="truncate">
+                    {selected
+                      ? `${selected.name} — ${formatPrice(selected.priceCents)}`
+                      : 'Choose a package'}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'shrink-0 text-base',
+                      packageOpen ? 'text-clay-400' : 'text-stone-600',
+                    )}
+                  >
+                    {packageOpen ? '▴' : '▾'}
+                  </span>
+                </button>
+              }
+            />
           </div>
         ) : null}
 

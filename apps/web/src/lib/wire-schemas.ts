@@ -25,6 +25,7 @@ import {
   vendorCardSchema,
   vendorProfileDetailSchema,
   vendorReviewsPageSchema,
+  vendorCityListSchema,
   vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
 import { resolveImageUrl } from '@vendor-marketplace/shared';
@@ -153,6 +154,14 @@ export const wireCustomerReviewSchema = customerReviewSchema.extend({
 });
 export type WireCustomerReview = z.infer<typeof wireCustomerReviewSchema>;
 export const wireCustomerReviewListSchema = z.array(wireCustomerReviewSchema);
+
+/**
+ * The cities that have vendors. No dates on it, so the domain schema passes
+ * straight through — it is re-exported here only so every read in the app
+ * reaches for its schema in one place.
+ */
+export const wireVendorCityListSchema = vendorCityListSchema;
+export type WireVendorCity = z.infer<typeof wireVendorCityListSchema>[number];
 
 /** One appended page of the vendor profile's Reviews tab. */
 export const wireVendorReviewsPageSchema = vendorReviewsPageSchema.extend({

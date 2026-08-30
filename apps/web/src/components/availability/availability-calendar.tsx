@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';
+import { CELL_HELD, CELL_UNAVAILABLE } from '@/components/availability/cell-marks';
 import { buildMonth, datesBetween, monthsFrom, WEEKDAY_LABELS } from '@/lib/calendar';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
@@ -38,22 +39,15 @@ const SATURDAY = 6;
  * than the signal. See design/design-plan/19-availability.md.
  *
  * The blocked hatch is the one place this departs from the frame, and the
- * departure is ruled and recorded (#278 via #306). The frame draws `#6B6459` on
- * an `#EFE9E0`/`#E0D8CA` hatch, which is **4.13:1** against the dark stripe —
- * and the numeral's strokes cross both stripes, so "the average clears" was
- * never an answer. `stone-700` on `stone-200`/`stone-300` is 6.80:1 and spends
- * two tokens that exist: `#E0D8CA` is in no token file, and `stone-250`, which
- * an earlier table named, was never minted at all.
+ * departure is ruled and recorded (#278 via #306) — see `cell-marks.ts`, which
+ * now holds it, because #167's customer-side date picker draws the same marks
+ * and the frame's own note requires the two to be one visual language.
  */
-const HATCH =
-  'bg-[repeating-linear-gradient(-45deg,var(--color-stone-200)_0_3px,var(--color-stone-300)_3px_6px)]';
-
 const STATUS_STYLES: Record<AvailabilityStatus, string> = {
   available: 'bg-stone-0 text-stone-900 hover:bg-clay-50',
   booked: 'bg-clay-100 font-semibold text-clay-600 cursor-not-allowed',
-  pending:
-    'bg-gold-50 font-semibold text-gold-600 cursor-not-allowed border-[1.5px] border-dashed border-gold-400',
-  blocked: `text-stone-700 line-through ${HATCH}`,
+  pending: `${CELL_HELD} cursor-not-allowed`,
+  blocked: CELL_UNAVAILABLE,
   completed: 'bg-sage-50 font-semibold text-sage-600',
 };
 

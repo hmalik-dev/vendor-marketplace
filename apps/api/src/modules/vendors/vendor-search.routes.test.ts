@@ -525,4 +525,58 @@ describe('GET /vendors', () => {
 
     expect((await search()).items[0]?.startingPriceCents).toBe(300_000);
   });
+
+  /*
+   * The City field is a select over these (#167), so what this endpoint returns
+   * is exactly what a customer is able to ask for. Two things follow, and both
+   * are asserted: an unpublished vendor's city must not be offered — choosing
+   * it would guarantee an empty grid — and city and state travel as a pair,
+   * because "Portland" alone names two places people would fly between.
+   */
+  describe('GET /vendors/cities', () => {
+    async function cities(): Promise<{ city: string; state: string; vendorCount: number }[]> {
+      const response = await harness.app.inject({ method: 'GET', url: '/vendors/cities' });
+      expect(response.statusCode).toBe(200);
+
+      return response.json();
+    }
+
+    it('offers only cities that have a published vendor, counted', async () => {
+      await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.', city: 'Austin' });
+      await seedVendor({ user: 'user_b', businessName: 'June Harlow', city: 'Austin' });
+      await seedVendor({
+        user: 'user_c',
+        businessName: 'Draft Studio',
+        city: 'Dallas',
+        publish: false,
+      });
+
+      expect(await cities()).toEqual([{ city: 'Austin', state: 'TX', vendorCount: 2 }]);
+    });
+
+    it('keeps two cities of the same name apart by their state', async () => {
+      await seedVendor({
+        user: 'user_a',
+        businessName: 'Rose City Film',
+        city: 'Portland',
+        state: 'OR',
+      });
+      await seedVendor({
+        user: 'user_b',
+        businessName: 'Casco Bay Photo',
+        city: 'Portland',
+        state: 'ME',
+      });
+
+      // Two rows, not one — and ordered, so the list cannot shuffle per read.
+      expect(await cities()).toEqual([
+        { city: 'Portland', state: 'ME', vendorCount: 1 },
+        { city: 'Portland', state: 'OR', vendorCount: 1 },
+      ]);
+    });
+
+    it('answers with an empty list rather than failing when nobody has published', async () => {
+      expect(await cities()).toEqual([]);
+    });
+  });
 });

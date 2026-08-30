@@ -1,8 +1,30 @@
 import type { Category } from '@vendor-marketplace/shared';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CategorySelect } from './category-select';
+
+/*
+ * This control lives in the search bar, which is a desktop surface first, so
+ * the suite drives the **anchored** mount. jsdom's stub in `vitest.setup.ts`
+ * answers every media query "no", which would silently put every one of these
+ * assertions against the bottom sheet instead — a different mount with
+ * different rows, tested by accident. `dropdown.test.tsx` drives the sheet on
+ * purpose.
+ */
+beforeEach(() => {
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: query.includes('min-width: 640px'),
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia;
+});
 
 function category(id: string, name: string, order: number): Category {
   return {
@@ -57,79 +79,78 @@ describe('CategorySelect', () => {
     const { onChange } = renderSelect('');
 
     await user.click(trigger());
-    await user.click(await screen.findByRole('option', { name: 'Catering' }));
+    await user.click(await screen.findByRole('option', { name: /^Catering/ }));
 
     expect(onChange).toHaveBeenCalledWith('catering');
   });
 
-  it('filters the list as the customer types', async () => {
-    const user = userEvent.setup();
-    renderSelect('');
-
-    await user.click(trigger());
-    await user.type(await screen.findByPlaceholderText('Filter vendor types'), 'cater');
-
-    expect(await screen.findByRole('option', { name: 'Catering' })).toBeDefined();
-    expect(screen.queryByRole('option', { name: 'Photography' })).toBeNull();
-  });
-
   /*
-   * The regression this file exists for. An always-present "Any vendor type"
-   * row kept cmdk's list non-empty, so the no-match state never rendered and a
-   * customer who typed a phrase saw a list holding nothing but "Any". The field
-   * cannot hold what they typed, so it owes them the category they meant.
+   * The filter field is gone (#167), and the "did you mean" recovery went with
+   * it — that existed only to answer a typo in a field that no longer accepts
+   * typing. `42-dropdowns.md` deletes both, and says why: eleven categories fit
+   * on one screen, and a filter box on a list that short is friction rather
+   * than help. Asserted as ABSENT rather than simply untested, because it
+   * shipped for months and a test that merely stopped mentioning it would let
+   * it back in.
    */
-  it('offers the closest categories for a phrase it cannot hold', async () => {
+  it('offers no filter field, and no did-you-mean state to go with it', async () => {
     const user = userEvent.setup();
     renderSelect('');
 
     await user.click(trigger());
-    await user.type(
-      await screen.findByPlaceholderText('Filter vendor types'),
-      'wedding photographer near me',
-    );
+    await screen.findByRole('listbox');
 
-    expect(await screen.findByText('No matching type')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Photography' })).toBeDefined();
-    // "Any vendor type" is not an answer to "which type did you mean?".
-    expect(screen.queryByRole('option', { name: 'Any vendor type' })).toBeNull();
+    expect(screen.queryByPlaceholderText('Filter vendor types')).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByText('No matching type')).toBeNull();
   });
 
-  it('selects a suggested category from the no-match state', async () => {
+  /* Type-ahead does in one keystroke what the filter field took a phrase to
+     do — the keyboard model in `42-dropdowns.md`. */
+  it('jumps to the first category matching a typed letter', async () => {
     const user = userEvent.setup();
     const { onChange } = renderSelect('');
 
     await user.click(trigger());
-    await user.type(await screen.findByPlaceholderText('Filter vendor types'), 'photograpy');
-    await user.click(await screen.findByRole('button', { name: 'Photography' }));
+    await screen.findByRole('listbox');
+    await user.keyboard('c{Enter}');
 
-    expect(onChange).toHaveBeenCalledWith('photography');
+    expect(onChange).toHaveBeenCalledWith('catering');
   });
 
-  it('says so plainly when nothing is even close', async () => {
+  it('moves with the arrows and commits with Enter', async () => {
     const user = userEvent.setup();
-    renderSelect('');
+    const { onChange } = renderSelect('');
 
     await user.click(trigger());
-    await user.type(await screen.findByPlaceholderText('Filter vendor types'), 'zzzzzzzz');
+    await screen.findByRole('listbox');
+    // From "Any vendor type" at the top, two rows down is Videography.
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
 
-    expect(await screen.findByText('No matching type')).toBeDefined();
-    expect(screen.getByText('Pick a vendor type from the list to search.')).toBeDefined();
+    expect(onChange).toHaveBeenCalledWith('videography');
   });
 
-  it('discards what was typed when the popover closes without a choice', async () => {
+  it('closes on Escape without changing the value', async () => {
     const user = userEvent.setup();
     const { onChange } = renderSelect('photography');
 
     await user.click(trigger());
-    await user.type(await screen.findByPlaceholderText('Filter vendor types'), 'cater');
+    await screen.findByRole('listbox');
     await user.keyboard('{Escape}');
 
-    // The field still holds the resolved category, never the typed string.
-    await waitFor(() => {
-      expect(trigger().textContent).toContain('Photography');
-    });
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+    expect(trigger().textContent).toContain('Photography');
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  /* The frame prints each category's own one-line description under its name. */
+  it('carries each category’s short description', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+
+    expect(await screen.findByText('Photo & film')).toBeDefined();
   });
   /*
    * #89. The vendor-type trigger is the third segment of the search bar, and

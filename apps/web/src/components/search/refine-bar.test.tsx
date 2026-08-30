@@ -3,9 +3,30 @@ import { join } from 'node:path';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RefineBar } from './refine-bar';
 import type { SearchState } from './search-state';
+
+/*
+ * The Refine bar is a desktop surface — below `lg` it lives inside the search
+ * shell's own sheet — so the suite drives the **anchored** dropdown mount.
+ * jsdom's stub in `vitest.setup.ts` answers every media query "no", which would
+ * put every assertion below against the bottom sheet instead: a different
+ * mount, tested by accident.
+ */
+beforeEach(() => {
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: query.includes('min-width: 640px'),
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia;
+});
 
 /*
  * Frame `02 Search` draws the sort control, so its numbers are read out of the
@@ -179,7 +200,7 @@ describe('RefineBar layout', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /^Sort:/ }));
-    await user.click(screen.getByRole('radio', { name: label }));
+    await user.click(screen.getByRole('option', { name: label }));
 
     expect(setState).toHaveBeenCalledWith({ sort: expected });
   });
@@ -198,11 +219,12 @@ describe('RefineBar layout', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sort: Price: high to low' }));
 
-    expect(screen.getByRole('radio', { name: 'Price: high to low' })).toHaveProperty(
-      'checked',
-      true,
+    expect(
+      screen.getByRole('option', { name: 'Price: high to low' }).getAttribute('aria-selected'),
+    ).toBe('true');
+    expect(screen.getByRole('option', { name: 'Top rated' }).getAttribute('aria-selected')).toBe(
+      'false',
     );
-    expect(screen.getByRole('radio', { name: 'Top rated' })).toHaveProperty('checked', false);
   });
 
   /* A single-choice panel is answered by the choice, and it covers the results. */
@@ -221,11 +243,11 @@ describe('RefineBar layout', () => {
     const trigger = screen.getByRole('button', { name: /^Sort:/ });
 
     await user.click(trigger);
-    expect(screen.getByRole('radio', { name: 'Top rated' })).toBeDefined();
+    expect(screen.getByRole('option', { name: 'Top rated' })).toBeDefined();
 
-    await user.click(screen.getByRole('radio', { name: 'Top rated' }));
+    await user.click(screen.getByRole('option', { name: 'Top rated' }));
 
-    expect(screen.queryByRole('radio', { name: 'Top rated' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Top rated' })).toBeNull();
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 
@@ -287,22 +309,25 @@ describe('filter popovers are reachable and know when they are finished', () => 
   }
 
   /*
-   * The cap is on the primitive, so it holds for popovers nobody measured.
-   * jsdom runs no layout and Radix computes the variable from real measurement,
-   * so what is asserted is the rule: a height bounded by the available space,
-   * and a scroll container to absorb the overflow.
+   * The 719px Languages panel, closed by the cap on the shell (#167).
+   *
+   * jsdom runs no layout, so what is asserted is the rule rather than the
+   * rendered box: 360px, and a scroll container to absorb the rest. That number
+   * is also what sets the flip distance — "flips when the field is within 380px
+   * of the viewport bottom" is the same statement as "flips when 360px of panel
+   * plus its 8px offset will not fit below", which is what Radix decides.
    */
-  it('caps every panel against the space it opens into, and scrolls inside', async () => {
+  it('caps every panel at the frame’s 360px, and scrolls inside', async () => {
     const user = userEvent.setup();
     renderWithTags();
 
     await user.click(screen.getByRole('button', { name: /^Language/ }));
 
-    const panel = document.querySelector('[data-slot="popover-content"]');
-    expect(panel, 'no popover panel').not.toBeNull();
+    const panel = document.querySelector('[data-slot="dropdown"]');
+    expect(panel, 'no dropdown panel').not.toBeNull();
 
     const className = (panel as HTMLElement).className;
-    expect(className).toContain('max-h-(--radix-popover-content-available-height)');
+    expect(className).toContain('max-h-[360px]');
     expect(className).toContain('overflow-y-auto');
   });
 
@@ -314,39 +339,108 @@ describe('filter popovers are reachable and know when they are finished', () => 
     const trigger = screen.getByRole('button', { name: 'Rating' });
     await user.click(trigger);
 
-    const option = screen.getByRole('button', { name: '4.5★ & up' });
-    await user.click(option);
+    await user.click(screen.getByRole('option', { name: '4.5★ & up' }));
 
     expect(setState).toHaveBeenCalledWith({ minRating: 4.5 });
-    expect(screen.queryByRole('button', { name: '4.5★ & up' })).toBeNull();
+    expect(screen.queryByRole('option', { name: '4.5★ & up' })).toBeNull();
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 
   /*
-   * Multi-select: staying open is the point, so it has to be the stated
-   * behaviour rather than the same defect the rating panel just lost.
+   * **Multi-select does not auto-apply** (#167). It used to fire per tick, so
+   * ticking three languages re-queried and re-sorted the grid three times,
+   * moving the list under the hand that was still choosing. Now the ticks build
+   * a draft and Apply commits it — which is also what closes the panel.
    */
-  it('keeps a multi-select panel open across a choice, and says why', async () => {
+  it('holds a multi-select choice back until Apply', async () => {
     const user = userEvent.setup();
     const setState = renderWithTags();
 
     await user.click(screen.getByRole('button', { name: /^Language/ }));
-    expect(screen.getByText(/this stays open/)).toBeDefined();
+    await user.click(screen.getByRole('option', { name: 'English' }));
 
-    await user.click(screen.getByRole('checkbox', { name: 'English' }));
+    // Ticked, and still nothing has reached the results grid.
+    expect(screen.getByRole('option', { name: 'English' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(setState).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Apply · 1' }));
 
     expect(setState).toHaveBeenCalledWith({ tags: [TAGS[0].id] });
-    expect(screen.getByRole('checkbox', { name: 'Spanish' })).toBeDefined();
   });
 
-  it('says the price panel stays open too, since a range has two ends', async () => {
+  /* Abandoning the panel discards the draft rather than leaking it. */
+  it('discards a multi-select draft when the panel is dismissed', async () => {
+    const user = userEvent.setup();
+    const setState = renderWithTags();
+
+    await user.click(screen.getByRole('button', { name: /^Language/ }));
+    await user.click(screen.getByRole('option', { name: 'English' }));
+    await user.keyboard('{Escape}');
+
+    expect(setState).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /^Language/ }));
+
+    expect(screen.getByRole('option', { name: 'English' }).getAttribute('aria-selected')).toBe(
+      'false',
+    );
+  });
+
+  /*
+   * The range is presets first, then typed bounds, then a slider that is only a
+   * readout — and it applies on Apply for the same reason the multi-select
+   * does: a range fired per keystroke re-sorts between the two digits of "18".
+   */
+  it('offers presets and typed bounds, and applies neither until Apply', async () => {
+    const user = userEvent.setup();
+    const setState = renderWithTags();
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+
+    expect(screen.getByRole('button', { name: 'Under $1k' })).toBeDefined();
+    expect(screen.getByLabelText('Min')).toBeDefined();
+    expect(screen.getByLabelText('Max')).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: '$1–2k' }));
+    expect(setState).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(setState).toHaveBeenCalledWith({ minPriceCents: 100_000, maxPriceCents: 200_000 });
+  });
+
+  /*
+   * Moving between chips takes **one** click, not two.
+   *
+   * Only one panel may be open, and that is held on the bar rather than in each
+   * chip — so clicking B while A is open fires both A's close and B's open. With
+   * a naive handler A's close landed second and wiped B straight back out, and
+   * the bar looked unresponsive to the first click on every chip after the first.
+   */
+  it('moves from one open chip to the next in a single click', async () => {
+    const user = userEvent.setup();
+    renderWithTags();
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    expect(screen.getByRole('button', { name: 'Under $1k' })).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: 'Rating' }));
+
+    expect(screen.getByRole('option', { name: '4★ & up' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Under $1k' })).toBeNull();
+  });
+
+  /* No `input[type=range]` is the control any more — it is a readout. */
+  it('draws the slider as a readout rather than the only control', async () => {
     const user = userEvent.setup();
     renderWithTags();
 
     await user.click(screen.getByRole('button', { name: 'Price' }));
 
-    expect(screen.getByText('Set either end — this stays open.')).toBeDefined();
-    expect(screen.getByLabelText(/Minimum/i)).toBeDefined();
+    expect(document.querySelector('input[type="range"]')).toBeNull();
+    expect(screen.queryByRole('slider')).toBeNull();
   });
 });
 
@@ -424,7 +518,7 @@ describe('the Style chip', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /^Style/ }));
 
-    expect(screen.getByRole('checkbox', { name: /Documentary/ })).toBeDefined();
+    expect(screen.getByRole('option', { name: /Documentary/ })).toBeDefined();
     expect(screen.queryByRole('checkbox', { name: /Cinematic/ })).toBeNull();
   });
 
@@ -433,7 +527,7 @@ describe('the Style chip', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /^Style/ }));
 
-    expect(screen.getByRole('checkbox', { name: /Cinematic/ })).toBeDefined();
+    expect(screen.getByRole('option', { name: /Cinematic/ })).toBeDefined();
     expect(screen.queryByRole('checkbox', { name: /Documentary/ })).toBeNull();
   });
 

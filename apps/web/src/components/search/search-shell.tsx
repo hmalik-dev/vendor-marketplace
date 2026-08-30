@@ -5,6 +5,7 @@ import {
   todayDateString,
   vendorNounFor,
   type Category,
+  type VendorCity,
   type VendorSearchResult,
 } from '@vendor-marketplace/shared';
 import { wireVendorSearchResultSchema } from '@/lib/wire-schemas';
@@ -67,6 +68,8 @@ const AVAILABILITY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
 
 export interface SearchShellProps {
   categories: readonly Category[];
+  /** The cities that have vendors, so City can only ask a real question. */
+  cities: readonly VendorCity[];
   tags: readonly WireTag[];
 }
 
@@ -89,7 +92,7 @@ function searchingLine(state: SearchState): string {
   return `Searching ${noun === '' ? 'vendors' : noun}${where}…`;
 }
 
-function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElement {
+function SearchScreen({ categories, cities, tags }: SearchShellProps): React.ReactElement {
   const { state, dropped, setState, clearRefinements } = useSearchState();
   const [result, setResult] = useState<VendorSearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -241,7 +244,13 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-stone-200 px-5 py-3 min-[90rem]:px-6.5 lg:hidden">
         <SearchBar
           categories={categories}
-          value={{ category: state.category, city: state.city, date: state.date }}
+          cities={cities}
+          value={{
+            category: state.category,
+            city: state.city,
+            state: state.state,
+            date: state.date,
+          }}
           onSubmit={(next) => setState(next)}
           className="w-full min-w-0 sm:flex-1 sm:max-w-140"
         />

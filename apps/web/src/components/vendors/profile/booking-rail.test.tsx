@@ -38,6 +38,20 @@ function servicePackage(overrides: Partial<ServicePackage> = {}): ServicePackage
   };
 }
 
+/**
+ * Both rail controls are dropdowns now (#167), so a choice is two clicks rather
+ * than a `selectOptions` or a typed date string.
+ */
+async function pickPackage(label: string): Promise<void> {
+  await userEvent.click(screen.getByLabelText('Package'));
+  await userEvent.click(await screen.findByRole('option', { name: label }));
+}
+
+async function pickDate(date: string): Promise<void> {
+  await userEvent.click(screen.getByLabelText('Event date'));
+  await userEvent.click(await screen.findByRole('gridcell', { name: new RegExp(date) }));
+}
+
 describe('BookingRail', () => {
   afterEach(() => {
     cleanup();
@@ -239,7 +253,7 @@ describe('BookingRail', () => {
       />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText('Package'), 'pkg-2');
+    await pickPackage('Full day — $3,200');
 
     expect(screen.getByText('$3,200')).toBeDefined();
   });
@@ -274,7 +288,7 @@ describe('BookingRail', () => {
           startingPriceCents={145_000}
           packages={[servicePackage()]}
           reviewCount={127}
-          today="2026-08-29"
+          today="2026-08-10"
           calendar={calendar}
         />,
       );
@@ -282,22 +296,29 @@ describe('BookingRail', () => {
 
     it('names a future date the vendor has not blocked', async () => {
       renderRail({});
-      await userEvent.type(screen.getByLabelText('Event date'), '2026-12-05');
+      await pickDate('2026-08-15');
 
-      expect(screen.getByText('Free on December 5')).toBeDefined();
+      expect(screen.getByText('Free on August 15')).toBeDefined();
     });
 
     it('says nothing about a date the vendor has blocked', async () => {
-      renderRail({ '2026-12-05': 'blocked' });
-      await userEvent.type(screen.getByLabelText('Event date'), '2026-12-05');
+      renderRail({ '2026-08-15': 'blocked' });
+      await pickDate('2026-08-15');
 
       expect(screen.queryByText(/^Free on/)).toBeNull();
     });
 
-    it('says nothing about a date already past', async () => {
+    /*
+     * A past date cannot be *chosen* now, which is a stronger guarantee than
+     * the old one: the picker used to accept it and the line then declined to
+     * say anything, where the grid now refuses the day outright (#167).
+     */
+    it('will not let a past date be chosen at all', async () => {
       renderRail({});
-      await userEvent.type(screen.getByLabelText('Event date'), '2026-06-14');
+      await userEvent.click(screen.getByLabelText('Event date'));
 
+      const past = await screen.findByRole('gridcell', { name: /2026-08-05/ });
+      expect((past as HTMLButtonElement).disabled).toBe(true);
       expect(screen.queryByText(/^Free on/)).toBeNull();
     });
 

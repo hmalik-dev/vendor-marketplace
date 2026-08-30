@@ -9,7 +9,7 @@ import { HeaderNav } from '@/components/header-nav';
 import { HeaderQuery } from '@/components/search/header-query';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
-import { getCategories } from '@/lib/vendor-data';
+import { getCategories, getVendorCities } from '@/lib/vendor-data';
 import { readRoleForChrome } from '@/lib/current-user';
 
 /**
@@ -34,7 +34,11 @@ export async function SiteHeader(): Promise<React.ReactElement> {
    * a throw escapes every `error.tsx` and takes the whole document to the
    * global error screen — see the note on that function.
    */
-  const [categories, role] = await Promise.all([getCategories(), readRoleForChrome()]);
+  const [categories, cities, role] = await Promise.all([
+    getCategories(),
+    getVendorCities(),
+    readRoleForChrome(),
+  ]);
 
   return (
     // The height sits on the header, not the nav inside it, so the bottom
@@ -75,7 +79,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
         </div>
 
         {/* Present only on `/search`, and only from `lg` — frame `02`. */}
-        <HeaderQuery categories={categories} />
+        <HeaderQuery categories={categories} cities={cities} />
 
         {/* 16 / 14 / 12px, per frame, same as the cluster on the left. */}
         <div className="flex flex-none items-center gap-3 lg:gap-3.5 min-[90rem]:gap-4">
