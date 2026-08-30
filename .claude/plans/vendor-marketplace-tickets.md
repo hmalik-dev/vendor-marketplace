@@ -476,7 +476,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **167** | **Build the shared dropdown component — nothing rolls its own** | **P1** | **M3** | **P1 High** | **In Progress** | `worktree-167` | **None** | `core` | **Change order A2** + `42-dropdowns.md` + frames `28`. **Supersedes #69.** Closes the unreachable-panel and stays-open findings. **Started 2026-08-29 on `worktree-167` — the shell is built and tested (`cbfd2ee`), the seven call-site migrations are not, so this is NOT done.** Landed on the branch: the shell, both mounts, the keyboard model and the Apply footer, under 23 tests covering both mounts, dismissal by outside click / Escape / select, focus return, scroll repositioning rather than dismissing, the 360px cap, arrow movement with wraparound, type-ahead, Tab-closes, and that a multi-select commits nothing until Apply. Adds `--shadow-dropdown` with the frame's own `0 14px 44px rgba(35,40,38,.20)` — neither `shadow-xl` nor the `shadow-lg` the plan names matches it, and the frame outranks the plan. **Remaining:** the range and date bodies, and migrating `category-select`, the four `refine-bar` chips, the booking-request event type, the two vendor-profile selects and `tag-picker`. **Two conflicts with existing documented decisions, both settled by `42-dropdowns.md` and needing no ruling — but they are deletions, so they are recorded here:** the vendor-type select's typed filter and its `closestCategories` fallback go, because the spec says a single-select has "no search field"; and its deliberate `avoidCollisions={false}` pinning goes, because the spec flips above a field within 380px of the viewport bottom. Both have tests that will need rewriting. **Out of scope by the acceptance criterion, which names five surfaces:** `booking-rail`'s package select stays native — `frame-03-parity.test.ts` asserts it and the code documents why — as do `customer-profile-form`'s budget tier, `package-form`'s price type, and `CategoryPicker`, which carries its own documented exception |
 | **168** | **Replace the page loader with the mark's two converging rings** | **P1** | **M3** | **P2 Medium** | **Done** | main | **None** | `core` | **Change order B3.** No wordmark — it renders before fonts are guaranteed. **Closed 2026-08-29 by verification, not by new code — it had already shipped out of band** (with frame `26`, alongside #165). Checked against every acceptance criterion rather than assumed: `page-loader.tsx` draws two `size-7.5` (30px) rings, `bg-clay-400` (`#b4552f`) and a `box-border` 2px `border-stone-900` (`#23201c`); `theme.css` defines `mark-converge-left` at `-9px -> 7px` and `mark-converge-right` at `9px -> -7px`, both `1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite` — the ticket's values exactly. No wordmark and no webfont: the loader's only text is an `sr-only` "Loading", and a test asserts the source contains neither `BRAND_NAME` nor `font-display`. Motion is gated behind `motion-safe:` on both rings, asserted. Mounted only at the `/vendor` and `/customer` segment loading boundaries — never the root, which `loading-boundaries.test.ts` enforces because a root `loading.tsx` turns every `notFound()` into a soft 404; `/messages` and `/bookings` use skeletons instead, per `40-states.md`'s one-idiom-per-screen rule. Both required tests already exist. Evidence: `page-loader.test.tsx` + `loading-boundaries.test.ts`, 9 tests green |
 | **169** | **Treat 1024 as a real breakpoint, height-constrained** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` | **Change order B4.** Seven `27 …` frames. "Due today" above the fold is a hard constraint |
-| **170** | **Uploads — Customer profile photo upload is dead, and leaks an internal role message to the user** | **P1** | **M3** | **P0 Critical** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
+| **170** | **Uploads — Customer profile photo upload is dead, and leaks an internal role message to the user** | **P1** | **M3** | **P0 Critical** | **In Progress** | `worktree-170` | **None** | `core` `storage` | Uploads pass 2026-08-28. Started 2026-08-29 on `worktree-170` |
 | **171** | **Uploads — A successful upload renders a broken image and a 500, while the toast says it worked** | **P1** | **M3** | **P1 High** | **In Progress** | `worktree-171` | **None** | `core` `storage` | Uploads pass 2026-08-28. Started 2026-08-29 in lane 171; #170 was skipped because a concurrent session holds its worktree lock. |
 | **172** | **Uploads — The image format allow-list is bypassed by renaming the file** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
 | **173** | **Uploads — No Cancel control exists during an upload** | **P1** | **M3** | **P1 High** | **Backlog** | — | **None** | `core` `storage` | Uploads pass 2026-08-28 |
@@ -591,6 +591,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **284** | **The vendor profile's sticky rail slides 22px under the header at max scroll** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 82's frame-03 pass.** `lg:top-[calc(var(--header-height)+16px)]` computes to `80px`, but at maximum scroll `aside.getBoundingClientRect().y` is **42.1** — 22px of the card sits behind the 64px sticky header, on all five tabs (packages 41.7; portfolio/reviews/availability 42.0). Cause: the grid's `pb-14` puts the sticky containing block's content bottom at 544.3, and 544.3 − 522.25 (wrapper height) = 22.05, which clamps the offset before it reaches 80. `12-vendor-profile.md` says the rail is *"offset by the header so it never slides under it"*. The frame's 900px shell cannot show this, so no frame contradicts the fix. |
 | **285** | **The rating star renders as a filled clay SVG where every frame draws a text glyph** | P1 | M3 | P3 Low | Backlog | — | None | `core` | **Found 2026-08-29 by lane 82's frame-03 pass.** Live: a 14px lucide `Star` SVG with `fill: rgb(180,85,47)` (clay-400). Frame: a `★` text glyph at 13px inheriting `#4A443C`. **All 19 `★` occurrences in the entire frame file are text glyphs** inheriting `#6B6459`/`#4A443C`; no frame anywhere draws a filled star icon. Affects the profile and every vendor card, so it is a systemic Style/Colour miss rather than one screen's. Note clay-400 as an icon fill is not the same rule as clay-400 as text, which is banned — check `01-foundations.md` before choosing the replacement colour. |
 | **286** | **The vendor profile tabs implement `role=tablist` without the keyboard pattern it promises** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 82's frame-03 pass.** All five tabs sit in the Tab order with `tabindex` unset and `ArrowRight` from `About` does nothing — there is no roving tabindex. Announcing `role=tablist` while behaving like five plain links is worse than not announcing it: a screen-reader user is told to expect arrow-key navigation that is not there. Either implement the ARIA tabs pattern (roving tabindex, Arrow/Home/End) or drop the tablist roles. Pairs with **#254**, which is the same row's focus ring being clipped by its `overflow-x-auto`. |
+| **287** | **`nearby-availability` builds test dates in UTC while the route reads server-local time, so the suite fails locally every evening** | P1 | M3 | P2 Medium | Backlog | — | None | `core` | **Found 2026-08-29 by lane 170** while running the API suite. Not caused by any diff — reproduced on a clean tree with `git stash`. See detail section |
 
 Rows are ordered by build sequence, not by ticket number. **207 rows — 50 Done, 1 In Progress, 150 Backlog, 4 Deferred, 2 Blocked.** Recounted 2026-08-28; the previous "56 rows — 25 Done" line had been stale for many batches.
 
@@ -8728,7 +8729,7 @@ mobile search) or the last card's price row lands under it.
 
 ### #170: Uploads — Customer profile photo upload is dead, and leaks an internal role message to the user
 
-**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** In Progress | **Capabilities:** `core` `storage`
 **Blocked by:** None
 
 Uploads adversarial pass, 2026-08-28. **Where:** `/customer/profile`, customer.
@@ -11450,6 +11451,45 @@ both sides, never from a screenshot.
 **Test (required):**
 
 - [ ] a parity assertion reading the expected value out of `Orla - Screens.dc.html` at test time rather than duplicating it into the test
+
+---
+
+### #287: `nearby-availability` builds its dates in UTC while the route reads server-local time
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Found 2026-08-29 by lane 170 while running the API suite for #170. **Not caused by that
+diff** — reproduced on a clean tree with `git stash`, 1 failed / 403 passed.
+
+| | |
+| --- | --- |
+| **Expected** | `pnpm --filter @vendor-marketplace/api test` is green on `main` at any hour, in any timezone |
+| **Observed** | `src/modules/vendors/nearby-availability.routes.test.ts > "never suggests a past date when the wanted date is today"` fails with `expected '2026-08-29' to be '2026-08-31'`, but **only between 20:00 and 00:00 EDT** — the window where the local date and the UTC date disagree |
+
+**Cause.** The test's `dayFromToday()` helper (line 17) builds dates with
+`new Date().toISOString().slice(0, 10)`, which is **UTC**. The route computes "today" in
+**server-local** time. At 22:00 EDT the two differ by a day, so the test asks for
+availability from the UTC tomorrow and asserts against a UTC-derived expectation while the
+route answers from the local today. CI runs in UTC, so the two agree there and `main` stays
+green — the failure is invisible to CI and reproducible only on a developer machine west of
+Greenwich in the evening.
+
+**Which side is wrong is the product question this ticket has to settle**, and it is not
+merely a test bug: a marketplace that decides whether a date is in the past using the API
+server's local clock will give a different answer depending on where the process runs. The
+likely correct fix is that the route resolves "today" in an explicit timezone rather than
+the server's, and the test then shares that definition.
+
+**Acceptance:**
+
+- [ ] "Today" is resolved from an explicit, stated timezone rather than the server's local clock
+- [ ] The test derives its expectations from the same definition the route uses
+- [ ] The suite is green at any hour — proven by running it with `TZ` set to a zone behind and a zone ahead of UTC, not by waiting for the clock
+
+**Tests (required):**
+
+- [ ] Run the affected test under at least `TZ=America/Los_Angeles`, `TZ=UTC` and `TZ=Pacific/Kiritimati`, asserting the same result in each. This is the dimension the current test has no coverage of, and the reason CI cannot see the defect.
 
 ---
 

@@ -164,7 +164,13 @@ describe('useUploadQueue', () => {
     act(() => result.current.addFiles([jpeg('a.jpg')]));
 
     await waitFor(() => expect(result.current.tasks[0]?.status).toBe('failed'));
-    expect(result.current.tasks[0]?.failure?.reason).toBe('Could not save it.');
+    /*
+     * #170: an `INTERNAL_ERROR` sentence is written for a developer, so the
+     * tile states the refusal in its own words rather than repeating it. The
+     * tile still fails, which is what this test is about.
+     */
+    expect(result.current.tasks[0]?.failure?.reason).toBe("We couldn't save that photo.");
+    expect(result.current.tasks[0]?.failure?.fix).toBe('Try again in a moment.');
   });
 
   it('reports determinate progress as the bytes go out', async () => {

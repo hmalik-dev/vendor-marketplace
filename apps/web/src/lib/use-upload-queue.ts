@@ -60,7 +60,7 @@ function classify(error: unknown): UploadFailure {
     return connectionFailure();
   }
   if (error instanceof ApiClientError) {
-    return rejectedFailure(error.message);
+    return rejectedFailure(error.message, error.code);
   }
   return connectionFailure();
 }

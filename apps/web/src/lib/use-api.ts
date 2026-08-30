@@ -78,8 +78,12 @@ function uploadError(status: number, rawBody: string): ApiClientError {
     : new ApiClientError(
         status,
         ERROR_CODES.INTERNAL_ERROR,
-        // Surfaced to the vendor as a tile reason, so it says what happened
-        // rather than the bare "Upload failed" `40-states.md` rules out.
+        /*
+         * A body that did not parse as an API error is not copy anyone wrote
+         * for a reader, so `rejectedFailure` withholds it and supplies its own
+         * sentence — this string is the log/debug line, and the status is the
+         * one detail a support request would carry. Do not render it directly.
+         */
         `The server would not take that file (${status}).`,
       );
 }
