@@ -19,6 +19,8 @@ import {
   tagSuggestionResponseSchema,
   uploadedImageSchema,
   updateUserSchema,
+  conversationSummarySchema,
+  fullCustomerProfileSchema,
   userSchema,
   vendorProfileDetailSchema,
   vendorSearchQuerySchema,
@@ -127,6 +129,56 @@ describe('userSchema', () => {
     const deletedAt = new Date('2026-02-01T00:00:00.000Z');
 
     expect(userSchema.parse({ ...valid, deletedAt }).deletedAt).toEqual(deletedAt);
+  });
+});
+
+/*
+ * #170. The #47 migration moved stored images from URLs to object keys and
+ * converted the vendor's images, but missed the user avatar on both the read
+ * and the write model. The customer profile uploader therefore returned a key
+ * the save then refused as an "Invalid URL" — so the upload appeared to work
+ * and the photo never persisted. Read and write are asserted together because
+ * fixing only the write side stores a value the response cannot serialise.
+ */
+describe('a user avatar is an image reference, not a URL', () => {
+  const KEY = 'customer-profile/0f4a1c2e-1111-2222-3333-444455556666.webp';
+
+  /*
+   * A response schema is a second write boundary. `serializerCompiler`
+   * re-validates on the way out and the error handler turns a serialisation
+   * failure into an opaque 500 — so a read model that still demands a URL does
+   * not fail politely, it 500s the page. This row carries the OTHER party's
+   * avatar, which means one customer uploading a photo would have broken the
+   * conversations list of every vendor they had messaged.
+   */
+  it('accepts the key on a conversation row, which is a response schema', () => {
+    expect(conversationSummarySchema.shape.otherPartyAvatarUrl.safeParse(KEY).success).toBe(true);
+  });
+
+  it('accepts the object key an upload returns, on the way in', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: KEY }).success).toBe(true);
+  });
+
+  it('accepts the same key on the way out', () => {
+    expect(userSchema.shape.avatarUrl.safeParse(KEY).success).toBe(true);
+  });
+
+  it('accepts it on the customer profile a vendor reads', () => {
+    expect(fullCustomerProfileSchema.shape.avatarUrl.safeParse(KEY).success).toBe(true);
+  });
+
+  it('still rejects a javascript: reference, which reaches an img src', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: 'javascript:alert(1)' }).success).toBe(false);
+  });
+
+  it('still accepts the absolute Clerk URL a synced account arrives with', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: 'https://img.clerk.com/abc' }).success).toBe(
+      true,
+    );
+  });
+
+  it('still allows the avatar to be cleared', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: null }).success).toBe(true);
   });
 });
 
@@ -887,6 +939,24 @@ describe('imageRefSchema', () => {
 
   it.each(['../../etc/passwd', 'a/../../b.webp'])('rejects the traversal %s', (value) => {
     expect(imageRefSchema.safeParse(value).success).toBe(false);
+  });
+
+  /*
+   * The scheme test is anchored, so without a trim a leading space or newline
+   * reclassifies a dangerous value as a harmless relative path. Not exploitable
+   * at today's only sink (an `img src`, where `javascript:` does not run), but
+   * one careless consumer — an `<a href>`, an email template, a server-side
+   * fetch — away from mattering. Validate before normalising.
+   */
+  it.each([' javascript:alert(1)', '\njavascript:alert(1)', '  data:image/png;base64,AAA'])(
+    'rejects %j rather than reading it as a relative path',
+    (value) => {
+      expect(imageRefSchema.safeParse(value).success).toBe(false);
+    },
+  );
+
+  it('trims an otherwise valid reference rather than rejecting it', () => {
+    expect(imageRefSchema.parse('  portfolio/abc.webp  ')).toBe('portfolio/abc.webp');
   });
 
   it('rejects an empty reference', () => {

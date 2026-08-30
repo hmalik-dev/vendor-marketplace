@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import type { UserRole } from '@vendor-marketplace/shared';
 import type { ApiEnv } from '../config/env.js';
 
 /** Object namespaces the API writes into, kept to a closed set. */
@@ -15,6 +16,21 @@ export const STORAGE_PREFIXES = [
   'customer-profile',
 ] as const;
 export type StoragePrefix = (typeof STORAGE_PREFIXES)[number];
+
+/**
+ * Who may write into each namespace. Authorization belongs **per prefix**, not
+ * per route: the upload endpoint serves both sides of the marketplace, so a
+ * single route-level role guard necessarily locks one of them out — which is
+ * exactly how `customer-profile` came to be declared here and unreachable by
+ * customers. The `Record` is what stops that recurring: a new prefix does not
+ * compile until someone decides who may write to it.
+ */
+export const STORAGE_PREFIX_ROLES: Record<StoragePrefix, readonly UserRole[]> = {
+  'vendor-profile': ['vendor'],
+  'vendor-cover': ['vendor'],
+  portfolio: ['vendor'],
+  'customer-profile': ['customer'],
+};
 
 /**
  * How long a stored object may be cached. Keys are unique per upload and never

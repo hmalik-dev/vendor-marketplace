@@ -9,3 +9,5 @@
 - [safeReturnPath's validate/return mismatch is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise landed in #76; 894k-case chain fuzz is clean, do not re-report
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths; slugSchema and 404s close the gap
 - [The role bounce can redirect into itself](role-bounce-self-loop-admin-bookings.md) — `DASHBOARD_PATH_BY_ROLE.admin` is `/bookings`, which is `requireRole('customer')`-gated
+- [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema without the read schemas on the same column and a user's data 500s someone else's page
+- [imageRefSchema's scheme check is whitespace-bypassable](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `" javascript:…"` validates; only `resolveImageUrl`'s trim-then-prefix keeps it harmless
