@@ -1,21 +1,57 @@
 import { describe, expect, it } from 'vitest';
-import { buildObjectKey, publicUrlFor } from './storage.js';
+import { buildObjectKey, ownsObjectKey, publicUrlFor, thumbnailKeyFor } from './storage.js';
 
 describe('buildObjectKey', () => {
-  it('namespaces the object by prefix and keeps the extension', () => {
-    const key = buildObjectKey('vendor-profile', 'webp');
+  it('namespaces the object by prefix and owner, and keeps the extension', () => {
+    const key = buildObjectKey('vendor-profile', 'owner-1', 'webp');
 
-    expect(key).toMatch(/^vendor-profile\/[0-9a-f-]{36}\.webp$/);
+    expect(key).toMatch(/^vendor-profile\/owner-1\/[0-9a-f-]{36}\.webp$/);
   });
 
   it('never reuses a key', () => {
-    const keys = new Set(Array.from({ length: 50 }, () => buildObjectKey('portfolio', 'webp')));
+    const keys = new Set(
+      Array.from({ length: 50 }, () => buildObjectKey('portfolio', 'owner-1', 'webp')),
+    );
 
     expect(keys.size).toBe(50);
   });
 
   it('rejects a prefix that could escape its namespace', () => {
-    expect(() => buildObjectKey('../../etc', 'webp')).toThrow();
+    expect(() => buildObjectKey('../../etc', 'owner-1', 'webp')).toThrow();
+  });
+
+  it('rejects an owner that could escape its namespace', () => {
+    expect(() => buildObjectKey('portfolio', '../vendor-profile', 'webp')).toThrow();
+    expect(() => buildObjectKey('portfolio', '', 'webp')).toThrow();
+  });
+});
+
+/*
+ * The owner segment is the ONLY record of who minted a key — there is no
+ * uploads table — and the key on a row is written by the client, from values
+ * public vendor pages hand out. Without this, a vendor could claim a rival's
+ * key on their own row, delete the row, and take the rival's photo with it.
+ */
+describe('ownsObjectKey', () => {
+  it('accepts a key minted for this owner', () => {
+    expect(ownsObjectKey(buildObjectKey('portfolio', 'owner-1', 'webp'), 'owner-1')).toBe(true);
+  });
+
+  it('refuses a key minted for someone else', () => {
+    expect(ownsObjectKey(buildObjectKey('portfolio', 'owner-2', 'webp'), 'owner-1')).toBe(false);
+  });
+
+  /* Pre-owner-segment keys have two parts and are never reaped. */
+  it('refuses a legacy key with no owner segment', () => {
+    expect(ownsObjectKey('portfolio/abc.webp', 'owner-1')).toBe(false);
+  });
+
+  it('refuses an absolute URL, which some seeded rows carry', () => {
+    expect(ownsObjectKey('http://cdn.test/portfolio/owner-1/abc.webp', 'owner-1')).toBe(false);
+  });
+
+  it('refuses a key whose first segment is not a known prefix', () => {
+    expect(ownsObjectKey('not-a-prefix/owner-1/abc.webp', 'owner-1')).toBe(false);
   });
 });
 
@@ -30,5 +66,30 @@ describe('publicUrlFor', () => {
     expect(publicUrlFor('http://cdn.test/', 'vendor-profile/abc.webp')).toBe(
       'http://cdn.test/vendor-profile/abc.webp',
     );
+  });
+});
+
+/**
+ * The upload route writes `<name>.webp` and `<name>-thumb.webp` for every
+ * prefix, but only `portfolio_items` has a column for the second one. For a
+ * profile image or a cover this derivation is the *only* record that the
+ * sibling exists, so it has to agree with the writer exactly — disagree and the
+ * reap removes nothing while believing it removed everything.
+ */
+describe('thumbnailKeyFor', () => {
+  it('names the sibling the upload route writes beside the image', () => {
+    expect(thumbnailKeyFor('vendor-profile/owner-1/abc.webp')).toBe(
+      'vendor-profile/owner-1/abc-thumb.webp',
+    );
+  });
+
+  it('touches only the extension, never the owner segment', () => {
+    const derived = thumbnailKeyFor('portfolio/owner-1/abc.webp');
+
+    expect(ownsObjectKey(derived, 'owner-1')).toBe(true);
+  });
+
+  it('leaves a key that is not a WebP alone rather than inventing one', () => {
+    expect(thumbnailKeyFor('portfolio/owner-1/abc.png')).toBe('portfolio/owner-1/abc.png');
   });
 });

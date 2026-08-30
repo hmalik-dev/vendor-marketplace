@@ -2,9 +2,14 @@ import { MAX_UPLOAD_BYTES, uploadedImageSchema } from '@vendor-marketplace/share
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { validationFailed } from '../../lib/errors.js';
-import { assertRole, requireAuth } from '../../lib/guards.js';
+import { assertRole, requireAuthBeforeValidation } from '../../lib/guards.js';
 import { processUploadedImage } from '../../lib/images.js';
-import { buildObjectKey, STORAGE_PREFIXES, STORAGE_PREFIX_ROLES } from '../../lib/storage.js';
+import {
+  buildObjectKey,
+  STORAGE_PREFIXES,
+  STORAGE_PREFIX_ROLES,
+  thumbnailKeyFor,
+} from '../../lib/storage.js';
 
 const uploadQuerySchema = z.object({
   /** Which namespace the object belongs to; a closed set, never client paths. */
@@ -28,14 +33,23 @@ function isFileTooLarge(error: unknown): boolean {
  * decoded and re-encoded before they ever reach storage, so what is served is
  * always a WebP this process produced rather than whatever the client sent.
  *
- * Authorization is **per prefix**: `requireAuth` settles only that there is a
- * caller, and `STORAGE_PREFIX_ROLES` decides who may write to the namespace.
+ * Authorization is **per prefix**: the `onRequest` guard settles only that
+ * there is a caller, and `STORAGE_PREFIX_ROLES` decides who may write to the
+ * namespace. The two run in that order on purpose — authenticate, then
+ * validate, then authorize — so nothing about the namespace reaches a caller
+ * who has not proved who they are.
  */
 export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/upload/image',
     {
-      preHandler: requireAuth,
+      /*
+       * `onRequest`, not `preHandler`. Fastify validates the querystring before
+       * `preHandler` runs, and `uploadQuerySchema`'s `z.enum` puts every
+       * allowed prefix into the 400's `details` — so a signed-out caller could
+       * read the whole storage namespace out of a validation error.
+       */
+      onRequest: requireAuthBeforeValidation,
       schema: {
         querystring: uploadQuerySchema,
         response: { 201: uploadedImageSchema },
@@ -48,7 +62,7 @@ export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
        * decode. The query is already validated against the closed prefix set by
        * the time a handler runs, so the lookup cannot miss.
        */
-      assertRole(request.auth, STORAGE_PREFIX_ROLES[request.query.prefix]);
+      const uploader = assertRole(request.auth, STORAGE_PREFIX_ROLES[request.query.prefix]);
 
       const part = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
 
@@ -70,8 +84,10 @@ export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const processed = await processUploadedImage(buffer, part.mimetype);
 
-      const key = buildObjectKey(request.query.prefix, 'webp');
-      const thumbnailKey = key.replace(/\.webp$/, '-thumb.webp');
+      // The uploader is written into the key: it is the only record of who
+      // minted it, and the only thing that makes deleting one safe.
+      const key = buildObjectKey(request.query.prefix, uploader.id, 'webp');
+      const thumbnailKey = thumbnailKeyFor(key);
 
       const [imageUrl, thumbnailUrl] = await Promise.all([
         app.storage.put(key, processed.image, WEBP_CONTENT_TYPE),

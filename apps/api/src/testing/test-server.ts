@@ -160,6 +160,16 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
       storedObjects.push({ key, body, contentType });
       return publicUrlFor(TEST_ENV.S3_PUBLIC_URL, key);
     },
+    remove: async (keys) => {
+      // Mirrors the real store: the objects go, and a missing key is not an
+      // error — so a suite can assert on what is left rather than on the call.
+      for (const key of keys) {
+        const at = storedObjects.findIndex((object) => object.key === key);
+        if (at !== -1) {
+          storedObjects.splice(at, 1);
+        }
+      }
+    },
     checkAvailable: async () => {
       if (!storageAvailable) {
         throw new Error('Test storage bucket is unavailable');

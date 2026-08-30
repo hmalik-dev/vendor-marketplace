@@ -360,11 +360,25 @@ export interface BatchProgress {
 }
 
 export function summarise(tasks: readonly UploadTask[]): BatchProgress {
+  /*
+   * Bytes that can still be sent. A file refused locally — wrong format, over
+   * the size ceiling, too narrow — enters the list already `failed`, carrying
+   * its full size, and is then skipped by the send loop. Counting it put bytes
+   * in the denominator that are structurally impossible to send, and it failed
+   * worst exactly where it showed most: an over-size rejection is by definition
+   * the largest file in the batch, so a 40 MB refusal inflated "of X MB" by
+   * 40 MB and the line could never converge.
+   *
+   * A file that failed *after* sending something keeps its bytes: those really
+   * did go out, and removing them would make the line run backwards.
+   */
+  const sendable = tasks.filter((task) => task.status !== 'failed' || task.progress > 0);
+
   return {
     settled: tasks.filter((task) => task.status === 'done' || task.status === 'failed').length,
     total: tasks.length,
-    uploadedBytes: tasks.reduce((sum, task) => sum + (task.sizeBytes * task.progress) / 100, 0),
-    totalBytes: tasks.reduce((sum, task) => sum + task.sizeBytes, 0),
+    uploadedBytes: sendable.reduce((sum, task) => sum + (task.sizeBytes * task.progress) / 100, 0),
+    totalBytes: sendable.reduce((sum, task) => sum + task.sizeBytes, 0),
     failed: tasks.filter((task) => task.status === 'failed').length,
   };
 }
@@ -423,4 +437,22 @@ export function failureSentence(tasks: readonly UploadTask[]): string | null {
 /** The subset "Retry all that can" would actually re-send. */
 export function retryableTasks(tasks: readonly UploadTask[]): UploadTask[] {
   return tasks.filter((task) => task.status === 'failed' && task.failure?.retryable === true);
+}
+
+/**
+ * Whether a batch still has work that leaving the page would destroy.
+ *
+ * A **queued** file counts. It has not started transferring, and it is just as
+ * gone as one caught mid-transfer if the tab closes — the vendor picked eight
+ * photos and the queue runs them a few at a time, so most of a large batch
+ * spends most of its life in this state.
+ *
+ * Exported rather than inlined into `useUploadQueue` because three places have
+ * to agree on it: the hook, the aggregate line's Cancel control, and the
+ * `beforeunload` guard. A copy of the predicate inside a test's mock of the
+ * hook is not agreement — it is a second definition that stays green while the
+ * real one drifts.
+ */
+export function isBatchInFlight(tasks: readonly UploadTask[]): boolean {
+  return tasks.some((task) => task.status === 'queued' || task.status === 'uploading');
 }

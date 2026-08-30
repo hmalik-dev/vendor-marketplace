@@ -504,3 +504,104 @@ describe('useUploadQueue', () => {
     expect(result.current.tasks[0]?.progress).toBe(100);
   });
 });
+
+/**
+ * `inFlight` is the hook's own answer to "is a batch running", and two surfaces
+ * read it: the aggregate progress line with its Cancel control, and the
+ * `beforeunload` guard that stops a vendor navigating away mid-upload.
+ *
+ * `portfolio-manager.test.tsx` re-implements the predicate inside its mock of
+ * this hook, so nothing there would notice if the real one drifted — dropping
+ * `queued`, say, would leave a queued-but-not-yet-started batch unprotected
+ * with both suites green. These drive the real hook.
+ */
+describe('useUploadQueue inFlight', () => {
+  function held(): { release: (value: unknown) => void } {
+    let settle: (value: unknown) => void = () => {};
+    uploadOne.mockImplementation(
+      async () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+    );
+    return {
+      release: (value) => {
+        settle(value);
+      },
+    };
+  }
+
+  it('is false on an idle queue', () => {
+    const { result } = renderHook(() =>
+      useUploadQueue({ prefix: 'portfolio', onUploaded: async () => undefined }),
+    );
+
+    expect(result.current.inFlight).toBe(false);
+  });
+
+  it('is true while a file is uploading and false once the batch settles', async () => {
+    const gate = held();
+    const { result } = renderHook(() =>
+      useUploadQueue({ prefix: 'portfolio', onUploaded: async () => undefined }),
+    );
+
+    act(() => result.current.addFiles([jpeg('a.jpg')]));
+
+    await waitFor(() => expect(result.current.inFlight).toBe(true));
+
+    await act(async () => {
+      gate.release(stored);
+    });
+
+    await waitFor(() => expect(result.current.inFlight).toBe(false));
+  });
+
+  /*
+   * A queued file has not started yet, and it is still work in flight: leaving
+   * the page drops it exactly as surely as leaving mid-transfer does.
+   */
+  it('counts a file that is queued behind another, not just the one transferring', async () => {
+    const gate = held();
+    const { result } = renderHook(() =>
+      useUploadQueue({ prefix: 'portfolio', onUploaded: async () => undefined }),
+    );
+
+    act(() => result.current.addFiles([jpeg('a.jpg'), jpeg('b.jpg'), jpeg('c.jpg')]));
+
+    await waitFor(() => expect(result.current.inFlight).toBe(true));
+    expect(result.current.tasks.some((task) => task.status === 'queued')).toBe(true);
+
+    await act(async () => {
+      gate.release(stored);
+    });
+  });
+
+  it('registers a beforeunload guard only while the batch is running', async () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    const dropped = vi.spyOn(window, 'removeEventListener');
+    const gate = held();
+
+    const { result } = renderHook(() =>
+      useUploadQueue({ prefix: 'portfolio', onUploaded: async () => undefined }),
+    );
+
+    expect(added.mock.calls.filter(([type]) => type === 'beforeunload')).toHaveLength(0);
+
+    act(() => result.current.addFiles([jpeg('a.jpg')]));
+    await waitFor(() =>
+      expect(added.mock.calls.filter(([type]) => type === 'beforeunload').length).toBe(1),
+    );
+
+    await act(async () => {
+      gate.release(stored);
+    });
+
+    // Cleaned up when nothing is left to lose, so an idle page never prompts.
+    await waitFor(() =>
+      expect(dropped.mock.calls.filter(([type]) => type === 'beforeunload').length).toBe(1),
+    );
+
+    added.mockRestore();
+    dropped.mockRestore();
+  });
+});

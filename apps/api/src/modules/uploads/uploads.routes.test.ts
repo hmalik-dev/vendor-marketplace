@@ -179,7 +179,11 @@ describe('POST /upload/image', () => {
     expect(response.statusCode).toBe(201);
 
     const body = response.json();
-    expect(body.imageUrl).toMatch(/^http:\/\/cdn\.test\/vendor-profile\/[0-9a-f-]{36}\.webp$/);
+    // `<prefix>/<ownerId>/<uuid>.webp` — the owner segment is what makes
+    // deleting an object safe, since nothing else records who minted a key.
+    expect(body.imageUrl).toMatch(
+      /^http:\/\/cdn\.test\/vendor-profile\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.webp$/,
+    );
     expect(body.thumbnailUrl).toBe(body.imageUrl.replace('.webp', '-thumb.webp'));
     expect(response.headers.location).toBe(body.imageUrl);
     expect(harness.storedObjects).toHaveLength(2);
@@ -208,6 +212,42 @@ describe('POST /upload/image', () => {
     });
 
     expect(harness.storedObjects[0]?.key.startsWith('portfolio/')).toBe(true);
+  });
+
+  /*
+   * #179. Fastify validates the querystring before `preHandler`, so a route
+   * guarded there answered a signed-out caller with a 400 explaining what was
+   * wrong with their input — and for a `z.enum` that 400 carries every allowed
+   * value in `details`. The whole storage namespace was readable by anyone who
+   * guessed the route and sent a bad prefix.
+   *
+   * The guard is on `onRequest` now: authenticate, then validate, then
+   * authorize per prefix.
+   */
+  it('answers a signed-out caller 401 before it validates the prefix', async () => {
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/upload/image?prefix=not-a-real-prefix',
+      headers: MULTIPART_HEADERS,
+      payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('names no storage prefix in that refusal', async () => {
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/upload/image?prefix=not-a-real-prefix',
+      headers: MULTIPART_HEADERS,
+      payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
+    });
+
+    // Read as text, so this catches the enum wherever it lands — `message`,
+    // `details`, or a serializer that changes shape later.
+    for (const prefix of STORAGE_PREFIXES) {
+      expect(response.body).not.toContain(prefix);
+    }
   });
 
   it('rejects a prefix outside the known set', async () => {

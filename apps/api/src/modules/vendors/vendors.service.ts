@@ -14,6 +14,8 @@ import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-mark
 import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
+import { thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
+import { reapObjects } from '../portfolio/portfolio.service.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import {
   findActiveCategoryIds,
@@ -270,8 +272,10 @@ export async function createVendorProfile(
  */
 export async function updateVendorProfile(
   db: AppDatabase,
+  storage: ObjectStorage,
   userId: string,
   input: UpdateVendorProfileInput,
+  log?: { warn: (details: unknown, message: string) => void },
 ): Promise<VendorProfileDetail> {
   const existing = await findVendorProfileByUserId(db, userId);
   if (!existing) {
@@ -368,7 +372,51 @@ export async function updateVendorProfile(
     throw notFound('You have not created a vendor profile yet');
   }
 
+  /*
+   * The images the vendor just replaced. Reaped after the row commits and
+   * never on the way to it: the profile has already changed, and failing this
+   * request because the bucket blinked would undo a save the vendor watched
+   * succeed. Without it, every photo change left two objects — the WebP and its
+   * thumbnail — in the bucket for the life of the account.
+   */
+  await reapObjects(
+    db,
+    storage,
+    userId,
+    [
+      ...withThumbnail(replacedKey(existing.profileImageUrl, row.profileImageUrl)),
+      /*
+       * The cover is a designation on an existing portfolio tile, not an
+       * upload of its own — `syncCoverFromPortfolio` copies a tile's key here.
+       * `reapObjects` refuses to remove a key another row still references, so
+       * passing it is safe; it only ever reaps a cover that was genuinely
+       * uploaded as one and is now referenced by nothing.
+       */
+      ...withThumbnail(replacedKey(existing.coverImageUrl, row.coverImageUrl)),
+    ],
+    log,
+  );
+
   return loadDetail(db, row);
+}
+
+/** The old key, when a write actually replaced it with a different one. */
+function replacedKey(before: string | null, after: string | null): string | null {
+  return before !== null && before !== after ? before : null;
+}
+
+/**
+ * A replaced key and the thumbnail written beside it.
+ *
+ * `vendor_profiles` has no thumbnail column, so the sibling every upload
+ * creates is referenced by nothing on this table and was previously orphaned by
+ * every single profile-photo change. Deriving it is safe because `reapObjects`
+ * puts it through the same ownership and reference checks as the key itself —
+ * and a cover copied from a portfolio tile has its sibling in that tile's
+ * `thumbnail_url`, which is precisely the reference check that saves it.
+ */
+function withThumbnail(key: string | null): string[] {
+  return key === null ? [] : [key, thumbnailKeyFor(key)];
 }
 
 /**

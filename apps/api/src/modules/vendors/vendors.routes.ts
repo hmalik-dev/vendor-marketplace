@@ -133,6 +133,12 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { body: updateVendorProfileSchema, response: { 200: vendorProfileDetailSchema } },
     },
     async (request) =>
-      updateVendorProfile(app.db, assertRole(request.auth, ['vendor']).id, request.body),
+      updateVendorProfile(
+        app.db,
+        app.storage,
+        assertRole(request.auth, ['vendor']).id,
+        request.body,
+        request.log,
+      ),
   );
 };
