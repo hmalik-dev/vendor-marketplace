@@ -1,7 +1,8 @@
 import { EVENT_TYPE_LABELS, formatPrice, type EventType } from '@vendor-marketplace/shared';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusPill } from '@/components/ui/status-pill';
-import type { WireBookingRequest } from '@/lib/wire-schemas';
+import { CompleteBooking } from '@/components/vendor/complete-booking';
+import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
 
 const CARD_DATE = new Intl.DateTimeFormat('en-US', {
   weekday: 'long',
@@ -20,7 +21,21 @@ const CARD_DATE = new Intl.DateTimeFormat('en-US', {
  * privacy rule is enforced at the source and this component just renders what
  * it is given rather than deciding a second time.
  */
-export function BookingCard({ request }: { request: WireBookingRequest }): React.ReactElement {
+export interface BookingCardProps {
+  request: WireBookingRequest;
+  /**
+   * The paid booking behind this request, when there is one.
+   *
+   * An accepted request and a paid booking are different things and the card
+   * has to say which it is: a vendor who has accepted but not been paid must
+   * not be told the date is settled, and only a paid booking can be completed.
+   */
+  booking: WireBooking | null;
+  /** Today as `YYYY-MM-DD`, resolved once on the server for the whole list. */
+  today: string;
+}
+
+export function BookingCard({ request, booking, today }: BookingCardProps): React.ReactElement {
   const { customer } = request;
   const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
   const displayName = fullName || customer.firstName || 'A customer';
@@ -33,7 +48,15 @@ export function BookingCard({ request }: { request: WireBookingRequest }): React
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.25">
             <span className="text-md font-semibold text-stone-900">{displayName}</span>
-            <StatusPill tone="confirmed">Booked</StatusPill>
+            {/*
+              Accepted is not paid. `40-states.md` reserves sage for settled, so
+              an unpaid booking reads gold — it is still waiting on someone.
+            */}
+            {booking ? (
+              <StatusPill tone="confirmed">Booked</StatusPill>
+            ) : (
+              <StatusPill tone="pending">Awaiting payment</StatusPill>
+            )}
           </div>
 
           <p className="mt-0.75 text-sm text-stone-700">{factsLine(request)}</p>
@@ -68,9 +91,12 @@ export function BookingCard({ request }: { request: WireBookingRequest }): React
           </dl>
         </div>
 
-        <p className="font-display text-[20px] text-stone-900">
-          {request.finalPriceCents === null ? '—' : formatPrice(request.finalPriceCents)}
-        </p>
+        <div className="flex flex-col items-end gap-2">
+          <p className="font-display text-[20px] text-stone-900">
+            {request.finalPriceCents === null ? '—' : formatPrice(request.finalPriceCents)}
+          </p>
+          {booking ? <CompleteBooking booking={booking} today={today} /> : null}
+        </div>
       </div>
     </li>
   );

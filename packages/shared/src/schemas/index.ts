@@ -771,6 +771,67 @@ export const bookingWithContextSchema = bookingSchema.extend({
 });
 export type BookingWithContext = z.infer<typeof bookingWithContextSchema>;
 
+// --- Checkout --------------------------------------------------------------
+
+/**
+ * What `POST /customer/booking-requests/:requestId/pay` answers.
+ *
+ * The client secret is the only thing that lets the browser confirm the charge,
+ * and it is returned rather than stored: it is scoped to one intent, it is
+ * useless without the publishable key, and holding a copy would mean keeping a
+ * live payment credential in a row nobody reads.
+ *
+ * The amounts travel with it so the summary rail renders from the same numbers
+ * the intent was created with. A rail that recomputes them client-side is a rail
+ * that can disagree with the charge.
+ */
+export const checkoutIntentSchema = z.object({
+  paymentIntentId: z.string().max(255),
+  /** `null` only for an intent that is already terminal — see `status`. */
+  clientSecret: z.string().nullable(),
+  /** Stripe's own vocabulary; `succeeded` means this is already paid. */
+  status: z.string().max(64),
+  amountCents: z.int().min(MIN_BOOKING_AMOUNT_CENTS),
+  /**
+   * What is **added** to the quoted price at checkout, which is nothing.
+   *
+   * Named for what the customer pays rather than for the platform's cut,
+   * because those are different numbers and only this one belongs on their
+   * receipt: D1 has the platform absorb Stripe's processing fee out of its
+   * commission, so the quoted price is the paid price. The rail states
+   * "Service fee: None" from this figure rather than from a hard-coded word,
+   * so a future decision to charge one cannot leave the copy lying.
+   */
+  customerFeeCents: z.int().min(0),
+  eventDate: calendarDateSchema,
+  eventLocation: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
+  guestCount: z.int().nullable(),
+  vendor: z.object({
+    slug: slugSchema,
+    businessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+    avatarUrl: imageRefSchema.nullable(),
+  }),
+  /** The date the vendor accepted, for the "Maya accepted your request on…" line. */
+  acceptedAt: z.date().nullable(),
+});
+export type CheckoutIntent = z.infer<typeof checkoutIntentSchema>;
+
+/**
+ * What a cancellation returns: the booking as it now stands, plus what was
+ * actually refunded.
+ *
+ * The refund is reported rather than left to be inferred from the tier, because
+ * the two can legitimately differ — a refund Stripe accepted for less than was
+ * asked is still a successful cancellation, and the customer is owed the real
+ * number rather than the one the policy predicted.
+ */
+export const cancelledBookingSchema = z.object({
+  booking: bookingSchema,
+  refundCents: z.int().min(0),
+  isFullRefund: z.boolean(),
+});
+export type CancelledBooking = z.infer<typeof cancelledBookingSchema>;
+
 // --- Vendor dashboard ------------------------------------------------------
 
 /**

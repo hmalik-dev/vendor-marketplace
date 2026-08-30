@@ -6,6 +6,7 @@ import { BookingCard } from '@/components/vendor/booking-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { requireRole } from '@/lib/current-user';
 import { getOwnBookingRequests } from '@/lib/vendor-requests';
+import { getOwnBookings } from '@/lib/customer-data';
 import { getOwnVendorProfile } from '@/lib/vendor-data';
 
 export const metadata: Metadata = {
@@ -43,6 +44,15 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
    * who has four weddings.
    */
   const requests = await getOwnBookingRequests({ onFailure: 'throw' });
+  /*
+   * `/bookings` is scoped by the caller's role, so this is the vendor's own
+   * side of the same endpoint the customer hub reads. Degrading to `[]` is
+   * right here and not for the list above: a missing booking row costs the
+   * `Mark complete` control, while a missing request would claim the vendor has
+   * nothing booked.
+   */
+  const bookings = await getOwnBookings();
+  const bookingByRequest = new Map(bookings.map((booking) => [booking.requestId, booking]));
   const today = todayDateString();
 
   /*
@@ -80,7 +90,12 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
       ) : (
         <ul className="flex flex-col gap-2.5">
           {upcoming.map((request) => (
-            <BookingCard key={request.id} request={request} />
+            <BookingCard
+              key={request.id}
+              request={request}
+              booking={bookingByRequest.get(request.id) ?? null}
+              today={today}
+            />
           ))}
         </ul>
       )}
@@ -90,7 +105,12 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
           <h2 className="mt-6 mb-2.5 font-display text-[21px] text-stone-900">Past events</h2>
           <ul className="flex flex-col gap-2.5">
             {past.map((request) => (
-              <BookingCard key={request.id} request={request} />
+              <BookingCard
+                key={request.id}
+                request={request}
+                booking={bookingByRequest.get(request.id) ?? null}
+                today={today}
+              />
             ))}
           </ul>
         </>

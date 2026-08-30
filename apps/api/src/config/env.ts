@@ -1,3 +1,4 @@
+import { DEFAULT_PLATFORM_FEE_RATE } from '@vendor-marketplace/shared';
 import { type ShapeTarget, registrySchemaShape } from '@vendor-marketplace/shared/env';
 import { z } from 'zod';
 
@@ -39,6 +40,14 @@ function buildSchema(target: ShapeTarget) {
       .enum(['true', 'false'])
       .default('true')
       .transform((value) => value === 'true'),
+    /*
+     * Coerced here rather than parsed at the call site: this is the multiplier
+     * on every charge, and a string that reached `calculateFees` would make the
+     * platform fee `NaN` and the payout `NaN` on a real payment. The registry
+     * already constrains the shape to `0.dddd`, so the bound below is the
+     * belt-and-braces half — a rate at or above 1 would pay the vendor nothing.
+     */
+    STRIPE_PLATFORM_FEE_RATE: z.coerce.number().min(0).lt(1).default(DEFAULT_PLATFORM_FEE_RATE),
   });
 }
 
@@ -64,6 +73,7 @@ export const OVERRIDDEN_KEYS = [
   'RATE_LIMIT_MAX',
   'S3_PUBLIC_URL',
   'S3_FORCE_PATH_STYLE',
+  'STRIPE_PLATFORM_FEE_RATE',
 ] as const;
 
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): ApiEnv {

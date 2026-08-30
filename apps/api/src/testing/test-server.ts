@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import type {
+  PaymentIntentSnapshot,
   StripeAccountStatus,
   StripeConnectGateway,
   StripeEventNotification,
@@ -31,7 +32,7 @@ export const TEST_ENV: ApiEnv = {
    */
   STRIPE_SECRET_KEY: 'unused',
   STRIPE_WEBHOOK_SECRET: 'unused',
-  STRIPE_PLATFORM_FEE_RATE: '0.12',
+  STRIPE_PLATFORM_FEE_RATE: 0.12,
   RATE_LIMIT_MAX: 1_000,
   S3_ENDPOINT: 'http://storage.test',
   S3_ACCESS_KEY_ID: 'test',
@@ -73,8 +74,27 @@ export interface FakeStripe extends StripeConnectGateway {
   accountStatuses: Map<string, StripeAccountStatus>;
   /** Signatures the fake verifier accepts; anything else is rejected. */
   validSignatures: Set<string>;
-  /** The notification the next verified webhook is parsed into. */
-  nextEvent: StripeEventNotification;
+  /**
+   * The notification the next verified webhook is parsed into.
+   *
+   * `objectId` is optional here and only here: a suite exercising an account
+   * event has no object to name, and requiring `objectId: null` on every one of
+   * them would be ceremony rather than a contract. The gateway itself always
+   * reports the field — `parseEventNotification` below fills the default.
+   */
+  nextEvent: Omit<StripeEventNotification, 'objectId'> & { objectId?: string | null };
+  /** Every intent the fake has minted, keyed by id, in Stripe's own shape. */
+  paymentIntents: Map<string, PaymentIntentSnapshot>;
+  /**
+   * Intents by idempotency key, which is what makes the fake's replay real
+   * rather than assumed: a suite firing checkout twice gets the *same object*
+   * back, and a fake that minted a second one would let a double-charge pass.
+   */
+  intentsByKey: Map<string, string>;
+  /** Refunds asked for, in order, so a suite can assert exact cent amounts. */
+  refunds: { paymentIntentId: string; amountCents: number; reason: string }[];
+  /** Moves an intent to `succeeded`, as confirming the card would. */
+  succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
 
 function createFakeStripe(): FakeStripe {
@@ -82,13 +102,37 @@ function createFakeStripe(): FakeStripe {
   const createdLinks: FakeStripe['createdLinks'] = [];
   const accountStatuses = new Map<string, StripeAccountStatus>();
   const validSignatures = new Set<string>(['valid-signature']);
+  const paymentIntents = new Map<string, PaymentIntentSnapshot>();
+  const intentsByKey = new Map<string, string>();
+  const refunds: FakeStripe['refunds'] = [];
 
   const fake: FakeStripe = {
     createdAccounts,
     createdLinks,
     accountStatuses,
     validSignatures,
-    nextEvent: { type: 'v2.core.account.updated', accountId: null },
+    paymentIntents,
+    intentsByKey,
+    refunds,
+    nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
+
+    succeed: (paymentIntentId) => {
+      const intent = paymentIntents.get(paymentIntentId);
+
+      if (!intent) {
+        throw new Error(`No fake payment intent ${paymentIntentId}`);
+      }
+
+      const settled: PaymentIntentSnapshot = {
+        ...intent,
+        status: 'succeeded',
+        amountReceivedCents: intent.amountReceivedCents,
+        clientSecret: null,
+      };
+      paymentIntents.set(paymentIntentId, settled);
+
+      return settled;
+    },
 
     createRecipientAccount: async (input) => {
       const accountId = `acct_test_${createdAccounts.length + 1}`;
@@ -112,7 +156,60 @@ function createFakeStripe(): FakeStripe {
       if (!validSignatures.has(signature)) {
         throw new Error('Invalid test Stripe signature');
       }
-      return fake.nextEvent;
+      return { objectId: null, ...fake.nextEvent };
+    },
+
+    createPaymentIntent: async (input) => {
+      /*
+       * The real gateway's idempotency, modelled rather than asserted. Stripe
+       * replays the same intent for a repeated key, and a fake that minted a
+       * fresh one each time would let a double-charge through a green suite —
+       * which is exactly the shape of bug the parity rule warns about.
+       */
+      const key = `pay_${input.requestId}`;
+      const replayed = intentsByKey.get(key);
+
+      if (replayed) {
+        return paymentIntents.get(replayed) as PaymentIntentSnapshot;
+      }
+
+      const id = `pi_test_${paymentIntents.size + 1}`;
+      const intent: PaymentIntentSnapshot = {
+        id,
+        status: 'requires_payment_method',
+        amountReceivedCents: input.amountCents,
+        clientSecret: `${id}_secret_test`,
+        metadata: {
+          requestId: input.requestId,
+          customerId: input.customerId,
+          vendorId: input.vendorId,
+        },
+      };
+
+      paymentIntents.set(id, intent);
+      intentsByKey.set(key, id);
+
+      return intent;
+    },
+
+    retrievePaymentIntent: async (paymentIntentId) => {
+      const intent = paymentIntents.get(paymentIntentId);
+
+      if (!intent) {
+        throw new Error(`No fake payment intent ${paymentIntentId}`);
+      }
+
+      return intent;
+    },
+
+    createRefund: async (input) => {
+      refunds.push({
+        paymentIntentId: input.paymentIntentId,
+        amountCents: input.amountCents,
+        reason: input.reason,
+      });
+
+      return { refundId: `re_test_${refunds.length}`, amountCents: input.amountCents };
     },
   };
 

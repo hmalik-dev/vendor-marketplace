@@ -2,7 +2,9 @@ import {
   availabilitySchema,
   bookingRequestDetailSchema,
   bookingWithContextSchema,
+  cancelledBookingSchema,
   categorySchema,
+  checkoutIntentSchema,
   conversationSummarySchema,
   customerProfileSchema,
   customerReviewSchema,
@@ -158,6 +160,12 @@ export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
 export type WireBookingRequest = z.infer<typeof wireBookingRequestSchema>;
 export const wireBookingRequestListSchema = z.array(wireBookingRequestSchema);
 
+/** The checkout read. `acceptedAt` is the only date on it. */
+export const wireCheckoutIntentSchema = checkoutIntentSchema.extend({
+  acceptedAt: z.coerce.date().nullable(),
+});
+export type WireCheckoutIntent = z.infer<typeof wireCheckoutIntentSchema>;
+
 export const wireBookingSchema = bookingWithContextSchema.extend({
   paidAt: z.coerce.date().nullable(),
   completedAt: z.coerce.date().nullable(),
@@ -167,6 +175,12 @@ export const wireBookingSchema = bookingWithContextSchema.extend({
 });
 export type WireBooking = z.infer<typeof wireBookingSchema>;
 export const wireBookingListSchema = z.array(wireBookingSchema);
+
+/** What a cancellation answers: the booking as it now stands, and the refund. */
+export const cancelledBookingWireSchema = cancelledBookingSchema.extend({
+  booking: wireBookingSchema.omit({ eventType: true, venue: true }),
+});
+export type WireCancelledBooking = z.infer<typeof cancelledBookingWireSchema>;
 
 /**
  * A customer as a vendor sees them. The discriminated union survives the

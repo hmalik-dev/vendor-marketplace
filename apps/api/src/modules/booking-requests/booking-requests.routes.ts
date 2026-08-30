@@ -41,6 +41,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
         app.events,
         authenticated(request.auth),
         request.body,
+        app.clock(),
       );
 
       // 200 for a repeat submission: nothing was created, and this is the id
@@ -63,7 +64,8 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
       preHandler: requireAuth,
       schema: { querystring: bookingRequestListQuerySchema, response: { 200: requestListSchema } },
     },
-    async (request) => listBookingRequests(app.db, authenticated(request.auth), request.query),
+    async (request) =>
+      listBookingRequests(app.db, authenticated(request.auth), request.query, app.clock()),
   );
 
   app.get(
@@ -73,7 +75,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { params: requestParamsSchema, response: { 200: bookingRequestDetailSchema } },
     },
     async (request) =>
-      getBookingRequest(app.db, authenticated(request.auth), request.params.requestId),
+      getBookingRequest(app.db, authenticated(request.auth), request.params.requestId, app.clock()),
   );
 
   app.post(
@@ -88,6 +90,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request) =>
       transitionRequest(app.db, request.params.requestId, 'quote', authenticated(request.auth), {
+        now: app.clock(),
         quote: request.body,
         hub: app.events,
       }),
@@ -107,6 +110,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
       },
       async (request) =>
         transitionRequest(app.db, request.params.requestId, action, authenticated(request.auth), {
+          now: app.clock(),
           hub: app.events,
         }),
     );

@@ -47,6 +47,22 @@ export const bookingRequests = pgTable(
     quoteNote: text('quote_note'),
     /** Locked price: package price at request time, or the accepted quote. */
     finalPriceCents: integer('final_price_cents'),
+    /**
+     * When the vendor accepted. Checkout opens on "Maya accepted your request
+     * on May 2", and `updated_at` cannot supply that date — writing the intent
+     * id below moves it, so the line would start reporting when the customer
+     * last opened checkout rather than when the vendor said yes.
+     */
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    /**
+     * The intent the customer is paying through, recorded before they confirm.
+     *
+     * This is the reconciliation handle. A webhook that never arrives leaves a
+     * charged customer with no booking row, and without this column that state
+     * is indistinguishable from a customer who opened checkout and walked away
+     * — there would be nothing to ask Stripe about.
+     */
+    stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

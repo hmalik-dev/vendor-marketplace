@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { pageTitle, uuidSchema } from '@vendor-marketplace/shared';
+import { AcceptedRequest } from '@/components/bookings/accepted-request';
 import { QuoteReview } from '@/components/bookings/quote-review';
-import { getOwnBookingRequest } from '@/lib/customer-data';
+import { getBookingForRequest, getOwnBookingRequest } from '@/lib/customer-data';
 import { requireRole } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -27,9 +28,10 @@ interface PageProps {
  * quoted request had no destination anywhere in the product, so `Review quote`
  * pointed at the vendor's storefront and the customer could not accept.
  *
- * The master-detail composition, the status stepper and checkout belong to
- * **#309**, which owns `#68` and is blocked on payments. This deliberately
- * stops at accept.
+ * The master-detail composition and the status stepper belong to **#309**.
+ * Checkout no longer does: #10 built it, so the `accepted` status now hands off
+ * to `AcceptedRequest` — which is the `Accepted → Pay now` pair this file's
+ * predecessor named and could not build.
  */
 export default async function BookingRequestPage({
   params,
@@ -60,6 +62,14 @@ export default async function BookingRequestPage({
     notFound();
   }
 
+  /*
+   * Only for a request that has been accepted: every other status has nothing
+   * to pay for, and asking the API would be a round trip whose answer is always
+   * `null`. Reading it here rather than inside the component keeps the page the
+   * one place that fetches.
+   */
+  const booking = request.status === 'accepted' ? await getBookingForRequest(parsed.data) : null;
+
   return (
     <main className="mx-auto w-full max-w-[660px] px-6 py-10 xl:px-10">
       <Link
@@ -69,7 +79,16 @@ export default async function BookingRequestPage({
         ← Your bookings
       </Link>
 
-      <QuoteReview request={request} />
+      {/*
+        Which surface this is depends on the status. `quoted` is a decision the
+        customer has not made yet; `accepted` is one they have, and what is left
+        is paying for it or calling it off.
+      */}
+      {request.status === 'accepted' ? (
+        <AcceptedRequest request={request} booking={booking} />
+      ) : (
+        <QuoteReview request={request} />
+      )}
     </main>
   );
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { FULL_REFUND_CUTOFF_HOURS } from '../constants/index.js';
 import {
   addDays,
   calculateFees,
+  calculateRefund,
   centsToDollars,
   dollarsToCents,
   formatPrice,
@@ -112,6 +114,65 @@ describe('calculateFees', () => {
   it('rejects a rate outside [0, 1)', () => {
     expect(() => calculateFees(10_000, 1)).toThrow(/rate/i);
     expect(() => calculateFees(10_000, -0.1)).toThrow(/rate/i);
+  });
+});
+
+/*
+ * D3's tiers, in cents. The boundary is the whole point of the function, so it
+ * is asserted from both sides of it rather than only in the middle of each
+ * band — 48 hours exactly is a full refund, one minute later is half.
+ */
+describe('calculateRefund', () => {
+  const EVENT = '2026-06-14';
+  const TOTAL = 145_000;
+
+  it('returns everything at exactly the cutoff', () => {
+    const quote = calculateRefund(TOTAL, EVENT, new Date('2026-06-12T00:00:00Z'));
+
+    expect(quote.refundCents).toBe(145_000);
+    expect(quote.isFullRefund).toBe(true);
+    expect(quote.hoursUntilEvent).toBe(FULL_REFUND_CUTOFF_HOURS);
+  });
+
+  it('returns half one minute inside the cutoff', () => {
+    const quote = calculateRefund(TOTAL, EVENT, new Date('2026-06-12T00:01:00Z'));
+
+    expect(quote.refundCents).toBe(72_500);
+    expect(quote.isFullRefund).toBe(false);
+  });
+
+  it('returns half once the event day has already begun', () => {
+    expect(calculateRefund(TOTAL, EVENT, new Date('2026-06-20T00:00:00Z'))).toEqual({
+      refundCents: 72_500,
+      isFullRefund: false,
+      hoursUntilEvent: 0,
+    });
+  });
+
+  /* An odd total must not lose or invent a cent between the two halves. */
+  it('rounds a half refund to a whole cent', () => {
+    const quote = calculateRefund(2_501, EVENT, new Date('2026-06-13T12:00:00Z'));
+
+    expect(quote.refundCents).toBe(1_251);
+    expect(TOTAL % 2).toBe(0);
+  });
+
+  /*
+   * The event day starts at midnight **UTC**, not in the reader's zone. A
+   * `DATE` column carries no time, so anything else would refund a customer in
+   * Auckland and a customer in Honolulu differently for the same cancellation
+   * on the same booking.
+   */
+  it('measures from midnight UTC on the event date', () => {
+    expect(
+      calculateRefund(TOTAL, EVENT, new Date('2026-06-11T23:59:00Z')).hoursUntilEvent,
+    ).toBeCloseTo(48.02, 1);
+  });
+
+  it('rejects a total that is not whole cents, and a date that is not a date', () => {
+    expect(() => calculateRefund(10.5, EVENT)).toThrow(/integer/i);
+    expect(() => calculateRefund(-1, EVENT)).toThrow(/integer/i);
+    expect(() => calculateRefund(TOTAL, 'not-a-date')).toThrow(/calendar date/i);
   });
 });
 

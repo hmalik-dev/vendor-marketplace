@@ -719,10 +719,16 @@ async function prepareTransition({
    * Accepting a quote is the second and last time a price is written. A
    * package request already locked its price at creation, so this leaves it
    * exactly as it was.
+   *
+   * `acceptedAt` is stamped here rather than read off `updatedAt` later:
+   * checkout opens on "…accepted your request on May 2", and `updatedAt` moves
+   * again the moment a payment intent is recorded against the request.
    */
+  const acceptance = { acceptedAt: options.now ?? new Date() };
+
   return row.finalPriceCents === null && row.quotedPriceCents !== null
-    ? { finalPriceCents: row.quotedPriceCents }
-    : {};
+    ? { ...acceptance, finalPriceCents: row.quotedPriceCents }
+    : acceptance;
 }
 
 /** Tells the other party what just happened to the request they are in. */
