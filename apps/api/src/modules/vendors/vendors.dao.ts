@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import {
   categories,
   tags,
@@ -10,6 +11,7 @@ import {
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import type { ScopedTagRow } from '../tags/tags.dao.js';
 
 /** A soft-deleted profile is invisible to every read path. */
 const live = eq(vendorProfiles.isDeleted, false);
@@ -139,19 +141,39 @@ export async function replaceVendorCategories(
   });
 }
 
-export async function findVendorTags(db: AppDatabase, vendorId: string): Promise<TagRow[]> {
+/**
+ * A vendor's tags, each carrying the vendor category it is scoped to — which is
+ * null for every group but `style`.
+ *
+ * The scope join is a **left** one and the tag join stays inner: a tag always
+ * has a row, a scope does not. `categories` is aliased because this query
+ * already reaches it through `vendor_categories` elsewhere in the module, and
+ * an unaliased second reference would resolve to the wrong one.
+ */
+export async function findVendorTags(db: AppDatabase, vendorId: string): Promise<ScopedTagRow[]> {
   if (!vendorId) {
     return [];
   }
 
-  const rows = await db
-    .select({ tag: tags })
+  const tagScope = alias(categories, 'tag_scope');
+
+  return db
+    .select({
+      id: tags.id,
+      name: tags.name,
+      slug: tags.slug,
+      category: tags.category,
+      vendorCategoryId: tags.vendorCategoryId,
+      displayOrder: tags.displayOrder,
+      isActive: tags.isActive,
+      createdAt: tags.createdAt,
+      vendorCategorySlug: tagScope.slug,
+    })
     .from(vendorTags)
     .innerJoin(tags, eq(tags.id, vendorTags.tagId))
+    .leftJoin(tagScope, eq(tags.vendorCategoryId, tagScope.id))
     .where(eq(vendorTags.vendorId, vendorId))
     .orderBy(asc(tags.category), asc(tags.displayOrder));
-
-  return rows.map((row) => row.tag);
 }
 
 /**

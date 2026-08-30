@@ -971,11 +971,14 @@ export const tagSchema = z.object({
    * The vendor category a `style` tag belongs to, and `null` for every other
    * group.
    *
-   * It travels with the row rather than being resolved separately, because the
-   * Refine bar's `Style ▾` option set changes with the selected vendor type —
-   * so whoever renders the chip needs the scope in the same read as the tag.
+   * The **slug**, not the id, even though the column is an id: every consumer
+   * of this field already holds a slug — it is what `/search?category=` carries
+   * and what the picker is keyed by — so projecting the id would make each of
+   * them resolve it again. It travels with the row rather than being looked up
+   * separately, because the Refine bar's `Style ▾` option set changes with the
+   * selected vendor type, so the chip needs the scope in the same read.
    */
-  vendorCategoryId: uuidSchema.nullable(),
+  vendorCategorySlug: slugSchema.nullable(),
   displayOrder: z.int(),
   isActive: z.boolean(),
   createdAt: z.date(),

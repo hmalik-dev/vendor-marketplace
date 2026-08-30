@@ -12,6 +12,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import type { ScopedTagRow } from '../tags/tags.dao.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
 import { thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
@@ -57,7 +58,7 @@ function parseRating(value: string): number {
 export function toVendorProfileDetail(
   row: VendorProfileRow,
   categoryIds: string[],
-  tagRows: TagRow[],
+  tagRows: ScopedTagRow[],
   activePackageCount: number,
 ): VendorProfileDetail {
   return {

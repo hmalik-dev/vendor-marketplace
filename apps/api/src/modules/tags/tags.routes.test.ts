@@ -117,13 +117,16 @@ describe('tag routes', () => {
      */
     it('carries the vendor category a style tag is scoped to, and only for style', async () => {
       const response = await harness.app.inject({ method: 'GET', url: '/tags' });
-      const rows = response.json() as { category: string; vendorCategoryId: string | null }[];
+      const rows = response.json() as { category: string; vendorCategorySlug: string | null }[];
 
       for (const row of rows) {
-        expect(row.vendorCategoryId === null).toBe(row.category !== 'style');
+        expect(row.vendorCategorySlug === null).toBe(row.category !== 'style');
       }
 
-      expect(rows.some((row) => row.category === 'style')).toBe(true);
+      // The slug, so the Refine bar can match it against `?category=` directly.
+      expect(
+        rows.filter((row) => row.category === 'style').map((row) => row.vendorCategorySlug),
+      ).toContain('photography');
     });
 
     it('omits a deactivated tag', async () => {

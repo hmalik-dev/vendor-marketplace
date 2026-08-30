@@ -197,8 +197,25 @@ export function RefineBar({
   };
 
   const tagChip = (tagCategory: TagCategory): React.ReactElement | null => {
-    // Seed `displayOrder`, never alphabetical — the order is the design.
-    const options = tags.filter((tag) => tag.category === tagCategory);
+    /*
+     * Seed `displayOrder`, never alphabetical — the order is the design.
+     *
+     * `style` is the one group whose options are scoped: `11-search.md` has its
+     * set change with the selected vendor type, because "Documentary" means one
+     * thing to a photographer and another to a videographer, and "Family style"
+     * means nothing at all to a florist. Every other group is the same list
+     * whoever is being filtered.
+     *
+     * With no type selected the chip renders nothing rather than everything —
+     * offering fifty styles across eleven trades is not a filter, and the
+     * `options.length === 0` return below is what makes that a chip that is
+     * absent rather than a chip that is empty.
+     */
+    const options = tags.filter(
+      (tag) =>
+        tag.category === tagCategory &&
+        (tag.vendorCategorySlug === null || tag.vendorCategorySlug === state.category),
+    );
     if (options.length === 0) {
       return null;
     }
@@ -382,17 +399,13 @@ export function RefineBar({
           )}
         </Chip>
 
-        {TAG_CATEGORIES.map(tagChip)}
-
         {/*
-        Frame `02` also draws a `Style ▾` chip — category-specific tags whose
-        option set changes with the selected vendor type (documentary,
-        editorial, …). There is no `style` tag category in the data model and no
-        link from a tag to a vendor category, so the chip has nothing to offer
-        yet. Seeding a style taxonomy for eleven categories is a product
-        decision, not a rendering one, so it is a ticket of its own (#25) rather
-        than invented here. Recorded as a named deviation from the frame.
-      */}
+          Six chips, in the frame's order: Price and Rating above, then Style,
+          Languages, Cultural and Dietary from `TAG_CATEGORIES`. `Style ▾` was a
+          named deviation until #281 gave it a group to read from — the chip was
+          never the missing part, the data model was.
+        */}
+        {TAG_CATEGORIES.map(tagChip)}
 
         {hasAnyRefinement ? (
           <button

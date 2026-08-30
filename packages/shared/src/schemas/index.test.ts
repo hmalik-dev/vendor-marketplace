@@ -243,7 +243,7 @@ describe('tagSchema', () => {
     name: 'South Asian',
     slug: 'cultural-south-asian',
     category: 'cultural',
-    vendorCategoryId: null,
+    vendorCategorySlug: null,
     displayOrder: 1,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -265,15 +265,21 @@ describe('tagSchema', () => {
       name: 'Documentary',
       slug: 'style-photography-documentary',
       category: 'style',
-      vendorCategoryId: UUID,
+      vendorCategorySlug: 'photography',
     });
 
-    expect(scoped.vendorCategoryId).toBe(UUID);
-    expect(tagSchema.parse(valid).vendorCategoryId).toBeNull();
+    expect(scoped.vendorCategorySlug).toBe('photography');
+    expect(tagSchema.parse(valid).vendorCategorySlug).toBeNull();
   });
 
-  it('rejects a scope that is not an id', () => {
-    expect(tagSchema.safeParse({ ...valid, vendorCategoryId: 'photography' }).success).toBe(false);
+  /*
+   * The slug, not the id — a consumer already holding `?category=photography`
+   * must be able to match without a second lookup.
+   */
+  it('rejects a scope that is not a slug', () => {
+    expect(tagSchema.safeParse({ ...valid, vendorCategorySlug: 'Photography!' }).success).toBe(
+      false,
+    );
   });
 
   it('rejects a tag category outside the shared set', () => {
@@ -711,7 +717,7 @@ describe('tagSuggestionResponseSchema', () => {
     name: 'Amharic',
     slug: 'language-amharic',
     category: 'language',
-    vendorCategoryId: null,
+    vendorCategorySlug: null,
     displayOrder: 1,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -812,7 +818,7 @@ describe('vendorProfileDetailSchema', () => {
           name: 'Spanish',
           slug: 'language-spanish',
           category: 'language',
-          vendorCategoryId: null,
+          vendorCategorySlug: null,
           displayOrder: 2,
           isActive: true,
           createdAt: new Date('2026-01-01T00:00:00.000Z'),

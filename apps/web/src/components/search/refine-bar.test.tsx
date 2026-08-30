@@ -241,8 +241,18 @@ describe('RefineBar layout', () => {
  */
 describe('filter popovers are reachable and know when they are finished', () => {
   const TAGS = [
-    { id: 'a1111111-1111-4111-8111-111111111111', name: 'English', category: 'language' },
-    { id: 'a2222222-2222-4222-8222-222222222222', name: 'Spanish', category: 'language' },
+    {
+      id: 'a1111111-1111-4111-8111-111111111111',
+      name: 'English',
+      category: 'language',
+      vendorCategorySlug: null,
+    },
+    {
+      id: 'a2222222-2222-4222-8222-222222222222',
+      name: 'Spanish',
+      category: 'language',
+      vendorCategorySlug: null,
+    },
   ] as const;
 
   function renderWithTags(overrides: Partial<SearchState> = {}, setState = vi.fn()) {
@@ -320,5 +330,106 @@ describe('filter popovers are reachable and know when they are finished', () => 
 
     expect(screen.getByText('Set either end — this stays open.')).toBeDefined();
     expect(screen.getByLabelText(/Minimum/i)).toBeDefined();
+  });
+});
+
+/*
+ * #92/#281. Frame `02` draws six refine chips; live rendered five, because
+ * there was no `style` group in the data model for the sixth to read from.
+ *
+ * The chip's own rule is what makes it more than a fourth copy of the other
+ * three: `11-search.md` has its option set change with the selected vendor
+ * type, so a style tag belongs to one category while a language belongs to all
+ * of them.
+ */
+describe('the Style chip', () => {
+  /** The chip labels frame `02` draws in its Refine bar, read at test time. */
+  const frameChips = (() => {
+    const frame = frameHtml.slice(frameHtml.indexOf('data-screen-label="02 Search"'));
+    const bar = frame.slice(frame.indexOf('Refine'), frame.indexOf('Sort'));
+
+    return [...bar.matchAll(/>([^<>]*?)\s*▾</g)].map((match) => (match[1] ?? '').trim());
+  })();
+
+  const STYLES = [
+    {
+      id: 'b1111111-1111-4111-8111-111111111111',
+      name: 'Documentary',
+      category: 'style',
+      vendorCategorySlug: 'photography',
+    },
+    {
+      id: 'b2222222-2222-4222-8222-222222222222',
+      name: 'Cinematic',
+      category: 'style',
+      vendorCategorySlug: 'videography',
+    },
+    {
+      id: 'b3333333-3333-4333-8333-333333333333',
+      name: 'English',
+      category: 'language',
+      vendorCategorySlug: null,
+    },
+  ] as const;
+
+  function renderStyles(category: string) {
+    render(
+      <RefineBar
+        state={state({ category })}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={STYLES as unknown as React.ComponentProps<typeof RefineBar>['tags']}
+        facets={[]}
+      />,
+    );
+  }
+
+  /* Guards the guard: a frame read that stopped matching would pass anything. */
+  it('reads six chips out of the frame, Style among them', () => {
+    expect(frameChips).toContain('Style');
+    expect(frameChips.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('draws the chip the frame draws', () => {
+    renderStyles('photography');
+
+    expect(screen.getByRole('button', { name: /^Style/ })).toBeDefined();
+  });
+
+  /*
+   * The scoping, asserted from the rendered options rather than from the
+   * filter expression — "Cinematic" is a real style and a real tag, and the
+   * only thing wrong with it here is that this customer is looking for a
+   * photographer.
+   */
+  it('offers only the styles belonging to the selected vendor type', async () => {
+    renderStyles('photography');
+
+    await userEvent.click(screen.getByRole('button', { name: /^Style/ }));
+
+    expect(screen.getByRole('checkbox', { name: /Documentary/ })).toBeDefined();
+    expect(screen.queryByRole('checkbox', { name: /Cinematic/ })).toBeNull();
+  });
+
+  it('swaps the option set with the vendor type', async () => {
+    renderStyles('videography');
+
+    await userEvent.click(screen.getByRole('button', { name: /^Style/ }));
+
+    expect(screen.getByRole('checkbox', { name: /Cinematic/ })).toBeDefined();
+    expect(screen.queryByRole('checkbox', { name: /Documentary/ })).toBeNull();
+  });
+
+  /*
+   * With no type chosen there is no option set, and fifty styles across eleven
+   * trades is not a filter. The chip is absent rather than present and empty —
+   * a control that opens onto nothing is the dead-control defect.
+   */
+  it('is absent entirely when no vendor type is selected', () => {
+    renderStyles('');
+
+    expect(screen.queryByRole('button', { name: /^Style/ })).toBeNull();
+    // The unscoped groups are unaffected by the vendor type.
+    expect(screen.getByRole('button', { name: /^Language/ })).toBeDefined();
   });
 });

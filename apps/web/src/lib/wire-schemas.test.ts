@@ -15,7 +15,7 @@ const TAG_JSON = {
   slug: 'language-spanish',
   category: 'language',
   // Null for the three global groups; only `style` carries a scope.
-  vendorCategoryId: null,
+  vendorCategorySlug: null,
   displayOrder: 2,
   isActive: true,
   createdAt: ISO,
