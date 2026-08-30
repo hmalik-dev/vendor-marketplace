@@ -16,6 +16,7 @@ import {
   portfolioItemSchema,
   nearbyAvailabilityResultSchema,
   nearbyVendorSchema,
+  publicReviewSchema,
   publicVendorProfileSchema,
   servicePackageSchema,
   streamTicketSchema,
@@ -23,6 +24,7 @@ import {
   userSchema,
   vendorCardSchema,
   vendorProfileDetailSchema,
+  vendorReviewsPageSchema,
   vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
 import { resolveImageUrl } from '@vendor-marketplace/shared';
@@ -151,6 +153,13 @@ export const wireCustomerReviewSchema = customerReviewSchema.extend({
 });
 export type WireCustomerReview = z.infer<typeof wireCustomerReviewSchema>;
 export const wireCustomerReviewListSchema = z.array(wireCustomerReviewSchema);
+
+/** One appended page of the vendor profile's Reviews tab. */
+export const wireVendorReviewsPageSchema = vendorReviewsPageSchema.extend({
+  items: z.array(publicReviewSchema.extend({ createdAt: z.coerce.date() })),
+});
+export type WireVendorReviewsPage = z.infer<typeof wireVendorReviewsPageSchema>;
+export type WirePublicReview = WireVendorReviewsPage['items'][number];
 
 export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
   expiresAt: z.coerce.date().nullable(),

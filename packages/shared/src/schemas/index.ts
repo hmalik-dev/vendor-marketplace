@@ -25,6 +25,7 @@ import {
   MAX_EMAIL_LENGTH,
   MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
+  MAX_REVIEWER_DISPLAY_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
   MAX_PAGE,
   MAX_PAGE_SIZE,
@@ -40,6 +41,7 @@ import {
   REVIEW_CONTENT_MAX_LENGTH,
   REVIEW_CONTENT_MIN_LENGTH,
   REVIEW_RATING_MAX,
+  REVIEW_RATINGS,
   REVIEW_RATING_MIN,
   RESPONSE_TIME_HOURS_OPTIONS,
   REVIEW_TYPES,
@@ -959,6 +961,93 @@ export const createReviewSchema = z.object({
   content: trimmedString(REVIEW_CONTENT_MAX_LENGTH, REVIEW_CONTENT_MIN_LENGTH),
 });
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
+
+/**
+ * A customer-to-vendor review as the public profile renders it.
+ *
+ * Deliberately **not** `reviewSchema`. That one is the row; this is what a
+ * stranger may read, and the difference is the point: no `reviewerId`, no
+ * `bookingId`, no `type`. The reviewer is a first name and an initial —
+ * `12-vendor-profile.md:135` — because a full name beside an event date and a
+ * city identifies someone at a wedding.
+ */
+export const publicReviewSchema = z.object({
+  id: uuidSchema,
+  rating: z.int().min(REVIEW_RATING_MIN).max(REVIEW_RATING_MAX),
+  title: z.string().max(MAX_TITLE_LENGTH).nullable(),
+  content: z.string(),
+  /**
+   * "Priya M." — built server-side, so the full name never leaves the API.
+   *
+   * Bounded by what the concatenation can produce, not by the column it starts
+   * from: `MAX_NAME_LENGTH` is three characters short of the longest legal
+   * value, and a name at the column's own limit made this response
+   * un-serialisable.
+   */
+  reviewerName: z.string().max(MAX_REVIEWER_DISPLAY_NAME_LENGTH),
+  /**
+   * The booking's own `event_type`, for the card's badge. Nullable because the
+   * column is: a booking made without one gets no badge rather than a made-up
+   * category.
+   */
+  eventType: z.string().max(MAX_TITLE_LENGTH).nullable(),
+  createdAt: z.date(),
+});
+export type PublicReview = z.infer<typeof publicReviewSchema>;
+
+/**
+ * The numbers above the list: the big Serif average, and the five-bar chart.
+ *
+ * Counted from the `reviews` rows in the same request that reads the page, not
+ * from `vendor_profiles.avg_rating`. The denormalised column is what search and
+ * the card render from and it is written by the same transaction — but a
+ * summary that disagrees with the list under it is the defect this avoids, and
+ * the chart needs the per-rating counts regardless, so the average comes from
+ * the same GROUP BY rather than from a second source.
+ */
+export const reviewSummarySchema = z.object({
+  /** `null` when there are none — never a 0.0 that reads as a bad score. */
+  avgRating: z.number().min(0).max(REVIEW_RATING_MAX).nullable(),
+  reviewCount: z.int().min(0),
+  /**
+   * One count per rating, ascending from `REVIEW_RATING_MIN`. Always the full
+   * length: a rating nobody gave is a zero-length bar, not a missing row.
+   */
+  distribution: z.array(z.int().min(0)).length(REVIEW_RATINGS.length),
+});
+export type ReviewSummary = z.infer<typeof reviewSummarySchema>;
+
+/**
+ * What the signed-in viewer may do here, resolved server-side.
+ *
+ * On the response rather than behind its own endpoint because the tab needs it
+ * on first paint, and because the answer is only ever "this viewer, this
+ * vendor" — a second request would ask the same question with the same inputs.
+ * Every field is `false`/`null` for a signed-out reader.
+ */
+export const reviewViewerSchema = z.object({
+  /**
+   * A completed booking with this vendor that this viewer has not reviewed.
+   * `12-vendor-profile.md:138`: "Write a review" appears only for a user with a
+   * completed booking with this vendor.
+   */
+  canReview: z.boolean(),
+  /** Which booking the review would be filed against, when there is one. */
+  bookingId: uuidSchema.nullable(),
+});
+export type ReviewViewer = z.infer<typeof reviewViewerSchema>;
+
+/** One appended page of the Reviews tab, with everything above it. */
+export const vendorReviewsPageSchema = z.object({
+  items: z.array(publicReviewSchema),
+  summary: reviewSummarySchema,
+  viewer: reviewViewerSchema,
+  page: z.int().min(1),
+  pageSize: z.int().min(1),
+  /** Whether another press of "Show more reviews" would return anything. */
+  hasMore: z.boolean(),
+});
+export type VendorReviewsPage = z.infer<typeof vendorReviewsPageSchema>;
 
 // --- Tags ------------------------------------------------------------------
 

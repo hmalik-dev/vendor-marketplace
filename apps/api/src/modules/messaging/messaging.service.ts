@@ -73,6 +73,20 @@ export function notificationHref(row: NotificationRow): string | null {
     return `/messages?conversation=${conversationId}`;
   }
 
+  /*
+   * A review lands on whichever surface shows the recipient the review itself,
+   * and the two directions have different ones: a vendor reads a public review
+   * on their own profile's Reviews tab, a customer reads a private one on
+   * theirs. The vendor slug in the payload is what distinguishes them — a
+   * `vendor_to_customer` row carries none, because there is no public page for
+   * it to lead to.
+   */
+  if (row.type === 'new_review') {
+    return typeof data.vendorSlug === 'string'
+      ? `/vendors/${data.vendorSlug}?tab=reviews`
+      : '/customer/profile?tab=reviews';
+  }
+
   if (typeof data.bookingRequestId === 'string') {
     if (row.type === 'new_request') {
       return '/vendor/dashboard';
@@ -100,7 +114,8 @@ export function notificationHref(row: NotificationRow): string | null {
   return null;
 }
 
-function toNotification(row: NotificationRow): NotificationItem {
+/** A stored notification as every surface reads it — the list and the stream. */
+export function toNotification(row: NotificationRow): NotificationItem {
   return {
     id: row.id,
     type: row.type as NotificationItem['type'],

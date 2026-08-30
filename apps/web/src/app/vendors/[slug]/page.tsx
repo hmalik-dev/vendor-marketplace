@@ -16,9 +16,13 @@ import { PackagesPane } from '@/components/vendors/profile/packages-pane';
 import { PortfolioPane } from '@/components/vendors/profile/portfolio-pane';
 import { ProfileHeader } from '@/components/vendors/profile/profile-header';
 import { ProfileTabs } from '@/components/vendors/profile/profile-tabs';
-import { EmptyState } from '@/components/ui/empty-state';
+import { ReviewsPane } from '@/components/vendors/profile/reviews-pane';
 import { siteOrigin } from '@/config/env';
-import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
+import {
+  getPublicVendorAvailability,
+  getPublicVendorProfile,
+  getPublicVendorReviews,
+} from '@/lib/vendor-data';
 
 /**
  * How far ahead the header chip looks for a free day.
@@ -125,7 +129,12 @@ export default async function VendorProfilePage({
     notFound();
   }
 
-  const availability = await getPublicVendorAvailability(slug);
+  /* Independent of each other, and neither blocks the header — the tabs render
+     from one payload apiece and there is no reason to wait for them in turn. */
+  const [availability, reviews] = await Promise.all([
+    getPublicVendorAvailability(slug),
+    getPublicVendorReviews(slug),
+  ]);
   const today = todayDateString();
 
   /* The same keyed view of availability the request form takes, so the rail's
@@ -222,14 +231,13 @@ export default async function VendorProfilePage({
               <PortfolioPane items={vendor.portfolio} businessName={vendor.businessName} />
             ),
             reviews: (
-              /* The tab and its empty state only — review content is #12. */
-              <EmptyState
-                headline={vendor.reviewCount > 0 ? 'Reviews are on their way' : 'No reviews yet'}
-                description={
-                  vendor.reviewCount > 0
-                    ? `${vendor.businessName} has ${vendor.reviewCount} reviews. We're building the page that shows them.`
-                    : `Every review here comes from a completed booking, so ${vendor.businessName} has none until they've worked an event.`
-                }
+              <ReviewsPane
+                slug={vendor.slug}
+                businessName={vendor.businessName}
+                /* From the profile read, so the pane can tell "none" from
+                   "we couldn't load them" when its own read fails. */
+                reviewCount={vendor.reviewCount}
+                initial={reviews}
               />
             ),
             availability: (

@@ -11,3 +11,4 @@
 - [Source-grep substring collisions](review-checklist-source-grep-substring-collisions.md) — `toContain('gap-2')` passes on the file's unrelated `gap-2.5`; count the matches, then mutate the intended line
 - [Ring offset in the ground's own colour](review-checklist-ring-offset-same-as-ground.md) — the ring is already outside the border box; re-grounding the offset in the parent's colour deletes its only 3:1 edge. Scan pixels outward
 - [Frames render content-box](review-checklist-design-frames-are-content-box.md) — the .dc.html has no preflight, so a bordered div there is `D + 2×stroke`; measuring it under the app's CSS gives the wrong answer
+- [Recompute in a SET clause still races](review-checklist-recompute-in-set-clause-races.md) — "derived, never incremented" is not concurrency-safe; PGlite has one connection, so prove it on the Docker Postgres with two
