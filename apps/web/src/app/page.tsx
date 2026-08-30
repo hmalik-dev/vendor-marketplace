@@ -293,7 +293,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 beneath it, so a third row of category shortcuts between them
                 repeats the same navigation twice in 120px.
               */}
-              <div className="mt-3.25 hidden flex-wrap items-center gap-2 max-md:flex lg:flex min-[90rem]:mt-4">
+              <div className="mt-3.25 hidden flex-wrap items-center gap-[7px] max-md:flex lg:flex min-[90rem]:mt-4 min-[90rem]:gap-2">
                 <span className="mr-0.5 text-sm text-stone-600">Or jump straight to</span>
                 {LANDING_JUMP_CATEGORY_SLUGS.map((slug, index) => (
                   <Link
@@ -435,7 +435,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                           never a from-price — both are deferred until the
                           numbers are real (design/design-plan/98-post-mvp.md).
                         */}
-                        <p className="mt-0.5 text-[10.5px] text-stone-600 lg:mt-0.75 min-[90rem]:text-helper">
+                        <p className="mt-0.5 text-[10.5px] text-stone-600 min-[90rem]:text-helper">
                           {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
                         </p>
                       </div>

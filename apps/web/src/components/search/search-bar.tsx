@@ -180,11 +180,18 @@ export function SearchBar({
    * **full-height** rule in a lighter colour. Rendered as this same span at
    * full height rather than restructured into borders, because the two are
    * pixel-identical and one element is easier to keep honest than three.
+   *
+   * `self-stretch`, **not** `h-full`. `height:100%` on a flex item resolves
+   * against the container's height, and this container's height comes from its
+   * own content — indefinite, so the percentage computed to 0 and both rules
+   * vanished at 768 while still measuring the right colour. The bar read as one
+   * undivided field. `align-self:stretch` is the property that actually means
+   * "fill the cross axis".
    */
   const divider = cn(
     'shrink-0 bg-stone-200 max-sm:h-px max-sm:w-full sm:w-px sm:bg-stone-300',
     isHero
-      ? 'sm:h-full sm:bg-stone-200 lg:h-7 lg:bg-stone-300 min-[90rem]:h-8'
+      ? 'sm:self-stretch sm:bg-stone-200 lg:h-7 lg:self-center lg:bg-stone-300 min-[90rem]:h-8'
       : 'sm:h-6.5 sm:bg-stone-200',
   );
   /*
@@ -250,7 +257,7 @@ export function SearchBar({
               1024, `7 7 7 24` at 1440, and a 26px blur at 768 against 28
               elsewhere.
             */
-            'shadow-[0_8px_26px_rgba(35,32,28,.10)] sm:py-1.5 sm:pr-1.5 sm:pl-5 lg:pl-4.5 min-[90rem]:shadow-lg min-[90rem]:py-1.75 min-[90rem]:pr-1.75 min-[90rem]:pl-6'
+            'shadow-[0_8px_26px_rgba(35,32,28,.10)] sm:py-1.5 sm:pr-1.5 sm:pl-5 lg:pl-4.5 lg:shadow-lg min-[90rem]:py-1.75 min-[90rem]:pr-1.75 min-[90rem]:pl-6'
           : /*
               A fixed height from `lg`, because the compact bar sits inside a
               header of its own fixed height and the frames measure it: 40px at
@@ -275,7 +282,9 @@ export function SearchBar({
       <label
         className={cn(
           segment,
-          isHero ? 'sm:flex-1 sm:pl-3.5 min-[90rem]:pl-4.5' : 'sm:flex-[0.9] sm:pl-3.5',
+          isHero
+            ? 'sm:flex-1 sm:pr-3.5 sm:pl-3.5 lg:pr-0 min-[90rem]:pl-4.5'
+            : 'sm:flex-[0.9] sm:pl-3.5',
         )}
       >
         <span className={label}>City</span>
@@ -304,7 +313,9 @@ export function SearchBar({
             vendor-type segment: the width changes, not the words.
           */
           isHero
-            ? 'sm:min-w-28 sm:flex-[0.8] sm:pl-3.5 min-[90rem]:pl-4.5'
+            ? /* .9 at 768, .8 from 1024. 768 also pads the field on both sides
+                 rather than only the left. */
+              'sm:min-w-28 sm:flex-[0.9] sm:pr-3.5 sm:pl-3.5 lg:flex-[0.8] lg:pr-0 min-[90rem]:pl-4.5'
             : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
         )}
       >

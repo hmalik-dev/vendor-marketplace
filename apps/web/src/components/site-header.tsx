@@ -104,7 +104,18 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               The route is a full page rather than a modal: sign-up has to
               collect the customer/vendor role before Clerk's form renders.
             */}
-            <Button variant="ink" asChild>
+            {/*
+              Stepped at the call site rather than in the variant: `ink` is one
+              control in one place, and its padding comes from `size`, so a
+              breakpoint inside the variant string would race the size variant
+              through `twMerge` rather than override it. The frames draw
+              `12.5px / 8 15` below 1440 and `13px / 10 18` at it.
+            */}
+            <Button
+              variant="ink"
+              asChild
+              className="px-3.75 py-2 text-[12.5px] min-[90rem]:px-4.5 min-[90rem]:py-2.5 min-[90rem]:text-action"
+            >
               <Link href="/sign-up">Sign up</Link>
             </Button>
 
