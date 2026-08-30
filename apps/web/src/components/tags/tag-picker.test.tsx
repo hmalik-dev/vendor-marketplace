@@ -28,6 +28,8 @@ function tag(name: string, category: TagCategory, order: number): WireTag {
     name,
     slug: `${category}-${name.toLowerCase().replace(/\s+/g, '-')}`,
     category,
+    // Only `style` carries a scope; these fixtures are the global groups.
+    vendorCategoryId: category === 'style' ? 'cat-photography' : null,
     displayOrder: order,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),

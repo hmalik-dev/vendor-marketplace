@@ -967,6 +967,15 @@ export const tagSchema = z.object({
   name: trimmedString(MAX_NAME_LENGTH),
   slug: slugSchema,
   category: tagCategorySchema,
+  /**
+   * The vendor category a `style` tag belongs to, and `null` for every other
+   * group.
+   *
+   * It travels with the row rather than being resolved separately, because the
+   * Refine bar's `Style ▾` option set changes with the selected vendor type —
+   * so whoever renders the chip needs the scope in the same read as the tag.
+   */
+  vendorCategoryId: uuidSchema.nullable(),
   displayOrder: z.int(),
   isActive: z.boolean(),
   createdAt: z.date(),

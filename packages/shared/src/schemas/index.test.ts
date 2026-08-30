@@ -243,6 +243,7 @@ describe('tagSchema', () => {
     name: 'South Asian',
     slug: 'cultural-south-asian',
     category: 'cultural',
+    vendorCategoryId: null,
     displayOrder: 1,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -250,6 +251,29 @@ describe('tagSchema', () => {
 
   it('accepts a well-formed tag row', () => {
     expect(tagSchema.parse(valid)).toMatchObject({ slug: 'cultural-south-asian' });
+  });
+
+  /*
+   * A style tag carries the vendor category it belongs to; the three global
+   * groups carry null. The schema allows either, because it describes both
+   * kinds of row — what enforces the correspondence is the seed and its own
+   * test, not this.
+   */
+  it('carries the vendor category a scoped tag belongs to', () => {
+    const scoped = tagSchema.parse({
+      ...valid,
+      name: 'Documentary',
+      slug: 'style-photography-documentary',
+      category: 'style',
+      vendorCategoryId: UUID,
+    });
+
+    expect(scoped.vendorCategoryId).toBe(UUID);
+    expect(tagSchema.parse(valid).vendorCategoryId).toBeNull();
+  });
+
+  it('rejects a scope that is not an id', () => {
+    expect(tagSchema.safeParse({ ...valid, vendorCategoryId: 'photography' }).success).toBe(false);
   });
 
   it('rejects a tag category outside the shared set', () => {
@@ -687,6 +711,7 @@ describe('tagSuggestionResponseSchema', () => {
     name: 'Amharic',
     slug: 'language-amharic',
     category: 'language',
+    vendorCategoryId: null,
     displayOrder: 1,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -787,6 +812,7 @@ describe('vendorProfileDetailSchema', () => {
           name: 'Spanish',
           slug: 'language-spanish',
           category: 'language',
+          vendorCategoryId: null,
           displayOrder: 2,
           isActive: true,
           createdAt: new Date('2026-01-01T00:00:00.000Z'),

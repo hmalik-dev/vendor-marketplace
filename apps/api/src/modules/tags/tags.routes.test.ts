@@ -101,13 +101,29 @@ describe('tag routes', () => {
       expect(response.json().length).toBeGreaterThan(0);
     });
 
-    it('covers all three picker sections', async () => {
+    it('covers every picker section, including the scoped one', async () => {
       const response = await harness.app.inject({ method: 'GET', url: '/tags' });
       const seen = new Set<string>(
         response.json().map((tag: { category: string }) => tag.category),
       );
 
-      expect([...seen].sort()).toEqual(['cultural', 'dietary', 'language']);
+      expect([...seen].sort()).toEqual(['cultural', 'dietary', 'language', 'style']);
+    });
+
+    /*
+     * A style tag is only meaningful beside the vendor category it belongs to —
+     * "Family style" says nothing about a florist — so the scope travels with
+     * the row rather than being looked up separately by whoever renders it.
+     */
+    it('carries the vendor category a style tag is scoped to, and only for style', async () => {
+      const response = await harness.app.inject({ method: 'GET', url: '/tags' });
+      const rows = response.json() as { category: string; vendorCategoryId: string | null }[];
+
+      for (const row of rows) {
+        expect(row.vendorCategoryId === null).toBe(row.category !== 'style');
+      }
+
+      expect(rows.some((row) => row.category === 'style')).toBe(true);
     });
 
     it('omits a deactivated tag', async () => {
