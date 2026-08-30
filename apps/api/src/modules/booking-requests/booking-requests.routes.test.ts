@@ -737,6 +737,35 @@ describe('/booking-requests', () => {
       expect(quoted?.href).toBe(`/bookings/${requestId}`);
     });
 
+    /*
+     * The event date was bounded below — a date past everywhere on Earth is
+     * refused — and not above, so `9999-12-31` was a bookable event and got
+     * stored. Nothing downstream expects one: the expiry window, the days-until
+     * arithmetic and every calendar read assume a working horizon.
+     */
+    it('refuses an event date beyond the booking horizon', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+
+      const response = await createRequest(vendorId, { packageId, eventDate: '9999-12-31' });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        statusCode: 400,
+        error: ERROR_CODES.VALIDATION_ERROR,
+      });
+    });
+
+    it('accepts a long-lead date inside the horizon', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      // Eighteen months out — the genuine wedding case the ceiling must not eat.
+      const longLead = toDateString(addDays(NOW, 540));
+
+      const response = await createRequest(vendorId, { packageId, eventDate: longLead });
+
+      expect(response.statusCode).toBe(201);
+      expect((response.json() as RequestBody).status).toBe('pending');
+    });
+
     it('pending -> declined by the vendor', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
