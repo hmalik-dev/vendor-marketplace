@@ -16,6 +16,7 @@ import {
   nearbyVendorSchema,
   publicVendorProfileSchema,
   servicePackageSchema,
+  streamTicketSchema,
   tagSchema,
   userSchema,
   vendorCardSchema,
@@ -80,6 +81,12 @@ export type WireUser = z.infer<typeof wireUserSchema>;
 
 export const wireTagSchema = tagSchema.extend({ createdAt: z.coerce.date() });
 export type WireTag = z.infer<typeof wireTagSchema>;
+
+/**
+ * `POST /events/stream-ticket`. Carries no date, so there is nothing to coerce
+ * and the shared schema is used as it stands.
+ */
+export const wireStreamTicketSchema = streamTicketSchema;
 
 export const wireTagListSchema = z.array(wireTagSchema);
 

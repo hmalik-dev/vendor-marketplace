@@ -12,6 +12,8 @@
 - [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema without the read schemas on the same column and a user's data 500s someone else's page
 - [imageRefSchema's scheme check is whitespace-bypassable](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `" javascript:…"` validates; only `resolveImageUrl`'s trim-then-prefix keeps it harmless
 - [Customer PII has two disclosure gates](customer-pii-has-two-disclosure-gates.md) — the profile relationship gate is permanent and customer-wide; the request-status gate is per-request, and they share no code
+- [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — `GET /events/stream` has no `requireAuth`; adding one breaks it, removing the inline ban check is the real regression
+- [Log redaction covers the query, not the path](log-redaction-covers-query-not-path.md) — every query value goes and cannot be name-bypassed, but a credential in a path segment is still logged whole
 - [availability.status literals are load-bearing](availability-status-literals-are-load-bearing.md) — three double-booking guards compare to `'booked'`; redefining what a lifecycle writes needs a migration, not a code change
 - [The error handler's 4xx passthrough leaks SDK messages](error-handler-4xx-passthrough-leaks-sdk-messages.md) — any thrown object with `statusCode` 4xx answers with its own `message`; Stripe errors carry both
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body around the `redact` path

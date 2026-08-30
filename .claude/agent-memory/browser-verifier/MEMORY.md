@@ -3,3 +3,4 @@
 - [Clerk handshake URLs leak session tokens](clerk-handshake-urls-leak-session-tokens.md) — never log full request/response URLs when driving a stored .auth/*.json identity
 - [E2E vendor blocked on payout setup](e2e-vendor-blocked-on-payout-setup.md) — Accept POSTs 402 until Stripe payout is complete; no in-app UI to clear it; Decline/read-only criteria still verifiable
 - [Playwright MCP is single-context; use a scratch script for a second role](playwright-mcp-single-context-scratch-script.md) — MCP tools share one browser/cookie jar; load a second .auth/*.json via a throwaway Node+Playwright script instead
+- [Stored auth state needs marker-wait, not fixed sleep](stored-auth-state-needs-marker-wait-not-fixed-sleep.md) — client header can render signed-out for 1-2 reloads after loading .auth/*.json; wait for a DOM marker and retry, don't fixed-sleep
