@@ -250,6 +250,31 @@ describe('SearchBar accessible names', () => {
 describe('SearchBar — pill and circle discipline', () => {
   afterEach(cleanup);
 
+  /*
+   * The submit's ring keeps a ZERO offset, and this test exists to stop it
+   * being "fixed" (#296).
+   *
+   * Tailwind's ring is an outward box-shadow, so at `ring-offset-0` the band is
+   * already painted outside the border box, directly against the `clay-400`
+   * fill — a 3.18:1 boundary, the one edge of this indicator that clears SC
+   * 1.4.11. Giving it a 2px `stone-0` offset inserts the colour that was
+   * already there and pushes the band two pixels clear of the button, leaving
+   * it bounded by cream on both sides at 1.52:1. #296 shipped that inversion
+   * and a pixel scan caught it.
+   *
+   * The faintness against cream is `ring-clay-400/30`'s, not this line's —
+   * #306 owns raising the token's alpha.
+   */
+  it('keeps the submit ring on the button edge, where it has an edge to contrast with', () => {
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
+
+    const submit = screen.getByRole('button', { name: 'Search' });
+
+    expect(submit.className).toContain('focus-visible:ring-offset-0');
+    // Any non-zero offset re-introduces the inversion.
+    expect(submit.className).not.toMatch(/focus-visible:ring-offset-[1-9]/);
+  });
+
   it('labels the submit control by default, for the hero and the full-width bar', () => {
     render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 

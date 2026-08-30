@@ -27,6 +27,11 @@ import { StockPhoto } from '@/components/ui/stock-photo';
  * shadows, so carrying the 1440 treatment down made a 146px card wear a
  * 40px-blur shadow and read heavier than the photograph inside it.
  *
+ * The 1440 radius is `rounded-[16px]`, not `rounded-2xl` (#249). The token is
+ * 18px and the frame draws 16 — the same 16-vs-18 the vendor card already
+ * resolved this way. There is no 16px step to reach for, and adding one would
+ * repoint every `rounded-2xl` in the product.
+ *
  * Every step is `min-[90rem]`, never `xl`. `xl` is 1280, which no frame in this
  * bundle draws — and while the geometry stepped there and the styling stepped at
  * 1440, the band from 1280 to 1439 rendered full-size 1440 cards wearing the
@@ -43,7 +48,7 @@ const CARDS = [
     geometry:
       'top-[6px] left-[4px] h-[182px] w-[146px] lg:top-0 lg:left-[14px] lg:h-[213px] lg:w-[172px] min-[90rem]:top-0 min-[90rem]:left-5 min-[90rem]:h-73 min-[90rem]:w-59',
     style:
-      'rotate-[-4deg] rounded-[13px] shadow-[0_10px_26px_rgba(35,32,28,.16)] lg:rounded-[14px] lg:shadow-[0_12px_32px_rgba(35,32,28,.16)] min-[90rem]:rounded-2xl min-[90rem]:shadow-[0_14px_40px_rgba(35,32,28,.16)]',
+      'rotate-[-4deg] rounded-[13px] shadow-[0_10px_26px_rgba(35,32,28,.16)] lg:rounded-[14px] lg:shadow-[0_12px_32px_rgba(35,32,28,.16)] min-[90rem]:rounded-[16px] min-[90rem]:shadow-[0_14px_40px_rgba(35,32,28,.16)]',
   },
   {
     src: '/stock/portrait.jpg',
@@ -51,7 +56,7 @@ const CARDS = [
     geometry:
       'top-[38px] left-[112px] h-[196px] w-[158px] lg:top-[51px] lg:left-[138px] lg:h-[231px] lg:w-[185px] min-[90rem]:top-17.5 min-[90rem]:left-47.5 min-[90rem]:h-79 min-[90rem]:w-63.5',
     style:
-      'rotate-[3deg] rounded-[13px] shadow-[0_12px_30px_rgba(35,32,28,.2)] lg:rounded-[14px] lg:shadow-[0_15px_38px_rgba(35,32,28,.2)] min-[90rem]:rounded-2xl min-[90rem]:shadow-[0_18px_46px_rgba(35,32,28,.2)]',
+      'rotate-[3deg] rounded-[13px] shadow-[0_12px_30px_rgba(35,32,28,.2)] lg:rounded-[14px] lg:shadow-[0_15px_38px_rgba(35,32,28,.2)] min-[90rem]:rounded-[16px] min-[90rem]:shadow-[0_18px_46px_rgba(35,32,28,.2)]',
   },
   {
     src: '/stock/venue.jpg',
@@ -101,14 +106,32 @@ export function PhotoCluster(): React.ReactElement {
      * positioned and contribute nothing to layout.
      */
     <div className="relative h-[250px] w-[270px] lg:h-[286px] lg:w-[323px] min-[90rem]:h-98 min-[90rem]:w-125">
-      {CARDS.map((card, index) => (
+      {CARDS.map((card) => (
         <StockPhoto
           key={card.src}
           src={card.src}
           sizes={card.sizes}
-          // The two cards above the fold at 1440 load eagerly; a hero that
-          // paints its headline over three empty boxes is the thing to avoid.
-          priority={index < 2}
+          /*
+            No `priority` on any card (#186).
+
+            The cluster is hidden below 768 — `14 Landing mobile` draws no cards
+            — but `display:none` does not stop an **eager** image loading, so
+            every phone fetched all three hero photographs and showed none of
+            them. Measured at 390x844 on a cold load: three `/_next/image`
+            requests, all three `complete`.
+
+            Lazy is what makes hidden mean unfetched: an image inside a
+            `display:none` ancestor never intersects the viewport, so it is
+            never requested. From 768 up the cards *are* in the viewport at
+            load, so they still fetch immediately — lazy defers until
+            intersection, and they intersect straight away.
+
+            What `priority` was buying is covered without it: `StockPhoto`
+            paints an opaque `stone-150` fill behind every card, so the hero
+            never paints its headline over empty boxes. It was trading three
+            wasted downloads on every mobile visit for a preload hint on a
+            decorative image that is not the LCP element.
+          */
           className={`absolute ${card.geometry} ${card.style}`}
         />
       ))}

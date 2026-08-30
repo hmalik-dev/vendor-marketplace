@@ -222,7 +222,22 @@ export default async function HomePage(): Promise<React.ReactElement> {
             14px of the 41px of accumulated drift at 1024 — every block below
             the headline inherited it.
           */}
-          <div className="grid pt-6.5 md:grid-cols-[1fr_288px] md:gap-x-5 lg:grid-cols-[56%_44%] lg:gap-x-0 min-[90rem]:pt-10">
+          {/*
+            `lg:grid-rows-[min-content_1fr]` is what puts the search bar where
+            the frame draws it.
+
+            From `lg` the cluster spans both rows, and it is taller than the
+            copy and the bar stacked. Grid distributes that surplus across the
+            rows it spans, so row 1 — the copy — grew by half of it and carried
+            the bar down with it: the bar measured y=372.25 against the frame's
+            352.5, and the jump chips inherited the same +19.75.
+
+            Sizing row 1 to `min-content` pins it to the copy, and `1fr` gives
+            row 2 the whole surplus, which the bar then sits at the top of. The
+            cluster is unaffected — its cards are absolutely positioned inside a
+            fixed-height box, so it does not care which row owns the slack.
+          */}
+          <div className="grid pt-6.5 md:grid-cols-[1fr_288px] md:gap-x-5 lg:grid-cols-[56%_44%] lg:grid-rows-[min-content_1fr] lg:gap-x-0 min-[90rem]:pt-10">
             {/*
               34px from the copy to the cluster is the frame's gutter at the
               1440 design target, but at 1024 it was the last 18px the search
@@ -448,7 +463,12 @@ export default async function HomePage(): Promise<React.ReactElement> {
                           never a from-price — both are deferred until the
                           numbers are real (design/design-plan/98-post-mvp.md).
                         */}
-                        <p className="mt-0.5 text-[10.5px] text-stone-600 min-[90rem]:text-helper">
+                        {/*
+                          3px, which frame `01` draws and `mt-0.5`'s 2px misses
+                          by one — the card ends up 156px tall against the
+                          frame's 157. Not on the 4px scale, so it is stated.
+                        */}
+                        <p className="mt-[3px] text-[10.5px] text-stone-600 min-[90rem]:text-helper">
                           {SHORT_DESCRIPTIONS.get(category.slug) ?? category.description}
                         </p>
                       </div>

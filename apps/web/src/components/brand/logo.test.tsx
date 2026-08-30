@@ -110,6 +110,32 @@ describe('Logo', () => {
     },
   );
 
+  /*
+   * #250. The two circles are equal as FILLS — a D-wide disc and a D-wide hole
+   * — with the stroke drawn outside the D. `box-border` read "equal" as equal
+   * footprints, which charged the stroke to the hole: at the desktop header a
+   * 13px hole beside a 15px disc, so the outline circle sat visibly small
+   * inside its own lockup.
+   *
+   * jsdom computes no box model, so the footprint cannot be measured here.
+   * What decides it is the box-sizing, and that is asserted directly; the
+   * rendered 17x17-over-15x15 is verified in the browser.
+   */
+  it.each(EVERY_SIZE)('sizes the stroke circle at %ipx of fill, not of footprint', (size) => {
+    render(<Logo size={size} />);
+
+    const stroke = screen.getByTestId('logo-mark-stroke');
+    const fill = screen.getByTestId('logo-mark-fill');
+
+    expect(stroke.className).toContain('box-content');
+    expect(stroke.className).not.toContain('box-border');
+    // The declared size is the FILL on both circles — that is what "equal
+    // diameter" means, and it is why the stroke may overflow its own box.
+    expect(stroke.style.width).toBe(fill.style.width);
+    expect(stroke.style.height).toBe(fill.style.height);
+    cleanup();
+  });
+
   it('keeps clay as the fill on a cream ground', () => {
     render(<Logo size={LOGO_SIZES.authPanel} tone="light" />);
 
@@ -142,5 +168,125 @@ describe('Logo', () => {
     render(<Logo size={LOGO_SIZES.authPanel} />);
 
     expect(screen.getByTestId('logo-wordmark').className).toContain('font-display');
+  });
+});
+
+/*
+ * The mark is drawn in three places — the component, the favicon and the iOS
+ * tile — and "keep the two in step" was a comment, not a check. #250 changed
+ * the component to `content-box` and both icons kept the border-box
+ * construction, so a 16px favicon would have drawn a 13.4px hole beside a 16px
+ * disc while the header beside it drew a 15px hole. Caught in review, not by
+ * the suite. This is the check that was missing.
+ */
+describe('the mark is one construction in all three places', () => {
+  const read = (relative: string): string =>
+    readFileSync(join(process.cwd(), 'src', 'app', relative), 'utf8');
+
+  /*
+   * SVG strokes straddle their path, so a circle's hole is `r - strokeWidth/2`.
+   * Equal-as-fills means that hole equals the solid disc's radius — which is
+   * what `content-box` produces in CSS, and what border-box did not.
+   */
+  it('gives the favicon a hole the size of its disc', () => {
+    const svg = read('icon.svg');
+
+    const fill = /<circle[^>]*r="([\d.]+)"[^>]*fill="#b4552f"/.exec(svg);
+    const stroke = /<circle[^>]*class="stroke"[^>]*r="([\d.]+)"[^>]*stroke-width="([\d.]+)"/.exec(
+      svg,
+    );
+
+    expect(fill, 'no solid disc in icon.svg').not.toBeNull();
+    expect(stroke, 'no outline circle in icon.svg').not.toBeNull();
+
+    const disc = Number((fill as RegExpExecArray)[1]);
+    const path = Number((stroke as RegExpExecArray)[1]);
+    const width = Number((stroke as RegExpExecArray)[2]);
+
+    expect(path - width / 2).toBe(disc);
+  });
+
+  /*
+   * And the ink has to fit. The stroke reaches `r + strokeWidth/2` past the
+   * offset centre, which is beyond the 1.45 D the mark declares — a `<span>`
+   * lets that overflow, a `viewBox` clips it.
+   */
+  it('gives the favicon a canvas its overflowing stroke fits inside', () => {
+    const svg = read('icon.svg');
+
+    const viewBox = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
+    const stroke =
+      /<circle[^>]*class="stroke"[^>]*cx="([\d.]+)"[^>]*r="([\d.]+)"[^>]*stroke-width="([\d.]+)"/.exec(
+        svg,
+      );
+
+    expect(viewBox, 'icon.svg has no viewBox').not.toBeNull();
+    expect(stroke).not.toBeNull();
+
+    const [width, height] = [
+      Number((viewBox as RegExpExecArray)[1]),
+      Number((viewBox as RegExpExecArray)[2]),
+    ];
+    const outer =
+      Number((stroke as RegExpExecArray)[1]) +
+      Number((stroke as RegExpExecArray)[2]) +
+      Number((stroke as RegExpExecArray)[3]) / 2;
+
+    expect(width).toBeGreaterThanOrEqual(outer);
+    // Square, so the tile is never letterboxed.
+    expect(height).toBe(width);
+  });
+
+  /*
+   * The root element has to be near the top of the file.
+   *
+   * Next's metadata image loader sniffs the icon's dimensions from the head of
+   * the file, so a long LEADING comment pushes `<svg>` out of its read window
+   * and `next build` fails with "is not a valid image file. The image may be
+   * corrupted or an unsupported format" — which names neither the comment nor
+   * the real cause. #296 hit exactly that by documenting the mark's geometry
+   * above the root element; the comment now sits inside it.
+   *
+   * The bound is deliberately loose. What matters is that the root stays near
+   * the top, not the loader's exact buffer size.
+   */
+  it('keeps the favicon root element in the loader’s read window', () => {
+    const svg = read('icon.svg');
+    const root = svg.indexOf('<svg');
+
+    expect(root, 'icon.svg has no root element').toBeGreaterThan(-1);
+    expect(root).toBeLessThan(256);
+  });
+
+  it('gives the iOS tile the same box-sizing the component uses', () => {
+    expect(read('apple-icon.tsx')).toContain("boxSizing: 'content-box'");
+    expect(read('apple-icon.tsx')).not.toContain("boxSizing: 'border-box'");
+  });
+
+  /*
+   * The ratios are the mark's definition, so all three must state the same two.
+   * A favicon that quietly moved to a different offset would still pass every
+   * assertion above.
+   */
+  it('states one offset and one stroke ratio everywhere', () => {
+    const component = readFileSync(
+      join(process.cwd(), 'src', 'components', 'brand', 'logo.tsx'),
+      'utf8',
+    );
+
+    expect(component).toContain('const OFFSET_RATIO = 0.45');
+    expect(component).toContain('const STROKE_RATIO = 0.08');
+    expect(read('apple-icon.tsx')).toContain('const OFFSET_RATIO = 0.45');
+    expect(read('apple-icon.tsx')).toContain('const STROKE_RATIO = 0.08');
+
+    // The favicon states them as resolved numbers at D=100, not as constants.
+    const svg = read('icon.svg');
+    const fill = /<circle[^>]*cx="([\d.]+)"[^>]*r="([\d.]+)"[^>]*fill="#b4552f"/.exec(svg);
+    const stroke = /<circle[^>]*class="stroke"[^>]*cx="([\d.]+)"/.exec(svg);
+    const diameter = Number((fill as RegExpExecArray)[2]) * 2;
+
+    expect(Number((stroke as RegExpExecArray)[1]) - Number((fill as RegExpExecArray)[1])).toBe(
+      diameter * 0.45,
+    );
   });
 });

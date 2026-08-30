@@ -135,9 +135,26 @@ export function Logo({
           className={cn('absolute top-0 left-0 rounded-full', tokens.fill)}
           style={{ width: `${size}px`, height: `${size}px` }}
         />
+        {/*
+          `box-content`, not `box-border` (#250).
+
+          The two circles are equal as **fills** — a D-wide disc and a D-wide
+          hole — and the stroke is drawn *outside* the D, which is how every
+          frame draws the mark and what `02-brand-and-logo.md` means by "two
+          circles of equal diameter". Border-box read "equal" as equal
+          footprints instead, which charged the stroke to the hole and rendered
+          it `D - 2×stroke` across: at the desktop header, a 13px hole beside a
+          15px disc, so the outline circle sat visibly small inside its own
+          lockup.
+
+          The stroke therefore overflows the mark's declared box by one used
+          pixel per edge, exactly as it does in the frame — whose 22px box holds
+          ink out to 23px. The box stays 1.45 D so the wordmark gap keeps
+          measuring from the same place.
+        */}
         <span
           data-testid="logo-mark-stroke"
-          className={cn('absolute top-0 box-border rounded-full border', tokens.stroke)}
+          className={cn('absolute top-0 box-content rounded-full border', tokens.stroke)}
           style={{
             left: `${size * OFFSET_RATIO}px`,
             width: `${size}px`,

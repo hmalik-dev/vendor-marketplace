@@ -490,8 +490,27 @@ export function SearchBar({
           type="submit"
           className={cn(
             'shrink-0 rounded-full bg-clay-400 font-semibold text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 max-sm:mt-3 max-sm:w-full max-sm:py-2.75',
-            // Inside a white pill the shared 2px cream offset reads as a gap in
-            // the bar, so this ring sits directly on the button's edge.
+            /*
+              Inside a white pill the shared 2px cream offset reads as a gap in
+              the bar, so this ring sits directly on the button's edge.
+
+              **Do not "fix" this by restoring the offset.** #296 tried exactly
+              that and it inverts the intent, because Tailwind's ring is an
+              *outward* box-shadow: with `ring-offset-0` the ring band is
+              already painted outside the border box, directly against the
+              `clay-400` fill, and that boundary measures **3.18:1** — the one
+              edge of this indicator that clears SC 1.4.11. Adding a 2px
+              `stone-0` offset inserts the colour that was already there and
+              pushes the coloured band two pixels off the button, leaving it
+              bounded by cream on *both* sides at **1.52:1**. Measured in
+              Chromium by scanning a pixel row outward through the button edge.
+
+              The ring is faint against cream either way, and that is a property
+              of `ring-clay-400/30`, not of where the band sits: #73 filed it
+              for **#306** — the token measures 1.49:1 where the law wants 3:1,
+              and clay needs alpha >= 0.80. Re-grounding the offset here cannot
+              fix a token problem, and it costs the one good edge.
+            */
             'focus-visible:ring-offset-0',
             isHero
               ? /*
