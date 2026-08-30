@@ -71,4 +71,38 @@ describe('focus rings paint', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  /*
+   * The third way a ring renders nothing, and the subtlest (#73).
+   *
+   * Tailwind v4 registers `--tw-ring-shadow` and its siblings as animatable
+   * custom properties, so `transition-all` animates the focus ring *in*. A
+   * parity pass measured this primitive as "five all-transparent entries" and
+   * reported a broken ring; it was 0% of the way through a 150ms animation.
+   * The ring was correct and the transition was wrong.
+   *
+   * It still cost every keyboard stop 150ms with no indicator, which is the
+   * one population the ring exists for. `04-laws.md`: functional transitions
+   * survive, decorative ones do not — and a focus indicator is functional.
+   *
+   * Scoped to lines that declare a focus ring, so an unrelated `transition-all`
+   * on something with no ring is left alone.
+   */
+  it('never animates a focus ring in with transition-all', async () => {
+    const files = await sourceFiles(COMPONENTS_DIR);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = await readFile(file, 'utf8');
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+      for (const [index, line] of code.split('\n').entries()) {
+        if (/\btransition-all\b/.test(line) && /\bfocus-visible:(?:ring|outline)-/.test(line)) {
+          offenders.push(`${path.relative(COMPONENTS_DIR, file)}:${index + 1}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });

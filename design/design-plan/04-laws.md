@@ -135,3 +135,47 @@ Framer Motion for component animation; CSS transitions for hover and focus.
 - Modals trap focus, close on Escape, restore focus
 - Star ratings use a radio-group pattern
 - Every input has a visible `<label htmlFor>`; placeholder is not a label
+
+### The focus ring has to be **visible**, not merely declared
+
+Two ways it computes correctly and renders nothing, both found in the product:
+
+1. **Clipped.** An outward ring on an element that exactly fills an
+   `overflow:hidden` ancestor is 100% outside that ancestor's rect. The vendor
+   card did this on landing and search — the primary interaction of the whole
+   app had no keyboard indicator while `:focus-visible` matched and the
+   `box-shadow` was correct.
+2. **Styleless.** Tailwind's `outline-none` sets `--tw-outline-style: none`, and
+   the width utilities read their line style from that variable — so
+   `outline-none focus-visible:outline-2` paints nothing at all. Pair a width
+   with `focus-visible:outline-solid`.
+
+**A test that asserts the class or the computed value cannot see either
+failure.** Assert the ring is rendered _and within its nearest `overflow:hidden`
+ancestor's rect_.
+
+### Decorative text is exempt from 4.5:1 — narrowly, and it must be `aria-hidden`
+
+`01-foundations.md` requires every text node to clear **4.5:1**. That rule is
+about text a person has to _read_. It is not about a glyph that happens to be a
+character, and holding ornament to it forces a design change that buys no one
+anything — which is the question the landing "How it works" numerals raised
+(`clay-200` on `stone-100`, **1.20:1**).
+
+The exemption, and it is the whole of it:
+
+> Text is exempt from the 4.5:1 minimum only when it is `aria-hidden="true"`,
+> conveys **no** information that is unavailable elsewhere on the screen, and is
+> not part of any control. Every fact it depicts must also be present in a form
+> that clears 4.5:1.
+
+This is WCAG 1.4.3's own "incidental / pure decoration" carve-out, stated
+locally so a parity pass can apply it without arguing about it. The numerals
+qualify: they are `aria-hidden`, and the steps they number are themselves
+headings in `stone-900`, so removing the numerals loses nothing.
+
+**What it does not cover:** anything a sighted user reads for meaning. Low
+contrast is not made lawful by adding `aria-hidden` — that hides the text from
+assistive technology while leaving it just as unreadable on screen, which is
+worse than the original defect. If removing the element would lose information,
+it is not decorative.

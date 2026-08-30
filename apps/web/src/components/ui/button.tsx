@@ -13,9 +13,23 @@ import { Spinner } from '@/components/ui/spinner';
  * The focus ring is the product's warm glow, never browser blue, and the
  * hover/active transforms are decorative, so `motion-reduce` drops them while
  * the colour change (which carries the state) survives.
+ *
+ * **The transition is an explicit property list, never `transition-all` (#73).**
+ * Tailwind v4 registers `--tw-ring-shadow` and friends as animatable custom
+ * properties, so `transition-all` animates the focus ring *in* over 150ms. A
+ * parity pass measured the ring on this primitive as "five all-transparent
+ * entries and `outline: 3px none`" and read it as a broken ring; re-measured
+ * across the transition it paints correctly at 250ms. It was never broken —
+ * it was 0% of the way through an animation nobody asked for.
+ *
+ * That is still a defect, just a smaller one than it looked: every keyboard
+ * stop spends 150ms with no visible indicator, which is exactly the population
+ * the ring exists for. `04-laws.md` already draws the line — functional
+ * transitions survive, decorative ones do not — and a focus indicator is
+ * functional, so it arrives at once while hover and the scale keep their ease.
  */
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-base font-semibold whitespace-nowrap transition-all duration-(--duration-fast) outline-none select-none focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-base font-semibold whitespace-nowrap transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-(--duration-fast) outline-none select-none focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {

@@ -173,9 +173,22 @@ export function SearchBar({
    * and reads as a second, misaligned box. A background stays inside the bar
    * and inherits its shape, so the bar still reads as one control.
    */
+  /*
+   * #73 law 2 asks each segment to show its own focus ring at the law's value.
+   * #89 had already rejected an *outward* ring here, for a reason that still
+   * holds: a rectangular ring around one segment breaks out past the pill's
+   * edge and reads as a second, misaligned box.
+   *
+   * An **inset** ring satisfies both. It is the law's width and colour, it
+   * stays inside the bar, and it follows the segment's own `rounded-full`
+   * shape — so the bar still reads as one control while the focused segment is
+   * unambiguous. The tint stays as well: two cues cost nothing and the tint is
+   * what reads at a glance.
+   */
   const segment = cn(
     'flex min-w-0 flex-col max-sm:w-full max-sm:px-0 max-sm:py-1.5',
     'rounded-full transition-colors duration-(--duration-fast) has-[:focus-visible]:bg-clay-400/10',
+    'has-[:focus-visible]:inset-ring-2 has-[:focus-visible]:inset-ring-clay-400/30',
   );
 
   return (

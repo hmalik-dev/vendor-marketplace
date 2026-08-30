@@ -66,6 +66,31 @@ describe('VendorCard', () => {
     expect(cover?.className).toContain('sm:max-lg:hidden');
   });
 
+  /*
+   * #73 law 1. The link is `display:block` and exactly fills the card, and the
+   * card is `overflow-hidden` — so an outward ring on the LINK is 100% outside
+   * the clipping rect and renders nothing, while `:focus-visible` matches and
+   * the computed `box-shadow` is correct. That is why this asserts which
+   * element carries the ring rather than that a ring exists: the broken
+   * version passed every value-based check there is.
+   */
+  it('carries the focus ring on the card, not on the clipped link inside it', () => {
+    const { container } = render(<VendorCard vendor={vendor()} />);
+    const card = container.querySelector('article');
+    const link = container.querySelector('a');
+
+    expect(card?.className).toContain('overflow-hidden');
+    // Driven by the link's focus, but drawn by the element that does the
+    // clipping — `overflow:hidden` clips descendants, not its own shadow.
+    expect(card?.className).toContain('has-[a:focus-visible]:ring-2');
+    expect(card?.className).toContain('has-[a:focus-visible]:ring-clay-400/30');
+    expect(card?.className).toContain('has-[a:focus-visible]:ring-offset-2');
+    expect(card?.className).toContain('has-[a:focus-visible]:ring-offset-stone-50');
+
+    // And the link must not draw one of its own, or it is clipped again.
+    expect(link?.className).toContain('focus-visible:ring-0');
+  });
+
   it('keeps the compact search card cover at every width', () => {
     const { container } = render(<VendorCard vendor={vendor()} density="compact" />);
     const cover = container.querySelector('[class*="aspect-[3/2]"]');

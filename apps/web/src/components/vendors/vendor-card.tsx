@@ -78,10 +78,31 @@ export function VendorCard({
         */
         'group/card overflow-hidden rounded-[16px] bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base)',
         'hover:shadow-hover motion-safe:hover:-translate-y-0.5',
+        /*
+          The focus ring lives on the card, not on the link inside it (#73).
+
+          The link is `display:block` and exactly fills this element, and this
+          element is `overflow-hidden` — so an outward ring on the link is 100%
+          outside the clipping rect and renders nothing at all, while
+          `:focus-visible` matches and the computed `box-shadow` looks correct.
+          That is how the primary interaction of the whole app went without a
+          keyboard indicator on both landing and search.
+
+          `overflow:hidden` clips descendants, not the element's own shadow, so
+          the same ring drawn here is fully visible. Moving it up is safe
+          precisely because the card is ONE control — unlike the hero search
+          bar, where a shared bar-level ring left three segments
+          indistinguishable.
+        */
+        'has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-clay-400/30 has-[a:focus-visible]:ring-offset-2 has-[a:focus-visible]:ring-offset-stone-50',
         className,
       )}
     >
-      <Link href={`/vendors/${vendor.slug}`} className="block">
+      {/* Suppresses the global `:focus-visible` ring that would be clipped. */}
+      <Link
+        href={`/vendors/${vendor.slug}`}
+        className="block focus-visible:ring-0 focus-visible:ring-offset-0"
+      >
         {/*
           A ratio, never a fixed height. A fixed height against a fluid card
           width crops the same vendor's photo differently at every breakpoint,
