@@ -16,11 +16,23 @@ export type PriceType = (typeof PRICE_TYPES)[number];
 /**
  * `pending` is a date held by an open booking request: the vendor cannot block
  * it while someone is waiting on an answer, and it resolves the moment the
- * request does. Nothing writes it until the booking lifecycle lands in #7 — it
- * exists here so the calendar can render the state its legend promises, rather
- * than advertising a colour no row can ever carry.
+ * request does. It is overlaid at read time rather than stored, so an
+ * unanswered request never takes the vendor out of a date-filtered search.
+ *
+ * `completed` is a date the vendor was booked for that has now passed. It is
+ * **derived at read time from `booked` plus the date**, not written by anything
+ * — a booked day that is behind us is a delivered event, and the frame keeps it
+ * on the calendar rather than letting delivered work vanish. Storing it would
+ * mean a writer that has to run at midnight, and a status that silently lies
+ * until it does.
  */
-export const AVAILABILITY_STATUSES = ['available', 'booked', 'blocked', 'pending'] as const;
+export const AVAILABILITY_STATUSES = [
+  'available',
+  'booked',
+  'blocked',
+  'pending',
+  'completed',
+] as const;
 export type AvailabilityStatus = (typeof AVAILABILITY_STATUSES)[number];
 
 /**

@@ -28,15 +28,32 @@ const MONTHS_PER_PAGE = 3;
 const SATURDAY = 6;
 
 /**
- * Cell states. Colour is never the only signal: booked is bold, blocked is
- * struck through, and every cell carries its state in its accessible name.
- * See design/design-plan/19-availability.md.
+ * Cell states — **every one carries a shape, not just a fill** (#166, #301).
+ *
+ * Booked, pending and blocked previously sat within two points of luminance of
+ * each other: indistinguishable in greyscale, at a glance, or with red-green
+ * deficiency. The frame's answer is a mark per state — dot, dashed border,
+ * hatch + strike, check, ink outline — and the fill became reinforcement rather
+ * than the signal. See design/design-plan/19-availability.md.
+ *
+ * The blocked hatch is the one place this departs from the frame, and the
+ * departure is ruled and recorded (#278 via #306). The frame draws `#6B6459` on
+ * an `#EFE9E0`/`#E0D8CA` hatch, which is **4.13:1** against the dark stripe —
+ * and the numeral's strokes cross both stripes, so "the average clears" was
+ * never an answer. `stone-700` on `stone-200`/`stone-300` is 6.80:1 and spends
+ * two tokens that exist: `#E0D8CA` is in no token file, and `stone-250`, which
+ * an earlier table named, was never minted at all.
  */
+const HATCH =
+  'bg-[repeating-linear-gradient(-45deg,var(--color-stone-200)_0_3px,var(--color-stone-300)_3px_6px)]';
+
 const STATUS_STYLES: Record<AvailabilityStatus, string> = {
   available: 'bg-stone-0 text-stone-900 hover:bg-clay-50',
   booked: 'bg-clay-100 font-semibold text-clay-600 cursor-not-allowed',
-  pending: 'bg-gold-50 font-semibold text-gold-600 cursor-not-allowed',
-  blocked: 'bg-stone-200 text-stone-600 line-through hover:bg-stone-300',
+  pending:
+    'bg-gold-50 font-semibold text-gold-600 cursor-not-allowed border-[1.5px] border-dashed border-gold-400',
+  blocked: `text-stone-700 line-through ${HATCH}`,
+  completed: 'bg-sage-50 font-semibold text-sage-600',
 };
 
 const STATUS_LABELS: Record<AvailabilityStatus, string> = {
@@ -44,16 +61,73 @@ const STATUS_LABELS: Record<AvailabilityStatus, string> = {
   booked: 'Booked — locked',
   pending: 'Pending request',
   blocked: 'Blocked by you',
+  completed: 'Completed',
 };
 
-/** The legend swatch for each state, plus the one for an in-progress drag. */
-const LEGEND: ReadonlyArray<{ label: string; swatch: string }> = [
-  { label: STATUS_LABELS.available, swatch: 'bg-stone-0 border border-stone-300' },
-  { label: STATUS_LABELS.booked, swatch: 'bg-clay-100' },
-  { label: STATUS_LABELS.pending, swatch: 'bg-gold-50' },
-  { label: STATUS_LABELS.blocked, swatch: 'bg-stone-200' },
-  { label: 'Selecting', swatch: 'bg-clay-400' },
+/**
+ * The mark each state carries, drawn beneath the numeral.
+ *
+ * `dot` and `check` are absolutely positioned, which is why their cells take
+ * the frame's asymmetric `5px 0 10px` padding: the numeral stays optically
+ * centred above the mark rather than being shouldered off it.
+ */
+type CellMark = 'dot' | 'check' | null;
+
+const STATUS_MARKS: Record<AvailabilityStatus, CellMark> = {
+  available: null,
+  booked: 'dot',
+  pending: null,
+  blocked: null,
+  completed: 'check',
+};
+
+/** Frame `11`: a 4px clay dot, centred, 4px from the bottom of the cell. */
+function BookedDot(): React.ReactElement {
+  return (
+    <i
+      aria-hidden="true"
+      className="absolute bottom-[4px] left-1/2 -ml-[2px] size-[4px] rounded-full bg-clay-400"
+    />
+  );
+}
+
+/** Frame `11`: a 7x4 two-sided border rotated -45deg — a tick, not a glyph. */
+function CompletedCheck(): React.ReactElement {
+  return (
+    <i
+      aria-hidden="true"
+      className="absolute bottom-[5px] left-1/2 -ml-[4px] h-[4px] w-[7px] -rotate-45 border-b-[1.6px] border-l-[1.6px] border-sage-400"
+    />
+  );
+}
+
+/**
+ * The legend renders the **actual marks**, not flat colour chips (#263).
+ *
+ * A legend of plain swatches cannot explain a calendar whose states are told
+ * apart by shape — it would be a key to the one signal the redesign stopped
+ * relying on. Each swatch is the cell it describes, at the frame's 22px.
+ */
+const LEGEND: ReadonlyArray<{
+  readonly label: string;
+  readonly shape: string | null;
+  readonly status: AvailabilityStatus | 'selecting' | 'today';
+}> = [
+  { label: STATUS_LABELS.available, shape: 'no mark', status: 'available' },
+  { label: STATUS_LABELS.booked, shape: 'dot', status: 'booked' },
+  { label: STATUS_LABELS.pending, shape: 'dashed', status: 'pending' },
+  { label: STATUS_LABELS.blocked, shape: 'hatch + strike', status: 'blocked' },
+  { label: STATUS_LABELS.completed, shape: 'check', status: 'completed' },
+  { label: 'Selecting now', shape: null, status: 'selecting' },
+  { label: 'Today', shape: 'ink outline', status: 'today' },
 ];
+
+/** `selecting` and `today` are cell states without being stored statuses. */
+const LEGEND_MARK: Record<AvailabilityStatus | 'selecting' | 'today', CellMark> = {
+  ...STATUS_MARKS,
+  selecting: null,
+  today: null,
+};
 
 const LOCKED: ReadonlySet<string> = new Set(LOCKED_AVAILABILITY_STATUSES);
 
@@ -61,16 +135,30 @@ const LOCKED: ReadonlySet<string> = new Set(LOCKED_AVAILABILITY_STATUSES);
 const SELECTING_STYLE = 'bg-clay-400 font-semibold text-stone-0';
 
 /*
- * stone-500 is the one token allowed to fail AA, and a past date is exactly the
- * inert content it is reserved for.
+ * A past date is inert, and the frame fills it rather than leaving it bare:
+ * `stone-50` ground under a `stone-500` numeral. `stone-500` is the one token
+ * allowed to fail AA, and this is the content it is reserved for.
  */
-const PAST_STYLE = 'cursor-not-allowed text-stone-500';
+const PAST_STYLE = 'cursor-not-allowed bg-stone-50 text-stone-500';
 
-/** Resolves a day cell to exactly one appearance. */
+/** Frame `11`: today is an ink border, not a clay ring (#264). */
+const TODAY_STYLE = 'border-[1.5px] border-stone-900 font-semibold';
+
+/**
+ * Resolves a day cell to exactly one appearance.
+ *
+ * **`completed` outranks `isPast`**, which no other state does. A completed
+ * event is *defined* by being in the past, so the past branch would erase the
+ * one state it exists to show — and the frame draws it clickable, because
+ * opening the delivered booking is why it stays on the calendar at all.
+ */
 export function cellAppearance(
   status: AvailabilityStatus,
   { isPast, isSelected }: { isPast: boolean; isSelected: boolean },
 ): string {
+  if (status === 'completed') {
+    return STATUS_STYLES.completed;
+  }
   if (isPast) {
     return PAST_STYLE;
   }
@@ -220,6 +308,7 @@ export function AvailabilityCalendar({
 
     let booked = 0;
     let blocked = 0;
+    let completed = 0;
     let openSaturdays = 0;
 
     for (const date of visible) {
@@ -233,6 +322,9 @@ export function AvailabilityCalendar({
       if (status === 'blocked') {
         blocked += 1;
       }
+      if (status === 'completed') {
+        completed += 1;
+      }
       if (
         status === 'available' &&
         !isPastDate(date, today) &&
@@ -242,7 +334,7 @@ export function AvailabilityCalendar({
       }
     }
 
-    return { booked, blocked, openSaturdays };
+    return { booked, blocked, completed, openSaturdays };
   }, [visibleMonths, statusByDate, today]);
 
   const extendTo = (date: string): void => {
@@ -363,7 +455,8 @@ export function AvailabilityCalendar({
         </div>
 
         <p className="mt-1 shrink-0 text-base leading-normal text-stone-700">
-          Click a date to block it, or drag across several. Booked dates are locked.
+          Click a date to block it, or drag across several. Booked dates are locked, and completed
+          events stay on the calendar &mdash; click one to open it.
         </p>
 
         {/*
@@ -405,7 +498,15 @@ export function AvailabilityCalendar({
                         const isPast = isPastDate(date, today);
                         const isToday = date === today;
                         const isSelected = selectedSet.has(date);
-                        const locked = isPast || LOCKED.has(status);
+                        const mark = STATUS_MARKS[status];
+                        /*
+                         * A completed date is past by definition, so the plain
+                         * past rule would lock the one state the frame draws as
+                         * clickable — opening the delivered booking is why it
+                         * stays on the calendar. It is still not vendor-settable:
+                         * `completed` is in `LOCKED_AVAILABILITY_STATUSES`.
+                         */
+                        const locked = status === 'completed' ? true : isPast || LOCKED.has(status);
 
                         return (
                           <td key={date} className="p-0">
@@ -431,17 +532,32 @@ export function AvailabilityCalendar({
                                 // 7px padding at the 1440 reference; a 44px
                                 // touch target below `sm`, where the input is
                                 // a finger rather than a pointer.
-                                'min-h-11 w-full rounded-[7px] py-[7px] text-center text-meta tabular-nums transition-colors duration-(--duration-fast) sm:min-h-0',
+                                'relative min-h-11 w-full rounded-[7px] py-[7px] text-center text-meta tabular-nums transition-colors duration-(--duration-fast) sm:min-h-0',
                                 // Exactly one of these, never layered: a
                                 // `hover:` utility outranks a plain one at the
                                 // same specificity, so an available cell's
                                 // hover fill would beat the selected fill and
                                 // paint white text on near-white.
                                 cellAppearance(status, { isPast, isSelected }),
-                                isToday && 'ring-2 ring-clay-400',
+                                /*
+                                  The frame's asymmetric padding for the two
+                                  states that carry an absolutely positioned
+                                  mark, so the numeral stays optically centred
+                                  above it rather than being shouldered off.
+                                */
+                                mark !== null && 'pt-[5px] pb-[10px]',
+                                /*
+                                  A `1.5px` border, so the padding drops by the
+                                  same amount and the cell keeps its height —
+                                  the frame does exactly this arithmetic.
+                                */
+                                (isToday || status === 'pending') && 'py-[5.5px]',
+                                isToday && TODAY_STYLE,
                               )}
                             >
                               {Number(date.slice(-2))}
+                              {mark === 'dot' ? <BookedDot /> : null}
+                              {mark === 'check' ? <CompletedCheck /> : null}
                             </button>
                           </td>
                         );
@@ -519,11 +635,37 @@ export function AvailabilityCalendar({
           <ul className="flex flex-col gap-2.25 text-sm text-stone-700">
             {LEGEND.map((item) => (
               <li key={item.label} className="flex items-center gap-2.5">
+                {/*
+                  The swatch IS the cell, at the frame's 22px — same fill, same
+                  border, same mark. A flat colour chip would be a key to the one
+                  signal this calendar stopped relying on.
+                */}
                 <span
                   aria-hidden="true"
-                  className={cn('size-4.5 shrink-0 rounded-[5px]', item.swatch)}
-                />
-                {item.label}
+                  className={cn(
+                    'relative flex size-5.5 shrink-0 items-center justify-center rounded-[6px] border-box text-[10px] font-semibold',
+                    item.status === 'selecting'
+                      ? SELECTING_STYLE
+                      : item.status === 'today'
+                        ? cn('bg-stone-0 text-stone-900', TODAY_STYLE)
+                        : STATUS_STYLES[item.status],
+                    item.status === 'available' && 'border border-stone-300',
+                    LEGEND_MARK[item.status] !== null && 'pb-1',
+                  )}
+                >
+                  {item.status === 'today' ? '11' : '14'}
+                  {LEGEND_MARK[item.status] === 'dot' ? <BookedDot /> : null}
+                  {LEGEND_MARK[item.status] === 'check' ? <CompletedCheck /> : null}
+                </span>
+                <span>
+                  {item.label}
+                  {item.shape === null ? null : (
+                    <span className="text-stone-600">
+                      {item.status === 'available' ? ' — ' : ' · '}
+                      {item.shape}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
@@ -535,8 +677,18 @@ export function AvailabilityCalendar({
           </h2>
           <dl className="flex flex-col gap-2 text-base text-stone-700">
             <div className="flex justify-between">
-              <dt>Booked</dt>
+              <dt>Booked ahead</dt>
               <dd className="font-semibold">{quarter.booked} dates</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Completed</dt>
+              {/*
+                Sage, because settled is what sage means (`40-states.md`) — and
+                the number is a real count of past booked dates, not a promise.
+              */}
+              <dd className="font-semibold text-sage-600">
+                {quarter.completed} {quarter.completed === 1 ? 'event' : 'events'}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt>Blocked</dt>

@@ -255,6 +255,46 @@ describe('/vendor/availability', () => {
       expect(await calendar()).toEqual([]);
     });
 
+    /*
+     * `completed` is derived from `booked` plus the date, never stored. A
+     * booked day that is behind us is a delivered event, and the frame keeps it
+     * on the calendar rather than letting finished work vanish. Storing it
+     * would need a writer that runs at midnight — and until it ran, the status
+     * would be lying.
+     */
+    it('reads a past booked date as completed, without storing that', async () => {
+      const vendorId = await createProfile(VENDOR, 'Sunlit Studio');
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId, date: YESTERDAY, status: 'booked' });
+
+      expect(await calendar()).toEqual([{ date: YESTERDAY, status: 'completed' }]);
+
+      const stored = await harness.database.db
+        .select({ status: availability.status })
+        .from(availability);
+      expect(stored).toEqual([{ status: 'booked' }]);
+    });
+
+    it('leaves a future booked date booked', async () => {
+      const vendorId = await createProfile(VENDOR, 'Sunlit Studio');
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId, date: TOMORROW, status: 'booked' });
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'booked' }]);
+    });
+
+    /* A past date the vendor merely blocked was never work, so it is not one. */
+    it('does not turn a past blocked date into a completed one', async () => {
+      const vendorId = await createProfile(VENDOR, 'Sunlit Studio');
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId, date: YESTERDAY, status: 'blocked' });
+
+      expect(await calendar()).toEqual([{ date: YESTERDAY, status: 'blocked' }]);
+    });
+
     /* The vendor's own decision outranks somebody else's hope for the date. */
     it('keeps a date the vendor blocked reading blocked, not pending', async () => {
       await requestOn(TOMORROW);
