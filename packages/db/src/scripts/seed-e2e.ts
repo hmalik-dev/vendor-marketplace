@@ -5,6 +5,7 @@ import { parse } from 'dotenv';
 import { createDatabase } from '../client.js';
 import { loadEnv } from '../load-env.js';
 import { seedE2eFixtures, type E2eAccount } from '../seed-e2e.js';
+import { assertSafeTarget } from './safe-target.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const E2E_ENV_FILE = '.env.e2e.local';
@@ -85,6 +86,14 @@ async function resolveAccount(email: string, secretKey: string, role: string): P
  */
 async function main(): Promise<void> {
   loadEnv();
+
+  /*
+   * Stricter than it looks necessary. This fixture does not merely add rows: it
+   * forces a `users.role` to `vendor` and marks a vendor able to take payment
+   * without Stripe ever saying so. Neither belongs in a database holding real
+   * accounts, so the target is refused before Clerk is even asked.
+   */
+  assertSafeTarget('end-to-end fixtures');
 
   const secretKey = process.env.CLERK_SECRET_KEY;
   if (!secretKey) {
