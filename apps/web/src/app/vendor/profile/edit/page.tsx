@@ -19,11 +19,17 @@ export default async function VendorProfileEditPage(): Promise<React.ReactElemen
 
   const [profile, categories, allTags] = await Promise.all([
     getOwnVendorProfile(),
-    // Required, not degrading: a storefront cannot be saved without a
-    // category, so an empty select here would be a form the vendor can fill in
-    // and never submit. See `ReferenceReadOptions` in `lib/vendor-data`.
-    getCategories({ required: true }),
-    getActiveTags({ required: true }),
+    /*
+     * Required, not degrading: a storefront cannot be saved without a
+     * category, so an empty select here would be a form the vendor can fill in
+     * and never submit. See `ReferenceReadOptions` in `lib/vendor-data`.
+     *
+     * `fresh` because this is the one screen that posts these ids back: a
+     * cached id can outlive the row it names, and the save is then refused for
+     * a choice the vendor was offered (#222).
+     */
+    getCategories({ required: true, fresh: true }),
+    getActiveTags({ required: true, fresh: true }),
   ]);
 
   return (

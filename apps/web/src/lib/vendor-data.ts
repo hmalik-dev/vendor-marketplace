@@ -180,6 +180,17 @@ export interface ReferenceReadOptions {
    * form whose category select is silently empty is not.
    */
   required?: boolean;
+  /**
+   * Read past the shared cache, for a surface whose **ids are posted back**.
+   *
+   * A cached id outlives the reference data it came from: after a reseed the
+   * editor kept offering ids the API no longer had, for up to an hour and
+   * across a hard reload, and every save was refused with "One or more
+   * selected categories are unavailable." (#222). A page that only *displays*
+   * the taxonomy is unharmed by a stale copy and keeps the cache; a page whose
+   * selection is submitted cannot.
+   */
+  fresh?: boolean;
 }
 
 /**
@@ -205,13 +216,22 @@ async function degradeToEmpty<T>(read: () => Promise<T[]>, required?: boolean): 
   }
 }
 
+/**
+ * `apiRequest` treats an omitted `revalidate` as `cache: 'no-store'`, so this
+ * is what a fresh read looks like: the option is left out entirely rather than
+ * sent as `0`, which Next would pair with `cache` and then ignore.
+ */
+function referenceCaching(fresh?: boolean): { revalidate?: number } {
+  return fresh === true ? {} : { revalidate: REFERENCE_DATA_REVALIDATE_SECONDS };
+}
+
 /** Public reference data; no session needed. */
 export async function getCategories(options: ReferenceReadOptions = {}): Promise<Category[]> {
   return degradeToEmpty(
     () =>
       apiRequest('/categories', {
         schema: wireCategoryListSchema,
-        revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
+        ...referenceCaching(options.fresh),
       }),
     options.required,
   );
@@ -222,7 +242,7 @@ export async function getActiveTags(options: ReferenceReadOptions = {}): Promise
     () =>
       apiRequest('/tags', {
         schema: wireTagListSchema,
-        revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
+        ...referenceCaching(options.fresh),
       }),
     options.required,
   );

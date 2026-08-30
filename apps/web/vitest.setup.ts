@@ -10,6 +10,25 @@ if (!('ResizeObserver' in globalThis)) {
   };
 }
 
+/**
+ * The storefront editor's section rail observes its sections to highlight the
+ * one being read. jsdom has no implementation, so the component throws on
+ * mount and takes the whole form's test file with it.
+ */
+if (!('IntersectionObserver' in globalThis)) {
+  globalThis.IntersectionObserver = class {
+    readonly root = null;
+    readonly rootMargin = '';
+    readonly thresholds: readonly number[] = [];
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  };
+}
+
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function scrollIntoView(): void {};
 }

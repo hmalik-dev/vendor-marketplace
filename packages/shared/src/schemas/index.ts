@@ -1223,3 +1223,15 @@ export const apiErrorSchema = z.object({
   details: z.unknown().optional(),
 });
 export type ApiError = z.infer<typeof apiErrorSchema>;
+
+/**
+ * The `details` a validation failure carries when the refusal belongs to one
+ * named field, keyed by the **payload** key rather than a control id — the API
+ * knows what it rejected, not how a client lays it out.
+ *
+ * Without it a form can only match on prose to decide which control to mark,
+ * which is how #222 shipped: a 400 the storefront editor could not attribute
+ * became no feedback at all, and onboarding could not be completed in the UI.
+ */
+export const fieldErrorDetailsSchema = z.object({ field: z.string().min(1) });
+export type FieldErrorDetails = z.infer<typeof fieldErrorDetailsSchema>;

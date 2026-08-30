@@ -148,6 +148,37 @@ describe('/vendor/profile', () => {
       expect(response.json().message).toMatch(/categories are unavailable/i);
     });
 
+    /*
+     * #222: the editor could not render the refusal on the control that caused
+     * it, so a vendor saw a dead button. The message alone is not enough — the
+     * form needs to know which of its controls to mark, and it cannot get that
+     * by matching on prose.
+     */
+    it('names the offending field, so the editor can mark the right control', async () => {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody({ categoryIds: ['11111111-1111-4111-8111-111111111111'] }),
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details).toEqual({ field: 'categoryIds' });
+    });
+
+    it('says how to fix an unavailable category, not only that it failed', async () => {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody({ categoryIds: ['11111111-1111-4111-8111-111111111111'] }),
+      });
+
+      expect(response.json().message).toBe(
+        'One or more selected categories are unavailable. Reload the page and choose from the current list.',
+      );
+    });
+
     it('requires a city and a state', async () => {
       const response = await harness.app.inject({
         method: 'POST',
