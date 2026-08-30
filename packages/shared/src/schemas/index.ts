@@ -1216,6 +1216,22 @@ export interface Paginated<T> {
 
 // --- Errors ----------------------------------------------------------------
 
+/**
+ * What `POST /events/stream-ticket` answers with.
+ *
+ * `EventSource` cannot set an `Authorization` header, so something has to
+ * travel in the stream's URL. This is that something: an opaque, single-use,
+ * minutes-long ticket exchanged for the session over a normal authenticated
+ * request — never the session JWT itself, which is what #215 found in the
+ * API's own logs. `expiresAt` lets a client refresh before connecting rather
+ * than discover the expiry as a failed stream.
+ */
+export const streamTicketSchema = z.object({
+  ticket: z.string().min(1),
+  expiresAt: z.date(),
+});
+export type StreamTicket = z.infer<typeof streamTicketSchema>;
+
 export const apiErrorSchema = z.object({
   statusCode: z.int(),
   error: z.enum(ERROR_CODES),

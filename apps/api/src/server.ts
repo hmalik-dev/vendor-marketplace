@@ -14,6 +14,7 @@ import { MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
 import { allowedOrigins, parseEnv, type ApiEnv } from './config/env.js';
 import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
 import type { AppDatabase } from './lib/database.js';
+import { redactQueryValues } from './lib/log-redaction.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
 import { databasePlugin } from './plugins/database.js';
@@ -64,6 +65,26 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       level: env.LOG_LEVEL,
       // Never let a token, cookie, or webhook signature reach the log stream.
       redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["svix-signature"]'],
+      serializers: {
+        /*
+         * The request line, with every query value redacted (#215).
+         *
+         * `redact` reaches headers but not the URL, and the default request
+         * serializer writes the URL whole — which is how 27 live session JWTs
+         * ended up in one lane's dev log. The stream no longer carries a
+         * credential in its URL, and this makes the logger unable to write one
+         * even if some future route puts it back.
+         */
+        req(request) {
+          return {
+            method: request.method,
+            url: redactQueryValues(request.url),
+            host: request.headers.host,
+            remoteAddress: request.socket?.remoteAddress,
+            remotePort: request.socket?.remotePort,
+          };
+        },
+      },
       ...(options.loggerStream ? { stream: options.loggerStream } : {}),
     },
   }).withTypeProvider<ZodTypeProvider>();
