@@ -85,8 +85,35 @@ describe('frame 03 — the profile is full-bleed (#103)', () => {
     expect(contentRight).toBe(28);
   });
 
-  it('sizes the rail column to the frame width', () => {
-    expect(headerSource).toContain(`lg:grid-cols-[minmax(0,1fr)_${railWidth}px]`);
+  /*
+   * Both widths, read from both frames. `03` draws the 1440 rail and
+   * `27 Vendor profile — 1024` draws the 1024 one, and they are different
+   * numbers — carrying 1440's 380px down to 1024 is the drift this asserts
+   * against. `30-responsive.md` is explicit that 1024 renders the desktop
+   * composition rather than a tablet one, so the columns are the same two;
+   * only the fixed one narrows.
+   */
+  const rail1024Style = (() => {
+    const frame27 = frame('27 Vendor profile — 1024');
+    const found = [...frame27.matchAll(/style="([^"]*)"/g)]
+      .map((match) => match[1] as string)
+      .find(
+        (style) =>
+          /width:\d+px/.test(style) && style.includes('flex:none') && !style.includes('background'),
+      );
+    expect(found, 'frame 27 has no fixed-width rail column').toBeDefined();
+    return found as string;
+  })();
+  const rail1024Width = Number.parseFloat(declaration(rail1024Style, 'width'));
+
+  it('reads the 1024 rail contract too', () => {
+    expect(rail1024Width).toBe(320);
+    expect(rail1024Width).not.toBe(railWidth);
+  });
+
+  it('sizes the rail column to each frame width at its own breakpoint', () => {
+    expect(headerSource).toContain(`lg:grid-cols-[minmax(0,1fr)_${rail1024Width}px]`);
+    expect(headerSource).toContain(`xl:grid-cols-[minmax(0,1fr)_${railWidth}px]`);
   });
 
   it('pads the shell to the frame gutter instead of centring a max-width box', () => {
@@ -141,7 +168,7 @@ describe('frame 03 — the rail starts level with the identity row (#104)', () =
    * first column, the rail in its second.
    */
   it('opens both columns in the same row, card first and rail second', () => {
-    const row = headerSource.indexOf('lg:grid-cols-[minmax(0,1fr)_380px]');
+    const row = headerSource.indexOf('lg:grid-cols-[minmax(0,1fr)_');
     const card = headerSource.indexOf('data-testid="profile-identity-card"');
     const cover = headerSource.indexOf('data-testid="profile-cover"');
     const railSlot = headerSource.indexOf('{rail}');

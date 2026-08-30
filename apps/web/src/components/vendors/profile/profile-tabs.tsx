@@ -118,7 +118,15 @@ export function ProfileTabs({ panes }: ProfileTabsProps): React.ReactElement {
                 sliced down its outer edge, which is the one place a keyboard
                 user most needs to see where they are.
               */
-              'shrink-0 cursor-pointer py-2.5 text-[13.5px] whitespace-nowrap transition-colors duration-(--duration-fast) outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-clay-400',
+              /*
+                `outline-solid` is load-bearing, not decoration. `outline-none`
+                sets `--tw-outline-style: none`, and Tailwind's width utilities
+                resolve their style from that variable — so
+                `focus-visible:outline-2` alone yields a 2px outline with no
+                style and paints nothing at all. The ring was measurably absent
+                until this was added.
+              */
+              'shrink-0 cursor-pointer py-2.5 text-[13.5px] whitespace-nowrap transition-colors duration-(--duration-fast) outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400',
               active === tab
                 ? 'font-semibold text-stone-900 shadow-[inset_0_-2px_0_var(--color-clay-400)]'
                 : 'font-medium text-stone-600 hover:text-stone-900',
@@ -134,7 +142,7 @@ export function ProfileTabs({ panes }: ProfileTabsProps): React.ReactElement {
         id={`panel-${active}`}
         aria-labelledby={`tab-${active}`}
         tabIndex={0}
-        className="pt-4.5 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay-400"
+        className="pt-4.5 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400"
       >
         {panes[active]}
       </div>

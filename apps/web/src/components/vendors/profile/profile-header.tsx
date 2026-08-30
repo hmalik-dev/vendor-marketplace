@@ -71,7 +71,14 @@ export function ProfileHeader({
   const hiddenTagCount = tags.length - visibleTags.length;
 
   return (
-    <div className="grid w-full gap-8 px-4 pt-6 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-x-7 lg:px-10">
+    /*
+      Two rail widths, because two frames draw them: `03 Vendor profile` puts
+      380px beside the card at 1440, and `27 Vendor profile — 1024` narrows it
+      to 320. Carrying 380 down to 1024 is what `30-responsive.md` means when
+      it says 1024 renders the desktop composition rather than a tablet one —
+      the composition is the same, the rail is not.
+    */
+    <div className="grid w-full gap-8 px-4 pt-6 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-x-7 lg:px-10 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0">
         {/*
           The card. `overflow-hidden` is what crops the cover to the rounded
@@ -80,7 +87,13 @@ export function ProfileHeader({
         */}
         <div
           data-testid="profile-identity-card"
-          className="flex min-h-[200px] flex-col overflow-hidden rounded-[18px] bg-stone-0 shadow-[0_2px_12px_rgba(35,32,28,.07)] md:flex-row"
+          /*
+            Three floors, because three frames draw them: 200 at 1440 (`03`),
+            187 at 1024 (`27`), 179 at 768 (`27 … — 768`). They are floors, not
+            heights — real content routinely exceeds them, and the cover
+            stretches to whatever the identity column needs.
+          */
+          className="flex min-h-[179px] flex-col overflow-hidden rounded-[18px] bg-stone-0 shadow-[0_2px_12px_rgba(35,32,28,.07)] md:flex-row lg:min-h-[187px] xl:min-h-[200px]"
         >
           <div className="min-w-0 flex-1 px-6.5 py-5.5">
             <div className="flex items-center gap-3.5">
