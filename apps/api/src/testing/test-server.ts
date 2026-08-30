@@ -5,6 +5,7 @@ import type { ApiEnv } from '../config/env.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import type { ClerkUserSnapshot } from '../modules/users/users.service.js';
 import { buildServer } from '../server.js';
+import type { Clock } from '../plugins/clock.js';
 
 export const TEST_ENV: ApiEnv = {
   NODE_ENV: 'test',
@@ -28,6 +29,12 @@ export const TEST_ENV: ApiEnv = {
 export interface TestHarnessOptions {
   env?: Partial<ApiEnv>;
   loggerStream?: NodeJS.WritableStream;
+  /**
+   * Pins "now" for every date-sensitive route. A suite that leaves it unset
+   * reads the real clock and is therefore hour-dependent; one that sets it
+   * asserts the same thing at every hour and under every `TZ`.
+   */
+  clock?: Clock;
 }
 
 /** Records what a route stored instead of reaching S3. */
@@ -87,6 +94,7 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
     db: database.db,
     storage,
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
+    ...(options.clock ? { clock: options.clock } : {}),
     auth: {
       // Tokens in the suites are literally the Clerk user id they stand for.
       verifySessionToken: async (token) => {

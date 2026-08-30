@@ -13,9 +13,24 @@ describe('GET /vendors/availability/nearby', () => {
   let photographyId: string;
   let cateringId: string;
 
-  /** Days from today, so fixtures never drift into the past as time passes. */
+  /**
+   * The instant every date in this suite is measured from.
+   *
+   * It is pinned rather than read, and pinned to **04:30 UTC on purpose**: at
+   * that moment the UTC day (`2026-03-15`) and the day a database session west
+   * of UTC would call current (`2026-03-14`) are different. That divergence is
+   * the bug — the window floor used to come from the connection's
+   * `CURRENT_DATE` while everything else counted in UTC — so a clock that did
+   * not straddle a midnight would assert nothing at all.
+   *
+   * Reading the real clock instead is what made this suite pass in the
+   * afternoon and fail after 20:00 local.
+   */
+  const FIXED_NOW = new Date('2026-03-15T04:30:00.000Z');
+
+  /** Days from the pinned now, so fixtures never drift as time passes. */
   function dayFromToday(offset: number): string {
-    const date = new Date();
+    const date = new Date(FIXED_NOW);
     date.setUTCDate(date.getUTCDate() + offset);
 
     return date.toISOString().slice(0, 10);
@@ -94,7 +109,7 @@ describe('GET /vendors/availability/nearby', () => {
   const VENDOR_USERS = ['user_a', 'user_b', 'user_c', 'user_d'] as const;
 
   beforeAll(async () => {
-    harness = await createTestHarness();
+    harness = await createTestHarness({ clock: () => FIXED_NOW });
 
     for (const clerkUserId of VENDOR_USERS) {
       harness.clerkUsers.set(clerkUserId, {
@@ -184,6 +199,50 @@ describe('GET /vendors/availability/nearby', () => {
     expect(body.items[0]?.nearestAvailableDate).toBe(dayFromToday(1));
     for (const item of body.items) {
       expect(item.nearestAvailableDate >= today).toBe(true);
+    }
+  });
+
+  /*
+   * The seam itself, asserted rather than implied.
+   *
+   * The window floor used to be Postgres `CURRENT_DATE`, which is the *session's*
+   * day — decided by a `TimeZone` nothing in this repository sets. Under PGlite
+   * that session runs on `Etc/GMT+5`, so after 00:00 UTC it sat a day behind the
+   * UTC day the service validates in, and the endpoint offered a date that had
+   * already gone.
+   *
+   * Two things make this a real assertion rather than a restatement. The pinned
+   * clock is a date in the **past**, so the connection's day is months ahead of
+   * the application's: a floor read from the connection would put the entire
+   * window below it and return nothing at all. And the session is then moved
+   * fourteen hours east, so no accident of the machine's own zone can make the
+   * two agree.
+   */
+  it('floors the window on the injected clock, not on the database session', async () => {
+    await harness.database.client.query(`SET TIME ZONE 'Pacific/Kiritimati'`);
+
+    try {
+      const sessionDay = (
+        await harness.database.client.query<{ day: string }>(
+          `SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS day`,
+        )
+      ).rows[0]?.day;
+      // Guards the guard: if the connection's day happened to match the pinned
+      // one, the assertion below would pass for the wrong reason.
+      expect(sessionDay).not.toBe(dayFromToday(0));
+
+      const wanted = dayFromToday(1);
+      await seedVendor({ user: 'user_a', businessName: 'Taken Tomorrow', blockedDates: [wanted] });
+
+      const body = await nearby(`?date=${wanted}`);
+
+      // Today and the day after are both one day from the wanted date, and the
+      // tie breaks earlier. A floor taken from the connection would have put
+      // the whole window in the past and answered with nothing.
+      expect(body.items).toHaveLength(1);
+      expect(body.items[0]?.nearestAvailableDate).toBe(dayFromToday(0));
+    } finally {
+      await harness.database.client.query(`SET TIME ZONE 'UTC'`);
     }
   });
 

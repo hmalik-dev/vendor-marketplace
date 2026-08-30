@@ -73,7 +73,7 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: nearbyAvailabilityResultSchema },
       },
     },
-    async (request) => findNearbyAvailability(app.db, request.query),
+    async (request) => findNearbyAvailability(app.db, request.query, app.clock()),
   );
 
   /**

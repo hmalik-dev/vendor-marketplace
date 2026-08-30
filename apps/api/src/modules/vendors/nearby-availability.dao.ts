@@ -30,7 +30,13 @@ const VISIBLE = and(eq(vendorProfiles.isPublished, true), eq(vendorProfiles.isDe
  *
  * - **Never the past.** The window's lower bound is the later of the window
  *   start and today, so a search anchored on today can only ever look forward.
- *   `11-search.md` rules out offering a date nobody can book.
+ *   `11-search.md` rules out offering a date nobody can book. **`today` is
+ *   passed in, never read from the connection.** This used to be
+ *   `CURRENT_DATE`, which is the *database session's* day: under PGlite that
+ *   session runs on `Etc/GMT+5`, so from 00:00 UTC it sat a day behind the UTC
+ *   day the rest of the stack computes in, and the query offered a date that
+ *   had already gone. Which day "today" is has to be one decision, made in
+ *   application code.
  * - **Never the wanted date.** A vendor free on it would have been in the main
  *   results; offering them here as an alternative to themselves is noise.
  *
@@ -38,7 +44,7 @@ const VISIBLE = and(eq(vendorProfiles.isPublished, true), eq(vendorProfiles.isDe
  * window, so a customer is offered the smallest move. Ties break earlier,
  * because the sooner of two equally-distant days is the one still bookable.
  */
-function nearestAvailableDate(target: string, windowDays: number) {
+function nearestAvailableDate(target: string, windowDays: number, today: string) {
   /*
    * `candidate.day` is cast to `date` at every use. `generate_series` over an
    * interval yields **timestamps**, and a timestamp minus a date is an
@@ -48,7 +54,7 @@ function nearestAvailableDate(target: string, windowDays: number) {
   return sql<string | null>`(
     SELECT to_char(candidate.day::date, 'YYYY-MM-DD')
     FROM generate_series(
-      GREATEST(${target}::date - ${windowDays}::int, CURRENT_DATE),
+      GREATEST(${target}::date - ${windowDays}::int, ${today}::date),
       ${target}::date + ${windowDays}::int,
       interval '1 day'
     ) AS candidate(day)
@@ -85,6 +91,8 @@ export interface NearbyAvailabilityPage {
 export async function findVendorsFreeNearby(
   db: AppDatabase,
   query: NearbyAvailabilityQuery,
+  /** Today as `YYYY-MM-DD`, decided by the caller — see `nearestAvailableDate`. */
+  today: string,
 ): Promise<NearbyAvailabilityPage> {
   const conditions = [VISIBLE, UNAVAILABLE_ON_TARGET(query.date)];
 
@@ -102,7 +110,7 @@ export async function findVendorsFreeNearby(
     )`);
   }
 
-  const nearest = nearestAvailableDate(query.date, query.windowDays);
+  const nearest = nearestAvailableDate(query.date, query.windowDays, today);
 
   /*
    * The nearest-date expression is repeated in the WHERE rather than aliased,
