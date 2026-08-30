@@ -36,15 +36,25 @@ export interface BookingEntry {
   isSettled: boolean;
 }
 
-const REQUEST_PRESENTATION: Record<string, { label: string; tone: StatusTone; settled: boolean }> =
-  {
-    pending: { label: 'Pending', tone: 'pending', settled: false },
-    quoted: { label: 'Quoted', tone: 'quoted', settled: false },
-    accepted: { label: 'Accepted', tone: 'needsYou', settled: false },
-    declined: { label: 'Declined', tone: 'inert', settled: true },
-    cancelled: { label: 'Withdrawn', tone: 'inert', settled: true },
-    expired: { label: 'Expired', tone: 'inert', settled: true },
-  };
+/**
+ * How a request's status is named and toned wherever it is shown.
+ *
+ * Exported because the request detail screen shows the same statuses and must
+ * use the same words — a cancelled request is "Withdrawn" here and a cancelled
+ * *booking* is "Cancelled", and a second table of labels is how those two come
+ * to disagree.
+ */
+export const REQUEST_PRESENTATION: Record<
+  string,
+  { label: string; tone: StatusTone; settled: boolean }
+> = {
+  pending: { label: 'Pending', tone: 'pending', settled: false },
+  quoted: { label: 'Quoted', tone: 'quoted', settled: false },
+  accepted: { label: 'Accepted', tone: 'needsYou', settled: false },
+  declined: { label: 'Declined', tone: 'inert', settled: true },
+  cancelled: { label: 'Withdrawn', tone: 'inert', settled: true },
+  expired: { label: 'Expired', tone: 'inert', settled: true },
+};
 
 const BOOKING_PRESENTATION: Record<string, { label: string; tone: StatusTone; settled: boolean }> =
   {

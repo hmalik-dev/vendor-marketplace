@@ -209,4 +209,74 @@ describe('QuoteReview', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('That date was booked while this quote was open');
   });
+
+  /*
+   * The same defect as the `pending` one above, one status over — and the
+   * hub-card change is what made it reachable. Everything that is not
+   * `accepted` routes here, so `declined`, `cancelled` and `expired` were
+   * rendering as a live quote: "<vendor> sent a quote", the refund terms, and
+   * an **enabled** `Accept quote` that answers 409.
+   *
+   * The reachable version took one press. Withdrawing refreshes, the status
+   * becomes `cancelled`, and the screen the customer is still looking at
+   * started offering to accept a quote that never existed.
+   */
+  describe('a request that is already over', () => {
+    const settled = ['declined', 'cancelled', 'expired'] as const;
+
+    it.each(settled)('offers no decision on a %s request', (status) => {
+      render(<QuoteReview request={quotedRequest({ status })} />);
+
+      expect(screen.queryByRole('button', { name: 'Accept quote' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Decline' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Withdraw request' })).toBeNull();
+    });
+
+    it.each(settled)('does not claim a quote is waiting on a %s request', (status) => {
+      render(<QuoteReview request={quotedRequest({ status })} />);
+
+      expect(screen.queryByText(/sent a quote/)).toBeNull();
+      expect(screen.queryByText(/full refund applies/)).toBeNull();
+    });
+
+    /*
+     * `cancel` is customer-only, so "you withdrew this" is a fact. `declined`
+     * can be either party, so it stays impersonal. The words are the hub's —
+     * a cancelled *request* is "Withdrawn" there, and a second vocabulary is
+     * how two screens come to disagree about one row.
+     */
+    it('says who ended it where that is knowable', () => {
+      render(<QuoteReview request={quotedRequest({ status: 'cancelled' })} />);
+
+      expect(screen.getByText('You withdrew this request.')).toBeDefined();
+    });
+
+    it('stays impersonal about a decline, which either party can make', () => {
+      render(<QuoteReview request={quotedRequest({ status: 'declined' })} />);
+
+      expect(screen.getByText('This request was declined.')).toBeDefined();
+    });
+
+    /*
+     * `expiresAt` is never cleared when a request settles, so the countdown
+     * would keep running on a dead row — "expires in 5d" under "This request
+     * was declined".
+     */
+    it('stops counting down a deadline that no longer means anything', () => {
+      // A `Date`, not an ISO string — `expiresAt` is parsed by Zod before it
+      // reaches the component, and a string here throws inside the helper.
+      const future = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+      render(<QuoteReview request={quotedRequest({ status: 'declined', expiresAt: future })} />);
+
+      expect(screen.queryByText(/expires/)).toBeNull();
+    });
+
+    /* Live requests keep it, so the guard above cannot be silently over-broad. */
+    it('still counts down on a quote that is still open', () => {
+      const future = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+      render(<QuoteReview request={quotedRequest({ status: 'quoted', expiresAt: future })} />);
+
+      expect(screen.getByText(/This quote expires/)).toBeDefined();
+    });
+  });
 });

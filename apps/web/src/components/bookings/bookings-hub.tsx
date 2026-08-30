@@ -85,11 +85,13 @@ function BookingCard({ entry }: BookingCardProps): React.ReactElement {
         <Link href={href} className={className}>
           {body}
         </Link>
-      ) : entry.vendorSlug ? (
-        <Link href={`/vendors/${entry.vendorSlug}`} className={className}>
-          {body}
-        </Link>
       ) : (
+        /*
+         * A booking row, which has no detail route of its own yet — and no
+         * slug either: `bookingToEntry` writes `vendorSlug: null`, so there is
+         * nothing to link to. It renders as a card and not a link rather than
+         * as a link to somewhere unhelpful.
+         */
         <div className={className}>{body}</div>
       )}
     </li>

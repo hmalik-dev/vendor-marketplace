@@ -206,17 +206,20 @@ describe('BookingsHub', () => {
     });
 
     /*
-     * A booking row is a different table with no detail route of its own yet,
-     * so it keeps the storefront rather than linking somewhere that 404s.
+     * A booking row has no detail route of its own yet, and no slug either —
+     * `bookingToEntry` writes `vendorSlug: null` unconditionally — so it is a
+     * card and not a link.
+     *
+     * An earlier version of this asserted that a booking row kept a
+     * `/vendors/<slug>` link, which passed only because the fixture supplied a
+     * slug on a `kind: 'booking'` entry. `bookingToEntry` cannot emit that
+     * combination, so the assertion described a row the application does not
+     * produce — the same "impossible row" this file criticises two tests up.
      */
-    it('leaves a booking row pointing at the vendor, which is the route that exists', () => {
-      expect(linkFor({ kind: 'booking', id: 'bk-9', status: 'confirmed' })).toBe(
-        '/vendors/kessler-co',
+    it('renders a booking row as a card, because it has nowhere of its own to go', () => {
+      expect(linkFor({ kind: 'booking', id: 'bk-9', status: 'confirmed', vendorSlug: null })).toBe(
+        null,
       );
-    });
-
-    it('renders no link at all when there is nowhere to go', () => {
-      expect(linkFor({ kind: 'booking', vendorSlug: null })).toBeNull();
     });
   });
 });

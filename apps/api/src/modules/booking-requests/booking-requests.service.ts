@@ -593,7 +593,7 @@ export async function transitionRequest(
 
   await syncHeldDate(db, updated.vendorId, updated.eventDate);
 
-  await announce(db, updated, action, row.status, vendor.businessName, options.hub);
+  await announce(db, updated, action, row.status, vendor.businessName, party, options.hub);
 
   const servicePackage = updated.packageId
     ? ((await findPackagesByIds(db, [updated.packageId]))[0] ?? null)
@@ -752,6 +752,11 @@ async function announce(
   action: RequestAction,
   from: BookingRequestStatus,
   businessName: string,
+  /*
+   * Who acted. `from` alone cannot answer it: both parties may decline a
+   * `quoted` request, and the notification is addressed to the other one.
+   */
+  party: 'customer' | 'vendor',
   hub?: EventHub,
 ): Promise<void> {
   switch (action) {
@@ -786,17 +791,38 @@ async function announce(
       );
       return;
     case 'decline':
-      await notifyParty(
-        db,
-        row,
-        'customer',
-        'request_declined',
-        {
-          title: `${businessName} declined`,
-          body: 'The date is free again — try another vendor for it.',
-        },
-        hub,
-      );
+      /*
+       * Whoever did not decline is the one who needs telling — the same rule
+       * as `accept` above, and for the same reason. Decline used to be the
+       * vendor's alone, so this addressed the customer unconditionally; once
+       * the customer could decline a quote, that sent them a notification
+       * about their own decision, attributed to the vendor ("Sunlit Studio
+       * declined"), and told the vendor nothing at all. `request_declined` is
+       * the only signal either party gets.
+       */
+      await (from === 'quoted' && party === 'customer'
+        ? notifyParty(
+            db,
+            row,
+            'vendor',
+            'request_declined',
+            {
+              title: 'Quote declined',
+              body: `The customer turned down your quote for ${readableDate(row.eventDate)}.`,
+            },
+            hub,
+          )
+        : notifyParty(
+            db,
+            row,
+            'customer',
+            'request_declined',
+            {
+              title: `${businessName} declined`,
+              body: 'The date is free again — try another vendor for it.',
+            },
+            hub,
+          ));
       return;
     case 'cancel':
       await notifyParty(
