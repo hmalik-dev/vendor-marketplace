@@ -27,6 +27,306 @@ describe('useUploadQueue', () => {
   });
 
   /*
+   * #173. Once a batch started, the only way to stop it was to leave the page.
+   *
+   * The half that matters is what survives: everything already saved stays
+   * saved, because each file is persisted on its own the moment it lands.
+   * Cancelling is not an undo.
+   */
+  describe('cancel', () => {
+    /** Resolves when the test says so, so a file can be caught mid-flight. */
+    function deferred(): { promise: Promise<unknown>; resolve: (value: unknown) => void } {
+      let resolve: (value: unknown) => void = () => {};
+      const promise = new Promise((settle) => {
+        resolve = settle;
+      });
+      return { promise, resolve };
+    }
+
+    it('stops the files still queued behind the one in flight', async () => {
+      const files = Array.from({ length: 6 }, (_unused, index) => jpeg(`shot-${index}.jpg`));
+      const started: string[] = [];
+      const first = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          started.push(file.name);
+
+          if (file.name === 'shot-0.jpg') {
+            await first.promise;
+            // What the real uploader does on abort: the request never completes.
+            if (options.signal?.aborted === true) {
+              throw new TestTransportError();
+            }
+          }
+
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles(files));
+      await waitFor(() => expect(started).toEqual(['shot-0.jpg']));
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        first.resolve(stored);
+      });
+
+      // The five behind it never started, and never will.
+      await waitFor(() => expect(result.current.tasks).toHaveLength(0));
+      expect(started).toEqual(['shot-0.jpg']);
+    });
+
+    it('leaves already-saved files saved — cancelling is not an undo', async () => {
+      const files = Array.from({ length: 5 }, (_unused, index) => jpeg(`shot-${index}.jpg`));
+      const saved: string[] = [];
+      const third = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          if (file.name === 'shot-2.jpg') {
+            await third.promise;
+            if (options.signal?.aborted === true) {
+              throw new TestTransportError();
+            }
+          }
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({
+          prefix: 'portfolio',
+          onUploaded: async () => {
+            saved.push('one');
+          },
+        }),
+      );
+
+      act(() => result.current.addFiles(files));
+      // Two have landed; the third is in flight and two are queued.
+      await waitFor(() => expect(saved).toHaveLength(2));
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        third.resolve(stored);
+      });
+
+      // The two that finished are still saved, and stay `done` on screen.
+      expect(saved).toHaveLength(2);
+      await waitFor(() =>
+        expect(result.current.tasks.filter((task) => task.status === 'done')).toHaveLength(2),
+      );
+      expect(result.current.tasks.some((task) => task.status === 'queued')).toBe(false);
+    });
+
+    /*
+     * A cancelled file is not a failed one. Showing "check your connection"
+     * beside a button the vendor has just pressed would be a lie, and it would
+     * offer a retry for something they asked to stop.
+     */
+    it('does not leave a failed tile behind for the file it aborted', async () => {
+      const inFlight = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          _file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          await inFlight.promise;
+          if (options.signal?.aborted === true) {
+            throw new TestTransportError();
+          }
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles([jpeg('only.jpg')]));
+      await waitFor(() => expect(result.current.tasks[0]?.status).toBe('uploading'));
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        inFlight.resolve(stored);
+      });
+
+      await waitFor(() => expect(result.current.tasks).toHaveLength(0));
+      expect(result.current.tasks.some((task) => task.status === 'failed')).toBe(false);
+    });
+
+    /*
+     * The vendor picks three photos, then three more before the first three
+     * land. `Cancel` means "stop uploading" — so the two selections share one
+     * controller. Giving the second its own would leave the first batch
+     * running behind a button claiming to have stopped it; aborting the first
+     * on the second selection would cancel work nobody asked to cancel.
+     */
+    it('does not cancel a running batch just because more files were added', async () => {
+      const started: string[] = [];
+      const first = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          started.push(file.name);
+          if (file.name === 'a1.jpg') {
+            await first.promise;
+            if (options.signal?.aborted === true) {
+              throw new TestTransportError();
+            }
+          }
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles([jpeg('a1.jpg'), jpeg('a2.jpg')]));
+      await waitFor(() => expect(started).toEqual(['a1.jpg']));
+
+      // A second selection while the first is still going.
+      act(() => result.current.addFiles([jpeg('b1.jpg')]));
+      await act(async () => {
+        first.resolve(stored);
+      });
+
+      // The first batch was not aborted: every file it queued still uploaded.
+      await waitFor(() => expect(started).toContain('a2.jpg'));
+      expect(result.current.tasks.some((task) => task.status === 'failed')).toBe(false);
+    });
+
+    it('stops both selections at once, because Cancel means stop uploading', async () => {
+      const started: string[] = [];
+      const held = deferred();
+
+      uploadOne.mockImplementation(
+        async (
+          file: File,
+          _prefix: string,
+          options: {
+            signal?: AbortSignal;
+          },
+        ) => {
+          started.push(file.name);
+          await held.promise;
+          if (options.signal?.aborted === true) {
+            throw new TestTransportError();
+          }
+          return stored;
+        },
+      );
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles([jpeg('a1.jpg'), jpeg('a2.jpg')]));
+      await waitFor(() => expect(started).toEqual(['a1.jpg']));
+      act(() => result.current.addFiles([jpeg('b1.jpg'), jpeg('b2.jpg')]));
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        held.resolve(stored);
+      });
+
+      /*
+       * Both selections stop. Each `addFiles` runs its own loop, so at the
+       * moment of the cancel `a1` and `b1` were both in flight — both are
+       * aborted — while `a2` and `b2` were queued behind them and never start.
+       */
+      await waitFor(() => expect(result.current.tasks).toHaveLength(0));
+      expect(started).not.toContain('a2.jpg');
+      expect(started).not.toContain('b2.jpg');
+    });
+
+    /*
+     * The held-back files were never in the batch — they were dropped over the
+     * per-batch ceiling before anything started — and the notice is the only
+     * record of which ones. Stopping the upload must not take that away.
+     */
+    it('keeps the held-back notice, which is about files it never started', async () => {
+      const tooMany = Array.from({ length: MAX_UPLOAD_BATCH_FILES + 3 }, (_unused, index) =>
+        jpeg(`shot-${index}.jpg`),
+      );
+      const held = deferred();
+      uploadOne.mockImplementation(async () => {
+        await held.promise;
+        return stored;
+      });
+
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles(tooMany));
+      await waitFor(() => expect(result.current.heldBackNotice).not.toBeNull());
+      const notice = result.current.heldBackNotice;
+
+      act(() => result.current.cancel());
+      await act(async () => {
+        held.resolve(stored);
+      });
+
+      expect(result.current.heldBackNotice).toBe(notice);
+    });
+
+    it('is harmless when nothing is in flight', () => {
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      expect(() => act(() => result.current.cancel())).not.toThrow();
+      expect(result.current.tasks).toHaveLength(0);
+    });
+
+    /** A new selection after a cancel must upload, not inherit the abort. */
+    it('accepts a fresh batch after a cancel', async () => {
+      const { result } = renderHook(() =>
+        useUploadQueue({ prefix: 'portfolio', onUploaded: async () => {} }),
+      );
+
+      act(() => result.current.addFiles([jpeg('first.jpg')]));
+      act(() => result.current.cancel());
+
+      act(() => result.current.addFiles([jpeg('second.jpg')]));
+
+      await waitFor(() => {
+        const second = result.current.tasks.find((task) => task.name === 'second.jpg');
+        expect(second?.status).toBe('done');
+      });
+    });
+  });
+
+  /*
    * The ticket's headline requirement. Partial success is the normal case: the
    * six that landed are already saved, and the two that did not keep their
    * tiles so the vendor can tell which shots they were.
