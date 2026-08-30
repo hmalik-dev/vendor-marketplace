@@ -174,24 +174,25 @@ export function SearchBar({
    * is worse than a taller control. See design/design-plan/30-responsive.md.
    */
   /*
-   * The hero divider is a short hairline at 1440 and 1024 — 32px and 28px in a
-   * bar of 58 and 50 — but `14 Landing tablet` draws no divider element at all:
-   * it puts `border-right: 1px #EFE9E0` on the segments instead, which is a
-   * **full-height** rule in a lighter colour. Rendered as this same span at
-   * full height rather than restructured into borders, because the two are
-   * pixel-identical and one element is easier to keep honest than three.
+   * A short hairline at every width: 32px at 1440, 28px at 1024, 29px at 768.
    *
-   * `self-stretch`, **not** `h-full`. `height:100%` on a flex item resolves
-   * against the container's height, and this container's height comes from its
-   * own content — indefinite, so the percentage computed to 0 and both rules
-   * vanished at 768 while still measuring the right colour. The bar read as one
-   * undivided field. `align-self:stretch` is the property that actually means
-   * "fill the cross axis".
+   * `14 Landing tablet` draws no divider element — it puts `border-right: 1px
+   * #EFE9E0` on the segments instead. That is rendered as this same span rather
+   * than restructured into three borders, because the two are pixel-identical
+   * and one element is easier to keep honest than three. It does pick up the
+   * frame's lighter colour there.
+   *
+   * **29px, not the bar's height.** The bar is `align-items:center`, so a
+   * border on a segment runs the *segment's* height inside the taller content
+   * box — 29px in a 40px box. Two wrong readings of that in a row: `h-full`
+   * resolved to 0 against an indefinite container and drew nothing, then
+   * `self-stretch` drew the whole 40px box. Both were attempts to derive a
+   * height that the frame simply states.
    */
   const divider = cn(
     'shrink-0 bg-stone-200 max-sm:h-px max-sm:w-full sm:w-px sm:bg-stone-300',
     isHero
-      ? 'sm:self-stretch sm:bg-stone-200 lg:h-7 lg:self-center lg:bg-stone-300 min-[90rem]:h-8'
+      ? 'sm:h-7.25 sm:bg-stone-200 lg:h-7 lg:bg-stone-300 min-[90rem]:h-8'
       : 'sm:h-6.5 sm:bg-stone-200',
   );
   /*
@@ -335,7 +336,12 @@ export function SearchBar({
           focusing hands the field straight back to the browser's own editor.
           See design/design-plan/10-landing.md.
         */}
-        <span className={cn('relative flex min-w-0', isHero && 'mt-0.5')}>
+        {/*
+          The same baseline ladder as `field` — 0 at 768, 1px at 1024, 2px at
+          1440. Left on the flat `mt-0.5`, this segment's micro-label sat 1.3px
+          above the other two, where the frame draws all three flush.
+        */}
+        <span className={cn('relative flex min-w-0', isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5')}>
           <input
             type="date"
             value={draft.date}

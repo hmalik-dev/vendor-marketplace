@@ -113,7 +113,16 @@ export function CategorySelect({
             */
             /* 1.2 at 768, 1.3 from 1024 — `14 Landing tablet` widens the
                two fields either side of it instead. */
-            isHero ? 'sm:min-w-36 sm:flex-[1.2] lg:flex-[1.3]' : 'sm:min-w-33 sm:flex-[1.15]',
+            /*
+              `padding-right:14px` at 768, where the frame gives this segment a
+              border rather than a divider beside it. `flex-basis` is 0, so the
+              missing 14px was redistributed and every boundary in the bar
+              moved — the vendor-type segment came out 9.6px narrow and both
+              hairlines sat left of where the frame draws them.
+            */
+            isHero
+              ? 'sm:min-w-36 sm:flex-[1.2] sm:pr-3.5 lg:flex-[1.3] lg:pr-0'
+              : 'sm:min-w-33 sm:flex-[1.15]',
           )}
         >
           <span

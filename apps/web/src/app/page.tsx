@@ -294,7 +294,10 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 repeats the same navigation twice in 120px.
               */}
               <div className="mt-3.25 hidden flex-wrap items-center gap-[7px] max-md:flex lg:flex min-[90rem]:mt-4 min-[90rem]:gap-2">
-                <span className="mr-0.5 text-sm text-stone-600">Or jump straight to</span>
+                {/* Steps with the chips beside it: 11.5px/1px, 12.5px/2px at 1440. */}
+                <span className="mr-px text-[11.5px] text-stone-600 min-[90rem]:mr-0.5 min-[90rem]:text-sm">
+                  Or jump straight to
+                </span>
                 {LANDING_JUMP_CATEGORY_SLUGS.map((slug, index) => (
                   <Link
                     key={slug}
