@@ -98,8 +98,24 @@ describe('QuoteReview', () => {
     expect(screen.queryByRole('link', { name: /pay/i })).toBeNull();
   });
 
-  it('cannot accept a request that carries no price', () => {
-    render(<QuoteReview request={quotedRequest({ quotedPriceCents: null })} />);
+  /*
+   * A **custom** request, which is the only shape that actually reaches this
+   * surface without a price. `createBookingRequest` writes
+   * `finalPriceCents: servicePackage?.priceCents ?? null`, so a packaged
+   * request is priced from the moment it exists, and the quote path always
+   * writes `quotedPriceCents` — meaning a `quoted` request with no price is a
+   * row the application cannot produce.
+   *
+   * This originally asserted against exactly that impossible row: `quoted`
+   * with a null price. Every field was checked and the object described could
+   * not exist, which no assertion on values can see.
+   */
+  it('cannot accept a custom request that has not been quoted yet', () => {
+    render(
+      <QuoteReview
+        request={quotedRequest({ status: 'pending', quotedPriceCents: null, quoteNote: null })}
+      />,
+    );
 
     expect(screen.getByRole('button', { name: 'Accept quote' })).toHaveProperty('disabled', true);
     expect(screen.getByText('No price yet')).toBeDefined();
