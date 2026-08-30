@@ -115,6 +115,17 @@ matching file. Do not duplicate it here.
   regenerate.
 - **A development default must never be able to reach production.** Derive it from
   something the platform sets, or throw.
+- **One ticket per worktree — the staging hook makes it mandatory, not advisory.**
+  The hook refuses any commit while *any* unrelated path in the tree is dirty, so
+  two sessions with work in flight in the same checkout can never both commit:
+  each one's edits block the other's, in both directions. Verified 2026-08-30,
+  when two overnight lanes deadlocked in the shared checkout. Stage explicit
+  paths in their own command too — the hook reads the tree before the command
+  runs, so `git add X && git commit` is refused where the same two steps
+  separately succeed. Also: `EnterWorktree` branches fresh from `origin/main` and
+  does **not** carry uncommitted work across, whatever its description says —
+  commit WIP to a branch before moving, and check `git status` inside the new
+  worktree before trusting it.
 - **MVP only.** No ticket implements anything from a screen file's Post-MVP
   section, and no invented numbers reach a public page.
 
