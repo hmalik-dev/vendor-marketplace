@@ -442,7 +442,7 @@ export function AvailabilityCalendar({
         <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-3">
           <h1 className="display-heading text-display-md text-stone-900">Availability</h1>
 
-          <div className="flex items-center gap-3 text-base text-stone-700">
+          <div className="flex items-center gap-3 text-[13px] text-stone-700">
             <MonthNavButton
               label="Show earlier months"
               glyph="‹"
@@ -463,7 +463,13 @@ export function AvailabilityCalendar({
           </div>
         </div>
 
-        <p className="mt-1 shrink-0 text-base leading-normal text-stone-700">
+        {/*
+          `leading-[normal]`, not `leading-normal`. The frame declares no
+          line-height, so it inherits the CSS keyword `normal` (~1.19) — while
+          Tailwind's `leading-normal` is the RATIO 1.5, a 40.5px box against the
+          frame's 32px, which pushed the whole calendar 23px down the page.
+        */}
+        <p className="mt-1 shrink-0 text-base leading-[normal] text-stone-700">
           Click a date to block it, or drag across several. Booked dates are locked, and completed
           events stay on the calendar &mdash; click one to open it.
         </p>
@@ -523,13 +529,26 @@ export function AvailabilityCalendar({
                          * before it was dead for anyone else.
                          */
                         const opensBooking = status === 'completed';
+                        /*
+                         * Same shape, same reason. `19-availability.md` gives
+                         * pending the interaction "opens the request", and a
+                         * `disabled` button is out of the tab order — so the
+                         * cell's accessible name is never announced and the
+                         * promise is dead for a keyboard user first.
+                         *
+                         * The dashboard rather than a deep link: `availability`
+                         * carries no request id, and a URL the data cannot
+                         * support is the same defect wearing a different hat.
+                         */
+                        const opensRequest = status === 'pending';
+                        const navigates = opensBooking || opensRequest;
 
                         return (
                           <td key={date} className="p-0">
                             <button
                               type="button"
-                              disabled={(locked && !opensBooking) || isSaving}
-                              aria-pressed={isSelected}
+                              disabled={(locked && !navigates) || isSaving}
+                              {...(locked ? {} : { 'aria-pressed': isSelected })}
                               aria-label={`${date} — ${STATUS_LABELS[status]}${isPast ? ', in the past' : ''}`}
                               onPointerDown={(event) => {
                                 if (locked) return;
@@ -540,7 +559,7 @@ export function AvailabilityCalendar({
                                 if (isDragging && !locked) extendTo(date);
                               }}
                               onClick={(event) => {
-                                if (opensBooking) {
+                                if (navigates) {
                                   /*
                                    * The calendar knows the date, not which
                                    * booking sat on it — `availability` carries
@@ -548,7 +567,9 @@ export function AvailabilityCalendar({
                                    * that lists them rather than inventing a
                                    * deep link the data cannot support.
                                    */
-                                  router.push('/vendor/bookings');
+                                  router.push(
+                                    opensBooking ? '/vendor/bookings' : '/vendor/dashboard',
+                                  );
                                   return;
                                 }
                                 // Keyboard activation reports no pointer, and
@@ -648,7 +669,8 @@ export function AvailabilityCalendar({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="text-stone-700 hover:text-stone-900"
+                  // Frame `11` draws `Clear` at `8px 6px`, not the `sm` default.
+                  className="px-1.5 py-2 text-stone-700 hover:text-stone-900"
                   disabled={isSaving}
                   onClick={() => {
                     setSelection([]);
@@ -704,8 +726,9 @@ export function AvailabilityCalendar({
                 </span>
                 <span>
                   {item.label}
+                  {/* The frame leaves row 1's tail in the row colour. */}
                   {item.shape === null ? null : (
-                    <span className="text-stone-600">
+                    <span className={item.status === 'available' ? undefined : 'text-stone-600'}>
                       {item.status === 'available' ? ' — ' : ' · '}
                       {item.shape}
                     </span>
@@ -720,7 +743,7 @@ export function AvailabilityCalendar({
           <h2 className="mb-2.5 text-label font-semibold tracking-label text-stone-600 uppercase">
             This quarter
           </h2>
-          <dl className="flex flex-col gap-2 text-base text-stone-700">
+          <dl className="flex flex-col gap-2 text-[13px] text-stone-700">
             <div className="flex justify-between">
               <dt>Booked ahead</dt>
               <dd className="font-semibold">{quarter.booked} dates</dd>

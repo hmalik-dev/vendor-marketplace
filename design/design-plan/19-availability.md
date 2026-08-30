@@ -135,6 +135,21 @@ the state — this is a contrast fix to the numeral, not a redesign of the cell.
 `Orla - Screens.dc.html` is untouched; the divergence is recorded against the
 source design project.
 
+### The market note states the vendor's own numbers — recorded 2026-08-30
+
+Frame `11` draws _"Saturdays in June and July are 80% booked across Austin.
+Yours are worth quoting high."_ **That copy does not ship**, and its absence is
+correct rather than drift.
+
+There is no market data to read 80% from, and `04-laws.md` forbids a number on a
+page that was not read from the database at request time. The panel keeps the
+frame's shape — `stone-150`, 12px radius, 12px padding, 12.5px/1.55 `stone-700` —
+and says what this vendor's own calendar says instead, which is true on day one.
+`98-post-mvp.md` holds the unblock condition.
+
+Recorded here because a parity pass will otherwise rediscover it as a Text
+failure every time, the way the rationale panel was.
+
 ### The rail's rationale note does not ship — ruled 2026-08-30 (#275 via #306)
 
 The 300px rail in frame `11` carries a `stone-150` panel between the legend and

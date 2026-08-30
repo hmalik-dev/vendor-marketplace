@@ -195,9 +195,40 @@ describe('AvailabilityCalendar', () => {
     renderCalendar([entry('2026-06-15', 'booked'), entry('2026-06-17', 'pending')]);
 
     expect(cell('2026-06-15')).toHaveProperty('disabled', true);
-    expect(cell('2026-06-17')).toHaveProperty('disabled', true);
     // An ordinary open date stays editable.
     expect(cell('2026-06-18')).toHaveProperty('disabled', false);
+  });
+
+  /*
+   * Pending and completed are not vendor-settable either, but they are not
+   * inert: `19-availability.md` gives one "opens the request" and the other
+   * "opens the past booking". `disabled` would take them out of the tab order
+   * and their accessible names would never be announced — the promise dies for
+   * a keyboard user before it dies for anyone else.
+   */
+  it('keeps the two states that lead somewhere reachable', async () => {
+    render(
+      <AvailabilityCalendar
+        initialEntries={[entry('2026-06-17', 'pending'), entry('2026-06-02', 'completed')]}
+        today="2026-06-15"
+      />,
+    );
+
+    const pending = cell('2026-06-17');
+    const completed = cell('2026-06-02');
+
+    expect(pending).toHaveProperty('disabled', false);
+    expect(completed).toHaveProperty('disabled', false);
+
+    // Neither advertises a toggle it cannot perform.
+    expect(pending.getAttribute('aria-pressed')).toBeNull();
+    expect(completed.getAttribute('aria-pressed')).toBeNull();
+
+    await userEvent.click(completed);
+    expect(push).toHaveBeenCalledWith('/vendor/bookings');
+
+    await userEvent.click(pending);
+    expect(push).toHaveBeenCalledWith('/vendor/dashboard');
   });
 
   /*
@@ -394,9 +425,14 @@ describe('AvailabilityCalendar', () => {
     expect(cell('2026-06-15')).toHaveProperty('disabled', true);
     expect(quarterCount('Booked ahead')).toBe('1 dates');
 
-    // And the pending sibling is neither counted as booked nor editable.
+    /*
+     * And the pending sibling is not counted as booked, and not settable — but
+     * it IS reachable, because it opens the request. Not settable and not
+     * reachable are different things, and conflating them is what put its
+     * accessible name out of reach of a screen reader.
+     */
     expect(cell('2026-06-16').getAttribute('aria-label')).toBe('2026-06-16 — Pending request');
-    expect(cell('2026-06-16')).toHaveProperty('disabled', true);
+    expect(cell('2026-06-16').getAttribute('aria-pressed')).toBeNull();
   });
 
   it('counts only open future Saturdays, since that is the number that drives action', () => {
