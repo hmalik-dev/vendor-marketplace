@@ -23,9 +23,7 @@ import {
   type WireVendorDashboard,
   type WireVendorProfile,
   type WireVendorPayoutStatus,
-  type WireStripeOnboardingLink,
   wireVendorPayoutStatusSchema,
-  wireStripeOnboardingLinkSchema,
 } from './wire-schemas';
 
 /**
@@ -361,28 +359,6 @@ export async function getPayoutStatus(): Promise<WireVendorPayoutStatus | null> 
 
     if (error.statusCode === 404) {
       return null;
-    }
-
-    rethrowUnlessSessionFailure(error, signInPath);
-  }
-}
-
-/**
- * Mints a hosted-onboarding link and answers with the URL to send the vendor
- * to. A POST, because the first call creates the connected account.
- */
-export async function startPayoutOnboarding(): Promise<WireStripeOnboardingLink> {
-  const { token, signInPath } = await vendorSession();
-
-  try {
-    return await apiRequest('/vendor/stripe/connect', {
-      method: 'POST',
-      schema: wireStripeOnboardingLinkSchema,
-      token,
-    });
-  } catch (error) {
-    if (!(error instanceof ApiClientError)) {
-      throw error;
     }
 
     rethrowUnlessSessionFailure(error, signInPath);

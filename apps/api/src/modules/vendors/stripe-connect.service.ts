@@ -1,11 +1,12 @@
-import type { VendorPayoutStatus } from '@vendor-marketplace/shared';
+import {
+  VENDOR_PAYMENTS_RESUME_PATH,
+  VENDOR_PAYMENTS_RETURN_PATH,
+  type VendorPayoutStatus,
+} from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
-import {
-  isOnboarded,
-  type StripeConnectGateway,
-  type StripeAccountStatus,
-} from '../../lib/stripe.js';
+import { z } from 'zod';
+import { isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
 import { findUserById } from '../users/users.dao.js';
 import {
   findVendorProfileByStripeAccountId,
@@ -13,25 +14,18 @@ import {
   updateVendorProfileById,
 } from './vendors.dao.js';
 
-/**
- * Where Stripe drops the vendor once the hosted form is finished or abandoned.
- * `payments` rather than `payouts` because that is the word frame `08` puts in
- * the vendor's sidebar, and the route a nav item points at should read like the
- * nav item.
- */
-export const PAYOUT_RETURN_PATH = '/vendor/payments/return';
-
-/**
- * Where Stripe drops them when the link has expired or was already used. It is
- * the payouts page itself rather than a dedicated route: the page already knows
- * how to mint a new link, and `resume` is what turns its heading into an
- * explanation of why they are back.
- */
-export const PAYOUT_REFRESH_PATH = '/vendor/payments?resume=1';
-
+/** What every Stripe Connect operation needs. */
 export interface StripeConnectDeps {
   db: AppDatabase;
   stripe: StripeConnectGateway;
+}
+
+/**
+ * Onboarding additionally has to tell Stripe where to send the vendor back to.
+ * Kept off `StripeConnectDeps` so the webhook — which has nowhere to send
+ * anyone — is not made to carry a value it never reads.
+ */
+export interface StripeOnboardingDeps extends StripeConnectDeps {
   /** Origin Stripe returns the vendor to, with no trailing slash. */
   returnOrigin: string;
 }
@@ -48,7 +42,7 @@ export interface StripeConnectDeps {
  * against one account, never three accounts.
  */
 export async function startPayoutOnboarding(
-  deps: StripeConnectDeps,
+  deps: StripeOnboardingDeps,
   userId: string,
 ): Promise<{ url: string }> {
   const vendor = await findVendorProfileByUserId(deps.db, userId);
@@ -82,8 +76,8 @@ export async function startPayoutOnboarding(
 
   return deps.stripe.createOnboardingLink({
     accountId,
-    returnUrl: `${deps.returnOrigin}${PAYOUT_RETURN_PATH}`,
-    refreshUrl: `${deps.returnOrigin}${PAYOUT_REFRESH_PATH}`,
+    returnUrl: `${deps.returnOrigin}${VENDOR_PAYMENTS_RETURN_PATH}`,
+    refreshUrl: `${deps.returnOrigin}${VENDOR_PAYMENTS_RESUME_PATH}`,
   });
 }
 
@@ -109,8 +103,21 @@ export async function readPayoutStatus(
   };
 }
 
+/**
+ * The four things a notification can do to a vendor's payout flag. Declared as
+ * a schema because the webhook serialises it straight into its response, and
+ * two hand-written copies of one vocabulary is how a response body and the
+ * handler behind it drift apart.
+ */
+export const accountUpdateOutcomeSchema = z.enum([
+  'onboarded',
+  'not-onboarded',
+  'unchanged',
+  'ignored',
+]);
+
 /** What `applyAccountStatusChange` did, for the webhook's response and its log line. */
-export type AccountUpdateOutcome = 'onboarded' | 'not-onboarded' | 'unchanged' | 'ignored';
+export type AccountUpdateOutcome = z.infer<typeof accountUpdateOutcomeSchema>;
 
 /**
  * Re-reads the account from Stripe and writes the derived flag. The event
@@ -128,7 +135,7 @@ export async function applyAccountStatusChange(
     return 'ignored';
   }
 
-  const status: StripeAccountStatus = await deps.stripe.readAccountStatus(accountId);
+  const status = await deps.stripe.readAccountStatus(accountId);
   const onboarded = isOnboarded(status);
 
   if (onboarded === vendor.stripeOnboarded) {

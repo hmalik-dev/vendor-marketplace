@@ -56,7 +56,15 @@ export const WEBHOOK_FORWARDERS: Readonly<Partial<Record<Capability, WebhookForw
   stripe: {
     command: 'stripe',
     install: 'brew install stripe/stripe-cli/stripe',
-    forward: 'stripe listen --forward-to localhost:4000/webhooks/stripe',
+    /*
+     * `--forward-thin-to`, not `--forward-to`. Connect onboarding runs on
+     * Accounts v2, which emits **thin** events, and the plain forwarder does
+     * not carry them — a lane that uses it watches the hosted form complete and
+     * the vendor stay unonboarded forever, with nothing in either log saying
+     * why. Add `--forward-to` alongside it when a v1 snapshot event (a
+     * PaymentIntent, #10) also needs to reach the same endpoint.
+     */
+    forward: 'stripe listen --forward-thin-to localhost:4000/webhooks/stripe',
   },
 };
 

@@ -1,20 +1,15 @@
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized } from '../../lib/errors.js';
-import type { StripeConnectGateway } from '../../lib/stripe.js';
 import {
+  accountUpdateOutcomeSchema,
   applyAccountStatusChange,
-  type AccountUpdateOutcome,
 } from '../vendors/stripe-connect.service.js';
-
-export interface StripeWebhookRoutesOptions {
-  stripe: StripeConnectGateway;
-  returnOrigin: string;
-}
+import { keepRawJsonBody, rawBodyOf } from './raw-body.js';
 
 const webhookResponseSchema = z.object({
   received: z.literal(true),
-  outcome: z.enum(['onboarded', 'not-onboarded', 'unchanged', 'ignored']),
+  outcome: accountUpdateOutcomeSchema,
 });
 
 /**
@@ -28,25 +23,13 @@ const webhookResponseSchema = z.object({
  */
 const ACCOUNT_EVENT_PREFIX = 'v2.core.account';
 
-export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptions> = async (
-  app,
-  options,
-) => {
-  /*
-   * Stripe signs the exact bytes it sent, so this route keeps the body as a
-   * string rather than letting Fastify parse it first. Content type parsers are
-   * encapsulated per plugin, so this does not disturb the Clerk webhook's own
-   * parser or any JSON route.
-   */
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_request, body, done) => {
-    done(null, body);
-  });
+export const stripeWebhookRoutes: FastifyPluginAsyncZod = async (app) => {
+  keepRawJsonBody(app);
 
   app.post(
     '/webhooks/stripe',
     { schema: { response: { 200: webhookResponseSchema } } },
     async (request, reply) => {
-      const rawBody = typeof request.body === 'string' ? request.body : '';
       const signature = request.headers['stripe-signature'];
 
       if (typeof signature !== 'string') {
@@ -55,20 +38,16 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
 
       let event;
       try {
-        event = options.stripe.parseEventNotification(rawBody, signature);
+        event = app.stripe.parseEventNotification(rawBodyOf(request.body), signature);
       } catch (error) {
         request.log.warn({ err: error }, 'Rejected a Stripe webhook with an invalid signature');
         throw unauthorized('Webhook signature verification failed');
       }
 
-      let outcome: AccountUpdateOutcome = 'ignored';
-
-      if (event.type.startsWith(ACCOUNT_EVENT_PREFIX) && event.accountId) {
-        outcome = await applyAccountStatusChange(
-          { db: app.db, stripe: options.stripe, returnOrigin: options.returnOrigin },
-          event.accountId,
-        );
-      }
+      const outcome =
+        event.type.startsWith(ACCOUNT_EVENT_PREFIX) && event.accountId
+          ? await applyAccountStatusChange({ db: app.db, stripe: app.stripe }, event.accountId)
+          : 'ignored';
 
       request.log.info({ stripeEvent: event.type, outcome }, 'Applied a Stripe Connect webhook');
 

@@ -1,6 +1,6 @@
 import { findVariable, registryKeys } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
-import { OVERRIDDEN_KEYS, allowedOrigins, parseEnv } from './env.js';
+import { OVERRIDDEN_KEYS, allowedOrigins, canonicalWebOrigin, parseEnv } from './env.js';
 
 // Shaped like real values, because the schema now enforces each row's shape —
 // `sk_test_key` is indistinguishable from a placeholder and is rejected.
@@ -134,6 +134,48 @@ describe('allowedOrigins', () => {
     const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://orla.app,' });
 
     expect(allowedOrigins(env)).toEqual(['https://orla.app']);
+  });
+
+  /*
+   * The allow-list and the origin handed to Stripe are the same value, so a
+   * stray slash must not be able to make them disagree about one deployment.
+   */
+  it('strips a trailing slash so every reader sees one origin', () => {
+    const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://orla.app/, http://localhost:3000//' });
+
+    expect(allowedOrigins(env)).toEqual(['https://orla.app', 'http://localhost:3000']);
+  });
+});
+
+describe('canonicalWebOrigin', () => {
+  it('takes the first origin, which is written canonical-first', () => {
+    const env = parseEnv({
+      ...REQUIRED,
+      WEB_URL: 'https://orla.app, https://www.orla.app',
+    });
+
+    expect(canonicalWebOrigin(env)).toBe('https://orla.app');
+  });
+
+  it('joins cleanly onto a path, because the slash is already gone', () => {
+    const env = parseEnv({ ...REQUIRED, WEB_URL: 'https://orla.app/' });
+
+    expect(`${canonicalWebOrigin(env)}/vendor/payments/return`).toBe(
+      'https://orla.app/vendor/payments/return',
+    );
+  });
+
+  /*
+   * A plaintext origin is correct locally — Stripe accepts an `http://localhost`
+   * return URL in test mode, and that is what makes the redirect leg verifiable
+   * on a laptop. It is `WEB_URL`'s `productionShape`, checked by
+   * `pnpm preflight --env production`, that keeps it out of a deployment;
+   * `NODE_ENV` cannot tell a release from a `tsc` run, so nothing here reads it.
+   */
+  it('allows a plaintext localhost origin, which is what local onboarding needs', () => {
+    const env = parseEnv({ ...REQUIRED, WEB_URL: 'http://localhost:3038' });
+
+    expect(canonicalWebOrigin(env)).toBe('http://localhost:3038');
   });
 });
 

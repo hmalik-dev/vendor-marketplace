@@ -71,6 +71,25 @@ describe('ENV_REGISTRY integrity', () => {
     expect(rejected).toEqual([]);
   });
 
+  /*
+   * The guard that keeps a deployment from returning vendors over plaintext.
+   * Nothing in the API asserts this on `NODE_ENV` — `next build` and `tsc` set
+   * it too — so the production value set is the only thing standing between an
+   * http `WEB_URL` and a release, and it is worth an explicit test rather than
+   * only the generic shape-pairing ones below.
+   */
+  it('refuses a plaintext WEB_URL under the production value set', () => {
+    const webUrl = findVariable('WEB_URL')!;
+    const production = shapeFor(webUrl, 'production')!;
+
+    expect(production.test('https://orla.app')).toBe(true);
+    expect(production.test('https://orla.app, https://www.orla.app')).toBe(true);
+    expect(production.test('http://orla.app')).toBe(false);
+    expect(production.test('http://localhost:3000')).toBe(false);
+    // One plaintext origin in an otherwise https list still fails the whole value.
+    expect(production.test('https://orla.app, http://localhost:3000')).toBe(false);
+  });
+
   it('only declares productionShape where a shape exists to tighten', () => {
     const orphans = ALL_VARIABLES.filter(
       (variable) => variable.productionShape !== undefined && variable.shape === undefined,

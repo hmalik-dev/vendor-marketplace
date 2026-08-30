@@ -93,7 +93,17 @@ describe('vendor Stripe Connect onboarding', () => {
       expect(harness.stripe.createdAccounts).toHaveLength(1);
       expect(harness.stripe.createdAccounts[0]?.contactEmail).toBe('vendor_a@example.com');
 
-      expect((await status('vendor_a')).json().stripeAccountId).toBe('acct_test_1');
+      const stored = (await status('vendor_a')).json();
+      expect(stored.stripeAccountId).toBe('acct_test_1');
+      expect(stored.stripeOnboarded).toBe(false);
+
+      /*
+       * The account carries the vendor's own id into Stripe's metadata. It is
+       * the only thread back from a connected account to a row in this database
+       * when someone is reading the Stripe dashboard during a support question.
+       */
+      const [vendor] = await harness.database.db.select().from(vendorProfiles);
+      expect(harness.stripe.createdAccounts[0]?.vendorId).toBe(vendor!.id);
     });
 
     it('reuses the account on a second call and issues a new link', async () => {

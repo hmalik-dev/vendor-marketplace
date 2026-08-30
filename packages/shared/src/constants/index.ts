@@ -730,3 +730,18 @@ export const ERROR_CODES = {
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
+/**
+ * Where Stripe returns a vendor after hosted payout onboarding, and where it
+ * sends them when the link has expired or was already used.
+ *
+ * These are Next.js routes that the **API** has to hand to Stripe, so they live
+ * here rather than in either app: renaming the page without minting links to a
+ * 404 is only possible while both sides read one value. `apps -> packages` is
+ * the allowed direction, so both can.
+ */
+export const VENDOR_PAYMENTS_PATH = '/vendor/payments';
+export const VENDOR_PAYMENTS_RETURN_PATH = `${VENDOR_PAYMENTS_PATH}/return`;
+
+/** `resume` is what turns the page's heading into "that link had expired". */
+export const VENDOR_PAYMENTS_RESUME_PATH = `${VENDOR_PAYMENTS_PATH}?resume=1`;

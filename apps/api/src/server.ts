@@ -11,21 +11,18 @@ import {
 } from 'fastify-type-provider-zod';
 import { createDatabase, loadEnv } from '@vendor-marketplace/db';
 import { MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
-import { allowedOrigins, parseEnv, type ApiEnv } from './config/env.js';
+import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
 import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
 import type { AppDatabase } from './lib/database.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
-import {
-  createStripeConnectGateway,
-  onboardingReturnOrigin,
-  type StripeConnectGateway,
-} from './lib/stripe.js';
+import type { StripeConnectGateway } from './lib/stripe.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
 import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { eventsPlugin } from './plugins/events.js';
 import { storagePlugin } from './plugins/storage.js';
+import { stripePlugin } from './plugins/stripe.js';
 import { availabilityRoutes } from './modules/availability/availability.routes.js';
 import { bookingRequestRoutes } from './modules/booking-requests/booking-requests.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
@@ -68,14 +65,12 @@ export interface BuildServerOptions {
   /** Test seams; production wiring uses the real Clerk and svix clients. */
   auth?: Pick<ClerkAuthPluginOptions, 'verifySessionToken' | 'loadClerkUser'>;
   webhooks?: Pick<ClerkWebhookRoutesOptions, 'verifySignature'>;
-  /** Stripe Connect seam; production wiring builds the real gateway from env. */
+  /** Stripe Connect seam; the plugin builds the real gateway from the secrets. */
   stripe?: StripeConnectGateway;
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
   const { env, db, storage } = options;
-  const stripe = options.stripe ?? createStripeConnectGateway(env);
-  const returnOrigin = onboardingReturnOrigin(env);
 
   const app = Fastify({
     logger: {
@@ -110,6 +105,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(databasePlugin, { db });
   await app.register(eventsPlugin);
   await app.register(storagePlugin, { storage });
+  await app.register(stripePlugin, {
+    secretKey: env.STRIPE_SECRET_KEY,
+    webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+    ...(options.stripe ? { gateway: options.stripe } : {}),
+  });
   await app.register(clerkAuthPlugin, {
     secretKey: env.CLERK_SECRET_KEY,
     ...options.auth,
@@ -121,7 +121,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(userRoutes);
   await app.register(customerRoutes);
   await app.register(vendorRoutes);
-  await app.register(stripeConnectRoutes, { stripe, returnOrigin });
+  await app.register(stripeConnectRoutes, { returnOrigin: canonicalWebOrigin(env) });
   await app.register(packageRoutes);
   await app.register(portfolioRoutes);
   await app.register(availabilityRoutes);
@@ -132,7 +132,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     signingSecret: env.CLERK_WEBHOOK_SECRET,
     ...options.webhooks,
   });
-  await app.register(stripeWebhookRoutes, { stripe, returnOrigin });
+  await app.register(stripeWebhookRoutes);
 
   await app.ready();
   return app;

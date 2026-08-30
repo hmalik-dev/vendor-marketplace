@@ -1,5 +1,4 @@
 import Stripe from 'stripe';
-import type { ApiEnv } from '../config/env.js';
 
 /**
  * Stripe Connect, reduced to the four things this codebase actually does with
@@ -86,34 +85,6 @@ export function isOnboarded(status: StripeAccountStatus): boolean {
 }
 
 /**
- * Where Stripe returns the vendor to. Derived from `WEB_URL` — which is already
- * the CORS allow-list — rather than from a second variable that could disagree
- * with it. The first origin wins, because `WEB_URL` is comma-separated and the
- * canonical origin is written first.
- *
- * Stripe accepts an `http://localhost` return URL in test mode, which is what
- * makes the redirect leg verifiable locally, but a deployed platform must send
- * vendors somewhere encrypted. Rather than trust that the deployment was
- * configured correctly, production refuses to mint a link at all against a
- * plaintext origin.
- */
-export function onboardingReturnOrigin(env: Pick<ApiEnv, 'WEB_URL' | 'NODE_ENV'>): string {
-  const origin = env.WEB_URL.split(',')[0]?.trim().replace(/\/+$/, '') ?? '';
-
-  if (origin.length === 0) {
-    throw new Error('WEB_URL is empty, so Stripe has nowhere to return the vendor to');
-  }
-
-  if (env.NODE_ENV === 'production' && !origin.startsWith('https://')) {
-    throw new Error(
-      `WEB_URL must be an https origin in production; Stripe onboarding would return the vendor to ${origin}`,
-    );
-  }
-
-  return origin;
-}
-
-/**
  * Reads the recipient configuration off a v2 account. The capabilities hash is
  * only present when `configuration.recipient` was included in the request, and
  * a capability is absent until it has been requested, so both are treated as
@@ -129,10 +100,13 @@ function readRecipientStatus(account: Stripe.V2.Core.Account): StripeAccountStat
   };
 }
 
-export function createStripeConnectGateway(
-  env: Pick<ApiEnv, 'STRIPE_SECRET_KEY' | 'STRIPE_WEBHOOK_SECRET'>,
-): StripeConnectGateway {
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+export interface StripeCredentials {
+  secretKey: string;
+  webhookSecret: string;
+}
+
+export function createStripeConnectGateway(credentials: StripeCredentials): StripeConnectGateway {
+  const stripe = new Stripe(credentials.secretKey);
 
   return {
     async createRecipientAccount(input) {
@@ -184,7 +158,7 @@ export function createStripeConnectGateway(
       const notification = stripe.parseEventNotification(
         payload,
         signature,
-        env.STRIPE_WEBHOOK_SECRET,
+        credentials.webhookSecret,
       );
 
       /*

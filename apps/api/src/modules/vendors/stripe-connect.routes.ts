@@ -1,15 +1,14 @@
-import {
-  stripeOnboardingLinkSchema,
-  vendorPayoutStatusSchema,
-} from '@vendor-marketplace/shared';
+import { stripeOnboardingLinkSchema, vendorPayoutStatusSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRole } from '../../lib/guards.js';
-import type { StripeConnectGateway } from '../../lib/stripe.js';
 import { readPayoutStatus, startPayoutOnboarding } from './stripe-connect.service.js';
 
 export interface StripeConnectRoutesOptions {
-  stripe: StripeConnectGateway;
-  /** Origin Stripe returns the vendor to, with no trailing slash. */
+  /**
+   * Origin Stripe returns the vendor to, with no trailing slash. A route option
+   * rather than an instance decoration because this module is the only one that
+   * needs it — the webhook has nowhere to send anyone.
+   */
   returnOrigin: string;
 }
 
@@ -30,7 +29,7 @@ export const stripeConnectRoutes: FastifyPluginAsyncZod<StripeConnectRoutesOptio
     { preHandler: vendorOnly, schema: { response: { 200: stripeOnboardingLinkSchema } } },
     async (request) =>
       startPayoutOnboarding(
-        { db: app.db, stripe: options.stripe, returnOrigin: options.returnOrigin },
+        { db: app.db, stripe: app.stripe, returnOrigin: options.returnOrigin },
         assertRole(request.auth, ['vendor']).id,
       ),
   );

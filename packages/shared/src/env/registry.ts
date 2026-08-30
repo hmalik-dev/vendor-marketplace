@@ -131,10 +131,16 @@ const STRIPE_SETUP: EnvSetup = {
   ],
 };
 
+/*
+ * `--forward-thin-to`, not `--forward-to`. Connect onboarding runs on Accounts
+ * v2, which emits **thin** events, and the plain forwarder does not carry them
+ * — a lane that uses it sees the hosted form complete and the vendor stay
+ * unonboarded forever, with nothing in either log to say why.
+ */
 const STRIPE_WEBHOOK_SETUP: EnvSetup = {
   url: 'https://dashboard.stripe.com/test/webhooks',
   steps: [
-    'stripe listen --forward-to localhost:4000/webhooks/stripe',
+    'stripe listen --forward-thin-to localhost:4000/webhooks/stripe',
     'Copy the printed `whsec_...` into STRIPE_WEBHOOK_SECRET',
   ],
 };

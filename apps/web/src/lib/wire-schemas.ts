@@ -9,7 +9,6 @@ import {
   notificationItemSchema,
   paginatedSchema,
   sendMessageResultSchema,
-  stripeOnboardingLinkSchema,
   vendorDashboardSchema,
   vendorPayoutStatusSchema,
   portfolioItemSchema,
@@ -185,10 +184,6 @@ export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
 /** The vendor's payout state — plain JSON, so the shared schema stands as-is. */
 export const wireVendorPayoutStatusSchema = vendorPayoutStatusSchema;
 export type WireVendorPayoutStatus = z.infer<typeof wireVendorPayoutStatusSchema>;
-
-/** Where `POST /vendor/stripe/connect` says to send the vendor next. */
-export const wireStripeOnboardingLinkSchema = stripeOnboardingLinkSchema;
-export type WireStripeOnboardingLink = z.infer<typeof wireStripeOnboardingLinkSchema>;
 
 /** Messaging, as JSON — every timestamp coerced back at the boundary. */
 export const wireConversationSchema = conversationSummarySchema.extend({

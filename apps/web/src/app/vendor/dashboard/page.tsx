@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { pageTitle, todayDateString } from '@vendor-marketplace/shared';
+import { VENDOR_PAYMENTS_PATH, pageTitle, todayDateString } from '@vendor-marketplace/shared';
 import { DashboardStats } from '@/components/vendor/dashboard-stats';
 import { PublishChecklist } from '@/components/vendor/publish-checklist';
 import { RequestRow } from '@/components/vendor/request-row';
@@ -9,7 +9,7 @@ import { EmptyState, EmptyStateGlyph } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { getOwnBookingRequests } from '@/lib/vendor-requests';
 import { Banner } from '@/components/ui/banner';
-import { getOwnVendorProfile, getPayoutStatus, getVendorDashboard } from '@/lib/vendor-data';
+import { getOwnVendorProfile, getVendorDashboard } from '@/lib/vendor-data';
 import { requireRole } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -18,7 +18,6 @@ export const metadata: Metadata = {
 };
 
 const PROFILE_EDIT_PATH = '/vendor/profile/edit';
-const PAYMENTS_PATH = '/vendor/payments';
 
 /**
  * Frame `08` — every incoming request, actionable without navigating away.
@@ -40,11 +39,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
     redirect(PROFILE_EDIT_PATH);
   }
 
-  const [dashboard, requests, payouts] = await Promise.all([
-    getVendorDashboard(),
-    getOwnBookingRequests(),
-    getPayoutStatus(),
-  ]);
+  const [dashboard, requests] = await Promise.all([getVendorDashboard(), getOwnBookingRequests()]);
 
   if (!dashboard) {
     redirect(PROFILE_EDIT_PATH);
@@ -89,16 +84,21 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
           `40-states.md` reserves red for a failure and gold for work waiting on
           the vendor — and the sentence is the approved one from
           `31-content-voice.md`. It disappears the moment Stripe reports both
-          capabilities active, so a set-up vendor never sees it.
+          capabilities active, so a set-up vendor never sees it. The flag rides
+          on the dashboard payload rather than a second request, beside
+          `publishBlockers`, which is the same class of state.
         */}
-        {payouts && !payouts.stripeOnboarded ? (
+        {dashboard.stripeOnboarded ? null : (
           <Banner status="pending" title="Payouts not connected" className="mb-4">
             You can&rsquo;t take payment until payouts are connected. It takes about five minutes.{' '}
-            <Link href={PAYMENTS_PATH} className="font-semibold text-clay-500 hover:underline">
+            <Link
+              href={VENDOR_PAYMENTS_PATH}
+              className="font-semibold text-clay-500 hover:underline"
+            >
               Set up payouts &rarr;
             </Link>
           </Banner>
-        ) : null}
+        )}
 
         <DashboardStats dashboard={dashboard} today={today} />
 
