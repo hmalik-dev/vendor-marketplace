@@ -371,14 +371,22 @@
   background-image: linear-gradient(155deg, var(--color-stone-50) 0%, #f7f0e8 52%, #f2e4d8 100%);
 
   /*
-   * 160deg at 768. `14 Landing tablet` is the only landing frame that turns it,
-   * and the reason is the composition rather than taste: at 768 the hero is
-   * shorter and wider in proportion, so the 155deg sweep lands its warm end
-   * below the fold. Five degrees brings it back into the frame. The stops are
-   * unchanged at every width.
+   * The sweep turns as the hero gets shorter and proportionally wider, so its
+   * warm end stays inside the frame instead of falling below the fold: 155deg
+   * at 1440 and 1024, 160 at 768, 170 at 390 — and 390 moves the midpoint too,
+   * from 52% to 50%.
+   *
+   * Bounded at both ends. An unbounded `width < 64rem` handed 390 the tablet's
+   * 160deg/52%, and its comment claimed the tablet frame was the only one that
+   * turns the gradient and that the stops never move. `14 Landing mobile`
+   * contradicts both.
    */
-  @media (width < 64rem) {
+  @media (48rem <= width < 64rem) {
     background-image: linear-gradient(160deg, var(--color-stone-50) 0%, #f7f0e8 52%, #f2e4d8 100%);
+  }
+
+  @media (width < 48rem) {
+    background-image: linear-gradient(170deg, var(--color-stone-50) 0%, #f7f0e8 50%, #f2e4d8 100%);
   }
 }
 

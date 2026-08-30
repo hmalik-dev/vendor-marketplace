@@ -106,12 +106,18 @@ describe('HeaderNav', () => {
     expect(insetFromClass(className, 'min-[90rem]')).toBe(frameHeaderInset('01 Landing'));
 
     /*
-     * The base step is unprefixed, so it is read separately. 768 is the
-     * narrowest width the frames draw a landing header at.
+     * 768 rides on `sm:`, not on the unprefixed base. The base belongs to the
+     * six `14 … mobile` frames, which draw this header at 16px — so the two
+     * cannot be the same declaration, and reading the unprefixed one as the
+     * 768 value is how raising it to 20px moved every mobile frame at once.
      */
+    const tablet = /(?:^|\s)sm:px-([\d.]+)(?=\s|$)/.exec(className);
+    expect(tablet, `no \`sm:px-*\` in "${className}"`).not.toBeNull();
+    expect(Number((tablet as RegExpExecArray)[1]) * 4).toBe(frameHeaderInset('14 Landing tablet'));
+
     const base = /(?:^|\s)px-([\d.]+)(?=\s|$)/.exec(className);
     expect(base, `no unprefixed \`px-*\` in "${className}"`).not.toBeNull();
-    expect(Number((base as RegExpExecArray)[1]) * 4).toBe(frameHeaderInset('14 Landing tablet'));
+    expect(Number((base as RegExpExecArray)[1]) * 4).toBe(frameHeaderInset('14 Landing mobile'));
   });
 
   /*

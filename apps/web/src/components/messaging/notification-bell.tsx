@@ -156,16 +156,26 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
       {open ? (
         <div /* Inside the header's own stacking context, so a local z is enough. */
           /*
-           * 360px, bounded by the viewport it is anchored in.
+           * 360px, bounded by the space actually to the panel's left.
            *
-           * The panel hangs off the bell's right edge, so at 375px a fixed
-           * 360px panel plus the header's own gutter ran past the left edge of
-           * the screen and clipped the notification text — the timestamps and
-           * the "Mark all read" control were the first things to go. The bound
-           * is the viewport less both gutters, so the panel narrows instead of
-           * escaping. It never binds at 768 and up, where the frames draw it.
+           * The panel hangs off the **bell's** right edge, not the screen's,
+           * and the bell is not the last thing in the header: `UserButton` and
+           * the drawer trigger follow it. So the room available is the viewport
+           * less everything to its right — at 390 that is gap-3 (12) + the
+           * 44px user button + gap-3 (12) + the 44px drawer trigger less its
+           * `-mr-2.5` (34) + the 16px gutter = 118px, rounded to 8rem for the
+           * margin of error a Clerk-rendered control deserves.
+           *
+           * A first attempt used `100vw - 2.75rem`, one gutter — which is the
+           * bound that would be right if the panel were flush to the screen
+           * edge. It removed 14px of a 92px overflow and left the timestamps
+           * and `Mark all read` still clipped. The lesson is that `right-0` is
+           * relative to the anchor, and the anchor's own offset has to be part
+           * of the arithmetic.
+           *
+           * It never binds at 768 and up, where the frames draw this panel.
            */
-          className="absolute right-0 z-10 mt-2 w-90 max-w-[calc(100vw-2.75rem)] overflow-hidden rounded-xl border border-stone-300 bg-stone-0 shadow-lg"
+          className="absolute right-0 z-10 mt-2 w-90 max-w-[calc(100vw-8rem)] overflow-hidden rounded-xl border border-stone-300 bg-stone-0 shadow-lg"
         >
           <div className="flex items-center justify-between border-b border-stone-200 px-4 py-2.5">
             <p className="text-base font-semibold text-stone-900">Notifications</p>

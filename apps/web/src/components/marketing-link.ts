@@ -16,12 +16,12 @@
  * `min-h-11` is there because the padding alone lands at **43px** — 14 + a 15px
  * line box + 14 — and 43 is not 44.
  *
- * **Height only.** `Sign in` is 39.3px wide at 768 and the law asks for 44 on
- * both axes, but width here is not free the way height is: these links sit in a
- * bar whose gaps the frames draw to the pixel, so a `min-w-11` would push every
- * sibling and fail the Layout axis to pass the Access one. Recorded rather than
- * traded silently — widening the target means re-drawing the bar, which is a
- * design decision.
+ * Width is bought the same way the `Sign up` pill buys its height: a
+ * pseudo-element, so the target reaches 44px without the box moving. `Sign in`
+ * measures 39.3px wide and `Browse` 43px, and a `min-w-11` on the box itself
+ * would push every sibling and fail the Layout axis to pass the Access one. The
+ * overlay expands into the 16px gap between links, which is wider than the ~2px
+ * each side it needs.
  *
  * It lives in its own module rather than beside `MarketingNav` because that
  * component is a Client Component, and a constant imported across the client
@@ -31,4 +31,4 @@
  * link silently renders unstyled. A plain module has no boundary to cross.
  */
 export const MARKETING_LINK_CLASS =
-  'flex min-h-11 items-center py-3.5 text-[12.5px] font-medium text-stone-700 transition-colors duration-(--duration-fast) min-[90rem]:text-[13.5px] hover:text-clay-600';
+  "relative flex min-h-11 items-center py-3.5 text-[12.5px] font-medium text-stone-700 transition-colors duration-(--duration-fast) after:absolute after:top-1/2 after:left-1/2 after:h-full after:min-w-11 after:w-full after:-translate-x-1/2 after:-translate-y-1/2 after:content-[''] min-[90rem]:text-[13.5px] hover:text-clay-600";

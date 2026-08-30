@@ -121,14 +121,29 @@ describe('the landing gutter is the frames own, at each width they draw', () => 
     expect(frameGutter(label)).toBeGreaterThan(0);
   });
 
+  /*
+   * The 768 step is the *effective* value at 768, which may be written
+   * unprefixed or with `sm:` — 640 is below 768, so `sm:px-5` is in force
+   * there. The header needs the distinction: six `14 … mobile` frames draw it
+   * at 16px, so its unprefixed base is 16 and its 768 value rides on `sm:`.
+   * The page and footer have no narrower frame to answer and state 20 flat.
+   */
   it.each(VIEWPORTS)('the page, header and footer all step to $width', ({ label, variant }) => {
     const gutter = frameGutter(label);
-    const expected = `${variant}px-${unit(gutter)}`;
+    const utility = `px-${unit(gutter)}`;
+    const variants = variant === '' ? ['', 'sm:'] : [variant];
 
     for (const { name, source } of SOURCES) {
+      const found = variants.some((prefix) =>
+        new RegExp(`(?:^|[\\s'\`"])${(prefix + utility).replace(/[[\]]/g, '\\$&')}(?![\\d.])`).test(
+          source,
+        ),
+      );
+
       expect(
-        new RegExp(`(?:^|[\\s'\`"])${expected.replace(/[[\]]/g, '\\$&')}(?![\\d.])`).test(source),
-        `${name} has no \`${expected}\` for the ${gutter}px gutter frame "${label}" draws`,
+        found,
+        `${name} has no \`${variants.map((p) => p + utility).join('\` or \`')}\` for the ` +
+          `${gutter}px gutter frame "${label}" draws`,
       ).toBe(true);
     }
   });

@@ -13,6 +13,10 @@ measuring.
 Work in your own new context/tab and close it when done. If you must touch an
 existing tab, **read its viewport first and restore that exact value**.
 
+**Read the viewport back after restoring.** A restore you have not confirmed is
+a restore you have not established — the same shape as everything else here. Read
+it, restore it, read it again.
+
 **Restoring to a repo default is a guess dressed as a repair.** On 2026-08-30 a
 parity-checker resized another lane's tab, then set it to 1440x900 — this repo's
 reference viewport — because it could not know the original. If that tab had

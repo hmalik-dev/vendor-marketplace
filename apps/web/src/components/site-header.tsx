@@ -114,7 +114,18 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             <Button
               variant="ink"
               asChild
-              className="px-3.75 py-2 text-[12.5px] min-[90rem]:px-4.5 min-[90rem]:py-2.5 min-[90rem]:text-action"
+              /*
+                The frame's pill is 31px tall and `30-responsive.md` asks for a
+                44px target, so the target is grown without moving the pill: a
+                44px-tall pseudo-element centred on it, full width, which is the
+                idiom `search-bar.tsx` already uses for its icon action. Padding
+                alone would have to redraw a control the frames measure.
+
+                Stepping the padding down to the frame's `8 15` made this worse
+                before the pseudo-element existed — it took the pill from ~36px
+                to 31 while the nav links beside it were being raised to 44.
+              */
+              className="relative px-3.75 py-2 text-[12.5px] after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] min-[90rem]:px-4.5 min-[90rem]:py-2.5 min-[90rem]:text-action"
             >
               <Link href="/sign-up">Sign up</Link>
             </Button>

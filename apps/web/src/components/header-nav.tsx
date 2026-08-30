@@ -26,8 +26,14 @@ import { cn } from '@/lib/utils';
  * same reason `MarketingNav` and `HeaderQuery` are small.
  */
 
-/** `min-[90rem]` is 1440, the viewport every desktop frame is drawn at. */
-const SEARCH_INSET = 'min-[90rem]:px-6.5';
+/**
+ * `min-[90rem]` is 1440, the viewport every desktop frame is drawn at.
+ *
+ * `/search` steps at 1024 too: the three `27 Search …` frames draw `padding:
+ * 0 20px`, not the 28px the landing frame draws. Without this, `BASE`'s own
+ * `lg` step reached search from 1024 to 1439 carrying landing's number.
+ */
+const SEARCH_INSET = 'lg:px-5 min-[90rem]:px-6.5';
 
 /**
  * 32px — the `.hd` default itself, which the vendor chrome frames take
@@ -41,8 +47,15 @@ const SEARCH_INSET = 'min-[90rem]:px-6.5';
  * Narrowing the default would silently move both. The other 17 base-`.hd`
  * frames are still on 40px and that is a real finding, but it belongs to the
  * lanes that own those screens rather than to this one.
+ *
+ * **Both steps are stated.** `BASE` gained a `min-[90rem]` step, and
+ * tailwind-merge keeps utilities under *different* modifiers rather than
+ * letting a later one win — so `lg:px-8` alone left `min-[90rem]:px-10` in the
+ * composed class and the vendor chrome silently went to 40px at 1440, the one
+ * number these four frames do not draw. A route override has to answer every
+ * step the base declares, not just the widest one it used to.
  */
-const VENDOR_INSET = 'lg:px-8';
+const VENDOR_INSET = 'lg:px-8 min-[90rem]:px-8';
 
 /**
  * The routes carrying the vendor chrome — frames `08`, `09` and `11` under
@@ -55,8 +68,14 @@ const VENDOR_ROUTES = ['/vendor', '/messages'] as const;
  * The header's gutter is the page's gutter — the frames draw the logo flush
  * with the hero copy at every width, so a header on its own ladder puts the
  * two out of line by 8-12px at exactly the widths #169 is about.
+ *
+ * 16 / 20 / 28 / 40px at 390 / 768 / 1024 / 1440. The 16px base is not
+ * decoration: six `14 … mobile` frames draw the header at `padding: 0 16px`,
+ * and briefly raising the base to 20 moved every one of them — 390 was the one
+ * width that had been right all along.
  */
-const BASE = 'flex h-full items-center justify-between gap-4 px-5 lg:px-7 min-[90rem]:px-10';
+const BASE =
+  'flex h-full items-center justify-between gap-4 px-4 sm:px-5 lg:px-7 min-[90rem]:px-10';
 
 export interface HeaderNavProps {
   children: React.ReactNode;

@@ -142,8 +142,15 @@ describe('hero cluster parity across the drawn viewports', () => {
        * `h-73`, so both spellings are accepted.
        */
       const carries = (axis: 'h' | 'w', px: number): boolean => {
-        const arbitrary = new RegExp(`(?:^|[\\s'\`])(?:[a-z]+:)?${axis}-\\[${px}px\\]`);
-        const native = new RegExp(`(?:^|[\\s'\`])(?:[a-z]+:)?${axis}-${px / 4}(?![\\d.])`);
+        /*
+         * The prefix may be `lg:` or `min-[90rem]:` — the 1440 step is a
+         * bracketed arbitrary variant, so `[a-z]+:` alone misses it and the
+         * 1440 row silently stopped being asserted the moment the component
+         * moved off `xl:`.
+         */
+        const variant = String.raw`(?:[a-z-]+:|min-\[[^\]]+\]:)?`;
+        const arbitrary = new RegExp(`(?:^|[\\s'\`])${variant}${axis}-\\[${px}px\\]`);
+        const native = new RegExp(`(?:^|[\\s'\`])${variant}${axis}-${px / 4}(?![\\d.])`);
 
         return arbitrary.test(clusterSource) || native.test(clusterSource);
       };
