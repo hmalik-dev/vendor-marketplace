@@ -87,6 +87,15 @@ export function notificationHref(row: NotificationRow): string | null {
       : '/customer/profile?tab=reviews';
   }
 
+  /*
+   * An approved tag is already on the vendor's profile by the time this is
+   * read, so the link goes to where they can see it — the editor's tag
+   * section — rather than to a queue they have no access to.
+   */
+  if (row.type === 'tag_suggestion_approved') {
+    return '/vendor/profile/edit';
+  }
+
   if (typeof data.bookingRequestId === 'string') {
     if (row.type === 'new_request') {
       return '/vendor/dashboard';

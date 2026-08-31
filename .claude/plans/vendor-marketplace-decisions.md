@@ -773,3 +773,43 @@ already a failure. Landed in `40-states.md`, `31-content-voice.md`, `99-open-que
 **Board effect.** #342, #348 and #350 move `Deferred — needs a human` → `Backlog`. With
 D16, **nothing on the board is blocked on a design decision.** What remains needing a
 human is the launch-prep block alone: #19, #62, #46, #206 and #15's `SENTRY_DSN` half.
+
+---
+
+### D18: The Admin Table Zebra Gets a Token — *2026-08-31*
+
+**Filed by #15**, which builds the admin portal and is the first surface to need it.
+
+`design/design-plan/22-admin.md:24` specifies the table's zebra stripe as a **raw hex**,
+`#FDFAF4`, and frame `13 Admin` draws it on every even row. No token carries that value:
+the warm stone ramp runs `stone-0 #FFFDF9` → `stone-50 #F8F5EF`, and the zebra sits
+between them. Every other value on the frame resolves — `stone-100` is literally commented
+*"table header"*, the four status pills are the existing `confirmed` / `pending` /
+`needsYou` / `inert` tones — so this is the one hole.
+
+**Ruling: add `--color-stone-25: #fdfaf4`**, commented as the admin table zebra.
+
+**Why this is not the thing #373 forbids.** #373's non-goal is *"adding a `stone-800`
+token to the ramp"* — and that is a different situation in the way that matters.
+`stone-800` is a step somebody **wrote by mistake**, which Tailwind then silently resolved
+to its own cool built-in; the fix is to stop using it, and adding it would bless the
+error. `stone-25` is a value the **design plan states in writing** and the frame draws,
+which has no name. Naming it is what lets the surface be built without an inline hex, and
+it makes #373's undefined-step guard *easier* to satisfy, not harder: after this, every
+colour on frame `13` is a defined token and the guard can run clean over the admin tree.
+
+**Rejected:**
+
+- **`stone-50` for the zebra.** It is `#F8F5EF` against the frame's `#FDFAF4` — a visible
+  step, and the parity Colour axis requires the same token value, not a near one. A screen
+  that reproduces the composition in the wrong colour has failed.
+- **An inline `bg-[#FDFAF4]`.** Forbidden outright: *"any hex, width or radius written
+  inline in a component"* is old-design debt, and #373 is adding a guard that would fail on
+  it.
+- **Leaving the zebra off.** The stripe is what makes a 15-row 44px table scannable, which
+  is the stated purpose of the screen — *"scannability beats airiness"*.
+
+**Collision note.** This edits `packages/config/tailwind/theme.css`, which **#373 also
+owns**. #373 adds the 12px radius step and the undefined-step guard to the same file.
+Whichever lands second rebases; the two changes are additive and do not overlap by line,
+but they must not run concurrently in two lanes.

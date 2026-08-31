@@ -53,6 +53,7 @@
 
   /* Warm stone — the neutral ramp. Deliberately shadows Tailwind's cool `stone`. */
   --color-stone-0: #fffdf9; /* cards, header, rails — never pure white */
+  --color-stone-25: #fdfaf4; /* admin table zebra — the only surface between stone-0 and stone-50 */
   --color-stone-50: #f8f5ef; /* page background */
   --color-stone-100: #f4f0e8; /* table header, deeper panels */
   --color-stone-150: #f1ece4; /* input fill, nested surfaces */
