@@ -39,6 +39,15 @@ function readE2eEnv(): Record<string, string> {
   return parse(readFileSync(file, 'utf8'));
 }
 
+/** The surname a Clerk profile with no last name falls back to, by role. */
+function defaultLastName(role: string): string {
+  if (role === 'vendor') {
+    return 'Vendor';
+  }
+
+  return role === 'admin' ? 'Admin' : 'Customer';
+}
+
 /**
  * Resolves an end-to-end account's **real** Clerk id from its email.
  *
@@ -73,7 +82,7 @@ async function resolveAccount(email: string, secretKey: string, role: string): P
     clerkUserId: user.id,
     email: user.email_addresses[0]?.email_address ?? email,
     firstName: user.first_name?.trim() || 'E2E',
-    lastName: user.last_name?.trim() || (role === 'vendor' ? 'Vendor' : 'Customer'),
+    lastName: user.last_name?.trim() || defaultLastName(role),
   };
 }
 
@@ -103,26 +112,44 @@ async function main(): Promise<void> {
   const values = readE2eEnv();
   const vendorEmail = values.E2E_VENDOR_EMAIL;
   const customerEmail = values.E2E_CUSTOMER_EMAIL;
+  /*
+   * Optional, unlike the other two. An admin row is what makes `/admin`
+   * reachable — the role cannot be reached from inside the product, because it
+   * is read from Clerk at first sign-in and immutable after — but a checkout
+   * that predates the account should still seed the vendor and customer
+   * fixtures rather than failing outright on a gitignored file it cannot fix.
+   */
+  const adminEmail = values.E2E_ADMIN_EMAIL;
 
   if (!vendorEmail || !customerEmail) {
     throw new Error(`${E2E_ENV_FILE} must supply E2E_VENDOR_EMAIL and E2E_CUSTOMER_EMAIL.`);
   }
 
-  const [vendor, customer] = await Promise.all([
+  const [vendor, customer, admin] = await Promise.all([
     resolveAccount(vendorEmail, secretKey, 'vendor'),
     resolveAccount(customerEmail, secretKey, 'customer'),
+    adminEmail === undefined ? undefined : resolveAccount(adminEmail, secretKey, 'admin'),
   ]);
 
   const { db, client } = createDatabase({ max: 1 });
 
   try {
-    const result = await seedE2eFixtures(db, { vendor, customer });
+    const result = await seedE2eFixtures(db, {
+      vendor,
+      customer,
+      ...(admin === undefined ? {} : { admin }),
+    });
     console.log(
       'Seeded the end-to-end fixtures: the vendor account owns a published storefront with ' +
         'one package and one pending request, and can take payment.',
     );
     console.log(`  vendor profile ${result.vendorProfileId}`);
     console.log(`  booking request ${result.bookingRequestId}`);
+    console.log(
+      result.adminUserId === undefined
+        ? '  no admin account — set E2E_ADMIN_EMAIL to make /admin reachable'
+        : `  admin ${result.adminUserId}`,
+    );
   } finally {
     await client.end();
   }

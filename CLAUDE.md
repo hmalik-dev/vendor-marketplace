@@ -84,6 +84,17 @@ profile form and every `/vendor` route redirects there. It gives that account a
 published storefront, one package, one live booking request, and
 `stripe_onboarded`, so `accept` is not blocked by the 402.
 
+**It also seeds the admin account, and that is the only way `/admin` is reachable
+at all.** `role = 'admin'` cannot be reached from inside the product: it is read
+from Clerk's `unsafeMetadata` at first sign-in, falls back to `customer`, and is
+immutable afterwards — so no sign-up flow produces one, and `seed-demo.ts` gives
+its admin a synthetic `clerk_user_id` that cannot authenticate. Before the
+account existed, the only route to frame `13`'s screens was promoting a customer
+in the database by hand, which is a privileged write nobody should make to run a
+test. `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` are in `.env.e2e.local` alongside
+the other two; the account is **persistent by intent — do not delete it**. The
+key is optional, so a checkout whose env file predates it still seeds.
+
 It needs `pnpm db:seed` first (for categories), `.env.e2e.local` for the account
 emails, and `CLERK_SECRET_KEY` for the **same Clerk instance those accounts live
 in** — it resolves their real Clerk ids rather than inventing them, because a

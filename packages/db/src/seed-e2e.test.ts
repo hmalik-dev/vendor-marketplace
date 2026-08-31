@@ -88,6 +88,88 @@ describe('seedE2eFixtures', () => {
    * capabilities active — a round trip no unattended run can complete, because
    * Stripe's hosted form is behind a captcha.
    */
+  /*
+   * `/admin` is gated on `users.role = 'admin'`, and that role cannot be reached
+   * from inside the product: it is read from Clerk's `unsafeMetadata` at first
+   * sign-in, falls back to `customer`, and is immutable afterwards. So no
+   * sign-up flow produces an admin, `seed-demo.ts` gives its admin a synthetic
+   * `clerk_user_id` that cannot authenticate, and before this the only route to
+   * the operations console was promoting a customer in the database by hand.
+   */
+  it('grants the admin account the operations role', async () => {
+    const result = await seedE2eFixtures(database.db, {
+      ...INPUT,
+      admin: {
+        clerkUserId: 'user_e2e_admin',
+        email: 'admin+clerk_test@example.com',
+        firstName: 'Ada',
+        lastName: 'Admin',
+      },
+    });
+
+    expect(result.adminUserId).toBeDefined();
+
+    const [row] = await database.db
+      .select({ role: users.role, email: users.email, clerkUserId: users.clerkUserId })
+      .from(users)
+      .where(eq(users.id, result.adminUserId as string));
+
+    expect(row?.role).toBe('admin');
+    expect(row?.email).toBe('admin+clerk_test@example.com');
+    expect(row?.clerkUserId).toBe('user_e2e_admin');
+  });
+
+  /*
+   * Optional on purpose. A checkout whose `.env.e2e.local` predates the admin
+   * account must still seed the vendor and customer fixtures rather than
+   * failing outright on a gitignored file it cannot fix for itself.
+   */
+  it('seeds the vendor and customer fixtures with no admin account at all', async () => {
+    const result = await seedE2eFixtures(database.db, INPUT);
+
+    expect(result.adminUserId).toBeUndefined();
+    expect(result.vendorProfileId).toBeDefined();
+
+    const admins = await database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, 'admin'));
+    expect(admins).toEqual([]);
+  });
+
+  /*
+   * The role is *forced*, like the vendor's. An account that signed up without
+   * the metadata hint has a `customer` row nothing in the application can
+   * correct, so adopting it rather than overwriting would leave `/admin`
+   * unreachable with a green seed.
+   */
+  it('promotes an account Clerk had already created as a customer to admin', async () => {
+    await database.db.insert(users).values({
+      clerkUserId: 'user_e2e_admin',
+      email: 'admin+clerk_test@example.com',
+      role: 'customer',
+      firstName: 'Ada',
+      lastName: 'Admin',
+    });
+
+    const result = await seedE2eFixtures(database.db, {
+      ...INPUT,
+      admin: {
+        clerkUserId: 'user_e2e_admin',
+        email: 'admin+clerk_test@example.com',
+        firstName: 'Ada',
+        lastName: 'Admin',
+      },
+    });
+
+    const [row] = await database.db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, result.adminUserId as string));
+
+    expect(row?.role).toBe('admin');
+  });
+
   it('marks the vendor able to take payment, so accept is not blocked by the payout gate', async () => {
     const result = await seedE2eFixtures(database.db, INPUT);
 

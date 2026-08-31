@@ -79,6 +79,21 @@ export interface E2eSeedInput {
   vendor: E2eAccount;
   customer: E2eAccount;
   /**
+   * The operations account, and the only way `/admin` is reachable at all.
+   *
+   * Optional so an existing `.env.e2e.local` without `E2E_ADMIN_EMAIL` still
+   * seeds, rather than every lane breaking on a file it cannot edit for itself.
+   *
+   * It exists because `role = 'admin'` cannot be reached from inside the
+   * product: the role is read from Clerk's `unsafeMetadata` at first sign-in,
+   * falls back to `customer`, and is immutable afterwards — so no sign-up flow
+   * produces an admin, and `seed-demo.ts` gives its admin a synthetic
+   * `clerk_user_id` that cannot authenticate. Before this, the only route to
+   * frame `13`'s screens was promoting a customer in the database by hand,
+   * which is a privileged write nobody should be making to run a test.
+   */
+  admin?: E2eAccount;
+  /**
    * Whether the fixture vendor is marked as able to take payment.
    *
    * `true` by default, because the gate it clears — `accept` answering 402
@@ -93,6 +108,8 @@ export interface E2eSeedInput {
 export interface E2eSeedResult {
   vendorUserId: string;
   customerUserId: string;
+  /** Absent when `.env.e2e.local` supplies no admin account. */
+  adminUserId?: string;
   vendorProfileId: string;
   packageId: string;
   bookingRequestId: string;
@@ -132,6 +149,14 @@ export async function seedE2eFixtures<
   return db.transaction(async (tx) => {
     const vendorUserId = await upsertAccount(tx, input.vendor, 'vendor');
     const customerUserId = await upsertAccount(tx, input.customer, 'customer');
+    /*
+     * The admin needs no fixture beyond the row — `/admin` reads the whole
+     * platform, so it has nothing of its own to own. The role is the entire
+     * deliverable, which is exactly why it belongs in the same transaction as
+     * the other two: a half-applied run that granted a role and seeded no
+     * fixture is the failure mode this transaction exists to prevent.
+     */
+    const adminUserId = input.admin ? await upsertAccount(tx, input.admin, 'admin') : undefined;
 
     const vendorProfileId = await ensureProfile(tx, vendorUserId, payoutsReady);
     await attachCategory(tx, vendorProfileId);
@@ -147,6 +172,7 @@ export async function seedE2eFixtures<
     return {
       vendorUserId,
       customerUserId,
+      ...(adminUserId === undefined ? {} : { adminUserId }),
       vendorProfileId,
       packageId: servicePackage.id,
       bookingRequestId: request.id,
@@ -168,7 +194,7 @@ export async function seedE2eFixtures<
 async function upsertAccount(
   tx: Tx,
   account: E2eAccount,
-  role: 'vendor' | 'customer',
+  role: 'vendor' | 'customer' | 'admin',
 ): Promise<string> {
   const [row] = await tx
     .insert(users)
