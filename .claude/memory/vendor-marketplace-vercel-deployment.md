@@ -38,6 +38,17 @@ generate the bypass secret (`vercel project protection enable
 vendor-marketplace-web --protection-bypass`) and send it as
 `x-vercel-protection-bypass`.
 
+**The project is on the free plan and its daily build cap is reachable.** On
+2026-08-31 the `production` fast-forward produced **no Vercel build at all**,
+and PRs #70 and #71 showed `Vercel fail — Deployment rate limited — retry in 24
+hours` against `?upgradeToPro=build-rate-limit` while #72 passed. So a missing
+deployment, or a red Vercel check on a PR, is as likely to be quota as a broken
+integration — and the deployment record proves the integration is fine
+(`source: git`, `githubCommitRef: production` on the live build). Check
+`gh pr checks <n>` for the rate-limit string before concluding anything is
+misconfigured; the consequence is that `production` can silently stay stale
+after a fast-forward.
+
 Images present locally but missing when deployed usually means untracked assets —
 ticket #32: `apps/web/.gitignore` ignores `public/marketing/`, so every seeded
 vendor cover 404s off the machine the files were downloaded on.
