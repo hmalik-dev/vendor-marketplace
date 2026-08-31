@@ -254,9 +254,10 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **369** | **Retire or keep `Placeholder`, and rule the 32x32 icon-only submit** | P2 | M4.5 | **P3 Low** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-31 by the third backlog consolidation — merged into #373.** Design-system completion — two rulings enforced by checks, over the same files. The row and its detail section stay on purpose: they carry the measurements #373 was built from, and `pnpm preflight --ticket 369` still gates for anyone on an older branch. **Never worked directly.** |
 | **370** | **Production deploy pipeline and error visibility** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **#362** (production credentials and `SENTRY_DSN`) | `core` `sentry` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#20, #353**. One deliverable: merging to `main` ships — migrations first, both services after, a failed `/ready` poll stops the release — and what it ships reports its own errors somewhere a human reads. Split, the two waited on the same #362 sitting. |
 | **371** | **Responsive parity at 1024 and 768** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#323, #354, #355, #356**. One ladder walked once — search, checkout, vendor profile, the profile editor and the empty dashboard, at both widths. Four tickets that were the same work split by frame. |
-| **372** | **Design parity close-out — dashboard, bookings, chrome and the error page** | P1 | M3 | **P2 Medium** | **Backlog** | — | **#358** (owns `vendor-card.tsx` and the Refine bar); **#374** (owns the `Contact support` destination) | `core` `auth` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#300, #359, #361, #366, #367**. The last 1440 parity debt in one pass: frames `08`, `04`/`07`/`19`, `16`, `18`, and the site chrome no frame owns. |
+| **372** | **Design parity close-out — dashboard, bookings, chrome and the error page** | P1 | M3 | **P2 Medium** | **Backlog** | — | **#374** (owns the `Contact support` destination) — **#358 landed 2026-08-31 (`8e9208d`), so its collision is cleared** | `core` `auth` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#300, #359, #361, #366, #367**. The last 1440 parity debt in one pass: frames `08`, `04`/`07`/`19`, `16`, `18`, and the site chrome no frame owns. |
 | **373** | **Design-system completion — token scale, undefined-step guard, and the caret override** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#333, #364, #369**. One pass over `theme.css` and `apps/web/src`, each half closed by a guard — the shape that stops the next parity pass re-finding the same class of defect. |
-| **374** | **Launch legal, policy and support surfaces** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31.** Not a consolidation — a gap nobody had filed. `docs/pre-launch.md` §1.5 and §7 require terms, a privacy policy, a cookie notice, a vendor agreement covering the 12% commission and payout timing, a refund and cancellation policy shown **before** payment, and a support route that reaches a human. **None of those routes exist in `apps/web/src/app`.** The product cannot take money from strangers without them. |
+| **374** | **Launch legal, policy and support surfaces** | P3 | M6 | **P0 Critical** | **Deferred — needs a human** | — | **The account holder: (1) the operative wording of the terms, privacy policy and vendor agreement — a ticket must not invent binding text; (2) a real monitored support address or destination** | `core` | **Filed 2026-08-31.** Not a consolidation — a gap nobody had filed. `docs/pre-launch.md` §1.5 and §7 require terms, a privacy policy, a cookie notice, a vendor agreement covering the 12% commission and payout timing, a refund and cancellation policy shown **before** payment, and a support route that reaches a human. **None of those routes exist in `apps/web/src/app`.** The product cannot take money from strangers without them. |
+| **375** | **Search entry — a filtering combobox for `Vendor type`, a typeahead input for `City`** | P1 | M3 | **P1 High** | **Backlog** | — | **None** (coordinate with **#373**, which removes the caret from the same two triggers) | `core` | **Filed 2026-08-31 on the user's explicit instruction.** *"It should allow typing that appears directly in the input and matching text appears in the category type dropdown, and the city should literally be an input, where the validated city appears as clickable for a user. Not a scrollable dropdown for city since cities can vary drastically. Category should have a dropdown with all categories but as a user types the dropdown should be filtered with each input."* **A user override of decision D6 and `42-dropdowns.md`**, which deleted the filter field from the category panel and made city a select. Both fields stay **validated** — only the affordance changes. |
 **This board carries open work only. The closed rows live in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **310 rows as of 2026-08-30: 172 `Done` and 138 `Superseded`**, recounted programmatically in the second consolidation, which also moved #14 and #305 across. The earlier figures here (311 / 180 / 131) were a snapshot that nothing updated as rows moved, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
 Rows are ordered by build sequence, not by ticket number. **45 rows — 20 open (17 Backlog, 1 In Progress, 2 Deferred) and 25 `Superseded`.** **#14 and #305 moved to the archive in this pass**, restoring the 2026-08-30 convention that this board carries open work only; they had been left here after closing. Recounted programmatically on 2026-08-30 after the **second backlog consolidation**, which replaced 25 rows with **#354–#360**. That pass was only possible because D16 and D17 had just ruled every open design question: eleven rows that could never start became ordinary code work, and the shape underneath them — twenty-five rows that were really seven pieces of work — became visible. **The blank line that had split this table in two is gone**; rows #332–#352 had been rendering as a separate headerless table, though `tickets.board.test.ts` parses line by line and never noticed. **A Backlog count is still not a ready count** — **#20** waits on #359 and **#353** on the Sentry DSN, and #355 is sequenced behind #354, which owns `Orla - Screens.dc.html` for one pass. Read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
@@ -3803,7 +3804,7 @@ they are the implementation checklist and are not restated here.
 ### #372: Design parity close-out — dashboard, bookings, chrome and the error page
 
 **Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** **#358** (owns `vendor-card.tsx` and the Refine bar at the same widths — two lanes in those files collide); **#374** (owns the `Contact support` destination frame `16` needs)
+**Blocked by:** **#374** (owns the `Contact support` destination frame `16` needs). **#358 landed 2026-08-31 (`8e9208d`)** — the `vendor-card.tsx` / Refine-bar collision it caused is cleared, and its sage-chip removal is now history this ticket verifies rather than waits on.
 
 Merges **#300, #359, #361, #366, #367** — the last of the 1440 parity debt.
 
@@ -3988,8 +3989,17 @@ the category chip on `vendor-card.tsx:216` (nobody asked for it to go); editing
 
 ### #374: Launch legal, policy and support surfaces
 
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** None
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Deferred — needs a human | **Capabilities:** `core`
+**Blocked by:** the account holder — two things, both of which a ticket must not invent:
+**(1)** the operative wording of the terms, the privacy policy and the vendor agreement, and
+**(2)** a real monitored support destination (an address, or where a form should land).
+
+**Deferred 2026-08-31** at the start of an unattended run, on the standing instruction to
+defer rather than guess. **The deferral is the two content items only.** Everything else
+here is code and becomes runnable the moment they arrive: the four routes, the footer
+links, the checkout placement, and the reconciliation of the stated policy against what
+`booking-requests.service.ts` actually enforces. **#372 waits only on item (2)** — the
+`Contact support` destination frame `16` needs
 
 **Filed 2026-08-31. Not a consolidation — a gap nobody had filed.** `docs/pre-launch.md`
 §1.5 and §7 have carried these as checkboxes since 2026-08-27, and no ticket was ever
@@ -4058,3 +4068,190 @@ photography (§7, a human's task, record it as such).
       control, asserted by position rather than by presence
 - [ ] A test that the commission figure on the vendor agreement reads the same constant the
       payment code charges — never a typed literal
+
+---
+
+### #375: Search entry — a filtering combobox for `Vendor type`, a typeahead input for `City`
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None. **Coordinate with #373** — it removes the `▾` caret from
+`category-select.tsx:197` and `city-select.tsx:116`, the same two triggers this ticket
+rebuilds. Whichever runs second inherits the other's shape; **do not run them concurrently**.
+
+**Filed 2026-08-31 on the user's explicit instruction**, verbatim:
+
+> *"Ensure in the tickets you fix the search for vendor type/city — it should allow typing
+> that appears directly in the input and matching text appears in the category type
+> dropdown, and the city should literally be an input, where the validated city appears as
+> clickable for a user. Not a scrollable dropdown for city since cities can vary
+> drastically. Category should have a dropdown with all categories but as a user types the
+> dropdown should be filtered with each input."*
+
+**This is a user override of the design contract, like #364 — record it as one.** Decision
+D6 and `design/design-plan/42-dropdowns.md` deliberately deleted the category filter field
+(*"eleven categories fit on one screen, and a filter box on a list that short is friction
+rather than help"*, `category-select.tsx:19-23`) and deliberately made city a select
+(*"'Springfield' names a place in thirty-odd states"*, `city-select.tsx:13-22`). Both
+comments are the reasoning for the current shape, and both are now overridden. **The
+reasoning was not wrong, and the override does not discard what it protected** — see the
+invariant below. The frames draw the old shape; the user is correcting them.
+
+**The invariant that survives, and it is the whole design of this ticket.** The committed
+query value is still a **category slug or empty**, and still a **real `(city, state)` pair
+or empty**. Typing is an *input affordance*; it is never a query term. A customer who types
+`photograhpy` and walks away has selected nothing, and the field shows nothing selected. The
+law it protects is unchanged: *the query can only ever ask a question the platform can
+answer*, so the result-count sentence can always name the category truthfully and the empty
+state can always say why. **A free-text city that reaches the API as a filter is a
+regression, not this ticket.**
+
+## Current state, verified 2026-08-31
+
+| | |
+| --- | --- |
+| `apps/web/src/components/search/category-select.tsx` | 204 lines. Renders `SingleSelectDropdown` over `categories` plus a leading `Any vendor type`. Trigger is a `button` showing `selected?.name`. No text input anywhere. `VISIBLE_ROWS = 7` drives the panel's "N more" note |
+| `apps/web/src/components/search/city-select.tsx` | 123 lines. Same, over `GET /vendors/cities` (`vendors.routes.ts:72`), option value `` `${city}|${state}` ``, each row hinted with a real `vendorCount` |
+| `apps/web/src/components/ui/dropdown.tsx` | The shared primitive: `Dropdown`, `DropdownList`, `DropdownRow`, `DropdownScrollNote`, `useRowHeight`. **This is where a filter belongs if it is shared** |
+| `packages/shared/src/schemas/index.ts:1307` | `city: z.string().trim().max(MAX_NAME_LENGTH).optional()` — already a string, so **no schema change is needed** for the city half |
+| `vendorCitySchema` | `index.ts:1493`, `{ city, state, vendorCount }` |
+
+**Both fields render at two densities** — `hero` (landing) and `compact` (the `/search`
+header). Every change lands in both, and the frames draw them at different sizes.
+
+## Scope
+
+- `apps/web/src/components/search/category-select.tsx` — becomes a **combobox**
+- `apps/web/src/components/search/city-select.tsx` — becomes a **typeahead input**
+- `apps/web/src/components/ui/dropdown.tsx` / `dropdown-select.tsx` — whatever filtering,
+  active-descendant and keyboard behaviour is shared, factored **once**. Two bespoke
+  comboboxes that drift apart is the failure mode
+- `design/design-plan/42-dropdowns.md` and `.claude/plans/vendor-marketplace-decisions.md` —
+  record the override and the surviving invariant
+- Tests, per the list below
+
+**Non-goals:** the `Event date` segment (`search-bar.tsx`); the Refine bar's chips
+(`refine-bar.tsx`) — this ticket is the three hero/compact query segments' first two only;
+any new API, index or data source — both lists are already served; fuzzy or phonetic
+matching; a remote city geocoder; reinstating the "did you mean" recovery (#167 removed it
+and nothing here brings it back); editing `Orla - Screens.dc.html` (the user is correcting
+the frames).
+
+## Behavioral requirements — `Vendor type`
+
+- The trigger is a **text input**, not a button. Typed characters appear **in the input
+  itself**, immediately, with no delay and no separate filter box inside the panel
+- Focusing or clicking it opens the panel showing **every** category, plus the leading
+  `Any vendor type` row — the full list is the default, exactly as today
+- Each keystroke filters the list. Match on the category **name**, case- and
+  diacritic-insensitive, substring anywhere in the name — not prefix-only, because
+  "film" must find "Photo & film"
+- The short descriptions from `CATEGORY_SEEDS` stay as row hints and are **not** matched
+  against; matching visible label text only is what makes the filtering explicable
+- Zero matches renders the panel's empty state naming what was typed, not a blank panel
+- **Selection is the only thing that changes the query.** Choosing a row fills the input
+  with that category's name and commits the slug. Typing alone commits nothing
+- **Blur with uncommitted text reverts the input to the committed value** — the selected
+  category's name, or the `Any vendor type` placeholder. The input never persists a string
+  that is not a real selection
+- `Any vendor type` remains the way to empty the field and stays at the top of the
+  unfiltered list
+
+## Behavioral requirements — `City`
+
+- **Literally an input.** It does **not** open a list of every city on focus. Cities vary
+  too much for a scroll list to be the affordance — that is the user's stated reason and it
+  is the difference from the category field
+- Suggestions appear as the customer types, from the first character, drawn from
+  `GET /vendors/cities` and matched on the **city name** — and additionally on the state
+  code when the typed text contains a comma (`Austin, TX`)
+- Each suggestion is **clickable**, reads `City, ST`, and keeps its real `vendorCount` hint.
+  That hint is a query result, not a platform statistic, and the no-invented-numbers law
+  keeps it legal
+- Suggestions are capped and ordered: **exact prefix matches first, then substring matches,
+  then by `vendorCount` descending**; render at most 8 and say how many more matched
+- **Only a clicked or keyboard-selected suggestion commits.** `city` and `state` still
+  travel together as a pair; a typed string that matches no suggestion commits nothing and
+  the field reverts on blur
+- Clearing the input to empty commits `Anywhere` — the pair becomes `('', '')`
+- A customer whose typing matches nothing sees a panel saying so, naming what they typed —
+  **this is the case the old select could not produce and is the reason the select existed.**
+  It is now reachable, so it must be answered in copy rather than by an empty panel
+
+## Accessibility — not optional, and the reason to factor this once
+
+Both fields become `role="combobox"` with `aria-expanded`, `aria-controls`, and
+`aria-activedescendant` pointing at the highlighted option; the panel is `role="listbox"`
+and rows are `role="option"` with `aria-selected`. `aria-autocomplete="list"`.
+
+- `ArrowDown` / `ArrowUp` move the active option and **do not** move the text caret
+- `Enter` commits the active option; `Escape` closes and reverts to the committed value;
+  `Tab` closes, commits nothing new, and reverts
+- The active option is always scrolled into view
+- Every trigger keeps `aria-expanded`. **#373's rule holds: removing the caret must not cost
+  the control its legibility as a control** — these are now inputs, which carry their own
+  affordance, but the fill and border stay
+- Screen-reader users learn the filtered count when it changes (a polite live region), which
+  is the one thing a sighted user gets for free from the shrinking list
+
+## Edge cases
+
+- **Diacritics.** `San Jose` finds `San José` and the reverse. Normalise both sides
+- **Duplicate city names across states.** `Portland` matches two rows; both render, each
+  naming its state. This is exactly the case `city-select.tsx:13-22` was written to protect,
+  and the suggestion list protects it because **selection, not typing, is what commits**
+- **A category name that is a substring of another.** Filtering must not collapse them
+- **Paste.** A pasted value filters identically to typing, in one update
+- **IME composition.** Do not filter mid-composition; wait for `compositionend`, or the
+  first keystroke of a multi-byte input empties the list
+- **The list arrives late.** `GET /vendors/cities` is a fetch; typing before it resolves must
+  not commit, drop keystrokes, or show "no matches" when the truth is "not loaded yet"
+- **A committed city that leaves the list** — its last vendor unpublishes — still renders as
+  the field's value; it is not silently blanked mid-session
+- **Deep link / back button.** A URL carrying `?category=&city=&state=` still rehydrates both
+  inputs to their committed labels
+
+## Acceptance
+
+- [ ] `Vendor type` is a text input whose typed characters appear in the input, filtering an
+      open panel that starts as the **full** category list with `Any vendor type` leading
+- [ ] `City` is a text input that opens **no** list on focus and shows clickable, validated
+      `City, ST` suggestions as the customer types, each with its real vendor count
+- [ ] Neither field ever commits a value that is not a real category slug or a real
+      `(city, state)` pair; blur, `Escape` and `Tab` all revert uncommitted text
+- [ ] A typed string matching nothing produces a panel that **names what was typed**, in
+      both fields
+- [ ] Both fields work at `hero` and `compact` densities and are driven in a browser at
+      1440x900 at both
+- [ ] Full keyboard operation: arrows move the active option without moving the caret,
+      `Enter` commits, `Escape` reverts, and the active option is scrolled into view
+- [ ] `role="combobox"` / `listbox` / `option` with `aria-activedescendant` and
+      `aria-expanded` on both
+- [ ] The shared filtering and keyboard behaviour lives in **one** place, not duplicated
+      across the two components
+- [ ] `42-dropdowns.md` and `.claude/plans/vendor-marketplace-decisions.md` record this as a
+      **user override**, naming the invariant that survives it — validated commit values —
+      so the next parity pass reads it as accepted rather than re-filing it
+- [ ] `parity-checker` is re-run on frames `01`, `02`, `17` and `18`, and every delta it
+      reports against the two segments is recorded as **this override**, not as a regression
+- [ ] No inline hex, width or radius is introduced; no `primary-*`, no brand literal
+
+## Tests (required)
+
+- [ ] Category: typing `film` leaves `Photo & film` in the list and removes non-matching
+      categories — asserted on rendered rows, not on internal state
+- [ ] Category: typing a string that matches nothing renders the empty state **containing
+      that string**
+- [ ] Category: typing then blurring commits **nothing**, and the input reads the previously
+      committed label
+- [ ] Category: selecting a row commits the **slug**, asserted on the `onChange` payload
+- [ ] City: focus alone renders **no** suggestion list — the assertion that pins the user's
+      distinction between the two fields, so a later refactor cannot quietly make them the same
+- [ ] City: typing `aus` renders `Austin, TX` as a clickable option carrying its vendor count
+- [ ] City: selecting commits the `(city, state)` **pair**; typing a non-matching string and
+      blurring commits neither half
+- [ ] City: two same-named cities in different states both render, each naming its state
+- [ ] Diacritic normalisation, both directions
+- [ ] Keyboard: `ArrowDown` + `Enter` commits the first option; `Escape` reverts; the caret
+      does not move on arrows
+- [ ] An a11y test asserting `role`, `aria-expanded` and `aria-activedescendant` on both
+      fields in both states
