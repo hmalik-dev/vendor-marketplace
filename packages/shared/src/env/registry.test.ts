@@ -356,7 +356,7 @@ describe('capabilitiesForTicket', () => {
   });
 
   it('tracks the highest registered ticket', () => {
-    expect(HIGHEST_REGISTERED_TICKET).toBe(382);
+    expect(HIGHEST_REGISTERED_TICKET).toBe(386);
   });
 
   it('declares only known capabilities for every ticket', () => {

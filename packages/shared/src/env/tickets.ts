@@ -463,6 +463,15 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   380: [], // `Due today` vs `Total today` — a copy ruling, no external service
   381: ['stripe'], // a check constraint on the two payout columns Stripe onboarding writes
   382: [], // a guard for the stale `shared/dist` — build tooling, no external service
+
+  // The fourth consolidation pass, 2026-08-31, plus two tickets filed from the
+  // user's own instructions in the same session. #385 and #386 are merges; the
+  // rows they replace keep their entries so `pnpm preflight --ticket <old n>`
+  // still gates from an older branch.
+  383: [], // focus indicators — a stylesheet rule and component classes, no external service
+  384: [], // the city place-search — a seeded US city/state table, deliberately no geocoder
+  385: [], // a design pass: four rulings and a frame re-cut. No application code at all
+  386: [], // token substitutions and a skeleton shape, both read off frames
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
