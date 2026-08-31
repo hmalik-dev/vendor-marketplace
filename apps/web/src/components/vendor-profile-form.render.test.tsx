@@ -344,20 +344,22 @@ describe('the storefront preview rail (#360)', () => {
    * "No link out." A vendor clicking their own preview must not be navigated
    * off a form holding unsaved edits.
    *
-   * jsdom implements `inert` as an attribute only — it does not remove the
-   * subtree from the accessibility tree or from the focus order, so
-   * `queryAllByRole('link')` still finds the card's Link here and would find
-   * it however correct the rendered page is. Asserting the attribute is the
-   * class-level fact this environment can actually establish; that the link is
-   * genuinely unreachable is **owed to the browser parity pass**, not proven
-   * here.
+   * This used to assert that the card's Link sat inside an `[inert]` wrapper,
+   * and owed the real proof to the browser: jsdom implements `inert` as an
+   * attribute only, so the Link was still in the accessibility tree and in the
+   * focus order here however correct the rendered page was.
+   *
+   * `VendorCard`'s `preview` prop (#358) makes the stronger fact assertable —
+   * there is no anchor to reach, so nothing is owed to a later pass.
    */
-  it('marks the mirrored card inert so it cannot be navigated', () => {
+  it('renders the mirrored card with no link out at all', () => {
     renderSaved();
 
-    const link = within(rail()).getByRole('link', { name: /Sunlit Studio/ });
-
-    expect(link.closest('[inert]')).not.toBeNull();
+    // The card is still there and still says the vendor's name…
+    expect(within(rail()).getByText('Sunlit Studio')).toBeDefined();
+    // …but there is nothing to navigate, rather than something unreachable.
+    expect(within(rail()).queryAllByRole('link')).toHaveLength(0);
+    expect(rail().querySelector('a')).toBeNull();
   });
 
   /*

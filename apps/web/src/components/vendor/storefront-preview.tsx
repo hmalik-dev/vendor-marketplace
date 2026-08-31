@@ -84,23 +84,25 @@ export function StorefrontPreview({
       </div>
 
       {/*
-        `inert` because the acceptance line is "no link out": VendorCard wraps
-        its body in a Link to the public profile, and a vendor clicking their
-        own preview would be navigated off a form holding unsaved edits.
+        The acceptance line is "no link out": `VendorCard` wraps its body in a
+        Link to the public profile, and a vendor clicking their own preview
+        would be navigated off a form holding unsaved edits.
 
         It is the real card rather than a rebuilt one on purpose — a preview
         that drifts from the thing it previews is worse than no preview. Frame
-        `09` draws this card as static spans, not as a link, so `inert` matches
-        the frame rather than working around it.
+        `09` draws this card as static spans, not as a link.
 
-        Removing it from the accessibility tree is correct here and not a loss:
-        it is a second rendering of content the vendor is editing in labelled
-        fields alongside, and announcing it twice would be noise.
+        `preview` rather than the `inert` wrapper this replaced (#358). The
+        wrapper worked, but it stated the constraint at the wrong end: the card
+        is the thing that knows it is "ONE control", so the exception belongs
+        on the card. `inert` also removed the subtree from the accessibility
+        tree, which was defensible — it is a second rendering of content the
+        vendor is editing in labelled fields alongside — but it was a side
+        effect of the workaround rather than a decision, and the prop leaves
+        that judgement where it can be made deliberately.
       */}
       {placement === 'search' ? (
-        <div inert>
-          <VendorCard vendor={vendor} />
-        </div>
+        <VendorCard vendor={vendor} preview />
       ) : (
         <ProfilePlacement vendor={vendor} />
       )}

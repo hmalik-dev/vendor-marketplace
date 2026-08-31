@@ -161,7 +161,20 @@ export function SearchBar({
    * invites: one span carried it, so the rule looked like "the 768 bar is
    * heavier". It is not. `CategorySelect` carries its own 500.
    */
-  const fieldText = isHero ? 'text-[14px] lg:text-[13.5px] min-[90rem]:text-md' : 'text-[13.5px]';
+  /*
+   * The compact bar's value is 13px/500 in frames `17` and `18`, measured at
+   * 1440 during #297's pass; it rendered 13.5px/400. Frame `02`'s header is
+   * ruled stale by #57, so `17`/`18` are the authority for this bar.
+   *
+   * This does **not** contradict the note above. That one is about the 768
+   * bar, where a single span carried a 500 and the rule was wrongly read off
+   * one sample; this is the 1440 compact header, measured on all three
+   * segments. `CategorySelect` still carries its own 500, so it is unchanged
+   * by this and stays the reason not to generalise from it.
+   */
+  const fieldText = isHero
+    ? 'text-[14px] lg:text-[13.5px] min-[90rem]:text-md'
+    : 'text-[13px] font-medium';
   /*
    * The `field` class this used to hold is gone with the last text input on the
    * bar (#167). All three segments are dropdown triggers now, and each carries
@@ -267,7 +280,7 @@ export function SearchBar({
               in the header at all — `SearchShell` renders it as its own row —
               so it keeps its padding-driven height there.
             */
-            'border border-stone-300 shadow-sm sm:py-1 sm:pr-1 sm:pl-4 lg:h-10 lg:py-0 xl:h-[42px]',
+            'border border-stone-300 shadow-sm sm:py-1 sm:pr-1.25 sm:pl-4.5 lg:h-10 lg:py-0 xl:h-[42px]',
         className,
       )}
     >
@@ -300,7 +313,7 @@ export function SearchBar({
           segment,
           isHero
             ? 'sm:flex-1 sm:pr-3.5 sm:pl-3.5 lg:pr-0 min-[90rem]:pl-4.5'
-            : 'sm:flex-[0.9] sm:pl-3.5',
+            : 'sm:flex-[0.9] sm:pl-4',
         )}
       />
 
@@ -352,7 +365,7 @@ export function SearchBar({
                 ? /* .9 at 768, .8 from 1024. 768 also pads the field on both
                      sides rather than only the left. */
                   'sm:min-w-28 sm:flex-[0.9] sm:pr-3.5 sm:pl-3.5 lg:flex-[0.8] lg:pr-0 min-[90rem]:pl-4.5'
-                : 'sm:min-w-26 sm:flex-[0.85] sm:pl-3.5',
+                : 'sm:min-w-26 sm:flex-[0.85] sm:pl-4',
             )}
           >
             {/*

@@ -35,3 +35,4 @@
 - [Pathspec when a peer has work staged](pathspec-when-a-peer-has-work-staged.md) — the index is shared; `git add` + plain commit steals their staged work under your message
 - [CI and the deploy check are pre-launch](vercel-deploy-check-always-fails.md) — never wait on them or read their red as a finding; land on the local gate
 - [`git ls-tree -r` is cwd-scoped](git-ls-tree-is-cwd-scoped.md) — without `--full-tree` it lists only the current directory, and the Bash cwd persists across calls
+- [File feature-sized tickets, not findings](ticket-granularity-feature-sized.md) — few + detailed; 138 of 315 closed rows were Superseded consolidations
