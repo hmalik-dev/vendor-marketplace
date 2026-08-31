@@ -472,6 +472,10 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   384: [], // the city place-search — a seeded US city/state table, deliberately no geocoder
   385: [], // a design pass: four rulings and a frame re-cut. No application code at all
   386: [], // token substitutions and a skeleton shape, both read off frames
+  387: ['stripe'], // checkout opens a real PaymentIntent against a connected account
+  388: [], // form validation feedback — client rendering only, no external service
+  389: [], // a grid template in the shared admin table, no external service
+  390: [], // a fetch deadline and a streamed fallback, no external service
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

@@ -257,6 +257,10 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **384** | **Search rework — `City` becomes a place search over every US city, not the inventory list** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 on the user's explicit instruction**, verbatim: *"i currently want the city dropdown to function the way airbnb's 'where' input functions. Do not preload and indicate how many vendors are in each city.. users should be able to search for any city and see the results."* **The third user override of the design contract, after #364 and #375 — record it as one.** It overrides #375's own closing invariant (*"A free-text city that reaches the API as a filter is a regression, not this ticket"*) and D6's rule that the field may only ask questions the platform can answer. Three things go: the preloaded `GET /vendors/cities` payload, `vendorCount` as a ranking **and** display signal, and the rule that a city with nobody in it is unpickable. **The `(city, state)` pair survives** — `state` has been the closed `us_state` enum since #332 and "Springfield" still names a place in thirty-odd states — so a suggestion still names its state; what changes is *which* places may be suggested. Detail section carries the scope, the suggestion source and the empty-state contract |
 | **385** | **[DESIGN] Ruling round — the four questions blocking #371 and #313** | P1 | M3 | **P1 High** | **Backlog** | — | **A design pass: it edits `design/` and answers product rulings, which `web-design-parity.md` reserves for one** | `core` | **Filed 2026-08-31 by the fourth backlog consolidation. Merges #377, #378 and #380**, and takes the contrast question out of **#313**'s blocked half. One person, one sitting, one design bundle open. Split, they stall four separate times for one reason — and three of the four block the same ticket, so answering them one at a time re-opens #371 three times. **Same shape as #335**, the 2026-08-29 ruling round that unblocked eleven rows at once. The merged rows carry the measurements and are the checklist. **Order: rule first, re-cut second, and only then do #371, #313 and #386 become ordinary code work** |
 | **386** | **Visual corrections read off the frames — four undefined ramp steps and the search skeleton** | P2 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by the fourth backlog consolidation. Merges #376 and #379.** Both are single-pass corrections whose value is read off a frame and then guarded; both are unblocked; and neither fills a lane on its own, while each would otherwise cost a worktree, a preflight, a PR and a merge. One browser session covers all three frames — `05 Checkout`, `06 Booking confirmed`, `17 Search loading`. The merged rows carry the measurements and are not restated |
+| **387** | **Checkout is a dead end — an accepted booking's `Pay` CTA answers 404** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-31 by the pre-launch QA passthrough.** The money path does not complete. `/bookings/<id>` renders `Pay $1,450` on an accepted booking; the link is `/bookings/<id>/checkout`, and that route answers **404** with copy that says the listing may be gone. Stripe rejects the PaymentIntent — `No such destination: 'acct_e2e_fixture_not_a_real_account'`, `param: transfer_data[destination]`, `code: resource_missing` — the API answers **400**, and `openCheckout` folds 400/402/404/409/422 into `null`, which the page turns into `notFound()`. **#381 would not catch this**: its proposed `stripe_onboarded implies stripe_account_id is not null` constraint passes on a non-null placeholder. The seed writes exactly such a placeholder, so **no browser or E2E pass can ever reach checkout** — which is why this survived. Contrast the accept-time 402, which is handled well |
+| **388** | **Forms reject the first submit in silence** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** Two of the three form surfaces a vendor must clear reject a pristine submit with **no POST, no `aria-invalid`, no `role=alert`, no message anywhere on the page** — the button appears inert. Confirmed on **Add package** (`/vendor/packages`) and **Create profile** (`/vendor/profile/edit`, the screen every new vendor is funnelled to). Focus moves to the offending control, which is the only signal, and it is silent for a screen reader. A **second** submit does render the summary, so the machinery exists and the first pass does not reach it. The booking-request form validates correctly but never announces it either. Includes the Price filter, which discards non-numeric input with no message |
+| **389** | **Admin tables let each row size its own columns** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** `components/admin/data-table.tsx` gives the header and **every row its own grid container**, sharing only a template string through `--admin-table-columns`. The admin pages declare bare `fr` tracks, and a bare `fr` cannot shrink below its content's min-content — so any row with long text resolves its own widths. On `/admin/reviews` **13 of 15 rows** disagree with the header, the action column is pushed to `right=1454` in a 1440 viewport, and at 390 the document scrolls sideways. **Fix verified live in-browser:** wrapping the flexible tracks in `minmax(0, …)` took matching rows from 2/6 to 6/6. Latent on bookings, customers and payments — they escape only because their cells are short |
+| **390** | **Server-rendered pages have no upstream timeout** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** With the API reachable but not answering, `/` and `/vendors/<slug>` send **zero bytes and never respond** — measured at 30s against a 0.10s baseline, so the visitor holds a blank tab until the platform 504s. `/search` returns its skeleton in 0.14s under the identical fault, so the correct pattern is already in the repo. No fetch in the web app sets a deadline, so a slow dependency is indistinguishable from a hung one |
 **This board carries open work only. The closed rows live in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **327 rows as of 2026-08-31: 189 `Done` and 138 `Superseded`**, recounted programmatically. **`Superseded` rows stay here on purpose and `Done` rows do not**, which had drifted: the fourth `/cleanup-tickets` pass on 2026-08-31 found 12 `Done` rows still on this board and moved them across with their detail sections. The distinction is the one the header above gives — a `Superseded` row is still consulted, because `pnpm preflight --ticket <old n>` gates against it and its measurements are what its replacement was written from; a `Done` row is history. `tickets.board.test.ts` reads both files together, so moving a row changes nothing about the gate.
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-08-31 after the fourth consolidation pass: 58 rows — 12 open (9 Backlog, 1 In Progress, 2 Deferred — needs a human) and 46 `Superseded`.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That pass merged **#377/#378/#380 into #385** and **#376/#379 into #386**, folded **#382 into #363**, filed **#383** and **#384** from the user's own instructions, reconciled **#313** (whose board row and detail section had been asserting different statuses and different blockers), and moved the 12 `Done` rows to the archive. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
@@ -3261,6 +3265,22 @@ correct, reads `BOOKING_REQUEST_EXPIRY_DAYS`).
 
 ---
 
+#### Appended 2026-08-31 by the pre-launch QA passthrough — the no-results state has no `<h1>`
+
+Frame `18`'s surface, inherited here from #367. `/search` with a filter that matches
+nothing renders **no `<h1>` at all** — the only heading in the document is
+`<h2>No vendors match that filter</h2>`. The populated state renders `<h1>17 vendors</h1>`,
+and the loading shell renders `<h1>Searching…</h1>`, so the heading is lost precisely when
+the results settle to zero.
+
+Confirmed through the accessibility tree, not `querySelector`: `getByRole('heading',
+{ level: 1 })` returns 0 on the empty state and 1 on the populated one.
+
+Repro: `/search?tags=<any tag with no matching vendor>`.
+
+**Acceptance line to add:** the no-results state carries an `<h1>`, and the document has
+exactly one at every state of this route — loading, populated and empty.
+
 ### #374: Launch legal, policy and support surfaces
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Deferred — needs a human | **Capabilities:** `core`
@@ -3595,6 +3615,32 @@ same. Copy this shape.
 
 ---
 
+#### Appended 2026-08-31 by the pre-launch QA passthrough — the `ring-*`-only case is also doubled
+
+This ticket's mechanism section exempts components that use `ring-*`: *"a component's own
+`ring-3` replaces the global `ring-2` and draws one indicator."* **Measured, it does not.**
+`ring-*` and `ring-offset-*` write different custom properties, and `ui/input.tsx` sets
+only the former, so the base rule's `ring-offset-2 ring-offset-stone-50` survives and
+composites.
+
+A focused `input[data-slot="input"]`, keyboard-focused so `:focus-visible` is genuine:
+
+```
+box-shadow layer 1: rgb(248, 245, 239) 0 0 0 2px      <- ring-offset, from the base rule
+box-shadow layer 2: oklab(clay/0.5)    0 0 0 5px      <- ring-3, from input.tsx
+border-color      : rgb(180, 85, 47)                  <- focus-visible:border-ring
+```
+
+Three concentric edges on a plain text input — which is what the user's report describes.
+
+The search bar stacks three **elements**: focusing one combobox paints a ring on the input,
+an inset ring on its field cell, and a 3px ring around the whole `<form>` — reproduce by
+keyboard-focusing `Vendor type` on `/search`.
+
+**So the fix cannot be "let components override the ring" — a component cannot override an
+offset it does not set.** Whichever owner is chosen, `ring-offset` must be owned by the
+same rule as `ring`, and `ui/input.tsx` is a site this ticket's table must include.
+
 ### #384: Search rework — `City` becomes a place search over every US city, not the inventory list
 
 **Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
@@ -3861,3 +3907,261 @@ the frame's 6 merely illustrative.
       `design-tokens.test.ts`
 - [ ] A test asserting the skeleton and the loaded card share a radius token, so the two
       cannot drift apart again
+
+
+### #387: Checkout is a dead end — an accepted booking's `Pay` CTA answers 404
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Blocked by:** None
+
+**Filed 2026-08-31 by the pre-launch QA passthrough**, driving the customer flow end to
+end for the first time rather than stopping at "request sent".
+
+#### What happens
+
+Signed in as the E2E customer, with booking request `1af86d43…` in `accepted`:
+
+1. `/bookings` lists it as **ACCEPTED**, `$1,450`.
+2. `/bookings/1af86d43…` renders the money CTA: **`Pay $1,450`**, an `<a>` whose `href`
+   is `/bookings/1af86d43…/checkout`.
+3. Clicking it lands on **404 · NOT FOUND** — *"This page isn't here. The link may be
+   old, or a vendor may have taken their listing down. Nothing is wrong with your
+   account."*
+
+Every claim in that copy is false. The link is current, the vendor is published, and the
+customer's account is fine.
+
+#### Why
+
+`apps/api` logs the real cause on the `POST /customer/booking-requests/:id/checkout` it
+serves:
+
+```
+StripeInvalidRequestError: No such destination: 'acct_e2e_fixture_not_a_real_account'
+  param: transfer_data[destination]   code: resource_missing   statusCode: 400
+  at createPaymentIntent (apps/api/src/lib/stripe.ts:344)
+  at openCheckout (apps/api/src/modules/payments/payments.service.ts:165)
+```
+
+The API answers **400**. `apps/web/src/lib/customer-data.ts:145` folds
+`[400, 402, 404, 409, 422]` into `null`, and `checkout/page.tsx` turns `null` into
+`notFound()`. The comment there reasons about **402** only — the vendor's payout setup,
+deliberately not named to the customer. A Stripe **400** is a different thing: a
+misconfiguration or an outage, and rendering it as "this page isn't here" tells the
+customer their booking link is dead when their money simply could not be taken.
+
+#### Two defects, not one
+
+**1. The fixture makes the money path unverifiable.** `vendor_profiles.stripe_account_id`
+for the E2E vendor is the literal `acct_e2e_fixture_not_a_real_account`. Stripe rejects
+it, so checkout 404s for the only account any automated pass can drive. This is the
+reason a broken core flow reached pre-launch: **every** browser and E2E run stops one
+click short.
+
+`pnpm preflight` compounds it. Its browser-verification check reports *"the vendor account
+owns a published storefront with a package, a live request **and payouts**"* — a green tick
+for the exact capability that does not work. The gate asserts the columns are set, never
+that Stripe accepts the account, so it certifies the fixture as payment-capable on every
+run.
+
+**#381 does not close this.** Its proposed constraint — `stripe_onboarded` implies
+`stripe_account_id is not null` — passes on a non-null placeholder, which is exactly what
+`be02b46` wrote when it "fixed the instance" for the same 404. The class is still open.
+
+**2. An upstream payment failure is presented as a missing page.** 400/409/422 are not
+"not found". They need a state that says payment could not be started, offers a retry,
+and leads somewhere — not the 404 shell.
+
+#### What is already right, and must not regress
+
+The **accept-time 402 is handled well** and is the model to follow. A vendor with no
+Stripe account who tries to accept gets a toast — *"Payouts not connected. You can't take
+payment until payouts are connected. It takes about five minutes. Set up payouts →"* —
+plus an inline *"Finish your payout setup before accepting bookings"*. Verified against a
+storefront created from scratch during this pass.
+
+#### Acceptance
+
+1. The E2E vendor's `stripe_account_id` is a **real Stripe test-mode connected account**,
+   or the seed provisions one, so `POST /customer/booking-requests/:id/checkout` succeeds
+   for the seeded fixture. `pnpm db:seed:e2e` still runs without a Stripe key by leaving
+   the vendor **not** onboarded rather than writing a placeholder.
+2. Driven in a real browser at 1440x900 as the E2E customer: `/bookings/<id>` →
+   `Pay $…` → the checkout screen renders frame `05` with a live Stripe element, and the
+   payment completes to `/bookings/<id>/confirmed`. Screenshot both.
+3. A checkout that cannot be opened for a reason **other than 402** renders an error
+   state naming what happened and offering a retry — never `notFound()`. 402 keeps its
+   current deliberate silence about the vendor's payout status.
+4. An id that is not a UUID, and one that is a UUID but not this customer's booking,
+   still `notFound()`.
+5. A regression test asserts a non-404 outcome for an accepted, payable booking, and a
+   test asserts the 400 branch does not reach `notFound()`.
+6. **Extend #381's guard** so a `stripe_account_id` that is not a plausible Stripe account
+   id (`acct_` plus Stripe's id charset) cannot be written, or state in #381 why a format
+   check is refused. Note the outcome in #381.
+
+---
+
+### #388: Forms reject the first submit in silence
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-31 by the pre-launch QA passthrough.**
+
+#### The defect
+
+Submitting a pristine form produces **no observable response at all**:
+
+| Surface | Trigger | POST | `aria-invalid` | `role=alert` | Visible message |
+| --- | --- | --- | --- | --- | --- |
+| `/vendor/packages` → Add package | `Add package`, all blank | none | 0 | none | none |
+| `/vendor/packages` → Add package | name + price, description blank | none | 0 | none | none |
+| `/vendor/profile/edit` → Create profile | `Create profile`, all blank | none | 0 | none | none |
+
+Focus moves to the first offending control — the textarea, then `businessName` — and that
+is the **only** signal. It is silent for assistive technology and easy to miss with a
+mouse, so the button reads as broken. `/vendor/profile/edit` is the screen **every new
+vendor is funnelled to**: with no profile row, all seven `/vendor/*` routes redirect here.
+
+**The machinery exists and the first pass does not reach it.** A *second* submit renders
+*"One field needs fixing before this can go out"* and names the field, and the required
+description is not marked required anywhere before it blocks.
+
+#### The same gap, one level milder, on the booking request form
+
+`/vendors/<slug>/request` sets `aria-invalid` and wires a well-written message through
+`aria-describedby` — genuinely good — but the message container carries **no `role="alert"`
+and no `aria-live`**, and focus stays on `Continue to review`. Nothing is announced.
+
+#### And the Price filter discards input without saying so
+
+`/search` → Price → Min = `abc` → Apply: the popover closes, the URL and results are
+unchanged, and nothing is said. The **inverted** range on the same control explains itself
+well — *"That price range isn't one we can use, so it was cleared — the rest of your
+search still applies."* One control, two contracts.
+
+#### Acceptance
+
+1. A blank submit on **Add package** and on **Create profile** renders the same error
+   summary the second submit renders today, on the **first** press.
+2. Every field that blocks submission carries `aria-invalid="true"` and an
+   `aria-describedby` message placed next to that field.
+3. The error summary is announced: `role="alert"` (or an `aria-live="assertive"` region),
+   on all three forms including the booking request.
+4. Focus moves to the first invalid control **and** that control's message is what a
+   screen reader reads on arrival.
+5. Required fields are marked required before they block — the package description
+   included.
+6. The Price filter tells the user when it discards a value, in the register the inverted
+   range already uses.
+7. Driven in a real browser at 1440x900 for each surface, with a screen reader
+   announcement check or an equivalent assertion on the live region, and screenshots.
+8. Tests: one per surface asserting a blank submit produces a visible, announced message
+   and no network call.
+
+---
+
+### #389: Admin tables let each row size its own columns
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-31 by the pre-launch QA passthrough.**
+
+#### Mechanism
+
+`apps/web/src/components/admin/data-table.tsx` renders the header row and each body row as
+its **own grid container** (`role="row"`, `grid grid-cols-(--admin-table-columns)`),
+sharing only the template *string* through a CSS variable set on the wrapper. Column
+widths therefore resolve **per row**, against that row's own content.
+
+The admin pages declare bare `fr` tracks — `1.6fr`, `1.4fr`, `.9fr` in
+`admin/{bookings,customers,payments}/page.tsx`. A bare `fr` track's automatic minimum is
+`min-content`, so a long cell expands its track and steals width from the rest of **that
+row only**.
+
+#### Measured on `/admin/reviews` at 1440x900
+
+```
+header : 72.125  187.547  187.547  129.828  274.109  129.828  70
+row 3  : 23.406   94.688   84.047   68.250  670.547   78.453  70
+row 4  : 27.078   94.688   70.422   68.250  642.109   78.453  70
+```
+
+**13 of 15 rows** disagree with the header. The two that agree are the short E2E-seeded
+reviews. The trailing action column is pushed to `right=1454` in a 1440 viewport, so it is
+clipped. At **390** the document itself scrolls horizontally — `scrollWidth 407 > 390`,
+83 elements past the edge.
+
+#### Fix, verified before filing
+
+Applied live in the browser with no file edit — wrapping each flexible track in
+`minmax(0, …)`:
+
+```
+before: 2 of 6 sampled rows match the header
+after : 6 of 6
+```
+
+The fixed table also truncates with an ellipsis, as the design intends. Re-measure before
+fixing rather than trusting these numbers — the row set changes with the seed.
+
+**Latent everywhere else.** `/admin/{vendors,bookings,customers,tags}` measure 0 misaligned
+today only because their cells are short. The fix belongs in the shared component or in
+every column spec, not in the Reviews page.
+
+#### Acceptance
+
+1. Every body row's computed `grid-template-columns` equals the header's, on all six admin
+   tables, at 1440 / 1024 / 768 / 390.
+2. No admin route scrolls the document horizontally at any of those widths.
+3. Overlong cell content truncates inside its track rather than widening it.
+4. The trailing action column is fully inside the viewport at 1440.
+5. A test asserts header-vs-row template equality for a row carrying deliberately overlong
+   text, so the regression cannot return.
+6. Browser-verified as the admin at 1440x900 and 390, screenshotted.
+
+---
+
+### #390: Server-rendered pages have no upstream timeout
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-31 by the pre-launch QA passthrough.**
+
+#### Measured
+
+The API process was suspended with `SIGSTOP`, so it accepts connections and never answers
+— the shape of a saturated or wedged dependency, not a refused one:
+
+| Route | API up | API hung |
+| --- | --- | --- |
+| `/` | 200 · 0.11s | **000 · 30.00s · 0 bytes** |
+| `/vendors/kessler-co` | 200 · 0.09s | **000 · 30.01s · 0 bytes** |
+| `/search` | 200 · 0.08s | 200 · 0.14s · 118443 bytes |
+
+`/` and the vendor profile await API data before flushing anything, so the visitor holds a
+blank tab until the platform's own gateway timeout ends it — on Vercel a 504 in its
+chrome, not ours. **`/search` is already correct** under the identical fault: it streams
+its shell and skeleton immediately and fills in later.
+
+No fetch in the web app sets a deadline, so "slow" and "never" are the same event.
+
+#### Acceptance
+
+1. Every server-side API fetch carries a timeout. One value, named once, not per call site.
+2. With the API hung, `/`, `/vendors/<slug>` and `/search` all return **HTML within that
+   timeout plus a margin** — verified by re-running the suspension above and recording the
+   three timings in the PR.
+3. A page whose data does not arrive renders its skeleton and then an error state that
+   says the data could not be loaded and offers a retry — never a blank document and never
+   the 404 shell.
+4. Static and above-the-fold content renders regardless of API health, following the
+   pattern `/search` already uses.
+5. A test exercises the timeout path with a stalled fetch and asserts the error state,
+   rather than asserting only the happy path.
+6. The landing hero image `/stock/portrait.jpg` is the LCP element and lacks
+   `priority`; Next warns on every load. Set it, since this ticket owns how the landing
+   page is delivered.
