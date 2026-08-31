@@ -2,6 +2,7 @@
 
 import {
   BRAND_DOMAIN,
+  COVER_CONSTRAINT_LINE,
   createVendorProfileSchema,
   describeBlockers,
   generateSlug,
@@ -13,9 +14,11 @@ import {
   milesToKm,
   PUBLISH_BLOCKERS,
   RESPONSE_TIME_HOURS_OPTIONS,
+  shortTimeAgo,
   updateVendorProfileSchema,
   UPLOAD_CONSTRAINT_LINE,
   type Category,
+  type VendorCard as VendorCardData,
   type PublishBlockerKey,
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
@@ -37,6 +40,7 @@ import {
 import { cn } from '@/lib/utils';
 import { US_STATE_OPTIONS, usStateName } from '@/lib/us-states';
 import {
+  toImageSrc,
   wireTagListSchema,
   wireVendorProfileSchema,
   type WireTag,
@@ -45,6 +49,7 @@ import {
 import { CategoryPicker } from '@/components/category-picker';
 import { FormSectionNav, type FormSection } from '@/components/form-section-nav';
 import { ImageUpload } from '@/components/image-upload';
+import { StorefrontPreview } from '@/components/vendor/storefront-preview';
 import { TagPicker } from '@/components/tags/tag-picker';
 import { Button } from '@/components/ui/button';
 import {
@@ -86,6 +91,13 @@ const DEFAULT_SERVICE_RADIUS_MILES = 30;
 /** How long the inline "Saved" confirmation stays up. */
 const SAVED_NOTICE_MS = 2000;
 
+/**
+ * Stands in for the row id while a profile is still being created. The preview
+ * card needs an id for its key; nothing reads this one, and it never reaches
+ * the API — the create payload carries no id at all.
+ */
+const PREVIEW_VENDOR_ID = '00000000-0000-4000-8000-000000000000';
+
 /** Characters left before the bio counter starts warning. */
 const BIO_WARNING_THRESHOLD = 100;
 
@@ -103,8 +115,11 @@ const SECTION_IDS = {
  * their blocker dot here rather than being invisible until the vendor
  * stumbles on them.
  *
- * Payouts is deliberately absent until #9 makes it satisfiable: a nav entry
- * with a dot the vendor can never clear is worse than no entry at all.
+ * Payouts was deliberately absent while a dot there was unclearable, on the
+ * grounds that an entry a vendor can never satisfy is worse than no entry.
+ * #9 shipped Connect onboarding, so `/vendor/payments` is a real surface and
+ * the dot now clears — which makes the absence an ordinary missing nav item.
+ * Frame `09` draws it last, after Portfolio.
  */
 const SECTION_ORDER = [
   { key: 'business', label: 'Business', id: SECTION_IDS.business },
@@ -113,6 +128,7 @@ const SECTION_ORDER = [
   { key: 'responseTime', label: 'Response time', id: SECTION_IDS.responseTime },
   { key: 'packages', label: 'Packages', id: 'packages', href: '/vendor/packages' },
   { key: 'portfolio', label: 'Portfolio', id: 'portfolio', href: '/vendor/portfolio' },
+  { key: 'payouts', label: 'Payouts', id: 'payouts', href: '/vendor/payments' },
 ] as const;
 
 export interface FormState {
@@ -128,6 +144,8 @@ export interface FormState {
   serviceRadiusMiles: number;
   responseTimeHours: string;
   profileImageUrl: string | null;
+  /** One file, two placements — the card's cover and the profile header (#287). */
+  coverImageUrl: string | null;
   categoryIds: string[];
   tagIds: string[];
 }
@@ -154,6 +172,7 @@ function initialState(profile: WireVendorProfile | null): FormState {
         ? NO_RESPONSE_TIME
         : String(profile.responseTimeHours),
     profileImageUrl: profile?.profileImageUrl ?? null,
+    coverImageUrl: profile?.coverImageUrl ?? null,
     categoryIds: [...(profile?.categoryIds ?? [])],
     tagIds: (profile?.tags ?? []).map((tag) => tag.id),
   };
@@ -184,6 +203,7 @@ function toPayload(form: FormState): Record<string, unknown> {
     responseTimeHours:
       form.responseTimeHours === NO_RESPONSE_TIME ? undefined : Number(form.responseTimeHours),
     profileImageUrl: form.profileImageUrl ?? undefined,
+    coverImageUrl: form.coverImageUrl ?? undefined,
     categoryIds: form.categoryIds,
   };
 }
@@ -379,6 +399,18 @@ export function VendorProfileForm({
     profile?.publishBlockers ?? [],
   );
   const [isPublished, setIsPublished] = useState(profile?.isPublished ?? false);
+  /*
+   * #258: the bar never said when the storefront was last saved, so a vendor
+   * returning to it could not tell a saved draft from an unsaved one.
+   */
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(profile?.updatedAt ?? null);
+  /*
+   * Held in state and filled by an effect rather than computed during render:
+   * `shortTimeAgo` reads the clock, and a clock read while rendering gives the
+   * server and the client two different strings for the same markup. The
+   * interval keeps `2m` from sitting there reading `2m` an hour later.
+   */
+  const [savedAgo, setSavedAgo] = useState('');
 
   const isNew = profile === null;
   const slugPreview = form.slug.trim() || generateSlug(form.businessName || 'your-business');
@@ -394,6 +426,22 @@ export function VendorProfileForm({
   });
   const radiusFillPercent = serviceRadiusFillPercent(form.serviceRadiusMiles);
   const bioRemaining = MAX_VENDOR_BIO_LENGTH - form.bio.length;
+
+  useEffect(() => {
+    if (lastSavedAt === null) {
+      setSavedAgo('');
+      return;
+    }
+
+    const show = (): void => setSavedAgo(shortTimeAgo(lastSavedAt));
+
+    show();
+    // A minute is the resolution `shortTimeAgo` floors to, so anything faster
+    // re-renders without ever changing the string.
+    const timer = setInterval(show, 60_000);
+
+    return () => clearInterval(timer);
+  }, [lastSavedAt]);
 
   useEffect(() => {
     if (!justSaved) {
@@ -437,15 +485,63 @@ export function VendorProfileForm({
   /** Nothing is said in red before a submit attempt (`40-states.md`). */
   const formMessage = validation.attempted ? problem.formMessage : null;
 
+  /*
+   * Payouts is not a `PUBLISH_BLOCKERS` key and must not become one: a
+   * storefront publishes without Stripe, it just cannot accept a booking. So
+   * its dot reads the real Connect state off the profile row rather than the
+   * publish gate — no invented status, and it clears the moment onboarding
+   * completes. Gold, never red (`40-states.md`): payouts not set up yet is
+   * waiting on someone, not a failure.
+   */
+  const payoutsBlock = profile !== null && !profile.stripeOnboarded;
+
+  /*
+   * What the preview rail mirrors: the live form, not the saved row, which is
+   * what makes "Updates as you type" true rather than decorative.
+   *
+   * `startingPriceCents` is null on purpose. A starting price is derived from
+   * this vendor's packages, which this screen does not load and cannot know —
+   * and inventing one to make the preview look complete would put a number on
+   * a card that no query produced.
+   */
+  const previewVendor: VendorCardData = useMemo(
+    () => ({
+      id: profile?.id ?? PREVIEW_VENDOR_ID,
+      businessName: form.businessName.trim() || 'Your business',
+      slug: slugPreview,
+      city: form.city.trim() || null,
+      state: form.state.trim() || null,
+      profileImageUrl: toImageSrc(form.profileImageUrl),
+      coverImageUrl: toImageSrc(form.coverImageUrl),
+      avgRating: profile?.avgRating ?? 0,
+      reviewCount: profile?.reviewCount ?? 0,
+      startingPriceCents: null,
+      categories: categories
+        .filter((category) => form.categoryIds.includes(category.id))
+        .map((category) => ({ id: category.id, name: category.name, slug: category.slug })),
+    }),
+    [
+      categories,
+      form.businessName,
+      form.categoryIds,
+      form.city,
+      form.coverImageUrl,
+      form.profileImageUrl,
+      form.state,
+      profile,
+      slugPreview,
+    ],
+  );
+
   const sections: FormSection[] = useMemo(
     () =>
       SECTION_ORDER.map((section) => ({
         id: section.id,
         label: section.label,
-        blocks: blockedSections.has(section.key),
+        blocks: section.key === 'payouts' ? payoutsBlock : blockedSections.has(section.key),
         ...('href' in section ? { href: section.href } : {}),
       })),
-    [blockedSections],
+    [blockedSections, payoutsBlock],
   );
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
@@ -489,6 +585,7 @@ export function VendorProfileForm({
 
       setPublishBlockers(saved.publishBlockers);
       setIsPublished(saved.isPublished);
+      setLastSavedAt(saved.updatedAt);
       setForm((previous) => {
         const next = {
           ...previous,
@@ -562,6 +659,21 @@ export function VendorProfileForm({
         className="hidden shrink-0 border-stone-300 bg-stone-0 lg:flex lg:w-(--sidebar-width-sm) lg:border-r"
       />
 
+      {/*
+        Frame `09` is explicit that this "stays a separate surface at every
+        width; it never becomes a field" — so it is a sibling of the form, not
+        a node inside it. Below `lg` it orders above the fields rather than
+        below them, because a mirror the vendor has to scroll past the whole
+        form to reach is a mirror nobody looks at.
+
+        308px at 1440 and 280px from `lg`, both content-box against the frame's
+        own measurements.
+      */}
+      <StorefrontPreview
+        vendor={previewVendor}
+        className="order-first lg:order-last lg:h-full lg:w-70 lg:overflow-y-auto min-[90rem]:w-77"
+      />
+
       <form onSubmit={save} className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
         <div className="app-pane min-h-0 flex-1 px-4 pt-5.5 sm:px-7">
           <div className="max-w-[65rem]">
@@ -605,29 +717,57 @@ export function VendorProfileForm({
               <h2 className="sr-only">Business</h2>
 
               {/*
-               * The profile photo alone. There is no cover drop zone: the
-               * cover is a **designation on an existing portfolio tile**, not
-               * a second upload of the same image (`40-states.md`). Whatever
-               * sits first in the portfolio is the cover, and the portfolio
-               * editor says so on the tile.
+               * The media row frame `09` draws: a 128px circle beside a
+               * 216x144 3:2 cover zone.
+               *
+               * The cover used to be described here as "a designation on an
+               * existing portfolio tile" rather than an upload. That was never
+               * built, and it left the one image the search card and the
+               * profile header both render with no editing surface at all —
+               * `coverImageUrl` has been on the schema and accepted by the API
+               * the whole time. #288 settled the spec and #360 builds it.
+               *
+               * There is deliberately **no separate profile-banner field**:
+               * one file, two placements (#287).
                */}
-              <div
-                id="profileImage"
-                role="group"
-                aria-label="Profile photo"
-                className="mt-4 w-24 sm:w-32"
-                {...describedByProps(validation.issueFor('profileImage'))}
-              >
-                <ImageUpload
-                  label="Profile photo"
-                  prefix="vendor-profile"
-                  value={form.profileImageUrl}
-                  onChange={(url) => update('profileImageUrl', url)}
-                  rounded
-                  showHint={false}
-                  disabled={isSaving}
-                />
-                <FieldMessage issue={validation.issueFor('profileImage')} />
+              <div className="mt-4 flex flex-wrap items-start gap-5.5">
+                <div
+                  id="profileImage"
+                  role="group"
+                  aria-label="Profile photo"
+                  className="w-24 sm:w-32"
+                  {...describedByProps(validation.issueFor('profileImage'))}
+                >
+                  <ImageUpload
+                    label="Profile photo"
+                    prefix="vendor-profile"
+                    value={form.profileImageUrl}
+                    onChange={(url) => update('profileImageUrl', url)}
+                    rounded
+                    showHint={false}
+                    disabled={isSaving}
+                  />
+                  <FieldMessage issue={validation.issueFor('profileImage')} />
+                </div>
+
+                <div
+                  id="coverImage"
+                  role="group"
+                  aria-label="Cover photo"
+                  className="w-54"
+                  {...describedByProps(validation.issueFor('coverImage'))}
+                >
+                  <ImageUpload
+                    label="Cover photo"
+                    prefix="vendor-cover"
+                    value={form.coverImageUrl}
+                    onChange={(url) => update('coverImageUrl', url)}
+                    showHint={false}
+                    constraintLine={COVER_CONSTRAINT_LINE}
+                    disabled={isSaving}
+                  />
+                  <FieldMessage issue={validation.issueFor('coverImage')} />
+                </div>
               </div>
               <p className="mt-2 text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p>
 
@@ -663,48 +803,6 @@ export function VendorProfileForm({
                 </div>
 
                 <div className="sm:col-span-2">
-                  <Label htmlFor="tagline">Your line</Label>
-                  <Input
-                    id="tagline"
-                    value={form.tagline}
-                    onChange={(event) => update('tagline', event.target.value)}
-                    placeholder="Quiet, documentary, never asks you to pose."
-                    maxLength={MAX_TAGLINE_LENGTH}
-                    className="mt-1.5 bg-stone-0"
-                    {...errorProps(validation.issueFor('tagline'))}
-                  />
-                  <FieldMessage issue={validation.issueFor('tagline')} />
-                  <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
-                    <p className="text-stone-600">
-                      One sentence, in your own words. It opens your profile.
-                    </p>
-                    <p className="shrink-0 tabular-nums text-stone-600">
-                      {form.tagline.length} / {MAX_TAGLINE_LENGTH}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="yearsInBusiness">Years in business</Label>
-                  <Input
-                    id="yearsInBusiness"
-                    type="number"
-                    inputMode="numeric"
-                    min={MIN_YEARS_IN_BUSINESS}
-                    max={MAX_YEARS_IN_BUSINESS}
-                    value={form.yearsInBusiness}
-                    onChange={(event) => update('yearsInBusiness', event.target.value)}
-                    placeholder="10"
-                    className="mt-1.5 bg-stone-0"
-                    {...errorProps(validation.issueFor('yearsInBusiness'))}
-                  />
-                  <FieldMessage issue={validation.issueFor('yearsInBusiness')} />
-                  <p className="mt-1 text-xs text-stone-600">
-                    Counted from when you started, not when you joined here.
-                  </p>
-                </div>
-
-                <div className="sm:col-span-2">
                   <Label htmlFor="bio">About your business</Label>
                   <Textarea
                     id="bio"
@@ -728,6 +826,61 @@ export function VendorProfileForm({
                       {form.bio.length} / {MAX_VENDOR_BIO_LENGTH}
                     </p>
                   </div>
+                </div>
+
+                {/*
+                 * `Your line` and `Years in business` sit here, with About,
+                 * rather than above it — D16 (#335-D), and D12 before it.
+                 *
+                 * Frame `09`'s field list does not draw either one, and the
+                 * parity reading was to delete them. Both are the **only**
+                 * editing surface for content frame `03` displays: #298 moved
+                 * the tagline into the identity card and `yearsInBusiness`
+                 * feeds the About pane's Experience tile. Deleting the inputs
+                 * without deleting the displays would leave content nobody in
+                 * the product can change — a regression dressed as a parity
+                 * fix. So the ruling relocates them and records frame `09`'s
+                 * list as non-exhaustive; that is the deviation, and it is
+                 * deliberate.
+                 *
+                 * The helper sentences that came with them are gone (#152).
+                 * The counters stay: D16 keeps them and spreads them to every
+                 * capped input.
+                 */}
+                <div className="sm:col-span-2">
+                  <Label htmlFor="tagline">Your line</Label>
+                  <Input
+                    id="tagline"
+                    value={form.tagline}
+                    onChange={(event) => update('tagline', event.target.value)}
+                    placeholder="Quiet, documentary, never asks you to pose."
+                    maxLength={MAX_TAGLINE_LENGTH}
+                    className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('tagline'))}
+                  />
+                  <FieldMessage issue={validation.issueFor('tagline')} />
+                  <div className="mt-1 flex items-baseline justify-end gap-3 text-xs">
+                    <p className="shrink-0 tabular-nums text-stone-600">
+                      {form.tagline.length} / {MAX_TAGLINE_LENGTH}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="yearsInBusiness">Years in business</Label>
+                  <Input
+                    id="yearsInBusiness"
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_YEARS_IN_BUSINESS}
+                    max={MAX_YEARS_IN_BUSINESS}
+                    value={form.yearsInBusiness}
+                    onChange={(event) => update('yearsInBusiness', event.target.value)}
+                    placeholder="10"
+                    className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('yearsInBusiness'))}
+                  />
+                  <FieldMessage issue={validation.issueFor('yearsInBusiness')} />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -1009,8 +1162,23 @@ export function VendorProfileForm({
             )}
 
             <div className="flex items-center gap-3.5">
+              {/*
+                Four states, in the order they outrank each other: a save in
+                flight, a save just confirmed, work that would be lost, and —
+                when none of those apply — when this storefront was last saved
+                (#258). The last one is what a vendor returning to the screen
+                needs, and it is the only one that was missing.
+              */}
               <span aria-live="polite" className="text-sm text-stone-600">
-                {isSaving ? 'Saving…' : justSaved ? 'Saved' : isDirty ? 'Unsaved changes' : ''}
+                {isSaving
+                  ? 'Saving…'
+                  : justSaved
+                    ? 'Saved'
+                    : isDirty
+                      ? 'Unsaved changes'
+                      : savedAgo === ''
+                        ? ''
+                        : `Saved ${savedAgo} ago`}
               </span>
               {profile !== null ? (
                 <Button type="button" variant="secondary" asChild>
