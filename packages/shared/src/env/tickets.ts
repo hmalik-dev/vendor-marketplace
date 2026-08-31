@@ -423,6 +423,10 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   // Filed 2026-08-30 by the second backlog consolidation. #357-#363 replace 25 rows.
   // Those 25 keep their entries above, each marked `MERGED into #<n>`, so
   // `pnpm preflight --ticket <old number>` still gates from an older branch.
+  // The block was filed as #354-#360 and renumbered +3 the same day: lane 322
+  // merged to origin/main mid-write and had already taken #354-#356.
+  // #364 is NOT part of that seven — it is a separate filing (the `▾` caret
+  // removal, a user override), which is why the comment above stops at #363.
   357: [],
   358: [],
   359: [],
