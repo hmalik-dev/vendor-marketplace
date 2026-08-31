@@ -39,6 +39,13 @@ coverage/
 # Playwright MCP scratch output
 .playwright-mcp/
 
+# Playwright test-runner output (#340). Distinct from .playwright-mcp/ above,
+# which is the agent-driven browser's scratch directory.
+test-results/
+playwright-report/
+blob-report/
+.last-run.json
+
 # Playwright storage state for the E2E accounts. Live session cookies —
 # never commit. Regenerate with `pnpm e2e:auth`.
 .auth/
