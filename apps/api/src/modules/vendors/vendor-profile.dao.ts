@@ -185,8 +185,13 @@ export async function findVendorCities(db: AppDatabase) {
         VISIBLE,
         isNotNull(vendorProfiles.city),
         isNotNull(vendorProfiles.state),
+        /*
+         * City is free text and can still be blank. State cannot: since #332 it
+         * is the `us_state` enum, so `''` is not a value the column can hold and
+         * the guard that used to sit here is unrepresentable rather than merely
+         * redundant — TypeScript rejects it outright.
+         */
         ne(vendorProfiles.city, ''),
-        ne(vendorProfiles.state, ''),
       ),
     )
     .groupBy(vendorProfiles.city, vendorProfiles.state)

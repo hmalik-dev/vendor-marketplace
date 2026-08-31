@@ -239,6 +239,134 @@ export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 export const REVIEW_TYPES = ['customer_to_vendor', 'vendor_to_customer'] as const;
 export type ReviewType = (typeof REVIEW_TYPES)[number];
 
+/**
+ * The states a vendor can serve, as **two-letter USPS codes**. Ruled canonical
+ * 2026-08-30.
+ *
+ * The code is the stored value, not a display choice. `Austin, TX` and
+ * `Austin, Texas` were two rows in the same database, so a customer who picked
+ * one never saw the other's vendors — and the split widened with every new
+ * vendor, because the form offered full names while the majority of rows held
+ * codes. Closing the vocabulary is what stops that reopening.
+ *
+ * Fifty states plus the District of Columbia. Territories are deliberately
+ * absent: the product does not serve them yet, and an unserved option on a
+ * required field is a dead end a vendor cannot get past.
+ */
+export const US_STATE_CODES = [
+  'AL',
+  'AK',
+  'AZ',
+  'AR',
+  'CA',
+  'CO',
+  'CT',
+  'DE',
+  'DC',
+  'FL',
+  'GA',
+  'HI',
+  'ID',
+  'IL',
+  'IN',
+  'IA',
+  'KS',
+  'KY',
+  'LA',
+  'ME',
+  'MD',
+  'MA',
+  'MI',
+  'MN',
+  'MS',
+  'MO',
+  'MT',
+  'NE',
+  'NV',
+  'NH',
+  'NJ',
+  'NM',
+  'NY',
+  'NC',
+  'ND',
+  'OH',
+  'OK',
+  'OR',
+  'PA',
+  'RI',
+  'SC',
+  'SD',
+  'TN',
+  'TX',
+  'UT',
+  'VT',
+  'VA',
+  'WA',
+  'WV',
+  'WI',
+  'WY',
+] as const;
+export type UsStateCode = (typeof US_STATE_CODES)[number];
+
+/**
+ * How each code is written wherever a person reads or picks one. The form
+ * shows the name and stores the code, so a vendor never types a state and the
+ * two spellings can never diverge again.
+ */
+export const US_STATE_NAMES: Readonly<Record<UsStateCode, string>> = {
+  AL: 'Alabama',
+  AK: 'Alaska',
+  AZ: 'Arizona',
+  AR: 'Arkansas',
+  CA: 'California',
+  CO: 'Colorado',
+  CT: 'Connecticut',
+  DE: 'Delaware',
+  DC: 'District of Columbia',
+  FL: 'Florida',
+  GA: 'Georgia',
+  HI: 'Hawaii',
+  ID: 'Idaho',
+  IL: 'Illinois',
+  IN: 'Indiana',
+  IA: 'Iowa',
+  KS: 'Kansas',
+  KY: 'Kentucky',
+  LA: 'Louisiana',
+  ME: 'Maine',
+  MD: 'Maryland',
+  MA: 'Massachusetts',
+  MI: 'Michigan',
+  MN: 'Minnesota',
+  MS: 'Mississippi',
+  MO: 'Missouri',
+  MT: 'Montana',
+  NE: 'Nebraska',
+  NV: 'Nevada',
+  NH: 'New Hampshire',
+  NJ: 'New Jersey',
+  NM: 'New Mexico',
+  NY: 'New York',
+  NC: 'North Carolina',
+  ND: 'North Dakota',
+  OH: 'Ohio',
+  OK: 'Oklahoma',
+  OR: 'Oregon',
+  PA: 'Pennsylvania',
+  RI: 'Rhode Island',
+  SC: 'South Carolina',
+  SD: 'South Dakota',
+  TN: 'Tennessee',
+  TX: 'Texas',
+  UT: 'Utah',
+  VT: 'Vermont',
+  VA: 'Virginia',
+  WA: 'Washington',
+  WV: 'West Virginia',
+  WI: 'Wisconsin',
+  WY: 'Wyoming',
+};
+
 /** Self-reported spending band on a customer profile; helps vendors self-select. */
 export const BUDGET_TIERS = ['budget', 'mid_range', 'premium', 'luxury'] as const;
 export type BudgetTier = (typeof BUDGET_TIERS)[number];

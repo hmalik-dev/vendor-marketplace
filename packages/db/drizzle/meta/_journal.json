@@ -127,6 +127,20 @@
       "when": 1788125456859,
       "tag": "0017_same_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788146828520,
+      "tag": "0018_normalise_vendor_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788146849100,
+      "tag": "0019_worried_prodigy",
+      "breakpoints": true
     }
   ]
 }
