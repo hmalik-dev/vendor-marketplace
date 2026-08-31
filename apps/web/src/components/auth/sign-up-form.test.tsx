@@ -4,11 +4,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const signUpProps = vi.fn<(props: Record<string, unknown>) => void>();
 
+/**
+ * Clerk's in-flight sign-up attempt, as `useSignUp` reports it.
+ *
+ * `null` is the ordinary first render — no attempt started. A populated object
+ * is what the component sees **after** Clerk's email-verification step, which
+ * is a path navigation that remounts this component with its local state gone.
+ */
+let attempt: { status: string; unsafeMetadata: Record<string, unknown> } | null = null;
+
 vi.mock('@clerk/nextjs', () => ({
   SignUp: (props: Record<string, unknown>) => {
     signUpProps(props);
     return <div data-testid="clerk-sign-up" />;
   },
+  useSignUp: () => ({ isLoaded: true, signUp: attempt }),
 }));
 
 const { SignUpForm } = await import('./sign-up-form');
@@ -31,6 +41,7 @@ describe('SignUpForm', () => {
   afterEach(() => {
     cleanup();
     signUpProps.mockClear();
+    attempt = null;
   });
 
   /*
@@ -317,5 +328,74 @@ describe('SignUpForm', () => {
     expect(cardOf(VENDOR).className).toContain('bg-sage-50');
     // The unselected card drops back to the plain stone treatment.
     expect(cardOf(CUSTOMER).className).toContain('border-stone-300');
+  });
+
+  /*
+   * D16, `21-sign-up.md`: the role survives email verification and the picker
+   * is never shown twice.
+   *
+   * Clerk's verification step is a path navigation that remounts this
+   * component, so `role` — seeded from `?role=` — comes back `null`. The choice
+   * is not lost: it went to Clerk as `unsafeMetadata` before verification. It is
+   * read back from the in-flight attempt rather than asked again.
+   *
+   * **Re-asking is not a confirmation step.** The subhead promises the choice
+   * cannot be changed later, so asking again contradicts the screen's own copy.
+   */
+  describe('after email verification remounts the page', () => {
+    const verifying = (role: string) => ({
+      status: 'missing_requirements',
+      unsafeMetadata: { role },
+    });
+
+    it('reads the role back from the in-flight attempt instead of asking again', () => {
+      attempt = verifying('vendor');
+
+      const { container } = render(<SignUpForm initialRole={null} />);
+
+      expect(screen.queryByRole('radio', { name: new RegExp(CUSTOMER) })).toBeNull();
+      expect(screen.queryByRole('radio', { name: new RegExp(VENDOR) })).toBeNull();
+      expect(container.querySelector('fieldset')).toBeNull();
+    });
+
+    it('keeps the panel on the side the visitor already chose', () => {
+      attempt = verifying('vendor');
+
+      const { container } = render(<SignUpForm initialRole={null} />);
+
+      // The vendor panel's proof headline, per `21-sign-up.md`'s three states.
+      expect(headlineStartingWith(container, 'Set your prices.')).toBeDefined();
+    });
+
+    it('lifts the submit gate, because the role is known', () => {
+      attempt = verifying('customer');
+
+      const { container } = render(<SignUpForm initialRole={null} />);
+
+      expect(container.querySelector('[data-role-pending]')).toBeNull();
+      expect(screen.queryByText('Pick one above to continue')).toBeNull();
+    });
+
+    /*
+     * A started attempt that carries no role is not a verification remount —
+     * it is someone who got further than they should have. The picker has to
+     * come back, or they finish with no role at all and the API narrows them
+     * to `customer`.
+     */
+    it('still asks when the attempt carries no role', () => {
+      attempt = { status: 'missing_requirements', unsafeMetadata: {} };
+
+      render(<SignUpForm initialRole={null} />);
+
+      expect(screen.queryByRole('radio', { name: new RegExp(CUSTOMER) })).not.toBeNull();
+    });
+
+    it('ignores a role the product does not have', () => {
+      attempt = verifying('admin');
+
+      render(<SignUpForm initialRole={null} />);
+
+      expect(screen.queryByRole('radio', { name: new RegExp(CUSTOMER) })).not.toBeNull();
+    });
   });
 });
