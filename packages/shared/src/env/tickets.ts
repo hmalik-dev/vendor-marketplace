@@ -417,6 +417,9 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   352: ['auth'],
   // Sentry only — the DSN is the whole blocker, and it is a real external service.
   353: ['sentry'],
+  354: [],
+  355: [],
+  356: [],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
