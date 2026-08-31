@@ -101,6 +101,25 @@ export interface E2eSeedInput {
    * unattended run can complete. Set it `false` to drive the gate itself.
    */
   payoutsReady?: boolean;
+  /**
+   * Which storefront state the fixture vendor is left in.
+   *
+   * `published` by default — the state every other vendor ticket needs, and the
+   * one `pnpm preflight` asserts the account can reach.
+   *
+   * `draft` is the state frame `27 Vendor dashboard - empty . 1024` draws, and
+   * the **only** way to reach it: all 17 seeded profiles are published and this
+   * is the one account with a sign-in path, so the empty dashboard is otherwise
+   * unrenderable and a parity pass over it proves nothing. It unpublishes the
+   * profile and clears the account's live requests, which is what makes the
+   * screen's two halves -- the gold blocker banner and "No requests yet" --
+   * appear together rather than one at a time.
+   *
+   * It is deliberately not a separate script: re-running the default restores
+   * the published fixture, so a pass that leaves the lane in `draft` is undone
+   * by the same command every other ticket already runs.
+   */
+  storefront?: 'published' | 'draft';
   /** "Today", so the seeded event date is deterministic under test. */
   now?: Date;
 }
@@ -111,10 +130,12 @@ export interface E2eSeedResult {
   /** Absent when `.env.e2e.local` supplies no admin account. */
   adminUserId?: string;
   vendorProfileId: string;
-  packageId: string;
-  bookingRequestId: string;
+  /** `null` under `storefront: 'draft'`, which seeds no package. */
+  packageId: string | null;
+  /** `null` under `storefront: 'draft'`, which seeds no request. */
+  bookingRequestId: string | null;
   /** The date the request landed on, which is not always `now + 45`. */
-  eventDate: string;
+  eventDate: string | null;
 }
 
 /**
@@ -145,6 +166,7 @@ export async function seedE2eFixtures<
 ): Promise<E2eSeedResult> {
   const now = input.now ?? new Date();
   const payoutsReady = input.payoutsReady ?? true;
+  const draft = (input.storefront ?? 'published') === 'draft';
 
   return db.transaction(async (tx) => {
     const vendorUserId = await upsertAccount(tx, input.vendor, 'vendor');
@@ -158,8 +180,27 @@ export async function seedE2eFixtures<
      */
     const adminUserId = input.admin ? await upsertAccount(tx, input.admin, 'admin') : undefined;
 
-    const vendorProfileId = await ensureProfile(tx, vendorUserId, payoutsReady);
+    const vendorProfileId = await ensureProfile(tx, vendorUserId, payoutsReady, draft);
     await attachCategory(tx, vendorProfileId);
+
+    if (draft) {
+      /*
+       * Cleared rather than skipped. The account is long-lived and a previous
+       * pass will have left a live request on it, so seeding a draft without
+       * this produces the one state the frame never draws: a storefront that is
+       * not live with requests waiting on it.
+       */
+      await clearLiveRequests(tx, vendorProfileId);
+
+      return {
+        vendorUserId,
+        customerUserId,
+        vendorProfileId,
+        packageId: null,
+        bookingRequestId: null,
+        eventDate: null,
+      };
+    }
 
     const servicePackage = await ensurePackage(tx, vendorProfileId);
     const request = await ensureBookingRequest(tx, {
@@ -236,7 +277,12 @@ async function upsertAccount(
  * first and updated in place, keeping its slug; only an account with no profile
  * at all reaches the insert.
  */
-async function ensureProfile(tx: Tx, vendorUserId: string, payoutsReady: boolean): Promise<string> {
+async function ensureProfile(
+  tx: Tx,
+  vendorUserId: string,
+  payoutsReady: boolean,
+  draft: boolean,
+): Promise<string> {
   const [owned] = await tx
     .select({ id: vendorProfiles.id })
     .from(vendorProfiles)
@@ -247,7 +293,7 @@ async function ensureProfile(tx: Tx, vendorUserId: string, payoutsReady: boolean
     const [adopted] = await tx
       .update(vendorProfiles)
       .set({
-        isPublished: true,
+        isPublished: !draft,
         isDeleted: false,
         stripeOnboarded: payoutsReady,
         updatedAt: sql`now()`,
@@ -274,7 +320,7 @@ async function ensureProfile(tx: Tx, vendorUserId: string, payoutsReady: boolean
       city: 'Austin',
       state: 'TX',
       responseTimeHours: 4,
-      isPublished: true,
+      isPublished: !draft,
       isDeleted: false,
       stripeOnboarded: payoutsReady,
     })
@@ -297,6 +343,19 @@ async function ensureProfile(tx: Tx, vendorUserId: string, payoutsReady: boolean
   }
 
   return created.id;
+}
+
+/**
+ * Removes the live requests on the fixture vendor, for the draft storefront.
+ *
+ * A delete rather than a status change: `declined` and `cancelled` requests
+ * still render in the vendor's Requests list, and frame
+ * `27 Vendor dashboard - empty . 1024` draws `Requests 0` in the sidebar beside
+ * an empty pane. Only the fixture pair's own rows are touched, and only in a
+ * database `assertSafeTarget` has already cleared.
+ */
+async function clearLiveRequests(tx: Tx, vendorProfileId: string): Promise<void> {
+  await tx.delete(bookingRequests).where(eq(bookingRequests.vendorId, vendorProfileId));
 }
 
 /** Files the fixture vendor under one category, so search can return them. */

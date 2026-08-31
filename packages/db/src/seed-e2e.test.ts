@@ -1,7 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { seedReferenceData } from './seed.js';
-import { E2E_VENDOR_SLUG, seedE2eFixtures, type E2eSeedInput } from './seed-e2e.js';
+import {
+  E2E_VENDOR_SLUG,
+  seedE2eFixtures,
+  type E2eSeedInput,
+  type E2eSeedResult,
+} from './seed-e2e.js';
 import {
   availability,
   bookingRequests,
@@ -37,6 +42,28 @@ describe('seedE2eFixtures', () => {
     now: new Date('2026-08-30T00:00:00.000Z'),
   };
 
+  /**
+   * Narrows the published fixture's result.
+   *
+   * `packageId`, `bookingRequestId` and `eventDate` are nullable because
+   * `storefront: 'draft'` seeds none of them. Asserting them here rather than
+   * reaching for `!` keeps the published contract stated: a published seed that
+   * ever returned null would fail on this line instead of somewhere downstream.
+   */
+  function published(
+    result: E2eSeedResult,
+  ): E2eSeedResult & { packageId: string; bookingRequestId: string; eventDate: string } {
+    expect(result.packageId).not.toBeNull();
+    expect(result.bookingRequestId).not.toBeNull();
+    expect(result.eventDate).not.toBeNull();
+
+    return result as E2eSeedResult & {
+      packageId: string;
+      bookingRequestId: string;
+      eventDate: string;
+    };
+  }
+
   beforeEach(async () => {
     database = await createTestDatabase();
     await database.runMigrations();
@@ -48,7 +75,7 @@ describe('seedE2eFixtures', () => {
   });
 
   it('gives the vendor account a published storefront, a package and a live request', async () => {
-    const result = await seedE2eFixtures(database.db, INPUT);
+    const result = published(await seedE2eFixtures(database.db, INPUT));
 
     const [profile] = await database.db
       .select()
@@ -171,7 +198,7 @@ describe('seedE2eFixtures', () => {
   });
 
   it('marks the vendor able to take payment, so accept is not blocked by the payout gate', async () => {
-    const result = await seedE2eFixtures(database.db, INPUT);
+    const result = published(await seedE2eFixtures(database.db, INPUT));
 
     const [profile] = await database.db
       .select()
@@ -207,15 +234,15 @@ describe('seedE2eFixtures', () => {
       lastName: 'Vendor',
     });
 
-    const result = await seedE2eFixtures(database.db, INPUT);
+    const result = published(await seedE2eFixtures(database.db, INPUT));
 
     const [row] = await database.db.select().from(users).where(eq(users.id, result.vendorUserId));
     expect(row?.role).toBe('vendor');
   });
 
   it('is idempotent — a second run adopts its own rows rather than duplicating them', async () => {
-    const first = await seedE2eFixtures(database.db, INPUT);
-    const second = await seedE2eFixtures(database.db, INPUT);
+    const first = published(await seedE2eFixtures(database.db, INPUT));
+    const second = published(await seedE2eFixtures(database.db, INPUT));
 
     expect(second.vendorProfileId).toBe(first.vendorProfileId);
     expect(second.packageId).toBe(first.packageId);
@@ -228,6 +255,68 @@ describe('seedE2eFixtures', () => {
   });
 
   /*
+   * The draft storefront (#371).
+   *
+   * Frame `27 Vendor dashboard - empty . 1024` draws an unpublished profile
+   * beside `Requests 0`, and no seeded row could produce it: all 17 profiles are
+   * published and this is the only account with a sign-in path, so the frame was
+   * unrenderable and any parity pass over it proved nothing.
+   */
+  describe('storefront: draft', () => {
+    it('leaves the vendor unpublished with no requests', async () => {
+      const result = await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
+
+      const [profile] = await database.db
+        .select()
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, result.vendorProfileId));
+
+      expect(profile?.isPublished).toBe(false);
+      expect(profile?.isDeleted).toBe(false);
+      expect(await database.db.select().from(bookingRequests)).toHaveLength(0);
+      expect(result.bookingRequestId).toBeNull();
+      expect(result.packageId).toBeNull();
+      expect(result.eventDate).toBeNull();
+    });
+
+    /*
+     * The state the frame never draws, and the reason the requests are deleted
+     * rather than skipped: the account is long-lived, so a draft seeded after
+     * any earlier pass would otherwise be an unpublished storefront with
+     * requests still waiting on it.
+     */
+    it('clears the requests a previous published run left behind', async () => {
+      const seeded = published(await seedE2eFixtures(database.db, INPUT));
+
+      expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
+
+      const drafted = await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
+
+      expect(drafted.vendorProfileId).toBe(seeded.vendorProfileId);
+      expect(await database.db.select().from(bookingRequests)).toHaveLength(0);
+    });
+
+    /*
+     * The undo. `draft` has no separate restore script because re-running the
+     * default is the restore -- which is only true if it really republishes and
+     * really puts a request back.
+     */
+    it('is undone by re-running the published seed', async () => {
+      await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
+
+      const restored = published(await seedE2eFixtures(database.db, INPUT));
+
+      const [profile] = await database.db
+        .select()
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, restored.vendorProfileId));
+
+      expect(profile?.isPublished).toBe(true);
+      expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
+    });
+  });
+
+  /*
    * The hazard the whole design turns on. `insertUserIfAbsent` absorbs a
    * conflict on `clerk_user_id` and nothing else, so a fixture that invented an
    * id would leave this email attached to the wrong identity — and the account's
@@ -235,7 +324,7 @@ describe('seedE2eFixtures', () => {
    * account out. Attaching by the real id is what makes a later sign-in a no-op.
    */
   it('leaves a later sign-in for the same identity able to find its row', async () => {
-    const result = await seedE2eFixtures(database.db, INPUT);
+    const result = published(await seedE2eFixtures(database.db, INPUT));
 
     // What `insertUserIfAbsent` does on the account's next authenticated request.
     const inserted = await database.db
@@ -287,7 +376,7 @@ describe('seedE2eFixtures', () => {
       stripeOnboarded: false,
     });
 
-    const result = await seedE2eFixtures(database.db, INPUT);
+    const result = published(await seedE2eFixtures(database.db, INPUT));
 
     const profiles = await database.db.select().from(vendorProfiles);
     expect(profiles).toHaveLength(1);
@@ -304,14 +393,14 @@ describe('seedE2eFixtures', () => {
    * browser pass has sent a quote — then inserts, and dies on that index.
    */
   it('reuses a request that has moved from pending to quoted', async () => {
-    const first = await seedE2eFixtures(database.db, INPUT);
+    const first = published(await seedE2eFixtures(database.db, INPUT));
 
     await database.db
       .update(bookingRequests)
       .set({ status: 'quoted', quotedPriceCents: 160_000 })
       .where(eq(bookingRequests.id, first.bookingRequestId));
 
-    const second = await seedE2eFixtures(database.db, INPUT);
+    const second = published(await seedE2eFixtures(database.db, INPUT));
 
     expect(second.bookingRequestId).toBe(first.bookingRequestId);
     expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
@@ -323,7 +412,7 @@ describe('seedE2eFixtures', () => {
    * dashboard, no countdown, and a quote allowed on a package request.
    */
   it('shapes the request the way the service shapes one', async () => {
-    const result = await seedE2eFixtures(database.db, INPUT);
+    const result = published(await seedE2eFixtures(database.db, INPUT));
 
     const [request] = await database.db
       .select()
@@ -344,7 +433,7 @@ describe('seedE2eFixtures', () => {
    * re-seeding never reaches the insert that would get it right.
    */
   it('repairs a live request left without a price or an expiry', async () => {
-    const first = await seedE2eFixtures(database.db, INPUT);
+    const first = published(await seedE2eFixtures(database.db, INPUT));
 
     // Exactly what the previous fixture wrote.
     await database.db
@@ -352,7 +441,7 @@ describe('seedE2eFixtures', () => {
       .set({ finalPriceCents: null, expiresAt: null })
       .where(eq(bookingRequests.id, first.bookingRequestId));
 
-    const second = await seedE2eFixtures(database.db, INPUT);
+    const second = published(await seedE2eFixtures(database.db, INPUT));
 
     expect(second.bookingRequestId).toBe(first.bookingRequestId);
 
@@ -367,7 +456,7 @@ describe('seedE2eFixtures', () => {
 
   /** A price already locked is never overwritten — repair fills nulls only. */
   it('leaves a price that is already locked alone', async () => {
-    const first = await seedE2eFixtures(database.db, INPUT);
+    const first = published(await seedE2eFixtures(database.db, INPUT));
 
     await database.db
       .update(bookingRequests)
@@ -390,7 +479,7 @@ describe('seedE2eFixtures', () => {
    * `prepareTransition`. The fixture has to survive its own previous run.
    */
   it('steps past a date the vendor has already booked', async () => {
-    const first = await seedE2eFixtures(database.db, INPUT);
+    const first = published(await seedE2eFixtures(database.db, INPUT));
 
     await database.db
       .update(bookingRequests)
@@ -402,7 +491,7 @@ describe('seedE2eFixtures', () => {
       status: 'booked',
     });
 
-    const second = await seedE2eFixtures(database.db, INPUT);
+    const second = published(await seedE2eFixtures(database.db, INPUT));
 
     expect(second.bookingRequestId).not.toBe(first.bookingRequestId);
     expect(second.eventDate).not.toBe(first.eventDate);

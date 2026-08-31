@@ -280,7 +280,7 @@ export function SearchBar({
               in the header at all — `SearchShell` renders it as its own row —
               so it keeps its padding-driven height there.
             */
-            'border border-stone-300 shadow-sm sm:py-1 sm:pr-1.25 sm:pl-4.5 lg:h-10 lg:py-0 xl:h-[42px]',
+            'border border-stone-300 shadow-sm sm:py-1 sm:pr-1.25 sm:pl-4.5 lg:h-10 lg:py-0 min-[90rem]:h-[42px]',
         className,
       )}
     >
@@ -410,8 +410,8 @@ export function SearchBar({
                       render the wrong one on the server and then change under
                       the reader.
                     */}
-                    <span className="xl:hidden">{formattedDate.short}</span>
-                    <span className="max-xl:hidden">{formattedDate.full}</span>
+                    <span className="min-[90rem]:hidden">{formattedDate.short}</span>
+                    <span className="max-[90rem]:hidden">{formattedDate.full}</span>
                   </>
                 )}
               </span>
@@ -453,7 +453,7 @@ export function SearchBar({
           aria-label="Search"
           className={cn(
             // 30px at 1024, 32px from 1280 — the circle follows the bar.
-            'relative flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 xl:size-8',
+            'relative flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 min-[90rem]:size-8',
             /*
               `04-laws.md:137`: an icon-only control carries a 44x44 hit area.
               The circle keeps the size the frames draw — #57 settled that it is
