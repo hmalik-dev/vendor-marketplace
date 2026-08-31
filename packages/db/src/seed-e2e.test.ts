@@ -255,6 +255,38 @@ describe('seedE2eFixtures', () => {
   });
 
   /*
+   * The two payout columns move together (#371).
+   *
+   * `stripe_onboarded = true` with a null `stripe_account_id` is a state the
+   * product cannot reach -- the real flow claims the account id first and flips
+   * the flag later -- and the fixture was producing it, which made
+   * `/bookings/<id>/checkout` a 404 for the end-to-end customer.
+   */
+  it('writes an account id whenever it marks the vendor payout-ready', async () => {
+    const result = published(await seedE2eFixtures(database.db, INPUT));
+
+    const [profile] = await database.db
+      .select()
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.id, result.vendorProfileId));
+
+    expect(profile?.stripeOnboarded).toBe(true);
+    expect(profile?.stripeAccountId).toBe('acct_e2e_fixture_not_a_real_account');
+  });
+
+  it('leaves both payout columns empty when payouts are not ready', async () => {
+    const result = published(await seedE2eFixtures(database.db, { ...INPUT, payoutsReady: false }));
+
+    const [profile] = await database.db
+      .select()
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.id, result.vendorProfileId));
+
+    expect(profile?.stripeOnboarded).toBe(false);
+    expect(profile?.stripeAccountId).toBeNull();
+  });
+
+  /*
    * The draft storefront (#371).
    *
    * Frame `27 Vendor dashboard - empty . 1024` draws an unpublished profile

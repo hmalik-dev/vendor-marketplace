@@ -43,6 +43,27 @@ export const E2E_VENDOR_SLUG = 'e2e-test-studio';
 /** The category the fixture vendor is filed under, so search can find them. */
 const E2E_CATEGORY_SLUG = 'photography';
 
+/**
+ * The connected-account id that travels with `payoutsReady`.
+ *
+ * **Both columns or neither.** The real flow claims `stripe_account_id` when the
+ * Connect account is created and flips `stripe_onboarded` later, when Stripe
+ * reports the capabilities — so `onboarded = true` with a null account id is a
+ * state the product cannot produce, and the fixture was producing it. The cost
+ * was not theoretical: `openCheckout` throws 402 on a null account id,
+ * `customer-data` maps that to null and the checkout page calls `notFound()`, so
+ * **`/bookings/<id>/checkout` answered 404 for the end-to-end customer at every
+ * viewport** — and `/vendor/payments` read "Payouts connected, nothing else to
+ * do here", so there was no way out from inside the product either.
+ *
+ * Deliberately not shaped like a real id. It exists to get the *screen* to
+ * render for a browser pass; anything that actually reaches Stripe with it —
+ * `transfer_data.destination` on a PaymentIntent — must fail loudly rather than
+ * look plausible. `assertSafeTarget` already refuses any database where that
+ * distinction could matter.
+ */
+const E2E_STRIPE_ACCOUNT_ID = 'acct_e2e_fixture_not_a_real_account';
+
 /** How far ahead the seeded request's event sits, before avoiding clashes. */
 const EVENT_DAYS_AHEAD = 45;
 
@@ -296,6 +317,7 @@ async function ensureProfile(
         isPublished: !draft,
         isDeleted: false,
         stripeOnboarded: payoutsReady,
+        stripeAccountId: payoutsReady ? E2E_STRIPE_ACCOUNT_ID : null,
         updatedAt: sql`now()`,
       })
       .where(eq(vendorProfiles.id, owned.id))
@@ -323,6 +345,7 @@ async function ensureProfile(
       isPublished: !draft,
       isDeleted: false,
       stripeOnboarded: payoutsReady,
+      stripeAccountId: payoutsReady ? E2E_STRIPE_ACCOUNT_ID : null,
     })
     .onConflictDoUpdate({
       target: vendorProfiles.slug,
@@ -333,6 +356,7 @@ async function ensureProfile(
         isPublished: sql`excluded.is_published`,
         isDeleted: sql`excluded.is_deleted`,
         stripeOnboarded: sql`excluded.stripe_onboarded`,
+        stripeAccountId: sql`excluded.stripe_account_id`,
         updatedAt: sql`now()`,
       },
     })
