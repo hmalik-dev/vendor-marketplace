@@ -39,12 +39,17 @@ describe('HeroSearch', () => {
     const user = userEvent.setup();
     render(<HeroSearch categories={CATEGORIES} cities={CITIES} />);
 
-    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    /*
+     * The whole journey, through the controls #375 rebuilt: both segments are
+     * comboboxes, and `City` shows nothing until something is typed. That is
+     * the difference the ticket exists for, so the flow test drives it rather
+     * than clicking a list open.
+     */
+    await user.click(screen.getByRole('combobox', { name: 'Vendor type' }));
     // The row carries the category's short description under its name, so the
     // accessible name is the pair rather than the name alone (#167).
     await user.click(await screen.findByRole('option', { name: /^Photography/ }));
-    // City is a select over real places now, and it carries its state (#167).
-    await user.click(screen.getByRole('button', { name: 'City' }));
+    await user.type(screen.getByRole('combobox', { name: 'City' }), 'aus');
     await user.click(await screen.findByRole('option', { name: /^Austin, TX/ }));
     await user.click(screen.getByRole('button', { name: 'Search' }));
 

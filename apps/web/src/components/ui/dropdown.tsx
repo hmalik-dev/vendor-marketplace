@@ -145,6 +145,18 @@ export interface DropdownProps {
   onOpenChange: (open: boolean) => void;
   /** The field the panel hangs off. Rendered as the trigger. */
   trigger: ReactNode;
+  /**
+   * `anchor` positions the panel against the trigger without owning its
+   * events. `toggle` — the default — is Radix's `Trigger`, which merges an
+   * `onClick` that flips `open`.
+   *
+   * A combobox needs `anchor`. Its trigger is a text input, and a merged toggle
+   * makes every click *inside the field* close the panel the customer is
+   * reading — including the click that put the caret where they wanted it. The
+   * sheet mount has the same problem from the other direction: its wrapper
+   * toggles on any bubbled click, so it opens rather than toggles here.
+   */
+  triggerMode?: 'toggle' | 'anchor';
   /** Names the field — the sheet's heading, and the panel's accessible name. */
   label: string;
   /**
@@ -168,6 +180,7 @@ export function Dropdown({
   open,
   onOpenChange,
   trigger,
+  triggerMode = 'toggle',
   label,
   caption,
   width = 'field',
@@ -190,6 +203,7 @@ export function Dropdown({
           open={open}
           onOpenChange={onOpenChange}
           trigger={trigger}
+          triggerMode={triggerMode}
           label={label}
           caption={caption}
           width={width}
@@ -199,7 +213,13 @@ export function Dropdown({
           {children}
         </AnchoredDropdown>
       ) : (
-        <SheetDropdown open={open} onOpenChange={onOpenChange} trigger={trigger} label={label}>
+        <SheetDropdown
+          open={open}
+          onOpenChange={onOpenChange}
+          trigger={trigger}
+          triggerMode={triggerMode}
+          label={label}
+        >
           {children}
         </SheetDropdown>
       )}
@@ -212,6 +232,7 @@ function AnchoredDropdown({
   open,
   onOpenChange,
   trigger,
+  triggerMode = 'toggle',
   label,
   caption,
   width,
@@ -224,7 +245,17 @@ function AnchoredDropdown({
 }): React.ReactElement {
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
+      {/*
+        `Anchor` positions without owning events; `Trigger` merges an `onClick`
+        that flips `open`. See `triggerMode` — a text-input trigger cannot take
+        the merged toggle, because the click that places the caret would close
+        the panel.
+      */}
+      {triggerMode === 'anchor' ? (
+        <PopoverPrimitive.Anchor asChild>{trigger}</PopoverPrimitive.Anchor>
+      ) : (
+        <PopoverPrimitive.Trigger asChild>{trigger}</PopoverPrimitive.Trigger>
+      )}
       {/*
         The scrim gets a portal of its own. Radix's `Portal` slots a single
         element — putting the scrim beside the content inside one throws
@@ -246,6 +277,37 @@ function AnchoredDropdown({
           align="start"
           sideOffset={8}
           collisionPadding={8}
+          /*
+            In `anchor` mode the caller's input keeps focus for the whole
+            interaction — it is what `aria-activedescendant` is announced from,
+            and what the customer is still typing into. Radix's default is to
+            move focus into the panel on open and hand it back on close, which
+            would blur the field mid-word.
+
+            `onInteractOutside` is the one that is not obvious. An `Anchor` is
+            not a `Trigger`, so Radix counts a pointer-down on it as *outside*
+            the panel and dismisses — which means clicking back into the field
+            you are typing in closes the list you are reading. It is worse than
+            it sounds: `userEvent.type()` clicks before it types, so the second
+            interaction with the field killed the panel every time. The field
+            marks itself and is excluded here.
+          */
+          {...(triggerMode === 'anchor'
+            ? {
+                onOpenAutoFocus: (event: Event) => event.preventDefault(),
+                onCloseAutoFocus: (event: Event) => event.preventDefault(),
+                onInteractOutside: (event: {
+                  target: EventTarget | null;
+                  preventDefault: () => void;
+                }) => {
+                  const target = event.target as HTMLElement | null;
+
+                  if (target?.closest?.('[data-slot="combobox-field"]')) {
+                    event.preventDefault();
+                  }
+                },
+              }
+            : {})}
           className={cn(
             PANEL,
             PANEL_PADDING[padding],
@@ -275,11 +337,12 @@ function SheetDropdown({
   open,
   onOpenChange,
   trigger,
+  triggerMode = 'toggle',
   label,
   children,
 }: Pick<
   DropdownProps,
-  'open' | 'onOpenChange' | 'trigger' | 'label' | 'children'
+  'open' | 'onOpenChange' | 'trigger' | 'triggerMode' | 'label' | 'children'
 >): React.ReactElement {
   const panel = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -302,6 +365,19 @@ function SheetDropdown({
       return;
     }
 
+    /*
+     * A combobox brings its own input into the sheet and that input owns the
+     * keyboard, so focus goes there instead. Selected by `data-slot` rather
+     * than by tag: the sheet's Close button precedes it, and "first input" and
+     * "first focusable" are different elements here.
+     */
+    const combobox = panel.current?.querySelector<HTMLElement>('[data-slot="combobox-input"]');
+
+    if (combobox) {
+      combobox.focus();
+      return;
+    }
+
     panel.current?.querySelector<HTMLElement>('[role="listbox"]')?.focus();
   }, [open]);
 
@@ -314,7 +390,11 @@ function SheetDropdown({
         caller owns — and a click on a `<button>` bubbles here whether it came
         from a pointer, Enter or Space, so all three open the sheet.
       */}
-      <div ref={triggerRef} className="contents" onClick={() => onOpenChange(!open)}>
+      <div
+        ref={triggerRef}
+        className="contents"
+        onClick={() => onOpenChange(triggerMode === 'anchor' ? true : !open)}
+      >
         {trigger}
       </div>
       {open ? (
@@ -584,6 +664,7 @@ export function DropdownList({
   emptyMessage,
   emptyAction,
   visibleCount,
+  controlled,
 }: {
   options: readonly DropdownOption[];
   /** The selected values. Single-select passes at most one. */
@@ -595,26 +676,48 @@ export function DropdownList({
   emptyMessage?: string;
   emptyAction?: ReactNode;
   /**
+   * Hand the active row and the row ids to a caller that owns the keyboard.
+   *
+   * A combobox has to: DOM focus stays in its text input, so the input is what
+   * carries `aria-activedescendant` and what arrow keys arrive at. The list
+   * then renders and highlights but does not listen — one owner of the active
+   * index, rather than two that can disagree.
+   *
+   * Uncontrolled, this list keeps the model it has always had: it takes focus
+   * itself, handles the arrows, and jumps on a typed letter.
+   */
+  controlled?: {
+    activeIndex: number;
+    /** The caller's id, so its `aria-activedescendant` names a row that exists. */
+    listId: string;
+  };
+  /**
    * How many rows fit before the panel scrolls, for the "N more" note. The
    * note is the only thing that needs the number; the cap itself is CSS.
    */
   visibleCount?: number;
 }): React.ReactElement {
-  const listId = useId();
+  const ownId = useId();
+  const listId = controlled?.listId ?? ownId;
+  const owned = controlled === undefined;
   const { close } = useDropdownContext();
-  const [active, setActive] = useState(() =>
+  const [ownActive, setActive] = useState(() =>
     Math.max(
       0,
       options.findIndex((option) => selected.includes(option.value)),
     ),
   );
+  const active = controlled?.activeIndex ?? ownActive;
   const typeAhead = useRef({ buffer: '', at: 0 });
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Focus the list on open so the arrows work without a click first.
+  // Focus the list on open so the arrows work without a click first — unless
+  // a combobox owns the keyboard, in which case its input already has focus.
   useEffect(() => {
-    listRef.current?.focus();
-  }, []);
+    if (owned) {
+      listRef.current?.focus();
+    }
+  }, [owned]);
 
   /*
    * Keep the active row in view as the arrows move past the 360px cap — but
@@ -732,12 +835,18 @@ export function DropdownList({
     <>
       <div
         ref={listRef}
+        id={listId}
         role="listbox"
         aria-label={label}
         aria-multiselectable={multi || undefined}
-        aria-activedescendant={`${listId}-${active}`}
-        tabIndex={0}
-        onKeyDown={onKeyDown}
+        /*
+          Only when this list owns the keyboard. A controlled list is pointed at
+          by its caller's input instead, and two elements both claiming an
+          active descendant is what makes a screen reader announce the wrong
+          row.
+        */
+        {...(owned ? { 'aria-activedescendant': `${listId}-${active}`, tabIndex: 0 } : {})}
+        onKeyDown={owned ? onKeyDown : undefined}
         className="flex flex-col outline-hidden"
       >
         {options.map((option, index) => (

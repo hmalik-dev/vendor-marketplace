@@ -965,3 +965,70 @@ file, so the natural reading is that a merge broke `main`.
 **The rule:** a red suite in the shared checkout that names a workspace package is a
 resolution failure until `pnpm install` says otherwise. Check the link before reading the
 error.
+
+---
+
+### D28: The Search Fields Become a Combobox and a Typeahead — *2026-08-31*
+
+**Ruled by the account holder**, verbatim:
+
+> *"Ensure in the tickets you fix the search for vendor type/city — it should allow typing
+> that appears directly in the input and matching text appears in the category type
+> dropdown, and the city should literally be an input, where the validated city appears as
+> clickable for a user. Not a scrollable dropdown for city since cities can vary
+> drastically. Category should have a dropdown with all categories but as a user types the
+> dropdown should be filtered with each input."*
+
+Built as #375.
+
+**Most of this was not an override — it was a gap.** `42-dropdowns.md`'s Behaviour section
+has said *"typing **narrows the list in place** (not a jump-to-first-letter)"* since the
+2026-08-30 import, and **D14 recorded that the code was still on the behaviour that import
+reversed** — the list shipped jump-to-first-letter. `11-search.md:19-21` has specified
+these two controls as a *combobox* and a *typeahead* since it was written. So the filtering,
+the narrowing and the shape of both fields were already the contract; the code had drifted.
+
+**The actual override is one sentence, and it is narrower than it looks.** D13 ruling 1 and
+`42-dropdowns.md` body 1 say a single-select has **no search field**, on three reasons. Two
+of them — eleven categories fit one screen, a filter box on a list that short is friction —
+are about a *list*. The third is the load-bearing one: *"because such a field is autofocused
+its focus ring would appear every single time the panel opened — permanent decoration, not
+feedback."*
+
+**That objection is to a second field inside the panel, and this design dissolves it rather
+than overruling it.** There is no second field. The customer types into the one they already
+tabbed to, and its focus ring means exactly what it has always meant. D15 ruling 1's *"No
+search field over a tag list. Not in the vendor picker, not anywhere"* is likewise about a
+separate autofocused box; the tag pickers are untouched by #375.
+
+**The invariant that survives, and it is the whole design.** The committed value is still a
+**category slug or empty**, and still a real **`(city, state)` pair or empty**. Typing is an
+input affordance and is never a query term:
+
+- Only a click or a keyboard commit calls `onChange`.
+- Uncommitted text reverts on blur, on `Esc` and on `Tab`.
+- A string matching nothing commits neither half of the city pair.
+
+So **D6 is untouched** — the query can still only ask a question the platform can answer,
+the result-count sentence can still name the category truthfully, and the empty state can
+still say why. A free-text city reaching the API as a filter would be a regression, not this
+ruling.
+
+**The one behavioural difference between the two fields is deliberate.** `Vendor type` opens
+on the **full** taxonomy, because D6's own reasoning is that a select "teaches the taxonomy
+on first use". `City` opens **nothing** until a character is typed — that is the account
+holder's stated reason ("cities can vary drastically") and the thing that makes it a
+typeahead rather than a second combobox. `city-select.test.tsx` asserts the *absence* of a
+list on focus, so a later refactor cannot quietly make the two fields the same.
+
+**Two implementation rulings worth keeping**, both found by building it:
+
+- **`Anchor`, not `Trigger`.** Radix's `Trigger` merges an `onClick` that flips `open`, so
+  every click inside the text field closed the panel the customer was reading — including
+  the click that placed the caret. The field is now an `Anchor`, and interactions inside it
+  are excluded from the panel's outside-dismissal.
+- **The open state is resolved in JavaScript, not layered as classes.** #373 measured a
+  `font-semibold` losing to a `lg:font-normal` on source order at 1440 — the browser painted
+  400 while the class list read semibold. An `aria-expanded:` Tailwind variant would
+  reintroduce that exactly, so the component takes `inputClassName` as a **function of the
+  open state** and emits one branch.
