@@ -170,16 +170,41 @@ describe('VendorCard', () => {
     expect(screen.queryByText(/^Free /)).toBeNull();
   });
 
-  it('falls back to a labelled placeholder when the vendor has no cover', () => {
-    render(<VendorCard vendor={vendor()} />);
+  /*
+   * D16/D17, and `40-states.md`'s Missing cover photo group: the labelled
+   * hatch is a build-time device for photography the *product* lacks. A
+   * published vendor's empty cover is *their* missing content, shown to
+   * *their* customers, so the card gets a plain `stone-250` ground at the
+   * cover's own 3:2 and nothing inside it — no hatch, no monospace label,
+   * nothing addressed to a developer.
+   *
+   * The cause and the fix stay in the editor, which is #360.
+   */
+  it('grounds a coverless vendor in stone-250 with nothing inside it', () => {
+    const { container } = render(<VendorCard vendor={vendor()} />);
 
-    expect(screen.getByRole('img', { name: 'Placeholder for cover 3:2' })).toBeDefined();
+    const coverless = container.querySelector('[data-slot="coverless"]');
+
+    expect(coverless).not.toBeNull();
+    expect(coverless?.className).toContain('bg-stone-250');
+    expect(coverless?.textContent).toBe('');
+  });
+
+  it('shows a coverless vendor no hatch and no developer-facing label', () => {
+    const { container } = render(<VendorCard vendor={vendor()} />);
+
+    expect(screen.queryByRole('img', { name: 'Placeholder for cover 3:2' })).toBeNull();
+    expect(container.querySelector('[data-slot="placeholder"]')).toBeNull();
+    expect(container.innerHTML).not.toContain('placeholder-hatch');
   });
 
   it('uses the vendor photograph when there is one', () => {
-    render(<VendorCard vendor={vendor({ coverImageUrl: 'https://example.test/cover.jpg' })} />);
+    const { container } = render(
+      <VendorCard vendor={vendor({ coverImageUrl: 'https://example.test/cover.jpg' })} />,
+    );
 
-    expect(screen.queryByRole('img', { name: 'Placeholder for cover 3:2' })).toBeNull();
+    expect(container.querySelector('[data-slot="coverless"]')).toBeNull();
+    expect(container.querySelector('img[src="https://example.test/cover.jpg"]')).not.toBeNull();
   });
 
   it('handles a vendor with no location without leaving a stray separator', () => {

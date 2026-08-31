@@ -172,6 +172,32 @@ describe('ProfileHeader', () => {
       expect(cover.querySelector('button')).toBeNull();
     });
 
+    /*
+     * D16/D17: the same ruling as the search card. A published vendor with no
+     * cover gets a plain `stone-250` ground and nothing inside it — the word
+     * "cover" set in a micro-label was addressed to whoever built the page,
+     * not to the customer reading it.
+     *
+     * `stone-250` is the image ground here as well as the coverless fill, so
+     * the container carries it whether or not a photograph loads over it.
+     */
+    it('grounds a coverless vendor in stone-250 with nothing inside it', () => {
+      renderHeader({ coverImageUrl: null });
+
+      const cover = screen.getByTestId('profile-cover');
+
+      expect(cover.className).toContain('bg-stone-250');
+      expect(cover.textContent).toBe('');
+      expect(cover.querySelector('[data-slot="coverless"]')).not.toBeNull();
+    });
+
+    it('leaves no developer-facing label on a coverless profile', () => {
+      renderHeader({ coverImageUrl: null });
+
+      expect(screen.queryByText('cover')).toBeNull();
+      expect(screen.getByTestId('profile-cover').innerHTML).not.toContain('placeholder-hatch');
+    });
+
     it('sizes the avatar to the frame and gives it no ring', () => {
       renderHeader();
 

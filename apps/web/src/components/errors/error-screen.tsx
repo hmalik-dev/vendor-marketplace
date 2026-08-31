@@ -65,13 +65,25 @@ export function ErrorScreen({ digest, reset }: ErrorScreenProps): React.ReactEle
             mount — a `<Link>` here works in `error.tsx` and throws in the one
             case the user is already looking at a crashed application.
 
-            The rule stopped resolving `/bookings` to a page when the hub moved
-            into a route group, so it began flagging what it had always been
-            fine with; the reasoning below is why the answer is a comment rather
-            than a `<Link>`.
+            The rule stopped resolving the destination to a page when the hub
+            moved into a route group, so it began flagging what it had always
+            been fine with; the reasoning below is why the answer is a comment
+            rather than a `<Link>`.
           */}
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/bookings">Go to my bookings</a>
+          {/*
+            D17: this screen cannot know who is reading it. `Go to my bookings`
+            is addressed to a signed-in customer and is a dead end for anyone
+            else — a signed-out visitor lands on a sign-in wall and a vendor on
+            a hub that is not theirs. `/search` is the one destination true for
+            every reader. Frame `16`.
+
+            No `eslint-disable` here, unlike the destination this replaced:
+            `no-html-link-for-pages` resolves `/search` to a real page and is
+            satisfied by it. The `<a>` is still deliberate for the reason
+            above — if the rule ever starts flagging it, the disable comes back
+            rather than the `<a>` becoming a `<Link>`.
+          */}
+          <a href="/search">Browse vendors</a>
         </Button>
       </div>
 

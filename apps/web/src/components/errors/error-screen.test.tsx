@@ -59,4 +59,37 @@ describe('ErrorScreen', () => {
     expect(text).not.toMatch(/oops/i);
     expect(text).not.toContain('!');
   });
+
+  /*
+   * D17: the 500 page cannot know who is reading it. `Go to my bookings` is
+   * addressed to a signed-in customer and is a dead end for everyone else —
+   * a signed-out visitor lands on a sign-in wall, and a vendor on a hub that
+   * is not theirs. `/search` is the one destination true for every reader.
+   *
+   * Frame `16`, and `31-content-voice.md`'s 500 recovery row.
+   */
+  it('recovers to the one destination true for every reader', () => {
+    render(<ErrorScreen digest="err_9F3K2QX7" reset={vi.fn()} />);
+
+    const recovery = screen.getByRole('link', { name: 'Browse vendors' });
+
+    expect(recovery.getAttribute('href')).toBe('/search');
+  });
+
+  it('no longer sends an unknown reader to a signed-in surface', () => {
+    render(<ErrorScreen digest="err_9F3K2QX7" reset={vi.fn()} />);
+
+    expect(screen.queryByRole('link', { name: 'Go to my bookings' })).toBeNull();
+  });
+
+  /*
+   * Deliberately still an `<a>`, not a `<Link>`: this screen is shared with
+   * `global-error.tsx`, which replaces the root layout and so renders outside
+   * the App Router context `next/link` needs to mount.
+   */
+  it('keeps the recovery a hard navigation', () => {
+    render(<ErrorScreen digest="err_9F3K2QX7" reset={vi.fn()} />);
+
+    expect(screen.getByRole('link', { name: 'Browse vendors' }).tagName).toBe('A');
+  });
 });
