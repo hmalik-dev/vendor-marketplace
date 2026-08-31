@@ -358,8 +358,11 @@ export function SearchBar({
               segment,
               'text-left',
               /*
-                The floor is the "Add a date" prompt plus its caret. Same rule
-                as the vendor-type segment: the width changes, not the words.
+                The floor is the "Add a date" prompt. It used to be that prompt
+                plus its caret; D25 removed the glyph and these minima were left
+                over-reserving by its width, which is harmless — a floor, not a
+                fixed width — and is recorded rather than re-derived by eye. The
+                rule is unchanged: the width changes, not the words.
               */
               isHero
                 ? /* .9 at 768, .8 from 1024. 768 also pads the field on both
@@ -388,7 +391,12 @@ export function SearchBar({
                 className={cn(
                   'truncate',
                   fieldText,
-                  draft.date === '' ? 'text-stone-600' : 'text-stone-900',
+                  /* The open state the caret used to carry (D25). */
+                  dateOpen
+                    ? 'font-semibold text-clay-600'
+                    : draft.date === ''
+                      ? 'text-stone-600'
+                      : 'text-stone-900',
                 )}
               >
                 {draft.date === '' ? (

@@ -69,9 +69,11 @@ const PANEL_WIDTH: Record<DropdownWidth, string> = {
 /**
  * The panel shell, shared by both mounts.
  *
- * The 12px radius is the frame's, and it is not on the radius scale: 12px sits
- * between `radius-md` (8px, what the rows use) and `radius-xl` (14px, what a
- * card uses), and a panel is neither.
+ * The 12px radius is the frame's, and it is now `--radius-panel`. It used to be
+ * written inline here with a comment saying 12px was not on the scale — true at
+ * the time, and the reason #373 added the step: a panel sits between
+ * `radius-lg` (10px, what a button takes) and `radius-xl` (14px, what a card
+ * takes), and 28 of the 46 frames draw it.
  */
 const PANEL = 'flex flex-col rounded-panel border border-stone-300 bg-stone-0 shadow-dropdown';
 
@@ -324,7 +326,7 @@ function SheetDropdown({
             aria-modal="true"
             aria-label={label}
             data-slot="dropdown-sheet"
-            className="fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-[18px] bg-stone-0 pt-2 pb-3 shadow-sheet"
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-2xl bg-stone-0 pt-2 pb-3 shadow-sheet"
           >
             {/* 34x4, the frame's grab handle. Decorative: the sheet is
                 dismissed by Close, the scrim or Escape, never by dragging. */}

@@ -16,10 +16,22 @@ import { describe, expect, it } from 'vitest';
  * again as #338. An inverted assertion turns the next attempt red instead of
  * letting it land.
  *
- * Scope: the glyphs themselves, anywhere in rendered source. Prose is excluded
- * by reading only string and template literals that are not inside a comment —
- * several files legitimately describe the frame's caret in a doc comment, and
- * `refine-bar.tsx` describes the chip states it used to have.
+ * Scope: **the two unicode glyphs**, anywhere in rendered source. Deliberately
+ * not every disclosure indicator — `ui/select.tsx` and `tags/tag-category-section.tsx`
+ * draw lucide icons on their triggers and still do. #364's deliverable is the
+ * twelve sites drawing the character the frames draw, and the override is
+ * against that character; removing an icon from a shadcn primitive is a
+ * different decision on surfaces this ruling did not cover. Said here because
+ * a guard whose name is broader than its reach is worse than a narrow one.
+ *
+ * Prose is excluded by blanking comments — several files legitimately describe
+ * the frame's caret in a doc comment, and `refine-bar.tsx` describes the chip
+ * states it used to have.
+ *
+ * Two known blind spots in that blanking, neither exploited today and both
+ * cheaper to name than to close: a `//` inside a string literal blanks the rest
+ * of its line, and a regex literal containing `*\/` ends the block early. A
+ * caret re-landing on a line that also carries a URL would read clean.
  */
 
 const CARETS = ['▾', '▴'] as const;
@@ -47,7 +59,7 @@ function withoutComments(source: string): string {
   );
 }
 
-describe('no dropdown trigger draws a disclosure caret (D25)', () => {
+describe('no dropdown trigger draws the unicode disclosure caret (D25)', () => {
   const files = sourceFiles();
 
   it('reads the tree it is scanning, so the check cannot be vacuous', () => {

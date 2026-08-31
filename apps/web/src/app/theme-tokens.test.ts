@@ -113,7 +113,10 @@ describe('shared theme tokens', () => {
    * `42-dropdowns.md` specifies the dropdown panel at 12px in writing.
    */
   it('uses exactly the six-step radius scale the plan documents', () => {
-    const radii = [...themeCss.matchAll(/--radius-([a-z0-9]+): *([^;]+);/g)].map(
+    // `[a-z0-9-]+`, not `[a-z0-9]+`: a hyphenated step such as
+    // `--radius-drop-zone` would otherwise not match, drop out of `radii`, and
+    // leave this `toEqual` green — the exact failure the rewrite closes.
+    const radii = [...themeCss.matchAll(/--radius-([a-z0-9-]+): *([^;]+);/g)].map(
       (match) => `${match[1] as string}: ${match[2] as string}`,
     );
 

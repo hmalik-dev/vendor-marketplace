@@ -36,6 +36,20 @@ function sourceFiles(): [string, string][] {
     .map((entry) => [join('src', entry), readFileSync(join(root, entry), 'utf8')]);
 }
 
+/**
+ * The source with every comment blanked out, positions preserved.
+ *
+ * A local copy of `dropdown-caret.test.ts`'s helper rather than a shared one:
+ * six lines each, and a shared test util would make each guard depend on the
+ * other staying correct. `image-upload.tsx` names the utility in a doc comment
+ * as well as using it, and a comment is not a render.
+ */
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (comment) =>
+    comment.replace(/[^\n]/g, ' '),
+  );
+}
+
 describe('the hatch is an editor primitive (D26)', () => {
   const files = sourceFiles();
 
@@ -45,8 +59,14 @@ describe('the hatch is an editor primitive (D26)', () => {
   });
 
   it('draws the hatch only on the surfaces a vendor edits', () => {
+    /*
+     * The bare class name, not `'placeholder-hatch'` in single quotes. The
+     * quoted form matched only because `image-upload.tsx` happens to write it
+     * as a ternary branch; `className="placeholder-hatch"` on a public surface
+     * — the one thing this guard exists to catch — went straight past it.
+     */
     const drawn = files
-      .filter(([, source]) => source.includes("'placeholder-hatch'"))
+      .filter(([, source]) => withoutComments(source).includes('placeholder-hatch'))
       .map(([file]) => file);
 
     expect(drawn).toEqual([...EDITOR_SURFACES]);

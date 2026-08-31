@@ -170,13 +170,17 @@ export function CategorySelect({
                   ? 'text-[14px] font-medium lg:text-[13.5px] lg:font-normal min-[90rem]:text-md'
                   : 'text-[13.5px]',
                 /*
-                  Open state, and it differs between the two bars because the
-                  frames draw it differently. In the compact bar the open
-                  segment is the *only* clay element on the whole bar, so the
-                  value itself turns; in the hero the value stays ink and the
-                  caret alone carries it.
+                  Open state. It used to differ between the two bars: in the
+                  compact bar the open segment is the only clay element on the
+                  bar so the value itself turns, and in the hero the value
+                  stayed ink because *the caret alone carried it*.
+                  D25 removed the caret, which left the hero segment rendering
+                  byte-identically open and closed — `aria-expanded` was the
+                  only signal, so the state was announced and not drawn. Both
+                  bars now turn the value, which is the treatment the frames
+                  already specify for one of them.
                 */
-                isOpen && !isHero
+                isOpen
                   ? 'font-semibold text-clay-600'
                   : selected
                     ? 'text-stone-900'

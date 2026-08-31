@@ -846,7 +846,7 @@ an inline `style`; this is the check that closes the gap it names.
 
 ---
 
-### D25: The Disclosure Caret Comes Off Every Trigger — *2026-08-31*
+### D25: The Unicode Disclosure Caret Comes Off Every Trigger — *2026-08-31*
 
 **A user override of the design contract, not a parity finding.** Recorded here because
 that distinction is the whole point: `Orla - Screens.dc.html` draws `▾` on its dropdown
@@ -866,6 +866,25 @@ Every trigger keeps `aria-expanded` and stays visually identifiable as a control
 trigger was left with an empty span or padding reserving space for a glyph that is gone;
 `ChipLabel` and `SelectCaret` both existed only to pair a label with a caret and are
 deleted.
+
+**The glyph, not every disclosure indicator — and the title says "unicode" for that
+reason.** Two triggers draw a **lucide icon** rather than `▾`, and both still do:
+`ui/select.tsx:47` (`ChevronDownIcon`, rendered by the vendor package form's "How it is
+priced") and `tags/tag-category-section.tsx:87` (`ChevronsUpDown`, the profile editor's
+Languages / Cultural / Dietary pickers). They are left alone deliberately. #364's
+deliverable is the twelve sites drawing the character the frames draw, and the override is
+against *that* glyph; removing an icon from a shadcn primitive and a combobox is a
+different decision, on surfaces whose frames were not part of this ruling. Named here so
+the next reader does not have to discover that the sweep's scope and the title's scope
+differ.
+
+**Three triggers lost their only visible open-state signal**, which the sweep had to
+replace rather than accept: the hero's vendor-type and city segments and the compact bar's
+date segment drew their open state *through the caret alone* — the value stayed ink by
+design. With the glyph gone they rendered byte-identically open and closed, so the state
+reached a screen reader through `aria-expanded` and reached nobody else. All three now
+turn the value `font-semibold text-clay-600`, which is the treatment the frames already
+specify for the compact bar.
 
 **Why it needs an assertion.** It has already come back twice, as #228 and again as #338,
 because nothing recorded the override — a parity pass reads the frame, sees a caret the app

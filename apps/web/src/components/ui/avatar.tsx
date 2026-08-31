@@ -88,10 +88,14 @@ function glyphSize(size: AvatarSize): number {
 /**
  * The smallest size Instrument Serif may be set at, from `01-foundations.md`.
  *
- * Exported so `display-type.test.ts` reads the same number this component
- * does. It is duplicated in that file as `SERIF_FLOOR_PX` for the class-based
- * scan; a guard that asserted a floor the component did not share would be
- * checking its own arithmetic rather than the code.
+ * Exported for `avatar.test.tsx`, which renders all six sizes and asserts the
+ * face against this number rather than against one written down twice.
+ *
+ * `display-type.test.ts` declares its own `SERIF_FLOOR_PX` for the class-based
+ * scan and does **not** import this one — the two are the same value by
+ * agreement, not by linkage. Said plainly because the previous wording claimed
+ * a linkage that does not exist, and a false claim about a guard is worse than
+ * no claim.
  */
 export const SERIF_FLOOR_PX = 16;
 

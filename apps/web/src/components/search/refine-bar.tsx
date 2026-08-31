@@ -58,9 +58,10 @@ const SORT_LABELS: Record<VendorSortOption, string> = {
 /**
  * The three chip states the design distinguishes:
  *
- * - `resting` — no value, `stone-0` fill, `▾`.
+ * - `resting` — no value, `stone-0` fill. The frames draw a `▾` here;
+ *   D25 removed it from every trigger.
  * - `valued` — carries a live value that isn't narrowing anything on its own
- *   (the price range), `stone-150` fill, still `▾`.
+ *   (the price range), `stone-150` fill.
  * - `active` — genuinely excluding vendors, `clay-100` fill / `clay-600` text,
  *   and an `✕` that clears it. This is what replaces the separate
  *   active-filter pill row: one chip, one state, one place to undo it.
