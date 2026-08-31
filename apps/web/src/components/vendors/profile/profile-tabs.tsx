@@ -93,7 +93,8 @@ export function ProfileTabs({ panes }: ProfileTabsProps): React.ReactElement {
       <div
         role="tablist"
         aria-label="Vendor profile sections"
-        className="flex gap-5 overflow-x-auto border-b border-stone-300 [scrollbar-width:none] sm:gap-6.5 [&::-webkit-scrollbar]:hidden"
+        /* 22px between tabs at 1024 (`27`), 26px at 1440 (`03`). */
+        className="flex gap-5 overflow-x-auto border-b border-stone-300 [scrollbar-width:none] sm:gap-5.5 min-[90rem]:gap-6.5 [&::-webkit-scrollbar]:hidden"
       >
         {PROFILE_TABS.map((tab) => (
           <button
@@ -126,7 +127,18 @@ export function ProfileTabs({ panes }: ProfileTabsProps): React.ReactElement {
                 style and paints nothing at all. The ring was measurably absent
                 until this was added.
               */
-              'shrink-0 cursor-pointer py-2.5 text-[13.5px] whitespace-nowrap transition-colors duration-(--duration-fast) outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400',
+              /*
+                `ring-0` and `ring-offset-0` are the other half of the inward
+                outline above. `globals.css` puts `ring-2 ring-offset-2` on
+                every `:focus-visible` in the app, so this button was painting
+                the inward outline *and* a 4px outward ring — and the outward
+                one is exactly what this scroll container clips. Measured at
+                1024: 0px of left slack and 0px of top slack against it on the
+                first tab, twice, 400ms apart. Turning it off here leaves one
+                indicator, drawn where it cannot be sliced.
+              */
+              // 13px at 1024, 13.5px at 1440. Both frames pad `10px 0`.
+              'shrink-0 cursor-pointer py-2.5 text-[13px] whitespace-nowrap min-[90rem]:text-[13.5px] transition-colors duration-(--duration-fast) outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400',
               active === tab
                 ? 'font-semibold text-stone-900 shadow-[inset_0_-2px_0_var(--color-clay-400)]'
                 : 'font-medium text-stone-600 hover:text-stone-900',
@@ -142,7 +154,8 @@ export function ProfileTabs({ panes }: ProfileTabsProps): React.ReactElement {
         id={`panel-${active}`}
         aria-labelledby={`tab-${active}`}
         tabIndex={0}
-        className="pt-4.5 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400"
+        /* 14px above the pane at 1024, 18px at 1440. */
+        className="pt-3.5 outline-none min-[90rem]:pt-4.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400"
       >
         {panes[active]}
       </div>

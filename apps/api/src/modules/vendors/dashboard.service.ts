@@ -1,12 +1,21 @@
-import { todayDateString, type VendorDashboard } from '@vendor-marketplace/shared';
+import {
+  BOOKING_WEEK_DAYS,
+  addDays,
+  parseDateString,
+  toDateString,
+  todayDateString,
+  type AvailabilityStatus,
+  type VendorDashboard,
+} from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import {
   countBookingsBetween,
   countPendingRequests,
   countResponses,
-  findBookingsOn,
+  findCalendarBetween,
   findCategoryIds,
+  findNextPayout,
   sumPayoutsBetween,
 } from './dashboard.dao.js';
 import { publishBlockers, requireOwnVendorProfile } from './vendors.service.js';
@@ -35,6 +44,26 @@ function monthBounds(date: string): { start: string; next: string; previous: str
 }
 
 /**
+ * The dates the `This week` strip covers, and the exclusive bound to read to.
+ *
+ * Stepped with the shared `addDays`/`toDateString` pair rather than by adding to
+ * the day-of-month, so a week crossing a month or year boundary is the
+ * calendar's problem and not this function's, and no date round-trips through a
+ * local-time `Date`.
+ */
+function weekFrom(today: string): { days: string[]; end: string } {
+  // `today` reaches here from `todayDateString`, so it always parses; the
+  // fallback exists because `parseDateString` is honest about malformed input
+  // rather than because this caller can produce any.
+  const start = parseDateString(today) ?? new Date(`${today}T00:00:00.000Z`);
+  const days = Array.from({ length: BOOKING_WEEK_DAYS }, (_, offset) =>
+    toDateString(addDays(start, offset)),
+  );
+
+  return { days, end: toDateString(addDays(start, BOOKING_WEEK_DAYS)) };
+}
+
+/**
  * The vendor's own dashboard figures.
  *
  * Every number is recomputed from source rows on read — none is a counter
@@ -55,6 +84,8 @@ export async function getVendorDashboard(
   const { start, next, previous } = monthBounds(today);
 
   const since = new Date(now.getTime() - RESPONSE_WINDOW_DAYS * 86_400_000);
+  // `[today, today + 7)` — `end` is exclusive, so the eighth day never leaks in.
+  const { days: week, end: weekEnd } = weekFrom(today);
 
   const [
     newRequestCount,
@@ -62,7 +93,8 @@ export async function getVendorDashboard(
     bookingsLastMonth,
     responses,
     earningsThisMonthCents,
-    todaysBookings,
+    calendar,
+    nextPayout,
     categoryIds,
     activePackageCount,
   ] = await Promise.all([
@@ -76,12 +108,14 @@ export async function getVendorDashboard(
       new Date(`${start}T00:00:00.000Z`),
       new Date(`${next}T00:00:00.000Z`),
     ),
-    findBookingsOn(db, vendor.id, today),
+    findCalendarBetween(db, vendor.id, today, weekEnd),
+    findNextPayout(db, vendor.id, today),
     findCategoryIds(db, vendor.id),
     countActivePackages(db, vendor.id),
   ]);
 
   const rating = Number.parseFloat(vendor.avgRating);
+  const byDate = new Map(calendar.map((row) => [row.date, row.status]));
 
   return {
     newRequestCount,
@@ -95,6 +129,16 @@ export async function getVendorDashboard(
     isPublished: vendor.isPublished,
     publishBlockers: publishBlockers(vendor, categoryIds, activePackageCount),
     stripeOnboarded: vendor.stripeOnboarded,
-    todaysBookings,
+    /*
+     * Every day in the window, in order — not only the ones with a row. The
+     * calendar is sparse, so an absent row is the vendor's default state and
+     * has to be filled in here rather than left as a hole the strip would have
+     * to guess at.
+     */
+    bookingWeek: week.map((date) => ({
+      date,
+      status: byDate.get(date) ?? ('available' as AvailabilityStatus),
+    })),
+    nextPayout,
   };
 }

@@ -55,10 +55,20 @@ export function DashboardStats({ dashboard, today }: DashboardStatsProps): React
   const change = dashboard.bookingsThisMonth - dashboard.bookingsLastMonth;
 
   return (
-    // Four across from `lg` and never stacked above it — the 1024 rule is that
-    // a grid loses a column before a card loses information, and at four
-    // narrow cards there is nothing left to lose.
-    <ul className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+    /*
+      Four across at 1440, two below 1024 — and **absent between them**, which
+      is the one width where this row cannot be built.
+
+      `30-responsive.md`'s rule is that a grid loses a column before a card
+      loses information. At 1024 there is no column left to lose: the sidebar
+      and the 300px right column leave the pane 394px, so four cards compute to
+      89.5px each and every label wraps to three lines — `BOOKINGS / THIS /
+      MONTH`. Frame `27 Vendor dashboard — 1024` is the ruling: it draws no
+      stats row at all, and puts the week and the payout in the right column
+      instead. Below 1024 there is no sidebar and no right column, so the two-up
+      frame `14` draws fits and stays.
+    */
+    <ul className="mb-5 grid grid-cols-2 gap-3 lg:hidden min-[90rem]:grid min-[90rem]:grid-cols-4">
       <Stat
         label="Bookings this month"
         value={String(dashboard.bookingsThisMonth)}

@@ -9,7 +9,12 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { addDays, todayDateString, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  parseDateString,
+  todayDateString,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -27,7 +32,13 @@ interface DashboardBody {
   earningsThisMonthCents: number;
   isPublished: boolean;
   publishBlockers: string[];
-  todaysBookings: { customerFirstName: string }[];
+  bookingWeek: { date: string; status: string }[];
+  nextPayout: {
+    bookingId: string;
+    eventDate: string;
+    customerFirstName: string;
+    vendorPayoutCents: number;
+  } | null;
 }
 
 describe('/vendor/dashboard', () => {
@@ -110,6 +121,19 @@ describe('/vendor/dashboard', () => {
     return created.json().id;
   }
 
+  /**
+   * `offset` days from the dashboard's own today.
+   *
+   * Anchored on `todayDateString` rather than on `toDateString(new Date())`:
+   * the first is the local calendar day and the second is the UTC one, and for
+   * part of every day they name different dates. The service anchors the week
+   * on the local day, so a test that anchored on the UTC one would fail for a
+   * few hours a day and pass for the rest — the definition of flaky.
+   */
+  function dayFrom(offset: number): string {
+    return toDateString(addDays(parseDateString(todayDateString())!, offset));
+  }
+
   beforeAll(async () => {
     harness = await createTestHarness();
 
@@ -175,7 +199,14 @@ describe('/vendor/dashboard', () => {
     expect(body.reviewCount).toBe(0);
     // Not 0 — nobody has asked, so there is no rate to report.
     expect(body.responseRate).toBeNull();
-    expect(body.todaysBookings).toEqual([]);
+    expect(body.nextPayout).toBeNull();
+    // Seven days from today, every one of them open — the calendar is sparse,
+    // so a vendor with no rows still gets a full week rather than a short one.
+    expect(body.bookingWeek).toHaveLength(7);
+    expect(body.bookingWeek.map((day) => day.date)).toEqual(
+      Array.from({ length: 7 }, (_, offset) => dayFrom(offset)),
+    );
+    expect([...new Set(body.bookingWeek.map((day) => day.status))]).toEqual(['available']);
   });
 
   it('counts the requests still waiting on this vendor', async () => {
@@ -256,8 +287,131 @@ describe('/vendor/dashboard', () => {
 
     expect(body.earningsThisMonthCents).toBe(127_600);
     expect(body.bookingsThisMonth).toBe(1);
-    expect(body.todaysBookings).toHaveLength(1);
-    expect(body.todaysBookings[0]?.customerFirstName).toBe('Test');
+    // The payout share again, this time as the *next* one owed — the amount is
+    // real, so the card never has to invent it.
+    expect(body.nextPayout).toMatchObject({
+      eventDate: todayDateString(),
+      customerFirstName: 'Test',
+      vendorPayoutCents: 127_600,
+    });
+  });
+
+  /*
+   * The `This week` strip. It reads the availability calendar rather than
+   * re-deriving from `bookings`, so these tests write calendar rows: that is
+   * where the booking lifecycle puts `booked` and `pending`, and where the
+   * vendor puts `blocked`.
+   */
+  describe('the booking week', () => {
+    /** Writes one calendar row `offset` days from today. */
+    async function mark(
+      vendorId: string,
+      offset: number,
+      status: 'booked' | 'pending' | 'blocked',
+    ): Promise<string> {
+      const date = dayFrom(offset);
+      await harness.database.db.insert(availability).values({ vendorId, date, status });
+
+      return date;
+    }
+
+    it('carries each calendar status through, and fills the untouched days', async () => {
+      const vendorId = await createProfile();
+      const booked = await mark(vendorId, 2, 'booked');
+      const held = await mark(vendorId, 3, 'pending');
+      const blocked = await mark(vendorId, 4, 'blocked');
+
+      const week = ((await read()).json() as DashboardBody).bookingWeek;
+      const byDate = new Map(week.map((day) => [day.date, day.status]));
+
+      expect(week).toHaveLength(7);
+      expect(byDate.get(booked)).toBe('booked');
+      expect(byDate.get(held)).toBe('pending');
+      expect(byDate.get(blocked)).toBe('blocked');
+      // The sparse calendar's default, filled in rather than left as a hole.
+      expect(byDate.get(dayFrom(1))).toBe('available');
+    });
+
+    it('starts at today and stops before the eighth day', async () => {
+      const vendorId = await createProfile();
+      // One day either side of the window, both of which must be invisible.
+      await mark(vendorId, -1, 'booked');
+      await mark(vendorId, 7, 'booked');
+
+      const week = ((await read()).json() as DashboardBody).bookingWeek;
+
+      expect(week[0]?.date).toBe(todayDateString());
+      expect(week[6]?.date).toBe(dayFrom(6));
+      expect(week.every((day) => day.status === 'available')).toBe(true);
+    });
+  });
+
+  describe('the next payout', () => {
+    /** A confirmed booking `offset` days out, worth `payoutCents` to the vendor. */
+    async function book(
+      vendorId: string,
+      requestId: string,
+      offset: number,
+      payoutCents: number,
+      status: 'confirmed' | 'cancelled' = 'confirmed',
+    ): Promise<void> {
+      const customer = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.clerkUserId, CUSTOMER));
+
+      await harness.database.db.insert(bookings).values({
+        requestId,
+        customerId: customer[0]!.id,
+        vendorId,
+        eventDate: dayFrom(offset),
+        totalAmountCents: payoutCents + 1_000,
+        platformFeeCents: 1_000,
+        vendorPayoutCents: payoutCents,
+        status,
+        paidAt: new Date(),
+      });
+    }
+
+    it('names the soonest upcoming event, not the largest', async () => {
+      const vendorId = await createProfile();
+      const packageId = await addPackage();
+      await publish(vendorId);
+      const near = await request(vendorId, packageId, 10);
+      const far = await request(vendorId, packageId, 40);
+
+      await book(vendorId, far, 40, 900_000);
+      await book(vendorId, near, 10, 50_000);
+
+      const payout = ((await read()).json() as DashboardBody).nextPayout;
+
+      expect(payout?.vendorPayoutCents).toBe(50_000);
+      expect(payout?.eventDate).toBe(dayFrom(10));
+    });
+
+    it('ignores a cancelled booking, which is money that is not coming', async () => {
+      const vendorId = await createProfile();
+      const packageId = await addPackage();
+      await publish(vendorId);
+      const cancelled = await request(vendorId, packageId, 10);
+      const live = await request(vendorId, packageId, 40);
+
+      await book(vendorId, cancelled, 10, 50_000, 'cancelled');
+      await book(vendorId, live, 40, 900_000);
+
+      expect(((await read()).json() as DashboardBody).nextPayout?.vendorPayoutCents).toBe(900_000);
+    });
+
+    it('is null when every booking is already behind the vendor', async () => {
+      const vendorId = await createProfile();
+      const packageId = await addPackage();
+      await publish(vendorId);
+      const past = await request(vendorId, packageId, 10);
+
+      await book(vendorId, past, -5, 50_000);
+
+      expect(((await read()).json() as DashboardBody).nextPayout).toBeNull();
+    });
   });
 
   /*

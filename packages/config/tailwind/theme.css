@@ -226,8 +226,15 @@
 
   /* Chrome the full-height app shells are measured against. */
   --header-height: 4rem; /* 64px at 1440; 56px below it — see the override */
-  --sidebar-width: 15rem; /* 240px */
-  --sidebar-width-sm: 12.5rem; /* 200px — also the sticky form section nav */
+  --sidebar-width: 15rem; /* 240px — the vendor sidebar at 1440, frame `08` */
+  /*
+   * 220px — the vendor sidebar at 1024, frame `27 Vendor dashboard — 1024`.
+   * Its own step because `30-responsive.md` keeps the sidebar labelled at this
+   * width rather than collapsing it, so it narrows by 20px instead of becoming
+   * the icon rail: "a sidebar that becomes an icon rail at 1024 is a bug".
+   */
+  --sidebar-width-md: 13.75rem;
+  --sidebar-width-sm: 12.5rem; /* 200px — the editor's sticky section nav, frame `09` */
   /*
    * Declared by `01-foundations.md`, and deliberately unused. The 2026-08-27
    * responsive pass **considered an icon rail at 1024 and rejected it**: it
