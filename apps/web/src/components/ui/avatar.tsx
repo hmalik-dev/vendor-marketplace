@@ -61,6 +61,12 @@ export type AvatarSize = keyof typeof AVATAR_SIZES;
 const GLYPH_FRACTION = 0.42;
 
 const GLYPH_SIZES: Partial<Record<AvatarSize, number>> = {
+  /*
+   * Frame `13 Admin` sets `font-size:13px` on the header's 30px circle. The
+   * fraction would give 12.6, and the console's is the only `xs` any frame
+   * measures — so it is pinned rather than left to round.
+   */
+  xs: 13,
   sm: 13,
   /*
    * Frame `07`'s message rows set `font-size:13px` on a 32px circle. The

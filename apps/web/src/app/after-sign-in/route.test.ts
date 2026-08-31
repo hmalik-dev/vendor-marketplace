@@ -49,10 +49,10 @@ describe('GET /after-sign-in', () => {
     expect(locationOf(await GET(REQUEST))).toBe('/');
   });
 
-  it('starts an admin on the marketplace home too', async () => {
+  it('starts an admin on the operations console', async () => {
     getCurrentUser.mockResolvedValue({ id: 'u3', firstName: 'Root', role: 'admin' });
 
-    expect(locationOf(await GET(REQUEST))).toBe('/');
+    expect(locationOf(await GET(REQUEST))).toBe('/admin');
   });
 
   it('sends a session with no account back to sign-in', async () => {

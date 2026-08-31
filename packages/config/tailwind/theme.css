@@ -64,6 +64,7 @@
   --color-stone-500: #c9c1b5; /* disabled text ONLY — fails AA by design */
   --color-stone-600: #6b6459; /* MUTED TEXT — the minimum for any real label */
   --color-stone-700: #4a443c; /* body text */
+  --color-stone-800: #3a342e; /* the admin header's hairline on a stone-900 ground */
   --color-stone-900: #23201c; /* headings, ink */
 
   /*
@@ -238,6 +239,7 @@
    */
   --sidebar-width-md: 13.75rem;
   --sidebar-width-sm: 12.5rem; /* 200px — the editor's sticky section nav, frame `09` */
+  --sidebar-admin-width: 13.125rem; /* 210px — the console rail, frame `13` */
   /*
    * Declared by `01-foundations.md`, and deliberately unused. The 2026-08-27
    * responsive pass **considered an icon rail at 1024 and rejected it**: it

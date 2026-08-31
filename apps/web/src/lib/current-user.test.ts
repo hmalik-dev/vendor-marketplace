@@ -58,8 +58,13 @@ describe('DASHBOARD_PATH_BY_ROLE', () => {
     expect(DASHBOARD_PATH_BY_ROLE.vendor).toBe('/vendor/dashboard');
   });
 
-  it('covers every role so the lookup can never return undefined', () => {
-    expect(DASHBOARD_PATH_BY_ROLE.admin).toBe('/');
+  /*
+   * `/admin` since #15 built the console. It was `/` before that, because the
+   * bounce below redirects to this map and there was no admin surface to land
+   * on — `/` was chosen as the one route that would not bounce again.
+   */
+  it('sends an admin to the operations console', () => {
+    expect(DASHBOARD_PATH_BY_ROLE.admin).toBe('/admin');
   });
 
   /*
@@ -72,6 +77,7 @@ describe('DASHBOARD_PATH_BY_ROLE', () => {
     const GATED_BY: Record<string, UserRole> = {
       '/bookings': 'customer',
       '/vendor/dashboard': 'vendor',
+      '/admin': 'admin',
     };
 
     for (const [role, path] of Object.entries(DASHBOARD_PATH_BY_ROLE)) {
@@ -327,8 +333,13 @@ describe('POST_SIGN_IN_PATH_BY_ROLE', () => {
     expect(POST_SIGN_IN_PATH_BY_ROLE.customer).not.toBe(DASHBOARD_PATH_BY_ROLE.customer);
   });
 
-  it('covers every role so the lookup can never return undefined', () => {
-    expect(POST_SIGN_IN_PATH_BY_ROLE.admin).toBe('/');
+  /*
+   * An operator signs in to operate. Like a vendor, and unlike a customer, they
+   * have no use for a catalogue of vendors as a starting place.
+   */
+  it('starts an admin on the console rather than the marketplace home', () => {
+    expect(POST_SIGN_IN_PATH_BY_ROLE.admin).toBe(DASHBOARD_PATH_BY_ROLE.admin);
+    expect(POST_SIGN_IN_PATH_BY_ROLE.admin).not.toBe('/');
   });
 });
 

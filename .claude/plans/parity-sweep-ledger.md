@@ -33,7 +33,7 @@ browser alongside the live screen; compare, never recall.
 | 10 | 10 Messaging | `/messages` | customer | 1440x900 | todo | — |
 | 11 | 11 Availability | `/vendor/availability` | vendor | 1440x900 | **re-run done — #153–#164 all closed; still FAIL on the new state model** | #153–#164 done, +#166, new #254–#270 |
 | 12 | 12 Sign up | `/sign-up` | guest | 1440x900 | **FAIL (13)** | #194–#197 |
-| 13 | 13 Admin | `NO ROUTE — #15` | guest | 1440x900 | n/a | — |
+| 13 | 13 Admin | `/admin/vendors?status=review` | admin | 1440x900 | todo | #15 |
 | 14 | 14 Search tablet | `derive from base screen` | guest | 768x1024 | todo | — |
 | 15 | 14 Messaging tablet | `derive from base screen` | customer | 768x1024 | todo | — |
 | 16 | 14 Landing mobile | `derive from base screen` | guest | 390x844 | todo | — |

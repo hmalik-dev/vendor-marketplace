@@ -1,29 +1,79 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { bookingStatusSchema, generateSlug } from '@vendor-marketplace/shared';
 import type {
   AdminBanResult,
+  AdminBookingPage,
+  AdminBookingQuery,
+  AdminCustomerPage,
+  AdminCustomerQuery,
+  AdminMetrics,
+  AdminPaymentPage,
+  AdminPaymentQuery,
+  AdminReviewPage,
+  AdminReviewQuery,
+  AdminTagList,
+  AdminTagRow,
+  AdminTagSuggestionPage,
+  AdminTagSuggestionQuery,
+  AdminTagSuggestionResult,
+  AdminTagSuggestionRow,
+  AdminVendorFacets,
   AdminVendorPage,
   AdminVendorQuery,
   AdminVendorRow,
   AdminVendorStatus,
+  FieldErrorDetails,
+  ResolveTagSuggestion,
+  TagCategory,
+  UpdateTag,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EventHub } from '../../lib/event-stream.js';
 import type { StripeConnectGateway } from '../../lib/stripe.js';
-import { conflict, forbidden, notFound } from '../../lib/errors.js';
+import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
+import { deleteReviewAndRecalculate } from '../reviews/reviews.dao.js';
+import { normalizeTagName } from '../tags/tags.service.js';
 import {
+  assignTagToVendor,
+  countAdminBookings,
+  countAdminCustomers,
+  countAdminPayments,
+  countAdminReviews,
+  countAdminTagSuggestions,
   countAdminVendors,
   countVendorsAwaitingReview,
+  countVendorsHoldingTag,
   declineOpenRequests,
+  findAdminBookings,
+  findAdminCustomers,
+  findAdminMetricSeries,
+  findAdminMetricTotals,
+  findAdminPayments,
+  findAdminReviews,
+  findAdminTagSuggestionById,
+  findAdminTagSuggestions,
+  findAdminTags,
   findAdminVendors,
   findConfirmedBookingsToUnwind,
+  findTagByCategoryAndName,
+  findTagById,
+  findTagBySlug,
+  findTagSuggestionById,
   findUserById,
+  findVendorFilterFacets,
   findVendorOwnerId,
   findVendorProfileByUserId,
+  findVendorProfileIdByUserId,
+  insertTag,
+  resolveTagSuggestionRow,
   setBanned,
+  updateTagRow,
+  type AdminTagSuggestionProjection,
   type AdminVendorFilters,
   type AdminVendorProjection,
+  type DailyBucket,
 } from './admin.dao.js';
 
 /** Everything an admin operation needs. Mirrors `PaymentContext`, for the same reason. */
@@ -277,4 +327,508 @@ export async function setUserBanned(
     refundsIssued,
     profileUnpublished,
   };
+}
+
+export async function listCustomers(
+  db: AppDatabase,
+  query: AdminCustomerQuery,
+): Promise<AdminCustomerPage> {
+  const offset = (query.page - 1) * query.pageSize;
+  const [rows, total] = await Promise.all([
+    findAdminCustomers(db, query.q, query.pageSize, offset),
+    countAdminCustomers(db, query.q),
+  ]);
+
+  return { items: rows, total, page: query.page, pageSize: query.pageSize };
+}
+
+/** `First Last`, collapsed — the same shape every other admin surface prints. */
+function fullName(firstName: string, lastName: string): string {
+  return `${firstName} ${lastName}`.trim();
+}
+
+export async function listBookings(
+  db: AppDatabase,
+  query: AdminBookingQuery,
+): Promise<AdminBookingPage> {
+  const offset = (query.page - 1) * query.pageSize;
+  const [rows, total] = await Promise.all([
+    findAdminBookings(db, query.status, query.pageSize, offset),
+    countAdminBookings(db, query.status),
+  ]);
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      eventDate: row.eventDate,
+      totalCents: row.totalAmountCents,
+      customerName: fullName(row.customerFirstName, row.customerLastName),
+      vendorName: row.vendorName,
+      vendorSlug: row.vendorSlug,
+      createdAt: row.createdAt,
+    })),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+  };
+}
+
+export async function listPayments(
+  db: AppDatabase,
+  query: AdminPaymentQuery,
+): Promise<AdminPaymentPage> {
+  const offset = (query.page - 1) * query.pageSize;
+  const [rows, total] = await Promise.all([
+    findAdminPayments(db, query.pageSize, offset),
+    countAdminPayments(db),
+  ]);
+
+  return {
+    items: rows.map((row) => ({
+      bookingId: row.id,
+      status: bookingStatusSchema.parse(row.status),
+      totalAmountCents: row.totalAmountCents,
+      platformFeeCents: row.platformFeeCents,
+      vendorPayoutCents: row.vendorPayoutCents,
+      stripePaymentIntentId: row.stripePaymentIntentId,
+      vendorName: row.vendorName,
+      customerName: fullName(row.customerFirstName, row.customerLastName),
+      paidAt: row.paidAt,
+    })),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+  };
+}
+
+export async function listReviews(
+  db: AppDatabase,
+  query: AdminReviewQuery,
+): Promise<AdminReviewPage> {
+  const offset = (query.page - 1) * query.pageSize;
+  const [rows, total] = await Promise.all([
+    findAdminReviews(db, query.type, query.pageSize, offset),
+    countAdminReviews(db, query.type),
+  ]);
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      rating: row.rating,
+      title: row.title,
+      content: row.content,
+      type: row.type,
+      authorName: fullName(row.authorFirstName, row.authorLastName),
+      vendorName: row.vendorName,
+      vendorSlug: row.vendorSlug,
+      createdAt: row.createdAt,
+    })),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+  };
+}
+
+/**
+ * Deletes a review and re-derives the rating it contributed to.
+ *
+ * `deleteReviewAndRecalculate` is the reviews module's own write — reached from
+ * here rather than reimplemented, because a second recompute is how the two come
+ * to disagree. Deleting the last review leaves `0 / 0`, not `NULL`.
+ */
+export async function deleteReview(db: AppDatabase, reviewId: string): Promise<void> {
+  const deleted = await deleteReviewAndRecalculate(db, reviewId);
+
+  if (!deleted) {
+    throw notFound('No review with that id');
+  }
+}
+
+// --- Tag moderation --------------------------------------------------------
+
+function toSuggestionRow(row: AdminTagSuggestionProjection): AdminTagSuggestionRow {
+  return {
+    id: row.id,
+    vendorId: row.vendorId,
+    suggestedName: row.suggestedName,
+    category: row.category,
+    status: row.status,
+    resolvedTagId: row.resolvedTagId,
+    adminNote: row.adminNote,
+    createdAt: row.createdAt,
+    resolvedAt: row.resolvedAt,
+    /*
+     * The storefront name where there is one, the account name otherwise: a
+     * suggestion can come from a vendor who has not built a profile yet, and
+     * "· suggested by" with nothing after it is worse than the account name.
+     */
+    vendorName: row.vendorBusinessName ?? fullName(row.vendorFirstName, row.vendorLastName),
+    resolvedTagName: row.resolvedTagName,
+  };
+}
+
+export async function listTagSuggestions(
+  db: AppDatabase,
+  query: AdminTagSuggestionQuery,
+): Promise<AdminTagSuggestionPage> {
+  const offset = (query.page - 1) * query.pageSize;
+  const [rows, total] = await Promise.all([
+    findAdminTagSuggestions(db, query.status, query.pageSize, offset),
+    countAdminTagSuggestions(db, query.status),
+  ]);
+
+  return {
+    items: rows.map(toSuggestionRow),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+  };
+}
+
+/**
+ * The tag vocabulary is category-scoped, so the slug is too — `tags_slug_key` is
+ * global and "Korean" is legitimately both a language and a culture.
+ */
+function tagSlug(category: TagCategory, name: string): string {
+  return `${category}-${generateSlug(name)}`;
+}
+
+async function notifyVendorOfTag(
+  context: AdminContext,
+  userId: string,
+  title: string,
+  body: string,
+): Promise<void> {
+  const stored = await insertNotification(context.db, {
+    userId,
+    type: 'tag_suggestion_approved',
+    title,
+    body,
+    data: {},
+  });
+
+  if (stored) {
+    context.hub.publish(userId, {
+      type: 'new_notification',
+      notification: {
+        id: stored.id,
+        type: stored.type,
+        title: stored.title,
+        body: stored.body,
+        href: '/vendor/profile/edit',
+        isRead: false,
+        createdAt: stored.createdAt,
+      },
+    });
+  }
+}
+
+/**
+ * Approve, reject or merge one suggestion.
+ *
+ * **Concurrency is settled by the write, not by the read.** The `status =
+ * 'pending'` predicate lives on the UPDATE in `resolveTagSuggestionRow`, so two
+ * operators acting on the same suggestion cannot both succeed however the reads
+ * interleave — the second gets a 409 rather than overwriting the first's
+ * decision. Checking the status here first only makes that failure legible; it
+ * is not what makes it correct.
+ */
+export async function resolveTagSuggestion(
+  context: AdminContext,
+  suggestionId: string,
+  input: ResolveTagSuggestion,
+  now: Date,
+): Promise<AdminTagSuggestionResult> {
+  const suggestion = await findTagSuggestionById(context.db, suggestionId);
+
+  if (!suggestion) {
+    throw notFound('No tag suggestion with that id');
+  }
+
+  if (suggestion.status !== 'pending') {
+    throw conflict('That suggestion has already been resolved');
+  }
+
+  const suggesterProfileId = await findVendorProfileIdByUserId(context.db, suggestion.vendorId);
+
+  if (input.action === 'reject') {
+    const resolved = await resolveTagSuggestionRow(context.db, {
+      suggestionId,
+      status: 'rejected',
+      resolvedTagId: null,
+      adminNote: input.adminNote,
+      resolvedAt: now,
+    });
+
+    if (!resolved) {
+      throw conflict('That suggestion has already been resolved');
+    }
+
+    /*
+     * No notification, by design. The queue records why; telling a vendor their
+     * idea was turned down is how a product stops receiving suggestions.
+     */
+    return { suggestion: await readResolved(context.db, suggestionId), tag: null };
+  }
+
+  if (input.action === 'merge') {
+    const target = await findTagById(context.db, input.mergeTagId);
+
+    if (!target) {
+      throw notFound('No tag with that id');
+    }
+
+    if (target.category !== suggestion.category) {
+      /*
+       * A merge across categories would file "Kosher" under languages. The
+       * vocabulary is category-scoped and so is every reader of it.
+       */
+      throw validationFailed('That tag is in a different category', {
+        field: 'mergeTagId',
+      } satisfies FieldErrorDetails);
+    }
+
+    const resolved = await resolveTagSuggestionRow(context.db, {
+      suggestionId,
+      status: 'approved',
+      resolvedTagId: target.id,
+      adminNote: input.adminNote ?? `Merged with ${target.name}`,
+      resolvedAt: now,
+    });
+
+    if (!resolved) {
+      throw conflict('That suggestion has already been resolved');
+    }
+
+    if (suggesterProfileId) {
+      await assignTagToVendor(context.db, suggesterProfileId, target.id);
+    }
+
+    await notifyVendorOfTag(
+      context,
+      suggestion.vendorId,
+      'Your tag suggestion matched an existing tag',
+      `“${suggestion.suggestedName}” matched our existing tag “${target.name}” — it has been added to your profile.`,
+    );
+
+    return { suggestion: await readResolved(context.db, suggestionId), tag: target };
+  }
+
+  const normalized = normalizeTagName(suggestion.suggestedName);
+  /*
+   * Name match first, then slug. The ticket lists them the other way round, but
+   * the slug is *derived from* the name — so checking it first would reject
+   * every exact duplicate that step 3 says to merge, and step 3 would be
+   * unreachable. Same-name is therefore treated as the merge it is; a slug
+   * collision that survives this check is a *different* name that slugifies the
+   * same ("Gluten Free" vs "gluten-free"), which is the case the operator has to
+   * rule on rather than the machine.
+   */
+  const sameName = await findTagByCategoryAndName(context.db, suggestion.category, normalized);
+
+  if (sameName) {
+    return resolveTagSuggestion(
+      context,
+      suggestionId,
+      { action: 'merge', mergeTagId: sameName.id },
+      now,
+    );
+  }
+
+  const slug = tagSlug(suggestion.category, suggestion.suggestedName);
+  const slugTaken = await findTagBySlug(context.db, slug);
+
+  if (slugTaken) {
+    throw conflict(`A similar tag already exists: ${slugTaken.name}. Merge into it instead.`);
+  }
+
+  const created = await context.db.transaction(async (tx) => {
+    const tag = await insertTag(tx, {
+      name: suggestion.suggestedName,
+      slug,
+      category: suggestion.category,
+    });
+
+    const resolved = await resolveTagSuggestionRow(tx, {
+      suggestionId,
+      status: 'approved',
+      resolvedTagId: tag.id,
+      adminNote: input.adminNote ?? null,
+      resolvedAt: now,
+    });
+
+    if (!resolved) {
+      /*
+       * Another operator resolved it between the read and this write. Throwing
+       * inside the transaction rolls the new tag back, which is the point: a
+       * tag created for a decision that did not happen is orphaned vocabulary.
+       */
+      throw conflict('That suggestion has already been resolved');
+    }
+
+    if (suggesterProfileId) {
+      await assignTagToVendor(tx, suggesterProfileId, tag.id);
+    }
+
+    return tag;
+  });
+
+  await notifyVendorOfTag(
+    context,
+    suggestion.vendorId,
+    'Your tag suggestion was approved',
+    `“${created.name}” is now available, and has been added to your profile.`,
+  );
+
+  return { suggestion: await readResolved(context.db, suggestionId), tag: created };
+}
+
+/** Re-reads the suggestion through the list projection, so the response and the queue agree. */
+async function readResolved(db: AppDatabase, suggestionId: string): Promise<AdminTagSuggestionRow> {
+  const row = await findAdminTagSuggestionById(db, suggestionId);
+
+  if (!row) {
+    throw notFound('No tag suggestion with that id');
+  }
+
+  return toSuggestionRow(row);
+}
+
+export async function listTags(db: AppDatabase): Promise<AdminTagList> {
+  const rows = await findAdminTags(db);
+
+  return { items: rows };
+}
+
+/**
+ * Renames, reorders or deactivates one tag.
+ *
+ * A rename regenerates the slug, because the slug is the dedup key every
+ * approval checks against — leaving it on the old name would let the same tag be
+ * suggested and approved twice. Deactivation is a soft remove: `vendor_tags`
+ * rows survive, so a vendor keeps what they chose while the tag stops being
+ * offered and stops filtering search.
+ */
+export async function updateTag(
+  db: AppDatabase,
+  tagId: string,
+  input: UpdateTag,
+): Promise<AdminTagRow> {
+  const existing = await findTagById(db, tagId);
+
+  if (!existing) {
+    throw notFound('No tag with that id');
+  }
+
+  const patch: { name?: string; slug?: string; isActive?: boolean; displayOrder?: number } = {};
+
+  if (
+    input.name !== undefined &&
+    normalizeTagName(input.name) !== normalizeTagName(existing.name)
+  ) {
+    const clash = await findTagByCategoryAndName(
+      db,
+      existing.category,
+      normalizeTagName(input.name),
+    );
+
+    if (clash) {
+      throw conflict(`A tag called ${clash.name} already exists in that category`);
+    }
+
+    const slug = tagSlug(existing.category, input.name);
+    const slugClash = await findTagBySlug(db, slug);
+
+    if (slugClash && slugClash.id !== tagId) {
+      throw conflict(`A similar tag already exists: ${slugClash.name}`);
+    }
+
+    patch.name = input.name;
+    patch.slug = slug;
+  }
+
+  if (input.isActive !== undefined) {
+    patch.isActive = input.isActive;
+  }
+
+  if (input.displayOrder !== undefined) {
+    patch.displayOrder = input.displayOrder;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { ...existing, vendorCount: await countVendorsHoldingTag(db, tagId) };
+  }
+
+  const updated = await updateTagRow(db, tagId, patch);
+
+  if (!updated) {
+    throw notFound('No tag with that id');
+  }
+
+  return { ...updated, vendorCount: await countVendorsHoldingTag(db, tagId) };
+}
+
+// --- Overview --------------------------------------------------------------
+
+/** The window every chart on the Overview draws, in days. */
+export const ADMIN_METRICS_WINDOW_DAYS = 30;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function utcDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Turns the sparse buckets Postgres returns into a continuous series.
+ *
+ * A day with no bookings has no row, and a line chart fed a gap draws a
+ * straight segment across it as though the value had been interpolated. Every
+ * day in the window is present, and a quiet day reads as the zero it was.
+ */
+function fillWindow(buckets: DailyBucket[], since: Date, days: number): DailyBucket[] {
+  const byDate = new Map(buckets.map((bucket) => [bucket.date, bucket.value]));
+  const series: DailyBucket[] = [];
+
+  for (let offset = 0; offset < days; offset += 1) {
+    const date = utcDay(new Date(since.getTime() + offset * MS_PER_DAY));
+    series.push({ date, value: byDate.get(date) ?? 0 });
+  }
+
+  return series;
+}
+
+export async function readMetrics(db: AppDatabase, now: Date): Promise<AdminMetrics> {
+  /*
+   * Midnight UTC `days - 1` back, so the window is thirty whole days ending
+   * today rather than a rolling thirty-times-24-hours whose first bucket is
+   * always a partial day.
+   */
+  const since = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
+      (ADMIN_METRICS_WINDOW_DAYS - 1) * MS_PER_DAY,
+  );
+
+  const [totals, series] = await Promise.all([
+    findAdminMetricTotals(db),
+    findAdminMetricSeries(db, since),
+  ]);
+
+  return {
+    totalRevenueCents: totals.totalRevenueCents,
+    bookingsCount: totals.bookingsCount,
+    activeVendorsCount: totals.activeVendorsCount,
+    usersCount: totals.usersCount,
+    pendingTagSuggestionsCount: totals.pendingTagSuggestionsCount,
+    reviewsCount: totals.reviewsCount,
+    revenueByDay: fillWindow(series.revenueByDay, since, ADMIN_METRICS_WINDOW_DAYS),
+    bookingsByDay: fillWindow(series.bookingsByDay, since, ADMIN_METRICS_WINDOW_DAYS),
+    signupsByDay: fillWindow(series.signupsByDay, since, ADMIN_METRICS_WINDOW_DAYS),
+    completedByDay: fillWindow(series.completedByDay, since, ADMIN_METRICS_WINDOW_DAYS),
+  };
+}
+
+export async function readVendorFacets(db: AppDatabase): Promise<AdminVendorFacets> {
+  return findVendorFilterFacets(db);
 }

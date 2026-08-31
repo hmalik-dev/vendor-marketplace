@@ -1775,7 +1775,14 @@ export const adminMetricsSchema = z.object({
   activeVendorsCount: z.int(),
   usersCount: z.int(),
   pendingTagSuggestionsCount: z.int(),
-  flaggedReviewsCount: z.int(),
+  /*
+   * The number beside `Reviews` in the sidebar. It is the review count and
+   * nothing narrower: there is no flag column on `reviews`, and deriving a
+   * "flagged" set from the rating would invent a moderation state the product
+   * does not have — the same reason the four vendor statuses are derived from
+   * columns that already record something.
+   */
+  reviewsCount: z.int(),
   /** Colour-coded in the UI by meaning: revenue gold, bookings clay, users steel, completion sage. */
   revenueByDay: z.array(adminMetricPointSchema),
   bookingsByDay: z.array(adminMetricPointSchema),
@@ -1794,3 +1801,72 @@ export const adminBanResultSchema = z.object({
   profileUnpublished: z.boolean(),
 });
 export type AdminBanResult = z.infer<typeof adminBanResultSchema>;
+
+/**
+ * One page window, written once.
+ *
+ * Every admin list answers the same envelope — the rows, how many there are in
+ * total under the same filters, and the window that was asked for. The Vendors
+ * page adds `awaitingReview` on top of this because its count line names a
+ * second number; nothing else does.
+ */
+function adminPageSchema<T extends z.ZodTypeAny>(item: T) {
+  return z.object({
+    items: z.array(item),
+    total: z.int(),
+    page: z.int(),
+    pageSize: z.int(),
+  });
+}
+
+/** The real cities and categories the Vendors filter bar offers — no invented options. */
+export const adminVendorFacetsSchema = z.object({
+  cities: z.array(z.string()),
+  categories: z.array(z.object({ slug: z.string(), name: z.string() })),
+});
+export type AdminVendorFacets = z.infer<typeof adminVendorFacetsSchema>;
+
+export type AdminCustomerQuery = z.infer<typeof adminCustomerQuerySchema>;
+export const adminCustomerPageSchema = adminPageSchema(adminCustomerRowSchema);
+export type AdminCustomerPage = z.infer<typeof adminCustomerPageSchema>;
+
+export const adminBookingQuerySchema = z.object({
+  ...paginationQueryShape,
+  status: bookingStatusSchema.optional(),
+});
+export type AdminBookingQuery = z.infer<typeof adminBookingQuerySchema>;
+export const adminBookingPageSchema = adminPageSchema(adminBookingRowSchema);
+export type AdminBookingPage = z.infer<typeof adminBookingPageSchema>;
+
+export const adminPaymentQuerySchema = z.object({ ...paginationQueryShape });
+export type AdminPaymentQuery = z.infer<typeof adminPaymentQuerySchema>;
+export const adminPaymentPageSchema = adminPageSchema(adminPaymentRowSchema);
+export type AdminPaymentPage = z.infer<typeof adminPaymentPageSchema>;
+
+export const adminReviewQuerySchema = z.object({
+  ...paginationQueryShape,
+  type: reviewTypeSchema.optional(),
+});
+export type AdminReviewQuery = z.infer<typeof adminReviewQuerySchema>;
+export const adminReviewPageSchema = adminPageSchema(adminReviewRowSchema);
+export type AdminReviewPage = z.infer<typeof adminReviewPageSchema>;
+
+export type AdminTagSuggestionQuery = z.infer<typeof adminTagSuggestionQuerySchema>;
+export const adminTagSuggestionPageSchema = adminPageSchema(adminTagSuggestionRowSchema);
+export type AdminTagSuggestionPage = z.infer<typeof adminTagSuggestionPageSchema>;
+
+/**
+ * The tag management table. Not paginated: the whole point of the screen is to
+ * see the vocabulary as one list, grouped by category, and the vocabulary is
+ * bounded by what an operator has approved rather than by user-generated volume.
+ */
+export const adminTagListSchema = z.object({ items: z.array(adminTagRowSchema) });
+export type AdminTagList = z.infer<typeof adminTagListSchema>;
+
+/** What resolving a suggestion did, so the queue can say it rather than guess. */
+export const adminTagSuggestionResultSchema = z.object({
+  suggestion: adminTagSuggestionRowSchema,
+  /** The tag the suggestion now points at — created by `approve`, chosen by `merge`. */
+  tag: tagSchema.nullable(),
+});
+export type AdminTagSuggestionResult = z.infer<typeof adminTagSuggestionResultSchema>;

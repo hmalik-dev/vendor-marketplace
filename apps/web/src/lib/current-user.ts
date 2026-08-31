@@ -17,14 +17,17 @@ export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
   customer: '/bookings',
   vendor: '/vendor/dashboard',
   /*
-   * **Not `/bookings`.** That route is gated by `requireRole('customer')`, and
-   * the mismatch branch below redirects here — so pointing an admin at it made
-   * the bounce land on a route that bounces again, forever. Once sign-in
-   * started carrying a destination, every protected route funnelled into that
-   * loop rather than just a typed URL. `/` is terminal for an admin: the root
-   * page only redirects vendors.
+   * The operations console (#15). It was `/` until the console existed, with a
+   * comment explaining that `/` was terminal *because there was no admin
+   * surface* — the mismatch branch below redirects here, so a destination that
+   * bounced again would loop forever, and `/bookings` is gated by
+   * `requireRole('customer')`.
+   *
+   * `/admin` is terminal for the same reason `/vendor/dashboard` is: it is
+   * gated by `requireRole('admin')`, which this role passes, so the bounce
+   * lands and stops.
    */
-  admin: '/',
+  admin: '/admin',
 };
 
 /**
@@ -37,7 +40,12 @@ export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
 export const POST_SIGN_IN_PATH_BY_ROLE: Record<UserRole, string> = {
   customer: '/',
   vendor: DASHBOARD_PATH_BY_ROLE.vendor,
-  admin: '/',
+  /*
+   * An operator signs in to operate. Like a vendor, they have no use for a
+   * catalogue of vendors as a *starting* place, so this matches their dashboard
+   * rather than the marketplace home.
+   */
+  admin: DASHBOARD_PATH_BY_ROLE.admin,
 };
 
 /**

@@ -22,6 +22,15 @@ import {
   streamTicketSchema,
   tagSchema,
   userSchema,
+  adminBookingRowSchema,
+  adminCustomerRowSchema,
+  adminMetricsSchema,
+  adminPaymentRowSchema,
+  adminReviewRowSchema,
+  adminTagRowSchema,
+  adminTagSuggestionRowSchema,
+  adminVendorFacetsSchema,
+  adminVendorRowSchema,
   vendorCardSchema,
   vendorProfileDetailSchema,
   vendorReviewsPageSchema,
@@ -271,3 +280,71 @@ export type WireNearbyVendor = z.infer<typeof wireNearbyVendorSchema>;
 export const wireNearbyAvailabilityResultSchema = nearbyAvailabilityResultSchema.extend({
   items: z.array(wireNearbyVendorSchema),
 });
+
+// --- Admin (#15) -----------------------------------------------------------
+
+/**
+ * The admin console's reads, with their timestamps coerced back from the ISO
+ * strings JSON carries. No image resolution: the console shows names and
+ * numbers, and a table of thumbnails is not what an operations tool is for.
+ */
+const adminPage = <T extends z.ZodTypeAny>(item: T) =>
+  z.object({ items: z.array(item), total: z.int(), page: z.int(), pageSize: z.int() });
+
+export const wireAdminVendorRowSchema = adminVendorRowSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireAdminVendorRow = z.infer<typeof wireAdminVendorRowSchema>;
+
+export const wireAdminVendorPageSchema = adminPage(wireAdminVendorRowSchema).extend({
+  awaitingReview: z.int(),
+});
+export type WireAdminVendorPage = z.infer<typeof wireAdminVendorPageSchema>;
+
+export const wireAdminVendorFacetsSchema = adminVendorFacetsSchema;
+export type WireAdminVendorFacets = z.infer<typeof wireAdminVendorFacetsSchema>;
+
+export const wireAdminCustomerRowSchema = adminCustomerRowSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireAdminCustomerRow = z.infer<typeof wireAdminCustomerRowSchema>;
+export const wireAdminCustomerPageSchema = adminPage(wireAdminCustomerRowSchema);
+export type WireAdminCustomerPage = z.infer<typeof wireAdminCustomerPageSchema>;
+
+export const wireAdminBookingRowSchema = adminBookingRowSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireAdminBookingRow = z.infer<typeof wireAdminBookingRowSchema>;
+export const wireAdminBookingPageSchema = adminPage(wireAdminBookingRowSchema);
+export type WireAdminBookingPage = z.infer<typeof wireAdminBookingPageSchema>;
+
+export const wireAdminPaymentRowSchema = adminPaymentRowSchema.extend({
+  paidAt: z.coerce.date().nullable(),
+});
+export type WireAdminPaymentRow = z.infer<typeof wireAdminPaymentRowSchema>;
+export const wireAdminPaymentPageSchema = adminPage(wireAdminPaymentRowSchema);
+export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
+
+export const wireAdminReviewRowSchema = adminReviewRowSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireAdminReviewRow = z.infer<typeof wireAdminReviewRowSchema>;
+export const wireAdminReviewPageSchema = adminPage(wireAdminReviewRowSchema);
+export type WireAdminReviewPage = z.infer<typeof wireAdminReviewPageSchema>;
+
+export const wireAdminTagSuggestionRowSchema = adminTagSuggestionRowSchema.extend({
+  createdAt: z.coerce.date(),
+  resolvedAt: z.coerce.date().nullable(),
+});
+export type WireAdminTagSuggestionRow = z.infer<typeof wireAdminTagSuggestionRowSchema>;
+export const wireAdminTagSuggestionPageSchema = adminPage(wireAdminTagSuggestionRowSchema);
+export type WireAdminTagSuggestionPage = z.infer<typeof wireAdminTagSuggestionPageSchema>;
+
+export const wireAdminTagRowSchema = adminTagRowSchema.extend({ createdAt: z.coerce.date() });
+export type WireAdminTagRow = z.infer<typeof wireAdminTagRowSchema>;
+export const wireAdminTagListSchema = z.object({ items: z.array(wireAdminTagRowSchema) });
+export type WireAdminTagList = z.infer<typeof wireAdminTagListSchema>;
+
+/** No dates on the wire: every series point is already a `YYYY-MM-DD` string. */
+export const wireAdminMetricsSchema = adminMetricsSchema;
+export type WireAdminMetrics = z.infer<typeof wireAdminMetricsSchema>;

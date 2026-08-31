@@ -12,6 +12,7 @@ import {
   type NewNotificationRow,
   type NotificationRow,
 } from '@vendor-marketplace/db/schema';
+import type { NotificationType } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 export interface ConversationListRow {
@@ -335,9 +336,21 @@ export async function openUnattachedConversation(
   return { conversation: row, created: false };
 }
 
+/**
+ * A notification insert with its `type` narrowed to the shared vocabulary.
+ *
+ * `notifications.type` is a `varchar`, not a `pgEnum`, so `NewNotificationRow`
+ * accepts any string and a typo reaches the database as data — which is how
+ * `tag_suggestion_resolved` was written and stored for a type that does not
+ * exist. The column stays a varchar; this is the type that makes the write
+ * obey `NOTIFICATION_TYPES` the way `.claude/rules/shared-contracts.md`
+ * requires of every enum.
+ */
+export type NotificationWrite = Omit<NewNotificationRow, 'type'> & { type: NotificationType };
+
 export async function insertNotification(
   db: AppDatabase,
-  values: NewNotificationRow,
+  values: NotificationWrite,
 ): Promise<NotificationRow | null> {
   const inserted = await db.insert(notifications).values(values).returning();
 
