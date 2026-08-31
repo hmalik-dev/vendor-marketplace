@@ -165,8 +165,11 @@ describe('VendorCard', () => {
    * a deletion rather than a condition: the caller that knows something the
    * card does not passes `freeOnDate` explicitly.
    */
-  it('makes no availability claim from a searched date, even when free on it', () => {
-    render(<VendorCard vendor={vendor({ availableOnDate: true })} searchedDate="2026-06-14" />);
+  it('makes no availability claim for a vendor free on the searched date', () => {
+    // `availableOnDate` is what a dated query sets on every row it returns.
+    // There is no longer a prop that could turn it into a chip — the search
+    // grid passes nothing, and that is the point of the deletion.
+    render(<VendorCard vendor={vendor({ availableOnDate: true })} />);
 
     expect(screen.queryByText(/^Free /)).toBeNull();
   });

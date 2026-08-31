@@ -407,3 +407,75 @@ describe('SearchShell against a hostile URL', () => {
     expect(setState).toHaveBeenCalledWith({ date: '' });
   });
 });
+
+/*
+ * `/search?page=2` returned HTTP 200 with an empty results pane while the
+ * heading still claimed the full count — 17 vendors and nothing drawn under a
+ * line reading "17 photographers".
+ *
+ * `pageSize` is 20 against 17 vendors, so nothing is lost today. It stops being
+ * true the moment the marketplace outgrows one page, and the URL is reachable
+ * by hand and by any crawler that guesses it.
+ *
+ * The correction is a clamp rather than a message: frame `02` draws no
+ * pagination at all, so there is no approved string for "that page does not
+ * exist" and inventing one would fail the text axis. Going back to the first
+ * page is the behaviour the frame can support.
+ */
+describe('SearchShell out-of-range page', () => {
+  beforeEach(() => {
+    apiRequest.mockReset();
+    setState.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  function pageBeyondTheEnd(): unknown {
+    return { items: [], total: 17, page: 2, pageSize: 20, facets: { categories: [] } };
+  }
+
+  it('returns to the first page rather than drawing an empty grid under a full count', async () => {
+    state = baseState({ page: 2 });
+    apiRequest.mockResolvedValue(pageBeyondTheEnd());
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(setState).toHaveBeenCalledWith({ page: 1 }));
+  });
+
+  /*
+   * The guard is about a page past the end, not about an empty result set.
+   * A genuine no-results search has `total: 0` and must keep frame `18` — the
+   * relaxation buttons are the only thing that unsticks it.
+   */
+  it('leaves a genuinely empty search on the no-results state', async () => {
+    state = baseState({ page: 1 });
+    apiRequest.mockResolvedValue(emptyResult());
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() =>
+      expect(screen.getByText('Try a different vendor type or city.')).toBeDefined(),
+    );
+    expect(setState).not.toHaveBeenCalledWith({ page: 1 });
+  });
+
+  /* And a page that really has rows is left alone. */
+  it('does not touch a page that returned results', async () => {
+    state = baseState({ page: 1 });
+    apiRequest.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      facets: { categories: [] },
+    });
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+    expect(setState).not.toHaveBeenCalledWith({ page: 1 });
+  });
+});
