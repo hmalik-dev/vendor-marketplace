@@ -2,6 +2,7 @@
 - [Docker Postgres IS the local app database](vendor-marketplace-no-docker.md) — postgres:18-alpine on 5432; migrate/seed go there, not Neon. MinIO matters too
 - [Playwright browser verification is mandatory](vendor-marketplace-playwright-verification.md) — every ticket flow gets driven in a real browser before Done
 - [E2E test accounts, one per role](vendor-marketplace-e2e-credentials.md) — customer + vendor credentials in the gitignored .env.e2e.local, never in the repo
+- [A persistent E2E admin account exists](e2e-admin-account-exists.md) — the only way `/admin` is reachable; human-provisioned, deliberately outside preflight (D27)
 - [Open Playwright before frontend work](open-playwright-before-frontend-work.md) — user watches FE changes live; open the browser session before the first FE edit
 - [The Playwright browser is shared across sessions](playwright-browser-is-shared-across-sessions.md) — read a tab's viewport before resizing; "restored to a default" is a guess, not a repair
 - [Local dev left Neon; Neon holds production](vendor-marketplace-neon-dev-branch.md) — an always-open dev pool was pacing 375h/mo against a 100 CU-hour cap production shares
