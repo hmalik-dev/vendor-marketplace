@@ -103,8 +103,11 @@ const SECTION_IDS = {
  * their blocker dot here rather than being invisible until the vendor
  * stumbles on them.
  *
- * Payouts is deliberately absent until #9 makes it satisfiable: a nav entry
- * with a dot the vendor can never clear is worse than no entry at all.
+ * Payouts was deliberately absent while a dot there was unclearable, on the
+ * grounds that an entry a vendor can never satisfy is worse than no entry.
+ * #9 shipped Connect onboarding, so `/vendor/payments` is a real surface and
+ * the dot now clears — which makes the absence an ordinary missing nav item.
+ * Frame `09` draws it last, after Portfolio.
  */
 const SECTION_ORDER = [
   { key: 'business', label: 'Business', id: SECTION_IDS.business },
@@ -113,6 +116,7 @@ const SECTION_ORDER = [
   { key: 'responseTime', label: 'Response time', id: SECTION_IDS.responseTime },
   { key: 'packages', label: 'Packages', id: 'packages', href: '/vendor/packages' },
   { key: 'portfolio', label: 'Portfolio', id: 'portfolio', href: '/vendor/portfolio' },
+  { key: 'payouts', label: 'Payouts', id: 'payouts', href: '/vendor/payments' },
 ] as const;
 
 export interface FormState {
@@ -437,15 +441,25 @@ export function VendorProfileForm({
   /** Nothing is said in red before a submit attempt (`40-states.md`). */
   const formMessage = validation.attempted ? problem.formMessage : null;
 
+  /*
+   * Payouts is not a `PUBLISH_BLOCKERS` key and must not become one: a
+   * storefront publishes without Stripe, it just cannot accept a booking. So
+   * its dot reads the real Connect state off the profile row rather than the
+   * publish gate — no invented status, and it clears the moment onboarding
+   * completes. Gold, never red (`40-states.md`): payouts not set up yet is
+   * waiting on someone, not a failure.
+   */
+  const payoutsBlock = profile !== null && !profile.stripeOnboarded;
+
   const sections: FormSection[] = useMemo(
     () =>
       SECTION_ORDER.map((section) => ({
         id: section.id,
         label: section.label,
-        blocks: blockedSections.has(section.key),
+        blocks: section.key === 'payouts' ? payoutsBlock : blockedSections.has(section.key),
         ...('href' in section ? { href: section.href } : {}),
       })),
-    [blockedSections],
+    [blockedSections, payoutsBlock],
   );
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {

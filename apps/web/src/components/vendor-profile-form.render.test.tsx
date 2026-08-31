@@ -1,5 +1,6 @@
 import { ERROR_CODES, type Category } from '@vendor-marketplace/shared';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import type { WireVendorProfile } from '@/lib/wire-schemas';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '@/lib/api-client';
@@ -38,6 +39,66 @@ afterEach(() => {
 /** A vendor onboarding: no profile row yet, so the form is in create mode. */
 function renderOnboarding(): void {
   render(<VendorProfileForm profile={null} categories={CATEGORIES} allTags={[]} />);
+}
+
+/**
+ * A saved storefront, complete enough that nothing else paints a blocker dot —
+ * so a dot in these tests can only have come from the thing under test.
+ */
+function savedProfile(overrides: Partial<WireVendorProfile> = {}): WireVendorProfile {
+  return {
+    id: '33333333-3333-4333-8333-333333333333',
+    userId: '44444444-4444-4444-8444-444444444444',
+    businessName: 'Sunlit Studio',
+    slug: 'sunlit-studio',
+    bio: 'Ten years photographing weddings across central Texas.',
+    tagline: 'Film for the portraits, digital for everything else',
+    yearsInBusiness: 10,
+    profileImageUrl: null,
+    coverImageUrl: null,
+    address: '1204 E Cesar Chavez St',
+    city: 'Austin',
+    state: 'Texas',
+    latitude: null,
+    longitude: null,
+    serviceRadiusKm: 96,
+    responseTimeHours: 24,
+    stripeAccountId: 'acct_1',
+    stripeOnboarded: true,
+    isPublished: true,
+    isDeleted: false,
+    avgRating: 4.9,
+    reviewCount: 17,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    categoryIds: [CATEGORIES[0]!.id],
+    tags: [],
+    publishBlockers: [],
+    ...overrides,
+  };
+}
+
+function renderSaved(overrides: Partial<WireVendorProfile> = {}): void {
+  render(
+    <VendorProfileForm profile={savedProfile(overrides)} categories={CATEGORIES} allTags={[]} />,
+  );
+}
+
+/**
+ * The rail row for a section that lives on its own route, which renders as a
+ * link. `Payouts` is one of those — it points at `/vendor/payments`.
+ */
+function railLink(label: string): HTMLElement {
+  const rail = screen.getByRole('navigation', { name: 'Storefront sections' });
+  const item = within(rail)
+    .getAllByRole('link')
+    .find((node) => node.textContent?.startsWith(label));
+
+  if (!item) {
+    throw new Error(`No rail link labelled ${label}`);
+  }
+
+  return item;
 }
 
 async function chooseState(user: User): Promise<void> {
@@ -224,5 +285,77 @@ describe('VendorProfileForm — a save the form itself refuses', () => {
       );
     });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+/*
+ * #360: the rail's `Payouts` entry, and the one thing about it that could
+ * silently rot — a dot showing invented status rather than the vendor's real
+ * Connect state. Asserted in BOTH directions, because a dot hard-coded on and
+ * a dot correctly driven look identical from the failing side alone.
+ */
+describe('the Payouts rail entry (#360)', () => {
+  it('links to the payouts surface #9 shipped', () => {
+    renderSaved();
+
+    expect(railLink('Payouts').getAttribute('href')).toBe('/vendor/payments');
+  });
+
+  it('marks Payouts as blocking while Stripe onboarding is incomplete', () => {
+    renderSaved({ stripeOnboarded: false });
+
+    expect(
+      within(railLink('Payouts')).getByRole('img', {
+        name: 'Needs attention before publishing',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('clears the dot once Stripe onboarding completes', () => {
+    renderSaved({ stripeOnboarded: true });
+
+    expect(
+      within(railLink('Payouts')).queryByRole('img', {
+        name: 'Needs attention before publishing',
+      }),
+    ).toBeNull();
+  });
+
+  /*
+   * Gold is "waiting on someone" in `40-states.md`; red is "it failed".
+   * Payouts not set up yet is the former, so the dot must never go red — and
+   * the class is the assertion because jsdom resolves no Tailwind colours.
+   */
+  it('paints that dot gold rather than red', () => {
+    renderSaved({ stripeOnboarded: false });
+
+    const dot = within(railLink('Payouts')).getByRole('img', {
+      name: 'Needs attention before publishing',
+    });
+
+    expect(dot.className).toContain('bg-gold-400');
+    expect(dot.className).not.toMatch(/bg-(error|red)-/);
+  });
+
+  /*
+   * Publishing does not require Stripe — a storefront can be live and simply
+   * unable to accept a booking — so an incomplete payout setup must not be
+   * reported as a publish blocker anywhere else on the screen.
+   *
+   * The positive half is asserted first on purpose: a `queryBy…` that returns
+   * null because the string never renders under any condition is not a check.
+   * This establishes that a real blocker does produce the line, so the absence
+   * below is evidence rather than a vacuous pass.
+   */
+  it('shows the publish-blocker line when a real blocker stands', () => {
+    renderSaved({ stripeOnboarded: true, publishBlockers: ['packages'] });
+
+    expect(screen.getByText(/before you can publish/i)).toBeTruthy();
+  });
+
+  it('does not count payouts as a publish blocker', () => {
+    renderSaved({ stripeOnboarded: false, publishBlockers: [] });
+
+    expect(screen.queryByText(/before you can publish/i)).toBeNull();
   });
 });
