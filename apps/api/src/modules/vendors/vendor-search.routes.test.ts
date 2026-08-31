@@ -214,6 +214,38 @@ describe('GET /vendors', () => {
   });
 
   /*
+   * `state` had no test at all, which is how it reached production 500ing on
+   * every request that used it. #332 made the column the `us_state` enum and
+   * the predicate still called `lower()` on it, so Postgres answered
+   * `function lower(us_state) does not exist` — and because the search UI always
+   * sends `city` and `state` as a pair, the canonical results URL was a 500 for
+   * every visitor. These three assert the filter, its case-insensitivity and the
+   * unknown-value case, which is the one a bare `eq()` on the enum would break.
+   */
+  it('filters by state', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Texan', city: 'Austin', state: 'TX' });
+    await seedVendor({ user: 'user_b', businessName: 'Oregonian', city: 'Portland', state: 'OR' });
+
+    expect(names((await search('?state=TX')).items)).toEqual(['Texan']);
+  });
+
+  it('matches state case-insensitively, and pairs with city the way the app sends it', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Texan', city: 'Austin', state: 'TX' });
+
+    expect(names((await search('?state=tx')).items)).toEqual(['Texan']);
+    expect(names((await search('?city=Austin&state=TX')).items)).toEqual(['Texan']);
+  });
+
+  it('returns no rows for a state outside the vocabulary rather than failing', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Texan', city: 'Austin', state: 'TX' });
+
+    const body = await search('?state=ZZ');
+
+    expect(body.items).toEqual([]);
+    expect(body.total).toBe(0);
+  });
+
+  /*
    * Name search is the referral case only — someone was handed a business card.
    * It is deliberately narrow: business name, nothing else. Matching the bio
    * too would make it a general text query, which is the thing decision D6
