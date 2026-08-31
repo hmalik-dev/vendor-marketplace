@@ -247,6 +247,11 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **362** | **[PLATFORM] External-account provisioning — one dashboard session** | INFRA | M-OPS | **P0 Critical** | **Deferred — needs a human** | — | **The account holder — every item is a provider-console action** | all | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#19, #46 (residual), #62, #206**. Every item is the same actor doing the same kind of thing — signing into a provider console to mint, rename or rotate a value — and **none of it is repository code**. Three of the four already point at each other: #62 calls itself *"a #19 prerequisite"*, #206's Notes say it *"overlaps #19"* and is *"a pointer, not a queue item"*, and #46's remaining scope is one rotation (its code scopes 1 and 2 are Done in `34cd28c`, `ed41aed`). Split, this is four separate asks of one person. The checklist: **rotate `CLERK_WEBHOOK_SECRET`** (leaked to a transcript 2026-08-27 — rotate, deleting is not enough); **rename the Clerk application** to `BRAND_NAME`, which is the source every `{{applicationName}}` key reads; **change the Stripe public business name** from `VendYou`, which renders on Connect onboarding, on Checkout and as the **statement descriptor**; **mint production credentials** in Clerk, Stripe, R2 and Resend, newly minted rather than copied; pooled string on Railway, unpooled on Railway **and** GitHub Actions. **Supplying `SENTRY_DSN` belongs here too and unblocks #353.** The Neon Launch upgrade (#206) stays **launch-gated** in `docs/pre-launch.md` §3.2 and is not current work. |
 | **363** | **Repo guardrails — lane tooling, preflight hygiene, seed and route ledgers** | P2 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#334, #341**; #334 in turn merges #316 and #319. **All of it is tooling and tests — no user-facing behaviour, so no parity gate and no browser pass** — which is the whole reason to batch it: they share the entire verification shape. #341 is the same species as the rest, a guard closing a class of mistake three seeds made independently. Contents: `lane:up` **seeds** rather than only migrating (lane 9 came up with 0 categories and every vendor surface 404ing); `laneUp` re-derives `worktreePath` on an active manifest (#256); preflight compares the `stripe listen` secret against `STRIPE_WEBHOOK_SECRET` by **digest only**; `ulimit -n 65536` before `next dev` (three lanes died on `EMFILE` reported as a Clerk middleware error); `POST /vendor/stripe/connect` answers **403 not 400** to a customer's malformed body; the `packages/preflight` parallel-run flake is **reproduced before it is fixed** (#64); seeds write slugs not labels, with a guard over `EVENT_TYPES`; and the route/frame ledger becomes a **test** over `apps/web/src/app/**/page.tsx`, because #80's five unframed routes are now nine and prose did not notice. |
 | **364** | **Remove the `▾` disclosure caret from every dropdown trigger — user override** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 on the user's explicit instruction**, corrected the same day after the first draft aimed at the wrong element. The target is the **small triangle at the right-hand end of each input** — the `▾` / `▴` glyph the hero's `Vendor type`, `City` and `Event date` segments carry on the landing page. It comes off **everywhere**, not only there: **12 render sites across 9 files**. **This is a deliberate deviation from the design contract, not a parity finding** — the frames draw the caret and `42-dropdowns.md` specifies it, and the user is correcting `Orla - Screens.dc.html` themselves. Recorded so the next `parity-checker` pass reads it as an accepted override rather than re-filing it as a regression. **Flagged, not blocking:** these triggers are custom `button`s, not native `<select>`s, so the caret is their only visual disclosure cue — keep each trigger legible as a control by its own fill and border, and keep `aria-expanded` on all of them, since the glyph is decorative and already hidden from the accessibility tree. |
+| **365** | **12 Sign up — the D16 copy ruling and four measured gaps** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-08-30 from #357's parity pass.** D16 ruled `Create my account` **a code defect, not a plan gap** (`21-sign-up.md:61-66`), and the app still renders **`Continue`** — `#357`'s own notes said this one "was already right", which was wrong. `clerk-copy.ts:7-11` carries a comment claiming `21-sign-up.md` records a deviation; that file rules the opposite, so the comment is **stale against D16** and must be corrected, not just the string. Measured on frame `12` at 1440x900: password helper **`At least 10 characters` is absent** (frame line 1440); sub-headline **15px, frame says 14**; helper under submit **11px, frame says 11.5**; `VENDING` micro-label resolves `sage-200 #A8C08E` where the frame draws **`#C4D6A8`**, which `01-foundations.md` says to mint as **`sage-175`** — the token does not exist in `theme.css`. Panel padding 48px all round vs the frame's `46px 48px`, sub `max-width` 400 vs 415. **Not a finding:** the disabled submit is `stone-500` where the frame draws `#9A9184`, and `01-foundations.md:95-98` bans that value by name — the app is right and the frame is the outlier |
+| **366** | **16 Server error — page chrome and type scale** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 from #357's parity pass**, which corrected the CTA (`Browse vendors` -> `/search`) and measured the rest. Frame `16` draws a **bespoke 64px header** — logo left, **`Contact support`** 13.5px/600 `#A34A28` right — and **no footer**; the app renders the full site header and footer, and **`Contact support` exists nowhere**. Consequently the page **scrolls**: `scrollHeight` **964** at a 900 viewport, where frame `16` is a single non-scrolling screen, and the block sits ~100px above the frame's centring. Type: h1 **34px, frame says 38** (`error-screen.tsx:38`); body **12.5px, frame says 14** at lh 1.65 (`error-screen.tsx:42`); reference chip **11px, frame says 12**. The sage banner is the shared `Banner status="settled"` — `sage-50` fill is right, but it carries a `sage-300` border, radius 14 and weight 400 where the frame draws **no border**, radius 10, `padding:11px 16px`, weight 500. That last one is **frame vs component library** and needs a ruling before it is coded. Also: the body renders curly apostrophes where the frame writes straight ones, and `/sign-up` renders straight ones — the app is inconsistent with itself |
+| **367** | **18 Search no results — empty glyph, relaxations, and `all two filters`** | P1 | M3 | **P2 Medium** | **Backlog** | — | **#358** | `core` | **Filed 2026-08-30 from #357's parity pass.** **A real copy defect first:** with two filters set the headline reads **`No photographers match all two filters`** — `relaxations.ts:102` composes `all ${spelled(count)} filters` and `spelled(2)` returns `"two"`; it should read `both`. Three filters reads correctly. Frame `18` draws the empty state's glyph as **the Orla mark drawn absent** — a 62x38 group of two 38px circles, one `1.5px solid #D5CEC2`, one `1.5px dashed` — and the app renders a **32x32 lucide `circle-x`**; the colour is right, the shape is a generic icon. Relaxation buttons: frame draws `Search within 100 mi` (`.btnP`) - `Any price` - `Any date`; app draws `Any date` (`.btnP`) - `Any price` - `Anywhere` **plus a fourth underlined `Clear all` the frame does not draw**. The distance relaxation has no corresponding filter in the product, so that third is **partly unbuildable as drawn** — but the extra button and the reordering are not. A count row (`0 photographers in Marfa` + the price line) sits between the Refine bar and the empty block where the frame goes straight through. **Blocked by #358**, which owns the same `vendor-card.tsx` and the Refine bar. **Do not remove the sage chip from the nearby-dates band** — it is one of only two surviving sage sites, and the band's cards are `VendorCard`s, so #358's removal must spare it. The band itself was **unverifiable, not missing**: the lane DB has no availability rows at all. **Not a finding:** the diagnosis sentence differs from the frame deliberately (`relaxations.ts:126-135` — the market-size claim is unmeasured, and no-invented-numbers forbids it) |
+| **368** | **A failed search is indistinguishable from an empty one** | P2 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 from #357's browser pass**, found while the API rate limit was deliberately exhausted. `search-shell.tsx:171` catches the failure with a bare `.catch(() => {})`, so `/search` renders the **empty-result heading with no error state and nothing in the console** — a reader cannot tell a broken search from a genuinely empty one, and neither can a verifier. That is the same class as the labelled-hatch finding #357 just closed: a developer-facing failure rendered as ordinary product copy. `40-states.md` is the law here — steel is information, **red is failure** — and the failed branch currently draws neither. Needs a real error state, and a test that asserts the two branches differ |
+| **369** | **Retire or keep `Placeholder`, and rule the 32x32 icon-only submit** | P2 | M4.5 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 from #357's passes — two loose ends, both needing a decision rather than an obvious fix.** (1) **`placeholder.tsx` is now dead.** After #357, `grep -rn "<Placeholder"` over `apps/web/src` returns nothing; only the component, its test and the `.placeholder-hatch` utility remain. That is consistent with D17's *never on a public page*, but the hatch is still legitimate as a **build-time device** and `image-upload.tsx` uses the utility directly. Decide: keep it as an editor-only primitive with a rule that bans it from public surfaces, or retire the component and keep the utility. (2) **The `/search` header submit is 32x32**, below the **44x44** minimum in `04-laws.md`, and it is the only icon-only control on the page. It carries `aria-label="Search"`, so this is target size, not labelling. **The law and the frames are in standing conflict** — frames `02`, `18` and the five-siblings ruling all draw a 30-32px circle — so this needs a ruling, and nothing in the repo currently checks the law either way |
 **This board carries open work only. The closed rows live in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **310 rows as of 2026-08-30: 172 `Done` and 138 `Superseded`**, recounted programmatically in the second consolidation, which also moved #14 and #305 across. The earlier figures here (311 / 180 / 131) were a snapshot that nothing updated as rows moved, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
 Rows are ordered by build sequence, not by ticket number. **45 rows — 20 open (17 Backlog, 1 In Progress, 2 Deferred) and 25 `Superseded`.** **#14 and #305 moved to the archive in this pass**, restoring the 2026-08-30 convention that this board carries open work only; they had been left here after closing. Recounted programmatically on 2026-08-30 after the **second backlog consolidation**, which replaced 25 rows with **#354–#360**. That pass was only possible because D16 and D17 had just ruled every open design question: eleven rows that could never start became ordinary code work, and the shape underneath them — twenty-five rows that were really seven pieces of work — became visible. **The blank line that had split this table in two is gone**; rows #332–#352 had been rendering as a separate headerless table, though `tickets.board.test.ts` parses line by line and never noticed. **A Backlog count is still not a ready count** — **#20** waits on #359 and **#353** on the Sentry DSN, and #355 is sequenced behind #354, which owns `Orla - Screens.dc.html` for one pass. Read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
@@ -3302,3 +3307,287 @@ frames, which the user is correcting.
 - [ ] The six updated `bookings-hub.test.tsx` name assertions, asserting the new name
       explicitly rather than being loosened to a substring match
 - [ ] A test that each converted trigger still exposes `aria-expanded` in both states
+
+### #365: 12 Sign up — the D16 copy ruling and four measured gaps
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+Filed 2026-08-30 from #357's `parity-checker` pass on frame `12`.
+
+**The copy defect is the reason this is P1.** D16 ruled `Create my account` **a code
+defect, not a plan gap** (`21-sign-up.md:61-66`), and the app still renders **`Continue`**.
+#357's own notes recorded frame `12`'s correction as one the code "was already right" for.
+It was not — that claim was never measured, and the parity pass is what caught it.
+
+**Fix the comment as well as the string.** `apps/web/src/app/clerk-copy.ts:7-11` says
+`21-sign-up.md` records a deviation permitting `Continue`. That file rules the opposite.
+Changing the string and leaving the comment is how the next reader re-derives the wrong
+answer — the comment is the more durable half of the defect.
+
+**Measured at 1440x900 against frame `12`:**
+
+| What | Frame | Live |
+| --- | --- | --- |
+| Primary action | `Create my account` | `Continue` |
+| Password helper | `At least 10 characters`, 11.5px `#6B6459` | absent |
+| Sub-headline | 14px | 15px |
+| Helper under submit | 11.5px | 11px |
+| `VENDING` micro-label | `#C4D6A8` | `sage-200 #A8C08E` |
+| Panel padding | `46px 48px` | `48px` all round |
+| Sub `max-width` | 415px | 400px |
+
+**`sage-175` does not exist.** `01-foundations.md` rules that `#C4D6A8` should be minted as
+`sage-175`; `packages/config/tailwind/theme.css` has no such token. Same shape as #357's
+`clay-150` and `stone-250` — the plan named a token the theme never gained, so this is a
+mint, not a swap. It is not an AA failure today (5.96:1 against its own band), so the
+defect is that the value is off-token, not that it is illegible.
+
+**Not a finding, and must not be "fixed":** the disabled submit renders `stone-500 #C9C1B5`
+where the frame draws `#9A9184`. `01-foundations.md:95-98` bans `#9A9184` by name and tells
+the app to use a compliant disabled treatment. **The app is right and the frame is the
+outlier** — a later pass restoring the frame's value would be a regression against the law.
+
+**Also present, both dev-only or Clerk-owned:** `Secured by Clerk` and `Development mode`
+render below the form and are in no frame. Confirm the first is suppressible before filing
+it as work; the second does not ship.
+
+**Acceptance:**
+
+- [ ] The primary action reads `Create my account`, and `clerk-copy.ts`'s comment names D16 and `21-sign-up.md:61-66` as the ruling rather than claiming a deviation
+- [ ] `At least 10 characters` renders under the password field at 11.5px `#6B6459`
+- [ ] The sub-headline is 14px and the helper under the submit is 11.5px
+- [ ] `sage-175 #C4D6A8` is minted between `sage-150` and `sage-200`, and `VENDING` resolves to it
+- [ ] The disabled submit is **left alone** — `stone-500`, not the frame's banned `#9A9184`
+- [ ] `parity-checker` returns MATCH on frame `12` for text, font and colour
+
+**Tests (required):**
+
+- [ ] A test asserting the sign-up primary action string, so a Clerk appearance change cannot silently revert it
+- [ ] A token test that `sage-175` exists and resolves to `#c4d6a8`, in the shape #357 added for `clay-150`
+- [ ] A guard that `#9A9184` appears in no source file — the value the foundations ban by name
+
+### #366: 16 Server error — page chrome and type scale
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed 2026-08-30 from #357's `parity-checker` pass. #357 corrected this frame's CTA
+(`Browse vendors` -> `/search`, D17) and verified it in a real 500. Everything else on the
+frame was measured at the same time and is recorded here.
+
+**The chrome is the substantial half.** Frame `16` draws a **bespoke 64px header** — the
+logo left, **`Contact support`** 13.5px/600 `#A34A28` right — and **no footer**. The app
+renders the full site header (`Orla` / `Sign in` / `Sign up`) and the full site footer, and
+**`Contact support` exists nowhere in the application**. That is not a styling gap: the
+frame gives a reader whose page just crashed one route to a human, and the app gives them
+the ordinary navigation of a site that is currently broken.
+
+**It also makes the page scroll.** `scrollHeight` measured **964** at a 900 viewport, where
+frame `16` is a single non-scrolling screen, and the content block sits roughly 100px above
+the frame's centring. Removing the footer is most of the fix.
+
+**Type scale, measured:**
+
+| What | Frame | Live | Source |
+| --- | --- | --- | --- |
+| h1 | 38px, ls -0.57 | 34px (`text-display-lg`), ls -0.51 | `error-screen.tsx:38` |
+| Body | 14px / lh 1.65 | 12.5px (`text-sm`) / lh 20.625 | `error-screen.tsx:42` |
+| Reference chip | 12px | 11px | — |
+
+**The banner needs a ruling before it is coded.** Frame line 1619 draws `background:#EDF0E9`,
+`border-radius:10px`, `padding:11px 16px`, **no border**, text 12.5px **weight 500**. The app
+uses the shared `Banner status="settled"`: the `sage-50` fill matches, but it carries a
+`sage-300` border, radius 14, padding `13px 15px` and weight 400. `--color-sage-300` is
+commented "sage banner border", so the bordered form is a deliberate component decision.
+**This is frame vs component library** — decide whether frame `16` gets a bespoke banner or
+the frame is corrected, and record it, rather than forking the component.
+
+**One inconsistency the app has with itself:** this screen renders curly apostrophes
+(`wasn't`, `We've`, `we're`) where the frame writes straight ones, and `/sign-up` renders
+straight ones. Pick one and apply it; the frames are not consistent either, so this needs a
+content-voice ruling rather than a local fix.
+
+**Acceptance:**
+
+- [ ] Frame `16` renders its own 64px header — logo and `Contact support` — and no site footer
+- [ ] `Contact support` resolves to a real destination, decided and recorded, not a dead link
+- [ ] The page does not scroll at 1440x900: `scrollHeight` <= 900
+- [ ] h1 is 38px and the body line is 14px at lh 1.65; the reference chip is 12px
+- [ ] The banner question is **ruled and recorded** in the plan before any code changes — bespoke banner, or corrected frame
+- [ ] The apostrophe form is ruled once in `31-content-voice.md` and applied to both this screen and `/sign-up`
+
+**Tests (required):**
+
+- [ ] A test asserting the 500 screen renders no site footer and no primary nav, since both return the moment the layout changes
+- [ ] A test that the recovery CTA is still `Browse vendors` -> `/search` — #357 landed it and this ticket edits the same component
+
+### #367: 18 Search no results — empty glyph, relaxations, and `all two filters`
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** **#358**
+
+Filed 2026-08-30 from #357's `parity-checker` pass on frame `18`.
+
+**Start with the copy defect — it is the only one a user reads as broken English.**
+With two filters set the headline renders **`No photographers match all two filters`**.
+`apps/web/src/components/search/relaxations.ts:102` composes `all ${spelled(count)} filters`
+and `spelled(2)` returns `"two"`. Three filters reads correctly (`all three filters`). It
+should read `both`, which means the count-2 case needs its own branch rather than a wider
+`spelled` table.
+
+**The empty glyph is a generic icon where the frame draws the brand.** Frame line 1709 draws
+the Orla mark *absent* — a 62x38 group of two 38px circles, one `1.5px solid #D5CEC2`, one
+`1.5px dashed #D5CEC2`. The app renders a 32x32 lucide `circle-x`. The colour is already
+right (`stone-400`); the shape is the finding.
+
+**The relaxation buttons differ in count, order and treatment:**
+
+| | Frame | Live |
+| --- | --- | --- |
+| 1 | `Search within 100 mi` (`.btnP`) | `Any date` (`.btnP`) |
+| 2 | `Any price` | `Any price` |
+| 3 | `Any date` | `Anywhere` |
+| 4 | — | `Clear all`, underlined clay |
+
+**The distance relaxation is partly unbuildable as drawn** — there is no distance filter in
+the product to relax — so the frame's first button cannot be reproduced without inventing a
+filter, which is out of scope here. The extra fourth button and the reordering are not
+excused by that and should be fixed.
+
+**A count row sits where the frame goes straight through.** The app renders
+`0 photographers in Marfa` plus the price line between the Refine bar and the empty block,
+occupying y 118-173; frame `18` runs the 54px Refine bar directly into
+`flex:1;padding:44px 26px`.
+
+**Blocked by #358**, which owns `vendor-card.tsx` and the Refine bar at the same widths.
+Two lanes in those files will collide.
+
+**The nearby-dates band was unverifiable, not missing.** `nearby-dates-band.tsx` exists and
+is wired; it renders nothing because the lane database has no availability rows at all
+(`/vendors/availability/nearby` returned `{"items":[],"total":0}` for every date probed).
+Verifying it needs a seed that produces availability — decide that first, because a pass
+that cannot render the band proves nothing.
+
+**Carry this into #358:** the band's cards are `VendorCard`s, and the sage `Free ...` chip is
+one of only **two** surviving sage sites. #358 removes that chip from the result grid and
+**must spare the band**.
+
+**Not a finding.** The diagnosis sentence reads `The date is the narrowest filter here`
+where the frame reads `Marfa is a small market — the distance limit is the usual culprit`.
+That is a documented, reasoned deviation (`relaxations.ts:126-135`): the market-size half is
+an unmeasured claim, and the no-invented-numbers law forbids it. **The app is right.**
+
+**Unresolved between two frames, needs a ruling:** frame `02` draws the Refine bar's set
+value as a **clay dismiss chip** (`Under $1,200 ✕`), frame `18` as the same, and the app
+draws a **stone** set-value chip (`$0 – $1,200 ▾`) with the word `Clear` rather than
+`Clear all`. Settle the chip treatment once for both frames before coding either.
+
+**Acceptance:**
+
+- [ ] `No photographers match both filters` at count 2, and `all three filters` still correct at count 3
+- [ ] The empty state draws the Orla mark absent — two 38px circles, one solid and one dashed, `1.5px #D5CEC2` — not a generic icon
+- [ ] The relaxation row draws three buttons in the frame's order, with no fourth `Clear all`
+- [ ] The count row does not render on the no-results state; the Refine bar runs into the empty block
+- [ ] The Refine chip treatment is **ruled once** for frames `02` and `18` together and recorded, then applied
+- [ ] The nearby-dates band is driven with real availability data, and its sage chip survives #358
+
+**Tests (required):**
+
+- [ ] A test over `relaxations.ts` asserting the headline at counts 1, 2 and 3 — the count-2 case is the regression
+- [ ] A test that the no-results state renders no count row
+- [ ] A test asserting the nearby-dates band keeps its sage chip, so #358's removal cannot take it
+
+### #368: A failed search is indistinguishable from an empty one
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed 2026-08-30 from #357's `browser-verifier` pass, found incidentally while the API
+rate limit was deliberately exhausted to reach the 500 screen.
+
+`apps/web/src/components/search/search-shell.tsx:171` swallows the failure with a bare
+`.catch(() => {})`. With the API returning 429 for every request, `/search` rendered the
+**ordinary empty-result heading** — `0 vendors` — with **no error state and nothing in the
+console**. Nothing anywhere on the page distinguished "the search backend is down" from
+"nobody matches your filters".
+
+**This is the same class of defect #357 just closed on the coverless block:** an internal
+condition rendered to the customer as ordinary product copy. There it was a developer's
+hatch on a public page; here it is a backend outage dressed as a legitimate result. It is
+worse than the hatch, because the hatch at least looked wrong.
+
+**It also defeats verification.** A browser pass driving `/search` against a broken API sees
+a clean, plausible page and reports it green. Any agent verifying search results can be
+lied to by this branch, which is why it is P1 despite being a rare state.
+
+`40-states.md` is the governing law and gives the answer: **steel is information, gold is
+waiting on someone, red is failure, sage is settled.** The failed branch currently draws
+none of them — it draws the empty state, which is not a failure at all.
+
+**Check the sibling call sites in the same pass.** A bare `.catch(() => {})` in one data
+path usually has company; find the others before deciding the shape of the fix, so this is
+closed as a class rather than as one line.
+
+**Acceptance:**
+
+- [ ] A failed search renders a real failure state — red per `40-states.md`, distinct from the empty-result state in wording and colour
+- [ ] The failure is legible in the console as well as on the page, so a browser pass cannot mistake it for a clean render
+- [ ] Every other bare `.catch(() => {})` in the web app's data paths is found and either fixed or explicitly justified in a comment
+- [ ] The empty-result state is unchanged for a genuinely empty search
+
+**Tests (required):**
+
+- [ ] A test that a rejected search request renders the failure state and **not** the empty-result heading — the two branches must assert different text
+- [ ] A test that a resolved-but-empty search still renders the empty state, so the fix does not collapse the two
+- [ ] A guard test that no new bare `.catch(() => {})` appears in `apps/web/src`, in the shape of the existing source-scanning guards
+
+### #369: Retire or keep `Placeholder`, and rule the 32x32 icon-only submit
+
+**Milestone:** M4.5 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed 2026-08-30 from #357's browser and parity passes. **Two loose ends, both needing a
+decision rather than an obvious fix** — which is why they are one low-priority ticket rather
+than two pieces of work.
+
+**1. `placeholder.tsx` is now dead code.** After #357 removed the labelled hatch from the
+search card and the profile header, `grep -rn "<Placeholder"` over `apps/web/src` returns
+**nothing**. What remains is the component, its own test, and the `.placeholder-hatch`
+utility in `theme.css` — and the utility is still used directly by `image-upload.tsx`.
+
+That is consistent with D17's *never on a public page*, but "no public page" is not "no
+page": the hatch is a legitimate **build-time device** for photography the product lacks,
+and the editor is exactly where it belongs. **Decide, and record the decision:** keep the
+component as an editor-only primitive with a rule that bans it from public surfaces, or
+retire the component and keep the utility for direct use. Deleting it silently loses the
+reasoning; leaving it un-ruled means the next parity pass re-files it.
+
+If it is kept, the guard is the deliverable: a test that no route under a public path
+renders it. #357 verified that by hand once — a test makes it hold.
+
+**2. The `/search` header submit is 32x32, against a 44x44 law.** `04-laws.md` sets 44x44 as
+the minimum target size. `button[aria-label="Search"]` measures **32x32** and is the only
+icon-only control on the page. It carries its label, so this is **target size, not
+labelling**.
+
+**The law and the design contract are in standing conflict here.** Frames `02` and `18`, and
+the five-siblings compact-bar ruling in `11-search.md`, all draw a 30-32px circle. One of
+the two has to give, and neither is obviously wrong: the law protects motor accessibility,
+the frames protect a dense bar that was measured deliberately.
+
+**Nothing in the repo checks the law either way**, which is why it went unnoticed. Whatever
+is ruled, the deliverable includes the check — otherwise the next frame to draw a small
+target reintroduces it silently.
+
+**Acceptance:**
+
+- [ ] The `Placeholder` question is ruled and recorded in `design-plan/` — kept as an editor-only primitive, or retired
+- [ ] If kept: a test asserts it renders on no public surface. If retired: the component and its test are deleted and `.placeholder-hatch` keeps its remaining caller
+- [ ] The 32x32-vs-44x44 conflict is ruled in `04-laws.md` or `11-search.md`, naming which of the law and the frames gives way and why
+- [ ] The ruling is enforced by a check, not only written down
+
+**Tests (required):**
+
+- [ ] A test enforcing whichever `Placeholder` ruling is taken
+- [ ] A test asserting the minimum target size the ruling settles on, over the interactive controls the ruling covers

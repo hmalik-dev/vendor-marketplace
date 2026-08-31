@@ -435,6 +435,14 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   362: [...CAPABILITIES],
   363: ['stripe'],
   364: [],
+  // Filed 2026-08-30 from #357's browser and parity passes. Each is a finding
+  // that pass attributed to something other than #357, gathered by the surface
+  // it belongs to rather than one row per measurement.
+  365: ['auth'], // the sign-up panel is Clerk's, so the gate needs Clerk keys
+  366: [],
+  367: [],
+  368: [],
+  369: [],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
