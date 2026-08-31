@@ -85,7 +85,7 @@ export default async function AdminVendorsPage({
             <Link
               href={`/admin/vendors/export${query}`}
               prefetch={false}
-              className="text-meta font-semibold text-clay-500 hover:underline"
+              className="text-sm font-semibold text-clay-500 hover:underline"
             >
               Export CSV
             </Link>
@@ -105,7 +105,7 @@ export default async function AdminVendorsPage({
             }
             aria-pressed={awaitingActive}
             className={cn(
-              'rounded-lg px-3.5 py-2 text-meta font-semibold whitespace-nowrap',
+              'rounded-md px-3.5 py-2 text-sm font-semibold whitespace-nowrap',
               awaitingActive
                 ? 'bg-clay-400 text-stone-0'
                 : 'border border-stone-300 bg-stone-0 text-stone-900 hover:bg-stone-150',
@@ -115,6 +115,8 @@ export default async function AdminVendorsPage({
           </Link>
 
           <FilterSelect
+            action={PATH}
+            carried={params}
             name="category"
             label="Category"
             value={params.category ?? ''}
@@ -124,12 +126,16 @@ export default async function AdminVendorsPage({
             }))}
           />
           <FilterSelect
+            action={PATH}
+            carried={params}
             name="city"
             label="City"
             value={params.city ?? ''}
             options={facets.cities.map((city) => ({ value: city, label: city }))}
           />
           <FilterSelect
+            action={PATH}
+            carried={params}
             name="payouts"
             label="Payouts"
             value={params.payouts ?? ''}
@@ -139,11 +145,15 @@ export default async function AdminVendorsPage({
             }))}
           />
           {/*
-            `status` is carried through the form as a hidden field so changing a
-            dropdown does not silently drop the saved filter the operator turned
-            on with the button above.
+            Every filter the search form does not own travels with it as a
+            hidden field. Submitting a GET form sends only its own controls, and
+            the three dropdowns now navigate on their own — so without these,
+            pressing Enter in the search box would silently clear the category,
+            the city, the payout state and the saved filter.
           */}
-          {params.status ? <input type="hidden" name="status" value={params.status} /> : null}
+          {(['category', 'city', 'payouts', 'status'] as const).map((key) =>
+            params[key] ? <input key={key} type="hidden" name={key} value={params[key]} /> : null,
+          )}
         </FilterBar>
       }
       pager={{

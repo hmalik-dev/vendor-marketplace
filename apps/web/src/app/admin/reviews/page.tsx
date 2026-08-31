@@ -36,6 +36,8 @@ export default async function AdminReviewsPage({
       filters={
         <FilterBar action={PATH}>
           <FilterSelect
+            action={PATH}
+            carried={{ type }}
             name="type"
             label="Direction"
             value={type ?? ''}

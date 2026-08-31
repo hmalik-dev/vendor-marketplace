@@ -26,11 +26,9 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
   return (
     <header className="flex h-(--header-height) shrink-0 items-center justify-between border-b border-stone-800 bg-stone-900 px-8">
       <div className="flex items-center gap-1">
-        <Link
-          href="/admin"
-          className="rounded-sm focus-visible:outline-2 focus-visible:outline-clay-400"
-        >
-          <Logo tone="dark" />
+        <Link href="/admin" className="rounded-sm">
+          {/* D=14.375 x 1.6 = 23px, the size frame `13` draws — frame `01`'s 15 gives 24. */}
+          <Logo tone="dark" size={14.375} />
         </Link>
         <span className="ml-1 rounded-[5px] bg-stone-0/12 px-2 py-1 text-xs font-semibold tracking-[.06em] text-clay-150 uppercase">
           Admin
@@ -38,7 +36,7 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
       </div>
 
       <div className="flex items-center gap-4.5">
-        <span className="text-base text-stone-400">Logged in as {email}</span>
+        <span className="text-action text-stone-400">Logged in as {email}</span>
         <Avatar name={name} size="xs" className="bg-stone-700 text-clay-150" />
       </div>
     </header>

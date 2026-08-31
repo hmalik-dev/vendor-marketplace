@@ -62,7 +62,7 @@ export default async function AdminTagsPage({
               href={`${PATH}${adminQueryString({ status: value })}`}
               aria-pressed={status === value}
               className={cn(
-                'rounded-lg px-3.5 py-2 text-meta font-semibold',
+                'rounded-md px-3.5 py-2 text-sm font-semibold',
                 status === value
                   ? 'bg-clay-400 text-stone-0'
                   : 'border border-stone-300 bg-stone-0 text-stone-900 hover:bg-stone-150',

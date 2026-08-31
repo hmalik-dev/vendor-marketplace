@@ -17,7 +17,10 @@ function href(path: string, params: Record<string, string | undefined>, page: nu
 }
 
 /**
- * Previous and next, with the window stated.
+ * Previous and next, with the window stated — in the title row.
+ *
+ * `first–last` rather than `first–last of total`, because the count line beside
+ * it already says the total and repeating it is two numbers for one fact.
  *
  * Renders nothing when everything fits on one page — a pager under six rows is
  * furniture. Both controls carry the current filters, because a pager that
@@ -41,16 +44,16 @@ export function Pager({
   const last = Math.min(page * pageSize, total);
 
   return (
-    <nav aria-label="Pagination" className="flex shrink-0 items-center gap-4 pt-3">
-      <p className="text-meta text-stone-600">
-        {first}–{last} of {total}
+    <nav aria-label="Pagination" className="flex shrink-0 items-center gap-2.5">
+      <p className="text-sm text-stone-600">
+        {first}–{last}
       </p>
-      <span className="ml-auto flex items-center gap-2">
+      <span className="flex items-center gap-1.5">
         {page > 1 ? (
           <Link
             href={href(path, params, page - 1)}
             rel="prev"
-            className="rounded-lg border border-stone-300 bg-stone-0 px-3.5 py-2 text-meta font-semibold text-stone-900 hover:bg-stone-150"
+            className="rounded-md border border-stone-300 bg-stone-0 px-2.5 py-1 text-sm font-semibold text-stone-900 hover:bg-stone-150"
           >
             Previous
           </Link>
@@ -59,7 +62,7 @@ export function Pager({
           <Link
             href={href(path, params, page + 1)}
             rel="next"
-            className="rounded-lg border border-stone-300 bg-stone-0 px-3.5 py-2 text-meta font-semibold text-stone-900 hover:bg-stone-150"
+            className="rounded-md border border-stone-300 bg-stone-0 px-2.5 py-1 text-sm font-semibold text-stone-900 hover:bg-stone-150"
           >
             Next
           </Link>

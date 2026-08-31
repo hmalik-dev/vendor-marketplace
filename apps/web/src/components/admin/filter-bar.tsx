@@ -1,7 +1,10 @@
 'use client';
 
 import { MAX_NAME_LENGTH } from '@vendor-marketplace/shared';
-import { useRef, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { useRef, useState, type ReactNode } from 'react';
+import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
+import { adminQueryString } from '@/lib/admin-params';
 import { cn } from '@/lib/utils';
 
 export interface FilterOption {
@@ -15,49 +18,66 @@ export interface FilterSelectProps {
   label: string;
   options: readonly FilterOption[];
   value: string;
+  /** The surface's own path — the choice is applied by navigating to it. */
+  action: string;
+  /** The filters already applied, so choosing one does not clear the others. */
+  carried: Record<string, string | undefined>;
 }
 
 /**
  * One trigger in the Refine bar.
  *
- * A **native** `<select>`, styled to the frame's trigger. The bar is a plain
- * GET form, so the filters survive a reload, are linkable, and need no client
- * state at all — and a native control is keyboard- and screen-reader-correct
- * without reimplementing either. The caret is the frame's `▾`, drawn as
- * decoration behind the control rather than as text inside it.
+ * **Not a native `<select>`.** `03-components.md` forbids one outright — "they
+ * bring their own selection colour and OS glyphs — three palettes in one field"
+ * — and the native version also sized itself to its widest option, so `Payouts`
+ * rendered 153px against the frame's 93px and pushed the whole bar out of
+ * composition. This is the app's own `SingleSelectDropdown`, which is what every
+ * other filter in the product uses.
+ *
+ * Choosing navigates rather than submitting a form: the filters live in the URL,
+ * so a choice *is* a URL, and `page` is dropped so a narrower filter cannot land
+ * the operator on a page that no longer exists.
  */
 export function FilterSelect({
   name,
   label,
   options,
   value,
+  action,
+  carried,
 }: FilterSelectProps): React.ReactElement {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const chosen = options.find((option) => option.value === value);
+
   return (
-    <span className="relative inline-flex items-center">
-      <select
-        name={name}
-        defaultValue={value}
-        aria-label={label}
-        onChange={(event) => event.currentTarget.form?.requestSubmit()}
-        className={cn(
-          'appearance-none rounded-lg border border-stone-300 bg-stone-0 py-2 pr-7 pl-3.5 text-meta font-semibold text-stone-900',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay-400',
-        )}
-      >
-        <option value="">{label}</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute right-3 text-meta text-stone-900"
-      >
-        ▾
-      </span>
-    </span>
+    <SingleSelectDropdown
+      open={open}
+      onOpenChange={setOpen}
+      label={label}
+      options={[{ value: '', label: `Any ${label.toLowerCase()}` }, ...options]}
+      value={value || null}
+      onChange={(next) => {
+        setOpen(false);
+        router.push(`${action}${adminQueryString({ ...carried, [name]: next })}`);
+      }}
+      trigger={
+        <button
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className={cn(
+            'flex items-center gap-1.5 rounded-md border border-stone-300 bg-stone-0 py-2 pr-3 pl-3.5 text-sm font-semibold whitespace-nowrap',
+            chosen ? 'text-clay-600' : 'text-stone-900',
+          )}
+        >
+          {chosen ? chosen.label : label}
+          <span aria-hidden="true" className={open ? 'text-clay-400' : 'text-stone-900'}>
+            ▾
+          </span>
+        </button>
+      }
+    />
   );
 }
 
@@ -104,7 +124,7 @@ export function FilterBar({
           maxLength={MAX_NAME_LENGTH}
           placeholder={searchPlaceholder}
           aria-label={searchPlaceholder}
-          className="w-full max-w-70 flex-1 rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-base text-stone-900 placeholder:text-stone-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay-400"
+          className="w-full max-w-70 flex-1 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900 placeholder:text-stone-600"
         />
       ) : null}
       {children}
@@ -113,6 +133,10 @@ export function FilterBar({
         frame does not draw — but a form with no submit control is unreachable
         to a keyboard user who has tabbed past the field, so it is present and
         visually hidden rather than absent.
+
+        The dropdowns are *outside* the form's submit path since they became
+        real listboxes: each navigates on choice, carrying the filters it did
+        not change. The form is the search field and the hidden fields alone.
       */}
       <button type="submit" className="sr-only">
         Apply filters

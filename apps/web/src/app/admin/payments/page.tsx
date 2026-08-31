@@ -73,7 +73,7 @@ export default async function AdminPaymentsPage({
             key: 'vendor',
             width: '1.4fr',
             header: 'Vendor',
-            className: 'truncate font-semibold text-stone-900',
+            className: 'font-semibold text-stone-900',
             cell: (row) => row.vendorName,
           },
           { key: 'customer', width: '1.2fr', header: 'Customer', cell: (row) => row.customerName },

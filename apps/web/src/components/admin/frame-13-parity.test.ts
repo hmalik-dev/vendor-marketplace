@@ -153,10 +153,20 @@ describe('the table', () => {
     // rather than `fixed`, which would leave the grid it has to stay aligned to.
     expect(dataTable).toContain('sticky top-0');
     expect(dataTable).toContain('overflow-y-auto');
-    // The pane that scrolls, and the class pair that lets it — owned by the
-    // shell rather than copied into each screen.
-    expect(surface).toContain('flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-5');
-    expect(surface).toContain('<div className="min-h-0 flex-1">{children}</div>');
+    /*
+     * The pane that scrolls, owned by the shell rather than copied into each
+     * screen — and nothing shares it. The pager sat in this box for one commit
+     * and cost the table 45px, which is one 44px row, so "fifteen rows fit"
+     * stopped being true at the first page that needed a pager.
+     */
+    expect(surface).toContain(
+      '<div className="min-h-0 flex-1 overflow-hidden px-6 pb-5">{children}</div>',
+    );
+    // The pager is inside the title block, above the pane that scrolls.
+    const pagerAt = surface.indexOf('<Pager {...pager} />');
+    const paneAt = surface.indexOf('<div className="min-h-0 flex-1 overflow-hidden px-6 pb-5">');
+    expect(pagerAt).toBeGreaterThan(-1);
+    expect(pagerAt).toBeLessThan(paneAt);
   });
 
   it('sets the header row’s ground and micro-label off the frame', () => {
@@ -226,6 +236,79 @@ describe('the status pills', () => {
       expect(fillToken.toLowerCase(), `${label} fill`).toContain(fill.toLowerCase());
       expect(textToken.toLowerCase(), `${label} text`).toContain(text.toLowerCase());
       expect(vendorTable, label).toContain(`{ tone: '${tone}', label: '${label}' }`);
+    }
+  });
+});
+
+describe('what the parity pass measured, kept from drifting back', () => {
+  const avatar = read('src/components/ui/avatar.tsx');
+  const rowTrigger = read('src/components/admin/row-trigger.tsx');
+  const filterBar = read('src/components/admin/filter-bar.tsx');
+
+  it('lets a caller override the avatar’s tone', () => {
+    /*
+     * `cn` is tailwind-merge, so the later of two conflicting classes wins.
+     * Folding `className` into `shared` and appending the tone after it dropped
+     * the caller's override entirely — frame `13`'s inverted header avatar came
+     * out clay-on-cream, the brightest thing on a near-black bar.
+     */
+    expect(avatar).not.toMatch(/const shared = cn\([\s\S]*?\n\s+className,\n\s+\);/);
+    expect(avatar).toContain('FALLBACK_TONES[avatarToneIndex(name)],\n        className,');
+  });
+
+  it('keeps a body cell’s colour out of the header label', () => {
+    // `text-stone-900` on the business column leaked into `BUSINESS`, which the
+    // frame draws in `stone-600` like the other five.
+    expect(dataTable).toContain('className={column.headerClassName}');
+    expect(vendorTable).not.toContain("headerClassName: 'font-semibold text-stone-900'");
+  });
+
+  it('does not clip a focus ring inside a cell', () => {
+    // A ring is drawn outside the element's box and every control fills its
+    // cell exactly, so a bare `truncate` cut three of four sides off.
+    expect(dataTable).not.toMatch(/cn\('truncate'/);
+    expect(dataTable).toContain('[overflow-clip-margin:6px]');
+  });
+
+  it('gives both icon-only row controls a 44px target', () => {
+    // `04-laws.md`; they were 32x32 and 14x14.
+    expect(rowTrigger).toContain('size-11');
+    expect(vendorTable).toContain('flex size-11 cursor-pointer items-center justify-center');
+  });
+
+  it('draws the checkbox rather than leaving the OS to', () => {
+    // `border-*` and `rounded-*` are inert while `appearance` is `auto`.
+    expect(vendorTable).toContain('appearance-none rounded-[4px] border-[1.3px] border-stone-400');
+  });
+
+  it('declares no outline that `outline-style: none` would swallow', () => {
+    for (const [name, source] of [
+      ['row-trigger', rowTrigger],
+      ['filter-bar', filterBar],
+      ['data-table', dataTable],
+      ['vendor-table', vendorTable],
+    ] as const) {
+      expect(source, name).not.toContain('focus-visible:outline-2');
+    }
+  });
+
+  it('uses the app’s own dropdown, never a native select', () => {
+    // `03-components.md`: "Never a native `date`, `time` or `select`."
+    // Matched at the start of a line so the rule quoted in a docstring — which
+    // necessarily contains the words — is not read as a violation of itself.
+    for (const [name, source] of [
+      ['filter-bar', filterBar],
+      ['tag-queue', read('src/components/admin/tag-queue.tsx')],
+    ] as const) {
+      expect(source, name).toContain('SingleSelectDropdown');
+      expect(source, name).not.toMatch(/^\s*<select$|^\s*<select /m);
+    }
+
+    // Every console component, whether or not it has a dropdown of its own.
+    for (const file of ['tag-table', 'vendor-table', 'review-table', 'data-table']) {
+      expect(read(`src/components/admin/${file}.tsx`), file).not.toMatch(
+        /^\s*<select$|^\s*<select /m,
+      );
     }
   });
 });

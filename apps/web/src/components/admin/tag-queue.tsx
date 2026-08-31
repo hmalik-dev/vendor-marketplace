@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { MAX_ADMIN_NOTE_LENGTH } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
+import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -82,6 +83,7 @@ function SuggestionCard({
   const call = useApi();
   const [note, setNote] = useState('');
   const [mergeTarget, setMergeTarget] = useState('');
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -155,27 +157,44 @@ function SuggestionCard({
                 maxLength={MAX_ADMIN_NOTE_LENGTH}
                 onChange={(event) => setNote(event.target.value)}
                 placeholder="Required to reject — why this one was turned down"
-                className="rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-base text-stone-900 placeholder:text-stone-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay-400"
+                className="rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-base text-stone-900 placeholder:text-stone-600"
               />
             </label>
 
-            <label className="flex flex-col gap-1">
+            <span className="flex flex-col gap-1">
               <span className="text-label font-semibold tracking-label text-stone-600 uppercase">
                 Merge into
               </span>
-              <select
-                value={mergeTarget}
-                onChange={(event) => setMergeTarget(event.target.value)}
-                className="rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-base text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay-400"
-              >
-                <option value="">An existing tag…</option>
-                {mergeable.map((tag) => (
-                  <option key={tag.id} value={tag.id}>
-                    {tag.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+              {/*
+                `SingleSelectDropdown`, not a native `<select>` —
+                `03-components.md` forbids one outright: "they bring their own
+                selection colour and OS glyphs — three palettes in one field."
+              */}
+              <SingleSelectDropdown
+                open={mergeOpen}
+                onOpenChange={setMergeOpen}
+                label="Merge into"
+                countNoun="tags"
+                options={mergeable.map((tag) => ({ value: tag.id, label: tag.name }))}
+                value={mergeTarget || null}
+                onChange={(next) => {
+                  setMergeTarget(next);
+                  setMergeOpen(false);
+                }}
+                emptyMessage="No active tag in this category to merge into."
+                trigger={
+                  <button
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={mergeOpen}
+                    className="flex items-center gap-1.5 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900"
+                  >
+                    {mergeable.find((tag) => tag.id === mergeTarget)?.name ?? 'An existing tag…'}
+                    <span aria-hidden="true">▾</span>
+                  </button>
+                }
+              />
+            </span>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">

@@ -57,7 +57,7 @@ export default async function AdminCustomersPage({
             key: 'name',
             width: '1.4fr',
             header: 'Name',
-            className: 'truncate font-semibold text-stone-900',
+            className: 'font-semibold text-stone-900',
             cell: (row) => `${row.firstName} ${row.lastName}`.trim(),
           },
           { key: 'email', width: '1.6fr', header: 'Email', cell: (row) => row.email },

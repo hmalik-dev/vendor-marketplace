@@ -57,7 +57,7 @@ export function ReviewTable({
           key: 'vendor',
           width: '1.3fr',
           header: 'Vendor',
-          className: 'truncate font-semibold text-stone-900',
+          className: 'font-semibold text-stone-900',
           cell: (row) => (
             <Link href={`/vendors/${row.vendorSlug}`} className="hover:underline">
               {row.vendorName}

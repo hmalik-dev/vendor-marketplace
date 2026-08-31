@@ -90,13 +90,18 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5">
+    <div className="relative h-full min-h-0">
       {/*
         Bulk actions appear only when rows are selected (`22-admin.md`). A bar
         that is always present, greyed out, teaches an operator to ignore it.
+
+        It **floats over** the table rather than sitting above it. Displacing
+        the table cost two of the fifteen rows the frame fits — in the very
+        state frame `13` draws, which shows a checked row and all fifteen rows
+        with no bar between them.
       */}
       {selectedRows.length > 0 ? (
-        <div className="flex shrink-0 items-center gap-3 rounded-lg border border-stone-300 bg-stone-0 px-4 py-2.5">
+        <div className="absolute inset-x-4 bottom-4 z-20 flex items-center gap-3 rounded-lg border border-stone-300 bg-stone-0 px-4 py-2.5 shadow-md">
           <p className="text-meta font-semibold text-stone-900">{selectedRows.length} selected</p>
           <ConfirmAction
             destructive
@@ -148,20 +153,31 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
             width: '22px',
             header: '',
             cell: (row) => (
-              <input
-                type="checkbox"
-                checked={selected.has(row.userId)}
-                onChange={(event) => toggle(row.userId, event.currentTarget.checked)}
-                aria-label={`Select ${row.businessName}`}
-                className="size-3.5 rounded-[4px] border-1.5 border-stone-400 accent-clay-400"
-              />
+              /*
+                A `<label>` wrapping the input, not a bare 14px control.
+                `border-*` and `rounded-*` are inert on a native checkbox —
+                `appearance: auto` draws the OS square and ignores both — so the
+                frame's 14px `1.3px #D5CEC2` box was never rendered.
+                `appearance-none` with the frame's own border draws it, and the
+                label supplies the 44x44 target `04-laws.md` requires without
+                growing the glyph.
+              */
+              <label className="flex size-11 cursor-pointer items-center justify-center">
+                <span className="sr-only">Select {row.businessName}</span>
+                <input
+                  type="checkbox"
+                  checked={selected.has(row.userId)}
+                  onChange={(event) => toggle(row.userId, event.currentTarget.checked)}
+                  className="size-3.5 appearance-none rounded-[4px] border-[1.3px] border-stone-400 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[9px] checked:after:leading-[12px] checked:after:text-stone-0 checked:after:content-['✓']"
+                />
+              </label>
             ),
           },
           {
             key: 'business',
             width: '1.6fr',
             header: 'Business',
-            className: 'truncate font-semibold text-stone-900',
+            className: 'font-semibold text-stone-900',
             cell: (row) => (
               <Link href={`/vendors/${row.slug}`} className="hover:underline">
                 {row.businessName}

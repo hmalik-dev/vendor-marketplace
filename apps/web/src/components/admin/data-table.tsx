@@ -16,8 +16,18 @@ export interface DataTableColumn<T> {
    */
   width: string;
   cell: (row: T) => ReactNode;
-  /** Overrides for one cell — right alignment on the overflow column, mainly. */
+  /**
+   * Overrides for one **body** cell — right alignment on the overflow column,
+   * the business name's weight and colour.
+   *
+   * Deliberately not applied to the header. It was, and `vendor-table`'s
+   * `text-stone-900` on the business column leaked into the `BUSINESS` label,
+   * which the frame draws in `stone-600` like the other five — a near-black
+   * header cell beside five muted ones, invisible in review.
+   */
   className?: string;
+  /** Overrides for the header cell alone, where one is genuinely needed. */
+  headerClassName?: string;
 }
 
 export interface DataTableProps<T> {
@@ -59,7 +69,7 @@ export function DataTable<T>({
             className="sticky top-0 z-10 grid items-center gap-3 border-b border-stone-300 bg-stone-100 px-4 py-2.5 text-label font-semibold tracking-label text-stone-600 uppercase grid-cols-(--admin-table-columns)"
           >
             {columns.map((column) => (
-              <span role="columnheader" key={column.key} className={column.className}>
+              <span role="columnheader" key={column.key} className={column.headerClassName}>
                 {column.header}
               </span>
             ))}
@@ -73,13 +83,37 @@ export function DataTable<T>({
                 role="row"
                 key={rowKey(row)}
                 className={cn(
-                  'grid h-11 items-center gap-3 border-b border-stone-150 px-4 text-base text-stone-700 grid-cols-(--admin-table-columns)',
+                  /*
+                    `box-content`, and `text-action`. The frame's row is 44px of
+                    content **plus** its 1px separator — `.side`-style
+                    content-box, like every other measurement in that file — so
+                    a border-box `h-11` rendered the pitch a pixel short. The
+                    body step is 13px (`text-action`), not the 13.5px
+                    `text-base` default.
+                  */
+                  'grid box-content h-11 items-center gap-3 border-b border-stone-150 px-4 text-action text-stone-700 grid-cols-(--admin-table-columns)',
                   // Zebra on `stone-25`, the one surface between `stone-0` and `stone-50`.
                   index % 2 === 1 && 'bg-stone-25',
                 )}
               >
                 {columns.map((column) => (
-                  <span role="cell" key={column.key} className={cn('truncate', column.className)}>
+                  <span
+                    role="cell"
+                    key={column.key}
+                    /*
+                      `overflow-clip-margin`, not a bare `truncate`.
+                      `overflow: hidden` clipped the focus ring of every control
+                      inside a cell — a ring is drawn outside the element's box,
+                      and each control fills its cell exactly, so three of four
+                      sides were cut and a focused row link rendered as a single
+                      clay hairline. The margin keeps the ellipsis and lets the
+                      ring out.
+                    */
+                    className={cn(
+                      'overflow-hidden text-ellipsis whitespace-nowrap [overflow-clip-margin:6px]',
+                      column.className,
+                    )}
+                  >
                     {column.cell(row)}
                   </span>
                 ))}
