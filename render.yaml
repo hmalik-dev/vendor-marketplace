@@ -86,3 +86,11 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      # Required since #11 made `email` an API capability, and it is not
+      # satisfiable by a placeholder: the registry enforces the shape
+      # `re_[A-Za-z0-9_]{16,}`, so the API refuses to boot without a real key
+      # from https://resend.com/api-keys rather than starting and silently not
+      # sending. `EMAIL_FROM` is absent on purpose — it has a registry default
+      # derived from `BRAND_DOMAIN` and resolves without being set.
+      - key: RESEND_API_KEY
+        sync: false

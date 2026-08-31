@@ -150,6 +150,14 @@ describe('/booking-requests', () => {
   });
 
   afterEach(async () => {
+    /*
+     * The email fake records for the lifetime of the harness, which is
+     * `beforeAll`-scoped — so it resets with the tables. Without this every
+     * `toEqual([...])` below becomes history-dependent and the first suite to
+     * run decides what the rest see.
+     */
+    harness.email.sent.length = 0;
+    harness.email.deliveredKeys.clear();
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -343,6 +351,112 @@ describe('/booking-requests', () => {
       expect(second.statusCode).toBe(200);
       expect(second.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
       expect(second.headers.location).toBe(`/booking-requests/${first.json<RequestBody>().id}`);
+    });
+
+    /*
+     * The email half of the assertion directly above. It sits here rather than
+     * in a suite of its own because the email **is** the notification — a test
+     * that checked one and not the other would be checking half an event.
+     */
+    it('emails the vendor, with the notification’s own subject', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      await createRequest(vendorId, { packageId });
+
+      expect(harness.email.sent).toHaveLength(1);
+      expect(harness.email.sent[0]?.subject).toBe('New booking request');
+      /*
+       * `/vendor/dashboard`, which is where the *bell* sends this event — the
+       * email takes its destination from `notificationHref` rather than from a
+       * second table, so the two cannot point at different pages.
+       */
+      expect(harness.email.sent[0]?.text).toContain('/vendor/dashboard');
+    });
+
+    /*
+     * The ticket's idempotency requirement, and it is real rather than
+     * assumed: the fake models Resend's own dedupe on the idempotency key, so
+     * a second send of the same event would have to arrive with a *different*
+     * key to slip through — which is exactly the bug the key exists to stop.
+     */
+    it('does not email the vendor a second time about the same request', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+
+      await createRequest(vendorId, { packageId });
+      await createRequest(vendorId, { packageId });
+
+      expect(harness.email.sent).toHaveLength(1);
+    });
+
+    /*
+     * The load-bearing failure case. A booking request that succeeded must not
+     * appear to fail because an email bounced — the row is durable, the
+     * response is 201, and the failure is visible in the log instead.
+     */
+    it('still creates the request when the email fails', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Ash & Oak');
+      harness.email.failNext = true;
+
+      const response = await createRequest(vendorId, { packageId });
+
+      expect(response.statusCode).toBe(201);
+      expect(harness.email.sent).toEqual([]);
+
+      const rows = await harness.database.db
+        .select({ type: notifications.type })
+        .from(notifications);
+      expect(rows.map((row) => row.type)).toEqual(['new_request']);
+    });
+
+    /*
+     * **The four events a dropped parameter silenced.**
+     *
+     * `transitionRequest` called `announce` without its `mail` argument. Both
+     * were optional, so TypeScript said nothing and 734 tests stayed green
+     * while a quote, an acceptance, a decline and a cancellation each wrote
+     * their in-app row and reached no inbox — the exact "notifies in-app and
+     * not by email" the design exists to prevent.
+     *
+     * The parameter is required now, so the compiler catches the next one. This
+     * is the check that catches the one the compiler cannot: a hop that passes
+     * `undefined` on purpose.
+     */
+    it.each([
+      ['quote', 'request_quoted'],
+      ['accept', 'request_accepted'],
+      ['decline', 'request_declined'],
+      ['cancel', 'request_cancelled'],
+    ] as const)('emails the other party when a request is %sd', async (action, type) => {
+      /*
+       * A custom request rather than a packaged one, matching the quote tests
+       * below: a package caps the quote, and 250,000 is over the fixture
+       * package's price — which fails validation before any of this is reached.
+       */
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId = created.json<{ id: string }>().id;
+
+      harness.email.sent.length = 0;
+      harness.email.deliveredKeys.clear();
+
+      const actor = action === 'cancel' ? CUSTOMER : VENDOR;
+      const response =
+        action === 'quote'
+          ? await post(actor, `/booking-requests/${requestId}/quote`, {
+              quotedPriceCents: 250_000,
+            })
+          : await post(actor, `/booking-requests/${requestId}/${action}`);
+
+      expect(response.statusCode).toBe(200);
+
+      const rows = await harness.database.db
+        .select({ type: notifications.type })
+        .from(notifications);
+
+      // The row and the email, together — one without the other is the drift.
+      expect(rows.map((row) => row.type)).toContain(type);
+      expect(harness.email.sent).toHaveLength(1);
     });
 
     it('does not notify the vendor a second time about the same request', async () => {

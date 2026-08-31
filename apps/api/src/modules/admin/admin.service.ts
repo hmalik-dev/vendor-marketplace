@@ -31,6 +31,10 @@ import type { AppDatabase } from '../../lib/database.js';
 import type { EventHub } from '../../lib/event-stream.js';
 import type { StripeConnectGateway } from '../../lib/stripe.js';
 import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
+import {
+  sendNotificationEmail,
+  type NotificationEmailDeps,
+} from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
 import { deleteReviewAndRecalculate } from '../reviews/reviews.dao.js';
@@ -91,6 +95,14 @@ export interface AdminContext {
   stripe: StripeConnectGateway;
   hub: EventHub;
   log: FastifyBaseLogger;
+  /**
+   * Everything the transactional email needs.
+   *
+   * Carried on the context beside `hub` because the email *is* the
+   * notification: an event that rings the bell and does not reach the inbox has
+   * drifted, and threading them separately is how that happens.
+   */
+  mail: NotificationEmailDeps;
 }
 
 /**
@@ -339,6 +351,19 @@ export async function setUserBanned(
             createdAt: stored.createdAt,
           },
         });
+
+        /*
+         * Per recipient, which is the point. One shared string here once told a
+         * vendor their payment had been refunded — they had not paid, and on an
+         * unpaid booking nothing was refunded at all. The email carries the
+         * body written for *this* reader, so both parties read the same refund
+         * figure and neither reads the other's.
+         */
+        await sendNotificationEmail(
+          context.mail,
+          stored,
+          recipient === booking.customerId ? 'customer' : 'vendor',
+        );
       }
     }
   }
@@ -566,6 +591,9 @@ async function notifyVendorOfTag(
         createdAt: stored.createdAt,
       },
     });
+
+    // Always the vendor: a tag suggestion is theirs, and so is the surface.
+    await sendNotificationEmail(context.mail, stored, 'vendor');
   }
 }
 

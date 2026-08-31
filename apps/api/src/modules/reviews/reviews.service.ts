@@ -6,6 +6,10 @@ import {
   type VendorReviewsPage,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import {
+  sendNotificationEmail,
+  type NotificationEmailDeps,
+} from '../notifications/notification-email.js';
 import type { EventHub } from '../../lib/event-stream.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
 import { toNotification } from '../messaging/messaging.service.js';
@@ -123,6 +127,7 @@ export async function createReview(
   reviewerId: string,
   bookingId: string,
   input: CreateReviewInput,
+  mail?: NotificationEmailDeps,
 ): Promise<Review> {
   const booking = await findReviewableBooking(db, bookingId);
 
@@ -195,6 +200,20 @@ export async function createReview(
         type: 'new_notification',
         notification: toNotification(written.notification),
       });
+
+      /*
+       * The one emit that does not go through `insertNotification` — the review
+       * and its notification are written in one transaction by the DAO, which
+       * is why `WrittenReview` carries the row back out. Email hangs off the
+       * same post-commit hand-off the push already uses rather than opening a
+       * second one.
+       *
+       * `vendor` because a review is read on the reviewed party's own surface,
+       * and the reviewed party here is whoever was not the reviewer.
+       */
+      if (mail) {
+        await sendNotificationEmail(mail, written.notification, isCustomer ? 'vendor' : 'customer');
+      }
     }
 
     return written.review;

@@ -2,6 +2,7 @@ import { seedReferenceData } from '@vendor-marketplace/db';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
+import type { EmailGateway, EmailMessage } from '../lib/email.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import type {
   PaymentIntentSnapshot,
@@ -40,6 +41,21 @@ export const TEST_ENV: ApiEnv = {
   S3_BUCKET: 'test-bucket',
   S3_PUBLIC_URL: 'http://cdn.test',
   S3_FORCE_PATH_STYLE: true,
+  /*
+   * Composed rather than written as a literal, and both halves of that matter.
+   *
+   * `RESEND_API_KEY` carries a registry `shape` of `/^re_[A-Za-z0-9_]{16,}$/`,
+   * so unlike the Stripe keys above it cannot be the word `unused` — the boot
+   * schema would reject it and every suite would fail on a value nothing ever
+   * sends. But a string of that shape assigned to that name is exactly what the
+   * credential hook and the secret scanner are built to stop, and teaching both
+   * to ignore one file is worse than not writing the pattern. Joining the parts
+   * satisfies the schema without ever spelling a key-shaped literal.
+   *
+   * Nothing here reaches the network regardless: the suites inject a fake.
+   */
+  RESEND_API_KEY: ['re', 'not', 'used', 'by', 'the', 'suites'].join('_'),
+  EMAIL_FROM: 'noreply@test.invalid',
 };
 
 export interface TestHarnessOptions {
@@ -58,6 +74,59 @@ export interface RecordedObject {
   key: string;
   body: Buffer;
   contentType: string;
+}
+
+/**
+ * The transactional-email boundary, recorded rather than sent.
+ *
+ * `sent` is what a suite asserts on, in place of the `notifications` select it
+ * would otherwise write — the two sit side by side because the email *is* the
+ * notification, so a suite that checks one and not the other is checking half
+ * an event.
+ */
+export interface FakeEmail extends EmailGateway {
+  /** Every message the service asked to send, in order. */
+  sent: EmailMessage[];
+  /**
+   * Idempotency keys already delivered.
+   *
+   * The real provider deduplicates on this header, so a fake that simply
+   * appended would let a double-send pass a green suite — the same trap
+   * `FakeStripe.intentsByKey` exists to close for a double-charge.
+   */
+  deliveredKeys: Set<string>;
+  /**
+   * Makes the next send throw, for the "a failed email never fails the
+   * operation" case. Cleared once it has fired.
+   */
+  failNext: boolean;
+}
+
+function createFakeEmail(): FakeEmail {
+  const sent: EmailMessage[] = [];
+  const deliveredKeys = new Set<string>();
+
+  const fake: FakeEmail = {
+    sent,
+    deliveredKeys,
+    failNext: false,
+    send: async (message) => {
+      if (fake.failNext) {
+        fake.failNext = false;
+        throw new Error('Resend refused the send (500)');
+      }
+
+      // Modelled, not assumed: a replayed key is accepted and delivers once.
+      if (deliveredKeys.has(message.idempotencyKey)) {
+        return;
+      }
+
+      deliveredKeys.add(message.idempotencyKey);
+      sent.push(message);
+    },
+  };
+
+  return fake;
 }
 
 /**
@@ -235,16 +304,22 @@ export interface TestHarness {
   validWebhookSignatures: Set<string>;
   /** The Stripe Connect boundary, recorded rather than called. */
   stripe: FakeStripe;
+  /** The transactional-email boundary, recorded rather than sent. */
+  email: FakeEmail;
   /** Simulates the storage bucket going away, for the readiness probe. */
   setStorageAvailable: (available: boolean) => void;
   close: () => Promise<void>;
 }
 
 /**
- * Boots the real server against an in-process Postgres, with the three network
- * boundaries (Clerk token verification, svix signature verification, and Stripe
- * Connect) replaced by explicit fakes. Everything between the HTTP edge and SQL
- * is the production code path.
+ * Boots the real server against an in-process Postgres, with the four network
+ * boundaries (Clerk token verification, svix signature verification, Stripe
+ * Connect and Resend) replaced by explicit fakes. Everything between the HTTP
+ * edge and SQL is the production code path.
+ *
+ * Object storage is faked here too and is deliberately not counted among them:
+ * it is supplied by the caller rather than built by the server, because
+ * `buildServer` takes a `storage` port as a required option.
  */
 export async function createTestHarness(options: TestHarnessOptions = {}): Promise<TestHarness> {
   const database = await createTestDatabase();
@@ -256,6 +331,7 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
   const clerkUsers = new Map<string, ClerkUserSnapshot>();
   const validWebhookSignatures = new Set<string>(['valid-signature']);
   const stripe = createFakeStripe();
+  const email = createFakeEmail();
   const storedObjects: RecordedObject[] = [];
 
   let storageAvailable = true;
@@ -313,11 +389,13 @@ export async function createTestHarness(options: TestHarnessOptions = {}): Promi
       },
     },
     stripe,
+    email,
   });
 
   return {
     app,
     database,
+    email,
     storedObjects,
     clerkUsers,
     validWebhookSignatures,

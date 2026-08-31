@@ -9,6 +9,7 @@ import {
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { authenticated, requireAuth, requireRole } from '../../lib/guards.js';
+import type { NotificationEmailDeps } from '../notifications/notification-email.js';
 import {
   createBookingRequest,
   getBookingRequest,
@@ -22,7 +23,37 @@ const REQUESTS_PATH = '/booking-requests';
 const requestParamsSchema = z.object({ requestId: uuidSchema });
 const requestListSchema = z.array(bookingRequestDetailSchema);
 
-export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
+export interface BookingRequestRoutesOptions {
+  /**
+   * `canonicalWebOrigin(env)` — the origin every emailed link is built from.
+   *
+   * Passed in rather than read here, the way `paymentRoutes` takes its fee
+   * rate: the env is resolved once at boot, and a route module reaching for it
+   * again is a second place that can disagree. It is deliberately **not**
+   * `BRAND_DOMAIN`, which is the domain the product will live on rather than
+   * the one this deployment answers on — `brand-literals.test.ts` bans building
+   * a URL from it for exactly this reason.
+   */
+  webOrigin: string;
+}
+
+export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOptions> = async (
+  app,
+  options,
+) => {
+  /*
+   * Built per request so the log carries the request id, the way `payments`
+   * builds its `PaymentContext`. The origin is `WEB_URL`'s canonical entry —
+   * never `BRAND_DOMAIN`, which is the domain the product will live on rather
+   * than the one this deployment answers on.
+   */
+  const mailFor = (log: NotificationEmailDeps['log']): NotificationEmailDeps => ({
+    db: app.db,
+    email: app.email,
+    log,
+    webOrigin: options.webOrigin,
+  });
+
   app.post(
     REQUESTS_PATH,
     {
@@ -42,6 +73,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
         authenticated(request.auth),
         request.body,
         app.clock(),
+        mailFor(request.log),
       );
 
       // 200 for a repeat submission: nothing was created, and this is the id
@@ -65,7 +97,13 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { querystring: bookingRequestListQuerySchema, response: { 200: requestListSchema } },
     },
     async (request) =>
-      listBookingRequests(app.db, authenticated(request.auth), request.query, app.clock()),
+      listBookingRequests(
+        app.db,
+        authenticated(request.auth),
+        request.query,
+        app.clock(),
+        mailFor(request.log),
+      ),
   );
 
   app.get(
@@ -75,7 +113,13 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { params: requestParamsSchema, response: { 200: bookingRequestDetailSchema } },
     },
     async (request) =>
-      getBookingRequest(app.db, authenticated(request.auth), request.params.requestId, app.clock()),
+      getBookingRequest(
+        app.db,
+        authenticated(request.auth),
+        request.params.requestId,
+        app.clock(),
+        mailFor(request.log),
+      ),
   );
 
   app.post(
@@ -93,6 +137,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
         now: app.clock(),
         quote: request.body,
         hub: app.events,
+        mail: mailFor(request.log),
       }),
   );
 
@@ -112,6 +157,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod = async (app) => {
         transitionRequest(app.db, request.params.requestId, action, authenticated(request.auth), {
           now: app.clock(),
           hub: app.events,
+          mail: mailFor(request.log),
         }),
     );
   }

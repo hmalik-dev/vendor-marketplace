@@ -79,6 +79,8 @@ function isAccountEvent(type: string): boolean {
 export interface StripeWebhookRoutesOptions {
   /** `STRIPE_PLATFORM_FEE_RATE`, resolved and coerced at boot. */
   platformFeeRate: number;
+  /** `canonicalWebOrigin(env)` — the origin every emailed link is built from. */
+  webOrigin: string;
 }
 
 export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptions> = async (
@@ -149,6 +151,12 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
             stripe: app.stripe,
             hub: app.events,
             log: request.log,
+            mail: {
+              db: app.db,
+              email: app.email,
+              log: request.log,
+              webOrigin: options.webOrigin,
+            },
             platformFeeRate: options.platformFeeRate,
           },
           intent,

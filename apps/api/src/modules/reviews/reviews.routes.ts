@@ -24,7 +24,12 @@ const reviewsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(MAX_PAGE).catch(1).default(1),
 });
 
-export const reviewRoutes: FastifyPluginAsyncZod = async (app) => {
+export interface ReviewRoutesOptions {
+  /** `canonicalWebOrigin(env)` — the origin every emailed link is built from. */
+  webOrigin: string;
+}
+
+export const reviewRoutes: FastifyPluginAsyncZod<ReviewRoutesOptions> = async (app, options) => {
   /**
    * The Reviews tab. Unauthenticated for the same reason the profile is — the
    * reviews are most of why someone opens the page.
@@ -83,6 +88,12 @@ export const reviewRoutes: FastifyPluginAsyncZod = async (app) => {
         authenticated(request.auth).id,
         request.params.bookingId,
         request.body,
+        {
+          db: app.db,
+          email: app.email,
+          log: request.log,
+          webOrigin: options.webOrigin,
+        },
       );
 
       return reply.status(201).send(created);

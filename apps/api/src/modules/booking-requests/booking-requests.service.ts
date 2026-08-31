@@ -22,6 +22,10 @@ import type {
   VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import {
+  sendNotificationEmail,
+  type NotificationEmailDeps,
+} from '../notifications/notification-email.js';
 import type { EventHub } from '../../lib/event-stream.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { notificationHref } from '../messaging/messaging.service.js';
@@ -184,6 +188,7 @@ async function ageIfExpired(
   db: AppDatabase,
   row: BookingRequestRow,
   now: Date,
+  mail?: NotificationEmailDeps,
 ): Promise<BookingRequestRow> {
   const expirable = (EXPIRABLE_BOOKING_REQUEST_STATUSES as readonly string[]).includes(row.status);
 
@@ -204,10 +209,23 @@ async function ageIfExpired(
    */
   await syncHeldDate(db, expired.vendorId, expired.eventDate);
 
-  await notifyParty(db, expired, 'customer', 'request_expired', {
-    title: 'Your request expired',
-    body: 'It went unanswered for a week. Send it again, or find another vendor for the date.',
-  });
+  /*
+   * Once per request, not once per read — and that is `applyTransition`'s
+   * guarded UPDATE doing the work, not a check here. A second caller finds the
+   * status already moved, gets `null` above, and returns before this line.
+   */
+  await notifyParty(
+    db,
+    expired,
+    'customer',
+    'request_expired',
+    {
+      title: 'Your request expired',
+      body: 'It went unanswered for a week. Send it again, or find another vendor for the date.',
+    },
+    undefined,
+    mail,
+  );
 
   return expired;
 }
@@ -275,6 +293,30 @@ function publishNotification(hub: EventHub, { userId, stored }: Delivery): void 
   });
 }
 
+/**
+ * Rings the bell and sends the email, in that order, after the row exists.
+ *
+ * Both are best-effort and neither may fail the operation: the row is the
+ * source of truth, a user with no stream open sees it on their next load, and
+ * `sendNotificationEmail` swallows its own failures. Doing both here rather
+ * than at each call site is what stops an event notifying in-app and not by
+ * email by accident — the drift the ticket exists to prevent.
+ */
+async function deliverNotification(
+  delivery: Delivery,
+  party: 'customer' | 'vendor',
+  hub?: EventHub,
+  mail?: NotificationEmailDeps,
+): Promise<void> {
+  if (hub) {
+    publishNotification(hub, delivery);
+  }
+
+  if (mail) {
+    await sendNotificationEmail(mail, delivery.stored, party);
+  }
+}
+
 /** Addresses the notification at a person, given which side of the request they are. */
 async function notifyParty(
   db: AppDatabase,
@@ -283,11 +325,12 @@ async function notifyParty(
   type: NotificationType,
   copy: NotificationCopy,
   hub?: EventHub,
+  mail?: NotificationEmailDeps,
 ): Promise<void> {
   const delivery = await recordNotification(db, row, party, type, copy);
 
-  if (hub && delivery) {
-    publishNotification(hub, delivery);
+  if (delivery) {
+    await deliverNotification(delivery, party, hub, mail);
   }
 }
 
@@ -336,6 +379,7 @@ export async function createBookingRequest(
   user: AuthenticatedUser,
   input: CreateBookingRequestInput,
   now: Date = new Date(),
+  mail?: NotificationEmailDeps,
 ): Promise<BookingRequestOutcome> {
   const vendor = await findVendorById(db, input.vendorId);
 
@@ -442,9 +486,14 @@ export async function createBookingRequest(
     };
   }
 
-  // After the commit, so the bell never rings for a row that was rolled back.
+  /*
+   * After the commit, so neither the bell nor the inbox reports a row the
+   * transaction then rolled back. This is the seam the split between
+   * `recordNotification` and the push was built for; email joins it rather
+   * than opening a second one.
+   */
   if (created.delivery) {
-    publishNotification(hub, created.delivery);
+    await deliverNotification(created.delivery, 'vendor', hub, mail);
   }
 
   return {
@@ -463,6 +512,7 @@ export async function getBookingRequest(
   user: AuthenticatedUser,
   requestId: string,
   now: Date = new Date(),
+  mail?: NotificationEmailDeps,
 ): Promise<BookingRequestDetail> {
   const row = await findRequestById(db, requestId);
 
@@ -472,7 +522,7 @@ export async function getBookingRequest(
 
   await requireParticipant(db, user, row);
 
-  const current = await ageIfExpired(db, row, now);
+  const current = await ageIfExpired(db, row, now, mail);
   const vendor = await findVendorById(db, current.vendorId);
 
   if (!vendor) {
@@ -491,6 +541,7 @@ export async function listBookingRequests(
   user: AuthenticatedUser,
   query: { status?: BookingRequestStatus },
   now: Date = new Date(),
+  mail?: NotificationEmailDeps,
 ): Promise<BookingRequestDetail[]> {
   const vendorId = await actorVendorId(db, user);
 
@@ -511,7 +562,7 @@ export async function listBookingRequests(
    * returns the request that aged out on this very read rather than missing it
    * until someone happens to open it.
    */
-  const aged = await Promise.all(rows.map((row) => ageIfExpired(db, row, now)));
+  const aged = await Promise.all(rows.map((row) => ageIfExpired(db, row, now, mail)));
   const visible = query.status ? aged.filter((row) => row.status === query.status) : aged;
 
   if (visible.length === 0) {
@@ -551,6 +602,8 @@ interface TransitionOptions {
   now?: Date;
   /** Present when the caller can reach open streams; absent in a plain read. */
   hub?: EventHub;
+  /** Present when the caller can send email; absent in a plain read. */
+  mail?: NotificationEmailDeps;
 }
 
 /**
@@ -572,7 +625,7 @@ export async function transitionRequest(
   }
 
   const party = await requireParticipant(db, user, existing);
-  const row = await ageIfExpired(db, existing, now);
+  const row = await ageIfExpired(db, existing, now, options.mail);
 
   const vendor = await findVendorById(db, row.vendorId);
   if (!vendor) {
@@ -594,7 +647,16 @@ export async function transitionRequest(
 
   await syncHeldDate(db, updated.vendorId, updated.eventDate);
 
-  await announce(db, updated, action, row.status, vendor.businessName, party, options.hub);
+  await announce(
+    db,
+    updated,
+    action,
+    row.status,
+    vendor.businessName,
+    party,
+    options.hub,
+    options.mail,
+  );
 
   const servicePackage = updated.packageId
     ? ((await findPackagesByIds(db, [updated.packageId]))[0] ?? null)
@@ -758,7 +820,20 @@ async function announce(
    * `quoted` request, and the notification is addressed to the other one.
    */
   party: 'customer' | 'vendor',
-  hub?: EventHub,
+  /*
+   * **Required, not optional — and that is the fix, not the style.**
+   *
+   * Both were optional, and `transitionRequest` then called this without
+   * `mail` at all. TypeScript was silent, every test stayed green, and four of
+   * the thirteen events in the ticket's own table quietly stopped emailing:
+   * a quote, an acceptance, a decline and a cancellation each wrote their
+   * in-app row and reached no inbox. That is precisely the "notifies in-app and
+   * not by email by accident" the design is supposed to make impossible, and an
+   * optional parameter is how it got in. Callers now pass `undefined`
+   * explicitly or the compiler stops them.
+   */
+  hub: EventHub | undefined,
+  mail: NotificationEmailDeps | undefined,
 ): Promise<void> {
   switch (action) {
     case 'quote':
@@ -772,6 +847,7 @@ async function announce(
           body: 'Open the request to see the price and accept it.',
         },
         hub,
+        mail,
       );
       return;
     case 'accept':
@@ -789,6 +865,7 @@ async function announce(
           body: `${readableDate(row.eventDate)} is held. Payment confirms the booking.`,
         },
         hub,
+        mail,
       );
       return;
     case 'decline':
@@ -812,6 +889,7 @@ async function announce(
               body: `The customer turned down your quote for ${readableDate(row.eventDate)}.`,
             },
             hub,
+            mail,
           )
         : notifyParty(
             db,
@@ -823,6 +901,7 @@ async function announce(
               body: 'The date is free again — try another vendor for it.',
             },
             hub,
+            mail,
           ));
       return;
     case 'cancel':
@@ -836,6 +915,7 @@ async function announce(
           body: `The customer cancelled their request for ${readableDate(row.eventDate)}.`,
         },
         hub,
+        mail,
       );
   }
 }
