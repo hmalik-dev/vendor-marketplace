@@ -28,3 +28,5 @@
 - [Detached lane ticket ids collide silently](detached-lane-ticket-ids-collide-silently.md) — merging a stopped lane duplicates board rows and drops registry rows with no conflict
 - [Check for an existing branch before starting](check-for-an-existing-branch-before-starting-a-ticket.md) — a ticket's Branch column may already name pushed work; read it before rebuilding
 - [Cite the frame and the route in design questions](design-questions-cite-frame-and-route.md) — give the .dc.html frame + line and the live route before asking, so the user can verify
+- [Never abort a rebase you did not start](never-abort-a-rebase-you-did-not-start.md) — with many sessions in the shared checkout, possession of the live rebase decides ownership, not authorship
+- [Verify with a differently shaped check](verify-with-a-differently-shaped-check.md) — a grep that silently over- or under-matches returns a confident wrong answer; re-run differently, do not re-read
