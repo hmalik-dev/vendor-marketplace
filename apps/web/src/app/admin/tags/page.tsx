@@ -4,8 +4,8 @@ import { AdminSurface } from '@/components/admin/admin-surface';
 import { Pager } from '@/components/admin/pager';
 import { TagQueue } from '@/components/admin/tag-queue';
 import { TagTable } from '@/components/admin/tag-table';
-import { adminQueryString, getAdminTagSuggestions, getAdminTags } from '@/lib/admin-data';
-import { oneOf, pageNumber } from '@/lib/admin-params';
+import { getAdminTagSuggestions, getAdminTags } from '@/lib/admin-data';
+import { adminQueryString, oneOf, pageNumber, type RawParam } from '@/lib/admin-params';
 import { cn } from '@/lib/utils';
 
 const PATH = '/admin/tags';
@@ -26,7 +26,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function AdminTagsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string }>;
+  searchParams: Promise<{ status?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   // `pending` is the queue's whole purpose, so it is the default rather than "all".

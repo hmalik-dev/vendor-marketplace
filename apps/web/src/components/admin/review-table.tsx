@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
+import { RowTrigger } from '@/components/admin/row-trigger';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useApi } from '@/lib/use-api';
 import type { WireAdminReviewRow } from '@/lib/wire-schemas';
@@ -31,7 +32,6 @@ export function ReviewTable({
 
   return (
     <DataTable
-      template=".5fr 1.3fr 1.3fr 2.4fr .9fr 70px"
       rows={rows}
       rowKey={(row) => row.id}
       empty={
@@ -47,6 +47,7 @@ export function ReviewTable({
       columns={[
         {
           key: 'rating',
+          width: '.5fr',
           header: 'Rating',
           className: 'font-mono text-stone-900',
           // The number, not stars: an ops table is scanned and sorted, not admired.
@@ -54,6 +55,7 @@ export function ReviewTable({
         },
         {
           key: 'vendor',
+          width: '1.3fr',
           header: 'Vendor',
           className: 'truncate font-semibold text-stone-900',
           cell: (row) => (
@@ -62,32 +64,29 @@ export function ReviewTable({
             </Link>
           ),
         },
-        { key: 'author', header: 'Author', cell: (row) => row.authorName },
+        { key: 'author', width: '1.3fr', header: 'Author', cell: (row) => row.authorName },
         {
           key: 'content',
+          width: '2.4fr',
           header: 'Review',
           cell: (row) => row.title ?? row.content,
         },
         {
           key: 'written',
+          width: '.9fr',
           header: 'Written',
           cell: (row) => REVIEWED.format(row.createdAt),
         },
         {
           key: 'actions',
+          width: '70px',
           header: '',
           className: 'flex justify-end',
           cell: (row) => (
             <ConfirmAction
               destructive
               trigger={
-                <button
-                  type="button"
-                  aria-label={`Delete the review of ${row.vendorName} by ${row.authorName}`}
-                  className="flex size-8 items-center justify-center rounded-md text-stone-600 hover:bg-stone-150 hover:text-stone-900"
-                >
-                  <span aria-hidden="true">···</span>
-                </button>
+                <RowTrigger label={`Delete the review of ${row.vendorName} by ${row.authorName}`} />
               }
               title="Delete this review?"
               description={

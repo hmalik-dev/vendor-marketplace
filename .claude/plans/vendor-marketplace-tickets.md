@@ -258,6 +258,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **373** | **Design-system completion — token scale, undefined-step guard, and the caret override** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#333, #364, #369**. One pass over `theme.css` and `apps/web/src`, each half closed by a guard — the shape that stops the next parity pass re-finding the same class of defect. |
 | **374** | **Launch legal, policy and support surfaces** | P3 | M6 | **P0 Critical** | **Deferred — needs a human** | — | **The account holder: (1) the operative wording of the terms, privacy policy and vendor agreement — a ticket must not invent binding text; (2) a real monitored support address or destination** | `core` | **Filed 2026-08-31.** Not a consolidation — a gap nobody had filed. `docs/pre-launch.md` §1.5 and §7 require terms, a privacy policy, a cookie notice, a vendor agreement covering the 12% commission and payout timing, a refund and cancellation policy shown **before** payment, and a support route that reaches a human. **None of those routes exist in `apps/web/src/app`.** The product cannot take money from strangers without them. |
 | **375** | **Search entry — a filtering combobox for `Vendor type`, a typeahead input for `City`** | P1 | M3 | **P1 High** | **Backlog** | — | **None** (coordinate with **#373**, which removes the caret from the same two triggers) | `core` | **Filed 2026-08-31 on the user's explicit instruction.** *"It should allow typing that appears directly in the input and matching text appears in the category type dropdown, and the city should literally be an input, where the validated city appears as clickable for a user. Not a scrollable dropdown for city since cities can vary drastically. Category should have a dropdown with all categories but as a user types the dropdown should be filtered with each input."* **A user override of decision D6 and `42-dropdowns.md`**, which deleted the filter field from the category panel and made city a select. Both fields stay **validated** — only the affordance changes. |
+| **376** | **Four colour classes name ramp steps the theme never defines** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by lane 15**, by the guard that found them. `design-tokens.test.ts` asserts that every colour class names a step the shared theme declares; it was generalised from #147's `stone-800` assertion and immediately found four more, in the two ramps that assertion never covered. Each falls through to Tailwind's own cool default, so the rendered colour belongs to no palette in this product. Exempted by name and by this ticket number in that test, which is a ratchet rather than an allowlist — the list only shrinks. |
 **This board carries open work only. The closed rows live in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **310 rows as of 2026-08-30: 172 `Done` and 138 `Superseded`**, recounted programmatically in the second consolidation, which also moved #14 and #305 across. The earlier figures here (311 / 180 / 131) were a snapshot that nothing updated as rows moved, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
 Rows are ordered by build sequence, not by ticket number. **45 rows — 20 open (17 Backlog, 1 In Progress, 2 Deferred) and 25 `Superseded`.** **#14 and #305 moved to the archive in this pass**, restoring the 2026-08-30 convention that this board carries open work only; they had been left here after closing. Recounted programmatically on 2026-08-30 after the **second backlog consolidation**, which replaced 25 rows with **#354–#360**. That pass was only possible because D16 and D17 had just ruled every open design question: eleven rows that could never start became ordinary code work, and the shape underneath them — twenty-five rows that were really seven pieces of work — became visible. **The blank line that had split this table in two is gone**; rows #332–#352 had been rendering as a separate headerless table, though `tickets.board.test.ts` parses line by line and never noticed. **A Backlog count is still not a ready count** — **#20** waits on #359 and **#353** on the Sentry DSN, and #355 is sequenced behind #354, which owns `Orla - Screens.dc.html` for one pass. Read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
@@ -4117,6 +4118,53 @@ photography (§7, a human's task, record it as such).
       control, asserted by position rather than by presence
 - [ ] A test that the commission figure on the vendor agreement reads the same constant the
       payment code charges — never a typed literal
+
+---
+
+### #376: Four colour classes name ramp steps the theme never defines
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+
+**Filed 2026-08-31 by lane 15, by the guard that found them.** Not by a sweep and
+not by eye — `apps/web/src/app/design-tokens.test.ts` asserts the rule and listed
+these on its first run.
+
+**How they escaped.** #147 fixed one instance of this class (`text-stone-800` on
+the category picker) and guarded it with `expect(themeCss).not.toContain('--color-stone-800:')`
+— an assertion about *one absent number* rather than about the rule. It could
+never have caught a `sage` or a `steel` step, and it stopped being true the
+moment #15 legitimately needed an 800 step for frame `13`'s inverted header. The
+replacement asserts the rule over every ramp, every colour utility and every
+`.ts`/`.tsx`/`.css` file.
+
+**What is wrong.** Each class names a step no ramp declares, so Tailwind falls
+through to its own **cool** default palette — the rendered colour belongs to no
+palette in this product, on screens that carry frames.
+
+| Site | Class | Ramp holds | Likely correction |
+| --- | --- | --- | --- |
+| `apps/web/src/app/bookings/[requestId]/checkout/page.tsx` | `bg-sage-500` | 50, 100, 150, 200, 300, 400, 600 | `sage-400` — the fill step |
+| `apps/web/src/components/checkout/checkout-screen.tsx` | `bg-sage-500` | as above | `sage-400` |
+| `apps/web/src/components/bookings/booking-confirmed.tsx` | `text-sage-700` | as above | `sage-600` — "sage as text" |
+| `apps/web/src/components/portfolio/portfolio-manager.tsx` | `text-steel-700` | 50, 200, 600 | `steel-600` |
+
+**The corrections above are a reading of the ramp comments, not a ruling.** Two
+of the three surfaces carry frames (`05 Checkout`, `06 Booking confirmed`), so
+the step is whatever those frames draw — measure before substituting.
+
+**Why it is not fixed in lane 15.** Three surfaces none of #15's work touches.
+Fixing them there would have widened a 56-file diff into screens under their own
+parity gates, which is the scope creep that makes two lanes collide on one file.
+
+**Acceptance:**
+
+- [ ] Each of the four resolves to a token this theme declares, read off the
+      frame where the surface has one
+- [ ] The four exemptions are **deleted** from `design-tokens.test.ts`, not
+      amended — the list only shrinks
+- [ ] `pnpm --filter @vendor-marketplace/web test` green with no exemptions left
+
+**Blocked by:** None
 
 ---
 

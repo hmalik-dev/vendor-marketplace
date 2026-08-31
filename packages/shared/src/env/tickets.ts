@@ -453,6 +453,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   373: [],
   374: [], // legal, policy and support surfaces — static routes, no external service
   375: [], // search entry affordance — UI only, both lists are already served
+  376: [], // four colour classes naming steps no ramp defines — token substitutions only
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

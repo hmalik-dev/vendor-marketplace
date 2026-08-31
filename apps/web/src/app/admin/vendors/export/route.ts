@@ -1,6 +1,12 @@
-import { MAX_PAGE_SIZE } from '@vendor-marketplace/shared';
+import {
+  ADMIN_PAYOUT_FILTERS,
+  ADMIN_VENDOR_STATUSES,
+  MAX_PAGE_SIZE,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import type { NextRequest } from 'next/server';
-import { getAdminVendors } from '@/lib/admin-data';
+import { getAdminVendorFacets, getAdminVendors } from '@/lib/admin-data';
+import { adminQueryString, boundedText, displayRating, oneOf } from '@/lib/admin-params';
 import { getCurrentUser } from '@/lib/current-user';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 
@@ -48,12 +54,12 @@ function csvRow(row: WireAdminVendorRow): string {
     csvField(row.categoryName),
     csvField(row.city),
     csvField(row.state),
-    csvField(row.reviewCount === 0 ? '' : Number(row.avgRating).toFixed(1)),
+    csvField(displayRating(row) ?? ''),
     csvField(row.reviewCount),
     csvField(row.bookingsCount),
     csvField(row.status),
     csvField(row.stripeOnboarded ? 'yes' : 'no'),
-    csvField(row.createdAt.toISOString().slice(0, 10)),
+    csvField(toDateString(row.createdAt)),
   ].join(',');
 }
 
@@ -81,8 +87,28 @@ export async function GET(request: NextRequest): Promise<Response> {
     return new Response('Forbidden', { status: 403 });
   }
 
-  const filters = new URLSearchParams(request.nextUrl.search);
-  filters.delete('page');
+  /*
+   * The same narrowing the page does, not the raw query string.
+   *
+   * Forwarding `request.nextUrl.search` verbatim made this the one admin URL
+   * that skipped the boundary: `?status=nonsense` reached the API, came back
+   * 400, threw inside the loop below and rendered the 500 page — on an
+   * authenticated admin route, for a link the operator had bookmarked.
+   */
+  const raw = Object.fromEntries(request.nextUrl.searchParams);
+  const facets = await getAdminVendorFacets();
+  const filters = new URLSearchParams(
+    adminQueryString({
+      q: boundedText(raw.q),
+      category: oneOf(
+        raw.category,
+        facets.categories.map((category) => category.slug),
+      ),
+      city: oneOf(raw.city, facets.cities),
+      payouts: oneOf(raw.payouts, ADMIN_PAYOUT_FILTERS),
+      status: oneOf(raw.status, ADMIN_VENDOR_STATUSES),
+    }).slice(1),
+  );
   filters.set('pageSize', String(MAX_PAGE_SIZE));
 
   const lines: string[] = [COLUMNS.map((column) => csvField(column)).join(',')];
@@ -104,7 +130,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   return new Response(`${lines.join('\r\n')}\r\n`, {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="vendors-${new Date().toISOString().slice(0, 10)}.csv"`,
+      'content-disposition': `attachment; filename="vendors-${toDateString(new Date())}.csv"`,
       'cache-control': 'no-store',
     },
   });

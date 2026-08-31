@@ -467,40 +467,6 @@ describe('the selected chip’s label is clay, not stone (#147)', () => {
   it('stops painting the selected chip with a stone step', () => {
     expect(pickerSource).not.toContain('text-stone-800');
   });
-
-  /*
-   * The generalised guard, and the reason the assertion this replaced is gone.
-   *
-   * That one read "the theme never defines `--color-stone-800`", which was true
-   * and is no longer: #15's console header needs the `#3A342E` hairline frame
-   * `13` draws on the inverted bar, and that is a real 800 step. Pinning the
-   * absence of one number was always the weaker statement — what the fall-through
-   * defect actually taught is that **a `stone-N` class must name a step this
-   * theme defines**, whichever N it is. So that is what is asserted, over every
-   * source file rather than over one component.
-   */
-  it('uses no stone step the shared theme does not define', () => {
-    const defined = new Set(
-      [...themeCss.matchAll(/--color-stone-(\d+):/g)].map((match) => match[1] as string),
-    );
-    const root = join(process.cwd(), 'src');
-    const undefinedSteps = readdirSync(root, { recursive: true, encoding: 'utf8' })
-      .filter((entry) => /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry))
-      .flatMap((entry) => {
-        const contents = readFileSync(join(root, entry), 'utf8');
-
-        return [
-          ...contents.matchAll(
-            /(?<![\w-])(?:bg|text|border|ring|fill|stroke|from|via|to|outline|decoration|accent|shadow|divide|placeholder|caret)-stone-(\d+)/g,
-          ),
-        ]
-          .map((match) => match[1] as string)
-          .filter((step) => !defined.has(step))
-          .map((step) => `${entry} — stone-${step}`);
-      });
-
-    expect(undefinedSteps).toEqual([]);
-  });
 });
 
 describe('field labels take the frame’s label colour (#148)', () => {

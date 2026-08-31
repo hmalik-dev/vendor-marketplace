@@ -1,10 +1,9 @@
 import { formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
-import { Pager } from '@/components/admin/pager';
 import { EmptyState } from '@/components/ui/empty-state';
-import { adminQueryString, getAdminPayments } from '@/lib/admin-data';
-import { pageNumber } from '@/lib/admin-params';
+import { getAdminPayments } from '@/lib/admin-data';
+import { adminQueryString, pageNumber, type RawParam } from '@/lib/admin-params';
 
 const PATH = '/admin/payments';
 
@@ -25,7 +24,7 @@ const PAID_AT = new Intl.DateTimeFormat('en-US', {
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const payments = await getAdminPayments(adminQueryString({ page: pageNumber(raw.page) }));
@@ -36,61 +35,61 @@ export default async function AdminPaymentsPage({
     <AdminSurface
       heading="Payments"
       counts={[`${payments.total} paid`, `${formatPrice(feeTotal)} platform fee on this page`]}
+      pager={{
+        path: PATH,
+        params: {},
+        page: payments.page,
+        pageSize: payments.pageSize,
+        total: payments.total,
+      }}
     >
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="min-h-0 flex-1">
-          <DataTable
-            template="1.4fr 1.2fr .9fr .8fr .8fr 1.2fr"
-            rows={payments.items}
-            rowKey={(row) => row.bookingId}
-            empty={
-              <EmptyState
-                headline="No payments yet"
-                description="A payment appears here the moment a customer's card is charged."
-              />
-            }
-            columns={[
-              {
-                key: 'vendor',
-                header: 'Vendor',
-                className: 'truncate font-semibold text-stone-900',
-                cell: (row) => row.vendorName,
-              },
-              { key: 'customer', header: 'Customer', cell: (row) => row.customerName },
-              {
-                key: 'total',
-                header: 'Total',
-                className: 'font-mono',
-                cell: (row) => formatPrice(row.totalAmountCents),
-              },
-              {
-                key: 'fee',
-                header: 'Fee',
-                className: 'font-mono',
-                cell: (row) => formatPrice(row.platformFeeCents),
-              },
-              {
-                key: 'payout',
-                header: 'Payout',
-                className: 'font-mono',
-                cell: (row) => formatPrice(row.vendorPayoutCents),
-              },
-              {
-                key: 'paid',
-                header: 'Paid',
-                cell: (row) => (row.paidAt ? PAID_AT.format(row.paidAt) : '—'),
-              },
-            ]}
+      <DataTable
+        rows={payments.items}
+        rowKey={(row) => row.bookingId}
+        empty={
+          <EmptyState
+            headline="No payments yet"
+            description="A payment appears here the moment a customer's card is charged."
           />
-        </div>
-        <Pager
-          path={PATH}
-          params={{}}
-          page={payments.page}
-          pageSize={payments.pageSize}
-          total={payments.total}
-        />
-      </div>
+        }
+        columns={[
+          {
+            key: 'vendor',
+            width: '1.4fr',
+            header: 'Vendor',
+            className: 'truncate font-semibold text-stone-900',
+            cell: (row) => row.vendorName,
+          },
+          { key: 'customer', width: '1.2fr', header: 'Customer', cell: (row) => row.customerName },
+          {
+            key: 'total',
+            width: '.9fr',
+            header: 'Total',
+            className: 'font-mono',
+            cell: (row) => formatPrice(row.totalAmountCents),
+          },
+          {
+            key: 'fee',
+            width: '.8fr',
+            header: 'Fee',
+            className: 'font-mono',
+            cell: (row) => formatPrice(row.platformFeeCents),
+          },
+          {
+            key: 'payout',
+            width: '.8fr',
+            header: 'Payout',
+            className: 'font-mono',
+            cell: (row) => formatPrice(row.vendorPayoutCents),
+          },
+          {
+            key: 'paid',
+            width: '1.2fr',
+            header: 'Paid',
+            cell: (row) => (row.paidAt ? PAID_AT.format(row.paidAt) : '—'),
+          },
+        ]}
+      />
     </AdminSurface>
   );
 }

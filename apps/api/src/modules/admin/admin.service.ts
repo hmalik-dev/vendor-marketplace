@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
-import { bookingStatusSchema, generateSlug } from '@vendor-marketplace/shared';
+import { addDays, generateSlug, toDateString } from '@vendor-marketplace/shared';
 import type {
   AdminBanResult,
   AdminBookingPage,
@@ -43,7 +43,6 @@ import {
   countAdminReviews,
   countAdminTagSuggestions,
   countAdminVendors,
-  countVendorsAwaitingReview,
   countVendorsHoldingTag,
   declineOpenRequests,
   findAdminBookings,
@@ -63,7 +62,6 @@ import {
   findTagSuggestionById,
   findUserById,
   findVendorFilterFacets,
-  findVendorOwnerId,
   findVendorProfileByUserId,
   findVendorProfileIdByUserId,
   insertTag,
@@ -75,6 +73,17 @@ import {
   type AdminVendorProjection,
   type DailyBucket,
 } from './admin.dao.js';
+
+/**
+ * The page window's offset.
+ *
+ * One line, six call sites. An off-by-one here silently repeats or skips a row
+ * rather than failing, which makes it the most expensive one-line bug this file
+ * can host — so it is written once.
+ */
+function offsetOf(query: { page: number; pageSize: number }): number {
+  return (query.page - 1) * query.pageSize;
+}
 
 /** Everything an admin operation needs. Mirrors `PaymentContext`, for the same reason. */
 export interface AdminContext {
@@ -136,24 +145,21 @@ export async function listVendors(
     payouts: query.payouts,
     status: query.status,
   };
-  const offset = (query.page - 1) * query.pageSize;
+  const offset = offsetOf(query);
 
   /*
-   * The two counts run against the same filters as the page, so the count line
-   * can never describe a different set from the rows under it. `awaitingReview`
-   * deliberately ignores `status` — it is the saved filter's own badge, and it
-   * has to keep reporting how many are waiting while the table shows `live`.
+   * The counts run against the same filters as the page, so the count line can
+   * never describe a different set from the rows under it. See
+   * `countAdminVendors` for why `awaitingReview` ignores `status`.
    */
-  const [rows, total, awaitingReview] = await Promise.all([
+  const [rows, counts] = await Promise.all([
     findAdminVendors(db, filters, query.pageSize, offset),
     countAdminVendors(db, filters),
-    countVendorsAwaitingReview(db, { ...filters, status: undefined }),
   ]);
 
   return {
     items: rows.map(toVendorRow),
-    total,
-    awaitingReview,
+    ...counts,
     page: query.page,
     pageSize: query.pageSize,
   };
@@ -229,7 +235,7 @@ export async function setUserBanned(
     };
   }
 
-  const today = now.toISOString().slice(0, 10);
+  const today = toDateString(now);
   const affected = await findConfirmedBookingsToUnwind(
     context.db,
     targetId,
@@ -274,8 +280,7 @@ export async function setUserBanned(
 
     bookingsCancelled += 1;
 
-    const vendorUserId = await findVendorOwnerId(context.db, booking.vendorId);
-    const recipients = [booking.customerId, vendorUserId].filter(
+    const recipients = [booking.customerId, booking.vendorUserId].filter(
       (id): id is string => typeof id === 'string' && id !== targetId,
     );
 
@@ -333,7 +338,7 @@ export async function listCustomers(
   db: AppDatabase,
   query: AdminCustomerQuery,
 ): Promise<AdminCustomerPage> {
-  const offset = (query.page - 1) * query.pageSize;
+  const offset = offsetOf(query);
   const [rows, total] = await Promise.all([
     findAdminCustomers(db, query.q, query.pageSize, offset),
     countAdminCustomers(db, query.q),
@@ -351,7 +356,7 @@ export async function listBookings(
   db: AppDatabase,
   query: AdminBookingQuery,
 ): Promise<AdminBookingPage> {
-  const offset = (query.page - 1) * query.pageSize;
+  const offset = offsetOf(query);
   const [rows, total] = await Promise.all([
     findAdminBookings(db, query.status, query.pageSize, offset),
     countAdminBookings(db, query.status),
@@ -378,7 +383,7 @@ export async function listPayments(
   db: AppDatabase,
   query: AdminPaymentQuery,
 ): Promise<AdminPaymentPage> {
-  const offset = (query.page - 1) * query.pageSize;
+  const offset = offsetOf(query);
   const [rows, total] = await Promise.all([
     findAdminPayments(db, query.pageSize, offset),
     countAdminPayments(db),
@@ -387,7 +392,7 @@ export async function listPayments(
   return {
     items: rows.map((row) => ({
       bookingId: row.id,
-      status: bookingStatusSchema.parse(row.status),
+      status: row.status,
       totalAmountCents: row.totalAmountCents,
       platformFeeCents: row.platformFeeCents,
       vendorPayoutCents: row.vendorPayoutCents,
@@ -406,7 +411,7 @@ export async function listReviews(
   db: AppDatabase,
   query: AdminReviewQuery,
 ): Promise<AdminReviewPage> {
-  const offset = (query.page - 1) * query.pageSize;
+  const offset = offsetOf(query);
   const [rows, total] = await Promise.all([
     findAdminReviews(db, query.type, query.pageSize, offset),
     countAdminReviews(db, query.type),
@@ -472,7 +477,7 @@ export async function listTagSuggestions(
   db: AppDatabase,
   query: AdminTagSuggestionQuery,
 ): Promise<AdminTagSuggestionPage> {
-  const offset = (query.page - 1) * query.pageSize;
+  const offset = offsetOf(query);
   const [rows, total] = await Promise.all([
     findAdminTagSuggestions(db, query.status, query.pageSize, offset),
     countAdminTagSuggestions(db, query.status),
@@ -774,12 +779,6 @@ export async function updateTag(
 /** The window every chart on the Overview draws, in days. */
 export const ADMIN_METRICS_WINDOW_DAYS = 30;
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-function utcDay(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 /**
  * Turns the sparse buckets Postgres returns into a continuous series.
  *
@@ -792,7 +791,7 @@ function fillWindow(buckets: DailyBucket[], since: Date, days: number): DailyBuc
   const series: DailyBucket[] = [];
 
   for (let offset = 0; offset < days; offset += 1) {
-    const date = utcDay(new Date(since.getTime() + offset * MS_PER_DAY));
+    const date = toDateString(addDays(since, offset));
     series.push({ date, value: byDate.get(date) ?? 0 });
   }
 
@@ -805,9 +804,9 @@ export async function readMetrics(db: AppDatabase, now: Date): Promise<AdminMetr
    * today rather than a rolling thirty-times-24-hours whose first bucket is
    * always a partial day.
    */
-  const since = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
-      (ADMIN_METRICS_WINDOW_DAYS - 1) * MS_PER_DAY,
+  const since = addDays(
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
+    -(ADMIN_METRICS_WINDOW_DAYS - 1),
   );
 
   const [totals, series] = await Promise.all([

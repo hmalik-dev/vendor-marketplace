@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { ADMIN_PAGE_SIZE, DEFAULT_PAGE_SIZE } from '@vendor-marketplace/shared';
 import { eq, notInArray } from 'drizzle-orm';
 import {
   bookingRequests,
@@ -674,6 +675,37 @@ describe('admin routes', () => {
       expect(body.bookingsCount).toBe(2);
       expect(body.activeVendorsCount).toBe(1);
       expect(body.revenueByDay.at(-1).value).toBe(120_000);
+    });
+  });
+
+  describe('the console page window', () => {
+    /*
+     * `22-admin.md` states fifteen rows as an acceptance criterion, and the
+     * layout is not what guarantees it — the page size is. A default of twenty
+     * would hand the pane five rows more than it can show, which is exactly the
+     * "promises eighteen and clips three" failure the criterion names.
+     */
+    it('defaults every console list to the fifteen rows the frame fits', async () => {
+      await signIn(ADMIN, true);
+
+      for (const url of [
+        '/admin/vendors',
+        '/admin/customers',
+        '/admin/bookings',
+        '/admin/payments',
+        '/admin/reviews',
+        '/admin/tag-suggestions',
+      ]) {
+        const response = await harness.app.inject({ method: 'GET', url, headers: bearer(ADMIN) });
+
+        expect(response.statusCode, url).toBe(200);
+        expect(response.json().pageSize, url).toBe(ADMIN_PAGE_SIZE);
+      }
+    });
+
+    it('is fifteen, not the twenty every other list endpoint uses', () => {
+      expect(ADMIN_PAGE_SIZE).toBe(15);
+      expect(ADMIN_PAGE_SIZE).not.toBe(DEFAULT_PAGE_SIZE);
     });
   });
 

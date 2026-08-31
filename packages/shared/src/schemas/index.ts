@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { formatPrice, isBeyondBookingHorizon, isUniversallyPastDate } from '../utils/index.js';
 import {
+  ADMIN_PAGE_SIZE,
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
   BOOKING_WEEK_DAYS,
@@ -1585,6 +1586,19 @@ export type FieldErrorDetails = z.infer<typeof fieldErrorDetailsSchema>;
  *
  * `review` is therefore the "awaiting review" the frame's saved filter counts.
  */
+/**
+ * The page window every console list uses.
+ *
+ * `paginationQueryShape` with `pageSize` re-defaulted to `ADMIN_PAGE_SIZE` — the
+ * frame's fifteen rows. Spreading the shape and overriding one field keeps the
+ * bounds (`MAX_PAGE`, `MAX_PAGE_SIZE`) in one place; restating them here is how
+ * the two would come to disagree.
+ */
+export const adminPaginationShape = {
+  ...paginationQueryShape,
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(ADMIN_PAGE_SIZE),
+};
+
 export const ADMIN_VENDOR_STATUSES = ['live', 'review', 'flagged', 'paused'] as const;
 export const adminVendorStatusSchema = z.enum(ADMIN_VENDOR_STATUSES);
 export type AdminVendorStatus = (typeof ADMIN_VENDOR_STATUSES)[number];
@@ -1615,7 +1629,7 @@ export const adminVendorRowSchema = z.object({
 export type AdminVendorRow = z.infer<typeof adminVendorRowSchema>;
 
 export const adminVendorQuerySchema = z.object({
-  ...paginationQueryShape,
+  ...adminPaginationShape,
   /** Matches business name, slug or the owner's email. */
   q: trimmedString(MAX_NAME_LENGTH).optional(),
   category: z.string().trim().max(MAX_NAME_LENGTH).optional(),
@@ -1630,13 +1644,11 @@ export type AdminVendorQuery = z.infer<typeof adminVendorQuerySchema>;
  *
  * Both numbers are query results over the same filter the table ran, so the
  * sentence can never describe a different set from the rows beneath it.
+ * `awaitingReview` is the only field any console list adds to the shared
+ * envelope, which is why it is an `.extend` rather than a second envelope.
  */
-export const adminVendorPageSchema = z.object({
-  items: z.array(adminVendorRowSchema),
-  total: z.int(),
+export const adminVendorPageSchema = paginatedSchema(adminVendorRowSchema).extend({
   awaitingReview: z.int(),
-  page: z.int(),
-  pageSize: z.int(),
 });
 export type AdminVendorPage = z.infer<typeof adminVendorPageSchema>;
 
@@ -1654,13 +1666,19 @@ export const adminCustomerRowSchema = z.object({
 export type AdminCustomerRow = z.infer<typeof adminCustomerRowSchema>;
 
 export const adminCustomerQuerySchema = z.object({
-  ...paginationQueryShape,
+  ...adminPaginationShape,
   q: trimmedString(MAX_NAME_LENGTH).optional(),
 });
 
 export const adminBookingRowSchema = z.object({
   id: uuidSchema,
-  status: z.string(),
+  /*
+   * The enum, not `z.string()`. The lifecycle is a closed vocabulary declared
+   * once in `BOOKING_STATUSES`, and typing it loosely here forced a cast at the
+   * one place that maps a status to a pill — which is where a status the map
+   * does not cover would have to be caught.
+   */
+  status: bookingStatusSchema,
   eventDate: z.string(),
   /** Integer cents, like every other amount. */
   totalCents: z.int(),
@@ -1715,7 +1733,7 @@ export const adminTagSuggestionRowSchema = tagSuggestionSchema.extend({
 export type AdminTagSuggestionRow = z.infer<typeof adminTagSuggestionRowSchema>;
 
 export const adminTagSuggestionQuerySchema = z.object({
-  ...paginationQueryShape,
+  ...adminPaginationShape,
   status: tagSuggestionStatusSchema.optional(),
 });
 
@@ -1802,23 +1820,6 @@ export const adminBanResultSchema = z.object({
 });
 export type AdminBanResult = z.infer<typeof adminBanResultSchema>;
 
-/**
- * One page window, written once.
- *
- * Every admin list answers the same envelope — the rows, how many there are in
- * total under the same filters, and the window that was asked for. The Vendors
- * page adds `awaitingReview` on top of this because its count line names a
- * second number; nothing else does.
- */
-function adminPageSchema<T extends z.ZodTypeAny>(item: T) {
-  return z.object({
-    items: z.array(item),
-    total: z.int(),
-    page: z.int(),
-    pageSize: z.int(),
-  });
-}
-
 /** The real cities and categories the Vendors filter bar offers — no invented options. */
 export const adminVendorFacetsSchema = z.object({
   cities: z.array(z.string()),
@@ -1827,32 +1828,32 @@ export const adminVendorFacetsSchema = z.object({
 export type AdminVendorFacets = z.infer<typeof adminVendorFacetsSchema>;
 
 export type AdminCustomerQuery = z.infer<typeof adminCustomerQuerySchema>;
-export const adminCustomerPageSchema = adminPageSchema(adminCustomerRowSchema);
+export const adminCustomerPageSchema = paginatedSchema(adminCustomerRowSchema);
 export type AdminCustomerPage = z.infer<typeof adminCustomerPageSchema>;
 
 export const adminBookingQuerySchema = z.object({
-  ...paginationQueryShape,
+  ...adminPaginationShape,
   status: bookingStatusSchema.optional(),
 });
 export type AdminBookingQuery = z.infer<typeof adminBookingQuerySchema>;
-export const adminBookingPageSchema = adminPageSchema(adminBookingRowSchema);
+export const adminBookingPageSchema = paginatedSchema(adminBookingRowSchema);
 export type AdminBookingPage = z.infer<typeof adminBookingPageSchema>;
 
-export const adminPaymentQuerySchema = z.object({ ...paginationQueryShape });
+export const adminPaymentQuerySchema = z.object({ ...adminPaginationShape });
 export type AdminPaymentQuery = z.infer<typeof adminPaymentQuerySchema>;
-export const adminPaymentPageSchema = adminPageSchema(adminPaymentRowSchema);
+export const adminPaymentPageSchema = paginatedSchema(adminPaymentRowSchema);
 export type AdminPaymentPage = z.infer<typeof adminPaymentPageSchema>;
 
 export const adminReviewQuerySchema = z.object({
-  ...paginationQueryShape,
+  ...adminPaginationShape,
   type: reviewTypeSchema.optional(),
 });
 export type AdminReviewQuery = z.infer<typeof adminReviewQuerySchema>;
-export const adminReviewPageSchema = adminPageSchema(adminReviewRowSchema);
+export const adminReviewPageSchema = paginatedSchema(adminReviewRowSchema);
 export type AdminReviewPage = z.infer<typeof adminReviewPageSchema>;
 
 export type AdminTagSuggestionQuery = z.infer<typeof adminTagSuggestionQuerySchema>;
-export const adminTagSuggestionPageSchema = adminPageSchema(adminTagSuggestionRowSchema);
+export const adminTagSuggestionPageSchema = paginatedSchema(adminTagSuggestionRowSchema);
 export type AdminTagSuggestionPage = z.infer<typeof adminTagSuggestionPageSchema>;
 
 /**

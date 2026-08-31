@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { adminBanResultSchema, type AdminVendorStatus } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
+import { RowTrigger } from '@/components/admin/row-trigger';
 import { DataTable } from '@/components/admin/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
+import { displayRating } from '@/lib/admin-params';
 import { useApi } from '@/lib/use-api';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 
@@ -30,8 +32,23 @@ const STATUS_PILLS: Record<AdminVendorStatus, { tone: StatusTone; label: string 
   paused: { tone: 'inert', label: 'Paused' },
 };
 
-/** The frame's track list: checkbox · business · category · city · rating · bookings · status · actions. */
-const TEMPLATE = '22px 1.6fr 1.1fr 1fr .7fr .8fr .9fr 70px';
+/**
+ * What a suspension does, in one place.
+ *
+ * The bulk bar and the row control both name the consequence, and a destructive
+ * dialog that describes the same action two different ways is how an operator
+ * learns not to read them. `subject` is the only word that legitimately differs
+ * — one dialog is about several accounts, the other about one.
+ */
+function SuspensionConsequence({ subject }: { subject: string }): React.ReactElement {
+  return (
+    <>
+      Their open requests are declined and every confirmed booking in the future is cancelled and{' '}
+      <strong className="font-semibold">refunded in full</strong>. {subject} comes down. Suspension
+      can be lifted, but the bookings are not restored.
+    </>
+  );
+}
 
 export interface VendorTableProps {
   rows: readonly WireAdminVendorRow[];
@@ -93,14 +110,7 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
               </button>
             }
             title={`Suspend ${suspendable.length} ${suspendable.length === 1 ? 'account' : 'accounts'}?`}
-            description={
-              <>
-                Their open requests are declined and every confirmed booking in the future is
-                cancelled and <strong className="font-semibold">refunded in full</strong>. A
-                published storefront comes down. Suspension can be lifted, but the bookings are not
-                restored.
-              </>
-            }
+            description={<SuspensionConsequence subject="A published storefront" />}
             confirmLabel="Suspend accounts"
             onConfirm={async () => {
               /*
@@ -120,7 +130,6 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
       ) : null}
 
       <DataTable
-        template={TEMPLATE}
         rows={rows}
         rowKey={(row) => row.id}
         empty={
@@ -136,6 +145,7 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
         columns={[
           {
             key: 'select',
+            width: '22px',
             header: '',
             cell: (row) => (
               <input
@@ -149,6 +159,7 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
           },
           {
             key: 'business',
+            width: '1.6fr',
             header: 'Business',
             className: 'truncate font-semibold text-stone-900',
             cell: (row) => (
@@ -159,19 +170,21 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
           },
           {
             key: 'category',
+            width: '1.1fr',
             header: 'Category',
             cell: (row) => row.categoryName ?? '—',
           },
-          { key: 'city', header: 'City', cell: (row) => row.city ?? '—' },
+          { key: 'city', width: '1fr', header: 'City', cell: (row) => row.city ?? '—' },
           {
             key: 'rating',
+            width: '.7fr',
             header: 'Rating',
-            // A vendor with no reviews has no rating; `0.0` would read as a bad one.
-            cell: (row) => (row.reviewCount === 0 ? '—' : Number(row.avgRating).toFixed(1)),
+            cell: (row) => displayRating(row) ?? '—',
           },
-          { key: 'bookings', header: 'Bookings', cell: (row) => row.bookingsCount },
+          { key: 'bookings', width: '.8fr', header: 'Bookings', cell: (row) => row.bookingsCount },
           {
             key: 'status',
+            width: '.9fr',
             header: 'Status',
             cell: (row) => (
               <StatusPill tone={STATUS_PILLS[row.status].tone}>
@@ -181,56 +194,50 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
           },
           {
             key: 'actions',
+            width: '70px',
             header: '',
             className: 'flex justify-end',
-            cell: (row) =>
-              row.status === 'flagged' ? (
+            cell: (row) => {
+              /*
+                One control, two decisions. The branch is over the props rather
+                than over two near-identical elements — the consequence copy is
+                the part that must not drift, and it had already drifted once
+                between here and the bulk bar above.
+              */
+              const flagged = row.status === 'flagged';
+
+              return (
                 <ConfirmAction
+                  destructive={!flagged}
                   trigger={
-                    <button
-                      type="button"
-                      aria-label={`Lift the suspension on ${row.businessName}`}
-                      className="flex size-8 items-center justify-center rounded-md text-stone-600 hover:bg-stone-150 hover:text-stone-900"
-                    >
-                      <span aria-hidden="true">···</span>
-                    </button>
+                    <RowTrigger
+                      label={
+                        flagged
+                          ? `Lift the suspension on ${row.businessName}`
+                          : `Suspend ${row.businessName}`
+                      }
+                    />
                   }
-                  title={`Lift the suspension on ${row.businessName}?`}
-                  description="They can sign in again straight away. Their storefront stays unpublished until they publish it themselves, and the bookings cancelled by the suspension are not restored."
-                  confirmLabel="Lift suspension"
-                  onConfirm={async () => {
-                    await setBanned(row.userId, false);
-                    router.refresh();
-                  }}
-                />
-              ) : (
-                <ConfirmAction
-                  destructive
-                  trigger={
-                    <button
-                      type="button"
-                      aria-label={`Suspend ${row.businessName}`}
-                      className="flex size-8 items-center justify-center rounded-md text-stone-600 hover:bg-stone-150 hover:text-stone-900"
-                    >
-                      <span aria-hidden="true">···</span>
-                    </button>
+                  title={
+                    flagged
+                      ? `Lift the suspension on ${row.businessName}?`
+                      : `Suspend ${row.businessName}?`
                   }
-                  title={`Suspend ${row.businessName}?`}
                   description={
-                    <>
-                      Their open requests are declined and every confirmed booking in the future is
-                      cancelled and <strong className="font-semibold">refunded in full</strong>.
-                      Their storefront comes down. Suspension can be lifted, but the bookings are
-                      not restored.
-                    </>
+                    flagged ? (
+                      'They can sign in again straight away. Their storefront stays unpublished until they publish it themselves, and the bookings cancelled by the suspension are not restored.'
+                    ) : (
+                      <SuspensionConsequence subject="Their storefront" />
+                    )
                   }
-                  confirmLabel="Suspend account"
+                  confirmLabel={flagged ? 'Lift suspension' : 'Suspend account'}
                   onConfirm={async () => {
-                    await setBanned(row.userId, true);
+                    await setBanned(row.userId, !flagged);
                     router.refresh();
                   }}
                 />
-              ),
+              );
+            },
           },
         ]}
       />

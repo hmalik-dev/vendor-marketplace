@@ -12,8 +12,6 @@ import { TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
 import { useApi } from '@/lib/use-api';
 import { wireAdminTagRowSchema, type WireAdminTagRow } from '@/lib/wire-schemas';
 
-const TEMPLATE = '1.6fr 1.4fr .8fr .8fr 130px';
-
 /**
  * The vocabulary, grouped by category and editable in place.
  *
@@ -48,26 +46,28 @@ export function TagTable({ tags }: { tags: readonly WireAdminTagRow[] }): React.
             {TAG_CATEGORY_LABELS[category]}
           </h3>
           <DataTable
-            template={TEMPLATE}
             rows={group}
             rowKey={(tag) => tag.id}
             empty={null}
             columns={[
               {
                 key: 'name',
+                width: '1.6fr',
                 header: 'Name',
                 className: 'truncate font-semibold text-stone-900',
                 cell: (tag) => <TagName tag={tag} />,
               },
               {
                 key: 'slug',
+                width: '1.4fr',
                 header: 'Slug',
                 className: 'truncate font-mono',
                 cell: (tag) => tag.slug,
               },
-              { key: 'vendors', header: 'Vendors', cell: (tag) => tag.vendorCount },
+              { key: 'vendors', width: '.8fr', header: 'Vendors', cell: (tag) => tag.vendorCount },
               {
                 key: 'state',
+                width: '.8fr',
                 header: 'State',
                 cell: (tag) =>
                   tag.isActive ? (
@@ -78,6 +78,7 @@ export function TagTable({ tags }: { tags: readonly WireAdminTagRow[] }): React.
               },
               {
                 key: 'actions',
+                width: '130px',
                 header: '',
                 className: 'flex justify-end',
                 cell: (tag) => <ToggleActive tag={tag} />,

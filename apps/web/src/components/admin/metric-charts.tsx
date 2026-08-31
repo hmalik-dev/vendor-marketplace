@@ -95,7 +95,7 @@ function Chart({ title, stroke, points, format }: MetricSeries): React.ReactElem
  * revenue gold, bookings clay, users steel, completion sage. The colour is the
  * subject, not the position — reordering the grid must not recolour a line.
  */
-export function MetricCharts({ metrics }: { metrics: WireAdminMetrics }): React.ReactElement {
+export function MetricChartsImpl({ metrics }: { metrics: WireAdminMetrics }): React.ReactElement {
   const count = (value: number): string => String(value);
 
   return (

@@ -3,7 +3,7 @@
 import { AlertDialog } from 'radix-ui';
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 
 export interface ConfirmActionProps {
   /** The control that opens the dialog — an overflow-menu item or a row button. */
@@ -53,11 +53,15 @@ export function ConfirmAction({
        * The dialog stays open on failure. Closing it would leave the operator
        * looking at an unchanged table with no explanation, which reads as the
        * action having silently done nothing.
+       *
+       * `userFacingError`, not `failure.message`. These actions call Stripe, so
+       * they are the paths most likely to 500 — and a 5xx body is written about
+       * the server, not the reader: it can carry a stack fragment or an SDK
+       * complaining about an API key. That helper suppresses those and passes
+       * the API's own 4xx sentences through.
        */
       setError(
-        failure instanceof ApiClientError
-          ? failure.message
-          : 'That did not reach us. Check your connection and try again.',
+        userFacingError(failure, 'That did not reach us. Check your connection and try again.'),
       );
     } finally {
       setBusy(false);

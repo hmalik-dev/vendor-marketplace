@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
-import { MetricCharts } from '@/components/admin/metric-charts';
+import { MetricCharts } from '@/components/admin/metric-charts.lazy';
 import { getAdminMetrics } from '@/lib/admin-data';
 
 interface MetricCard {

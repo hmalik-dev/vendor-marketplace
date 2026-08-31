@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_NAME_LENGTH } from '@vendor-marketplace/shared';
 import { useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -95,6 +96,12 @@ export function FilterBar({
           type="search"
           name="q"
           defaultValue={searchValue ?? ''}
+          /*
+            The same cap the API enforces. Without it a long paste becomes a
+            user-visible error that validation should have prevented — the
+            "bound the input in the UI too" half of the boundary rule.
+          */
+          maxLength={MAX_NAME_LENGTH}
           placeholder={searchPlaceholder}
           aria-label={searchPlaceholder}
           className="w-full max-w-70 flex-1 rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-base text-stone-900 placeholder:text-stone-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay-400"

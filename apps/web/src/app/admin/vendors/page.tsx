@@ -2,10 +2,16 @@ import Link from 'next/link';
 import { ADMIN_PAYOUT_FILTERS, ADMIN_VENDOR_STATUSES } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
-import { Pager } from '@/components/admin/pager';
 import { VendorTable } from '@/components/admin/vendor-table';
-import { adminQueryString, getAdminVendorFacets, getAdminVendors } from '@/lib/admin-data';
-import { boundedText, oneOf, pageNumber } from '@/lib/admin-params';
+import { getAdminVendorFacets, getAdminVendors } from '@/lib/admin-data';
+import {
+  adminQueryString,
+  boundedText,
+  droppedKeys,
+  oneOf,
+  pageNumber,
+  type RawParam,
+} from '@/lib/admin-params';
 import { cn } from '@/lib/utils';
 
 const PATH = '/admin/vendors';
@@ -16,14 +22,14 @@ const PAYOUT_LABELS: Record<(typeof ADMIN_PAYOUT_FILTERS)[number], string> = {
   'not-connected': 'No payouts yet',
 };
 
-interface SearchParams {
-  q?: string;
-  category?: string;
-  city?: string;
-  payouts?: string;
-  status?: string;
-  page?: string;
-}
+/**
+ * Every value typed as `RawParam`, not `string`.
+ *
+ * Next hands a page `string[]` for a repeated key — `?q=a&q=b` — and typing
+ * these as `string` hides that from the compiler entirely, which is how the
+ * boundary helpers came to be called with an array.
+ */
+type SearchParams = Record<'q' | 'category' | 'city' | 'payouts' | 'status' | 'page', RawParam>;
 
 /**
  * Frame `13 Admin`.
@@ -35,7 +41,7 @@ interface SearchParams {
 export default async function AdminVendorsPage({
   searchParams,
 }: {
-  searchParams: Promise<SearchParams>;
+  searchParams: Promise<Partial<SearchParams>>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const facets = await getAdminVendorFacets();
@@ -56,6 +62,8 @@ export default async function AdminVendorsPage({
     status: oneOf(raw.status, ADMIN_VENDOR_STATUSES),
   };
   const query = adminQueryString({ ...params, page: pageNumber(raw.page) });
+  // What was in the URL and could not be used, so the screen can say so.
+  const dropped = droppedKeys(raw, params);
 
   const vendors = await getAdminVendors(query);
   const awaitingActive = params.status === 'review';
@@ -67,6 +75,7 @@ export default async function AdminVendorsPage({
     <AdminSurface
       heading="Vendors"
       counts={[`${vendors.total} total`, `${vendors.awaitingReview} awaiting review`]}
+      dropped={dropped}
       filters={
         <FilterBar
           action={PATH}
@@ -137,19 +146,15 @@ export default async function AdminVendorsPage({
           {params.status ? <input type="hidden" name="status" value={params.status} /> : null}
         </FilterBar>
       }
+      pager={{
+        path: PATH,
+        params: params,
+        page: vendors.page,
+        pageSize: vendors.pageSize,
+        total: vendors.total,
+      }}
     >
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="min-h-0 flex-1">
-          <VendorTable rows={vendors.items} filtered={filtered} />
-        </div>
-        <Pager
-          path={PATH}
-          params={params}
-          page={vendors.page}
-          pageSize={vendors.pageSize}
-          total={vendors.total}
-        />
-      </div>
+      <VendorTable rows={vendors.items} filtered={filtered} />
     </AdminSurface>
   );
 }

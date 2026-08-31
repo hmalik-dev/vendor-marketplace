@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
   bookingRequests,
@@ -206,29 +206,44 @@ export async function findAdminVendors(
     .offset(offset);
 }
 
+/**
+ * Both numbers in the count line — "412 total · 38 awaiting review" — from one
+ * scan.
+ *
+ * A `FILTER` aggregate rather than two queries. They were two, and they were
+ * the identical `vendor_profiles ⋈ users` scan under the identical `WHERE`,
+ * differing only by the `review` predicate — so the second was a doubled scan
+ * that could also, if the two ever drifted, describe a different set from the
+ * one beneath it.
+ *
+ * `awaitingReview` deliberately ignores `filters.status`: it is the saved
+ * filter's own badge and has to keep reporting how many are waiting while the
+ * table shows `live`. That is why the condition is built without it.
+ */
 export async function countAdminVendors(
   db: AppDatabase,
   filters: AdminVendorFilters,
-): Promise<number> {
+): Promise<{ total: number; awaitingReview: number }> {
+  /*
+   * The scan is the status-free set, and **both** numbers are `FILTER`
+   * aggregates over it — `total` by the requested status, `awaitingReview`
+   * always by `review`. Filtering the scan itself by status and counting
+   * `awaitingReview` inside it would report 0 waiting the moment an operator
+   * looked at the live vendors, which is the badge saying the queue is empty
+   * because you filtered it away.
+   */
   const rows = await db
-    .select({ total: sql<number>`count(*)::int` })
+    .select({
+      total: filters.status
+        ? sql<number>`count(*) filter (where ${statusCondition(filters.status)})::int`
+        : sql<number>`count(*)::int`,
+      awaitingReview: sql<number>`count(*) filter (where ${statusCondition('review')})::int`,
+    })
     .from(vendorProfiles)
     .innerJoin(users, eq(users.id, vendorProfiles.userId))
-    .where(vendorFilterCondition(filters));
+    .where(vendorFilterCondition({ ...filters, status: undefined }));
 
-  return rows?.[0]?.total ?? 0;
-}
-
-/**
- * How many vendors are in the `review` state, under the *same* filters as the
- * table — so "412 total · 38 awaiting review" always describes the rows below
- * it rather than the whole platform.
- */
-export async function countVendorsAwaitingReview(
-  db: AppDatabase,
-  filters: AdminVendorFilters,
-): Promise<number> {
-  return countAdminVendors(db, { ...filters, status: 'review' });
+  return { total: rows?.[0]?.total ?? 0, awaitingReview: rows?.[0]?.awaitingReview ?? 0 };
 }
 
 /** The distinct cities and categories the filter bar offers — real values only. */
@@ -255,17 +270,37 @@ export async function findVendorFilterFacets(db: AppDatabase): Promise<{
   };
 }
 
+/**
+ * The ban target.
+ *
+ * Soft-deleted accounts are excluded, the same way `users.dao.ts` excludes them
+ * from every other read. It is deliberately **not** the wider read it looks
+ * like: a deleted account has nothing left to ban, and letting one resolve here
+ * would let an operator "suspend" a row no other surface believes exists.
+ */
 export async function findUserById(db: AppDatabase, userId: string): Promise<UserRow | null> {
   if (!userId) {
     return null;
   }
 
-  const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const rows = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.id, userId), sql`${users.deletedAt} is null`))
+    .limit(1);
 
   return rows?.[0] ?? null;
 }
 
-/** The vendor profile an account owns, if it has one. */
+/**
+ * The live vendor profile an account owns, if it has one.
+ *
+ * Named the same as `vendors.dao.ts`'s and filtered the same way — `is_deleted`
+ * excluded — because a reader who knows that one will assume this one behaves
+ * identically, and a ban that unpublished a soft-deleted storefront would be
+ * acting on a row nothing else in the API returns. The projection is narrower
+ * because a ban needs only the id and the publish flag.
+ */
 export async function findVendorProfileByUserId(
   db: AppDatabase,
   userId: string,
@@ -277,7 +312,7 @@ export async function findVendorProfileByUserId(
   const rows = await db
     .select({ id: vendorProfiles.id, isPublished: vendorProfiles.isPublished })
     .from(vendorProfiles)
-    .where(eq(vendorProfiles.userId, userId))
+    .where(and(eq(vendorProfiles.userId, userId), eq(vendorProfiles.isDeleted, false)))
     .limit(1);
 
   return rows?.[0] ?? null;
@@ -292,6 +327,8 @@ export interface BanAffectedBooking {
   id: string;
   customerId: string;
   vendorId: string;
+  /** The account behind the vendor profile — who the cancellation notifies. */
+  vendorUserId: string;
   totalAmountCents: number;
   stripePaymentIntentId: string | null;
 }
@@ -310,15 +347,24 @@ export async function findConfirmedBookingsToUnwind(
     return [];
   }
 
+  /*
+   * The vendor's account id comes back with the row rather than being looked up
+   * per booking inside the cancellation loop. When the ban target *is* the
+   * vendor every row carries the same profile id, so that lookup was the same
+   * single-row query issued once per booking — inside a loop already paying for
+   * a Stripe refund.
+   */
   return db
     .select({
       id: bookings.id,
       customerId: bookings.customerId,
       vendorId: bookings.vendorId,
+      vendorUserId: vendorProfiles.userId,
       totalAmountCents: bookings.totalAmountCents,
       stripePaymentIntentId: bookings.stripePaymentIntentId,
     })
     .from(bookings)
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
     .where(and(eq(bookings.status, 'confirmed'), gt(bookings.eventDate, today), sides));
 }
 
@@ -384,31 +430,6 @@ export async function setBanned(
 
     return { profileUnpublished: false };
   });
-}
-
-/** The user row behind a vendor profile — the ban target, and the notification recipient. */
-export async function findVendorOwnerId(
-  db: AppDatabase,
-  vendorProfileId: string,
-): Promise<string | null> {
-  if (!vendorProfileId) {
-    return null;
-  }
-
-  const rows = await db
-    .select({ userId: vendorProfiles.userId })
-    .from(vendorProfiles)
-    .where(eq(vendorProfiles.id, vendorProfileId))
-    .limit(1);
-
-  return rows?.[0]?.userId ?? null;
-}
-
-/** Total accounts, for the Overview cards. */
-export async function countUsers(db: AppDatabase): Promise<number> {
-  const rows = await db.select({ total: count() }).from(users);
-
-  return rows?.[0]?.total ?? 0;
 }
 
 // --- Customers -------------------------------------------------------------
@@ -488,12 +509,11 @@ export async function countAdminCustomers(db: AppDatabase, q: string | undefined
  * `bookings` joined to both sides' names.
  *
  * The customer is a `users` row and the vendor a `vendor_profiles` row, so this
- * is two joins rather than one aliased self-join. Both are inner: a booking
- * whose vendor or customer row is gone is not a row an operator can act on, and
- * both foreign keys cascade, so it cannot occur.
+ * is two joins of two different tables rather than an aliased self-join — no
+ * `alias()` is needed or used. Both are inner: a booking whose vendor or
+ * customer row is gone is not a row an operator can act on, and both foreign
+ * keys cascade, so it cannot occur.
  */
-const bookingCustomer = users;
-
 function bookingSelection() {
   return {
     id: bookings.id,
@@ -504,8 +524,8 @@ function bookingSelection() {
     vendorPayoutCents: bookings.vendorPayoutCents,
     stripePaymentIntentId: bookings.stripePaymentIntentId,
     paidAt: bookings.paidAt,
-    customerFirstName: bookingCustomer.firstName,
-    customerLastName: bookingCustomer.lastName,
+    customerFirstName: users.firstName,
+    customerLastName: users.lastName,
     vendorName: vendorProfiles.businessName,
     vendorSlug: vendorProfiles.slug,
     createdAt: bookings.createdAt,
@@ -514,7 +534,7 @@ function bookingSelection() {
 
 export interface AdminBookingProjection {
   id: string;
-  status: string;
+  status: BookingStatus;
   eventDate: string;
   totalAmountCents: number;
   platformFeeCents: number;
@@ -537,7 +557,7 @@ export async function findAdminBookings(
   return db
     .select(bookingSelection())
     .from(bookings)
-    .innerJoin(bookingCustomer, eq(bookingCustomer.id, bookings.customerId))
+    .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
     .where(status ? eq(bookings.status, status) : undefined)
     .orderBy(desc(bookings.createdAt))
@@ -570,7 +590,7 @@ export async function findAdminPayments(
   return db
     .select(bookingSelection())
     .from(bookings)
-    .innerJoin(bookingCustomer, eq(bookingCustomer.id, bookings.customerId))
+    .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
     .where(sql`${bookings.paidAt} is not null`)
     .orderBy(desc(bookings.paidAt))
@@ -982,12 +1002,17 @@ export interface AdminMetricTotals {
 }
 
 export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetricTotals> {
-  const [revenue, bookingRows, activeVendors, userRows, pending, reviewRows] = await Promise.all([
+  const [bookingTotals, activeVendors, userRows, pending, reviewRows] = await Promise.all([
+    /*
+     * One scan of `bookings` for both numbers. They were two full scans of the
+     * same table, differing only by a predicate a `FILTER` expresses.
+     */
     db
-      .select({ total: sql<number>`coalesce(sum(${bookings.totalAmountCents}), 0)::int` })
-      .from(bookings)
-      .where(PAID_AND_KEPT),
-    db.select({ total: sql<number>`count(*)::int` }).from(bookings),
+      .select({
+        bookingsCount: sql<number>`count(*)::int`,
+        revenueCents: sql<number>`coalesce(sum(${bookings.totalAmountCents}) filter (where ${PAID_AND_KEPT}), 0)::int`,
+      })
+      .from(bookings),
     db
       .select({ total: sql<number>`count(*)::int` })
       .from(vendorProfiles)
@@ -1011,8 +1036,8 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
   ]);
 
   return {
-    totalRevenueCents: revenue?.[0]?.total ?? 0,
-    bookingsCount: bookingRows?.[0]?.total ?? 0,
+    totalRevenueCents: bookingTotals?.[0]?.revenueCents ?? 0,
+    bookingsCount: bookingTotals?.[0]?.bookingsCount ?? 0,
     activeVendorsCount: activeVendors?.[0]?.total ?? 0,
     usersCount: userRows?.[0]?.total ?? 0,
     pendingTagSuggestionsCount: pending?.[0]?.total ?? 0,

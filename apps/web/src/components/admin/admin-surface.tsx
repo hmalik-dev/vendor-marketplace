@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { Pager, type PagerProps } from '@/components/admin/pager';
 import { UpdatedAgo } from '@/components/admin/updated-ago';
+import { droppedFiltersLine } from '@/lib/admin-params';
 
 export interface AdminSurfaceProps {
   /** Serif 23px, per frame `13`. */
@@ -11,6 +13,16 @@ export interface AdminSurfaceProps {
   counts: readonly string[];
   /** The Refine bar. */
   filters?: ReactNode;
+  /**
+   * Filters that were in the URL and could not be used.
+   *
+   * `web-route-boundaries.md` asks for a bad value to be dropped **and said** —
+   * rendering the unfiltered list in silence tells an operator the platform
+   * holds data it does not.
+   */
+  dropped?: readonly string[];
+  /** Rendered below the table when there is more than one page. */
+  pager?: Omit<PagerProps, 'path'> & { path: string };
   /** The table, which fills the rest of the shell and scrolls inside itself. */
   children: ReactNode;
 }
@@ -28,8 +40,12 @@ export function AdminSurface({
   heading,
   counts,
   filters,
+  dropped,
+  pager,
   children,
 }: AdminSurfaceProps): React.ReactElement {
+  const ignored = droppedFiltersLine(dropped ?? []);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 px-6 pt-4.5 pb-3.5">
@@ -42,9 +58,23 @@ export function AdminSurface({
           </p>
         </div>
         {filters}
+        {ignored ? (
+          <p role="status" className="mt-2 text-helper text-stone-600">
+            {ignored}
+          </p>
+        ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden px-6 pb-5">{children}</div>
+      {/*
+        The `min-h-0 flex-1` pair is what makes the table scroll inside itself
+        rather than the page — and it lives here rather than in each screen,
+        because it was copied into five of them and the sixth would have got it
+        wrong. Losing it is the defect the frame's acceptance list names first.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-5">
+        <div className="min-h-0 flex-1">{children}</div>
+        {pager ? <Pager {...pager} /> : null}
+      </div>
     </div>
   );
 }

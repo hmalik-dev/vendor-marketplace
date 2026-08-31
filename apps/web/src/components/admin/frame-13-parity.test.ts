@@ -126,12 +126,19 @@ describe('the 210px rail', () => {
 });
 
 describe('the table', () => {
-  it('uses one track list for the header row and the body rows', () => {
-    // The frame repeats the same `grid-template-columns` on every row; here it
-    // is written once and read twice, because two copies drift and the columns
-    // stop lining up.
+  it('declares the frame’s tracks once, on the columns themselves', () => {
+    /*
+     * The frame repeats the same `grid-template-columns` on every row. Here the
+     * track lives on the column it sizes and `DataTable` joins them into one
+     * custom property, so the header row and the body rows read a single value
+     * — two hand-synchronised lists is how the columns stop lining up.
+     */
     expect(frame).toContain('grid-template-columns:22px 1.6fr 1.1fr 1fr .7fr .8fr .9fr 70px');
-    expect(vendorTable).toContain("const TEMPLATE = '22px 1.6fr 1.1fr 1fr .7fr .8fr .9fr 70px'");
+
+    const tracks = [...vendorTable.matchAll(/width: '([^']+)'/g)].map((match) => match[1]);
+    expect(tracks.join(' ')).toBe('22px 1.6fr 1.1fr 1fr .7fr .8fr .9fr 70px');
+
+    expect(dataTable).toContain("columns.map((column) => column.width).join(' ')");
     expect(dataTable.match(/grid-cols-\(--admin-table-columns\)/g)).toHaveLength(2);
   });
 
@@ -146,7 +153,10 @@ describe('the table', () => {
     // rather than `fixed`, which would leave the grid it has to stay aligned to.
     expect(dataTable).toContain('sticky top-0');
     expect(dataTable).toContain('overflow-y-auto');
-    expect(surface).toContain('min-h-0 flex-1 overflow-hidden');
+    // The pane that scrolls, and the class pair that lets it — owned by the
+    // shell rather than copied into each screen.
+    expect(surface).toContain('flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-5');
+    expect(surface).toContain('<div className="min-h-0 flex-1">{children}</div>');
   });
 
   it('sets the header row’s ground and micro-label off the frame', () => {

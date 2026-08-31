@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_NAME_LENGTH, MAX_PAGE } from '@vendor-marketplace/shared';
-import { boundedText, oneOf, pageNumber } from './admin-params';
+import { boundedText, droppedFiltersLine, droppedKeys, oneOf, pageNumber } from './admin-params';
 
 describe('oneOf', () => {
   it('returns the value when it is in the vocabulary', () => {
@@ -55,5 +55,53 @@ describe('pageNumber', () => {
 
   it('accepts the ceiling itself', () => {
     expect(pageNumber(String(MAX_PAGE))).toBe(MAX_PAGE);
+  });
+});
+
+describe('a repeated parameter', () => {
+  /*
+   * The class of defect: Next hands a page `string[]` for `?q=a&q=b`, and
+   * `.trim()` on an array is a TypeError during the server render — a 500 for a
+   * URL anyone can paste. Every reader takes the array shape for that reason.
+   */
+  it('is read as its first value rather than crashing the render', () => {
+    expect(boundedText(['kessler', 'ignored'])).toBe('kessler');
+    expect(pageNumber(['3', '9'])).toBe(3);
+    expect(oneOf(['review', 'live'], ['live', 'review'] as const)).toBe('review');
+  });
+
+  it('survives an empty array, which is what a bare `?q=` repeated can produce', () => {
+    expect(boundedText([])).toBeUndefined();
+    expect(pageNumber([])).toBe(1);
+    expect(oneOf([], ['live'] as const)).toBeUndefined();
+  });
+});
+
+describe('droppedKeys and droppedFiltersLine', () => {
+  it('names a filter that was supplied but not usable', () => {
+    const dropped = droppedKeys(
+      { status: 'banned', city: 'Austin' },
+      { status: undefined, city: 'Austin' },
+    );
+
+    expect(dropped).toEqual(['status']);
+    expect(droppedFiltersLine(dropped)).toBe(
+      'Ignored status in the address — it is not a value this list can filter by.',
+    );
+  });
+
+  it('says nothing when everything survived', () => {
+    expect(droppedKeys({ city: 'Austin' }, { city: 'Austin' })).toEqual([]);
+    expect(droppedFiltersLine([])).toBeNull();
+  });
+
+  it('does not report a key that was never supplied', () => {
+    expect(droppedKeys({}, { status: undefined })).toEqual([]);
+  });
+
+  it('joins several into one sentence', () => {
+    expect(droppedFiltersLine(['status', 'city', 'payouts'])).toBe(
+      'Ignored status, city and payouts in the address — they are not values this list can filter by.',
+    );
   });
 });

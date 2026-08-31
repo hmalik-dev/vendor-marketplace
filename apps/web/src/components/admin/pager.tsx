@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { adminQueryString } from '@/lib/admin-params';
 
 export interface PagerProps {
   /** The surface's own path, without a query. */
@@ -10,18 +11,9 @@ export interface PagerProps {
   total: number;
 }
 
+/** The same emptiness rule the filter links use — see `adminQueryString`. */
 function href(path: string, params: Record<string, string | undefined>, page: number): string {
-  const search = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') {
-      search.set(key, value);
-    }
-  }
-
-  search.set('page', String(page));
-
-  return `${path}?${search.toString()}`;
+  return `${path}${adminQueryString({ ...params, page })}`;
 }
 
 /**

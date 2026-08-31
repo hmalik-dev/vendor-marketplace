@@ -87,21 +87,6 @@ async function adminRead<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   }
 }
 
-/** Drops empty values so a cleared filter leaves the query string rather than sending `?city=`. */
-export function adminQueryString(params: Record<string, string | number | undefined>): string {
-  const search = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') {
-      search.set(key, String(value));
-    }
-  }
-
-  const query = search.toString();
-
-  return query ? `?${query}` : '';
-}
-
 export async function getAdminMetrics(): Promise<WireAdminMetrics> {
   return adminRead('/admin/metrics', wireAdminMetricsSchema);
 }

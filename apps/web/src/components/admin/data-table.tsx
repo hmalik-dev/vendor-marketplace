@@ -5,6 +5,16 @@ export interface DataTableColumn<T> {
   key: string;
   /** The uppercase micro-label in the fixed header row. Empty for a control column. */
   header: string;
+  /**
+   * This column's grid track — `1.6fr`, `70px`.
+   *
+   * On the column rather than in a separate track list beside it. The list and
+   * the columns were two hand-synchronised arrays, so adding a column without
+   * editing the string misaligned the header from the body with no type error
+   * and no test — which is the single most visible way a table like this
+   * breaks. Now the two cannot disagree, because there is only one.
+   */
+  width: string;
   cell: (row: T) => ReactNode;
   /** Overrides for one cell — right alignment on the overflow column, mainly. */
   className?: string;
@@ -14,12 +24,6 @@ export interface DataTableProps<T> {
   columns: readonly DataTableColumn<T>[];
   rows: readonly T[];
   rowKey: (row: T) => string;
-  /**
-   * The CSS grid track list both the header and every body row use. One string,
-   * because two would drift and the columns would stop lining up — which is the
-   * single most visible way a table like this breaks.
-   */
-  template: string;
   /** Rendered in place of the body when there is nothing to show. */
   empty: ReactNode;
 }
@@ -37,16 +41,17 @@ export function DataTable<T>({
   columns,
   rows,
   rowKey,
-  template,
   empty,
 }: DataTableProps<T>): React.ReactElement {
+  // Joined once here; the header row and every body row read this one value.
+  const template = columns.map((column) => column.width).join(' ');
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-stone-300 bg-stone-0">
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div
           role="table"
           className="min-w-full"
-          // The one place the track list is written; every row reads this value.
           style={{ ['--admin-table-columns' as string]: template }}
         >
           <div
