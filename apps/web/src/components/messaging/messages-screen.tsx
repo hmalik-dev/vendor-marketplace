@@ -8,6 +8,7 @@ import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Textarea } from '@/components/ui/textarea';
+import { reportSwallowedError } from '@/lib/report-error';
 import { useApi } from '@/lib/use-api';
 import { useEventStream } from '@/lib/use-event-stream';
 import {
@@ -101,11 +102,21 @@ export function MessagesScreen({
       });
       setMessages(page.items);
 
-      // Opening the thread is what marks it read; the list count follows.
+      /*
+       * Opening the thread is what marks it read; the list count follows.
+       *
+       * Justified swallow (#368): the count is corrected on the next load, and
+       * an error toast for a read receipt would interrupt the reader over
+       * something they did not ask for and cannot act on. Reported rather than
+       * dropped, because a mark-read that fails *every* time is a real defect
+       * that would otherwise never surface.
+       */
       await call(`/conversations/${conversationId}/read`, {
         schema: wireMessagePageSchema.nullable(),
         method: 'PUT',
-      }).catch(() => undefined);
+      }).catch((error: unknown) => {
+        reportSwallowedError('messages: marking a conversation read failed', error);
+      });
 
       setConversations((rows) =>
         rows.map((row) => (row.id === conversationId ? { ...row, unreadCount: 0 } : row)),

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { NEARBY_ALTERNATIVES_LIMIT } from '@vendor-marketplace/shared';
 import { apiRequest } from '@/lib/api-client';
+import { reportSwallowedError } from '@/lib/report-error';
 import { wireNearbyAvailabilityResultSchema, type WireNearbyVendor } from '@/lib/wire-schemas';
 import { VendorCard } from '@/components/vendors/vendor-card';
 
@@ -62,8 +63,17 @@ export function NearbyDatesBand({
         setVendors(body.items);
         setTotal(body.total);
       })
-      .catch(() => {
-        // Deliberately silent — see the note on the component.
+      .catch((error: unknown) => {
+        /*
+         * Deliberately silent **on screen** — see the note on the component:
+         * this band is a helpful addition to a screen that already stands on
+         * its own, so an error here would sit on top of a dead end.
+         *
+         * Silent on screen is not the same as silent everywhere, which is what
+         * it used to be (#368). The console keeps the trace, so a browser pass
+         * cannot read "no nearby dates" off a band whose request failed.
+         */
+        reportSwallowedError('search: /vendors/availability/nearby request failed', error);
         setVendors([]);
         setTotal(0);
       });
