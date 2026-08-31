@@ -56,7 +56,12 @@ const tagParamsSchema = z.object({ tagId: z.uuid() });
  * from Clerk metadata: the account holder can write that field, and `admin` is
  * refused at sync (`normalizeRole`) precisely so it can only be granted here.
  */
-export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
+export interface AdminRoutesOptions {
+  /** `canonicalWebOrigin(env)` — the origin every emailed link is built from. */
+  webOrigin: string;
+}
+
+export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app, options) => {
   /*
    * `onRequest`, not `preHandler`, on **every** route in this plugin.
    *
@@ -78,6 +83,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     stripe: app.stripe,
     hub: app.events,
     log: app.log,
+    mail: { db: app.db, email: app.email, log: app.log, webOrigin: options.webOrigin },
   });
 
   app.get(

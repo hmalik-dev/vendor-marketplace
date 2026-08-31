@@ -24,6 +24,8 @@ const bookingParamsSchema = z.object({ bookingId: uuidSchema });
 export interface PaymentRoutesOptions {
   /** `STRIPE_PLATFORM_FEE_RATE`, resolved and coerced at boot. */
   platformFeeRate: number;
+  /** `canonicalWebOrigin(env)` — the origin every emailed link is built from. */
+  webOrigin: string;
 }
 
 export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async (app, options) => {
@@ -32,6 +34,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
     stripe: app.stripe,
     hub: app.events,
     log,
+    mail: { db: app.db, email: app.email, log, webOrigin: options.webOrigin },
     platformFeeRate: options.platformFeeRate,
   });
 

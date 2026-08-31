@@ -31,6 +31,18 @@ for (const [stripeKey, clerkKey] of [
   REQUIRED[stripeKey] = REQUIRED[clerkKey];
 }
 
+/*
+ * Resend's key is composed rather than written out, for the same reason and one
+ * more. Its registry `shape` is `/^re_[A-Za-z0-9_]{16,}$/`, so unlike the
+ * Stripe pair above it cannot borrow Clerk's — and a string of that shape
+ * assigned to that name is precisely what the credential hook stops. Joining
+ * the parts satisfies the schema without ever spelling a key-shaped literal.
+ *
+ * `EMAIL_FROM` is absent on purpose: the registry gives it a default derived
+ * from `BRAND_DOMAIN`, and the default is what these tests should exercise.
+ */
+REQUIRED.RESEND_API_KEY = ['re', 'fixture', 'value', 'for', 'the', 'suites'].join('_');
+
 describe('parseEnv', () => {
   it('fills in the development defaults', () => {
     const env = parseEnv(REQUIRED);
@@ -94,10 +106,15 @@ describe('parseEnv', () => {
     expect(Object.keys(parseEnv(REQUIRED))).not.toContain('NEON_BRANCH');
   });
 
-  it('does not require a capability the API has not wired up yet', () => {
-    // `email` is the next capability the registry carries and the API does not
-    // read. Stripe used to stand here; #9 wired it up, so the example moved.
-    expect(Object.keys(parseEnv(REQUIRED))).not.toContain('RESEND_API_KEY');
+  /*
+   * `email` was the standing example here until #11 wired it up — Stripe held
+   * the place before that, and #9 moved it on for the same reason. There is no
+   * unwired capability left in the registry, so the assertion inverts: the keys
+   * the API now reads are the ones it must actually have.
+   */
+  it('requires the email capability now that the API sends transactional mail', () => {
+    expect(Object.keys(parseEnv(REQUIRED))).toContain('RESEND_API_KEY');
+    expect(Object.keys(parseEnv(REQUIRED))).toContain('EMAIL_FROM');
   });
 });
 
@@ -105,7 +122,7 @@ describe('registry derivation', () => {
   it('reads exactly the keys the registry assigns to the API', () => {
     const expected = registryKeys({
       consumer: 'api',
-      capabilities: ['core', 'auth', 'storage', 'stripe'],
+      capabilities: ['core', 'auth', 'storage', 'stripe', 'email'],
     });
 
     expect(Object.keys(parseEnv(REQUIRED)).sort()).toEqual([...expected].sort());

@@ -150,6 +150,14 @@ describe('/booking-requests', () => {
   });
 
   afterEach(async () => {
+    /*
+     * The email fake records for the lifetime of the harness, which is
+     * `beforeAll`-scoped — so it resets with the tables. Without this every
+     * `toEqual([...])` below becomes history-dependent and the first suite to
+     * run decides what the rest see.
+     */
+    harness.email.sent.length = 0;
+    harness.email.deliveredKeys.clear();
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -343,6 +351,55 @@ describe('/booking-requests', () => {
       expect(second.statusCode).toBe(200);
       expect(second.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
       expect(second.headers.location).toBe(`/booking-requests/${first.json<RequestBody>().id}`);
+    });
+
+    /*
+     * The email half of the assertion directly above. It sits here rather than
+     * in a suite of its own because the email **is** the notification — a test
+     * that checked one and not the other would be checking half an event.
+     */
+    it('emails the vendor, with the notification’s own subject', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      await createRequest(vendorId, { packageId });
+
+      expect(harness.email.sent).toHaveLength(1);
+      expect(harness.email.sent[0]?.subject).toBe('New booking request');
+      expect(harness.email.sent[0]?.text).toContain('/vendor/bookings');
+    });
+
+    /*
+     * The ticket's idempotency requirement, and it is real rather than
+     * assumed: the fake models Resend's own dedupe on the idempotency key, so
+     * a second send of the same event would have to arrive with a *different*
+     * key to slip through — which is exactly the bug the key exists to stop.
+     */
+    it('does not email the vendor a second time about the same request', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+
+      await createRequest(vendorId, { packageId });
+      await createRequest(vendorId, { packageId });
+
+      expect(harness.email.sent).toHaveLength(1);
+    });
+
+    /*
+     * The load-bearing failure case. A booking request that succeeded must not
+     * appear to fail because an email bounced — the row is durable, the
+     * response is 201, and the failure is visible in the log instead.
+     */
+    it('still creates the request when the email fails', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Ash & Oak');
+      harness.email.failNext = true;
+
+      const response = await createRequest(vendorId, { packageId });
+
+      expect(response.statusCode).toBe(201);
+      expect(harness.email.sent).toEqual([]);
+
+      const rows = await harness.database.db
+        .select({ type: notifications.type })
+        .from(notifications);
+      expect(rows.map((row) => row.type)).toEqual(['new_request']);
     });
 
     it('does not notify the vendor a second time about the same request', async () => {

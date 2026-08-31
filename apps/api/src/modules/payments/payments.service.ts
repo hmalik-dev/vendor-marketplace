@@ -9,6 +9,10 @@ import {
 import type { BookingRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
+import {
+  sendNotificationEmail,
+  type NotificationEmailDeps,
+} from '../notifications/notification-email.js';
 import type { EventHub } from '../../lib/event-stream.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import {
@@ -37,6 +41,14 @@ export interface PaymentContext {
   stripe: StripeConnectGateway;
   hub: EventHub;
   log: FastifyBaseLogger;
+  /**
+   * Everything the transactional email needs.
+   *
+   * Carried on the context beside `hub` because the email *is* the
+   * notification: an event that rings the bell and does not reach the inbox has
+   * drifted, and threading them separately is how that happens.
+   */
+  mail: NotificationEmailDeps;
   /** `STRIPE_PLATFORM_FEE_RATE`, resolved at boot. */
   platformFeeRate: number;
 }
@@ -305,6 +317,11 @@ async function notify(
   userId: string,
   type: 'booking_confirmed' | 'booking_completed' | 'booking_cancelled',
   copy: { title: string; body: string; bookingId: string },
+  /*
+   * Which half of the product the recipient reads this on, so the emailed link
+   * lands on their own bookings rather than bouncing off the other side's.
+   */
+  audience: 'customer' | 'vendor' = 'customer',
 ): Promise<void> {
   const stored = await insertNotification(context.db, {
     userId,
@@ -327,6 +344,14 @@ async function notify(
         createdAt: stored.createdAt,
       },
     });
+
+    /*
+     * After the row and after the push, and unable to fail either: every
+     * caller here is already outside its transaction — `announceBooking` runs
+     * after `confirmBooking` commits — and `sendNotificationEmail` swallows its
+     * own failures so a booking that succeeded cannot appear to fail.
+     */
+    await sendNotificationEmail(context.mail, stored, audience);
   }
 }
 

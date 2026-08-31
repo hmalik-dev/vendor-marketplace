@@ -16,6 +16,7 @@ import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.j
 import type { AppDatabase } from './lib/database.js';
 import { redactQueryValues } from './lib/log-redaction.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
+import type { EmailGateway } from './lib/email.js';
 import type { StripeConnectGateway } from './lib/stripe.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
 import { clockPlugin, type Clock } from './plugins/clock.js';
@@ -23,6 +24,7 @@ import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { eventsPlugin } from './plugins/events.js';
 import { storagePlugin } from './plugins/storage.js';
+import { emailPlugin } from './plugins/email.js';
 import { stripePlugin } from './plugins/stripe.js';
 import { availabilityRoutes } from './modules/availability/availability.routes.js';
 import { bookingRequestRoutes } from './modules/booking-requests/booking-requests.routes.js';
@@ -71,6 +73,8 @@ export interface BuildServerOptions {
   webhooks?: Pick<ClerkWebhookRoutesOptions, 'verifySignature'>;
   /** Stripe Connect seam; the plugin builds the real gateway from the secrets. */
   stripe?: StripeConnectGateway;
+  /** Resend seam, for the same reason: the suites assert on what would be sent. */
+  email?: EmailGateway;
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
@@ -139,13 +143,18 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     ...(options.stripe ? { gateway: options.stripe } : {}),
   });
+  await app.register(emailPlugin, {
+    apiKey: env.RESEND_API_KEY,
+    from: env.EMAIL_FROM,
+    ...(options.email ? { gateway: options.email } : {}),
+  });
   await app.register(clerkAuthPlugin, {
     secretKey: env.CLERK_SECRET_KEY,
     ...options.auth,
   });
 
   await app.register(healthRoutes);
-  await app.register(adminRoutes);
+  await app.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(categoryRoutes);
   await app.register(tagRoutes);
   await app.register(userRoutes);
@@ -154,17 +163,23 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(stripeConnectRoutes, { returnOrigin: canonicalWebOrigin(env) });
   await app.register(packageRoutes);
   await app.register(portfolioRoutes);
-  await app.register(reviewRoutes);
+  await app.register(reviewRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(availabilityRoutes);
-  await app.register(bookingRequestRoutes);
+  await app.register(bookingRequestRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(messagingRoutes, { allowedOrigins: allowedOrigins(env) });
   await app.register(uploadRoutes);
   await app.register(clerkWebhookRoutes, {
     signingSecret: env.CLERK_WEBHOOK_SECRET,
     ...options.webhooks,
   });
-  await app.register(paymentRoutes, { platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE });
-  await app.register(stripeWebhookRoutes, { platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE });
+  await app.register(paymentRoutes, {
+    platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
+    webOrigin: canonicalWebOrigin(env),
+  });
+  await app.register(stripeWebhookRoutes, {
+    platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
+    webOrigin: canonicalWebOrigin(env),
+  });
 
   await app.ready();
   return app;
