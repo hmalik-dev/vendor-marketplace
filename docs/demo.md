@@ -5,15 +5,21 @@ launch path, and nothing built here should ever be pointed at by anything that
 matters.** It exists for one reason: so Orla can be shown to a person over a URL
 instead of over a screen share.
 
+> **Status: not stood up, deferred by decision on 2026-08-31.** The account
+> holder chose to wait until the ticket queue and the MVP feature set are
+> complete rather than show a half-built product to friends. Nothing below is
+> stale — the blueprint and the steps are current against `main` — it simply
+> has not been run. Two things will have moved by the time it is, and both are
+> recorded under **Before you run this** below.
+
 Concretely, what that means:
 
 - It reads the Neon **`staging`** branch. The `production` branch is never
   touched, and `packages/db/src/scripts/safe-target.ts` refuses to seed it.
-- Its vendors are **fabricated** — the marketing seed's invented photographers,
-  with invented ratings and review counts. That is the whole reason they are
-  confined to `staging`; see `pre-launch.md` §1.1, which treats those same rows
-  reaching a public production site as the single most serious blocker in the
-  file.
+- Its vendors are **fabricated** — seeded, with invented ratings and review
+  counts. That is the whole reason they stay off `production`; see
+  `pre-launch.md` §1.1, which treats those same rows reaching a public
+  production site as the single most serious blocker in the file.
 - Clerk is a **development instance** and Stripe is in **test mode**. No real
   money can move; no real account is reachable.
 - It is on free infrastructure that sleeps when idle.
@@ -126,21 +132,53 @@ repoint `CLERK_WEBHOOK_ENDPOINT` at `<render-url>/webhooks/clerk` if you want
 `user.updated` and `user.deleted` to reach the demo at all. A development
 instance is capped at 100 users, which is the right ceiling for this.
 
-### 4. Optional — a richer dataset
+### 4. Required — migrate and seed the branch
 
-`staging` carries the marketing seed. For the fuller marketplace — every
-category populated, live booking requests, message threads, reviews and
-notifications, all deterministic — run the demo seed against `staging` from a
-laptop with `NEON_BRANCH=staging` in the environment:
+**`staging` is empty and its schema is behind.** Verified 2026-08-31 by querying
+it: **0 vendors, 0 users, 0 reviews**, 10 categories, and **10 of 20 migrations
+applied**. `production` is at the same 10. An API built from `main` will not
+work against either until they are migrated.
+
+An earlier revision of this file said `staging` carried the marketing seed's 16
+vendors. It does not — that claim was inherited from `pre-launch.md` §1.1, which
+describes a Neon `dev` branch that no longer exists. Seeding is a required step,
+not an optional one.
+
+With `NEON_BRANCH=staging` and the branch's connection string in the
+environment:
 
 ```
-pnpm db:seed:demo
+pnpm db:migrate      # the 10 pending migrations
+pnpm db:seed         # reference data — categories and tags
+pnpm db:seed:demo    # the marketplace itself
 ```
 
-It is additive and disjoint from both the reference and marketing seeds, needs
-no Clerk or Stripe credentials, and refuses to run against `production` or with
-`NODE_ENV=production`. `pnpm db:seed:demo -- --clear` removes exactly the rows
-it owns.
+The demo seed is additive and disjoint from the reference and marketing seeds,
+needs no Clerk or Stripe credentials, and refuses to run against `production` or
+with `NODE_ENV=production`. It gives every category vendors, packages, portfolio
+items, live booking requests, message threads, reviews and notifications, all
+deterministic. `pnpm db:seed:demo -- --clear` removes exactly the rows it owns.
+
+---
+
+## Before you run this
+
+Two things were true on 2026-08-31 and will need re-checking, because deferring
+the work is what makes them stale rather than wrong.
+
+**`RESEND_API_KEY` becomes required.** Ticket #11 adds `'email'` to
+`API_CAPABILITIES`, which makes that key required at API boot. It carries a
+shape — `/^re_[A-Za-z0-9_]{16,}$/` — so the `re_...` placeholder does not
+satisfy it and a real Resend account is needed before the API will start at all.
+`render.yaml` declares the 19 variables the four current capabilities require;
+once #11 lands it needs a twentieth. `EMAIL_FROM` needs nothing, having a
+default. Note also that Resend delivers only to the account's own address until
+a sending domain is verified, so notification email will not reach a friend.
+
+**The web project still builds from `production`.** That git branch was 26
+commits behind `main` on 2026-08-31. Whichever Vercel project serves the demo
+has to be switched to `main`, or the demo shows a stale build against a current
+API.
 
 ---
 
