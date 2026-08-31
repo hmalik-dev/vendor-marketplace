@@ -443,11 +443,21 @@ describe('frame 03 — the rail pairs Event date with Guests above Package (#107
   });
 
   it('renders both fields, in the frame order, above the package', () => {
-    expect(at(railSource, '>\n              Event date\n            </Label>')).toBeGreaterThan(-1);
+    /*
+     * Matched whitespace-insensitively.
+     *
+     * These were exact strings carrying their own indentation --
+     * `'>\n              Event date\n            </Label>'` -- so wrapping the
+     * rail's JSX in a fragment for #371's bottom bar reindented the file by two
+     * spaces and the assertion failed on a change that did not touch field
+     * order at all. The order is the contract; the indentation is Prettier's.
+     */
+    const labelled = (text: string): number =>
+      railSource.search(new RegExp(`>\\s*${text}\\s*</Label>`));
+
+    expect(labelled('Event date')).toBeGreaterThan(-1);
     expect(at(railSource, 'Guests')).toBeGreaterThan(at(railSource, 'Event date'));
-    expect(at(railSource, '>\n              Package\n            </Label>')).toBeGreaterThan(
-      at(railSource, 'Guests'),
-    );
+    expect(labelled('Package')).toBeGreaterThan(at(railSource, 'Guests'));
   });
 
   it('splits the row at the frame ratio and gap', () => {
