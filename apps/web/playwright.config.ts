@@ -47,6 +47,15 @@ export default defineConfig({
 
   use: {
     baseURL,
+    /*
+     * Playwright's 30s navigation default is too tight for a cold dev server:
+     * the first hit on a route compiles it, and a heavy route plus Clerk exceeds
+     * that with the server perfectly healthy. A `page.goto` timeout then reads
+     * as a broken route, which is the most expensive kind of wrong answer — it
+     * points the next person at the feature instead of at the compile.
+     */
+    navigationTimeout: 60_000,
+    actionTimeout: 15_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
