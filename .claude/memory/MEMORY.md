@@ -33,3 +33,5 @@
 - [Verify with a differently shaped check](verify-with-a-differently-shaped-check.md) — a grep that silently over- or under-matches returns a confident wrong answer; re-run differently, do not re-read
 - [Board rows mix bolded and plain ids](tracker-board-rows-are-bold.md) — never key a match on bolding; it has now caused a confident wrong answer in both directions
 - [Pathspec when a peer has work staged](pathspec-when-a-peer-has-work-staged.md) — the index is shared; `git add` + plain commit steals their staged work under your message
+- [CI and the deploy check are pre-launch](vercel-deploy-check-always-fails.md) — never wait on them or read their red as a finding; land on the local gate
+- [`git ls-tree -r` is cwd-scoped](git-ls-tree-is-cwd-scoped.md) — without `--full-tree` it lists only the current directory, and the Bash cwd persists across calls
