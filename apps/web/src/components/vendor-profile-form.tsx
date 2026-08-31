@@ -14,6 +14,7 @@ import {
   milesToKm,
   PUBLISH_BLOCKERS,
   RESPONSE_TIME_HOURS_OPTIONS,
+  shortTimeAgo,
   updateVendorProfileSchema,
   UPLOAD_CONSTRAINT_LINE,
   type Category,
@@ -388,6 +389,18 @@ export function VendorProfileForm({
     profile?.publishBlockers ?? [],
   );
   const [isPublished, setIsPublished] = useState(profile?.isPublished ?? false);
+  /*
+   * #258: the bar never said when the storefront was last saved, so a vendor
+   * returning to it could not tell a saved draft from an unsaved one.
+   */
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(profile?.updatedAt ?? null);
+  /*
+   * Held in state and filled by an effect rather than computed during render:
+   * `shortTimeAgo` reads the clock, and a clock read while rendering gives the
+   * server and the client two different strings for the same markup. The
+   * interval keeps `2m` from sitting there reading `2m` an hour later.
+   */
+  const [savedAgo, setSavedAgo] = useState('');
 
   const isNew = profile === null;
   const slugPreview = form.slug.trim() || generateSlug(form.businessName || 'your-business');
@@ -403,6 +416,22 @@ export function VendorProfileForm({
   });
   const radiusFillPercent = serviceRadiusFillPercent(form.serviceRadiusMiles);
   const bioRemaining = MAX_VENDOR_BIO_LENGTH - form.bio.length;
+
+  useEffect(() => {
+    if (lastSavedAt === null) {
+      setSavedAgo('');
+      return;
+    }
+
+    const show = (): void => setSavedAgo(shortTimeAgo(lastSavedAt));
+
+    show();
+    // A minute is the resolution `shortTimeAgo` floors to, so anything faster
+    // re-renders without ever changing the string.
+    const timer = setInterval(show, 60_000);
+
+    return () => clearInterval(timer);
+  }, [lastSavedAt]);
 
   useEffect(() => {
     if (!justSaved) {
@@ -508,6 +537,7 @@ export function VendorProfileForm({
 
       setPublishBlockers(saved.publishBlockers);
       setIsPublished(saved.isPublished);
+      setLastSavedAt(saved.updatedAt);
       setForm((previous) => {
         const next = {
           ...previous,
@@ -710,48 +740,6 @@ export function VendorProfileForm({
                 </div>
 
                 <div className="sm:col-span-2">
-                  <Label htmlFor="tagline">Your line</Label>
-                  <Input
-                    id="tagline"
-                    value={form.tagline}
-                    onChange={(event) => update('tagline', event.target.value)}
-                    placeholder="Quiet, documentary, never asks you to pose."
-                    maxLength={MAX_TAGLINE_LENGTH}
-                    className="mt-1.5 bg-stone-0"
-                    {...errorProps(validation.issueFor('tagline'))}
-                  />
-                  <FieldMessage issue={validation.issueFor('tagline')} />
-                  <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
-                    <p className="text-stone-600">
-                      One sentence, in your own words. It opens your profile.
-                    </p>
-                    <p className="shrink-0 tabular-nums text-stone-600">
-                      {form.tagline.length} / {MAX_TAGLINE_LENGTH}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="yearsInBusiness">Years in business</Label>
-                  <Input
-                    id="yearsInBusiness"
-                    type="number"
-                    inputMode="numeric"
-                    min={MIN_YEARS_IN_BUSINESS}
-                    max={MAX_YEARS_IN_BUSINESS}
-                    value={form.yearsInBusiness}
-                    onChange={(event) => update('yearsInBusiness', event.target.value)}
-                    placeholder="10"
-                    className="mt-1.5 bg-stone-0"
-                    {...errorProps(validation.issueFor('yearsInBusiness'))}
-                  />
-                  <FieldMessage issue={validation.issueFor('yearsInBusiness')} />
-                  <p className="mt-1 text-xs text-stone-600">
-                    Counted from when you started, not when you joined here.
-                  </p>
-                </div>
-
-                <div className="sm:col-span-2">
                   <Label htmlFor="bio">About your business</Label>
                   <Textarea
                     id="bio"
@@ -775,6 +763,61 @@ export function VendorProfileForm({
                       {form.bio.length} / {MAX_VENDOR_BIO_LENGTH}
                     </p>
                   </div>
+                </div>
+
+                {/*
+                 * `Your line` and `Years in business` sit here, with About,
+                 * rather than above it — D16 (#335-D), and D12 before it.
+                 *
+                 * Frame `09`'s field list does not draw either one, and the
+                 * parity reading was to delete them. Both are the **only**
+                 * editing surface for content frame `03` displays: #298 moved
+                 * the tagline into the identity card and `yearsInBusiness`
+                 * feeds the About pane's Experience tile. Deleting the inputs
+                 * without deleting the displays would leave content nobody in
+                 * the product can change — a regression dressed as a parity
+                 * fix. So the ruling relocates them and records frame `09`'s
+                 * list as non-exhaustive; that is the deviation, and it is
+                 * deliberate.
+                 *
+                 * The helper sentences that came with them are gone (#152).
+                 * The counters stay: D16 keeps them and spreads them to every
+                 * capped input.
+                 */}
+                <div className="sm:col-span-2">
+                  <Label htmlFor="tagline">Your line</Label>
+                  <Input
+                    id="tagline"
+                    value={form.tagline}
+                    onChange={(event) => update('tagline', event.target.value)}
+                    placeholder="Quiet, documentary, never asks you to pose."
+                    maxLength={MAX_TAGLINE_LENGTH}
+                    className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('tagline'))}
+                  />
+                  <FieldMessage issue={validation.issueFor('tagline')} />
+                  <div className="mt-1 flex items-baseline justify-end gap-3 text-xs">
+                    <p className="shrink-0 tabular-nums text-stone-600">
+                      {form.tagline.length} / {MAX_TAGLINE_LENGTH}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="yearsInBusiness">Years in business</Label>
+                  <Input
+                    id="yearsInBusiness"
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_YEARS_IN_BUSINESS}
+                    max={MAX_YEARS_IN_BUSINESS}
+                    value={form.yearsInBusiness}
+                    onChange={(event) => update('yearsInBusiness', event.target.value)}
+                    placeholder="10"
+                    className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('yearsInBusiness'))}
+                  />
+                  <FieldMessage issue={validation.issueFor('yearsInBusiness')} />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -1056,8 +1099,23 @@ export function VendorProfileForm({
             )}
 
             <div className="flex items-center gap-3.5">
+              {/*
+                Four states, in the order they outrank each other: a save in
+                flight, a save just confirmed, work that would be lost, and —
+                when none of those apply — when this storefront was last saved
+                (#258). The last one is what a vendor returning to the screen
+                needs, and it is the only one that was missing.
+              */}
               <span aria-live="polite" className="text-sm text-stone-600">
-                {isSaving ? 'Saving…' : justSaved ? 'Saved' : isDirty ? 'Unsaved changes' : ''}
+                {isSaving
+                  ? 'Saving…'
+                  : justSaved
+                    ? 'Saved'
+                    : isDirty
+                      ? 'Unsaved changes'
+                      : savedAgo === ''
+                        ? ''
+                        : `Saved ${savedAgo} ago`}
               </span>
               {profile !== null ? (
                 <Button type="button" variant="secondary" asChild>

@@ -708,6 +708,56 @@ describe('the section rail matches frame 09’s nav (#360)', () => {
 });
 
 /*
+ * D16's relocation (#360, carrying #138 and #152).
+ *
+ * This is the one place the editor deliberately deviates from frame `09`, so
+ * it is pinned rather than left to be rediscovered as drift. The frame's field
+ * list omits `Your line` and `Years in business`; deleting them would strip the
+ * only editing surface for two things frame `03` displays. D16 relocated them
+ * and recorded the frame's list as non-exhaustive.
+ */
+describe('Your line and Years in business are relocated, not deleted (#360)', () => {
+  /** Every `htmlFor` in the Business section, in the order the form renders. */
+  function fieldOrder(): string[] {
+    return [...formSource.matchAll(/<Label htmlFor="([a-zA-Z]+)"/g)].map((match) => match[1] ?? '');
+  }
+
+  it('still offers both fields', () => {
+    expect(fieldOrder()).toContain('tagline');
+    expect(fieldOrder()).toContain('yearsInBusiness');
+  });
+
+  it('places both after About your business, not above it', () => {
+    const order = fieldOrder();
+
+    expect(order.indexOf('bio')).toBeLessThan(order.indexOf('tagline'));
+    expect(order.indexOf('tagline')).toBeLessThan(order.indexOf('yearsInBusiness'));
+  });
+
+  it('leads with the frame’s own order: business name, profile link, about', () => {
+    const order = fieldOrder();
+
+    expect(order.indexOf('businessName')).toBeLessThan(order.indexOf('slug'));
+    expect(order.indexOf('slug')).toBeLessThan(order.indexOf('bio'));
+  });
+
+  /* #152: the helper sentences that came with the two fields. */
+  it('drops the tagline helper', () => {
+    expect(formSource).not.toContain('One sentence, in your own words');
+  });
+
+  it('drops the years helper', () => {
+    expect(formSource).not.toContain('Counted from when you started');
+  });
+
+  /* D16 keeps the counters and spreads them to every capped input. */
+  it('keeps the character counter on both capped inputs', () => {
+    expect(formSource).toContain('{form.tagline.length} / {MAX_TAGLINE_LENGTH}');
+    expect(formSource).toContain('{form.bio.length} / {MAX_VENDOR_BIO_LENGTH}');
+  });
+});
+
+/*
  * The slug preview (#360, carrying #257).
  *
  * The defect this guards against is a *disagreement between two places* — a

@@ -2,7 +2,7 @@ import { COVER_CONSTRAINT_LINE, ERROR_CODES, type Category } from '@vendor-marke
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import type { WireVendorProfile } from '@/lib/wire-schemas';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '@/lib/api-client';
 
 const requestMock = vi.fn();
@@ -285,6 +285,49 @@ describe('VendorProfileForm — a save the form itself refuses', () => {
       );
     });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+/*
+ * #360, carrying #258: the submit bar never said when the storefront was last
+ * saved, so a vendor returning to the screen could not tell a saved draft from
+ * an unsaved one.
+ *
+ * The clock is faked rather than read: `shortTimeAgo` is relative, so a real
+ * clock would make this assert a different string on every run.
+ */
+describe('the submit bar says when the storefront was last saved (#360)', () => {
+  const NOW = new Date('2026-08-30T12:00:00.000Z');
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reports how long ago the last save was', () => {
+    renderSaved({ updatedAt: new Date(NOW.getTime() - 2 * 60 * 60 * 1000) });
+
+    expect(screen.getByText('Saved 2h ago')).toBeTruthy();
+  });
+
+  it('floors at a minute rather than counting seconds', () => {
+    renderSaved({ updatedAt: new Date(NOW.getTime() - 9 * 1000) });
+
+    expect(screen.getByText('Saved 1m ago')).toBeTruthy();
+  });
+
+  /*
+   * A profile that has never been saved has nothing to report, and the word
+   * "never" beside a Create button would be noise rather than information.
+   */
+  it('says nothing on a profile that has never been saved', () => {
+    renderOnboarding();
+
+    expect(screen.queryByText(/^Saved /)).toBeNull();
   });
 });
 
