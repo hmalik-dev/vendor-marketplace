@@ -135,6 +135,7 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
       ) : null}
 
       <DataTable
+        scrollPadding={selectedRows.length > 0}
         rows={rows}
         rowKey={(row) => row.id}
         empty={
@@ -152,6 +153,8 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
             key: 'select',
             width: '22px',
             header: '',
+            // No clip: the 22px track would cut the box and its focus ring.
+            className: 'overflow-visible',
             cell: (row) => (
               /*
                 A `<label>` wrapping the input, not a bare 14px control.
@@ -162,7 +165,14 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
                 label supplies the 44x44 target `04-laws.md` requires without
                 growing the glyph.
               */
-              <label className="flex size-11 cursor-pointer items-center justify-center">
+              /*
+                22 x 44, and that is the frame's ceiling rather than a choice.
+                Frame `13` gives this column a **22px** track with the box at its
+                left edge, so a 44px-wide target cannot exist here without
+                overlapping the business name. The label takes the full row
+                height, which is the axis that was free.
+              */
+              <label className="flex h-11 w-full cursor-pointer items-center justify-start">
                 <span className="sr-only">Select {row.businessName}</span>
                 <input
                   type="checkbox"
@@ -212,7 +222,10 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
             key: 'actions',
             width: '70px',
             header: '',
-            className: 'flex justify-end',
+            // The control fills the cell and pushes its glyph to the right edge,
+            // where the frame draws it — a 44px button centred in a 70px cell
+            // put the dots 20px left of the frame's.
+            className: 'flex justify-end overflow-visible',
             cell: (row) => {
               /*
                 One control, two decisions. The branch is over the props rather

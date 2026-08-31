@@ -124,7 +124,14 @@ export function FilterBar({
           maxLength={MAX_NAME_LENGTH}
           placeholder={searchPlaceholder}
           aria-label={searchPlaceholder}
-          className="w-full max-w-70 flex-1 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900 placeholder:text-stone-600"
+          /*
+            `box-content`, like every measurement in the frame file. The frame's
+            `max-width:280px` is a **content** max in a content-box document, so
+            it renders 306px outer — 280 plus 24px of padding and 2px of border.
+            Border-box read the same number as the footprint and came out 26px
+            narrow, which pushed every control after it left.
+          */
+          className="box-content w-full max-w-70 flex-1 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900 placeholder:text-stone-600"
         />
       ) : null}
       {children}
@@ -138,7 +145,16 @@ export function FilterBar({
         real listboxes: each navigates on choice, carrying the filters it did
         not change. The form is the search field and the hidden fields alone.
       */}
-      <button type="submit" className="sr-only">
+      <button
+        type="submit"
+        /*
+          `focus-visible:not-sr-only`, the skip link's idiom. `sr-only` alone
+          left a keyboard stop between `Payouts` and `Export CSV` that painted
+          nothing at all — a focus ring on a 1px clipped box — which is the same
+          defect class as a clipped ring, arrived at from the other direction.
+        */
+        className="sr-only focus-visible:not-sr-only focus-visible:rounded-md focus-visible:border focus-visible:border-stone-300 focus-visible:bg-stone-0 focus-visible:px-3.5 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-stone-900"
+      >
         Apply filters
       </button>
       {trailing ? <span className="ml-auto">{trailing}</span> : null}

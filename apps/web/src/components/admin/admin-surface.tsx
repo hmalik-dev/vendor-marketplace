@@ -66,7 +66,12 @@ export function AdminSurface({
               {counts.length > 0 ? ' · ' : null}
               <UpdatedAgo />
             </p>
-            {pager ? <Pager {...pager} /> : null}
+            {/*
+              `self-center`: the row aligns on the baseline, and a flex `nav`
+              contributes its *first item's* baseline, which sat 1px below the
+              heading's and moved the whole pane down by one pixel.
+            */}
+            {pager ? <Pager {...pager} className="self-center" /> : null}
           </div>
         </div>
         {filters}

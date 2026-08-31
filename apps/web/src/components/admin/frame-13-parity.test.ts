@@ -163,7 +163,7 @@ describe('the table', () => {
       '<div className="min-h-0 flex-1 overflow-hidden px-6 pb-5">{children}</div>',
     );
     // The pager is inside the title block, above the pane that scrolls.
-    const pagerAt = surface.indexOf('<Pager {...pager} />');
+    const pagerAt = surface.indexOf('<Pager {...pager}');
     const paneAt = surface.indexOf('<div className="min-h-0 flex-1 overflow-hidden px-6 pb-5">');
     expect(pagerAt).toBeGreaterThan(-1);
     expect(pagerAt).toBeLessThan(paneAt);
@@ -264,16 +264,30 @@ describe('what the parity pass measured, kept from drifting back', () => {
   });
 
   it('does not clip a focus ring inside a cell', () => {
-    // A ring is drawn outside the element's box and every control fills its
-    // cell exactly, so a bare `truncate` cut three of four sides off.
-    expect(dataTable).not.toMatch(/cn\('truncate'/);
+    /*
+     * A ring is drawn outside the element's box and every control fills its
+     * cell exactly, so a bare `truncate` cut three of four sides off. The first
+     * fix added `overflow-clip-margin` and left `overflow: hidden` — where that
+     * property is **silently ignored**, so nothing changed. It only applies to
+     * `overflow: clip`.
+     */
+    expect(dataTable).toContain('overflow-clip text-ellipsis');
     expect(dataTable).toContain('[overflow-clip-margin:6px]');
+    expect(dataTable).not.toMatch(/overflow-hidden[^']*\[overflow-clip-margin/);
   });
 
-  it('gives both icon-only row controls a 44px target', () => {
-    // `04-laws.md`; they were 32x32 and 14x14.
-    expect(rowTrigger).toContain('size-11');
-    expect(vendorTable).toContain('flex size-11 cursor-pointer items-center justify-center');
+  it('gives both row controls a 44px-tall target', () => {
+    /*
+     * `04-laws.md` asks 44x44 of an icon-only control; they were 32x32 and
+     * 14x14. The `···` fills its 70px cell and right-aligns its glyph, which is
+     * where the frame draws it. The checkbox takes the row's full height but
+     * cannot take 44px of width: frame `13` gives that column a **22px** track,
+     * so a wider target would overlap the business name. Recorded in the ticket
+     * as a frame-versus-law question rather than resolved by widening the
+     * column, which would be a composition change.
+     */
+    expect(rowTrigger).toContain('h-11 w-full items-center justify-end');
+    expect(vendorTable).toContain('flex h-11 w-full cursor-pointer items-center justify-start');
   });
 
   it('draws the checkbox rather than leaving the OS to', () => {

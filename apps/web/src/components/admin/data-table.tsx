@@ -36,6 +36,15 @@ export interface DataTableProps<T> {
   rowKey: (row: T) => string;
   /** Rendered in place of the body when there is nothing to show. */
   empty: ReactNode;
+  /**
+   * Space below the last row, for a control floating over the table.
+   *
+   * The bulk-action bar floats so it does not displace rows — but floating
+   * over the last two put their checkboxes and `···` under it, and a pane with
+   * five pixels of scroll could not move them clear. This is what it scrolls
+   * into.
+   */
+  scrollPadding?: boolean;
 }
 
 /**
@@ -52,13 +61,14 @@ export function DataTable<T>({
   rows,
   rowKey,
   empty,
+  scrollPadding = false,
 }: DataTableProps<T>): React.ReactElement {
   // Joined once here; the header row and every body row read this one value.
   const template = columns.map((column) => column.width).join(' ');
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-stone-300 bg-stone-0">
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className={cn('min-h-0 flex-1 overflow-y-auto', scrollPadding && 'pb-16')}>
         <div
           role="table"
           className="min-w-full"
@@ -101,16 +111,21 @@ export function DataTable<T>({
                     role="cell"
                     key={column.key}
                     /*
-                      `overflow-clip-margin`, not a bare `truncate`.
-                      `overflow: hidden` clipped the focus ring of every control
-                      inside a cell — a ring is drawn outside the element's box,
-                      and each control fills its cell exactly, so three of four
-                      sides were cut and a focused row link rendered as a single
-                      clay hairline. The margin keeps the ellipsis and lets the
-                      ring out.
+                      `overflow-clip`, not `overflow-hidden`.
+                      `overflow-clip-margin` **only applies to `overflow: clip`**
+                      — on `hidden` it is silently ignored, which is why the
+                      first attempt at this changed nothing. The margin is what
+                      lets a focus ring out: a ring is drawn outside the
+                      element's box and each control fills its cell exactly, so
+                      under `hidden` three of four sides were cut and a focused
+                      row link rendered as a single clay hairline.
+
+                      A column may opt out entirely with `overflow-visible`,
+                      which the select column does — its track is 22px and its
+                      control needs a taller target than that box.
                     */
                     className={cn(
-                      'overflow-hidden text-ellipsis whitespace-nowrap [overflow-clip-margin:6px]',
+                      'overflow-clip text-ellipsis whitespace-nowrap [overflow-clip-margin:6px]',
                       column.className,
                     )}
                   >

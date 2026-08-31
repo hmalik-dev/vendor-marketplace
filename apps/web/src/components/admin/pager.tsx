@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { adminQueryString } from '@/lib/admin-params';
+import { cn } from '@/lib/utils';
 
 export interface PagerProps {
   /** The surface's own path, without a query. */
@@ -9,6 +10,7 @@ export interface PagerProps {
   page: number;
   pageSize: number;
   total: number;
+  className?: string;
 }
 
 /** The same emptiness rule the filter links use — see `adminQueryString`. */
@@ -33,6 +35,7 @@ export function Pager({
   page,
   pageSize,
   total,
+  className,
 }: PagerProps): React.ReactElement | null {
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
 
@@ -44,7 +47,7 @@ export function Pager({
   const last = Math.min(page * pageSize, total);
 
   return (
-    <nav aria-label="Pagination" className="flex shrink-0 items-center gap-2.5">
+    <nav aria-label="Pagination" className={cn('flex shrink-0 items-center gap-2.5', className)}>
       <p className="text-sm text-stone-600">
         {first}–{last}
       </p>
