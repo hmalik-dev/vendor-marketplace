@@ -251,3 +251,58 @@ describe('clay as text', () => {
     expect(banned).toBeLessThan(4.6);
   });
 });
+
+/*
+ * D18 minted `clay-150` and `stone-250` on 2026-08-30, both as ramp steps that
+ * were missing rather than as new colours: the frames already drew these two
+ * fills at 42 sites, and the ramp had no name for either.
+ *
+ * Tested because an unminted token is not a compile error. Tailwind emits
+ * `bg-clay-150` as an unknown utility and the element renders with no
+ * background at all, which reads as a styling nit rather than a missing token.
+ */
+describe('the D18 ramp steps', () => {
+  it('mints clay-150 and stone-250 at the values the frames draw', () => {
+    expect(COLOR_TOKENS.get('clay-150')).toBe('#eadccb');
+    expect(COLOR_TOKENS.get('stone-250')).toBe('#ece6dc');
+  });
+
+  /*
+   * Luminance descends as the ramp ascends, so a step inserted in the wrong
+   * place shows up here as an ordering break rather than as a wrong hex.
+   */
+  it('orders each new step between the two it was minted between', () => {
+    const luminance = (token: string): number =>
+      relativeLuminance(COLOR_TOKENS.get(token) as string);
+
+    expect(luminance('clay-100')).toBeGreaterThan(luminance('clay-150'));
+    expect(luminance('clay-150')).toBeGreaterThan(luminance('clay-200'));
+    expect(luminance('stone-200')).toBeGreaterThan(luminance('stone-250'));
+    expect(luminance('stone-250')).toBeGreaterThan(luminance('stone-300'));
+  });
+
+  /*
+   * The monogram is the reason `clay-150` exists. `FALLBACK_TONES` names its
+   * tokens as Tailwind utility strings, so nothing type-checks them — a rename
+   * would leave the initials on no background and no test would notice.
+   */
+  it('resolves every FALLBACK_TONES utility to a declared token', async () => {
+    const { FALLBACK_TONES } = await import('@/components/ui/avatar');
+
+    const unresolved = FALLBACK_TONES.flatMap((tone) =>
+      tone
+        .split(' ')
+        .map((utility) => utility.replace(/^(?:bg|text)-/, ''))
+        .filter((token) => !COLOR_TOKENS.has(token))
+        .map((token) => `${tone} -> ${token}`),
+    );
+
+    expect(unresolved).toEqual([]);
+  });
+
+  it('grounds the clay monogram on clay-150, as the frames draw it', async () => {
+    const { FALLBACK_TONES } = await import('@/components/ui/avatar');
+
+    expect(FALLBACK_TONES[0]).toBe('bg-clay-150 text-clay-600');
+  });
+});

@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
  * rather than a circle, so it cannot use `Avatar` itself but must not invent a
  * second palette.
  */
-export const FALLBACK_TONES = ['bg-clay-100 text-clay-600', 'bg-sage-100 text-sage-600'] as const;
+export const FALLBACK_TONES = ['bg-clay-150 text-clay-600', 'bg-sage-100 text-sage-600'] as const;
 
 /** The six sizes the design calls for, in px. */
 export const AVATAR_SIZES = {

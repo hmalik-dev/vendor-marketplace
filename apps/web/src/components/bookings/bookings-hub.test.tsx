@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BookingsHub } from './bookings-hub';
 import type { BookingEntry } from '@/lib/booking-entries';
+import { FALLBACK_TONES } from '@/components/ui/avatar';
 
 /*
  * The Refine chips push URL state, so the hub now reaches `useRouter`. The push
@@ -568,7 +569,13 @@ describe('the vendor tile on a booking card', () => {
     const tile = tileFor(container);
 
     expect(tile?.className).not.toContain('bg-stone-150');
-    expect(tile?.className).toMatch(/bg-(clay|sage)-100/);
+    /*
+     * Asserted against `FALLBACK_TONES` rather than a literal ramp step. This
+     * read `/bg-(clay|sage)-100/` until D18 moved the clay monogram to
+     * `clay-150`, and broke on a change that was correct — the tile's contract
+     * is that it draws one of the shared tones, not which step that tone is.
+     */
+    expect(FALLBACK_TONES.some((tone) => tile?.className.includes(tone))).toBe(true);
   });
 
   it('keeps one vendor on one tone across renders', () => {

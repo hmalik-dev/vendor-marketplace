@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { formatPrice, type VendorCard as VendorCardData } from '@vendor-marketplace/shared';
 import { Avatar } from '@/components/ui/avatar';
-import { Placeholder } from '@/components/ui/placeholder';
 import { cn } from '@/lib/utils';
 
 /**
@@ -147,9 +146,21 @@ export function VendorCard({
               className="size-full object-cover transition-transform duration-(--duration-slow) motion-safe:group-hover/card:scale-[1.03]"
             />
           ) : (
-            <Placeholder
-              label="cover 3:2"
-              className="size-full transition-transform duration-(--duration-slow) motion-safe:group-hover/card:scale-[1.03]"
+            /*
+              A published vendor with no cover gets the image ground and
+              nothing else — no hatch, no label, nothing addressed to a
+              developer. The labelled `Placeholder` is a build-time device for
+              photography the *product* lacks; this is *their* missing content
+              shown to *their* customers, and the place to fix it is the
+              storefront editor (#360), not the page the customer reads.
+
+              D16/D17, and `40-states.md`'s Missing cover photo group, which
+              draws this block beside the hatch and marks the hatch
+              "never on a public page".
+            */
+            <div
+              data-slot="coverless"
+              className="size-full bg-stone-250 transition-transform duration-(--duration-slow) motion-safe:group-hover/card:scale-[1.03]"
             />
           )}
         </div>

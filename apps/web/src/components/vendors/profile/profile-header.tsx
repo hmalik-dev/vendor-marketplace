@@ -207,7 +207,7 @@ export function ProfileHeader({
           */}
           <div
             data-testid="profile-cover"
-            className="aspect-[3/2] w-full shrink-0 bg-stone-300 md:aspect-auto md:w-[268px] lg:w-[280px] min-[90rem]:w-[300px]"
+            className="aspect-[3/2] w-full shrink-0 bg-stone-250 md:aspect-auto md:w-[268px] lg:w-[280px] min-[90rem]:w-[300px]"
           >
             {coverImageUrl ? (
               // The vendor's own photograph on a bucket host `next/image` would
@@ -215,9 +215,14 @@ export function ProfileHeader({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={coverImageUrl} alt="" className="block size-full object-cover" />
             ) : (
-              <span className="flex size-full items-center justify-center p-3 text-label font-semibold tracking-label text-stone-600 uppercase">
-                cover
-              </span>
+              /*
+                The image ground and nothing else. The word "cover" set in a
+                micro-label was addressed to whoever built the page rather than
+                to the customer reading it — the same ruling the search card
+                takes (D16/D17). The vendor fixes this in the storefront
+                editor, #360.
+              */
+              <div data-slot="coverless" className="size-full bg-stone-250" />
             )}
           </div>
         </div>

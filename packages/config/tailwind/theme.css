@@ -18,6 +18,7 @@
    */
   --color-clay-50: #fdf4ef;
   --color-clay-100: #f7e7e0; /* tinted surfaces: active nav, selected states */
+  --color-clay-150: #eadccb; /* avatar fallback fill — the frames' clay initials ground */
   --color-clay-200: #efd8cc; /* borders on clay surfaces */
   --color-clay-300: #dda98c;
   --color-clay-400: #b4552f; /* PRIMARY FILL — buttons, sliders, selected days */
@@ -56,6 +57,7 @@
   --color-stone-100: #f4f0e8; /* table header, deeper panels */
   --color-stone-150: #f1ece4; /* input fill, nested surfaces */
   --color-stone-200: #efe9e0; /* hairline dividers inside cards */
+  --color-stone-250: #ece6dc; /* image ground — behind every cover, and a coverless one */
   --color-stone-300: #e4ddd1; /* borders */
   --color-stone-400: #d5cec2; /* stronger borders, unchecked controls */
   --color-stone-500: #c9c1b5; /* disabled text ONLY — fails AA by design */
