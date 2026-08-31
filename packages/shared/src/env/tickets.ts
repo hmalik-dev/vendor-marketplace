@@ -462,6 +462,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   379: [], // the search skeleton mirroring its card — UI only
   380: [], // `Due today` vs `Total today` — a copy ruling, no external service
   381: ['stripe'], // a check constraint on the two payout columns Stripe onboarding writes
+  382: [], // a guard for the stale `shared/dist` — build tooling, no external service
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
