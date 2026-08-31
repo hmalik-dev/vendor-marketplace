@@ -66,8 +66,19 @@ export function ReviewTable({
         },
         { key: 'author', width: '1.3fr', header: 'Author', cell: (row) => row.authorName },
         {
+          key: 'direction',
+          width: '.9fr',
+          header: 'About',
+          /*
+            A `vendor_to_customer` row lists the vendor as both author and
+            vendor, because `reviews.reviewer_id` is the vendor's own account —
+            so without this column the two directions are indistinguishable.
+          */
+          cell: (row) => (row.type === 'customer_to_vendor' ? 'The vendor' : 'The customer'),
+        },
+        {
           key: 'content',
-          width: '2.4fr',
+          width: '1.9fr',
           header: 'Review',
           cell: (row) => row.title ?? row.content,
         },
@@ -90,11 +101,27 @@ export function ReviewTable({
               }
               title="Delete this review?"
               description={
-                <>
-                  It is removed permanently and{' '}
-                  <strong className="font-semibold">{row.vendorName}</strong>&rsquo;s rating is
-                  recalculated from the reviews that remain. There is no undo.
-                </>
+                /*
+                  Whose rating moves depends on the direction, and the dialog has
+                  to say which. `deleteReviewAndRecalculate` resolves a
+                  `vendor_to_customer` review back to the *customer* through its
+                  booking — so naming the vendor there told the operator they
+                  were correcting a public storefront rating when they were
+                  changing a customer's private one.
+                */
+                row.type === 'customer_to_vendor' ? (
+                  <>
+                    It is removed permanently and{' '}
+                    <strong className="font-semibold">{row.vendorName}</strong>&rsquo;s public
+                    rating is recalculated from the reviews that remain. There is no undo.
+                  </>
+                ) : (
+                  <>
+                    This is a vendor&rsquo;s private review of a customer. Deleting it recalculates{' '}
+                    <strong className="font-semibold">that customer&rsquo;s</strong> rating, not{' '}
+                    {row.vendorName}&rsquo;s. There is no undo.
+                  </>
+                )
               }
               confirmLabel="Delete review"
               onConfirm={async () => {

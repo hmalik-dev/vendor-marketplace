@@ -225,6 +225,44 @@ describe('admin routes', () => {
       }
     });
 
+    /*
+     * The same routes **with a query string**, which is a different test.
+     *
+     * `preHandler` runs after validation, so an anonymous
+     * `GET /admin/vendors?status=bogus` answered 400 — with the enum's members
+     * listed in `details.params.values` — where the same route without a query
+     * answered 401. The test above passed throughout, because it sent no query.
+     * Every route in this plugin is now guarded `onRequest`, and this is what
+     * says so.
+     */
+    it('refuses them before validating a query, so no schema leaks to a stranger', async () => {
+      for (const route of routes) {
+        const response = await harness.app.inject({
+          method: route.method,
+          url: `${route.url}?status=bogus&page=0&pageSize=99999`,
+        });
+
+        expect(response.statusCode, route.url).toBe(401);
+        expect(response.body, route.url).not.toContain('flagged');
+      }
+    });
+
+    it('refuses a malformed body before parsing it', async () => {
+      await signIn(CUSTOMER);
+
+      for (const route of routes.filter((candidate) => candidate.method === 'PUT')) {
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: route.url,
+          headers: { ...bearer(CUSTOMER), 'content-type': 'application/json' },
+          payload: '{"action":',
+        });
+
+        // 403 — the role refusal, not the 400 the JSON parser would have raised.
+        expect(response.statusCode, route.url).toBe(403);
+      }
+    });
+
     it('refuses every admin route to a customer', async () => {
       await signIn(CUSTOMER);
 
@@ -487,9 +525,15 @@ describe('admin routes', () => {
       });
       expect(response.json().requestsDeclined).toBeGreaterThanOrEqual(1);
 
-      // The refund is the full amount, not a D3 cancellation tier.
+      // The refund is the full amount, not a D3 cancellation tier — and it
+      // carries the key that stops a replayed ban issuing it twice.
       expect(harness.stripe.refunds).toEqual([
-        { paymentIntentId: 'pi_test_ban', amountCents: 120_000, reason: undefined },
+        {
+          paymentIntentId: 'pi_test_ban',
+          amountCents: 120_000,
+          reason: undefined,
+          idempotencyKey: expect.stringMatching(/^ban-refund:/) as unknown as string,
+        },
       ]);
 
       const [banned] = await harness.database.db
@@ -860,6 +904,50 @@ describe('admin routes', () => {
     });
   });
 
+  describe('payments name what happened to the money', () => {
+    /*
+     * `cancelBooking` never clears `paid_at`, so a refunded booking stays on
+     * this list — correctly, because the money did move and an operator has to
+     * find it. What it must not do is read as revenue: the Overview excludes
+     * cancelled bookings, so the same dollar was taken on one console screen
+     * and given back on another.
+     */
+    it('returns the status alongside the amounts, so a refund is not read as a payment', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const kept = await createFutureBooking(customerId, vendor.profileId);
+      const refunded = await createFutureBooking(customerId, vendor.profileId);
+
+      await harness.database.db
+        .update(bookings)
+        .set({ paidAt: new Date() })
+        .where(eq(bookings.id, kept));
+      await harness.database.db
+        .update(bookings)
+        .set({ paidAt: new Date(), status: 'cancelled' })
+        .where(eq(bookings.id, refunded));
+
+      const [payments, metrics] = await Promise.all([
+        harness.app.inject({ method: 'GET', url: '/admin/payments', headers: bearer(ADMIN) }),
+        harness.app.inject({ method: 'GET', url: '/admin/metrics', headers: bearer(ADMIN) }),
+      ]);
+
+      expect(payments.json().total).toBe(2);
+      const byId = new Map(
+        payments
+          .json()
+          .items.map((row: { bookingId: string; status: string }) => [row.bookingId, row.status]),
+      );
+      expect(byId.get(kept)).toBe('confirmed');
+      expect(byId.get(refunded)).toBe('cancelled');
+
+      // The two screens agree: one booking's money was kept.
+      expect(metrics.json().totalRevenueCents).toBe(120_000);
+    });
+  });
+
   describe('reviews', () => {
     async function createReview(
       customerId: string,
@@ -1064,6 +1152,27 @@ describe('admin routes', () => {
       expect(assigned.map((row) => row.tagId)).toEqual([existing[0]!.id]);
     });
 
+    it('keeps the operator’s note when an approval turns out to be a merge', async () => {
+      // The recursion into the merge branch dropped it, so the queue recorded
+      // the machine's "Merged with X" and the operator's reasoning was gone.
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      await harness.database.db
+        .insert(tags)
+        .values({ name: 'Soy Free', slug: 'dietary-soy-free', category: 'dietary' });
+      const { id } = await suggest('soy free');
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/tag-suggestions/${id}`,
+        headers: bearer(ADMIN),
+        payload: { action: 'approve', adminNote: 'Duplicate of the existing one, per Kate.' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().suggestion.adminNote).toBe('Duplicate of the existing one, per Kate.');
+    });
+
     it('refuses an approval whose slug collides with a differently spelled tag', async () => {
       await signIn(ADMIN, true);
       await signIn(VENDOR);
@@ -1213,6 +1322,84 @@ describe('admin routes', () => {
     });
   });
 
+  describe('what the ban tells each side', () => {
+    /*
+     * One body went to both parties and to unpaid bookings alike: "Your payment
+     * has been refunded in full." The vendor did not pay — they were about to be
+     * paid — and on a booking with no payment intent nothing was refunded at
+     * all. Both are the product making a false claim about somebody's money.
+     */
+    it('does not tell a vendor their payment was refunded', async () => {
+      const actor = await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile({ isPublished: true });
+      await createFutureBooking(customerId, vendor.profileId);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${customerId}/ban`,
+        headers: bearer(ADMIN),
+      });
+      expect(response.statusCode).toBe(200);
+      expect(actor).not.toBe(customerId);
+
+      const sent = await harness.database.db
+        .select({ userId: notifications.userId, body: notifications.body })
+        .from(notifications);
+      const toVendor = sent.find((row) => row.userId === vendor.userId);
+
+      expect(toVendor?.body).toBe(
+        'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, so no payout will follow.',
+      );
+      expect(toVendor?.body).not.toContain('Your payment');
+    });
+
+    it('does not claim a refund on a booking that was never charged', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const bookingId = await createFutureBooking(customerId, vendor.profileId);
+      await harness.database.db
+        .update(bookings)
+        .set({ stripePaymentIntentId: null })
+        .where(eq(bookings.id, bookingId));
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${customerId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      const sent = await harness.database.db
+        .select({ userId: notifications.userId, body: notifications.body })
+        .from(notifications);
+
+      expect(harness.stripe.refunds).toHaveLength(0);
+      for (const row of sent) {
+        expect(row.body, row.userId).not.toContain('refunded');
+      }
+    });
+
+    it('gives every refund an idempotency key, so a replayed ban cannot double it', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const bookingId = await createFutureBooking(customerId, vendor.profileId);
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${customerId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toBe(`ban-refund:${bookingId}`);
+    });
+  });
+
   describe('tag management', () => {
     it('lists every tag with a real vendor count', async () => {
       await signIn(ADMIN, true);
@@ -1307,6 +1494,35 @@ describe('admin routes', () => {
       });
 
       expect(response.statusCode).toBe(409);
+    });
+
+    it('applies a rename that only changes case', async () => {
+      /*
+       * It answered 200 and changed nothing. The name comparison ran through
+       * `normalizeTagName`, which lowercases — so a case fix looked identical
+       * to the stored value and skipped the whole block, silently.
+       */
+      await signIn(ADMIN, true);
+      const created = await harness.database.db
+        .insert(tags)
+        .values({ name: 'nut free', slug: 'dietary-nut-free', category: 'dietary' })
+        .returning({ id: tags.id });
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/tags/${created[0]!.id}`,
+        headers: bearer(ADMIN),
+        payload: { name: 'Nut Free' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().name).toBe('Nut Free');
+
+      const [row] = await harness.database.db
+        .select({ name: tags.name })
+        .from(tags)
+        .where(eq(tags.id, created[0]!.id));
+      expect(row!.name).toBe('Nut Free');
     });
 
     it('rejects an update that changes nothing', async () => {

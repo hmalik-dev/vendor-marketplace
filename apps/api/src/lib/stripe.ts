@@ -101,6 +101,16 @@ export interface CreateRefundInput {
    * nothing wrong — it feeds Stripe Radar and the issuer's own risk scoring.
    */
   reason?: 'requested_by_customer';
+  /**
+   * What makes this refund replayable exactly once.
+   *
+   * `createPaymentIntent` has always carried one; this did not, and the ban
+   * unwind's only replay guard was a non-atomic `isBanned` read — so two
+   * concurrent `PUT /admin/users/:id/ban` calls both entered the loop and both
+   * asked Stripe to refund the same booking. The booking id is the natural key:
+   * one refund per booking per ban, whatever the request timing.
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -368,26 +378,29 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
     },
 
     async createRefund(input) {
-      const refund = await stripe.refunds.create({
-        payment_intent: input.paymentIntentId,
-        amount: input.amountCents,
-        reason: input.reason,
-        /*
-         * The platform gives back its own fee too. Orla took a commission for
-         * arranging a booking that is not happening, and keeping it out of a
-         * refund the customer is owed in full would make the "100% refund" the
-         * cancellation policy promises a 88% one.
-         */
-        refund_application_fee: true,
-        /*
-         * And it carries the loss rather than clawing it back from the vendor's
-         * balance, which is what `losses_collector: 'application'` on the
-         * account already says. Reversing the transfer would take money out of a
-         * vendor who may have already been paid out and turn a cancellation into
-         * a negative balance they have to fund.
-         */
-        reverse_transfer: false,
-      });
+      const refund = await stripe.refunds.create(
+        {
+          payment_intent: input.paymentIntentId,
+          amount: input.amountCents,
+          reason: input.reason,
+          /*
+           * The platform gives back its own fee too. Orla took a commission for
+           * arranging a booking that is not happening, and keeping it out of a
+           * refund the customer is owed in full would make the "100% refund" the
+           * cancellation policy promises a 88% one.
+           */
+          refund_application_fee: true,
+          /*
+           * And it carries the loss rather than clawing it back from the vendor's
+           * balance, which is what `losses_collector: 'application'` on the
+           * account already says. Reversing the transfer would take money out of a
+           * vendor who may have already been paid out and turn a cancellation into
+           * a negative balance they have to fund.
+           */
+          reverse_transfer: false,
+        },
+        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
+      );
 
       return { refundId: refund.id, amountCents: refund.amount };
     },

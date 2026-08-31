@@ -1,39 +1,43 @@
 ---
 name: error-handler-4xx-passthrough-leaks-sdk-messages
-description: apps/api's error handler returns the raw message of ANY thrown object carrying a numeric `statusCode` between 400 and 499, so a third-party SDK error (Stripe) reaches the client verbatim
+description: FIXED — apps/api's 4xx passthrough now only lets Fastify's own errors speak, so a Stripe/Clerk/AWS SDK error no longer reaches the client verbatim; do not re-report
 metadata:
   type: project
 ---
 
-`apps/api/src/plugins/error-handler.ts` has a branch after the `AppError` check:
+**Status: fixed. Do not re-report.** Verified against
+`apps/api/src/plugins/error-handler.ts` on 2026-08-31 (#15 audit).
+
+The branch after the `AppError` check still passes the _status_ through for any
+thrown object carrying a numeric `statusCode` in 400–499, but the _message_ is
+now gated:
 
 ```ts
-const statusCode = statusCodeOf(error);            // reads error.statusCode
-if (statusCode !== null && statusCode >= 400 && statusCode < 500) {
-  return reply.status(statusCode).send({ ..., message: messageOf(error) });
+function messageOf(error, statusCode) {
+  if (isFastifyError(error) && error instanceof Error) return error.message; // code.startsWith('FST_')
+  return statusCode === 404 ? 'Resource not found' : 'Request failed';
 }
 ```
 
-It was written for `@fastify/rate-limit` and other plugins that throw Fastify
-errors, and it is safe for those. It is **not** safe for an SDK whose error class
-also exposes a top-level `statusCode` plus an upstream `message`. `stripe-node`
-does exactly that: `StripeError` sets `this.statusCode = raw.statusCode` and
-`this.message = raw.message`, so a Stripe 400/401/403/404 raised inside a service
-is answered to the browser with Stripe's own words — including
-`Invalid API Key provided: sk_live_****abcd` on a revoked platform key.
+That is the narrowing the old finding asked for. `stripe-node`'s `StripeError`
+sets `statusCode` and a message naming the API key and its mode; it now lands on
+`'Request failed'` and the detail goes to `request.log.error({ err })` instead.
 
-Clerk (`status`, not `statusCode`) and the AWS SDK (`$metadata.httpStatusCode`)
-miss the branch, which is why the leak did not exist before Stripe landed.
+What is still true and still worth checking:
 
-**Why:** the repo rule in `.claude/rules/api-layering.md` is "only `AppError`
-produces a client-visible message"; this branch is the one hole in it, and it
-opens automatically whenever a new upstream client is added.
+- The **log** gets the whole SDK error object (`{ err: error }`, line ~115).
+  Pino's `err` serializer copies own enumerable properties, so a Stripe error's
+  `raw`, `charge` and `payment_intent` fields are written to the log. See
+  [[webhook-error-objects-carry-the-redacted-header]].
+- The client-side counterpart `apps/web/src/lib/user-facing-error.ts` passes any
+  4xx message straight to the reader. That is safe _because_ of the narrowing
+  above — the two are coupled, so narrowing `messageOf` further is fine but
+  widening it re-opens the leak at both ends.
 
-**How to apply:** on any diff introducing or extending a third-party client in
-`apps/api`, check whether its error class carries `statusCode`. The containment
-belongs at the call site — wrap the SDK call and rethrow as an `AppError` with
-approved copy, logging the detail — rather than in the handler, unless the branch
-is narrowed to Fastify's own errors (`error.code?.startsWith('FST_')`).
+**How to apply:** on a diff introducing a new upstream client in `apps/api`,
+check the log path rather than the reply path. Wrapping the SDK call and
+rethrowing as an `AppError` is still the right containment for anything the
+operator or user needs to read.
 
 Related: [[response-schemas-are-a-second-write-boundary]],
 [[webhook-error-objects-carry-the-redacted-header]].

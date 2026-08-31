@@ -9,17 +9,12 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { useApi } from '@/lib/use-api';
+import { userFacingError } from '@/lib/user-facing-error';
 import {
-  wireAdminTagSuggestionRowSchema,
+  wireAdminTagSuggestionResultSchema,
   type WireAdminTagRow,
   type WireAdminTagSuggestionRow,
 } from '@/lib/wire-schemas';
-import { z } from 'zod';
-
-const RESOLVED = z.object({
-  suggestion: wireAdminTagSuggestionRowSchema,
-  tag: z.unknown().nullable(),
-});
 
 const SUGGESTED = new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -90,9 +85,15 @@ function SuggestionCard({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  /* Only tags in the suggestion's own category: the API refuses a cross-category
-     merge, and offering one would be a control that exists to be rejected. */
-  const mergeable = tags.filter((tag) => tag.category === suggestion.category);
+  /*
+   * Only **active** tags in the suggestion's own category.
+   *
+   * The API refuses a cross-category merge, so offering one would be a control
+   * that exists to be rejected. `isActive` is the subtler half: a deactivated
+   * tag is hidden from the picker and from search filters, so merging into one
+   * would close the suggestion by giving the vendor a tag nobody can see.
+   */
+  const mergeable = tags.filter((tag) => tag.category === suggestion.category && tag.isActive);
 
   async function resolve(body: Record<string, unknown>): Promise<void> {
     setBusy(true);
@@ -102,14 +103,14 @@ function SuggestionCard({
       await call(`/admin/tag-suggestions/${suggestion.id}`, {
         method: 'PUT',
         body,
-        schema: RESOLVED,
+        schema: wireAdminTagSuggestionResultSchema,
       });
       router.refresh();
     } catch (failure) {
+      // `userFacingError`, not `failure.message` — the same reason
+      // `ConfirmAction` uses it: a 5xx body is written about the server.
       setError(
-        failure instanceof Error
-          ? failure.message
-          : 'That did not reach us. Check your connection and try again.',
+        userFacingError(failure, 'That did not reach us. Check your connection and try again.'),
       );
     } finally {
       setBusy(false);

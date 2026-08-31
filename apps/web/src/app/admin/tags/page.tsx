@@ -5,7 +5,13 @@ import { Pager } from '@/components/admin/pager';
 import { TagQueue } from '@/components/admin/tag-queue';
 import { TagTable } from '@/components/admin/tag-table';
 import { getAdminTagSuggestions, getAdminTags } from '@/lib/admin-data';
-import { adminQueryString, oneOf, pageNumber, type RawParam } from '@/lib/admin-params';
+import {
+  adminQueryString,
+  droppedKeys,
+  oneOf,
+  pageNumber,
+  type RawParam,
+} from '@/lib/admin-params';
 import { cn } from '@/lib/utils';
 
 const PATH = '/admin/tags';
@@ -30,7 +36,11 @@ export default async function AdminTagsPage({
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   // `pending` is the queue's whole purpose, so it is the default rather than "all".
-  const status = oneOf(raw.status, TAG_SUGGESTION_STATUSES) ?? 'pending';
+  const parsed = oneOf(raw.status, TAG_SUGGESTION_STATUSES);
+  const status = parsed ?? 'pending';
+  // Every other console screen says when it ignored something in the address;
+  // this one silently fell back to `pending`, which reads as the queue's state.
+  const dropped = droppedKeys(raw, { status: parsed });
   const [suggestions, tags] = await Promise.all([
     getAdminTagSuggestions(adminQueryString({ status, page: pageNumber(raw.page) })),
     getAdminTags(),
@@ -43,6 +53,7 @@ export default async function AdminTagsPage({
         `${suggestions.total} ${STATUS_LABELS[status]?.toLowerCase() ?? status}`,
         `${tags.items.length} tags in the vocabulary`,
       ]}
+      dropped={dropped}
       filters={
         <div className="flex flex-wrap items-center gap-2">
           {TAG_SUGGESTION_STATUSES.map((value) => (

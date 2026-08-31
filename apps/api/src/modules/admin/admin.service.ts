@@ -209,6 +209,14 @@ export async function setUserBanned(
     throw conflict(isBanned ? 'That account is already banned' : 'That account is not banned');
   }
 
+  /*
+   * Who, not just what. `users.banned_at` records when an account was suspended
+   * and nothing records by whom, so "which operator suspended this" had no
+   * answer anywhere. A log line is not an audit table — but it is the
+   * difference between an unanswerable question and a greppable one.
+   */
+  context.log.info({ actorId, targetId, isBanned }, 'Admin changed an account’s ban state');
+
   const profile = await findVendorProfileByUserId(context.db, targetId);
 
   if (!isBanned) {
@@ -252,6 +260,12 @@ export async function setUserBanned(
         await context.stripe.createRefund({
           paymentIntentId: booking.stripePaymentIntentId,
           amountCents: booking.totalAmountCents,
+          /*
+           * One refund per booking, however many times a ban is issued. The
+           * `isBanned` check above is a read and not a lock, so two concurrent
+           * bans both reach this loop; without a key they would both refund.
+           */
+          idempotencyKey: `ban-refund:${booking.id}`,
         });
         refundsIssued += 1;
       } catch (error) {
@@ -284,12 +298,31 @@ export async function setUserBanned(
       (id): id is string => typeof id === 'string' && id !== targetId,
     );
 
+    /*
+     * The body is per recipient, and per whether money actually moved.
+     *
+     * One string went to both sides claiming "your payment has been refunded in
+     * full" — to the vendor, who did not pay but was about to be paid, and on
+     * an unpaid booking, where no refund happened at all. Both are the product
+     * telling somebody something untrue about their money.
+     */
+    const refunded = booking.stripePaymentIntentId !== null;
+
     for (const recipient of recipients) {
+      const body =
+        recipient === booking.customerId
+          ? refunded
+            ? 'The other party’s account was suspended. Your payment has been refunded in full.'
+            : 'The other party’s account was suspended. Nothing was charged for this booking.'
+          : refunded
+            ? 'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, so no payout will follow.'
+            : 'The customer’s account was suspended and the booking was cancelled. Nothing had been charged for it.';
+
       const stored = await insertNotification(context.db, {
         userId: recipient,
         type: 'booking_cancelled',
         title: 'A booking was cancelled',
-        body: 'The other party’s account was suspended. Your payment has been refunded in full.',
+        body,
         data: { bookingId: booking.id },
       });
 
@@ -442,12 +475,19 @@ export async function listReviews(
  * here rather than reimplemented, because a second recompute is how the two come
  * to disagree. Deleting the last review leaves `0 / 0`, not `NULL`.
  */
-export async function deleteReview(db: AppDatabase, reviewId: string): Promise<void> {
-  const deleted = await deleteReviewAndRecalculate(db, reviewId);
+export async function deleteReview(
+  context: AdminContext,
+  actorId: string,
+  reviewId: string,
+): Promise<void> {
+  const deleted = await deleteReviewAndRecalculate(context.db, reviewId);
 
   if (!deleted) {
     throw notFound('No review with that id');
   }
+
+  // Same reason as the ban: a deleted review otherwise leaves no trace at all.
+  context.log.info({ actorId, reviewId }, 'Admin deleted a review');
 }
 
 // --- Tag moderation --------------------------------------------------------
@@ -636,7 +676,17 @@ export async function resolveTagSuggestion(
     return resolveTagSuggestion(
       context,
       suggestionId,
-      { action: 'merge', mergeTagId: sameName.id },
+      /*
+       * The note travels. Approving a duplicate is still a decision, and the
+       * reasoning the operator typed is the only record of why it was made —
+       * dropping it left the queue reading the machine's "Merged with X" and
+       * nothing else.
+       */
+      {
+        action: 'merge',
+        mergeTagId: sameName.id,
+        ...(input.adminNote ? { adminNote: input.adminNote } : {}),
+      },
       now,
     );
   }
@@ -730,7 +780,14 @@ export async function updateTag(
 
   if (
     input.name !== undefined &&
-    normalizeTagName(input.name) !== normalizeTagName(existing.name)
+    /*
+     * Compared exactly, not through `normalizeTagName`. The normalised compare
+     * skipped this whole block for a case-only edit — so renaming `gluten free`
+     * to `Gluten Free` answered 200 and changed nothing, with no error to
+     * explain it. The clash check now self-excludes instead, the way the slug
+     * check below it already did.
+     */
+    input.name !== existing.name
   ) {
     const clash = await findTagByCategoryAndName(
       db,
@@ -738,7 +795,7 @@ export async function updateTag(
       normalizeTagName(input.name),
     );
 
-    if (clash) {
+    if (clash && clash.id !== tagId) {
       throw conflict(`A tag called ${clash.name} already exists in that category`);
     }
 

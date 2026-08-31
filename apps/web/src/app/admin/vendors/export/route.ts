@@ -5,6 +5,7 @@ import {
   toDateString,
 } from '@vendor-marketplace/shared';
 import type { NextRequest } from 'next/server';
+import { ApiClientError } from '@/lib/api-client';
 import { getAdminVendorFacets, getAdminVendors } from '@/lib/admin-data';
 import { adminQueryString, boundedText, displayRating, oneOf } from '@/lib/admin-params';
 import { getCurrentUser } from '@/lib/current-user';
@@ -77,7 +78,22 @@ function csvRow(row: WireAdminVendorRow): string {
  * data the one that was not role-gated.
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const user = await getCurrentUser();
+  /*
+   * `getCurrentUser` propagates a 403, which for a **suspended** operator is an
+   * unhandled render error rather than an answer. The pages avoid that by going
+   * through `requireCurrentUser`; a route handler has no redirect to offer, so
+   * it catches and states the refusal.
+   */
+  let user: Awaited<ReturnType<typeof getCurrentUser>>;
+
+  try {
+    user = await getCurrentUser();
+  } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 403) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    throw error;
+  }
 
   if (!user) {
     return new Response('Unauthorized', { status: 401 });
@@ -95,7 +111,18 @@ export async function GET(request: NextRequest): Promise<Response> {
    * 400, threw inside the loop below and rendered the 500 page — on an
    * authenticated admin route, for a link the operator had bookmarked.
    */
-  const raw = Object.fromEntries(request.nextUrl.searchParams);
+  /*
+   * `getAll`, not `Object.fromEntries` — which keeps the **last** value of a
+   * repeated key while `admin-params`' `first()` keeps the first. `?status=review
+   * &status=live` would have exported a different set from the table it claims
+   * to be exporting.
+   */
+  const raw = Object.fromEntries(
+    [...request.nextUrl.searchParams.keys()].map((key) => [
+      key,
+      request.nextUrl.searchParams.getAll(key),
+    ]),
+  );
   const facets = await getAdminVendorFacets();
   const filters = new URLSearchParams(
     adminQueryString({
@@ -126,6 +153,20 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     page += 1;
   } while ((page - 1) * MAX_PAGE_SIZE < total && page <= MAX_PAGES);
+
+  /*
+   * Say so when the walk stopped short. The docstring promises "the whole
+   * filtered set", and a file that quietly ends at 5,000 rows is worse than one
+   * that says where it stopped — an operator reconciling numbers would have no
+   * way to tell.
+   */
+  if (lines.length - 1 < total) {
+    lines.push(
+      csvField(
+        `Truncated at ${lines.length - 1} of ${total} rows — narrow the filters to export the rest.`,
+      ),
+    );
+  }
 
   return new Response(`${lines.join('\r\n')}\r\n`, {
     headers: {

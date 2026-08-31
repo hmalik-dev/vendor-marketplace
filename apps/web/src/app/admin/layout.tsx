@@ -29,20 +29,24 @@ export default async function AdminLayout({
   children: ReactNode;
 }): Promise<React.ReactElement> {
   /*
-   * Both reads together, not one after the other. A layout `await` blocks the
-   * child page's own fetch, so serialising these put two full round trips in
-   * front of every console screen's content.
+   * **Serial, and it has to be.** These ran in a `Promise.all` for one commit,
+   * to save a round trip. Both throw a `redirect` for a signed-in non-admin —
+   * `requireRole` throws `/bookings` for a customer, the badge read's own 403
+   * handler throws `/` — so whichever settled first won, and a customer typing
+   * `/admin` landed somewhere non-deterministic. The browser pass caught it
+   * landing on `/`.
    *
-   * Running the badge read before the role check is safe because the API guards
-   * `/admin/reviews` itself — a non-admin gets a 403 there, not data. This
-   * redirect is the courtesy, not the authorization.
+   * The role decision therefore completes before anything else runs. That is
+   * what makes the bounce a decision rather than a race, and it is worth more
+   * than the round trip it costs.
    *
    * The badge beside `Reviews` is a count rather than a read of
    * `/admin/metrics`: that route builds four 30-day series, and paying for
    * those on every page load to render one number would be the expensive way to
    * be correct. `pageSize=1` returns the same `total` the Reviews screen shows.
    */
-  const [user, reviews] = await Promise.all([requireRole('admin'), getAdminReviews('?pageSize=1')]);
+  const user = await requireRole('admin');
+  const reviews = await getAdminReviews('?pageSize=1');
 
   return (
     <div data-app-shell className="flex flex-col lg:h-dvh lg:overflow-hidden">

@@ -7,7 +7,13 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminBookings } from '@/lib/admin-data';
-import { adminQueryString, oneOf, pageNumber, type RawParam } from '@/lib/admin-params';
+import {
+  adminQueryString,
+  droppedKeys,
+  oneOf,
+  pageNumber,
+  type RawParam,
+} from '@/lib/admin-params';
 
 const PATH = '/admin/bookings';
 
@@ -25,12 +31,14 @@ export default async function AdminBookingsPage({
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const status = oneOf(raw.status, BOOKING_STATUSES);
+  const dropped = droppedKeys(raw, { status });
   const bookings = await getAdminBookings(adminQueryString({ status, page: pageNumber(raw.page) }));
 
   return (
     <AdminSurface
       heading="Bookings"
       counts={[`${bookings.total} total`]}
+      dropped={dropped}
       filters={
         <FilterBar action={PATH}>
           <FilterSelect

@@ -3,7 +3,13 @@ import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { ReviewTable } from '@/components/admin/review-table';
 import { getAdminReviews } from '@/lib/admin-data';
-import { adminQueryString, oneOf, pageNumber, type RawParam } from '@/lib/admin-params';
+import {
+  adminQueryString,
+  droppedKeys,
+  oneOf,
+  pageNumber,
+  type RawParam,
+} from '@/lib/admin-params';
 
 const PATH = '/admin/reviews';
 
@@ -19,12 +25,14 @@ export default async function AdminReviewsPage({
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const type = oneOf(raw.type, REVIEW_TYPES);
+  const dropped = droppedKeys(raw, { type });
   const reviews = await getAdminReviews(adminQueryString({ type, page: pageNumber(raw.page) }));
 
   return (
     <AdminSurface
       heading="Reviews"
       counts={[`${reviews.total} total`]}
+      dropped={dropped}
       filters={
         <FilterBar action={PATH}>
           <FilterSelect

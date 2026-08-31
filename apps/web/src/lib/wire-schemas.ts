@@ -347,8 +347,15 @@ export type WireAdminTagList = z.infer<typeof wireAdminTagListSchema>;
 export const wireAdminMetricsSchema = adminMetricsSchema;
 export type WireAdminMetrics = z.infer<typeof wireAdminMetricsSchema>;
 
+/**
+ * What resolving a suggestion answered.
+ *
+ * `tag` is `wireTagSchema`, **not** `wireAdminTagRowSchema`: the API returns
+ * `tagSchema` here, which carries no `vendorCount`, so requiring the admin row
+ * would reject every successful response.
+ */
 export const wireAdminTagSuggestionResultSchema = adminTagSuggestionResultSchema.extend({
   suggestion: wireAdminTagSuggestionRowSchema,
-  tag: wireAdminTagRowSchema.nullable(),
+  tag: wireTagSchema.nullable(),
 });
 export type WireAdminTagSuggestionResult = z.infer<typeof wireAdminTagSuggestionResultSchema>;

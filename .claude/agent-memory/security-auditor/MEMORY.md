@@ -15,7 +15,8 @@
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — `GET /events/stream` has no `requireAuth`; adding one breaks it, removing the inline ban check is the real regression
 - [Log redaction covers the query, not the path](log-redaction-covers-query-not-path.md) — every query value goes and cannot be name-bypassed, but a credential in a path segment is still logged whole
 - [availability.status literals are load-bearing](availability-status-literals-are-load-bearing.md) — three double-booking guards compare to `'booked'`; redefining what a lifecycle writes needs a migration, not a code change
-- [The error handler's 4xx passthrough leaks SDK messages](error-handler-4xx-passthrough-leaks-sdk-messages.md) — any thrown object with `statusCode` 4xx answers with its own `message`; Stripe errors carry both
+- [The error handler's 4xx passthrough is FIXED](error-handler-4xx-passthrough-leaks-sdk-messages.md) — only `FST_` errors speak now; the SDK detail moved to the log, do not re-report the reply path
+- [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself because `/admin/layout.tsx` never runs for it
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body around the `redact` path
 - [Fabricating seeds share one declared-branch guard](fabricating-seeds-share-one-declared-branch-guard.md) — `assertSafeTarget` is mandatory in any `packages/db` seed; it trusts `.neon`/`NEON_BRANCH`, not the URL
 - [The e2e fixture forges stripe_onboarded](e2e-fixture-forges-stripe-onboarded.md) — `true` with a null `stripe_account_id`, a shape Stripe cannot produce; harmless until checkout exists

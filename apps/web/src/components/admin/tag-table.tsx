@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
 import { useApi } from '@/lib/use-api';
+import { userFacingError } from '@/lib/user-facing-error';
 import { wireAdminTagRowSchema, type WireAdminTagRow } from '@/lib/wire-schemas';
 
 /**
@@ -123,7 +124,7 @@ function TagName({ tag }: { tag: WireAdminTagRow }): React.ReactElement {
       setEditing(false);
       router.refresh();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'That rename did not save.');
+      setError(userFacingError(failure, 'That rename did not save.'));
     }
   }
 

@@ -14,7 +14,7 @@ export interface AdminHeaderProps {
  *
  * The inversion is the point: it is the one unmistakable signal that this
  * surface acts on other people's accounts. It replaces `SiteHeader` rather than
- * sitting beneath it — see `outside-admin.tsx`.
+ * sitting beneath it — see `OutsideAdmin` in `public-chrome.tsx`.
  *
  * The avatar is the shared `Avatar` at its `xs` step — the 30px frame `13`
  * draws — with the ground and the initial swapped for the inverted pair the

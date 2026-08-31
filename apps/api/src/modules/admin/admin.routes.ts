@@ -22,7 +22,7 @@ import {
   updateTagSchema,
 } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { assertRole, requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
+import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import {
   deleteReview,
   listBookings,
@@ -57,7 +57,21 @@ const tagParamsSchema = z.object({ tagId: z.uuid() });
  * refused at sync (`normalizeRole`) precisely so it can only be granted here.
  */
 export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
-  const adminOnly = requireRole('admin');
+  /*
+   * `onRequest`, not `preHandler`, on **every** route in this plugin.
+   *
+   * Fastify runs `preHandler` *after* validation, so an anonymous
+   * `GET /admin/vendors?status=bogus` answered 400 with the enum's members in
+   * `details.params.values` where the same request without a query answered
+   * 401 — schema disclosure on the one plugin that reads other people's
+   * accounts. The four mutating routes already used the earlier hook for the
+   * neighbouring reason (a malformed body tripping the JSON parser, whose 400
+   * would outrun the 403 a wrong-role caller is owed); the reads now share it.
+   *
+   * Nothing is lost by moving: the guard reads the local `users.role` column
+   * and needs nothing the validator produces.
+   */
+  const adminOnly = requireRoleBeforeValidation('admin');
 
   const context = (): AdminContext => ({
     db: app.db,
@@ -69,7 +83,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/admin/vendors',
     {
-      preHandler: adminOnly,
+      onRequest: adminOnly,
       schema: {
         querystring: adminVendorQuerySchema,
         response: { 200: adminVendorPageSchema },
@@ -78,18 +92,10 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => listVendors(app.db, request.query),
   );
 
-  /*
-   * `onRequest` rather than `preHandler`, and no body schema.
-   *
-   * A ban is guarded by role alone, so a wrong-role caller can send a payload
-   * malformed enough to trip Fastify's own JSON parser — and that 400 would
-   * outrun the 403 this route owes them. The same reasoning as
-   * `POST /vendor/stripe/connect`; see `requireRoleBeforeValidation`.
-   */
   app.put(
     '/admin/users/:userId/ban',
     {
-      onRequest: requireRoleBeforeValidation('admin'),
+      onRequest: adminOnly,
       schema: { params: userParamsSchema, response: { 200: adminBanResultSchema } },
     },
     async (request) =>
@@ -105,7 +111,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     '/admin/users/:userId/unban',
     {
-      onRequest: requireRoleBeforeValidation('admin'),
+      onRequest: adminOnly,
       schema: { params: userParamsSchema, response: { 200: adminBanResultSchema } },
     },
     async (request) =>
@@ -120,7 +126,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/admin/metrics',
-    { preHandler: adminOnly, schema: { response: { 200: adminMetricsSchema } } },
+    { onRequest: adminOnly, schema: { response: { 200: adminMetricsSchema } } },
     async () => readMetrics(app.db, app.clock()),
   );
 
@@ -131,14 +137,14 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
    */
   app.get(
     '/admin/vendors/facets',
-    { preHandler: adminOnly, schema: { response: { 200: adminVendorFacetsSchema } } },
+    { onRequest: adminOnly, schema: { response: { 200: adminVendorFacetsSchema } } },
     async () => readVendorFacets(app.db),
   );
 
   app.get(
     '/admin/customers',
     {
-      preHandler: adminOnly,
+      onRequest: adminOnly,
       schema: {
         querystring: adminCustomerQuerySchema,
         response: { 200: adminCustomerPageSchema },
@@ -150,7 +156,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/admin/bookings',
     {
-      preHandler: adminOnly,
+      onRequest: adminOnly,
       schema: { querystring: adminBookingQuerySchema, response: { 200: adminBookingPageSchema } },
     },
     async (request) => listBookings(app.db, request.query),
@@ -159,7 +165,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/admin/payments',
     {
-      preHandler: adminOnly,
+      onRequest: adminOnly,
       schema: { querystring: adminPaymentQuerySchema, response: { 200: adminPaymentPageSchema } },
     },
     async (request) => listPayments(app.db, request.query),
@@ -168,7 +174,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/admin/reviews',
     {
-      preHandler: adminOnly,
+      onRequest: adminOnly,
       schema: { querystring: adminReviewQuerySchema, response: { 200: adminReviewPageSchema } },
     },
     async (request) => listReviews(app.db, request.query),
@@ -183,11 +189,15 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   app.delete(
     '/admin/reviews/:reviewId',
     {
-      preHandler: adminOnly,
+      onRequest: adminOnly,
       schema: { params: reviewParamsSchema, response: { 204: z.null() } },
     },
     async (request, reply) => {
-      await deleteReview(app.db, request.params.reviewId);
+      await deleteReview(
+        context(),
+        assertRole(request.auth, ['admin']).id,
+        request.params.reviewId,
+      );
 
       return reply.status(204).send(null);
     },
@@ -196,7 +206,7 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/admin/tag-suggestions',
     {
-      preHandler: adminOnly,
+      onRequest: adminOnly,
       schema: {
         querystring: adminTagSuggestionQuerySchema,
         response: { 200: adminTagSuggestionPageSchema },
@@ -205,11 +215,10 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => listTagSuggestions(app.db, request.query),
   );
 
-  // `onRequest`, for the reason given above `PUT /admin/users/:userId/ban`.
   app.put(
     '/admin/tag-suggestions/:suggestionId',
     {
-      onRequest: requireRoleBeforeValidation('admin'),
+      onRequest: adminOnly,
       schema: {
         params: suggestionParamsSchema,
         body: resolveTagSuggestionSchema,
@@ -222,14 +231,14 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/admin/tags',
-    { preHandler: adminOnly, schema: { response: { 200: adminTagListSchema } } },
+    { onRequest: adminOnly, schema: { response: { 200: adminTagListSchema } } },
     async () => listTags(app.db),
   );
 
   app.put(
     '/admin/tags/:tagId',
     {
-      onRequest: requireRoleBeforeValidation('admin'),
+      onRequest: adminOnly,
       schema: {
         params: tagParamsSchema,
         body: updateTagSchema,

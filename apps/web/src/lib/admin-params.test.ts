@@ -105,3 +105,26 @@ describe('droppedKeys and droppedFiltersLine', () => {
     );
   });
 });
+
+describe('every console screen can say what it ignored', () => {
+  /*
+   * The rule is "drop it **and say so**". Silently rendering the unfiltered
+   * list tells an operator the platform holds data it does not — which on a
+   * moderation queue is the difference between "nothing is waiting" and "your
+   * URL was wrong".
+   */
+  it('reports the key an operator supplied and the screen could not use', () => {
+    const raw = { status: 'nonsense', page: '2' };
+    const parsed = { status: undefined };
+
+    expect(droppedFiltersLine(droppedKeys(raw, parsed))).toBe(
+      'Ignored status in the address — it is not a value this list can filter by.',
+    );
+  });
+
+  it('says nothing about a key the screen never parses', () => {
+    // `page` is narrowed by `pageNumber`, which always yields a number — it is
+    // not a filter and must never appear in the line.
+    expect(droppedKeys({ page: 'abc' }, { status: undefined })).toEqual([]);
+  });
+});

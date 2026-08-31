@@ -93,7 +93,13 @@ export interface FakeStripe extends StripeConnectGateway {
   intentsByKey: Map<string, string>;
   /** Refunds asked for, in order, so a suite can assert exact cent amounts. */
   /** `reason` is absent on an operator-driven refund — see `CreateRefundInput`. */
-  refunds: { paymentIntentId: string; amountCents: number; reason: string | undefined }[];
+  refunds: {
+    paymentIntentId: string;
+    amountCents: number;
+    reason: string | undefined;
+    /** Recorded so a suite can assert a replayed refund is deduped by Stripe. */
+    idempotencyKey: string | undefined;
+  }[];
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
@@ -208,6 +214,7 @@ function createFakeStripe(): FakeStripe {
         paymentIntentId: input.paymentIntentId,
         amountCents: input.amountCents,
         reason: input.reason,
+        idempotencyKey: input.idempotencyKey,
       });
 
       return { refundId: `re_test_${refunds.length}`, amountCents: input.amountCents };
