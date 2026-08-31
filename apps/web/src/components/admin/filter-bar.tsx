@@ -131,7 +131,16 @@ export function FilterBar({
             Border-box read the same number as the footprint and came out 26px
             narrow, which pushed every control after it left.
           */
-          className="box-content w-full max-w-70 flex-1 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900 placeholder:text-stone-600"
+          /*
+            The bordered-field focus treatment, not the unbordered one.
+            `03-components.md` names three mechanisms and forbids mixing them: a
+            field that already has an edge darkens that edge, because a detached
+            ring on top of a border reads as browser chrome. With no override
+            this fell through to the global `:focus-visible` and painted the
+            unbordered control's offset ring. The class string is the one the
+            booking and customer-profile fields already use.
+          */
+          className="box-content w-full max-w-70 flex-1 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900 placeholder:text-stone-600 focus-visible:border-clay-400 focus-visible:ring-3 focus-visible:ring-clay-400/15"
         />
       ) : null}
       {children}
