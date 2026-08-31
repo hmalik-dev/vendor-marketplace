@@ -3,8 +3,8 @@ import { VendorNav } from '@/components/vendor-nav';
 import { requireRole } from '@/lib/current-user';
 
 /**
- * Every vendor surface sits beside the same navigation rail — 200px from `lg`,
- * widening to the full 240px sidebar at `xl`, per the degradation table in
+ * Every vendor surface sits beside the same navigation rail — 220px from `lg`,
+ * widening to the full 240px sidebar at 1440, per the degradation table in
  * design/design-plan/04-laws.md. Page height is left to each surface: the app
  * shells own their scrolling.
  */

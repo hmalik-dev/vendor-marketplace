@@ -50,9 +50,16 @@ title is not a gap to fill.
 metric about themselves, and it starts at zero honestly rather than at an
 invented value. It makes no claim about ranking.
 
-**Stats row** — four cards across, never stacked: Bookings this month · Response
-rate · Rating · Earnings this month. Serif 30px number over a 10.5px uppercase
-label, with a `sage-600` or `stone-600` delta line beneath.
+**Stats row** — four cards across at 1440, two below 1024, and **absent at
+1024**: Bookings this month · Response rate · Rating · Earnings this month.
+Serif 30px number over a 10.5px uppercase label, with a `sage-600` or
+`stone-600` delta line beneath.
+
+The 1024 deletion is frame `27 Vendor dashboard — 1024`'s, and it is the one
+place the standing "a grid loses a column before a card loses information" rule
+runs out: the sidebar and the right column leave the pane 394px, four cards
+compute to 89.5px each, and every label wraps to three lines. Two-up survives
+below 1024 because neither the sidebar nor the right column is there.
 
 **Requests list** — the working surface. Each row: avatar · name + status pill ·
 one line of event facts (type, date, venue, guests, package) · price and expiry ·
@@ -73,8 +80,54 @@ until payouts are connected. It takes about five minutes."
 It's a rail and not a banner because the vendor refers back to it while working
 on other pages.
 
-Once published, the rail becomes **today's schedule** — a timeline with times and
-event names.
+Once published, the rail becomes **this week and the next payout** — the
+seven-day booking strip (day number over `Open` / `Booked` / `Held` / `Blocked`,
+44px cells on a 5px grid) above a card naming what the vendor is owed next.
+
+This replaced a today's-schedule timeline under #322. Frame
+`27 Vendor dashboard — 1024` is the only frame in the bundle that draws a
+_published_ vendor's dashboard — its header carries the sage `Live` pill, where
+frame `08`'s vendor is still on `4 of 6` of the checklist — and it draws the
+week, not the day. `30-responsive.md` says the same thing independently: "the
+calendar shows the booking week, not the month grid".
+
+**Published, the column also moves inside the content pane** at `width:300px;
+flex:none` and a 16px gap, carrying no border and no padding of its own. The
+bordered outer rail is the unpublished composition, which is the state frame
+`08` draws.
+
+### The payout date is the event's — a recorded frame deviation
+
+Frame `27` writes the second card's line as `Anjali N. · pays out Jun 15`. **Do
+not build that.** There is no payout schedule to read a date from until #10, so
+the date could only be invented, on the one surface where the vendor can tell —
+the same objection that deleted the reply-time median above.
+
+What ships instead states the real event date and the mechanism that connects
+it to the money: `Anjali N. · after the event on Jun 15`. The **amount** is not
+a deviation — `vendor_payout_cents` is settled at payment, so it is exactly what
+will arrive. When #10 lands, the payout date replaces the event date here and
+this note is deleted.
+
+### One value in the week strip cannot be built
+
+Frame `27` sets each day number in Instrument Serif at **15px**.
+`01-foundations.md` states the serif floor as a rule of the type system — never
+below 16px — and `display-type.test.ts` enforces it across the whole tree. 16px
+ships: one pixel, on the smallest serif in the bundle, against lowering a floor
+that holds everywhere else.
+
+### The 1024 frame's copy is not the contract
+
+Frame `27` and `27 … — empty` write a different vocabulary from frame `08` and
+from this file: `Good morning, June` over `3 new requests · 4 confirmed events
+this month`, `Preview profile` for `View my public profile`, a `Vending`
+micro-label over the sidebar, and `Requests` / `Messages` / `My profile` /
+`Payouts` for the shipped `Bookings` / `Business profile` / `Packages` /
+`Portfolio` / `Payments`. **#322 built the composition and left the strings**,
+because adopting them at 1024 alone would make the same nav read two ways on one
+laptop, and the greeting's second line states two counts nothing computes. Filed
+rather than built.
 
 ## Acceptance
 

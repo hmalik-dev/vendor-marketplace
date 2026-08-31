@@ -1,5 +1,12 @@
-import { and, eq, gte, lt, sql } from 'drizzle-orm';
-import { bookingRequests, bookings, users, vendorCategories } from '@vendor-marketplace/db/schema';
+import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
+import {
+  availability,
+  bookingRequests,
+  bookings,
+  users,
+  vendorCategories,
+} from '@vendor-marketplace/db/schema';
+import type { AvailabilityStatus } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /** Bookings whose event falls inside `[from, to)`, by status bucket. */
@@ -88,28 +95,79 @@ export async function countPendingRequests(db: AppDatabase, vendorId: string): P
   return rows?.[0]?.total ?? 0;
 }
 
-export interface TodayBookingRow {
-  id: string;
-  eventDate: string;
-  eventLocation: string | null;
-  customerFirstName: string;
+export interface CalendarDayRow {
+  date: string;
+  status: AvailabilityStatus;
 }
 
-export async function findBookingsOn(
+/**
+ * The vendor's calendar rows inside `[from, to)`.
+ *
+ * The calendar is **sparse** — an absent row means available — so this returns
+ * only the days somebody has said something about, and the caller fills the
+ * gaps. Reading `availability` rather than re-deriving from `bookings` is what
+ * keeps the dashboard strip and the availability screen from disagreeing: the
+ * booking lifecycle writes `booked` and `pending` here, and the vendor writes
+ * `blocked` here.
+ */
+export async function findCalendarBetween(
   db: AppDatabase,
   vendorId: string,
-  date: string,
-): Promise<TodayBookingRow[]> {
+  from: string,
+  to: string,
+): Promise<CalendarDayRow[]> {
   return db
+    .select({ date: availability.date, status: availability.status })
+    .from(availability)
+    .where(
+      and(
+        eq(availability.vendorId, vendorId),
+        gte(availability.date, from),
+        lt(availability.date, to),
+      ),
+    );
+}
+
+export interface NextPayoutRow {
+  bookingId: string;
+  eventDate: string;
+  customerFirstName: string;
+  vendorPayoutCents: number;
+}
+
+/**
+ * The soonest event on or after `from` that this vendor is owed money for.
+ *
+ * `confirmed` only. A `completed` booking has already paid out, and a
+ * `cancelled` or `disputed` one is money that is not coming — naming any of
+ * them as the *next* payout would overstate what is owed, which is the one
+ * direction a money figure must never err in.
+ */
+export async function findNextPayout(
+  db: AppDatabase,
+  vendorId: string,
+  from: string,
+): Promise<NextPayoutRow | null> {
+  const rows = await db
     .select({
-      id: bookings.id,
+      bookingId: bookings.id,
       eventDate: bookings.eventDate,
-      eventLocation: bookings.eventLocation,
       customerFirstName: users.firstName,
+      vendorPayoutCents: bookings.vendorPayoutCents,
     })
     .from(bookings)
     .innerJoin(users, eq(bookings.customerId, users.id))
-    .where(and(eq(bookings.vendorId, vendorId), eq(bookings.eventDate, date)));
+    .where(
+      and(
+        eq(bookings.vendorId, vendorId),
+        eq(bookings.status, 'confirmed'),
+        gte(bookings.eventDate, from),
+      ),
+    )
+    .orderBy(asc(bookings.eventDate))
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 export async function findCategoryIds(db: AppDatabase, vendorId: string): Promise<string[]> {

@@ -192,24 +192,39 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
   return (
     <li
       className={cn(
-        'rounded-[14px] bg-stone-0 px-4 py-3.5 shadow-sm',
+        // `13px` radius on `13px 15px` at 1024 (`27`), `14px` on `14px 16px` at
+        // 1440 (`08`).
+        'rounded-[13px] bg-stone-0 px-3.75 py-3.25 shadow-sm min-[90rem]:rounded-[14px] min-[90rem]:px-4 min-[90rem]:py-3.5',
         isFirst && 'shadow-[inset_3px_0_0_var(--color-clay-400),0_2px_10px_rgba(35,32,28,.06)]',
       )}
     >
-      <div className="flex flex-wrap items-center gap-4">
-        <Avatar name={customerName} size="md" />
+      {/*
+        Frame `08`'s wide row at 1440; frame `27 Vendor dashboard — 1024`'s
+        stacked card below it. At 1024 the requests column is 423px, and the
+        four-part row compressed the event facts to the point of truncating the
+        venue — "Barr Mansion, Austi…" — which is the one part of the line the
+        vendor needs to recognise the booking. Identity takes the full width
+        there and the price and the actions share the line under it.
+      */}
+      <div className="flex flex-wrap items-center gap-3 min-[90rem]:gap-4">
+        <div className="flex min-w-0 basis-full items-center gap-3 min-[90rem]:flex-1 min-[90rem]:basis-0 min-[90rem]:gap-4">
+          <Avatar name={customerName} size="md" />
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.25">
-            <span className="text-md font-semibold text-stone-900">{customerName}</span>
-            <StatusPill tone={isFirst ? 'needsYou' : 'pending'}>
-              {isFirst ? 'Needs you' : 'New'}
-            </StatusPill>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2.25">
+              <span className="text-md font-semibold text-stone-900">{customerName}</span>
+              <StatusPill tone={isFirst ? 'needsYou' : 'pending'}>
+                {isFirst ? 'Needs you' : 'New'}
+              </StatusPill>
+            </div>
+            <p className="mt-0.75 text-sm text-stone-700 min-[90rem]:truncate">
+              {factsLine(request)}
+            </p>
           </div>
-          <p className="mt-0.75 truncate text-sm text-stone-700">{factsLine(request)}</p>
         </div>
 
-        <div className="mr-1.5 text-right">
+        {/* Left of the actions below 1440, right-aligned beside them at 1440. */}
+        <div className="mr-auto text-left min-[90rem]:mr-1.5 min-[90rem]:text-right">
           <p className="font-display text-[20px] text-stone-900">
             {request.finalPriceCents === null ? '—' : formatPrice(request.finalPriceCents)}
           </p>

@@ -111,21 +111,216 @@ describe('frame 03 — the profile is full-bleed (#103)', () => {
     expect(rail1024Width).not.toBe(railWidth);
   });
 
+  /*
+   * `min-[90rem]:`, not `xl:`. #322 found every vendor surface putting its 1440
+   * value on `xl:` — which is **1280**, a width no frame in this bundle draws —
+   * so 1280 through 1439 rendered the 1440 rail. `30-responsive.md:22` gives
+   * 1280 the same 320px rail as 1024, and only 1440 the wider one.
+   *
+   * The old version of this test hard-coded `xl:` and so could not see the
+   * drift: it asserted the two numbers and took the breakpoints on trust. The
+   * prefixes are named here for the same reason the widths are read from the
+   * frames — they are half of what "at its own breakpoint" means.
+   */
   it('sizes the rail column to each frame width at its own breakpoint', () => {
     expect(headerSource).toContain(`lg:grid-cols-[minmax(0,1fr)_${rail1024Width}px]`);
-    expect(headerSource).toContain(`xl:grid-cols-[minmax(0,1fr)_${railWidth}px]`);
+    expect(headerSource).toContain(`min-[90rem]:grid-cols-[minmax(0,1fr)_${railWidth}px]`);
+    expect(headerSource, 'xl: is 1280, which no frame draws').not.toContain('xl:grid-cols-');
   });
 
-  it('pads the shell to the frame gutter instead of centring a max-width box', () => {
-    // 40px === Tailwind's `10` step, 28px === `7`.
-    expect(headerSource).toContain(`lg:px-${contentLeft / 4}`);
-    expect(headerSource).toContain(`lg:gap-x-${contentRight / 4}`);
+  /*
+   * The 1024 pane's own padding, and the rail's, read from frame `27` the same
+   * way the 1440 pair is read from frame `03`. The gap between the columns is
+   * the pane's right padding: the rail's left padding is 0 in both frames.
+   */
+  const pane1024Style = (() => {
+    const frame27 = frame('27 Vendor profile — 1024');
+    const found = [...frame27.matchAll(/style="([^"]*)"/g)]
+      .map((match) => match[1] as string)
+      .find((style) => /padding:\d+px \d+px 0 \d+px/.test(style));
+    expect(found, 'frame 27 has no content pane padding').toBeDefined();
+    return found as string;
+  })();
+  const [pane1024Top, gap1024, , gutter1024] = pxParts(declaration(pane1024Style, 'padding'));
+
+  it('reads the 1024 gutter contract too', () => {
+    expect(gutter1024).toBe(24);
+    expect(gap1024).toBe(20);
+    expect(pane1024Top).toBe(20);
+    // The point of the ladder: these are not the 1440 numbers.
+    expect(gutter1024).not.toBe(contentLeft);
+    expect(gap1024).not.toBe(contentRight);
+  });
+
+  /*
+   * The gutter and the column gap are steps, not constants, and each one is
+   * asserted at its own breakpoint. Before #322 both carried frame `03`'s
+   * numbers from `lg` up, so 1024 was drawn 16px wider in the gutter and 8px
+   * wider in the gap than the frame that governs it.
+   */
+  it('pads the shell to each frame’s gutter instead of centring a max-width box', () => {
+    // 24px === Tailwind's `6` step, 20px === `5`; 40px === `10`, 28px === `7`.
+    expect(headerSource).toContain(`lg:px-${gutter1024 / 4}`);
+    expect(headerSource).toContain(`lg:gap-x-${gap1024 / 4}`);
+    expect(headerSource).toContain(`min-[90rem]:px-${contentLeft / 4}`);
+    expect(headerSource).toContain(`min-[90rem]:gap-x-${contentRight / 4}`);
+    // The 1440 pair must no longer be reachable at 1024.
+    expect(headerSource).not.toContain(`lg:px-${contentLeft / 4}`);
+    expect(headerSource).not.toContain(`lg:gap-x-${contentRight / 4}`);
+  });
+
+  /*
+   * The identity card's interior ladder, both ends of it.
+   *
+   * Before #322 every value in this card was frame `03`'s at every width from
+   * `lg` up — an 18px radius, a 22/26 pane, a 33px name and a 20px tagline
+   * inside a column 60px narrower than the one they were drawn for. Each pair
+   * is read from its own frame, so a re-import that moves either end moves the
+   * expectation instead of quietly disagreeing with it.
+   */
+  describe('the identity card steps between the two frames', () => {
+    const frame27 = frame('27 Vendor profile — 1024');
+
+    /** The first inline style in `frame27` matching every fragment given. */
+    function style1024(...fragments: readonly string[]): string {
+      const found = [...frame27.matchAll(/style="([^"]*)"/g)]
+        .map((match) => match[1] as string)
+        .find((style) => fragments.every((fragment) => style.includes(fragment)));
+      expect(found, `no inline style in frame 27 contains ${fragments.join(' + ')}`).toBeDefined();
+      return found as string;
+    }
+
+    const card1024 = style1024('box-shadow:0 2px 12px', 'border-radius');
+    const card1440 = styleContaining('box-shadow:0 2px 12px', 'border-radius');
+    /*
+      The identity pane, not the content column that contains it: both are
+      `flex:1;min-width:0` with a `padding`, and only the outer one is itself a
+      flex container. Selecting on the absence of `display:flex` is what tells
+      them apart without naming either padding here.
+    */
+    const identityPane = (styles: readonly string[]): string => {
+      const found = styles.find(
+        (style) =>
+          style.includes('flex:1') &&
+          style.includes('min-width:0') &&
+          style.includes('padding:') &&
+          !style.includes('display:flex'),
+      );
+      expect(found, 'no identity pane style found').toBeDefined();
+      return found as string;
+    };
+
+    const pane1024 = identityPane(
+      [...frame27.matchAll(/style="([^"]*)"/g)].map((match) => match[1] as string),
+    );
+    const pane1440 = identityPane(INLINE_STYLES);
+    const name1024 = style1024('font-size:28px', 'line-height:1.06');
+    const name1440 = styleContaining('font-size:33px', 'line-height:1.06');
+    const quote1024 = style1024('font-style:italic', 'font-size:17.5px');
+    const quote1440 = styleContaining('font-style:italic', 'font-size:20px');
+
+    const radius = (style: string): number =>
+      Number.parseFloat(declaration(style, 'border-radius'));
+    const size = (style: string): number => Number.parseFloat(declaration(style, 'font-size'));
+
+    it('reads a different value at each end for every step it asserts', () => {
+      expect(radius(card1024)).toBe(16);
+      expect(radius(card1440)).toBe(18);
+      expect(pxParts(declaration(pane1024, 'padding'))).toEqual([20, 22]);
+      expect(pxParts(declaration(pane1440, 'padding'))).toEqual([22, 26]);
+      expect(size(name1024)).toBe(28);
+      expect(size(name1440)).toBe(33);
+      expect(size(quote1024)).toBe(17.5);
+      expect(size(quote1440)).toBe(20);
+    });
+
+    it('builds the 1024 value unprefixed and the 1440 value at 90rem', () => {
+      const [padY1024, padX1024] = pxParts(declaration(pane1024, 'padding'));
+      const [padY1440, padX1440] = pxParts(declaration(pane1440, 'padding'));
+
+      for (const expected of [
+        `rounded-[${radius(card1024)}px]`,
+        `min-[90rem]:rounded-[${radius(card1440)}px]`,
+        `px-${(padX1024 as number) / 4}`,
+        `py-${(padY1024 as number) / 4}`,
+        `min-[90rem]:px-${(padX1440 as number) / 4}`,
+        `min-[90rem]:py-${(padY1440 as number) / 4}`,
+        `text-[${size(name1024)}px]`,
+        `min-[90rem]:text-[${size(name1440)}px]`,
+        `text-[${size(quote1024)}px]`,
+        `min-[90rem]:text-[${size(quote1440)}px]`,
+      ]) {
+        expect(headerSource, `missing ${expected}`).toContain(expected);
+      }
+    });
+
+    /*
+     * `xl:` is 1280, and no frame in this bundle draws 1280 — it renders the
+     * 1024 composition. Every 1440 step therefore rides on `min-[90rem]:`, and
+     * a single `xl:` reintroduces the 260-pixel band this ticket existed to
+     * close.
+     */
+    it('puts no 1440 step on a breakpoint no frame draws', () => {
+      expect(headerSource).not.toContain('xl:');
+    });
   });
 
   it('leaves no centred container on either the shell or the identity block', () => {
     expect(source).not.toMatch(/max-w-7xl/);
     expect(headerSource).not.toMatch(/max-w-7xl/);
     expect(source).not.toMatch(/mx-auto grid/);
+  });
+});
+
+/*
+ * `04-laws.md` § "The focus ring has to be visible", case 1: a ring drawn
+ * outside an element inside a scroll container is sliced by it.
+ *
+ * jsdom performs no layout, so the clipping itself cannot be asserted here —
+ * **the rendered result is verified in the browser, not by this test.** Measured
+ * at 1024 on 2026-08-30: the tab strip computes `overflow-x: auto`, which forces
+ * `overflow-y: auto` with it, and the first tab sits at 0px of left slack and
+ * 0px of top slack inside it. What this file can hold is the class-level fact,
+ * which no timing or missing layout explains away.
+ */
+describe('frame 03 — the tab strip draws its focus ring where it cannot be clipped', () => {
+  const tabsSource = readFileSync(
+    join(process.cwd(), 'src', 'components', 'vendors', 'profile', 'profile-tabs.tsx'),
+    'utf8',
+  );
+
+  /** The one `cn()` string that carries the tab button's own classes. */
+  const tabClasses = tabsSource.match(/'(shrink-0 cursor-pointer[^']*)'/)?.[1] ?? '';
+
+  it('reads the tab button class string it is asserting against', () => {
+    expect(tabClasses).not.toBe('');
+  });
+
+  it('draws the indicator inward', () => {
+    expect(tabClasses).toContain('focus-visible:outline-2');
+    expect(tabClasses).toContain('focus-visible:-outline-offset-2');
+    // Without an explicit style the width utility paints nothing at all.
+    expect(tabClasses).toContain('focus-visible:outline-solid');
+  });
+
+  /*
+   * The half that was missing. `globals.css` puts `ring-2 ring-offset-2` on
+   * every `:focus-visible` in the app, so the inward outline was being drawn
+   * *alongside* a 4px outward ring — and the outward one is the one this
+   * container slices. Both layers have to be switched off, not just the ring:
+   * `ring-offset-2` paints its own 2px shadow.
+   */
+  it('switches off the app-wide outward ring that the container would slice', () => {
+    expect(tabClasses).toContain('focus-visible:ring-0');
+    expect(tabClasses).toContain('focus-visible:ring-offset-0');
+  });
+
+  it('still has an app-wide outward ring for this to be opting out of', () => {
+    const globalsCss = readFileSync(join(process.cwd(), 'src', 'app', 'globals.css'), 'utf8');
+    const rule = globalsCss.match(/:focus-visible\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(rule).toContain('ring-2');
+    expect(rule).toContain('ring-offset-2');
   });
 });
 

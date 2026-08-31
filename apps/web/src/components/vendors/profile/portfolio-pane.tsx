@@ -77,7 +77,15 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
 
   return (
     <>
-      <ul className="columns-2 gap-3 md:columns-3 xl:columns-4 [&>li]:mb-3 [&>li]:break-inside-avoid">
+      {/*
+        Three columns is the widest the design goes: both `03 Vendor profile`
+        (1440) and `27 Vendor profile — 1024` draw
+        `grid-template-columns:repeat(3,1fr)`. `xl:columns-4` added a fourth from
+        1280 that **no frame draws at any width** — the same `xl:`-is-1280 drift
+        #322 corrects elsewhere, except here there was no wider frame for it to
+        have come from.
+      */}
+      <ul className="columns-2 gap-3 md:columns-3 [&>li]:mb-3 [&>li]:break-inside-avoid">
         {items.map((item, index) => (
           <li key={item.id}>
             <button

@@ -150,7 +150,8 @@ export function BookingRail({
       aria-label={`Book ${businessName}`}
       className="overflow-hidden rounded-[18px] bg-stone-0 shadow-[0_4px_18px_rgba(35,32,28,.09)]"
     >
-      <div className="border-b border-stone-200 px-5 pt-4.5 pb-4">
+      {/* `16px 18px 14px` at 1024 (`27`), `18px 20px 16px` at 1440 (`03`). */}
+      <div className="border-b border-stone-200 px-4.5 pt-4 pb-3.5 min-[90rem]:px-5 min-[90rem]:pt-4.5 min-[90rem]:pb-4">
         <div className="flex items-baseline justify-between gap-3">
           {/*
             "From" says the number beside it is the lowest this vendor charges,
@@ -168,11 +169,18 @@ export function BookingRail({
             `visibility: hidden`, which takes it out of the accessibility tree
             as well as off the screen.
           */}
-          <span className={cn('text-[12.5px] text-stone-600', !isStartingPrice && 'invisible')}>
+          <span
+            className={cn(
+              'text-[12px] text-stone-600 min-[90rem]:text-[12.5px]',
+              !isStartingPrice && 'invisible',
+            )}
+          >
             From
           </span>
           {freeOn ? (
-            <span className="text-[12px] font-semibold text-sage-600">Free on {freeOn}</span>
+            <span className="text-[11.5px] font-semibold text-sage-600 min-[90rem]:text-[12px]">
+              Free on {freeOn}
+            </span>
           ) : null}
         </div>
         {shownPriceCents === null ? (
@@ -183,12 +191,12 @@ export function BookingRail({
           */
           <p className="mt-0.5 font-display text-[26px] text-stone-900">Contact for pricing</p>
         ) : (
-          <div className="mt-0.5 flex items-baseline gap-1.75">
-            <span className="font-display text-[36px] text-stone-900">
+          <div className="mt-0.5 flex items-baseline gap-1.5 min-[90rem]:gap-1.75">
+            <span className="font-display text-[32px] text-stone-900 min-[90rem]:text-[36px]">
               {formatPrice(shownPriceCents)}
             </span>
             {selected?.durationHours ? (
-              <span className="text-[13px] text-stone-600">
+              <span className="text-[12px] text-stone-600 min-[90rem]:text-[13px]">
                 · {selected.durationHours} hour coverage
               </span>
             ) : null}
@@ -196,14 +204,15 @@ export function BookingRail({
         )}
       </div>
 
-      <div className="flex flex-col gap-2.5 px-5 pt-3.5 pb-4">
+      {/* `12px 18px 14px` on a 9px stack at 1024, `14px 20px 16px` on 10px at 1440. */}
+      <div className="flex flex-col gap-2.25 px-4.5 pt-3 pb-3.5 min-[90rem]:gap-2.5 min-[90rem]:px-5 min-[90rem]:pt-3.5 min-[90rem]:pb-4">
         {/*
           Frame `03` pairs the date and the guest count on one row above the
           package, at `flex: 1` and `flex: .7`. Both carry straight through to
           the request form in the query string, so what the customer answers
           here is not asked again on the next screen.
         */}
-        <div className="flex gap-2.5">
+        <div className="flex gap-2.25 min-[90rem]:gap-2.5">
           <div className="flex-1">
             <Label htmlFor={`${fieldId}-date`} className={FIELD_LABEL}>
               Event date
@@ -317,7 +326,12 @@ export function BookingRail({
           </div>
         ) : null}
 
-        <Button asChild variant="primary" className="mt-1 w-full justify-center py-3.25">
+        {/* `12px 0` on a 3px offset at 1024, `13px 0` on 4px at 1440. */}
+        <Button
+          asChild
+          variant="primary"
+          className="mt-0.75 w-full justify-center py-3 min-[90rem]:mt-1 min-[90rem]:py-3.25"
+        >
           <Link href={requestHref}>Request booking</Link>
         </Button>
         {/*
@@ -333,7 +347,7 @@ export function BookingRail({
           onClick={openThread}
           disabled={opening}
           aria-describedby={messageError ? errorId : undefined}
-          className="w-full justify-center py-3"
+          className="w-full justify-center py-2.75 min-[90rem]:py-3"
         >
           Send a message
         </Button>
@@ -354,12 +368,13 @@ export function BookingRail({
           and which wrapped a one-line helper onto two. That sentence existed to
           explain a disabled `Send a message`, which is no longer disabled.
         */}
-        <p className="mt-0.5 text-center text-helper leading-normal text-stone-600">
+        <p className="text-center text-[11px] leading-normal text-stone-600 min-[90rem]:mt-0.5 min-[90rem]:text-helper">
           You won&apos;t be charged yet — {businessName} confirms the date first.
         </p>
       </div>
 
-      <ul className="flex flex-col gap-2.25 border-t border-stone-200 px-5 py-3.25">
+      {/* `12px 18px` on an 8px stack at 1024, `13px 20px` on 9px at 1440. */}
+      <ul className="flex flex-col gap-2 border-t border-stone-200 px-4.5 py-3 min-[90rem]:gap-2.25 min-[90rem]:px-5 min-[90rem]:py-3.25">
         {[
           'Payment held until the event is done',
           'Full refund if cancelled 48h+ ahead',
@@ -367,7 +382,10 @@ export function BookingRail({
             ? `${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'} from verified bookings`
             : 'Every review comes from a completed booking',
         ].map((line) => (
-          <li key={line} className="flex items-center gap-2.25 text-[12.5px] text-stone-700">
+          <li
+            key={line}
+            className="flex items-center gap-2.25 text-[12px] text-stone-700 min-[90rem]:text-[12.5px]"
+          >
             <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-sage-400" />
             {line}
           </li>
@@ -386,9 +404,11 @@ export function BookingRail({
  * input beside it, which reads as a misaligned pair on the frame's shared row.
  */
 const FIELD =
-  'h-[38px] w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-base text-stone-900';
+  'h-[38px] w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-[13px] text-stone-900 min-[90rem]:text-base';
 
-const FIELD_LABEL = 'mb-1.25 text-label font-semibold tracking-label text-stone-600 uppercase';
+/* 4px under the micro-label at 1024, 5px at 1440. */
+const FIELD_LABEL =
+  'mb-1 min-[90rem]:mb-1.25 text-label font-semibold tracking-label text-stone-600 uppercase';
 
 /**
  * "June 14", the way the frame writes the availability date. Built from the

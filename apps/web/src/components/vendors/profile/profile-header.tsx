@@ -77,8 +77,16 @@ export function ProfileHeader({
       to 320. Carrying 380 down to 1024 is what `30-responsive.md` means when
       it says 1024 renders the desktop composition rather than a tablet one —
       the composition is the same, the rail is not.
+
+      The gutter and the column gap are steps for the same reason. Frame `27`
+      pads the pane `20px 20px 0 24px` against a rail padded `20px 24px 20px 0`
+      — a 24px page gutter and a 20px column gap; frame `03` pads them
+      `24px 28px 0 40px` and `20px 40px 20px 0` — 40 and 28. Both used to carry
+      the 1440 pair from `lg` up, which is 16px of gutter the 1024 frame does
+      not have. (No class name is spelled out in this comment: the parity test
+      below greps this file, and a quoted utility would satisfy it.)
     */
-    <div className="grid w-full gap-8 px-4 pt-6 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-x-7 lg:px-10 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid w-full gap-8 px-4 pt-6 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-x-5 lg:px-6 lg:pt-5 min-[90rem]:grid-cols-[minmax(0,1fr)_380px] min-[90rem]:gap-x-7 min-[90rem]:px-10 min-[90rem]:pt-6">
       <div className="min-w-0">
         {/*
           The card. `overflow-hidden` is what crops the cover to the rounded
@@ -93,16 +101,17 @@ export function ProfileHeader({
             heights — real content routinely exceeds them, and the cover
             stretches to whatever the identity column needs.
           */
-          className="flex min-h-[179px] flex-col overflow-hidden rounded-[18px] bg-stone-0 shadow-[0_2px_12px_rgba(35,32,28,.07)] md:flex-row lg:min-h-[187px] xl:min-h-[200px]"
+          className="flex min-h-[179px] flex-col overflow-hidden rounded-[16px] bg-stone-0 shadow-[0_2px_12px_rgba(35,32,28,.07)] md:flex-row lg:min-h-[187px] min-[90rem]:min-h-[200px] min-[90rem]:rounded-[18px]"
         >
-          <div className="min-w-0 flex-1 px-6.5 py-5.5">
-            <div className="flex items-center gap-3.5">
+          {/* `20px 22px` at 1024 and 768 (`27`), `22px 26px` at 1440 (`03`). */}
+          <div className="min-w-0 flex-1 px-5.5 py-5 min-[90rem]:px-6.5 min-[90rem]:py-5.5">
+            <div className="flex items-center gap-3 min-[90rem]:gap-3.5">
               <Avatar name={businessName} src={profileImageUrl} size="xl" />
               <div className="min-w-0">
-                <h1 className="font-display text-[33px] leading-[1.06] text-stone-900">
+                <h1 className="font-display text-[28px] leading-[1.06] text-stone-900 min-[90rem]:text-[33px]">
                   {businessName}
                 </h1>
-                <div className="mt-0.75 flex flex-wrap items-center gap-2.25 text-[13px] text-stone-700">
+                <div className="mt-0.75 flex flex-wrap items-center gap-2.25 text-[12.5px] text-stone-700 min-[90rem]:text-[13px]">
                   <span>
                     {/*
                       The frame's own glyph, not an icon. A filled clay SVG
@@ -138,7 +147,7 @@ export function ProfileHeader({
               </div>
             </div>
 
-            <ul className="mt-3.5 flex flex-wrap gap-1.5">
+            <ul className="mt-3 flex flex-wrap gap-1.5 min-[90rem]:mt-3.5">
               {/*
                 The sage availability chip leads, exactly as it does on the
                 vendor's search card — it is the one chip that persists between
@@ -179,7 +188,11 @@ export function ProfileHeader({
                 until it lands, every shipped surface stays straight and the
                 guard in `frame-03-parity.test.ts` holds the line.
               */
-              <p className="mt-3.75 max-w-[420px] font-display text-[20px] leading-[1.35] text-stone-700 italic">
+              /* 17.5px on a 12px offset at 1024, 20px on 15px and capped at
+                 420px at 1440. The cap is the 1440 frame's alone — at 1024 the
+                 identity column is already narrower than 420px, and frame `27`
+                 draws none. */
+              <p className="mt-3 font-display text-[17.5px] leading-[1.35] text-stone-700 italic min-[90rem]:mt-3.75 min-[90rem]:max-w-[420px] min-[90rem]:text-[20px]">
                 &quot;{tagline}&quot;
               </p>
             ) : null}
@@ -194,7 +207,7 @@ export function ProfileHeader({
           */}
           <div
             data-testid="profile-cover"
-            className="aspect-[3/2] w-full shrink-0 bg-stone-300 md:aspect-auto md:w-[268px] lg:w-[280px] xl:w-[300px]"
+            className="aspect-[3/2] w-full shrink-0 bg-stone-300 md:aspect-auto md:w-[268px] lg:w-[280px] min-[90rem]:w-[300px]"
           >
             {coverImageUrl ? (
               // The vendor's own photograph on a bucket host `next/image` would
@@ -209,8 +222,8 @@ export function ProfileHeader({
           </div>
         </div>
 
-        {/* The frame's 14px between the card and the tab row. */}
-        <div className="mt-3.5">{children}</div>
+        {/* 16px at 1024 (`27`), 14px at 1440 (`03`'s spacer div). */}
+        <div className="mt-4 min-[90rem]:mt-3.5">{children}</div>
       </div>
 
       {/*

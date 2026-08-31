@@ -154,6 +154,24 @@ screen 19. Clicking a free date pre-fills the rail's date field.
 On scroll past the profile header a slim sticky bar appears with the vendor name
 and both CTAs, so the action is never off-screen.
 
+## The 1024 interior is a ladder, not the 1440 values in a narrower box
+
+Frame `27 Vendor profile — 1024` restates almost every interior value, and until
+#322 the screen carried frame `03`'s from `lg` up. The pairs, 1024 then 1440:
+page gutter 24 / 40, column gap 20 / 28, pane top 20 / 24, card radius 16 / 18,
+identity pane `20 22` / `22 26`, avatar row gap 12 / 14, name 28 / 33, rating
+line 12.5 / 13, chips offset 12 / 14, tagline 17.5 / 20 (capped at 420px only at
+1440), tab strip offset 16 / 14, tab gap 22 / 26, tab label 13 / 13.5, pane top
+14 / 18, bio 13.5·1.65 inside 520 / 14.5·1.7 inside 640, stat grid gap 10 / 14
+inside 440 / 520 with `10 12` / `12 14` cards and 20 / 22 values. The rail head
+is `16 18 14` / `18 20 16`, its price 32 / 36, its body `12 18 14` / `14 20 16`,
+and its trust block `12 18` / `13 20`.
+
+**Two things frame `27` omits are kept.** Its 640px artboard ends where the stat
+grid does, so the `What's included` block and the third trust row are absent
+from the markup rather than deleted by it — and `30-responsive.md`'s standing
+rule is that a narrower width loses a column before it loses information.
+
 ## Reply time — deferred post-MVP
 
 Median reply time appeared in the profile meta line, as a stat tile, and on the

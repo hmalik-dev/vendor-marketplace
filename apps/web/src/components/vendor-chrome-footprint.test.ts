@@ -34,6 +34,14 @@ const read = (path: string): string => readFileSync(join(process.cwd(), path), '
 /** `.side` is the one sidebar class the frames use. */
 const SIDE_RULE = /\.side\{([^}]*)\}/;
 
+/**
+ * Frame `27 Vendor dashboard — 1024` overrides `.side` inline rather than
+ * declaring a second class, so the 1024 numbers are read off the style
+ * attribute. Matching the attribute rather than restating 220/14/10 here keeps
+ * a bundle re-import moving the expectation instead of disagreeing with it.
+ */
+const SIDE_1024_RULE = /class="side" style="width:(\d+)px;padding:(\d+)px (\d+)px"/;
+
 function pxOf(source: string, pattern: RegExp): number {
   const match = source.match(pattern);
   expect(match).not.toBeNull();
@@ -59,9 +67,27 @@ describe('the vendor chrome keeps the frames’ footprints', () => {
   const gutter = () => pxOf(side, /padding:\d+px (\d+)px/);
   const border = () => pxOf(side, /border-right:(\d+)px/);
 
+  const side1024 = frames.match(SIDE_1024_RULE);
+  const contentWidth1024 = () => Number(side1024?.[1]);
+  const gutter1024 = () => Number(side1024?.[3]);
+
+  it('the frame declares the 1024 sidebar override this test measures against', () => {
+    expect(side1024).not.toBeNull();
+    expect(contentWidth1024()).toBe(220);
+    expect(gutter1024()).toBe(10);
+  });
+
   it('states a sidebar footprint of content + two gutters + one border', () => {
     // 240 + 12 + 12 + 1 = 265. Named here only to show the shape of the sum.
     expect(contentWidth() + gutter() * 2 + border()).toBe(265);
+    // 220 + 10 + 10 + 1 = 241 at 1024 — a different sum, not the same one.
+    expect(contentWidth1024() + gutter1024() * 2 + border()).toBe(241);
+  });
+
+  it('sizes the 1024 sidebar token to the 1024 frame’s content width', () => {
+    const token = pxOf(themeCss, /--sidebar-width-md:\s*([\d.]+)rem/) * 16;
+
+    expect(token).toBe(contentWidth1024());
   });
 
   it('sizes the sidebar token to the frame’s content width', () => {
@@ -84,7 +110,12 @@ describe('the vendor chrome keeps the frames’ footprints', () => {
 
     expect(navClasses).not.toBe('');
     expect(navClasses).toContain('lg:box-content');
-    expect(navClasses).toContain(`lg:px-${gutter() / 4}`);
+    /*
+     * The gutter is a step, not a constant: 10px at 1024 and 12px at 1440. It
+     * was a flat `lg:px-3`, which overshot the 1024 frame's footprint by 4px.
+     */
+    expect(navClasses).toContain(`lg:px-${gutter1024() / 4}`);
+    expect(navClasses).toContain(`min-[90rem]:px-${gutter() / 4}`);
     expect(navClasses).toContain('lg:border-r');
   });
 
@@ -96,15 +127,45 @@ describe('the vendor chrome keeps the frames’ footprints', () => {
     expect(listClasses).toContain('lg:px-0');
   });
 
-  it('opts the dashboard rail out of border-box, on both of its states', () => {
+  it('opts the unpublished dashboard rail out of border-box', () => {
     const rail = read('src/components/vendor/publish-checklist.tsx');
-    const declarations = rail.match(/xl:box-content/g) ?? [];
+    const railClass = rail.match(/const RAIL_CLASS =\s*\n?\s*'([^']+)'/)?.[1] ?? '';
 
-    // The checklist renders a loading aside and a loaded one; a fix applied to
-    // only one of them shows up as a jump when the data arrives.
-    expect(declarations).toHaveLength(2);
-    expect(rail).toContain('p-5');
-    expect(rail).toContain('border-l');
+    expect(railClass).not.toBe('');
+    // One aside, one class: the two-branch component this used to guard was
+    // split in #322, so there is no longer a second copy to drift from.
+    expect(rail.match(/className=\{RAIL_CLASS\}/g) ?? []).toHaveLength(1);
+
+    expect(railClass).toContain('lg:box-content');
+    expect(railClass).toContain('p-5');
+    expect(railClass).toContain('border-l');
+    /*
+     * 300px at 1024 and 340px at 1440, per frames `27 Vendor dashboard — 1024`
+     * and `08`. It was `hidden … xl:block` at a flat 340px, so the column two of
+     * #322's frames draw did not render below 1280 at all.
+     */
+    expect(railClass).toContain('w-[300px]');
+    expect(railClass).toContain('min-[90rem]:w-[340px]');
+    expect(railClass).toContain('lg:block');
+    expect(railClass, 'xl: is 1280, which no frame draws').not.toContain('xl:');
+  });
+
+  /*
+   * The published column follows the same 300/340 ladder but is *inside* the
+   * pane — frame `27 Vendor dashboard — 1024` draws it at `width:300px;
+   * flex:none` with no border and no padding of its own, so `box-content` would
+   * make it 300px of content plus nothing and is simply wrong here.
+   */
+  it('sizes the published dashboard column to the frame, inside the pane', () => {
+    const rail = read('src/components/vendor/published-rail.tsx');
+    const railClass = rail.match(/className="([^"]*w-\[300px\][^"]*)"/)?.[1] ?? '';
+
+    expect(railClass).not.toBe('');
+    expect(railClass).toContain('min-[90rem]:w-[340px]');
+    expect(railClass).toContain('lg:flex');
+    expect(railClass, 'the in-pane column draws no rail border').not.toContain('border-l');
+    expect(railClass, 'no padding of its own, so no box-content').not.toContain('box-content');
+    expect(railClass, 'xl: is 1280, which no frame draws').not.toContain('xl:');
   });
 
   /*

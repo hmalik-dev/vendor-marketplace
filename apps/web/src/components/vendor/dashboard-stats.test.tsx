@@ -15,7 +15,8 @@ function dashboard(overrides: Partial<WireVendorDashboard> = {}): WireVendorDash
     avgRating: 4.9,
     reviewCount: 127,
     earningsThisMonthCents: 894000,
-    todaysBookings: [],
+    bookingWeek: [],
+    nextPayout: null,
     ...overrides,
   } as WireVendorDashboard;
 }
@@ -30,6 +31,27 @@ describe('DashboardStats', () => {
       expect(card.className).toContain('rounded-[12px]');
       expect(card.className).not.toContain('rounded-xl');
     }
+  });
+
+  /*
+   * The 1024 step. Frame `27 Vendor dashboard — 1024` draws no stats row at
+   * all: with the 220px sidebar and the 300px right column the pane is 394px,
+   * four cards compute to 89.5px each, and every label wraps to three lines.
+   * Two-up survives below 1024 because neither the sidebar nor the right
+   * column is there — frame `14 Vendor dashboard mobile` draws it.
+   */
+  it('leaves 1024 alone entirely, and keeps both of the widths that fit', () => {
+    const { container } = render(<DashboardStats dashboard={dashboard()} today="2026-08-29" />);
+
+    const grid = container.querySelector('ul')?.className ?? '';
+
+    expect(grid).toContain('grid-cols-2');
+    expect(grid).toContain('lg:hidden');
+    expect(grid).toContain('min-[90rem]:grid');
+    expect(grid).toContain('min-[90rem]:grid-cols-4');
+    // `lg:grid-cols-4` is the value this replaced: four cards at 1024.
+    expect(grid).not.toContain('lg:grid-cols-4');
+    expect(grid, 'xl: is 1280, which no frame draws').not.toContain('xl:');
   });
 
   it('draws the delta line at the frame’s 11.5px, not the 11px `text-xs` step', () => {

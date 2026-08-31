@@ -93,27 +93,40 @@ export function AboutPane({
 
   return (
     <div>
+      {/*
+        The measure is a step, not a constant: `13.5px/1.65` inside 520px at
+        1024 (`27 Vendor profile — 1024`), `14.5px/1.7` inside 640px at 1440
+        (`03`). A 640px measure at 1024 runs the bio past the identity card it
+        sits under.
+      */}
       {bio ? (
-        <p className="max-w-[640px] text-[14.5px] leading-[1.7] text-stone-700">{bio}</p>
+        <p className="max-w-[520px] text-[13.5px] leading-[1.65] text-stone-700 min-[90rem]:max-w-[640px] min-[90rem]:text-[14.5px] min-[90rem]:leading-[1.7]">
+          {bio}
+        </p>
       ) : (
-        <p className="max-w-[640px] text-[14.5px] leading-[1.7] text-stone-600">
+        <p className="max-w-[520px] text-[13.5px] leading-[1.65] text-stone-600 min-[90rem]:max-w-[640px] min-[90rem]:text-[14.5px] min-[90rem]:leading-[1.7]">
           This vendor hasn&apos;t written an introduction yet.
         </p>
       )}
 
       {tiles.length > 0 ? (
-        <dl className="mt-5 grid max-w-[520px] gap-3.5 sm:grid-cols-3">
+        <dl className="mt-3.5 grid max-w-[440px] gap-2.5 sm:grid-cols-3 min-[90rem]:mt-5 min-[90rem]:max-w-[520px] min-[90rem]:gap-3.5">
           {tiles.map((tile) => (
             /*
               12px, which is the frame's own and `12-vendor-profile.md`'s —
               between the 10px of a button and the 14px `rounded-xl` of a card,
               so neither token fits and the value is stated.
             */
-            <div key={tile.label} className="rounded-[12px] bg-stone-0 px-3.5 py-3">
+            <div
+              key={tile.label}
+              className="rounded-[12px] bg-stone-0 px-3 py-2.5 min-[90rem]:px-3.5 min-[90rem]:py-3"
+            >
               <dt className="text-label font-semibold tracking-label text-stone-600 uppercase">
                 {tile.label}
               </dt>
-              <dd className="mt-0.75 font-display text-[22px] text-stone-900">{tile.value}</dd>
+              <dd className="mt-0.5 font-display text-[20px] text-stone-900 min-[90rem]:mt-0.75 min-[90rem]:text-[22px]">
+                {tile.value}
+              </dd>
             </div>
           ))}
         </dl>
@@ -125,7 +138,21 @@ export function AboutPane({
         Packages tab is still one click away from the tab row.
       */}
       {inclusions.length > 0 ? (
-        <section className={cn('max-w-[640px]', tiles.length > 0 ? 'mt-5.5' : 'mt-5')}>
+        /*
+          Kept at 1024, where frame `27 Vendor profile — 1024` draws no
+          `What's included` block at all. That frame's artboard is 640px tall
+          and the stats grid already reaches its bottom edge, so the omission
+          reads as the artboard ending rather than as a decision — and
+          `30-responsive.md`'s standing rule is that a narrower width loses a
+          column before it loses information. Recorded in `12-vendor-profile.md`
+          rather than built as a 1024-only deletion.
+        */
+        <section
+          className={cn(
+            'max-w-[520px] min-[90rem]:max-w-[640px]',
+            tiles.length > 0 ? 'mt-5.5' : 'mt-5',
+          )}
+        >
           <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">
             What&apos;s included
           </h2>

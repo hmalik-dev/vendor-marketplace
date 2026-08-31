@@ -3,6 +3,7 @@ import { formatPrice, isBeyondBookingHorizon, isUniversallyPastDate } from '../u
 import {
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
+  BOOKING_WEEK_DAYS,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
@@ -911,15 +912,42 @@ export const vendorDashboardSchema = z.object({
    * — and it is read off the same row the rest of this object comes from.
    */
   stripeOnboarded: z.boolean(),
-  /** Bookings on today's date, for the rail once the profile is published. */
-  todaysBookings: z.array(
-    z.object({
-      id: uuidSchema,
+  /**
+   * The seven days from today, for the published rail's `This week` strip.
+   *
+   * Read off the **availability calendar**, which is the same row the booking
+   * lifecycle writes `booked` and `pending` to and the vendor writes `blocked`
+   * to — not a second derivation over `bookings`. A strip that disagreed with
+   * the availability screen would be the `publishBlockers` mistake again.
+   *
+   * `completed` cannot appear: every date here is today or later, and the
+   * calendar only derives it for a `booked` date already in the past.
+   */
+  bookingWeek: z
+    .array(
+      z.object({
+        date: calendarDateSchema,
+        status: availabilityStatusSchema,
+      }),
+    )
+    .length(BOOKING_WEEK_DAYS),
+  /**
+   * The soonest event this vendor is owed money for, for the rail's second card.
+   *
+   * The **amount** is real — it is that booking's `vendor_payout_cents`, already
+   * settled at payment. The **date is the event's**, not a payout date: there is
+   * no payout schedule to read one from until #10, and frame `08`'s
+   * `Next payout Jun 18` is exactly the invented number the money rules forbid.
+   * `null` when nothing upcoming has been paid for.
+   */
+  nextPayout: z
+    .object({
+      bookingId: uuidSchema,
       eventDate: calendarDateSchema,
-      eventLocation: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
       customerFirstName: trimmedString(MAX_NAME_LENGTH, 0),
-    }),
-  ),
+      vendorPayoutCents: z.int().min(0),
+    })
+    .nullable(),
 });
 export type VendorDashboard = z.infer<typeof vendorDashboardSchema>;
 

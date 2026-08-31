@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { VENDOR_PAYMENTS_PATH, pageTitle, todayDateString } from '@vendor-marketplace/shared';
 import { DashboardStats } from '@/components/vendor/dashboard-stats';
 import { PublishChecklist } from '@/components/vendor/publish-checklist';
+import { PublishedRail } from '@/components/vendor/published-rail';
 import { RequestRow } from '@/components/vendor/request-row';
 import { EmptyState, EmptyStateGlyph } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
@@ -60,11 +61,68 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
    */
   const greeting = user.firstName.trim() || profile.businessName;
 
+  /*
+    The working surface, hoisted so the published and unpublished compositions
+    can place it differently without the list being written twice.
+  */
+  const requestsPane =
+    waiting.length === 0 ? (
+      <EmptyState
+        /*
+          Frame `20` draws the pane as a panel that fills the column — a dashed
+          hairline at an 18px radius — rather than leaving the space blank below
+          a top-aligned sentence.
+        */
+        panel
+        icon={<EmptyStateGlyph />}
+        headline={dashboard.isPublished ? 'No requests right now' : 'Nobody can find you yet'}
+        /*
+          Frame `20`: an empty request list is almost always an unpublished
+          profile, so the state names that cause and the CTA fixes it — rather
+          than shrugging at the vendor.
+        */
+        description={
+          dashboard.isPublished
+            ? 'Requests land here the moment a customer sends one. Keeping your calendar current is what puts you in their search.'
+            : 'Your profile is not published, so it does not appear in search. Finish the checklist and requests can start arriving.'
+        }
+        action={
+          dashboard.isPublished ? null : (
+            /*
+              `.btnS` on frame `20`, not the clay fill: the pane is a waiting
+              state, not the one action the screen exists for.
+            */
+            <Button asChild variant="secondary">
+              <Link href={PROFILE_EDIT_PATH}>Finish your profile</Link>
+            </Button>
+          )
+        }
+      />
+    ) : (
+      <ul className="flex flex-col gap-2.5">
+        {waiting.map((request, index) => (
+          <RequestRow key={request.id} request={request} isFirst={index === 0} />
+        ))}
+      </ul>
+    );
+
   return (
-    <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-5.5">
+    <div className="app-shell flex">
+      {/*
+        The gutter is a ladder, not a constant. It was a flat `px-6` — the 1440
+        value at every width — where frame `27 Vendor dashboard — 1024` draws
+        `padding: 18px 22px` and frame `08` draws `22px 24px`. The steps below
+        1024 follow the shared ladder #304 established on the marketing chrome,
+        so the vendor pane widens with the header rather than against it.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pt-4 sm:px-5 lg:px-5.5 lg:pt-4.5 min-[90rem]:px-6 min-[90rem]:pt-5.5">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-          <h1 className="display-heading text-[26px] text-stone-900">
+          {/*
+            21px at 1024, 26px at 1440 — frame `27 Vendor dashboard — 1024`
+            steps the greeting down where the pane loses 220px to the sidebar
+            and 300px to the right column.
+          */}
+          <h1 className="display-heading text-[21px] text-stone-900 min-[90rem]:text-[26px]">
             {waiting.length === 0
               ? `${greeting}, nothing is waiting on you`
               : `${greeting}, you have ${waiting.length} new ${
@@ -102,52 +160,36 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
 
         <DashboardStats dashboard={dashboard} today={today} />
 
-        <h2 className="mb-2.5 font-display text-[21px] text-stone-900">Requests waiting on you</h2>
+        {/*
+          Two headings, one at a time. Frame `08` writes the serif
+          `Requests waiting on you`; frame `27 Vendor dashboard — 1024` replaces
+          it with a `Needs you` micro-label, because at 1024 the column is 394px
+          and a 21px serif line over three request cards is most of what fits.
+          Exactly one of the spans is rendered at any width, so a screen reader
+          announces one heading.
+        */}
+        <h2 className="mb-2.5">
+          <span className="text-label font-semibold tracking-label text-stone-600 uppercase min-[90rem]:hidden">
+            Needs you
+          </span>
+          <span className="hidden font-display text-[21px] text-stone-900 min-[90rem]:inline">
+            Requests waiting on you
+          </span>
+        </h2>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-5">
-          {waiting.length === 0 ? (
-            <EmptyState
-              /*
-                Frame `20` draws the pane as a panel that fills the column —
-                a dashed hairline at an 18px radius — rather than leaving the
-                space blank below a top-aligned sentence.
-              */
-              panel
-              icon={<EmptyStateGlyph />}
-              headline={dashboard.isPublished ? 'No requests right now' : 'Nobody can find you yet'}
-              /*
-                Frame `20`: an empty request list is almost always an
-                unpublished profile, so the state names that cause and the CTA
-                fixes it — rather than shrugging at the vendor.
-              */
-              description={
-                dashboard.isPublished
-                  ? 'Requests land here the moment a customer sends one. Keeping your calendar current is what puts you in their search.'
-                  : 'Your profile is not published, so it does not appear in search. Finish the checklist and requests can start arriving.'
-              }
-              action={
-                dashboard.isPublished ? null : (
-                  /*
-                    `.btnS` on frame `20`, not the clay fill: the pane is a
-                    waiting state, not the one action the screen exists for.
-                  */
-                  <Button asChild variant="secondary">
-                    <Link href={PROFILE_EDIT_PATH}>Finish your profile</Link>
-                  </Button>
-                )
-              }
-            />
-          ) : (
-            <ul className="flex flex-col gap-2.5">
-              {waiting.map((request, index) => (
-                <RequestRow key={request.id} request={request} isFirst={index === 0} />
-              ))}
-            </ul>
-          )}
+        {/*
+          The requests column and, once the profile is live, the right column
+          beside it. Frame `27` puts that column **inside** the pane at a 16px
+          gap; frame `08`'s bordered outer rail is the unpublished composition
+          and is rendered outside this pane instead.
+        */}
+        <div className="flex min-h-0 flex-1 gap-4 overflow-hidden">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-5">{requestsPane}</div>
+          {dashboard.isPublished ? <PublishedRail dashboard={dashboard} /> : null}
         </div>
       </div>
 
-      <PublishChecklist dashboard={dashboard} today={today} />
+      {dashboard.isPublished ? null : <PublishChecklist dashboard={dashboard} />}
     </div>
   );
 }

@@ -657,6 +657,17 @@ export const FULL_REFUND_CUTOFF_HOURS = 48;
 /** Refund fraction when cancelling inside the full-refund cutoff. */
 export const LATE_CANCELLATION_REFUND_RATE = 0.5;
 
+/**
+ * Days in the dashboard's `This week` strip.
+ *
+ * Seven, and **rolling from today** rather than snapped to a calendar week:
+ * frame `27 Vendor dashboard — 1024` draws Jun 9 through Jun 15 against a
+ * Sunday-the-14th event, which no Sunday- or Monday-started week produces. A
+ * rolling week is also the one a vendor is actually working — the back half of
+ * the current week is history to them by Thursday.
+ */
+export const BOOKING_WEEK_DAYS = 7;
+
 /** How far forward the vendor availability calendar runs. */
 export const AVAILABILITY_MONTHS_AHEAD = 12;
 

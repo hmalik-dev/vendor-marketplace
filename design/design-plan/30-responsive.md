@@ -22,8 +22,8 @@ they must not break, and they never dictate the desktop layout.
 | Vendor profile        | Identity card + 380px sticky rail, tabs              | Card + 320px rail                   | **Drawn.** Card + **320px** sticky rail — never stacks; cover 280px                                                                      | Card + rail → sticky bottom bar                                                                                         | Card stacks (identity above cover); **rail becomes a sticky bottom bar** with from-price + Request booking |
 | Booking request       | Form + 400px rail                                    | Same                                | Rail narrows to **340px**, never stacks                                                                                                  | Rail → summary card above the form                                                                                      | Summary accordion, sticky Continue                                                                         |
 | Checkout              | Form + 420px rail                                    | Same                                | **Drawn.** Rail 420 → **340px**; **Due today stays above the fold** — the hard constraint on this screen                                 | Same, narrower                                                                                                          | Summary accordion above, total always visible                                                              |
-| Vendor dashboard      | Sidebar + content + 340px rail                       | Rail wraps under content            | **Drawn.** Sidebar stays **220px with labels**; right column 300px, **never wraps**; calendar shows the booking week, not the month grid | Icon rail 72px                                                                                                          | Bottom tab bar; **rail content leads** — requests first, then stats, then checklist                        |
-| Customer bookings hub | Sidebar + content + rail                             | Rail wraps under                    | Sidebar **220px with labels**; rail narrows to 340px rather than wrapping                                                                | Icon rail; tabs stay, month groups stack                                                                                | Bottom tabs; month groups stack, tabs become a scrollable row                                              |
+| Vendor dashboard      | Sidebar + content + 340px rail                       | Same as 1024                        | **Drawn.** Sidebar stays **220px with labels**; right column 300px, **never wraps**; calendar shows the booking week, not the month grid | Icon rail 72px                                                                                                          | Bottom tab bar; **rail content leads** — requests first, then stats, then checklist                        |
+| Customer bookings hub | Sidebar + content + rail                             | Same as 1024                        | Sidebar **220px with labels**; rail narrows to 340px rather than wrapping                                                                | Icon rail; tabs stay, month groups stack                                                                                | Bottom tabs; month groups stack, tabs become a scrollable row                                              |
 | Editor                | 200px nav + fields + 308px preview rail + submit bar | Nav → dots rail, preview rail 280px | Section nav **keeps its labels** — no dots rail, no icon rail; preview rail **280px**                                                    | Nav on top, preview → panel above the fields, 2-col fields                                                              | 1 col, preview panel above the fields, submit bar sticky                                                   |
 | Messaging             | 3 panes                                              | 2 panes + context toggle            | 2 panes + context toggle, per `18-messaging.md`                                                                                          | **2 panes 40/60**, context as a collapsible strip under the thread header                                               | List → thread with back arrow; context behind a "Booking ▾" chip                                           |
 | Availability          | 3 months + rail                                      | 2 months                            | 2 months, per `19-availability.md`                                                                                                       | 1 month + rail below                                                                                                    | 1 month, swipe, tap to toggle                                                                              |
@@ -98,6 +98,19 @@ already sized for it (94px, not 3:2).
   1024, or a rail that wraps under the content, is a bug. The one screen that
   genuinely cannot hold its full desktop composition here is **messaging** — three
   panes do not fit in 1024 — and its collapse is specified in `18-messaging.md`.
+
+### The 1280 cells said the opposite of the 1024 rule — corrected 2026-08-30
+
+Two rows of the table above told 1280 to wrap the rail under the content while
+their own 1024 cells said it never wraps, and the rule below says a rail that
+wraps under the content at 1024 is a bug. The contradiction shipped: the vendor
+dashboard's right column was hidden below 1280 entirely, so the one width the
+stale cell described was the one width the column did not exist at.
+
+**1280 draws no frame in this bundle.** It renders the 1024 composition, and the
+1440 steps ride on `min-[90rem]:` for exactly that reason. Both cells now say so.
+Corrected under #322, per the precedence rule in `04-laws.md`: build the frame,
+fix the plan in the same ticket.
 
 ## Mobile-specific patterns
 
@@ -227,7 +240,12 @@ names:
 - **Checkout** — the 340px rail must keep **Due today above the fold**. This is
   the hard constraint on the screen; if anything else has to give, it gives first.
 - **Vendor dashboard** — right column 300px and the calendar shows the booking
-  week, not the month grid. Three request cards fit; the fourth peeks.
+  week, not the month grid. Three request cards fit; the fourth peeks. The
+  four-up **stats row is deleted here**: at 1024 the pane is 394px, four cards
+  compute to 89.5px and every label wraps to three lines. It returns at 1440 and
+  survives below 1024, where neither the sidebar nor the right column is taking
+  the width. The right column also moves **inside** the pane at a 16px gap —
+  frame `08`'s bordered outer rail is the unpublished composition.
 
 ## Mobile landing — imagery split (390)
 

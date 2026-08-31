@@ -153,7 +153,13 @@ describe('ProfileHeader', () => {
 
       expect(cover.className).toContain('md:w-[268px]');
       expect(cover.className).toContain('lg:w-[280px]');
-      expect(cover.className).toContain('xl:w-[300px]');
+      /*
+       * `min-[90rem]:` is 1440, the width the 300px cover is drawn at. It was
+       * `xl:` — 1280 — so every laptop between 1280 and 1439 rendered the 1440
+       * cover against a 320px rail it was never measured with (#322).
+       */
+      expect(cover.className).toContain('min-[90rem]:w-[300px]');
+      expect(cover.className, 'xl: is 1280, which no frame draws').not.toContain('xl:w-');
     });
 
     /* One cover file per vendor, and it carries no link and no counter. */
