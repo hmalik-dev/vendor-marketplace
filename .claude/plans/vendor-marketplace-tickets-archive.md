@@ -20,6 +20,12 @@ directly.** Neither is a `Done` one.
 together**, so a closed row still has to agree with its registry entry. Moving a row here
 does not take it out of that gate.
 
+**Second migration, 2026-08-31**, by the fourth `/cleanup-tickets` pass: **12 more `Done`
+rows** and their detail sections, which had accumulated on the active board after the
+first split. `Superseded` rows were left where they were — the tracker consults them, so
+they belong with the open work; `Done` rows are history and belong here. 327 rows now:
+**189 `Done`, 138 `Superseded`.**
+
 Active tracker: `.claude/plans/vendor-marketplace-tickets.md`
 
 ---
@@ -343,6 +349,18 @@ Active tracker: `.claude/plans/vendor-marketplace-tickets.md`
 | **302** | **07 Bookings hub and 06 Booking request — dead controls and parity** | P1 | M3 | **P1 High** | **Done** | worktree-302 | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#187, #188, #189, #190, #191, #192, #193** — seven findings across two screens in one component tree. Four are dead or lying controls: `All categories` and `Soonest first` do nothing (#187), the notifications bell opens nothing (#188), the hub renders the **EMPTY-state rail on a hub holding 11 bookings** (#189), and the count sentence contradicts the tab it sits above (#190). Then booking cards with no focus ring that link to the vendor profile instead of the booking (#191 — the destination is the booking detail #309 builds, so sequence them), a marketing footer appended below the app shell on the request screen (#192), and a form field moved into the context rail (#193). Re-measure frames `06` and `07` before fixing. **Released 2026-08-30 unstarted, with two blockers found and no code written.** Traced all seven items first. Five are implementable as filed (#188 bell, #189 rail state, #191 card destination + focus ring, #192 footer, #193 field placement) and **#191's destination already exists** — #308 built `/bookings/[requestId]`, which is the interim surface the ticket says to use while #309 is blocked. Two are not: **(a) #187's `All categories` filter has no data to filter on.** Both entry builders in `booking-entries.ts` hardcode `categoryName: null`, and `bookingRequestDetailSchema.vendor` carries slug, business name and avatar but no category — so the filter needs a field plumbed through DAO, response schema and web before it can do anything. The sort half is client-side and trivial by comparison. Note `20-customer-bookings-hub.md` also draws the **booking card** as `Category · …`, so the same missing field is a Text-axis gap on the card, not only a dead control. **(b) #190 needs approved copy that does not exist.** Its second acceptance bullet asks that *each tab* have approved copy for its empty and populated states. `20-customer-bookings-hub.md` specifies exactly one sentence — the upcoming summary — and `31-content-voice.md` carries no per-tab wording. Deriving the sentence from the active tab is easy; **inventing History and All copy would fail the Text axis**, and a ticket may not write the plan. That is a design ruling, and it is the only thing standing between this ticket and its parity gate on frames `06` and `07`.  **Done 2026-08-30 — `beae4a7`, PR #65.** Verified against the repository first: **#191a** and **#188** were already fixed, **#190 is not a defect** (the count sentence sits *above* the tab bar, says "upcoming" explicitly, and frame `07` draws that composition), and **#193 is blocked on a design ruling** — a field does live in the context rail, but `13-booking-request.md:32-33` specifies it there. Three needed work. **#187**: the chips were `<span>`s, now dropdowns on URL state — which required the vendor's primary category to reach the request read model, promised by `bookingRequestDetailSchema`'s own comment and never delivered. **#189**: the rail drew frames `07` and `19` at once; split on `hasBookings`, and frame `07`'s `Recent messages` block built. **#192**: `/vendors/<slug>/request` does not start with `/vendor/` (index 7 is `s`), so it fell through to the public branch and drew the marketing footer. **Two defects found only by review**: the category chip offered categories from every tab while filtering one, and `?category=a&category=b` threw *above* the auth check. **One found only in parity**: the card focus ring was clipped on column 1. **The ticket's frame label is wrong** — frame `06` is *Booking confirmed*; the request screen is `04`. Residual parity deviations filed as **#340–#343**. |
 | 14 | Demo Dataset (`seed:demo`) | P3 | M6 | P1 High | Done | worktree-14 | None | `core` | **Split 2026-08-30 by lane 14: the eight Playwright E2E suites moved to #340**, which is the half this ticket does not build. What is left is the deterministic demo dataset itself.  **Blocker cleared 2026-08-30: #12 is Done, so this is workable.**  **Content gap partly closed by ef8b341:** `pnpm db:seed:marketing` now seeds 16 photography vendors with covers, packages, and 918 reviews behind 918 completed bookings. **Still open here:** the other 10 categories (5 of 6 landing cards still lead to an empty search), portfolio images, messages, notifications, the non-completed booking statuses, and the 8 E2E suites. Asset tracking for the covers is **#32** **Done 2026-08-30** — squash `5f2a747`, PR #64, CI green. `pnpm preflight --ticket 14` passes 24/24 once the capabilities were narrowed to `core` (the seed reaches no external service), which is the unblock `f1f988c` asked for rather than a human setting SENTRY_DSN |
 | **305** | **`40-states.md` compliance sweep — copy, glyphs and unsaved work** | P1 | M3 | **P1 High** | **Done** | worktree-305 | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#72, #261, #225, #227, #228, #81**. `40-states.md` is a law, and it is violated in five places of error and empty-state copy (#72) — steel is information, gold is waiting on someone, red is failure; **red is never `pending` and gold is never a failure**. The two-circle empty-state glyph is absent from **seven of the nine** `EmptyState` call sites (#261), so the sweep is one component plus its callers. Alongside them, three defects in the same class of "the screen says something untrue": the success toast covering the submit button it confirms (#225), unsaved profile edits discarded silently with no prompt (#227), and a newly onboarded vendor's public storefront still showing placeholder copy (#228). **#81** is itself a rollup of nine smaller adversarial-sweep defects — triage it inside this ticket and carry anything that does not belong here out as its own row rather than silently dropping it. **Done 2026-08-30** — squash `528dfe8`, PR #66, CI green. Landed after a rebase onto #302, which had rewritten the same rail; the seven tickets this lane filed collided with that lane's and were renumbered #346–#352 by the contiguity guard rather than silently duplicating |
+| 11 | Transactional Email Notifications | P3 | M6 | P2 Medium | **Done** | `worktree-11` | None | `core` `auth` `email` | **Unblocked 2026-08-30 by lane 329 — the key is in place.** `pnpm preflight --ticket 11` now passes **35 of 35**, `RESEND_API_KEY — set, shape ok`. It had been `Deferred — needs a human` since 2026-08-28 on a placeholder key that has since been supplied, so the row was holding a solved blocker. The project's own rule is that a ticket does not start until the gate passes, and the acceptance requires verifying that each row of the event table actually sends. **Unblocks with one key** from https://resend.com/api-keys. Everything it hangs off is ready: `NOTIFICATION_TYPES` is the shared enum, and #7/#8 already emit every event at a single call site, so email attaches there without a second source of truth **Done 2026-08-31 — squash `584f4bc`, PR #85, CI green (2m52s).** **The design that made the ticket small: the email *is* the notification, rendered for an inbox.** Subject and body come from the row just written and the destination from `notificationHref`, the same function the bell uses — so three acceptance criteria fall out rather than being met one at a time. Money positions are already correct (`admin.service.ts` writes a per-recipient body), no platform statistic or vendor-side fee claim can appear (the in-app copy carries neither), and no duration is hard-coded (`new_request` reads its window through `bookingRequestWindowPhrase()`). Idempotency needs no column: the key is the notification row's own uuid. **Six of this ticket's claims were stale** and are corrected in the code's comments: `insertNotification` is not the single choke point, `payout_sent` and `stripe_onboarding_complete` have **no emit site at all**, `tag_suggestion_approved` postdates the table above, expiry does not run on the vendor dashboard, the window is 7 days rather than 48 hours, and Sentry is not installed so failures log through pino. **Four defects found after implementation, all fixed.** The sharpest: `transitionRequest` called `announce` without its `mail` argument, and because both were *optional* TypeScript said nothing while a quote, an acceptance, a decline and a cancellation each wrote their in-app row and reached **no inbox** — the exact drift the design exists to prevent. Both are required now. Also: a second table of paths that sent `new_review` to a route that does not exist; a brand guard blind to `orla.com` inside a URL because `//` started a “comment”; and a 39px tap target against the 44px law, with `line-height` inherited so the number deciding the height was the one the template did not control. Verified: `turbo run test/typecheck/lint/build --force` uncached (741 API, 1805 web, 297 shared, 254 preflight, 204 db), `diff-reviewer`, and two browser passes measuring the rendered template at 390/768/1440. **Deployment prerequisite:** `render.yaml` gains `RESEND_API_KEY`. The registry enforces `re_[A-Za-z0-9_]{16,}`, so it is **not satisfiable by a placeholder** — the deployed API refuses to boot without a real key rather than starting and silently not sending. |
+| 15 | Admin Portal | P3 | M6 | P1 High | **Done** | `worktree-15` | **None** | `core` `auth` | **Split 2026-08-30: the Sentry half is now #353, and this row is the admin portal alone.** The `sentry` capability moves with it, so `pnpm preflight --ticket 15` no longer fails on the placeholder `SENTRY_DSN` — the admin portal reaches no external service beyond Clerk. Sentry is launch-prep work: it needs a DSN only the account holder can mint, and it catches errors in an environment that does not exist until #19. **#14 landed 2026-08-30 (`5f2a747`), so the ticket blocker is clear — but the *gate* is not. `pnpm preflight --ticket 15` fails 1 of 34 on `SENTRY_DSN`, still the placeholder. Unlike #14, the `sentry` capability here is real: the ticket integrates `@sentry/node` and `@sentry/nextjs`, so narrowing the row is not the unblock and a human must supply the DSN. **The admin portal half needs no Sentry and is independently workable** — split it out if the DSN stays absent, rather than leaving a P1 feature parked behind a key. Found on run 2 of an unattended batch by running the gate, not by reading the board.**  Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` **In Progress 2026-08-31.** **Frame `13` parity measured twice and closed 2026-08-31 — four rulings left open as design questions (D18–D21), recorded in the detail section below.** The Sentry acceptance line below is **stale** — that half left with #353 on 2026-08-30 and now lives in **#370**; this lane does not implement it. **API half pushed 2026-08-31 — `bd438de` on `origin/worktree-15`, not merged.** `GET /admin/vendors` with its filters and count line, `PUT /admin/users/:id/ban` and `/unban` with the full unwind, 17 route tests, all 7 packages green. **The finding that matters for whoever resumes it: #15 cannot be sliced.** Frame `13 Admin` draws the whole portal, and any partial version renders a sidebar of links to routes that do not exist — which #31's "a control that opens nothing is furniture" rule forbids and the parity gate fails. So the remaining surfaces ship in the *same* PR: the `/admin` shell (inverted `stone-900` header, 210px rail), the Vendors table itself, Overview with its four cards and Recharts series, Customers, Bookings, Payments, Reviews with deletion, and Categories & tags with the approve/reject/merge queue. **Recharts is not installed yet.** Also still open: `DASHBOARD_PATH_BY_ROLE.admin` and `POST_SIGN_IN_PATH_BY_ROLE.admin` are `/` with a comment saying `/` is terminal *because there is no admin surface* — both become `/admin` when this lands, and that comment is part of the change. **The Sentry acceptance line below is stale** — that half left with #353 and now lives in #370. **Gap found and closed 2026-08-31 — there had been no admin account anyone could sign in as.** `/admin` gates on `users.role = 'admin'`, which cannot be reached from inside the product: it is read from Clerk's `unsafeMetadata` at first sign-in, falls back to `customer`, and is immutable afterwards. `.env.e2e.local` supplied only a customer and a vendor, and `seed-demo.ts:401` gives the demo admin a synthetic `clerk_user_id` that cannot authenticate — so the only route to this screen was promoting a customer in the database by hand, a privileged write the permission classifier correctly refused. **A persistent E2E admin account now exists** (`E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`, gitignored), `seed:e2e` seeds its row in the same transaction as the other two, and the console has been driven end to end: the bulk bar clears the last row's hit targets by 11px with `elementFromPoint` returning the controls; the header mark is 21.75x15 on a 9px gap with the chip at x=111.2; the search field focuses `rgb(180,85,47)` with a clay/15% ring, measurably distinct from the unbordered treatment beside it; no focus ring inside the table is clipped; 15 rows fit with the page not scrolling (`scrollHeight === clientHeight === 900`); all seven surfaces render with zero console errors and the Recharts series draw; and a customer's real session token gets **403** from `GET /admin/vendors`, so refusal is server-side and not a frontend redirect. **Done 2026-08-31 — squash `4776f95` (PR #77, the console) and `b3762fc` (PR #79, the third parity pass).** Landed in two PRs because #77 merged while this lane was still measuring: `main` carried the console for four hours while this row still read `In Progress`, which is the state that makes an unattended batch dispatch a second lane for finished work. Verification: `pnpm preflight --ticket 15` 33/33; `turbo run test typecheck lint build --force`, uncached, 709 API and 1752 web tests; `diff-reviewer`, `security-auditor` and a full browser auth-and-role matrix; and `parity-checker` against frame `13 Admin` at 1440x900 **three times**, each pass re-measuring the last one's fixes. That is the load-bearing part — pass 2 found three of pass 1's fixes had not landed and two had introduced new defects, and pass 3 found two of pass 2's had left a residue their stated target hid. Six frame-versus-law rulings (D18–D23) are left open in the detail section below; none blocks the acceptance criteria. Sentry is not here — that half left with #353 and lives in #370. |
+| **322** | **Vendor surfaces at 1024 and 768** | P1 | M3 | **P1 High** | **Done** | worktree-322 | **None** | `core` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. #304 verified landing and the shared chrome; these five frames are **not** verified and their components carry no 1024 or 1440 steps at all — `profile-header.tsx` and `bookings-hub.tsx` contain **zero** `min-[90rem]:` between them, so they render one composition at every width, exactly as landing did before #304. Frames: `27 Vendor profile — 1024`, `27 Vendor profile — 768`, `27 Vendor dashboard — 1024`, `27 Vendor dashboard — empty · 1024`, `27 Vendor profile editor — 768`. **#169's own numbers to check first:** sidebars stay 220px with labels (no icon rail), right rails narrow 420 → 340 and never stack, and the dashboard's right column is 300px with the calendar on the **booking week** rather than the month. The shared chrome from #304 already helps — gutter ladder, 56px header below 1440, capped popovers — so start by **re-measuring** rather than assuming the deltas match landing's. Needs `pnpm db:seed:e2e`; a vendor surface is unreachable without it. **Landed 2026-08-30 as `3478925` (PR #67, squashed from `worktree-322`)** — the **1024 pass only**. Both 1024 frames verified in the browser at 1024, 1280 and 1440: the sidebar steps 241 → 265, the right column exists at 1024 and 1280 at 300px, the stats row is deleted at 1024 (four cards computed to 89.5px in a 394px pane, every label wrapping to three lines), the requests column is 423px against the frame's 423, and the profile's whole interior ladder — gutter, gap, radii, type, rail — steps between frames `27` and `03`. Every 1440 step moved off `xl:` (1280, which no frame draws) onto `min-[90rem]:`. The published rail is now the booking week and the next payout, per frame `27`, reading the availability calendar rather than a second derivation. **Three of the five frames are not done and are filed as #354, #355 and #356.** Two recorded deviations, both in `16-vendor-dashboard.md`: the payout card states the event date rather than a payout date (no schedule until #10), and the week strip's day number is 16px rather than the frame's 15 (the serif floor). Also fixed a clipped focus ring on the profile tab strip and corrected two stale 1280 cells in `30-responsive.md`. |
+| **332** | **`state` becomes a closed vocabulary, from the form to the column** | P1 | M3 | **P1 High** | **Done** | `worktree-332` | **None** | `core` | **Done 2026-08-30 — squash `7314adc`, PR #71, CI green (`0 cached, 7 total` on the run that did the work), browser-verified at 1440x900.** `US_STATE_CODES` in the shared constants is the single vocabulary; `us_state` (Postgres) and `usStateCodeSchema` (Zod) both derive from it. Two migrations, order load-bearing: `0018` repairs (names case-folded onto codes, two-letter values upper-cased, blanks to NULL), `0019` creates the type and casts — reversed, the cast fails on the row that motivated the ticket. **`0018` has no catch-all on purpose**: an unrecognised value fails the migration loudly rather than being mapped to NULL, which would silently drop that vendor out of every state-filtered search. Verified end to end: the form stores `NY` while showing `New York`, `PUT /vendor/profile` carried `"state":"NY"`, and the column reads `pg_typeof = us_state`. Two things fell out of the closure rather than being sought — the seed fixtures had to declare `UsStateCode`, and the facet DAO's `state <> ''` guard became **unrepresentable** (an enum column cannot hold an empty string, so TypeScript rejected it). **City stays free text** and **`users.state` was left alone** — same latent split, no bad data, and closing it needs the customer form to become a picker. **Filed 2026-08-30 by the backlog consolidation.** Merges **#330 and #331**. `Austin, TX` and `Austin, Texas` are two rows in the dev database (11 and 1), so a customer who picks one never sees the other's vendors — the split is entirely in `state`, and it **widens with every new vendor**, because `us-states.ts` offers full names while the majority of rows hold codes. Canonical form is the **two-letter USPS code**, ruled 2026-08-30. The two rows were split by layer: #330 put the vocabulary in `createVendorProfileSchema` and repaired the data, #331 constrained the column. Merged because #331 must run **after** #330's repair or it fails on exactly the row that motivated it, and shipping them apart means two migrations on one column and an unconstrained column in between. City stays free text, deliberately — a validated city list needs a dataset decision that is not this ticket. |
+| **340** | **Playwright E2E harness and the eight critical-journey suites** | P3 | M6 | **P1 High** | **Done** | `worktree-340` | **None** (#14 **Done** — archived 2026-08-30) | `core` `auth` `stripe` | **Filed 2026-08-30 by lane 14**, split out of #14. The repo has **no `playwright.config`, no `e2e/` directory and no test-runner harness at all** — Playwright is currently MCP-driven for agentic verification only, so this ticket builds the runner from nothing. Depends on #14 for the fixed-UUID dataset the suites select on. Carries the eight suites verbatim from #14: auth, vendor profile, search, booking request, payment, messaging, reviews, admin — plus `@clerk/testing` for programmatic sign-in and the 1440x900 / 1024 / 768 / 390 viewport matrix. **Done 2026-08-31 — squash `55ae93f`, PR #74. Three of eight suites shipped; the other five are deferred with named blockers and ARE NOT FILED AS ROWS — they live in the detail section below, and need re-homing.** Built: `apps/web/playwright.config.ts`, `apps/web/e2e/` (fixtures, base-url resolver, README), the `test:e2e` script, and route-protection, booking-request and messaging suites — 15/15 green. `@playwright/test` was genuinely absent; only `playwright` 1.62.1, the library the MCP server drives, which is agent-steering rather than a runner. **Three findings the build produced, each measured:** (1) a full E2E pass exceeds `RATE_LIMIT_MAX` (120/min), the API answers 429, and **the app renders that as the generic 500 page** — "Something broke on our end… We've been notified" — so a throttled run is indistinguishable from a broken feature; it caused two misdiagnosed failures before the lane log named it. `RATE_LIMIT_MAX=5` returns 429 after exactly 5 requests, so the override channel works. (2) **`key` ≠ `slug` for two of four demo vendors** (`silver-alder` → `silver-alder-studio`, `copper-spoon` → `copper-spoon-catering`) — caught by the new drift guard on its first run. (3) Vitest's `include` was `src/**` only, so `e2e/**/*.test.ts` would never have run. Checks: typecheck 7/7, lint 8/8, format clean, `test --force` 7/7 with `0 cached` and 3042 tests, build 5/5 |
+| **346** | **`/messages` keys threads by vendor, so one booking's question lands in another's thread** | P1 | M3 | **P1 High** | **Done** | `worktree-346` | **None** | `core` | **Filed 2026-08-30 by lane 305**, carved out of #81 (item 3) because it is a data-model change, not the copy fix the rest of that ticket was. A customer asking about their Jun 11 fundraiser sends it into a thread the vendor reads as "Mar 15 birthday" — the subtitle names one arbitrary booking out of several. `conversations` already carries a nullable `booking_request_id` and a `conversations_request_key` unique index, so the schema supports a thread per request; what does not exist is the read path, the list grouping, or a rule for the vendor-initiated thread that belongs to no request. Needs a design ruling on how a multi-booking relationship is listed before it is built. **Done 2026-08-30 — squash `f373635`, PR #72.** **The row was stale on all four counts.** #310 had already built the model: `findConversationsFor` returns one row per conversation with the request's date and type joined, `bookingContext()` builds "Jun 14 wedding", `messages-screen.tsx` maps 1:1 over conversations with no vendor grouping anywhere, and `conversations_customer_vendor_open_key` covers the request-less thread. The blocking ruling also already existed — **A thread is scoped to one booking request** (2026-08-30, #310 for #219/#229) in the decisions file. **What was genuinely missing was the guard and the ruling's home**, and only those shipped: a regression test for the case nobody covered (two *requests* to one vendor, where the business name is identical on both rows and the context line is the sole discriminator — the existing test only covered the unattached thread beside one request), and the listing ruling recorded in `99-open-questions.md`, which acceptance criterion 4 required. **Proved non-vacuous rather than shipped as a green that never failed:** reintroducing the vendor-keyed read turns the list assertion red (3 failed / 29 passed); the message-routing assertion stays green under that mutation because it reads by conversation id, and is kept as a separate axis. **No production code changed.** Checks with output read: typecheck 7/7, lint 8/8, format clean, `test --force` 7/7 with `0 cached` and 651 API tests, build 5/5. Browser verification N/A — the diff reaches no user surface |
+| **357** | **Apply the D16/D17 rulings — the four code sites the frames now expect** | P1 | M3 | **P1 High** | **Done** | `worktree-357` | **None** | `core` | **Done 2026-08-30 — squash `d24488c`, PR #69, required CI green.** All four code sites verified in a browser at 1440x900 and MATCH on parity: monogram `clay-150 rgb(234,220,203)`, both coverless blocks `stone-250 rgb(236,230,220)` at ratio 1.500 with empty `innerHTML`, 500 CTA the single link `Browse vendors` -> `/search`. `clay-150` and `stone-250` had to be **minted** — the ticket claimed D18 had done it, but neither was in `theme.css`. `#327` and `#339` closed on evidence: all three hero segments compute to `#6b6459`, and `Most relevant` ships as the default sort. Frame `03`'s sage chip confirmed still present. `grep -rn "<Placeholder"` over `apps/web/src` now returns nothing. **The `parity-checker` MATCH acceptance line was not met as literally written** — frames `01`, `02`, `12`, `16`, `18` each returned MISMATCH, but **every finding was attributed to another ticket or to the frames**, none to this change; the sage result chip and the `New` badge are **#358**, the three carets are **#364**, and the rest (sign-up's `Continue` where D16 ruled `Create my account`, the unminted `sage-175`, frame `16`'s chrome and type scale, `all two filters`, and the 32x32 icon-only submit against the 44x44 law) are filed separately. Holding this ticket open for them would absorb three other tickets and its own stated non-goals **Filed 2026-08-30 by the second backlog consolidation.** Merges **#327, #335, #339, #342, #348, #350**. Every one of these had its decision taken by D16 or D17 and its `design-plan/` edit landed; what each has left is code or the frame file. **They are one ticket because five of the six end in an edit to `Orla - Screens.dc.html`** — frames `01`, `02`, `12`, `16`, `18` and their 1024 variants — and four concurrent lanes editing one 27-frame HTML file is a guaranteed conflict on the repo's own acceptance criterion. The code sites are named and small: `avatar.tsx:17`'s `FALLBACK_TONES` → `clay-150` (#342), `vendor-card.tsx:149` and `profile-header.tsx:199` → the neutral coverless block (#348), `error-screen.tsx:74`'s href and label → `Browse vendors` → `/search` (#350). #327 is **frame-only** — the hero seeds nothing and the code is already right. #339 is **verification only** — `Most relevant` already ships. Plus the guard test D16 asked for: no approved string in `31-content-voice.md` hard-codes a duration the code derives. **The frame half landed out-of-band on 2026-08-30**, from the user's own updated copy of the document — all six corrections plus `12`'s `Create my account`, which was already right. See `design/design-plan/CHANGE-ORDER-2026-08-30.md`. **What is left here is code only**: the four sites above and the guard test. `stone-250 #ECE6DC` was minted (D18) in the same pass, so the coverless block now has a token to name. |
+| **358** | **02/17/18 Search — close 1440 parity and the two reachability defects** | P1 | M3 | **P2 Medium** | **Done** | `worktree-358` | **None** (was #357; its frames landed 2026-08-30 in `72ddd73`) | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#324, #326, #337, #347**. One route, three states, one browser pass — #326's own measurements say the compact-header fix *"lands on `/search` at every state"*, #337 was found there, and #347's blank page 2 is reached from it. **#324 is now a deletion:** D16 dropped the gold chip (scarce was never defined) and the sage chip on the results grid (a dated query is already filtered on availability, so the chip was a tautology), leaving the stone `New` badge — published < 30 days — as the only chip a card carries. Sage survives **only** on the nearby-dates band. Sequence **after #357**, which corrects the frames this is measured against, and **do not run concurrently with #323**, which owns the same two components at 1024. **Frames `02` and `18` were corrected on 2026-08-30**, so the measurement target is already stable; the remaining #357 dependency is `vendor-card.tsx`, which both tickets touch. |
+| **360** | **09 Vendor storefront editor — cover, preview rail, nav and the unsaved-work guard** | P1 | M3 | **P0 Critical** | **Done** | worktree-360 | **None** | `core` `storage` `stripe` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#299, #338, #349**. **#338 is a duplicate** — "the section nav carries `Payouts` and its gold dot" is already acceptance line 5 of #299 (filed there as #140) — and #349 is the same route's form. #299 in turn merges #137, #138, #140, #141, #152, #257, #258, #288, with **#288 leading** because it unblocks #137. **D16 settled the field question:** `Your line` and `Years in business` are **relocated, not deleted** — both are the only editing surface for content frame `03` displays, so deleting the editor without the display leaves content nobody can change. The `Payouts` dot reads real Stripe onboarding state and is **gold, never red**. Re-measure frame `09`'s nav in full first: the pass that found the missing entry was scoped to the Tags row. **Done 2026-08-31 — squash `22fd808`, PR #73, required check green in 32s.** Frame `09`'s nav re-measured in full first, as the ticket demanded: the frame draws **seven** items (Business, Location, Tags, Response time, Packages, Portfolio, Payouts) and live rendered six — order otherwise identical, dot `#C99A2E` at 7px. The `Payouts` dot reads the profile row's real `stripeOnboarded`, **not** the publish gate: `payouts` is not a `PUBLISH_BLOCKERS` key and must not become one, because a storefront publishes without Stripe and simply cannot accept a booking. **Two of the ticket's own claims were stale** — `coverImageUrl` was already on the schema and accepted by `createVendorProfileSchema`, so only the UI was missing; and #257's slug preview was already correct, so it is pinned as an *agreement* test (derive the segment from the form, assert a matching dynamic route exists) rather than rebuilt. D16's relocation is pinned by an order test so the deviation reads as the decision it is. The Back/Forward gap is upheld and now **enforced**: the hook touches no history state, and a test fails if anyone adds the decoy-entry fix. Browser-verified signed in at 1440/1024/768/390 — rail 308px at 1440 and 280px at 1024, full-width panel above the fields below `lg`; no horizontal overflow, zero console errors; driven end to end (preview mirrors typing, toggle switches, **clicking the mirrored card does not navigate**, dirty form raises `Leave without saving?`). That last step paid a debt jsdom could not: it implements `inert` as an attribute only. **Two deviations recorded and attributed to #355, not fixed here:** at 768 the frame moves the section nav to a horizontal chip row and it is `hidden lg:flex`; at 390 the rail is a panel rather than a bottom sheet. Both are the 768/390 composition #355 owns, so it inherits the measurement. Also recorded: frame `09` draws a literal `Saved 30 seconds ago` where `shortTimeAgo` floors at a minute — treated as sample content under D16's no-hard-coded-duration guard, not matched. |
+| **368** | **A failed search is indistinguishable from an empty one** | P2 | M4.5 | **P1 High** | **Done** | `worktree-368` | **None** | `core` | **CORRECTED 2026-08-31 — the premise was wrong and the ticket is not implementable as written.** It claimed `search-shell.tsx:171` swallows the failure with a bare `.catch(() => {})`. **It does not.** Line 171 is the *opening* `.catch(() => {`, and the body sets `setHasFailed(true)`; `/search` then renders a real failure state — `Something went wrong` / `Could not load vendors just now.` — at `search-shell.tsx:380`. I filed this from a browser agent's report of that line without reading the body, which is the same trust-the-prose failure the project warns about, applied to a finding rather than to a ticket. **What is still unexplained is the observation, not the cause**: during a deliberate rate-limit the page was seen rendering the ordinary empty-result heading rather than that failure state. That may be the server-rendered path rather than the client fetch, or a rate-limited response arriving as a 200 with no rows — **nobody has established which, and it must be reproduced before anything is changed.** Re-scope to that, or close it. Original filing: **Filed 2026-08-30 from #357's browser pass**, found while the API rate limit was deliberately exhausted. `search-shell.tsx:171` catches the failure with a bare `.catch(() => {})`, so `/search` renders the **empty-result heading with no error state and nothing in the console** — a reader cannot tell a broken search from a genuinely empty one, and neither can a verifier. That is the same class as the labelled-hatch finding #357 just closed: a developer-facing failure rendered as ordinary product copy. `40-states.md` is the law here — steel is information, **red is failure** — and the failed branch currently draws neither. Needs a real error state, and a test that asserts the two branches differ. **Done 2026-08-31 — squash `1cc8e22`, PR #76.** The row's premise was stale: the bare `.catch(() => {})` it names no longer existed, a `hasFailed` branch with its own wording having landed since. **Two acceptance criteria were genuinely unmet, both about a failure being recognisable rather than merely handled.** Colour: `40-states.md` makes red mean "it failed", yet the failure branch drew the *same neutral glyph* as the empty state, so the two differed in wording alone. `EmptyState` gains an opt-in `tone`; glyph tint only, since no frame draws a failure state. Console: the half that defeats verification — a browser pass against a broken API saw a plausible page, an empty console and reported green, which is how this survived. `reportSwallowedError` leaves a trace without putting anything on screen, and excludes aborts because the search box cancels on every keystroke. **Closed as a class:** four other data paths swallowed a rejection whole (nearby-dates band, three optimistic mark-reads); each keeps its silence on screen, states why, and reports. Guard test in the shape of `font-smoothing.test.ts`, plus a companion pinning the set of files that legitimately swallow-and-report. **Browser-verified at 1440x900 against an API held at `RATE_LIMIT_MAX=1`, driving its own chromium** (the MCP browser was held by another lane): failure glyph computes `rgb(178, 58, 48)` = `error-500` beside "Something went wrong" with the swallowed error in the console; a genuinely empty search still computes `rgb(213, 206, 194)` = `stone-400` beside "No vendors match that filter" with a clean console. Both sampled twice and stable, neither overflowing. Non-vacuity proved by reverting the fix: three of the new tests go red. Checks: typecheck 7/7, lint 8/8 with `0 cached` and no warnings, format clean, `test --force` 7/7 with `0 cached` and 3095 tests, build 5/5. CI green on head `05105b8` |
+| **373** | **Design-system completion — token scale, undefined-step guard, and the caret override** | P1 | M3 | **P1 High** | **Done** | `worktree-373` | **None** | `core` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#333, #364, #369**. One pass over `theme.css` and `apps/web/src`, each half closed by a guard — the shape that stops the next parity pass re-finding the same class of defect. **Done 2026-08-31 — squash `ada3518`, PR #80.** **Over half the ticket's prose was stale and its largest half void**: #15 had already added `--color-stone-800`, the undefined-step guard already existed and was already generalised, #235 had closed the `text-[Npx]` line-height defect globally, and the 44x44 hit area already shipped. Corrected in the detail section rather than rebuilt. Shipped: `--radius-panel: 12px` with all seven inline call sites moved onto it, **D24** (the serif floor beats the frames on avatar monograms — the face changes, not the size), **D25** (the unicode caret override, with the assertion that stops it returning a third time after #228 and #338), **D26** (`placeholder.tsx` retired, the hatch guarded as editor-only), and a **radius half for the undefined-step guard** that `diff-reviewer` found — `rounded-xs` names a step the theme never declares, ratcheted at two sites. **Two defects only the browser could find**, both a class string naming a style the page never painted: the hero's Vendor type value measured weight 400 open and closed while its classes read `font-semibold` (`lg:font-normal` won on source order at 1440), and every Refine chip was byte-identical open and closed because the open signal had been living inside the deleted caret. Both fixed and re-measured. Verified: `turbo run test/typecheck/lint/build --force` uncached, `diff-reviewer`, and two `browser-verifier` passes at 1440x900 reading computed values. |
+| **375** | **Search entry — a filtering combobox for `Vendor type`, a typeahead input for `City`** | P1 | M3 | **P1 High** | **Done** | `worktree-375` | **None** (coordinate with **#373**, which removes the caret from the same two triggers) | `core` | **Filed 2026-08-31 on the user's explicit instruction.** *"It should allow typing that appears directly in the input and matching text appears in the category type dropdown, and the city should literally be an input, where the validated city appears as clickable for a user. Not a scrollable dropdown for city since cities can vary drastically. Category should have a dropdown with all categories but as a user types the dropdown should be filtered with each input."* **A user override of decision D6 and `42-dropdowns.md`**, which deleted the filter field from the category panel and made city a select. Both fields stay **validated** — only the affordance changes. **Done 2026-08-31 — squash `4073848`, PR #82, CI green (2m49s).** **Most of this was a gap rather than an override**: `42-dropdowns.md` has specified "typing narrows the list in place (not a jump-to-first-letter)" since the 2026-08-30 import, **D14 recorded that the code was still on the behaviour that import reversed**, and `11-search.md:19-21` has specified these two controls as a combobox and a typeahead since it was written. The override is one sentence — body 1's ban on a search field, whose load-bearing reason is an *autofocused second field's* permanent focus ring, and there is no second field here. Recorded as **D28**. The invariant is untouched: typing never calls `onChange`, and uncommitted text reverts on blur, `Esc` and `Tab`. **`diff-reviewer` found six real defects, all fixed.** The sharpest: opening the panel highlighted row 0, so on `/search?category=florals` the `Enter` meant to submit committed `''` first and **silently wiped the filter** — `DropdownList` seeded its active index from the selection and the combobox took ownership of the index without the seed. Also: focus lost to `<body>` after a mouse commit; the field unable to reopen on a click after a keyboard commit; the City sheet claiming nobody had published a location while the API had returned a full list; `aria-controls` dangling whenever the list was empty (the *common* case for a field you type into); and the acceptance's live region missing. **One finding was the tests** — `search-bar.test.tsx` and `hero-search.test.tsx` never stubbed `matchMedia`, so they were driving the bottom sheet, which is why a duplicate-`id` defect stayed green. Verified: `turbo run test/typecheck/lint/build --force` uncached (1803 web tests, 7 packages), `diff-reviewer`, and `browser-verifier` at 1440x900 across both densities and both auth states. **Found and deliberately not fixed here: city-filtered search has returned 500 since #332** (`function lower(us_state) does not exist`) — `apps/api` is untouched by this ticket; recorded in the detail section above. |
 
 ---
 
@@ -12196,4 +12214,1124 @@ last acceptance line asks for.
 - [x] A test over the `EmptyState` call sites asserting the glyph, so a tenth caller cannot
       be added without it
 - [x] A test that leaving a dirty profile form prompts, and that a clean one does not
+
+---
+
+<!-- Moved from the active tracker 2026-08-31 by the fourth `/cleanup-tickets` pass. -->
+
+### #11: Transactional Email Notifications
+
+**Milestone:** M6 | **Priority:** P2 Medium | **Status:** Done | **Capabilities:** `core` `auth` `email`
+**Blocked by:** #7 | **Can parallel with:** #12
+
+**User value:** As a user, the events I cannot afford to miss reach me by email, in the
+product's voice, with the one action I need.
+
+**The event set is not open to interpretation.** It is `NOTIFICATION_TYPES` in
+`packages/shared/src/constants` — the same enum the in-app notification centre uses. Email
+is a **subset** of it, decided per row below, so the two cannot drift.
+
+| Event | Emails whom | Why / why not |
+|---|---|---|
+| `new_request` | vendor | The one event where a slow reply loses the work |
+| `request_quoted` | customer | They are waiting on a number |
+| `request_accepted` | vendor | Their calendar is about to be committed |
+| `request_declined` | customer | Dead end; they need to search again |
+| `request_expired` | customer | The 48h window closed without a reply |
+| `request_cancelled` | vendor | Frees a held date |
+| `booking_confirmed` | both | Money moved and a date is locked |
+| `booking_completed` | customer | Carries the review prompt |
+| `booking_cancelled` | both | Money position must be stated explicitly |
+| `payout_sent` | vendor | Money arriving |
+| `stripe_onboarding_complete` | vendor | Unblocks taking payment |
+| `new_review` | vendor | Not time-critical, but it is about them |
+| `new_message` | **no email** | Per-message email is how a product teaches people to mute it. In-app only in MVP; a digest is post-MVP |
+
+**Brand comes from `BRAND_NAME`.** Every template reads it from
+`packages/shared/src/constants/brand.ts` — never a literal. The name has already moved
+twice and a stale hardcoded name in an email is worse than one in the UI, because it is
+archived in an inbox. (An earlier version of this ticket said "VenMatch branding"; that is
+exactly the failure the constant exists to prevent.)
+
+**Voice and content rules** come from `31-content-voice.md` and `40-states.md`:
+
+- Subject lines name the thing, not the system: *"June 14 is confirmed"*, not
+  *"Booking status update"*.
+- Every email that touches money **states the money position explicitly**, even when the
+  answer is "nothing was charged".
+- One primary action per email, as a button, pointing at the exact surface — never the
+  bare homepage.
+- No exclamation marks, no "Oops", no apology paragraphs.
+- US English per the spelling rule.
+
+**Scope:**
+
+- `apps/api`: a Resend-backed email service, layered route → service → DAO like everything
+  else, with one template per row above.
+- Integration into the existing service methods that already emit notifications — email
+  hangs off the same call site, so an event cannot notify in-app and not by email by
+  accident.
+- The booking-request expiry check (lazy, on vendor dashboard load) that produces
+  `request_expired`.
+
+**Behavioral requirements:**
+
+- Email is sent **after** the database operation commits, never inside its transaction.
+- **Email failure must not fail the operation** — log to Sentry and continue. A booking
+  that succeeded must not appear to fail because an email bounced.
+- Sending is idempotent per event: a retried operation does not double-send.
+- Templates render correctly at 390 / 768 / 1440 and in a plain-text fallback.
+- No email contains a platform statistic, per `98-post-mvp.md`.
+- No email makes a fee claim on a vendor surface, per the deferred fee language.
+
+**Non-goals:** per-message email for `new_message`; a digest; marketing or lifecycle
+campaigns; user-configurable notification preferences (that is #16's surface); SMS.
+
+**Edge cases:**
+
+- A user deleted in Clerk between the event and the send — skip, do not crash.
+- `booking_cancelled` reaching both parties must state the **same** refund figure in both.
+- An expired request that is expired lazily on dashboard load must email once, not once
+  per dashboard visit.
+- Resend outage: the operation still succeeds and the failure is visible in Sentry.
+
+**Acceptance:**
+
+- [ ] Every row in the table above sends (or deliberately does not send) exactly as specified
+- [ ] `new_message` sends **no** email
+- [ ] `grep` for a literal brand name in the email templates returns nothing — all read `BRAND_NAME`
+- [ ] Every money-touching email states the money position, including when nothing was charged
+- [ ] A forced send failure leaves the booking operation successful and logs to Sentry — tested
+- [ ] Emails are sent after commit, never inside the transaction
+- [ ] A retried operation does not double-send — idempotency tested
+- [ ] Lazy expiry emails once per request, not once per dashboard load
+- [ ] `booking_cancelled` shows an identical refund figure to both parties
+- [ ] Every template renders at 390 / 768 / 1440 and has a plain-text fallback
+- [ ] No template contains a platform statistic or a vendor-side fee claim
+
+---
+
+### #340: Playwright E2E harness and the eight critical-journey suites
+
+**Milestone:** M6 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core` `auth` `stripe`
+
+---
+
+## Landed 2026-08-31 — `55ae93f`, PR #74. Three of eight suites.
+
+**The harness is built and is not the deferred part.** `apps/web/playwright.config.ts`,
+`apps/web/e2e/` (role fixtures, base-url resolver, README), the `test:e2e` script, and
+three suites: route protection in both directions, booking request end to end, and
+messaging delivery. 15/15 green against a lane.
+
+### The five suites that are NOT built, and are NOT filed as their own rows
+
+**These need re-homing.** #370-#374 were taken by the third backlog consolidation while
+this ticket was in flight, and none of them covers this scope. Recorded here so it is not
+lost; whoever picks it up should file it properly.
+
+| Suite | Why it is not here |
+| --- | --- |
+| Admin | Needs the admin portal. **#15 is Backlog and unstarted.** This ticket's own body says the suite "lands with or after #15" — but the `Blocked By` cell only ever named #14, so the row advertised itself as fully workable. |
+| Vendor profile | Aimed at the editor #360 was rewriting the same night |
+| Search + discovery | Aimed at the surface #358 was rewriting the same night |
+| Payment | Stripe-hosted checkout and `stripe trigger` webhooks |
+| Reviews | Needs a completed-booking fixture that does not exist |
+
+Pinning selectors to a surface mid-rewrite guarantees churn, and a suite that breaks the
+morning after it lands teaches people to distrust the suite rather than the change.
+
+### CI wiring is absent and needs a human
+
+`ci.yml` runs on in-process PGlite with **placeholder Clerk keys** and never reaches
+Clerk's servers, so real-auth E2E cannot run there at all. It needs a development-instance
+`CLERK_SECRET_KEY` and the E2E account credentials added as **GitHub secrets** by the
+account holder. Until then `pnpm --filter @vendor-marketplace/web test:e2e` is a local
+gate, run through a lane.
+
+### Also unfiled: `.worktreeinclude` hands every lane a stale session
+
+`.worktreeinclude` copies `.auth/` into each new worktree from the main checkout, where it
+was minted against port 3000, and **nothing forces a regeneration** — so a lane inherits a
+session that is wrong for its port and usually expired, and drives every authenticated flow
+signed out while looking perfectly clean. `resolveBaseUrl` is *not* at fault; it resolves
+the lane port correctly (verified: regenerating in-lane rewrote origins to
+`http://localhost:3031`). Candidate fixes: drop `.auth/` from `.worktreeinclude`, and/or
+have `lane:up` run `e2e:auth`.
+
+**This ticket's fixtures already remove the silent half** — they assert the resolved
+pathname and Clerk's client state before yielding a page, so a stale file fails once with
+the regeneration command in the message. What remains is hygiene, not urgency.
+
+
+**Filed 2026-08-30 by lane 14**, split out of #14.
+
+**Current state, verified 2026-08-30:** the repo has **no `playwright.config.*`,
+no `e2e/` directory and no test-runner harness**. Playwright here is MCP-driven,
+for agentic browser verification by the `browser-verifier` and `parity-checker`
+agents — that is a different thing from a committed suite, and none of it is
+reusable as one. `pnpm e2e:auth` and the `.auth/` storage-state files
+(`.claude/rules/e2e-auth.md`) already exist and **are** reusable: agents never
+type a password, they load a role's storage state. The suites should do the same.
+
+**User value:** Every critical user journey is defended by a test that runs in
+CI, so a regression in booking, payment or messaging is caught before a human
+sees it.
+
+**Scope:**
+
+- `apps/web`: `playwright.config.ts`, an `e2e/` directory, and the `test:e2e` script
+- Eight suites covering the critical journeys
+- `@clerk/testing` for programmatic sign-in, reusing the `.auth/` storage state
+- Stripe test mode: `pm_card_visa`, and test webhook events via `stripe trigger`
+
+**Playwright E2E suites (8):**
+
+1. **Auth flow:** Sign up as customer, sign up as vendor, sign in, role-based redirects
+2. **Vendor profile:** Create profile, upload image, select tags, publish
+3. **Search + discovery:** Browse categories, apply filters, view vendor profile
+4. **Booking request:** Customer requests booking, vendor quotes, customer accepts
+5. **Payment:** Customer pays (Stripe test mode), booking confirmed
+6. **Messaging:** Send messages, verify real-time updates
+7. **Reviews:** Complete booking, leave review, verify rating update
+8. **Admin:** Ban user, moderate tag suggestion, view dashboard metrics
+
+**Behavioral requirements:**
+
+- `pnpm --filter web test:e2e` — all 8 suites pass, at the reference viewport (1440×900) plus 1024, 768 and 390
+- Suites select on the fixed UUIDs `seed:demo` derives (`demoVendorProfileId`), not on copy that a text change will break
+- A suite must fail loudly if a fixed UUID it selects on has drifted, rather than silently selecting nothing
+- Suite 8 needs the admin portal, so it lands with or after **#15**
+
+**Non-goals:** load or performance testing; visual-regression snapshots.
+
+**Acceptance:**
+
+- [ ] All 8 suites pass at 1440×900, and the responsive suites at 1024 / 768 / 390
+- [ ] Suites use the fixed UUIDs, not text selectors that copy changes will break
+- [ ] A drifted UUID fails the suite with a message naming the missing entity
+- [ ] Sign-in uses the stored `.auth/` state, never a typed password
+- [ ] The suites run against a `seed:demo` database, seeded by the harness
+
+**Blocked by:** #14
+
+---
+
+### #346: `/messages` keys threads by vendor, so one booking's question lands in another's thread
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-30 by lane 305**, carved out of #81 (item 3). #305 fixed #81's
+copy and markup findings; this one is a data-model change and does not belong in
+a compliance sweep.
+
+**Observed:** `/messages` lists one thread per vendor, subtitled with one
+arbitrary booking out of however many the customer has with them. A customer
+asking about their Jun 11 fundraiser sends the message into a thread the vendor
+reads as "Mar 15 birthday".
+
+**Expected:** a message about a booking is readable against that booking.
+
+**What already exists:** `conversations` carries a nullable `booking_request_id`
+and a `conversations_request_key` unique index, so the schema already permits a
+thread per request — `booking-requests.dao.ts` opens one on request creation.
+What is missing is the read path, the list grouping, and a rule for the
+vendor-initiated thread that belongs to no request (`conversations_customer_vendor_open_key`
+covers exactly that row).
+
+**Needs a ruling first:** how a customer with three bookings from one vendor is
+listed — three rows, or one row that opens to three. `18-messaging.md` draws a
+single list and does not answer it, so building either shape is a guess.
+
+**Acceptance:**
+
+- [ ] A message sent from a booking is read against that booking, by both sides
+- [ ] The list distinguishes threads that share a vendor
+- [ ] A vendor-initiated thread with no request still has somewhere to live
+- [ ] The ruling above is recorded in `99-open-questions.md` before implementation
+
+---
+
+### #15: Admin Portal
+
+**Milestone:** M6 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core` `auth`
+
+**Sentry moved out to #353 on 2026-08-30.** This ticket is the admin portal alone and needs no credential.
+
+**Design:** `design/design-plan/22-admin.md`. Frame: `13 Admin`.
+
+**Old-design debt:** these surfaces are new, so they are built on Orla tokens and the `03-components.md` vocabulary from the first commit — no `primary-*`, no brand literal, no inline hex. Any pre-Orla file this ticket edits in passing comes across whole rather than part-migrated; anything it cannot clear without leaving scope is named in the Notes column.
+
+**Orla screen `22` — admin:** an operations tool. Same typography and palette, **denser layout** — scannability beats airiness, and the whitespace moves to the gutters.
+- The header **inverts to `stone-900`** with a translucent "Admin" chip — an unmistakable signal you're on the ops side of the product. Sidebar 210px: Overview · Vendors · Customers · Bookings · Payments · Reviews (count) · Categories & tags.
+- Title row: "Vendors" (Serif 23px) with a count line in `stone-600` ("412 total · 38 awaiting review · updated 2m ago").
+- **Filter bar above the table, never a modal**: search input, the active saved filter as a `clay-400` filled button ("Awaiting review (38)"), Category / City / Payouts dropdowns, then "Export CSV" as a right-aligned ghost link.
+- Table: `bg-stone-0`, 1px `stone-300`, 12px radius, `overflow:hidden`. Header row `bg-stone-100`, 10.5px uppercase, **fixed**; the body scrolls internally; the page does not scroll. Rows 44px, zebra with `#FDFAF4`. Row-select checkbox first column, overflow menu last. Columns: Business · Category · City · Rating · Bookings · Status · actions, with the standard status pills — Live (sage), Review (gold), Flagged (clay), Paused (stone).
+- **Fifteen rows fit at 1440×900. Count them against the real header height before claiming a number** — a table that promises eighteen and clips three is a bug, and this was the most common defect in design review.
+- Bulk actions appear only when rows are selected. Overview: four metric cards then Recharts line charts colour-coded by meaning — revenue gold, bookings clay, users steel, completion sage. Every destructive action goes through an AlertDialog naming the consequence.
+
+**User value:** Platform operator has a control plane for oversight.
+
+**Scope:**
+- `apps/api`: Admin route group (`/admin/*`), admin service + DAOs, ban middleware
+- `apps/api`: Tag moderation routes — `GET /admin/tag-suggestions` (list pending), `PUT /admin/tag-suggestions/:id` (approve/reject)
+- `apps/web`: Admin layout, dashboard (metrics + charts), vendor/user/booking/review management pages, category management
+- `apps/web`: Tag moderation page — list pending suggestions with vendor name, suggested tag, category. Actions: Approve (creates tag in `tags` table, sets `resolved_tag_id`, notifies vendor), Reject (with optional admin note), Merge (link to existing similar tag). Shows approved/rejected history.
+- `apps/web`: Tag management — view all active tags by category, deactivate tags, edit display names, reorder
+- `packages/db`: Migration for `is_banned`, `banned_at` columns
+
+**Behavioral requirements:**
+- Only `role = 'admin'` can access admin routes → others get 403
+- Dashboard: total revenue, bookings, active vendors, users, signups, charts (30 days), pending tag suggestions count
+- Ban → `is_banned = true`, auto-cancel confirmed bookings with refunds, unpublish profile
+- Unban → `is_banned = false`, vendor must re-publish manually
+- Review deletion → recalculate vendor avg_rating + review_count
+- Tag approve → creates new active tag in `tags` table, auto-assigns to the suggesting vendor, updates suggestion status to `approved`
+- Tag reject → updates suggestion status to `rejected`, stores admin note
+- Tag merge → if suggestion is near-duplicate of existing tag, link suggestion to existing tag, auto-assign vendor to that tag
+- Tag deactivate → soft-remove from selection UI, existing vendor associations preserved but hidden from search
+- **Design parity gate** — the built screen matches its frame in `design/Orla - Screens.dc.html` at 1440×900, verified in a real browser with Playwright per the parity procedure in `design/design-plan/04-laws.md`. Then the desktop review checklist in the same file, then the adaptation checklist at 1280px / 768px / 390px in `design/design-plan/30-responsive.md`
+
+**Tag moderation implementation details:**
+
+`GET /admin/tag-suggestions?status=pending&page=1`:
+- Returns suggestions with vendor name, suggested tag name, category, created_at
+- Filterable by status (pending/approved/rejected), sortable by created_at
+
+`PUT /admin/tag-suggestions/:id` — actions via `{ action, adminNote? }`:
+- **approve**:
+  1. Generate slug: `${category}-${slugify(suggestedName)}` (lowercase, strip non-alphanumeric)
+  2. Check `tags` table for slug collision → if collision, reject with note "A similar tag already exists: [existing tag name]"
+  3. Check `tags` table for `(category, lower(name))` match → if match, treat as merge (see below)
+  4. **DB transaction:** Insert new `tags` row (isActive=true, displayOrder=max+1), insert `vendor_tags` row for suggesting vendor, update suggestion (status=approved, resolved_tag_id, resolved_at, admin_note)
+  5. Create notification for vendor: "Your tag suggestion '[name]' has been approved"
+- **reject**:
+  1. Update suggestion: status=rejected, resolved_at=now(), admin_note (required for rejection)
+  2. No notification (avoid discouraging future suggestions)
+- **merge** (suggestion matches an existing tag):
+  1. Admin selects existing tag to merge into
+  2. Update suggestion: status=approved, resolved_tag_id=existing tag id, resolved_at, admin_note="Merged with [existing tag name]"
+  3. Insert `vendor_tags` row linking suggesting vendor to the existing tag (ON CONFLICT DO NOTHING)
+  4. Create notification: "Your suggestion '[name]' matched our existing tag '[existing name]' — it's been added to your profile"
+
+Tag management page:
+- Table grouped by category, showing: name, slug, vendor count (from `vendor_tags`), isActive, displayOrder
+- Actions: edit display name (updates name + regenerates slug), toggle isActive, drag to reorder (updates displayOrder)
+- Deactivate: soft-disable — tag hidden from picker UI, existing `vendor_tags` rows preserved (vendors keep their tags, but tag won't appear in search filters). Show confirmation with vendor count.
+
+**Ban implementation details:**
+- `PUT /admin/users/:id/ban` — **DB transaction:**
+  1. Set `is_banned = true`, `banned_at = now()` on users table
+  2. If vendor: set `is_published = false` on vendor_profiles
+  3. Find all `bookings` where this user is customer or vendor AND status = `confirmed` AND event_date > today
+  4. For each: cancel booking, process refund via Stripe, create notifications
+  5. Revoke Clerk session: `clerk.users.revokeSession(clerkUserId)` or ban via Clerk API
+- `PUT /admin/users/:id/unban` — set `is_banned = false`, `banned_at = null`. Vendor must manually re-publish.
+
+**Edge cases:**
+- Admin self-ban → rejected (check `actorId !== targetId`)
+- Delete only review → `avg_rating` resets to 0, `review_count` = 0 (derived from source data via `SELECT AVG/COUNT`)
+- Ban mid-payment → any PENDING/QUOTED/ACCEPTED requests auto-declined, CONFIRMED bookings cancelled with full refund
+- Zero data state → zeros and "No data" empty states across all dashboard widgets
+- Approving a tag with a name that now conflicts (another admin approved a similar one) → slug collision check on `tags` unique index, reject with note
+- Deactivating a popular tag → confirmation dialog shows "This tag is used by X vendors. Deactivating will hide it from the tag picker but won't remove it from existing vendor profiles."
+- Concurrent admin actions on same suggestion → first wins (check status=pending before applying action)
+
+**Non-goals:** cohort/retention analytics, automated flag triage, vendor quality scoring
+and bulk messaging — all post-MVP.
+
+**Acceptance:**
+
+- [ ] A non-admin gets **403** on every `/admin/*` route — asserted per route
+- [ ] An admin cannot ban themselves (`actorId !== targetId`)
+- [ ] Ban sets `is_banned`, auto-declines PENDING/QUOTED/ACCEPTED requests, cancels CONFIRMED bookings **with full refund**, and unpublishes the profile — all asserted
+- [ ] Unban clears the flag but does **not** auto-republish; the vendor must publish manually
+- [ ] Deleting a review **recomputes** `avg_rating`/`review_count` from source rows; deleting the last one yields 0 / 0
+- [ ] Tag approve creates an active tag, auto-assigns the suggesting vendor, and marks the suggestion `approved`
+- [ ] Tag reject stores the admin note; tag merge links to the existing tag and assigns the vendor
+- [ ] Tag deactivate hides it from the picker and from search while preserving existing associations
+- [ ] Deactivating a tag used by N vendors shows a confirmation naming N — a real count, read at request time
+- [ ] A slug collision on approve is rejected with a note, not silently merged
+- [ ] Concurrent actions on one suggestion: first wins, second is rejected on a `status = pending` check
+- [ ] Zero-data state renders zeros and "No data" across every dashboard widget — no blank panes
+- [ ] **Fifteen rows fit at 1440 × 900** — counted against the real header height, not assumed
+- [ ] Table header is fixed, the body scrolls, and the page does not
+- [ ] Sentry captures unhandled errors with user context, and payment errors are tagged critical
+- [ ] Every status uses the shared pill vocabulary from `03-components.md`
+- [ ] **Design parity gate** against frame `13 Admin` at 1440×900, then 1280 / 1024 / 768 / 390
+
+**Blocked by:** #12, #14
+
+---
+
+### #332: `state` becomes a closed vocabulary, from the form to the column
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+Merges **#330 and #331**, whose detail sections carry the measurements and the rulings this
+was built from and stay on the board as `Superseded`.
+
+**Why one ticket.** #330 put the vocabulary in `createVendorProfileSchema` and repaired the
+data; #331 constrained the column. #331's own text calls itself *"the layer below #330, not a
+duplicate"* — and it is right that a validation layer eleven of twelve writers happen to pass
+through is a convention, not a guarantee. But it also states that it must run **after** #330's
+repair, because a constraint added while `Austin/Texas` still exists fails on exactly the row
+that motivated the ticket. Split, this ships two migrations against one column and leaves the
+column unconstrained in between; the intermediate state has no standalone value.
+
+**The defect, measured in the dev database rather than inferred:**
+
+```
+    city    | state | count
+------------+-------+-------
+ Austin     | TX    |    11
+ Austin     | Texas |     1
+ Buda       | TX    |     2
+ Oakland    | CA    |     1
+ Round Rock | TX    |     2
+```
+
+`findVendorCities` (`vendor-profile.dao.ts:174`) derives the picker with `GROUP BY city, state`
+over published profiles — deliberately, so the control can only offer places that have
+vendors. That design is right and does not change; it faithfully reproduces whatever the
+profiles hold, so a dirty column becomes a dirty picker, and `vendor-search.dao.ts:89` then
+filters `lower(state) = lower(?)` into two disjoint result sets.
+
+**It widens with every new vendor.** `apps/web/src/lib/us-states.ts` holds **full names**, and
+its own comment says *"Display data only — the column is a plain `varchar`"*. The 11 `TX` rows
+are seed data; every vendor who saves through the editor today writes `Texas`. The majority
+value is the one nothing produces any more.
+
+**Canonical form is the two-letter USPS code**, ruled 2026-08-30: it is what most rows already
+hold, what the card and frames `02`/`17`/`27` draw, a fixed-width token that cannot be
+half-typed, and it leaves the editor's dropdown as the single place a code→name map is read.
+Full names invert that — one free surface, four needing a map — and carry variants
+(`District of Columbia` / `Washington DC`) that codes do not.
+
+**Prefer the enum over a `CHECK`**: it is the pattern the schema already uses for closed
+vocabularies (`tag_category`, the status enums), it shows up in `db:studio` as a picker, and
+`type-parity.test.ts` already has a place to hold it to the shared constant. A `CHECK` is
+acceptable if the enum's migration cost is judged too high — say which was chosen and why.
+
+**City is deliberately scoped down.** A true "only real cities" guarantee needs a US city
+dataset — which one, how it is kept current, what happens to a vendor in a town it omits.
+**That is not this ticket.** City becomes *consistent* (trimmed, internal whitespace collapsed,
+punctuation-only rejected) and stays free text. What makes the bug fixable without a dataset is
+that the duplication is entirely in `state`.
+
+**Watch `vendor_profiles_city_state_idx`** (`vendor-profiles.ts:82`) — it is on the pair being
+rewritten, so confirm the search plan still uses it after the repair. Do not hand-edit
+`packages/db/drizzle/`; edit the schema and regenerate.
+
+**Non-goals:** a validated city dataset; geocoding, `latitude`/`longitude` or
+`serviceRadiusKm`; changing how `findVendorCities` derives the picker.
+
+**Acceptance:**
+
+- [ ] A `US_STATE_CODES` constant in `packages/shared/src/constants` is the single list, and
+      `createVendorProfileSchema.state` is an enum over it with a message naming the field
+- [ ] `POST /vendor/profile` and the update route reject `Texas`, `texas` and `Republic of
+      Texas` with a 400, and accept `TX`
+- [ ] The editor's State dropdown still shows full names and stores the code; `us-states.ts`
+      derives its labels from the shared list rather than restating them
+- [ ] City is trimmed and internal whitespace collapsed on write; a city of only punctuation
+      or whitespace is rejected
+- [ ] `vendor_profiles.state` **cannot hold** a value outside the 51 codes — proven by an
+      insert that is rejected, not by reading the DDL
+- [ ] The constraint is generated from the shared constant, so the two cannot drift
+- [ ] The migration runs the data repair **before** the constraint, in that order, and leaves
+      **one** `Austin` row in the dev-database clone with **12** vendors, no profile losing
+      its state
+- [ ] `GET /vendors/cities` returns one Austin entry, and a search for it returns all 12
+- [ ] `pnpm db:seed` and `db:seed:e2e` write codes and still run clean against the
+      constrained column
+- [ ] A decision is recorded for `users.state` (`users.ts:35`, also `varchar(100)`, a
+      customer's own location rather than a search axis) — either way, not silently
+
+**Tests (required):**
+
+- [ ] A schema test rejecting the full name and the lowercase code and accepting the code,
+      asserting the **message**, not just the failure
+- [ ] A route test that `POST /vendor/profile` with `state: 'Texas'` is a 400 and writes no row
+- [ ] A test asserting the rejected insert — the constraint stated at the database boundary
+      rather than the Zod one
+- [ ] A migration test seeding an `Austin/Texas` and an `Austin/TX` profile, running the
+      repair, and asserting one pair and both vendors survive; plus confirmation that the
+      constraint **fails** against an unrepaired clone rather than assuming it would
+- [ ] A `findVendorCities` test over both spellings asserting a single row with the summed
+      count — the defect stated as a test
+- [ ] `type-parity.test.ts` holds the enum's values to the shared constant, matching how
+      `tagCategoryEnum` is already guarded
+- [ ] A test that every `US_STATE_CODES` entry is two uppercase letters and the list has 51
+      members, so DC cannot be dropped silently
+
+---
+
+### #357: Apply the D16/D17 rulings — the four code sites the frames now expect
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+Merges **#327, #335, #339, #342, #348, #350**.
+
+**Why one ticket.** All six were `Deferred — needs a human` until D16 and D17 answered them
+on 2026-08-30, with the `design-plan/` edits landed in the same pass — five of the six were
+*filed* that same day, by the lanes that closed #302, #305 and #329, and never had a chance
+to start. What each had left was code, and for three of them the
+"code" was a correction to `design/Orla - Screens.dc.html` — which is why they were batched
+here in the first place: that file holds all 27 frames and **is** the parity acceptance
+criterion, so lanes editing it concurrently conflict on the one artifact every other ticket
+is measured against.
+
+**That half is now done** — the user landed the six frame corrections on 2026-08-30 as
+`72ddd73`, recorded in `design/design-plan/CHANGE-ORDER-2026-08-30.md`. **The sequencing
+reason for this ticket has therefore expired, and #358 is no longer behind it.** What is
+left is four code sites and one guard test, and they are independent of each other.
+
+**The frame corrections — done.** Landed 2026-08-30 from the user's updated copy of the document; `design/design-plan/CHANGE-ORDER-2026-08-30.md` records them and the plan edits that followed. The table stays as the record of what changed, not as work:
+
+| Frame | Correction | Ruling |
+| --- | --- | --- |
+| `01 Landing` (+ 1024) | City segment drawn empty in the **placeholder** tone `#6B6459`, not the literal `Austin, TX` in `#23201C`. The vendor-type segment matches it. The hero **badge** "Now booking in Austin" is unaffected | D16-A (#327) |
+| `02 Search` (+ 1024) | The gold `2 dates left` and sage `Free Jun 14` chips come off the result cards; the stone `New` chip stays | D16-B, C (#324) |
+| `12 Sign up` | Primary action reads `Create my account` — the plan already said so | D16-6 (#313) |
+| `16 500` | Secondary CTA reads `Browse vendors` → `/search` | D17 (#350) |
+| `18 Search no results` (+ 1024) | Its two gold chips become the sage **nearby-date** form, which is the one place the chip survives | D16-B, C (#324) |
+
+**The code sites, all named in the rulings:**
+
+- `avatar.tsx:17` — `FALLBACK_TONES` takes the new `--color-clay-150: #eadccb`. The frames
+  draw that fill at **42 sites across 20 frames**; the ramp had no step between `clay-100`
+  (`#F7E7E0`) and `clay-200` (`#EFD8CC`), and the clay initials and the whole sage pair
+  already resolved exactly, so the fill was the one off-token value. **The ramp was
+  incomplete, not the frame wrong** — the same finding as #306 (#342)
+- `vendor-card.tsx:149` and `profile-header.tsx:199` — a published vendor with no
+  `coverImageUrl` gets a **`stone-250` (`#ECE6DC`) block at the cover's exact 3:2 and the
+  card's own radius, with nothing inside it**: no hatch, no monospace label, nothing
+  addressed to a developer. `stone-250` was **minted for this** by D18 on 2026-08-30,
+  between `stone-200` and `stone-300`; the hatch stripes stay `stone-200`/`stone-300`, and
+  frame `26 State library` now carries the two-tile **Missing cover photo** group showing
+  the live block beside the hatch, the hatch marked *never on a public page*. The hatch is a build-time device
+  for photography the *product* lacks; a live vendor's empty cover is *their* missing
+  content shown to *their* customers. The cause and the fix stay in the editor, which is
+  **#360**, not on the page their customers read (#348)
+- `error-screen.tsx:74` — href and label (#350)
+
+**#327 is frame-only and #339 is verification-only.** The hero code already renders all
+three segments empty in the placeholder tone, which is what D16 ruled correct; `Most
+relevant` already ships and D16 confirmed it stands. Both close on evidence, not edits.
+
+**Non-goals:** the rest of frames `01` and `02` (closed by #296 and #297); the `New`
+badge's implementation, which is **#358**; the cover *upload* control, which is **#360**.
+
+**Acceptance:**
+
+- [x] ~~Every frame in the table above is corrected~~ — **landed 2026-08-30 as `72ddd73`**,
+      by the user, across frames `01`, `02`, `09`, `16`, `18`, `26` and their 1024 variants.
+      46 frames unchanged. This ticket does **not** edit `Orla - Screens.dc.html`
+- [ ] The four code sites render what their rulings say, verified in a browser
+- [ ] A published vendor with no cover renders the **`stone-250`** block on **both**
+      `/search` and `/vendors/[slug]`, and the labelled hatch appears on **no** live public
+      surface
+- [ ] **Frame `03`'s sage chip is left alone.** The change order is explicit that it stays —
+      a profile is not a filtered result — and that only its *reasoning* changed. Removing it
+      here would be the failure mode this ticket exists to avoid
+- [ ] `#327` and `#339` are closed with the evidence that no code change was needed — not
+      with a change made to look like one
+- [ ] `parity-checker` returns MATCH on frames `01`, `02`, `12`, `16` and `18` afterwards
+
+**Tests (required):**
+
+- [ ] The guard D16 asked for: **no approved string in `31-content-voice.md` hard-codes a
+      duration the code derives.** Same shape as `one-deadline-one-fee.test.ts`, pointed at
+      the plan rather than the app. It is the only thing that would have caught the 48-hour
+      row, since the file is prose nothing imports
+- [ ] A token test that `clay-150` exists and that `FALLBACK_TONES` resolves to defined
+      ramp steps only — the gap #333 generalises
+- [ ] A test that a vendor with `coverImageUrl: null` renders no monospace placeholder
+      label on either public surface, asserted by role or text rather than by class
+
+---
+
+### #358: 02/17/18 Search — close 1440 parity and the two reachability defects
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** In Progress | **Capabilities:** `core`
+**Blocked by:** None — **unblocked 2026-08-30**; frames `02` and `18` now draw what this is
+measured against (`72ddd73`, `CHANGE-ORDER-2026-08-30.md`). Still **must not run concurrently
+with #323**, which owns `search-shell.tsx` and `refine-bar.tsx` at 1024.
+
+Merges **#324, #326, #337, #347**. One route, three states, one browser pass.
+
+**Done 2026-08-31 — squash `8e9208d`, PR #75.** All five closed: the availability chip
+deleted from result cards (a deletion, not a condition — `freeDate` now comes only from an
+explicit `freeOnDate`, so **sage survives on the nearby-dates band** and `searchedDate` is
+retired); `preview` added to `VendorCard` **and consumed** — `storefront-preview.tsx`'s
+`<div inert>` from #360 is gone, and its test got stronger for it, because jsdom implements
+`inert` as an attribute only and the old assertion owed its real proof to a browser pass;
+the clipped focus ring fixed **as a class** with layout-neutral headroom (`app-pane` is
+`overflow-y: auto`, and `availability-calendar.tsx` had already paid 1px off a 44px target
+for the same clip); the compact bar's three measured values against frames `17`/`18`; and
+the count row off the no-results state, keeping the cleared-params live region, with
+`?page=2` clamping to page 1 rather than drawing an empty pane under a heading claiming the
+full count.
+
+**Local gate, all output read:** `pnpm typecheck` 7/7 · `pnpm lint` 8/8 with no warnings ·
+`pnpm build` 5/5 · `pnpm test --force` **7 tasks, 0 cached, 3074 tests** · `format:check`
+clean. Vercel went green on this PR — the earlier reds were the account-wide build cap.
+
+**Owed, and not claimed as done: `diff-reviewer` and `parity-checker` were started and
+stopped before either reported**, because the session was told to stop. So frames `02`,
+`17` and `18` have **not** been re-measured against this diff, and no adversarial read of it
+exists. The unit suite covers the behaviour — including the chip's survival on the band and
+the absence of any anchor in the preview — but **the six-axis parity gate is unmet and
+should be run before this surface is trusted.** #367 already owns frame `18`'s remaining
+gaps and is the natural place to pick that up.
+
+**Why one ticket.** #326's measurements say its compact-header fix *"lands on `/search` at
+every state"* — it is the shared `SearchBar`, so frames `17` and `18` are the same pass.
+#337 was found there, #347's blank page 2 is reached from it, and #324's code touches
+`vendor-card.tsx`, which all three states render. Split, this is four serial passes on one
+shared Playwright browser for one route.
+
+**#324 is now a deletion, not a feature.** D16 dropped the gold chip — `03-components.md`
+said "gold when scarce" and never defined scarce, and the threshold is an invented number —
+**and dropped the sage chip from the results grid**, because a dated query is already
+filtered on availability: `vendor-search.dao.ts` hard-codes `availableOnDate: true` on every
+row of one and says so in its own comment. The chip was a tautology. **Sage survives only**
+on the "free on a nearby date instead" band (`nearby-dates-band.tsx`), where it names a
+*different* date than the one searched and is the only thing that unsticks a dead-end query.
+The stone `New` chip is a **joined-recently badge** — vendor published within the last 30
+days — and becomes the only chip a search card carries.
+
+**The compact header bar**, measured at 1440×900 in Chromium during #297's pass. Frame
+`02`'s header is ruled stale by **#57**, so these are against `17`/`18`:
+
+| Element | Frame | Live |
+| --- | --- | --- |
+| Bar padding | `0 5px 0 18px` | `0 4px 0 16px` |
+| Segment value | 13px / 500 | 13.5px / 400 |
+| Segment inner padding-left | 16px | 14px |
+
+**The empty state's glyph sits 59px low** because a count row renders above it: `0
+photographers in Marfa`, the `free on …` clause and `Prices are what they charge — no quotes
+needed` occupy y=118–173, where frame `18` opens directly into `padding:44px 26px`. The
+glyph lands at y=**221** against the frame's y=**162**. The description's `line-height` is
+21.6px against the frame's `13.5px/1.65` = 22.28px — and `--leading-prose` is global at 1.6,
+so this is a **per-call-site override, not a token change**.
+
+**The focus-ring clip, measured by pixel-differencing** a focused card against a blurred
+one: `div.app-pane` is the `overflow:auto` scroller and carries **no top padding**; its
+content-box top is `y=173` and the first result row starts at exactly `y=173`, so the ring's
+top 4px (`ring-2` + `ring-offset-2`) is clipped. Rows 169–172 are identical
+`rgb(248,245,239)` in both and the first differing pixel is at `y=173`. **WCAG 2.4.7 holds**
+— the ring still paints left, right, bottom and corners, so this is a partial clip, not the
+"clipped to nothing" failure `04-laws.md` describes. That is why it is P2. **Fix the class,
+not the instance:** any `overflow` scroller whose first focusable child sits flush against
+its content box has it.
+
+**Pagination.** `/search?page=2` returns HTTP 200 with a blank results pane while the `h1`
+still claims the full count. `pageSize=20` against 17 vendors means nothing is lost today —
+which is why this is Medium, and why it stops being true the moment the marketplace grows.
+Frame `02` draws no pagination, so the **control's shape** is undecided; the **out-of-range
+page** is unambiguous and lands regardless.
+
+**Known and owned elsewhere — do not re-file:** the `Free on a nearby date instead` band and
+`See all 14 in the region →` (**#50**), the wordmark at 24px against 23px (**#118**), the
+1024 composition (**#323**), the `Anywhere` relaxation and the second `Clear all` — neither
+string is in frame `18` or `31-content-voice.md`, and `Clear all` duplicates the Refine
+bar's own `Clear` on the same screen, so **record it as an open wording question rather than
+inventing copy**.
+
+**Acceptance:**
+
+- [ ] The gold and sage availability chips are gone from the results grid; sage survives on
+      the nearby-dates band only, naming the nearby date
+- [ ] The `New` chip reads a real published-at within 30 days, at request time — never a
+      hard-coded flag, and never a threshold invented here
+- [ ] The empty state draws no count row above it, so its glyph lands where frame `18` puts it
+- [ ] The compact header bar matches frames `17`/`18` on all three measurements
+- [ ] The empty-state description carries the frame's 1.65 **without** moving `--leading-prose`
+- [ ] A focused first-row card's ring is unclipped on all four sides, proven by the same
+      pixel-difference method rather than by a computed-style read
+- [ ] Every other scroll container in the app is checked for the same shape, and what was
+      found is recorded — **including "none" if that is the answer**
+- [ ] An out-of-range page renders an empty state whose heading agrees with its body, and the
+      heading never claims a count the pane does not show
+- [ ] `parity-checker` returns MATCH on frames `02`, `17` and `18`, or names only #50, #118
+      and the recorded wording question
+
+**Tests (required):**
+
+- [ ] A test per chip state driven by the DAO's real output rather than a hand-built prop,
+      **including that a dated query renders no availability chip on the grid** — the ruling
+      stated as a test
+- [ ] A test that a vendor with no availability data draws no chip at all
+- [ ] Parity assertions reading the header bar's three values out of frame `17` at test time,
+      so `02`'s stale header cannot be picked up by mistake
+- [ ] A test that the no-results state renders without the count row, asserting the absence
+      **by role**, not by class
+- [ ] A test asserting an out-of-range page's heading agrees with its body
+- [ ] The focus-ring assertion needs a real browser, or must assert the class-level fact and
+      say so — **jsdom performs no layout**, so a geometry assertion there passes on the
+      broken version
+
+---
+
+### #360: 09 Vendor storefront editor — cover, preview rail, nav and the unsaved-work guard
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Done | **Capabilities:** `core` `storage` `stripe`
+**Blocked by:** None
+
+Merges **#299, #338, #349**. #299 in turn merges **#137, #138, #140, #141, #152, #257, #258,
+#288**, with **#288 leading** because it unblocks #137, which was stuck on a design contract
+that contradicted itself about the cover field.
+
+**#338 is a duplicate.** "The section nav carries `Payouts` and its gold dot" is already
+acceptance line 5 of #299, filed there as #140. It was re-filed on 2026-08-30 by lane 329
+from a different parity pass, which is exactly the failure mode a consolidated backlog
+exists to prevent. **#349 is the same route's form.**
+
+**D16 settled the field question** (#335-D, and D12 had already answered it): `Your line` and
+`Years in business` are **relocated, not deleted**. Both are the only editing surface for
+content frame `03` displays — #298 moved the tagline into the identity card and
+`yearsInBusiness` is read by the public profile — so deleting the editor without deleting the
+display leaves content nobody can change.
+
+**Acceptance:**
+
+- [ ] The media row is a 128px circle profile photo beside a **216×144, 3:2** cover drop zone
+      reading *"Drop a photo or browse · landscape · 1200×800 or larger"*. The `21:9, 1600×686
+      min` ask is retired (#288), and the drop zone missing entirely today exists (#137)
+- [ ] **There is no separate profile-banner field** — one file, two placements, per #287
+- [ ] The card preview is a **308px right-edge rail** at ≥1024 (`stone-100`, `stone-300` left
+      border) with a mono `PREVIEW` label, "Updates as you type", an **In search / Your
+      profile** toggle and the real card at full size, and **no link out**. 280px at 1280, a
+      panel above the fields at 768, a bottom sheet at 390 (#288)
+- [ ] `Your line` and `Years in business` are **relocated** per D16, and the eight helper
+      strings that came with the removed fields go (#152) — every remaining string traces to
+      the frame or to `31-content-voice.md`
+- [ ] **Frame `09`'s section nav is re-measured in full before any code change.** The pass
+      that found the missing entry was scoped to the Tags row and read the rest only in
+      passing, so the order, the dot's exact token and whether the other six match are all
+      unverified. Live renders **six** items — Business, Location, Tags, Response time,
+      Packages, Portfolio — where the frame draws **seven**
+- [ ] The nav renders every item the frame draws, in the frame's order, with `Payouts` last
+- [ ] The blocker dot reads the vendor's **real** Stripe onboarding state — no invented status
+      — and is **gold, never red**: payouts not yet set up is waiting on someone, not a
+      failure (`40-states.md`). Payouts exists as a surface, since #9 shipped Connect
+      onboarding, so this is a missing nav entry rather than a missing feature
+- [ ] The form pane is inside its scroll budget (#141)
+- [ ] The slug preview shows the URL the router actually serves — no extra path segment, no
+      vanity URL that 404s (#257)
+- [ ] The submit bar says when the storefront was last saved (#258)
+- [ ] A dirty form prompts on **Back and trackpad swipe**, or the reason it deliberately does
+      not is recorded. `useUnsavedChangesGuard` covers `beforeunload` and a capture-phase
+      click intercept; **a history navigation is neither** — `beforeunload` does not fire for
+      a same-document one and `popstate` arrives *after* the entry changed, so the only block
+      is a decoy entry re-pushed on every `popstate`, which corrupts the stack the user is
+      walking and breaks a second Back. Next's App Router exposes no supported blocking API.
+      **Covering it badly is worse than the gap** — #305 left it uncovered deliberately and
+      said so in the hook's own contract
+- [ ] Whatever lands does not leave the history stack in a state a second Back handles
+      wrongly, and the hook's contract comment matches what it actually covers
+- [ ] `parity-checker` returns MATCH on all six axes at **1440 / 1024 / 768 / 390**
+
+**Tests (required):**
+
+- [ ] A test that the slug preview and the route resolve to the same URL — the defect is a
+      disagreement between two places, so assert the **agreement**, not either side
+- [ ] A parity assertion reading the nav label list **and its order** out of the frame at test
+      time, so a reordering fails rather than passing on set equality
+- [ ] A test that the payout dot follows real onboarding state in both directions
+- [ ] Parity assertions read from the frame at test time, at all four viewports
+
+---
+
+### #368: A failed search is indistinguishable from an empty one
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+Filed 2026-08-30 from #357's `browser-verifier` pass, found incidentally while the API
+rate limit was deliberately exhausted to reach the 500 screen.
+
+`apps/web/src/components/search/search-shell.tsx:171` swallows the failure with a bare
+`.catch(() => {})`. With the API returning 429 for every request, `/search` rendered the
+**ordinary empty-result heading** — `0 vendors` — with **no error state and nothing in the
+console**. Nothing anywhere on the page distinguished "the search backend is down" from
+"nobody matches your filters".
+
+**This is the same class of defect #357 just closed on the coverless block:** an internal
+condition rendered to the customer as ordinary product copy. There it was a developer's
+hatch on a public page; here it is a backend outage dressed as a legitimate result. It is
+worse than the hatch, because the hatch at least looked wrong.
+
+**It also defeats verification.** A browser pass driving `/search` against a broken API sees
+a clean, plausible page and reports it green. Any agent verifying search results can be
+lied to by this branch, which is why it is P1 despite being a rare state.
+
+`40-states.md` is the governing law and gives the answer: **steel is information, gold is
+waiting on someone, red is failure, sage is settled.** The failed branch currently draws
+none of them — it draws the empty state, which is not a failure at all.
+
+**Check the sibling call sites in the same pass.** A bare `.catch(() => {})` in one data
+path usually has company; find the others before deciding the shape of the fix, so this is
+closed as a class rather than as one line.
+
+**Acceptance:**
+
+- [ ] A failed search renders a real failure state — red per `40-states.md`, distinct from the empty-result state in wording and colour
+- [ ] The failure is legible in the console as well as on the page, so a browser pass cannot mistake it for a clean render
+- [ ] Every other bare `.catch(() => {})` in the web app's data paths is found and either fixed or explicitly justified in a comment
+- [ ] The empty-result state is unchanged for a genuinely empty search
+
+**Tests (required):**
+
+- [ ] A test that a rejected search request renders the failure state and **not** the empty-result heading — the two branches must assert different text
+- [ ] A test that a resolved-but-empty search still renders the empty state, so the fix does not collapse the two
+- [ ] A guard test that no new bare `.catch(() => {})` appears in `apps/web/src`, in the shape of the existing source-scanning guards
+
+---
+
+### #373: Design-system completion — token scale, undefined-step guard, and the caret override
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+Merges **#333, #364, #369**.
+
+**Why one ticket.** All three are one sweep over `packages/config/tailwind/theme.css` and
+`apps/web/src`, and all three are only finished when a **guard** closes the class. That is
+the shape: `stone-800` was noticed and fixed locally **twice** and never generalised; the
+caret was re-filed as a regression **twice** (#228, #338) because no assertion recorded
+the override; the 44x44 law went unchecked because nothing in the repo tests it. A fix
+without a guard here is a fix that gets re-found.
+
+**1. The undefined-step trap (#333) — the largest half.** `theme.css` defines the warm
+stone ramp as `stone-0 / 50 / 100 / 150 / 200 / 300 / 400 / 500 / 600 / 700 / 900`. There
+is **no `stone-800`** — and Tailwind 4 still resolves `text-stone-800`, to its own built-in
+**cool** `stone`, `#292524`. It compiles, renders, and puts an off-palette colour on the
+page with no error, no build warning and nothing in the suite able to notice. The same
+hole is open on `gold`, `steel`, `clay` and `sage`.
+
+Seven live sites, re-verified 2026-08-30: `app/suspended/page.tsx:17`,
+`components/uploads/upload-tile.tsx:99`, `components/tags/tag-category-section.tsx:65`,
+`components/packages/package-manager.tsx:191,262`,
+`components/packages/package-form.tsx:204,312`.
+
+**2. The scale remainder (#333).** The `text-[Npx]` line-height defect on the `h1`, the
+card `h3` and the price span; the radius scale's missing **12px step** (`theme.css:203-207`
+runs 6/8/10/14/18) and the 69 frame call sites that need it; avatar initials never
+rendering Instrument Serif below the 16px floor at any of the five sizes.
+
+**3. The caret override (#364) — a user ruling, not a parity finding.** The `▾` / `▴`
+disclosure caret comes off **every** dropdown trigger, 12 render sites, listed in #364's
+detail section with file and line. The frames draw it and `42-dropdowns.md` specifies it;
+**the user overrides both and is correcting the frames themselves.** Two sites need care:
+`bookings-refine-chips.tsx:99,115` builds the caret **into the label string**, so removing
+it changes the accessible name and the **six** assertions in `bookings-hub.test.tsx`
+(lines 200, 201, 354, 426, 427, 449) are part of the deliverable. Every trigger keeps
+`aria-expanded` and stays visually identifiable as a control; no trigger is left with a
+stray empty span or padding reserving space for a glyph that is gone.
+
+**4. Two rulings to settle (#369).** `placeholder.tsx` is dead code —
+`grep -rn "<Placeholder"` returns nothing — but `.placeholder-hatch` is still used by
+`image-upload.tsx`. Keep it as an editor-only primitive with a rule banning it from public
+surfaces, or retire the component and keep the utility. And: `button[aria-label="Search"]`
+measures **32x32** against `04-laws.md`'s 44x44 minimum, which frames `02`/`18` and
+`11-search.md`'s compact-bar ruling all contradict at 30-32px. One has to give; whichever
+it is, **the deliverable includes the check**.
+
+**Non-goals:** adding a `stone-800` token to the ramp — `01-foundations.md` sets the ramp
+and this is not a ticket's to extend; the two absent frame colours (**#306**, a ruling);
+the category chip on `vendor-card.tsx:216` (nobody asked for it to go); editing
+`Orla - Screens.dc.html` or `42-dropdowns.md` (the user is correcting those).
+
+**Acceptance:**
+
+- [ ] Every `stone-800` call site resolves to a defined token — `stone-900` for ink,
+      `stone-700` for body text, decided **per site by what the surrounding frame draws**,
+      not by a blanket swap
+- [ ] A guard fails when any `(text|bg|border|ring|fill|stroke)-<family>-<step>` class in
+      `apps/web/src` names a step `theme.css` does not define. It **reads the theme**, so a
+      token added later needs no edit here
+- [ ] The guard covers arbitrary-value classes, or its own comment says it does not and why
+- [ ] The `text-[Npx]` line-height defect is closed on the `h1`, card `h3` and price span
+- [ ] The radius scale carries a **12px step** and the frame call sites use the token
+- [ ] Avatar initials never render Instrument Serif below the 16px floor, at any of the five sizes
+- [ ] No dropdown trigger in `apps/web/src` renders `▾` or `▴`, at any state, on any surface,
+      verified in a browser at 1440x900 on the landing hero's three segments
+- [ ] Every trigger keeps `aria-expanded`; the segments **re-measure** rather than just
+      losing a character
+- [ ] `.claude/plans/vendor-marketplace-decisions.md` records the caret as a **user override
+      of the design contract**
+- [ ] The `Placeholder` question and the 32x32-vs-44x44 conflict are both ruled, recorded,
+      **and enforced by a check**
+- [ ] No inline hex, width or radius is introduced anywhere the sweep touches
+
+**Tests (required):**
+
+- [ ] The undefined-step guard, with a fixture proving it **fails** on a fabricated
+      off-ramp class. A scanner never shown to fail is not a guard
+- [ ] A guard that fails on a raw `text-[Npx]` without a paired line-height
+- [ ] A token test that the radius scale has exactly the documented steps
+- [ ] A test that no dropdown trigger's rendered text contains `▾` or `▴` — the override
+      stated as an assertion, so a later parity pass restoring it from the frame goes red
+- [ ] The six updated `bookings-hub.test.tsx` assertions, naming the new accessible name
+      explicitly rather than loosened to a substring match
+- [ ] A test that each converted trigger still exposes `aria-expanded` in both states
+- [ ] A test enforcing whichever `Placeholder` ruling is taken
+- [ ] A test asserting the minimum target size the ruling settles on
+
+---
+
+### #15 parity — four rulings the frame owes, measured 2026-08-31
+
+Frame `13 Admin` vs `/admin/vendors?status=review` at 1440x900, measured **three
+times** by `parity-checker`, each pass re-measuring the last one's fixes rather
+than trusting them. That is the load-bearing part of the method: pass 2 found
+that three of pass 1's fixes had not landed and two had introduced new defects,
+and pass 3 found that two of pass 2's had landed their stated target and left a
+measurable residue. A fix is not a fix until something measures it again.
+
+Colour, font and text match outright — 83 text nodes checked for contrast with
+zero failures (minimum 4.83:1), every literal compared as codepoints, and both
+ambiguous glyphs (U+00B7, U+2026) verified by hexdump on each side. Six deltas
+are **left open on purpose**, because in each the frame disagrees with a written
+law rather than the code disagreeing with the frame — and `04-laws.md` says
+design passes edit the plan, tickets write the code.
+
+| # | The delta | The two sides |
+| --- | --- | --- |
+| **D18** | **Status pill geometry.** Frame `.pill` draws `700 10px`, `padding 5px 10px` (23px tall). `StatusPill` draws `text-xs` (11px), `px-2.5 py-1.5` (26px tall). | `03-components.md` specifies the component **exactly as built** — `text-xs font-bold tracking-[.07em] uppercase px-2.5 py-1.5 rounded-full` — and #15's own acceptance criterion is "every status uses the shared pill vocabulary **from `03-components.md`**". So the code follows the criterion and the frame follows neither. The pill is on every screen in the product; changing it is a system change, not a console one. |
+| **D19** | **Table radius.** Frame draws `border-radius: 12px` on the table card. The radius scale steps `6 · 8 · 10 · 14 · 18`, and `--radius-xl: 14px` is annotated "cards, panels". | 12px is not a step. Either the card takes `radius-xl` (built) or the scale gains a sixth step — which is #373's territory (token-scale completion), not a console ticket's. |
+| **D20** | **Rail item height.** Frame `.nav` is 34px tall with no gap (pitch 34). Live is 44px with a 4px gap (pitch 48), so item 7 sits 84px lower. | 44px is `04-laws.md`'s hit-area floor, and the rail is seven navigation targets. The frame's 34px cannot satisfy it. `VendorNav` made the same call for the same reason. |
+| **D21** | **The row-select target is 22px wide.** `04-laws.md` asks 44x44 of an icon-only control; the checkbox has 44px of height and **22px of width**, because that is the frame's own track for that column. | A 44px-wide target there would overlap the business name. Either the law carves out a control that has a label (this one does — "Select <business>"), or the frame's first track widens. |
+| **D22** | **The row-select box is 14px, the frame's unchecked box is 16.6px.** Frame draws 14px of content plus a 1.3px border in a content-box document (16.6px outer); live is `size-3.5` + `border-[1.3px]` in border-box (14px outer, 11.4px of content). | The frame is **internally inconsistent here**: its *checked* box is 14x14 with no border, so it draws a checked box smaller than its unchecked one. Live is consistent at 14 and matches the frame's checked state. Distinct from D21, which is the 22px *track*, not the box. |
+| **D23** | **The search field has no visible `<label htmlFor>`.** `04-laws.md:141` — "every input has a visible label; placeholder is not a label". The field carries `aria-label` and a placeholder; `input.labels.length === 0`. **The frame draws no label either.** | `03-components.md:139` even specifies the label treatment (10.5px / 600 / .05em / uppercase / `stone-600`), so the law has an answer ready — but adding it changes the Refine bar's vertical composition, which is a frame change. Frame-versus-law, exactly like D18–D21, and not resolvable by a ticket. |
+
+Two more measured facts, recorded so nobody re-derives them:
+
+- **Fifteen rows do not quite fit, and the frame's own do not either.** The pane
+  gives 670px of row area (704 scroller − 34 header); 15 rows at the frame's own
+  45px pitch need 675. The frame's pane is 672 — **3px short of its own claim**,
+  and its 15th row is clipped by `overflow:hidden`. Live is 5px short, and the
+  15th row is *reachable by scrolling* rather than clipped, which is the failure
+  the criterion actually names ("a table that promises eighteen and clips three
+  is a bug"). `ADMIN_PAGE_SIZE = 15` guarantees a page never holds more.
+- **The pager and the bulk bar were each costing rows.** Both were moved — the
+  pager into the title row, the bulk bar to float over the table with scroll
+  padding beneath it — and both are recorded because the obvious placement for
+  each is the one that breaks the row count.
+- **The pager still costs 6px, not the "nothing" the code claimed.** Pass 3
+  measured it: the `nav` is 25px against the heading's 30px box, but it is
+  `self-center` inside a baseline-aligned wrapper whose top is pinned by the
+  count line, so the title row grows 30 → 36 and the pane goes from 5px short of
+  fifteen rows to 11px short. All fifteen stay reachable, so the criterion
+  holds. **Left unfixed deliberately** and the comment in `admin-surface.tsx`
+  corrected instead: the alignment there has already been broken twice by fixes
+  aimed at one pixel of baseline, and 6px of pane buys nothing.
+- **The bulk bar's scroll padding was 7px short of its own arithmetic.** The bar
+  is `bottom-4` (16px) and 55px tall, so 71px of clearance is needed; `pb-16`
+  gave 64. Row 15's two 44px controls sat 5px under the bar — the glyphs were
+  visible, so it read as fixed, but `elementFromPoint` returned the bar and both
+  hit targets were really 39px. `pb-20`, with the three numbers written down
+  together so the next person to move the bar moves the padding.
+- **An app-wide contradiction, surfaced here and belonging to #373.**
+  `04-laws.md:135` and `03-components.md:125` both specify the unbordered-control
+  ring as `ring-2 ring-clay-400/40`; `globals.css:153` implements
+  `ring-clay-400/30`, and every ring in the product resolves to `/30`. One of the
+  two is wrong. Not a frame-`13` finding — judged against `/30` here — but it is
+  a single-line divergence between the plan and the implementation of the focus
+  ring on every screen.
+
+---
+
+### #375: Search entry — a filtering combobox for `Vendor type`, a typeahead input for `City`
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None. **Coordinate with #373** — it removes the `▾` caret from
+`category-select.tsx:197` and `city-select.tsx:116`, the same two triggers this ticket
+rebuilds. Whichever runs second inherits the other's shape; **do not run them concurrently**.
+
+**Filed 2026-08-31 on the user's explicit instruction**, verbatim:
+
+> *"Ensure in the tickets you fix the search for vendor type/city — it should allow typing
+> that appears directly in the input and matching text appears in the category type
+> dropdown, and the city should literally be an input, where the validated city appears as
+> clickable for a user. Not a scrollable dropdown for city since cities can vary
+> drastically. Category should have a dropdown with all categories but as a user types the
+> dropdown should be filtered with each input."*
+
+**This is a user override of the design contract, like #364 — record it as one.** Decision
+D6 and `design/design-plan/42-dropdowns.md` deliberately deleted the category filter field
+(*"eleven categories fit on one screen, and a filter box on a list that short is friction
+rather than help"*, `category-select.tsx:19-23`) and deliberately made city a select
+(*"'Springfield' names a place in thirty-odd states"*, `city-select.tsx:13-22`). Both
+comments are the reasoning for the current shape, and both are now overridden. **The
+reasoning was not wrong, and the override does not discard what it protected** — see the
+invariant below. The frames draw the old shape; the user is correcting them.
+
+**The invariant that survives, and it is the whole design of this ticket.** The committed
+query value is still a **category slug or empty**, and still a **real `(city, state)` pair
+or empty**. Typing is an *input affordance*; it is never a query term. A customer who types
+`photograhpy` and walks away has selected nothing, and the field shows nothing selected. The
+law it protects is unchanged: *the query can only ever ask a question the platform can
+answer*, so the result-count sentence can always name the category truthfully and the empty
+state can always say why. **A free-text city that reaches the API as a filter is a
+regression, not this ticket.**
+
+## Current state, verified 2026-08-31
+
+| | |
+| --- | --- |
+| `apps/web/src/components/search/category-select.tsx` | 204 lines. Renders `SingleSelectDropdown` over `categories` plus a leading `Any vendor type`. Trigger is a `button` showing `selected?.name`. No text input anywhere. `VISIBLE_ROWS = 7` drives the panel's "N more" note |
+| `apps/web/src/components/search/city-select.tsx` | 123 lines. Same, over `GET /vendors/cities` (`vendors.routes.ts:72`), option value `` `${city}|${state}` ``, each row hinted with a real `vendorCount` |
+| `apps/web/src/components/ui/dropdown.tsx` | The shared primitive: `Dropdown`, `DropdownList`, `DropdownRow`, `DropdownScrollNote`, `useRowHeight`. **This is where a filter belongs if it is shared** |
+| `packages/shared/src/schemas/index.ts:1307` | `city: z.string().trim().max(MAX_NAME_LENGTH).optional()` — already a string, so **no schema change is needed** for the city half |
+| `vendorCitySchema` | `index.ts:1493`, `{ city, state, vendorCount }` |
+
+**Both fields render at two densities** — `hero` (landing) and `compact` (the `/search`
+header). Every change lands in both, and the frames draw them at different sizes.
+
+## Scope
+
+- `apps/web/src/components/search/category-select.tsx` — becomes a **combobox**
+- `apps/web/src/components/search/city-select.tsx` — becomes a **typeahead input**
+- `apps/web/src/components/ui/dropdown.tsx` / `dropdown-select.tsx` — whatever filtering,
+  active-descendant and keyboard behaviour is shared, factored **once**. Two bespoke
+  comboboxes that drift apart is the failure mode
+- `design/design-plan/42-dropdowns.md` and `.claude/plans/vendor-marketplace-decisions.md` —
+  record the override and the surviving invariant
+- Tests, per the list below
+
+**Non-goals:** the `Event date` segment (`search-bar.tsx`); the Refine bar's chips
+(`refine-bar.tsx`) — this ticket is the three hero/compact query segments' first two only;
+any new API, index or data source — both lists are already served; fuzzy or phonetic
+matching; a remote city geocoder; reinstating the "did you mean" recovery (#167 removed it
+and nothing here brings it back); editing `Orla - Screens.dc.html` (the user is correcting
+the frames).
+
+## Behavioral requirements — `Vendor type`
+
+- The trigger is a **text input**, not a button. Typed characters appear **in the input
+  itself**, immediately, with no delay and no separate filter box inside the panel
+- Focusing or clicking it opens the panel showing **every** category, plus the leading
+  `Any vendor type` row — the full list is the default, exactly as today
+- Each keystroke filters the list. Match on the category **name**, case- and
+  diacritic-insensitive, substring anywhere in the name — not prefix-only, because
+  "film" must find "Photo & film"
+- The short descriptions from `CATEGORY_SEEDS` stay as row hints and are **not** matched
+  against; matching visible label text only is what makes the filtering explicable
+- Zero matches renders the panel's empty state naming what was typed, not a blank panel
+- **Selection is the only thing that changes the query.** Choosing a row fills the input
+  with that category's name and commits the slug. Typing alone commits nothing
+- **Blur with uncommitted text reverts the input to the committed value** — the selected
+  category's name, or the `Any vendor type` placeholder. The input never persists a string
+  that is not a real selection
+- `Any vendor type` remains the way to empty the field and stays at the top of the
+  unfiltered list
+
+## Behavioral requirements — `City`
+
+- **Literally an input.** It does **not** open a list of every city on focus. Cities vary
+  too much for a scroll list to be the affordance — that is the user's stated reason and it
+  is the difference from the category field
+- Suggestions appear as the customer types, from the first character, drawn from
+  `GET /vendors/cities` and matched on the **city name** — and additionally on the state
+  code when the typed text contains a comma (`Austin, TX`)
+- Each suggestion is **clickable**, reads `City, ST`, and keeps its real `vendorCount` hint.
+  That hint is a query result, not a platform statistic, and the no-invented-numbers law
+  keeps it legal
+- Suggestions are capped and ordered: **exact prefix matches first, then substring matches,
+  then by `vendorCount` descending**; render at most 8 and say how many more matched
+- **Only a clicked or keyboard-selected suggestion commits.** `city` and `state` still
+  travel together as a pair; a typed string that matches no suggestion commits nothing and
+  the field reverts on blur
+- Clearing the input to empty commits `Anywhere` — the pair becomes `('', '')`
+- A customer whose typing matches nothing sees a panel saying so, naming what they typed —
+  **this is the case the old select could not produce and is the reason the select existed.**
+  It is now reachable, so it must be answered in copy rather than by an empty panel
+
+## Accessibility — not optional, and the reason to factor this once
+
+Both fields become `role="combobox"` with `aria-expanded`, `aria-controls`, and
+`aria-activedescendant` pointing at the highlighted option; the panel is `role="listbox"`
+and rows are `role="option"` with `aria-selected`. `aria-autocomplete="list"`.
+
+- `ArrowDown` / `ArrowUp` move the active option and **do not** move the text caret
+- `Enter` commits the active option; `Escape` closes and reverts to the committed value;
+  `Tab` closes, commits nothing new, and reverts
+- The active option is always scrolled into view
+- Every trigger keeps `aria-expanded`. **#373's rule holds: removing the caret must not cost
+  the control its legibility as a control** — these are now inputs, which carry their own
+  affordance, but the fill and border stay
+- Screen-reader users learn the filtered count when it changes (a polite live region), which
+  is the one thing a sighted user gets for free from the shrinking list
+
+## Edge cases
+
+- **Diacritics.** `San Jose` finds `San José` and the reverse. Normalise both sides
+- **Duplicate city names across states.** `Portland` matches two rows; both render, each
+  naming its state. This is exactly the case `city-select.tsx:13-22` was written to protect,
+  and the suggestion list protects it because **selection, not typing, is what commits**
+- **A category name that is a substring of another.** Filtering must not collapse them
+- **Paste.** A pasted value filters identically to typing, in one update
+- **IME composition.** Do not filter mid-composition; wait for `compositionend`, or the
+  first keystroke of a multi-byte input empties the list
+- **The list arrives late.** `GET /vendors/cities` is a fetch; typing before it resolves must
+  not commit, drop keystrokes, or show "no matches" when the truth is "not loaded yet"
+- **A committed city that leaves the list** — its last vendor unpublishes — still renders as
+  the field's value; it is not silently blanked mid-session
+- **Deep link / back button.** A URL carrying `?category=&city=&state=` still rehydrates both
+  inputs to their committed labels
+
+## Acceptance
+
+- [ ] `Vendor type` is a text input whose typed characters appear in the input, filtering an
+      open panel that starts as the **full** category list with `Any vendor type` leading
+- [ ] `City` is a text input that opens **no** list on focus and shows clickable, validated
+      `City, ST` suggestions as the customer types, each with its real vendor count
+- [ ] Neither field ever commits a value that is not a real category slug or a real
+      `(city, state)` pair; blur, `Escape` and `Tab` all revert uncommitted text
+- [ ] A typed string matching nothing produces a panel that **names what was typed**, in
+      both fields
+- [ ] Both fields work at `hero` and `compact` densities and are driven in a browser at
+      1440x900 at both
+- [ ] Full keyboard operation: arrows move the active option without moving the caret,
+      `Enter` commits, `Escape` reverts, and the active option is scrolled into view
+- [ ] `role="combobox"` / `listbox` / `option` with `aria-activedescendant` and
+      `aria-expanded` on both
+- [ ] The shared filtering and keyboard behaviour lives in **one** place, not duplicated
+      across the two components
+- [ ] `42-dropdowns.md` and `.claude/plans/vendor-marketplace-decisions.md` record this as a
+      **user override**, naming the invariant that survives it — validated commit values —
+      so the next parity pass reads it as accepted rather than re-filing it
+- [ ] `parity-checker` is re-run on frames `01`, `02`, `17` and `18`, and every delta it
+      reports against the two segments is recorded as **this override**, not as a regression
+- [ ] No inline hex, width or radius is introduced; no `primary-*`, no brand literal
+
+## Tests (required)
+
+- [ ] Category: typing `film` leaves `Photo & film` in the list and removes non-matching
+      categories — asserted on rendered rows, not on internal state
+- [ ] Category: typing a string that matches nothing renders the empty state **containing
+      that string**
+- [ ] Category: typing then blurring commits **nothing**, and the input reads the previously
+      committed label
+- [ ] Category: selecting a row commits the **slug**, asserted on the `onChange` payload
+- [ ] City: focus alone renders **no** suggestion list — the assertion that pins the user's
+      distinction between the two fields, so a later refactor cannot quietly make them the same
+- [ ] City: typing `aus` renders `Austin, TX` as a clickable option carrying its vendor count
+- [ ] City: selecting commits the `(city, state)` **pair**; typing a non-matching string and
+      blurring commits neither half
+- [ ] City: two same-named cities in different states both render, each naming its state
+- [ ] Diacritic normalisation, both directions
+- [ ] Keyboard: `ArrowDown` + `Enter` commits the first option; `Escape` reverts; the caret
+      does not move on arrows
+- [ ] An a11y test asserting `role`, `aria-expanded` and `aria-activedescendant` on both
+      fields in both states
+
 ---
