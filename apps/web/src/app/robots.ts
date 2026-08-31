@@ -10,6 +10,11 @@ import { siteOrigin } from '@/config/env';
  * budget on a site whose growth depends on vendor profiles being indexed.
  */
 const PRIVATE_PATHS = [
+  // The operations console. Every URL under it already 403s or redirects for a
+  // stranger, and the layout sets `robots: { index: false }` — this is the
+  // crawl-budget half, and the rule above says "everything a signed-in person
+  // sees", which includes an operator.
+  '/admin',
   '/vendor/',
   '/customer/',
   '/dashboard',

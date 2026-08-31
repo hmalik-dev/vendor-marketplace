@@ -459,14 +459,13 @@ describe('the selected chip’s label is clay, not stone (#147)', () => {
   });
 
   /*
-   * `stone-800` is not a step in this theme's ramp at all — it defines
-   * stone-0/50/100/150/200/300/400/500/600/700/900 — so the old class fell
-   * through to Tailwind's default cool stone, which is why it measured as a
-   * neutral `oklch(0.268 0.007 34.298)` rather than any token in this theme.
+   * The original defect: `text-stone-800` on the selected chip, at a time when
+   * this theme's ramp had no 800 step — so the class fell through to Tailwind's
+   * default *cool* stone and measured `oklch(0.268 0.007 34.298)` rather than
+   * any token here. The chip is clay, and that is what it must stay.
    */
-  it('stops using a stone step this theme never defines', () => {
+  it('stops painting the selected chip with a stone step', () => {
     expect(pickerSource).not.toContain('text-stone-800');
-    expect(themeCss).not.toContain('--color-stone-800:');
   });
 });
 

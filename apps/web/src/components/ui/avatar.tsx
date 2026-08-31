@@ -61,6 +61,12 @@ export type AvatarSize = keyof typeof AVATAR_SIZES;
 const GLYPH_FRACTION = 0.42;
 
 const GLYPH_SIZES: Partial<Record<AvatarSize, number>> = {
+  /*
+   * Frame `13 Admin` sets `font-size:13px` on the header's 30px circle. The
+   * fraction would give 12.6, and the console's is the only `xs` any frame
+   * measures — so it is pinned rather than left to round.
+   */
+  xs: 13,
   sm: 13,
   /*
    * Frame `07`'s message rows set `font-size:13px` on a 32px circle. The
@@ -142,12 +148,24 @@ export function Avatar({
   className,
 }: AvatarProps): React.ReactElement {
   const pixels = AVATAR_SIZES[size];
+  /*
+   * `className` is deliberately **not** folded in here.
+   *
+   * `cn` is tailwind-merge: the later of two conflicting classes wins. Folding
+   * the caller's `className` into `shared` and then appending
+   * `FALLBACK_TONES[...]` in the fallback branch below put the tone last, so a
+   * caller's `bg-*`/`text-*` override vanished from the rendered class list
+   * entirely. Frame `13`'s inverted header avatar came out clay-on-cream — the
+   * brightest element on a near-black bar — with no warning anywhere.
+   *
+   * Every branch now appends `className` last, which is what makes an override
+   * an override.
+   */
   const shared = cn(
     // `box-border` keeps the ring inside the declared size, so an avatar
     // occupies its declared width whether or not it is ringed.
     'box-border inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full',
     ring && AVATAR_RINGS[ring],
-    className,
   );
 
   if (src) {
@@ -160,7 +178,7 @@ export function Avatar({
         alt={name}
         width={pixels}
         height={pixels}
-        className={cn(shared, 'object-cover')}
+        className={cn(shared, 'object-cover', className)}
         style={{ width: `${pixels}px`, height: `${pixels}px` }}
       />
     );
@@ -171,7 +189,12 @@ export function Avatar({
       role="img"
       aria-label={name}
       data-slot="avatar-fallback"
-      className={cn(shared, 'font-display leading-none', FALLBACK_TONES[avatarToneIndex(name)])}
+      className={cn(
+        shared,
+        'font-display leading-none',
+        FALLBACK_TONES[avatarToneIndex(name)],
+        className,
+      )}
       style={{ width: `${pixels}px`, height: `${pixels}px`, fontSize: `${glyphSize(size)}px` }}
     >
       {initialsFor(name)}

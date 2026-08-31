@@ -25,6 +25,17 @@ Still on `preHandler` with an enum in a _request_ schema, as of 2026-08-30:
 in the public `/vendors/:slug/availability` response; both sets are literals in
 the web bundle), so they were left as low-severity rather than fixed.
 
+The operations console (#15, `modules/admin/admin.routes.ts`) repeats the shape
+on a **privileged** plugin: the four mutating routes correctly use
+`requireRoleBeforeValidation('admin')` on `onRequest`, but every `GET` and the
+`DELETE` stay on `preHandler: requireRole('admin')`. Reproduced 2026-08-31 with a
+standalone Fastify + `fastify-type-provider-zod` app: an anonymous
+`GET /admin/vendors?status=bogus` answers
+`400 {"details":[{"params":{"values":["live","review","flagged","paused"]}}]}`
+where a well-formed request answers 401. The plugin's own
+`it('refuses every admin route without a session')` passes because it injects no
+query string — the suite's guarantee is narrower than it reads.
+
 **How to apply:** don't re-report those two as blockers. Do require
 `requireAuthBeforeValidation` on any _new_ guarded route whose request schema
 would describe something not already public — internal enums, id-shape hints, or

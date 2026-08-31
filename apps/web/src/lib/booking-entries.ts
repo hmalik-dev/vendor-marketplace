@@ -2,6 +2,7 @@ import {
   EVENT_TYPE_LABELS,
   expiryCountdown,
   formatPrice,
+  type BookingStatus,
   type EventType,
 } from '@vendor-marketplace/shared';
 import type { StatusTone } from '@/components/ui/status-pill';
@@ -56,13 +57,27 @@ export const REQUEST_PRESENTATION: Record<
   expired: { label: 'Expired', tone: 'inert', settled: true },
 };
 
-const BOOKING_PRESENTATION: Record<string, { label: string; tone: StatusTone; settled: boolean }> =
-  {
-    confirmed: { label: 'Confirmed', tone: 'confirmed', settled: false },
-    completed: { label: 'Completed', tone: 'completed', settled: true },
-    cancelled: { label: 'Cancelled', tone: 'inert', settled: true },
-    disputed: { label: 'Disputed', tone: 'failed', settled: true },
-  };
+/**
+ * How a booking status is worded and toned, everywhere it is shown.
+ *
+ * Exported for the same reason the request map beside it is: the customer hub,
+ * the request detail screen and the admin console all render these statuses,
+ * and a second table of labels is how those come to disagree — the console
+ * briefly drew `cancelled` red where the customer saw it grey, and `disputed`
+ * clay where the customer saw it red.
+ *
+ * `settled` is only meaningful to the hub's grouping; the console reads the
+ * label and the tone and ignores it.
+ */
+export const BOOKING_PRESENTATION: Record<
+  BookingStatus,
+  { label: string; tone: StatusTone; settled: boolean }
+> = {
+  confirmed: { label: 'Confirmed', tone: 'confirmed', settled: false },
+  completed: { label: 'Completed', tone: 'completed', settled: true },
+  cancelled: { label: 'Cancelled', tone: 'inert', settled: true },
+  disputed: { label: 'Disputed', tone: 'failed', settled: true },
+};
 
 function occasionOf(eventType: string | null): string | null {
   if (!eventType) {
@@ -153,11 +168,7 @@ export function bookingToEntry(
   vendorName: string,
   categoryName: string | null = null,
 ): BookingEntry {
-  const presentation = BOOKING_PRESENTATION[booking.status] ?? {
-    label: booking.status,
-    tone: 'inert' as StatusTone,
-    settled: true,
-  };
+  const presentation = BOOKING_PRESENTATION[booking.status];
 
   return {
     id: booking.id,

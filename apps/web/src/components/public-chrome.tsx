@@ -4,12 +4,24 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 /**
+ * The operations console. One constant, read by both predicates below — see
+ * `isAdminRoute` for why they must agree.
+ */
+const ADMIN_PREFIX = '/admin';
+
+/**
  * Route prefixes that are the application rather than the marketplace's public
  * face. They own the whole viewport: a full-height pane layout and a marketing
  * footer underneath it are incompatible, because the footer's height is what
  * makes the *page* scroll when only the panes are supposed to.
  */
-const APP_ROUTE_PREFIXES = ['/bookings', '/customer', '/messages', '/vendor/'] as const;
+const APP_ROUTE_PREFIXES = [
+  ADMIN_PREFIX,
+  '/bookings',
+  '/customer',
+  '/messages',
+  '/vendor/',
+] as const;
 
 /**
  * The one application screen that does not live under an application prefix.
@@ -35,6 +47,31 @@ export function isAppRoute(pathname: string): boolean {
       (prefix) => pathname === prefix.replace(/\/$/, '') || pathname.startsWith(prefix),
     )
   );
+}
+
+/**
+ * The console, which is an app route **and** replaces the header rather than
+ * only the footer.
+ *
+ * Both predicates read `ADMIN_PREFIX` so the two answers cannot drift: the
+ * console briefly counted `/administrators` as an app route (prefix test) but
+ * not as an admin route (segment test), which would have drawn the marketplace
+ * header with no footer under it.
+ */
+export function isAdminRoute(pathname: string): boolean {
+  return pathname === ADMIN_PREFIX || pathname.startsWith(`${ADMIN_PREFIX}/`);
+}
+
+/**
+ * Renders its children everywhere except the console.
+ *
+ * The console draws its own inverted header (frame `13`), and `SiteHeader`
+ * lives in the root layout above every route — so this removes it here rather
+ * than threading a `showHeader` flag through every layout in between, which is
+ * the same argument `PublicChrome` makes for the footer.
+ */
+export function OutsideAdmin({ children }: { children: ReactNode }): React.ReactNode {
+  return isAdminRoute(usePathname()) ? null : children;
 }
 
 /**

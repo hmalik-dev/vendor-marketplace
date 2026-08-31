@@ -7,7 +7,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { CLERK_COPY } from './clerk-copy';
 import { siteOrigin } from '@/config/env';
-import { PublicChrome } from '@/components/public-chrome';
+import { OutsideAdmin, PublicChrome } from '@/components/public-chrome';
 import { SiteFooter } from '@/components/site-footer';
 import { SearchStatusProvider } from '@/components/search/search-status';
 import { SiteHeader } from '@/components/site-header';
@@ -118,7 +118,14 @@ export default function RootLayout({
               and read by the query bar in the header. See `search-status.tsx`.
             */}
             <SearchStatusProvider>
-              <SiteHeader />
+              {/*
+                The operations console draws its own inverted header (frame
+                `13`), so the marketplace one is removed there rather than
+                stacked above it. Same argument as `PublicChrome` below.
+              */}
+              <OutsideAdmin>
+                <SiteHeader />
+              </OutsideAdmin>
               <main id="main" tabIndex={-1} className="flex-1">
                 {children}
               </main>

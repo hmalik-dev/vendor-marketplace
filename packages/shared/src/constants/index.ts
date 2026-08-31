@@ -418,6 +418,14 @@ export const NOTIFICATION_TYPES = [
   'new_review',
   'payout_sent',
   'stripe_onboarding_complete',
+  /*
+   * Admin moderation (#15). Approving and merging both land here: the
+   * vendor's suggestion became a real tag on their profile either way, and
+   * only the body differs. A rejection deliberately sends nothing —
+   * notifying somebody their idea was turned down discourages the next one,
+   * and the admin note is recorded for the queue rather than for them.
+   */
+  'tag_suggestion_approved',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -892,6 +900,23 @@ export const REVIEW_PAGE_SIZE = 10;
 
 /** Default page size for vendor search and most list endpoints. */
 export const DEFAULT_PAGE_SIZE = 20;
+
+/**
+ * The admin console's page size, and the reason it is not `DEFAULT_PAGE_SIZE`.
+ *
+ * `22-admin.md` states it as an acceptance criterion — "**Fifteen rows fit at
+ * 1440 × 900.** Count them against the real header height before claiming a
+ * number — a table that promises eighteen and clips three is a bug." The
+ * console's table is 44px rows in a pane that measures ~700px once the header,
+ * title row and Refine bar are taken out, so fifteen is what fits.
+ *
+ * Setting it here rather than trusting the layout makes the count a property of
+ * the **data**: a page can never carry more rows than the pane can show, so the
+ * clipping the criterion warns about is unreachable rather than merely
+ * unobserved. The pane still scrolls internally, which is what absorbs the
+ * pager and the narrower viewports.
+ */
+export const ADMIN_PAGE_SIZE = 15;
 /** Message history loads in larger pages than list endpoints. */
 export const MESSAGES_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 100;
