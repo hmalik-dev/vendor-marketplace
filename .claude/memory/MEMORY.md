@@ -15,6 +15,7 @@
 - [Ad-hoc work commits as one](adhoc-work-single-commit.md) — don't isolate unrelated changes; the commit hook blocks on a dirty tree
 - [Production API is intentionally down](production-api-intentionally-down.md) — Railway service removed on purpose; `Application not found` is expected, not an outage
 - [Vercel deployment URL](vendor-marketplace-vercel-deployment.md) — web-gules-eta-41.vercel.app follows `production`, not `main`; parity is checked against localhost
+- [Demo deployment is deferred](demo-deployment-deferred.md) — render.yaml and docs/demo.md are on main and current, but deliberately not stood up until the queue and MVP are done
 - [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; the tracker is the durable queue
 - [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; the Neon URL that leaked still needs rotating
 - [Global config repo: claude-workflow](claude-workflow-config-repo.md) — ~/.claude is git-tracked in a private repo; its .gitignore is deny-by-default
