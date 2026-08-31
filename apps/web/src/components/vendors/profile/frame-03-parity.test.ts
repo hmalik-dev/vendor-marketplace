@@ -443,11 +443,21 @@ describe('frame 03 — the rail pairs Event date with Guests above Package (#107
   });
 
   it('renders both fields, in the frame order, above the package', () => {
-    expect(at(railSource, '>\n              Event date\n            </Label>')).toBeGreaterThan(-1);
+    /*
+     * Matched whitespace-insensitively.
+     *
+     * These were exact strings carrying their own indentation --
+     * `'>\n              Event date\n            </Label>'` -- so wrapping the
+     * rail's JSX in a fragment for #371's bottom bar reindented the file by two
+     * spaces and the assertion failed on a change that did not touch field
+     * order at all. The order is the contract; the indentation is Prettier's.
+     */
+    const labelled = (text: string): number =>
+      railSource.search(new RegExp(`>\\s*${text}\\s*</Label>`));
+
+    expect(labelled('Event date')).toBeGreaterThan(-1);
     expect(at(railSource, 'Guests')).toBeGreaterThan(at(railSource, 'Event date'));
-    expect(at(railSource, '>\n              Package\n            </Label>')).toBeGreaterThan(
-      at(railSource, 'Guests'),
-    );
+    expect(labelled('Package')).toBeGreaterThan(at(railSource, 'Guests'));
   });
 
   it('splits the row at the frame ratio and gap', () => {
@@ -502,8 +512,26 @@ describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
     const fill = tokenFor(declaration(rule, 'background'));
 
     expect(fill).toBe('stone-150');
-    expect(railSource).toContain(`bg-${fill}`);
-    expect(railSource).not.toContain('bg-stone-0 px-');
+
+    /*
+     * Asserted on the `FIELD_BOX` constant rather than on the whole file.
+     *
+     * The old form was `railSource).not.toContain('bg-stone-0 px-')`, a
+     * whole-file string search standing in for "no control is filled with the
+     * card colour". It stopped meaning that the moment the file gained a second
+     * surface: #371's 768 bottom bar is legitimately `bg-stone-0 px-6`, and the
+     * guard failed on a *correct* change while still not actually checking the
+     * controls. Reading the declaration the controls share says what was meant.
+     *
+     * `FIELD_BOX` rather than `FIELD`: the type step was split out so the bar
+     * could take the frame's 13.5px without losing to `text-[13px]` on source
+     * order. The box -- and with it the fill this asserts -- stayed put.
+     */
+    const field = /const FIELD_BOX =\s*\n?\s*'([^']*)'/.exec(railSource)?.[1];
+
+    expect(field).toBeDefined();
+    expect(field).toContain(`bg-${fill}`);
+    expect(field).not.toContain('bg-stone-0');
   });
 
   it('pads and rounds them to the frame', () => {

@@ -1,10 +1,26 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BRAND_NAME, ERROR_CODES, type ServicePackage } from '@vendor-marketplace/shared';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BookingRail } from './booking-rail';
+
+/**
+ * The rail proper, not the 768 bottom bar.
+ *
+ * `BookingRail` renders both compositions from one component (#371) -- the card
+ * at `lg` and up, the pinned bar below it -- because they share the chosen
+ * package, the chosen date and the message request in flight. jsdom applies no
+ * CSS, so both are in the tree here even though a browser only ever paints one,
+ * and an unscoped `screen.getByText('$1,750')` matches twice.
+ *
+ * `aside` carries role `complementary`; the bar is a `region`. Scoping to the
+ * former is what keeps these assertions about the rail they were written for.
+ */
+function rail(): HTMLElement {
+  return screen.getByRole('complementary');
+}
 import { ApiClientError } from '@/lib/api-client';
 
 const requestMock = vi.fn();
@@ -57,6 +73,47 @@ describe('BookingRail', () => {
     cleanup();
   });
 
+  /*
+   * The clearance for the fixed bar, asserted as the two class-level facts that
+   * make it work rather than as geometry.
+   *
+   * jsdom performs no layout and loads no stylesheet, so the thing that
+   * actually failed -- the footer's `All vendors` link sitting 12 of its 16px
+   * under the bar, with its centre intercepted -- **cannot be reproduced here**
+   * and is verified in a browser instead. What can be pinned is that the bar
+   * still carries the marker the rule keys on, and that the rule still exists:
+   * either one silently disappearing is how the overlap returns.
+   */
+  it('carries the marker the footer clearance rule keys on', () => {
+    render(
+      <BookingRail
+        businessName="Kessler & Co."
+        slug="kessler-and-co"
+        startingPriceCents={175_000}
+        packages={[servicePackage()]}
+        reviewCount={0}
+        today="2026-01-01"
+        calendar={{}}
+      />,
+    );
+
+    const bar = screen.getByRole('region', { name: 'Book Kessler & Co.' });
+
+    expect(bar.hasAttribute('data-booking-bar')).toBe(true);
+    expect(bar.className).toContain('fixed');
+    expect(bar.className).toContain('lg:hidden');
+  });
+
+  it('is cleared by a footer rule that names that marker', () => {
+    const globals = readFileSync(join(process.cwd(), 'src', 'app', 'globals.css'), 'utf8');
+    const rule = /body:has\(\[data-booking-bar\]\)\s*>\s*footer\s*\{[^}]*padding-bottom:/;
+
+    expect(globals).toMatch(rule);
+    // Below `lg` only: at 1024 and up the bar is `display:none` and the rail is
+    // an ordinary grid column, so the footer must pay nothing.
+    expect(globals).toMatch(/@media \(width < 64rem\) \{\s*body:has\(\[data-booking-bar\]\)/);
+  });
+
   it('leads with the from-price in dollars', () => {
     render(
       <BookingRail
@@ -70,7 +127,7 @@ describe('BookingRail', () => {
       />,
     );
 
-    expect(screen.getByText('$1,750')).toBeDefined();
+    expect(within(rail()).getByText('$1,750')).toBeDefined();
   });
 
   it('sends the selected package through to the request form', () => {
@@ -86,12 +143,12 @@ describe('BookingRail', () => {
       />,
     );
 
-    const request = screen.getByRole('link', { name: 'Request booking' });
+    const request = within(rail()).getByRole('link', { name: 'Request booking' });
 
     expect(request.getAttribute('href')).toBe('/vendors/kessler-and-co/request?package=pkg-1');
     // The reassurance line carries the frame's sentence and nothing in front
     // of it — see #114.
-    expect(screen.queryByText(/Messaging opens shortly/)).toBeNull();
+    expect(within(rail()).queryByText(/Messaging opens shortly/)).toBeNull();
   });
 
   /*
@@ -198,7 +255,7 @@ describe('BookingRail', () => {
       />,
     );
 
-    expect(screen.getByRole('link', { name: 'Request booking' }).getAttribute('href')).toBe(
+    expect(within(rail()).getByRole('link', { name: 'Request booking' }).getAttribute('href')).toBe(
       '/vendors/kessler-and-co/request',
     );
   });
@@ -255,7 +312,7 @@ describe('BookingRail', () => {
 
     await pickPackage('Full day — $3,200');
 
-    expect(screen.getByText('$3,200')).toBeDefined();
+    expect(within(rail()).getByText('$3,200')).toBeDefined();
   });
 
   it('does not claim reviews a vendor has not earned', () => {
@@ -397,8 +454,8 @@ describe('the From qualifier', () => {
   it('qualifies the starting price while no package is chosen', () => {
     renderRail();
 
-    expect(screen.getByText('From')).toBeDefined();
-    expect(screen.getByText('$1,450')).toBeDefined();
+    expect(within(rail()).getByText('From')).toBeDefined();
+    expect(within(rail()).getByText('$1,450')).toBeDefined();
   });
 
   /*
@@ -424,20 +481,20 @@ describe('the From qualifier', () => {
       />,
     );
 
-    expect(screen.getByText('$1,450')).toBeDefined();
-    expect(screen.getByText('From').className).not.toContain('invisible');
+    expect(within(rail()).getByText('$1,450')).toBeDefined();
+    expect(within(rail()).getByText('From').className).not.toContain('invisible');
   });
 
   it('keeps the row’s height when the qualifier hides, so the price does not shift', async () => {
     renderRail();
 
-    const before = screen.getByText('From');
+    const before = within(rail()).getByText('From');
     expect(before.className).not.toContain('invisible');
 
     await pickPackage('Full day — $3,900');
 
     // Still in the tree, just not shown — an empty node would collapse the row.
-    expect(screen.getByText('From').className).toContain('invisible');
+    expect(within(rail()).getByText('From').className).toContain('invisible');
   });
 
   it('drops once a package is chosen, because that price is exact', async () => {
@@ -445,7 +502,7 @@ describe('the From qualifier', () => {
 
     await pickPackage('Full day — $3,900');
 
-    expect(screen.getByText('$3,900')).toBeDefined();
-    expect(screen.getByText('From').className).toContain('invisible');
+    expect(within(rail()).getByText('$3,900')).toBeDefined();
+    expect(within(rail()).getByText('From').className).toContain('invisible');
   });
 });

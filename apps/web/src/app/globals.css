@@ -103,6 +103,27 @@
  */
 
 /*
+ * Clearance for the vendor profile's fixed booking bar, below `lg` (#371).
+ *
+ * `30-responsive.md`: "any pane with a fixed bottom action bar needs bottom
+ * padding equal to the bar's height ... or the last card's price row lands
+ * underneath it." The bar is `fixed` and the footer is a **sibling of
+ * `<main>`**, so no padding inside the profile can reach it — the browser pass
+ * measured the footer's `All vendors` link 12 of its 16px under the bar, with
+ * its centre intercepted, so a real click landed on the bar's dead space.
+ *
+ * Matched on the bar's own marker rather than on the route, so a page without a
+ * bar pays nothing and a second surface that grows one is covered for free.
+ * `:has()` because the footer is above the bar in the tree and cannot be
+ * selected from it any other way.
+ */
+@media (width < 64rem) {
+  body:has([data-booking-bar]) > footer {
+    padding-bottom: 5.5rem;
+  }
+}
+
+/*
  * A full-height app shell (design/design-plan/04-laws.md, scroll budget 1.0x) fills the
  * viewport on its own. The site footer lives in the root layout, above every
  * route, so it is removed here rather than by threading a `showFooter` flag

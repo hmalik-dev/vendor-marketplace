@@ -131,6 +131,14 @@ async function main(): Promise<void> {
     adminEmail === undefined ? undefined : resolveAccount(adminEmail, secretKey, 'admin'),
   ]);
 
+  /*
+   * `--draft` leaves the fixture vendor unpublished with no requests, which is
+   * the only way to render frame `27 Vendor dashboard - empty . 1024` (#371).
+   * Re-running without the flag restores the published fixture, so it needs no
+   * separate undo.
+   */
+  const draft = process.argv.includes('--draft');
+
   const { db, client } = createDatabase({ max: 1 });
 
   try {
@@ -138,7 +146,18 @@ async function main(): Promise<void> {
       vendor,
       customer,
       ...(admin === undefined ? {} : { admin }),
+      storefront: draft ? 'draft' : 'published',
     });
+
+    if (draft) {
+      console.log(
+        'Seeded the end-to-end fixtures in DRAFT: the vendor account owns an unpublished ' +
+          'storefront with no requests. Re-run without --draft to restore the published one.',
+      );
+      console.log(`  vendor profile ${result.vendorProfileId}`);
+      return;
+    }
+
     console.log(
       'Seeded the end-to-end fixtures: the vendor account owns a published storefront with ' +
         'one package and one pending request, and can take payment.',

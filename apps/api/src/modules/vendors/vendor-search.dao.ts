@@ -73,7 +73,18 @@ function filters(query: VendorSearchQuery, exceptCategory = false): SQL[] {
     conditions.push(sql`lower(${vendorProfiles.city}) = ${query.city.toLowerCase()}`);
   }
   if (query.state) {
-    conditions.push(sql`lower(${vendorProfiles.state}) = ${query.state.toLowerCase()}`);
+    /*
+     * `::text` before `lower()`, because #332 made this column the `us_state`
+     * enum and Postgres has no `lower(us_state)` — the unqualified call raised
+     * `function lower(us_state) does not exist` and turned **every** state
+     * filter into a 500, including the `city` + `state` pair the app's own
+     * search URL always carries.
+     *
+     * The cast rather than `eq()` on an upper-cased code: the querystring is
+     * free text, so an unknown value has to return no rows the way an unknown
+     * `city` does, not fail on `invalid input value for enum us_state`.
+     */
+    conditions.push(sql`lower(${vendorProfiles.state}::text) = ${query.state.toLowerCase()}`);
   }
 
   if (!exceptCategory && query.category) {

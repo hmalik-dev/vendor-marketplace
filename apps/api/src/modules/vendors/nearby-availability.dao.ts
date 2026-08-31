@@ -100,7 +100,8 @@ export async function findVendorsFreeNearby(
     conditions.push(sql`lower(${vendorProfiles.city}) = ${query.city.toLowerCase()}`);
   }
   if (query.state) {
-    conditions.push(sql`lower(${vendorProfiles.state}) = ${query.state.toLowerCase()}`);
+    // `::text` for the same reason as `searchVendors` — see the note there.
+    conditions.push(sql`lower(${vendorProfiles.state}::text) = ${query.state.toLowerCase()}`);
   }
   if (query.category) {
     conditions.push(sql`EXISTS (
