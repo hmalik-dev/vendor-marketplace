@@ -12,8 +12,6 @@ import { cn } from '@/lib/utils';
  */
 export interface VendorCardProps {
   vendor: VendorCardData;
-  /** The searched date, when there was one — it drives the availability chip. */
-  searchedDate?: string;
   /**
    * `compact` is the search grid, where four cards across and two full rows
    * have to fit above the fold; `featured` is the roomier landing variant.
@@ -23,12 +21,21 @@ export interface VendorCardProps {
   /**
    * A day this vendor **is** free, shown as the sage chip.
    *
-   * The search grid derives this from the searched date, because a vendor that
-   * survived a dated query is free on it. The nearby-dates band passes the
-   * vendor's nearest free day instead, which is the whole point of that band:
-   * the card is saying "not then, but this".
+   * Passed only by the nearby-dates band, which is the whole point of that
+   * band: the card is saying "not then, but this". The search grid passes
+   * nothing, because a vendor that survived a dated query is free on it by
+   * construction and a chip saying so is a tautology (D16, #324).
    */
   freeOnDate?: string;
+  /**
+   * Render as static content instead of a link.
+   *
+   * For the storefront editor's preview rail (#360), which shows the real card
+   * so the preview cannot drift — but where a click would navigate the vendor
+   * off a form holding unsaved edits, and where frame `09` draws the card as
+   * static anyway.
+   */
+  preview?: boolean;
   className?: string;
 }
 
@@ -49,19 +56,55 @@ const DATE_CHIP_FORMATTERS = {
   }),
 } as const;
 
+interface ShellProps {
+  slug: string;
+  className: string;
+  children: React.ReactNode;
+}
+
+/** The card as one control: the whole body is the link. */
+function LinkShell({ slug, className, children }: ShellProps): React.ReactElement {
+  return (
+    <Link href={`/vendors/${slug}`} className={className}>
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * The card as static content, for the storefront editor's preview rail (#360).
+ *
+ * Both shells live at module scope so the component identity is stable — a
+ * component defined inside `VendorCard` would be a new type on every render and
+ * remount the whole subtree.
+ */
+function PreviewShell({ className, children }: ShellProps): React.ReactElement {
+  return <div className={className}>{children}</div>;
+}
+
 export function VendorCard({
   vendor,
-  searchedDate,
   density = 'featured',
   freeOnDate,
+  preview = false,
   className,
 }: VendorCardProps): React.ReactElement {
+  const Shell = preview ? PreviewShell : LinkShell;
   const location = [vendor.city, vendor.state].filter(Boolean).join(', ');
   const isReviewed = vendor.reviewCount > 0;
   const isCompact = density === 'compact';
-  // An explicit free day wins: the caller knows something the card cannot
-  // work out, which is that this vendor is being offered *instead* of a date.
-  const freeDate = freeOnDate ?? (vendor.availableOnDate && searchedDate ? searchedDate : null);
+  /*
+    D16 (#324): a result card carries no availability chip. Surviving a dated
+    filter already *is* the answer — `vendor-search.dao.ts` hard-codes
+    `availableOnDate: true` on every row of a dated query — so a chip repeating
+    it was a tautology, and the gold "scarce" variant rested on a threshold
+    nobody defined.
+
+    Sage survives only where the caller knows something the card cannot: that
+    this vendor is being offered *instead* of the date searched. That caller is
+    `nearby-dates-band.tsx`, and it says so by passing `freeOnDate`.
+  */
+  const freeDate = freeOnDate ?? null;
 
   return (
     <article
@@ -106,11 +149,19 @@ export function VendorCard({
         className,
       )}
     >
-      {/* Suppresses the global `:focus-visible` ring that would be clipped. */}
-      <Link
-        href={`/vendors/${vendor.slug}`}
-        className="block focus-visible:ring-0 focus-visible:ring-offset-0"
-      >
+      {/*
+        Suppresses the global `:focus-visible` ring that would be clipped.
+
+        `preview` swaps the link for a plain block. The storefront editor's
+        rail (#360) renders this card at full size so the preview cannot drift
+        from the real thing, but frame `09` draws it as static content and a
+        vendor clicking their own preview would be navigated off a form holding
+        unsaved edits. The card is the thing that knows it is "ONE control", so
+        the exception belongs here rather than in an `inert` wrapper at the call
+        site. With no `<a>` the `has-[a:focus-visible]` ring above simply never
+        matches, which is correct: nothing inside a preview is focusable.
+      */}
+      <Shell slug={vendor.slug} className="block focus-visible:ring-0 focus-visible:ring-offset-0">
         {/*
           A ratio, never a fixed height. A fixed height against a fluid card
           width crops the same vendor's photo differently at every breakpoint,
@@ -270,7 +321,7 @@ export function VendorCard({
             )}
           </div>
         </div>
-      </Link>
+      </Shell>
     </article>
   );
 }

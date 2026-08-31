@@ -164,6 +164,27 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
       signal: controller.signal,
     })
       .then((body) => {
+        /*
+          A page past the end of the result set. `/search?page=2` returned 200
+          with an empty pane while the heading still claimed the full count —
+          nothing drawn under a line reading "17 photographers". `pageSize` is
+          20 against 17 vendors so nothing is lost today, but the URL is
+          reachable by hand and stops being harmless the moment the marketplace
+          outgrows one page.
+
+          A clamp rather than a message: frame `02` draws no pagination, so
+          there is no approved string for "that page does not exist" and
+          inventing one would fail the text axis. Going back to the first page
+          is the only correction the frame can support.
+
+          Guarded on `page > 1`, so it cannot re-enter: page 1 with no rows is
+          a genuinely empty search and belongs to frame `18`.
+        */
+        if (body.total > 0 && body.items.length === 0 && body.page > 1) {
+          setState({ page: 1 });
+          return;
+        }
+
         setResult(body);
         setIsLoading(false);
         setSearching(false);
@@ -227,6 +248,12 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
   const refineCount = activeRefineCount(state);
   const diagnosis = noResultsDiagnosis(state);
   const total = result?.total ?? 0;
+  /*
+    The count row is for a search that found something, or is still looking.
+    Frame `18`'s empty state opens directly into the pane, so a "0 photographers"
+    line above it is both wrong for the frame and useless to read.
+  */
+  const countRowVisible = isLoading || total > 0;
   // "24 photographers in Austin" — the count is about the vendors, not about
   // the category they sell under.
   const heading = `${total} ${vendorNounFor(state.category, total)}${
@@ -313,14 +340,32 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
         </button>
       </div>
 
-      {/* Neither the query bar nor the Refine bar scrolls; only the grid does. */}
-      <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 min-[90rem]:px-6.5">
-        {/*
+      {/*
+        Neither the query bar nor the Refine bar scrolls; only the grid does.
+
+        The count row comes off entirely on the no-results state. Frame `18`
+        runs the Refine bar straight into `padding:44px 26px`, and this row —
+        the heading, the date clause and the price line — occupied y=118-173,
+        which pushed the empty state's glyph 59px below where the frame draws
+        it. A count of nothing is also the least useful line on a screen whose
+        whole job is to offer a way out.
+
+        The cleared-params live region is **not** part of that and stays. It
+        announces what the URL asked for and did not get, which matters most
+        precisely when the search came back empty — an over-narrowed query is a
+        common reason for it. So the row survives on its own when it has
+        something to announce, and takes its padding with it when it does not.
+      */}
+      {countRowVisible || clearedLines.length > 0 ? (
+        <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 min-[90rem]:px-6.5">
+          {countRowVisible ? (
+            <>
+              {/*
           `min-w-0 break-words` because the heading interpolates the city, which
           comes from the URL. It is capped at 100 characters, but 100 characters
           with no space in them still overflow a column that has no rule for it.
         */}
-        {/*
+              {/*
           The date clause is a **sibling** of the heading, not a child of it
           (#242). Nested inside, it joined the accessible name with no
           separator — `11 photographers in Austinfree on Mon, Jun 14` — and it
@@ -328,55 +373,78 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
           computes `normal`. Frame `02` draws the two as siblings inside one
           baseline-aligned box, which is exactly what fixes both.
         */}
-        {/*
+              {/*
           A plain block box with inline children, exactly as the frame draws it
           — NOT a flex row. As flex items the clause would re-apply its 10px
           `ml-2.5` at the start of every wrapped line, which put it at x=30 at
           390px where both the frame and the previous markup leave it flush at
           x=20.
         */}
-        <div className="min-w-0">
-          {/*
+              <div className="min-w-0">
+                {/*
             `inline`, so the heading and the clause share a line and wrap as one
             run of text — the frame's `<span class="h2">` is inline, and a block
             `<h1>` would put the clause on its own line inside this box.
           */}
-          <h1 className="inline display-heading text-[22px] break-words text-stone-900">
-            {isLoading ? searchingLine(state) : heading}
-          </h1>
-          {state.date ? (
-            <span className="ml-2.5 text-[13px] text-stone-600">
-              free on {AVAILABILITY_DATE_FORMATTER.format(new Date(`${state.date}T00:00:00Z`))}
-            </span>
-          ) : null}
-        </div>
+                <h1 className="inline display-heading text-[22px] break-words text-stone-900">
+                  {isLoading ? searchingLine(state) : heading}
+                </h1>
+                {state.date ? (
+                  <span className="ml-2.5 text-[13px] text-stone-600">
+                    free on{' '}
+                    {AVAILABILITY_DATE_FORMATTER.format(new Date(`${state.date}T00:00:00Z`))}
+                  </span>
+                ) : null}
+              </div>
 
-        {/*
+              {/*
           Not a statistic — a statement about how the marketplace works, which
           is true on day one. See design/design-plan/98-post-mvp.md.
         */}
-        <p className="text-[12.5px] text-stone-600">
-          Prices are what they charge — no quotes needed
-        </p>
+              <p className="text-[12.5px] text-stone-600">
+                Prices are what they charge — no quotes needed
+              </p>
+            </>
+          ) : null}
 
-        {/*
+          {/*
           Everything the URL asked for that is not in effect, announced once.
           A date that has passed and a param that could not be parsed are the
           same event to the customer — the search that ran is narrower than the
           link said — so they share one live region rather than stacking two.
         */}
-        {clearedLines.length > 0 ? (
-          <div role="status" className="w-full">
-            {clearedLines.map((line) => (
-              <p key={line} className="text-[12.5px] text-stone-700">
-                {line}
-              </p>
-            ))}
-          </div>
-        ) : null}
-      </div>
+          {clearedLines.length > 0 ? (
+            <div role="status" className="w-full">
+              {clearedLines.map((line) => (
+                <p key={line} className="text-[12.5px] text-stone-700">
+                  {line}
+                </p>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
-      <div className="app-pane px-5 pb-20 min-[90rem]:px-6.5 lg:pb-4">
+      {/*
+        `pt-1 -mt-1` is headroom for the focus ring, not spacing.
+
+        `app-pane` is `overflow-y: auto`, so its padding box is a clipping box.
+        The first result row sat exactly on the content origin, which clipped
+        the top 4px of the card's ring (`ring-2` + `ring-offset-2`) — the ring
+        still painted left, right and bottom, so every value-based check passed
+        while the indicator was visibly cut.
+
+        The padding puts 4px inside the clip box and the negative margin takes
+        the same 4px back off the outside, so the first row lands on the same y
+        the frame draws it at. Spacing would have shifted the grid and failed
+        parity; this is layout-neutral by construction.
+
+        The class, not the instance: `availability-calendar.tsx` hit the same
+        thing and paid 1px off a 44px hit target for it (see `MonthNavButton`),
+        solving it structurally instead. Any `app-pane` whose first focusable
+        child is flush against the content origin has this.
+      */}
+      <div className="app-pane -mt-1 px-5 pt-1 pb-20 min-[90rem]:px-6.5 lg:pb-4">
         {hasFailed ? (
           <EmptyState
             icon={<SearchX />}
@@ -477,12 +545,7 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
         ) : (
           <div className={GRID_COLUMNS}>
             {result?.items.map((vendor) => (
-              <VendorCard
-                key={vendor.id}
-                vendor={vendor}
-                density="compact"
-                {...(state.date ? { searchedDate: state.date } : {})}
-              />
+              <VendorCard key={vendor.id} vendor={vendor} density="compact" />
             ))}
           </div>
         )}
