@@ -32,3 +32,22 @@ re-hardcode the call site, run the owning package's suite. In #238
 `packages/preflight` stayed 234/234 green with `portsCheck.run` back on a
 hardcoded `[3000, 4000]`, and nothing at all covered `scripts/e2e-auth.mjs`
 consuming `resolveBaseUrl`.
+
+**The "these N numbers travel together" variant (#15, pass 3).** A parity fix
+often lands as a derived constant plus a comment stating the derivation —
+`pb-20` because "the bar is `bottom-4` (16px) and 55px tall, so a row needs
+71px". The comment _asserts an invariant across several numbers_, and its
+confident phrasing ("the three numbers travel together", "whoever changes the
+bar's height changes this number with it") reads as evidence the invariant is
+guarded. Count the numbers in the sentence, then count the ones the test pins.
+Here the guard pinned `'pb-20'` and `'absolute inset-x-4 bottom-4 z-20'` — the
+result and the offset — and left the **height** free, because height is emergent
+(`px-4 py-2.5` on the bar + `py-2` + `text-meta` on its tallest child), so no
+single literal spells it. Changing `py-2.5` → `py-6` on `vendor-table.tsx` took
+the bar 55px → 83px and the last row's clearance +11px → **−17px**
+(`elementFromPoint` at the row's bottom returns the bar again) with all 33 tests
+still green.
+
+**How to apply:** the emergent number is the one that escapes. For every
+"A because B and C" comment, mutate **B and C**, not A, and re-run. Restore
+after.

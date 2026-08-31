@@ -258,7 +258,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **373** | **Design-system completion — token scale, undefined-step guard, and the caret override** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#333, #364, #369**. One pass over `theme.css` and `apps/web/src`, each half closed by a guard — the shape that stops the next parity pass re-finding the same class of defect. |
 | **374** | **Launch legal, policy and support surfaces** | P3 | M6 | **P0 Critical** | **Deferred — needs a human** | — | **The account holder: (1) the operative wording of the terms, privacy policy and vendor agreement — a ticket must not invent binding text; (2) a real monitored support address or destination** | `core` | **Filed 2026-08-31.** Not a consolidation — a gap nobody had filed. `docs/pre-launch.md` §1.5 and §7 require terms, a privacy policy, a cookie notice, a vendor agreement covering the 12% commission and payout timing, a refund and cancellation policy shown **before** payment, and a support route that reaches a human. **None of those routes exist in `apps/web/src/app`.** The product cannot take money from strangers without them. |
 | **375** | **Search entry — a filtering combobox for `Vendor type`, a typeahead input for `City`** | P1 | M3 | **P1 High** | **Backlog** | — | **None** (coordinate with **#373**, which removes the caret from the same two triggers) | `core` | **Filed 2026-08-31 on the user's explicit instruction.** *"It should allow typing that appears directly in the input and matching text appears in the category type dropdown, and the city should literally be an input, where the validated city appears as clickable for a user. Not a scrollable dropdown for city since cities can vary drastically. Category should have a dropdown with all categories but as a user types the dropdown should be filtered with each input."* **A user override of decision D6 and `42-dropdowns.md`**, which deleted the filter field from the category panel and made city a select. Both fields stay **validated** — only the affordance changes. |
-| **376** | **Four colour classes name ramp steps the theme never defines** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by lane 15**, by the guard that found them. `design-tokens.test.ts` asserts that every colour class names a step the shared theme declares; it was generalised from #147's `stone-800` assertion and immediately found four more, in the two ramps that assertion never covered. Each falls through to Tailwind's own cool default, so the rendered colour belongs to no palette in this product. Exempted by name and by this ticket number in that test, which is a ratchet rather than an allowlist — the list only shrinks. |
+| **376** | **Four colour classes name ramp steps the theme never defines** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by lane 15**, by the guard that found them. `design-tokens.test.ts` asserts that every colour class names a step the shared theme declares; it was generalised from #147's `stone-800` assertion and immediately found four more, in the two ramps that assertion never covered. Each falls through to Tailwind's own cool default, so the rendered colour belongs to no palette in this product. Exempted by name and by this ticket number in that test, which is a ratchet rather than an allowlist — the list only shrinks. **Not latent — already invisible on screen, measured 2026-08-31 by lane 371** on the running stylesheet: `--color-sage-500` resolves to `""`, `bg-sage-500` computes `rgba(0,0,0,0)` on a probe element, and there are **0** stylesheet rules mentioning it — against `bg-sage-400`, which emits 1 rule and computes `rgb(94,107,79)`. Both call sites are in checkout (`app/bookings/[requestId]/checkout/page.tsx:66`, `components/checkout/checkout-screen.tsx:291`) and both are sage dots that currently paint nothing. |
 **This board carries open work only. The closed rows live in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **310 rows as of 2026-08-30: 172 `Done` and 138 `Superseded`**, recounted programmatically in the second consolidation, which also moved #14 and #305 across. The earlier figures here (311 / 180 / 131) were a snapshot that nothing updated as rows moved, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
 Rows are ordered by build sequence, not by ticket number. **45 rows — 20 open (17 Backlog, 1 In Progress, 2 Deferred) and 25 `Superseded`.** **#14 and #305 moved to the archive in this pass**, restoring the 2026-08-30 convention that this board carries open work only; they had been left here after closing. Recounted programmatically on 2026-08-30 after the **second backlog consolidation**, which replaced 25 rows with **#354–#360**. That pass was only possible because D16 and D17 had just ruled every open design question: eleven rows that could never start became ordinary code work, and the shape underneath them — twenty-five rows that were really seven pieces of work — became visible. **The blank line that had split this table in two is gone**; rows #332–#352 had been rendering as a separate headerless table, though `tickets.board.test.ts` parses line by line and never noticed. **A Backlog count is still not a ready count** — **#20** waits on #359 and **#353** on the Sentry DSN, and #355 is sequenced behind #354, which owns `Orla - Screens.dc.html` for one pass. Read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
@@ -4123,12 +4123,19 @@ photography (§7, a human's task, record it as such).
 
 ### #15 parity — four rulings the frame owes, measured 2026-08-31
 
-Frame `13 Admin` vs `/admin/vendors?status=review` at 1440x900, measured twice by
-`parity-checker` (the second pass re-measuring the first pass's findings after
-fixes). Colour, font, text and every style axis now match. Four deltas are
-**left open on purpose**, because in each the frame disagrees with a written law
-rather than the code disagreeing with the frame — and `04-laws.md` says design
-passes edit the plan, tickets write the code.
+Frame `13 Admin` vs `/admin/vendors?status=review` at 1440x900, measured **three
+times** by `parity-checker`, each pass re-measuring the last one's fixes rather
+than trusting them. That is the load-bearing part of the method: pass 2 found
+that three of pass 1's fixes had not landed and two had introduced new defects,
+and pass 3 found that two of pass 2's had landed their stated target and left a
+measurable residue. A fix is not a fix until something measures it again.
+
+Colour, font and text match outright — 83 text nodes checked for contrast with
+zero failures (minimum 4.83:1), every literal compared as codepoints, and both
+ambiguous glyphs (U+00B7, U+2026) verified by hexdump on each side. Six deltas
+are **left open on purpose**, because in each the frame disagrees with a written
+law rather than the code disagreeing with the frame — and `04-laws.md` says
+design passes edit the plan, tickets write the code.
 
 | # | The delta | The two sides |
 | --- | --- | --- |
@@ -4136,6 +4143,8 @@ passes edit the plan, tickets write the code.
 | **D19** | **Table radius.** Frame draws `border-radius: 12px` on the table card. The radius scale steps `6 · 8 · 10 · 14 · 18`, and `--radius-xl: 14px` is annotated "cards, panels". | 12px is not a step. Either the card takes `radius-xl` (built) or the scale gains a sixth step — which is #373's territory (token-scale completion), not a console ticket's. |
 | **D20** | **Rail item height.** Frame `.nav` is 34px tall with no gap (pitch 34). Live is 44px with a 4px gap (pitch 48), so item 7 sits 84px lower. | 44px is `04-laws.md`'s hit-area floor, and the rail is seven navigation targets. The frame's 34px cannot satisfy it. `VendorNav` made the same call for the same reason. |
 | **D21** | **The row-select target is 22px wide.** `04-laws.md` asks 44x44 of an icon-only control; the checkbox has 44px of height and **22px of width**, because that is the frame's own track for that column. | A 44px-wide target there would overlap the business name. Either the law carves out a control that has a label (this one does — "Select <business>"), or the frame's first track widens. |
+| **D22** | **The row-select box is 14px, the frame's unchecked box is 16.6px.** Frame draws 14px of content plus a 1.3px border in a content-box document (16.6px outer); live is `size-3.5` + `border-[1.3px]` in border-box (14px outer, 11.4px of content). | The frame is **internally inconsistent here**: its *checked* box is 14x14 with no border, so it draws a checked box smaller than its unchecked one. Live is consistent at 14 and matches the frame's checked state. Distinct from D21, which is the 22px *track*, not the box. |
+| **D23** | **The search field has no visible `<label htmlFor>`.** `04-laws.md:141` — "every input has a visible label; placeholder is not a label". The field carries `aria-label` and a placeholder; `input.labels.length === 0`. **The frame draws no label either.** | `03-components.md:139` even specifies the label treatment (10.5px / 600 / .05em / uppercase / `stone-600`), so the law has an answer ready — but adding it changes the Refine bar's vertical composition, which is a frame change. Frame-versus-law, exactly like D18–D21, and not resolvable by a ticket. |
 
 Two more measured facts, recorded so nobody re-derives them:
 
@@ -4146,10 +4155,31 @@ Two more measured facts, recorded so nobody re-derives them:
   15th row is *reachable by scrolling* rather than clipped, which is the failure
   the criterion actually names ("a table that promises eighteen and clips three
   is a bug"). `ADMIN_PAGE_SIZE = 15` guarantees a page never holds more.
-- **The pager and the bulk bar were each costing rows** and no longer do — the
-  pager moved into the title row (1px cost, from a flex baseline) and the bulk
-  bar floats with scroll padding beneath it. Both are recorded because the
-  obvious placement for each is the one that breaks the row count.
+- **The pager and the bulk bar were each costing rows.** Both were moved — the
+  pager into the title row, the bulk bar to float over the table with scroll
+  padding beneath it — and both are recorded because the obvious placement for
+  each is the one that breaks the row count.
+- **The pager still costs 6px, not the "nothing" the code claimed.** Pass 3
+  measured it: the `nav` is 25px against the heading's 30px box, but it is
+  `self-center` inside a baseline-aligned wrapper whose top is pinned by the
+  count line, so the title row grows 30 → 36 and the pane goes from 5px short of
+  fifteen rows to 11px short. All fifteen stay reachable, so the criterion
+  holds. **Left unfixed deliberately** and the comment in `admin-surface.tsx`
+  corrected instead: the alignment there has already been broken twice by fixes
+  aimed at one pixel of baseline, and 6px of pane buys nothing.
+- **The bulk bar's scroll padding was 7px short of its own arithmetic.** The bar
+  is `bottom-4` (16px) and 55px tall, so 71px of clearance is needed; `pb-16`
+  gave 64. Row 15's two 44px controls sat 5px under the bar — the glyphs were
+  visible, so it read as fixed, but `elementFromPoint` returned the bar and both
+  hit targets were really 39px. `pb-20`, with the three numbers written down
+  together so the next person to move the bar moves the padding.
+- **An app-wide contradiction, surfaced here and belonging to #373.**
+  `04-laws.md:135` and `03-components.md:125` both specify the unbordered-control
+  ring as `ring-2 ring-clay-400/40`; `globals.css:153` implements
+  `ring-clay-400/30`, and every ring in the product resolves to `/30`. One of the
+  two is wrong. Not a frame-`13` finding — judged against `/30` here — but it is
+  a single-line divergence between the plan and the implementation of the focus
+  ring on every screen.
 
 ---
 

@@ -244,6 +244,7 @@ describe('what the parity pass measured, kept from drifting back', () => {
   const avatar = read('src/components/ui/avatar.tsx');
   const rowTrigger = read('src/components/admin/row-trigger.tsx');
   const filterBar = read('src/components/admin/filter-bar.tsx');
+  const logo = read('src/components/brand/logo.tsx');
 
   it('lets a caller override the avatar’s tone', () => {
     /*
@@ -288,6 +289,53 @@ describe('what the parity pass measured, kept from drifting back', () => {
      */
     expect(rowTrigger).toContain('h-11 w-full items-center justify-end');
     expect(vendorTable).toContain('flex h-11 w-full cursor-pointer items-center justify-start');
+  });
+
+  it('clears the floating bulk bar by its own measured height', () => {
+    /*
+     * The bar is `bottom-4` (16px) and 55px tall, so the last row needs 71px to
+     * scroll past it. `pb-16` gave 64 and left row 15's two 44px controls 5px
+     * under the bar — visible, but `elementFromPoint` returned the bar, so both
+     * hit targets were 39px.
+     *
+     * All three numbers are pinned, including the bar's `py-2.5`. Its 55px is
+     * emergent — no literal spells it — so pinning only the padding and the
+     * offset would let a future ticket bump the bar to `py-6`, take the
+     * clearance to −17px, and reinstate the exact defect under a green guard.
+     */
+    expect(dataTable).toContain("scrollPadding && 'pb-20'");
+    expect(vendorTable).toContain(
+      'absolute inset-x-4 bottom-4 z-20 flex items-center gap-3 rounded-lg border border-stone-300 bg-stone-0 px-4 py-2.5',
+    );
+  });
+
+  it('sets the header cluster’s gap and mark at the frame’s measured sizes', () => {
+    /*
+     * Both were read off a *rendered* frame `13` rather than its markup: the
+     * mark is 22 x 15 and the cluster gap is 9px. `gap-1` with a 14.375 mark
+     * put the `Admin` chip at x=103.5 against the frame's x=110 — drift that
+     * survives a source read because neither side writes the resolved value.
+     */
+    expect(header).toContain('flex items-center gap-[9px]');
+    /*
+     * The named size, not the literal 15 it holds — `LOGO_SIZES` exists "so no
+     * surface picks a logo size by eye", and asserting the literal would make
+     * *correcting* the call site fail this test.
+     */
+    expect(header).toContain('<Logo tone="dark" size={LOGO_SIZES.desktopHeader} />');
+    expect(logo).toContain('desktopHeader: 15');
+  });
+
+  it('gives the search field the bordered-field focus treatment', () => {
+    /*
+     * `03-components.md` names three focus mechanisms and forbids mixing them.
+     * A standalone bordered field darkens its own edge; with no override this
+     * fell through to the global `:focus-visible` and painted the *unbordered*
+     * control's detached offset ring on top of a border.
+     */
+    expect(filterBar).toContain(
+      'focus-visible:border-clay-400 focus-visible:ring-3 focus-visible:ring-clay-400/15',
+    );
   });
 
   it('draws the checkbox rather than leaving the OS to', () => {
