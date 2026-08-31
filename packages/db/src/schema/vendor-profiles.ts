@@ -11,6 +11,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { usStateEnum } from './enums.js';
 import { users } from './users.js';
 
 export const vendorProfiles = pgTable(
@@ -48,7 +49,7 @@ export const vendorProfiles = pgTable(
     coverImageUrl: varchar('cover_image_url', { length: 500 }),
     address: varchar('address', { length: 500 }),
     city: varchar('city', { length: 100 }),
-    state: varchar('state', { length: 100 }),
+    state: usStateEnum('state'),
     latitude: decimal('latitude', { precision: 10, scale: 8 }),
     longitude: decimal('longitude', { precision: 11, scale: 8 }),
     /**

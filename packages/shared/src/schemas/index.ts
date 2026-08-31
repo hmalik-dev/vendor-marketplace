@@ -49,6 +49,7 @@ import {
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
   USER_ROLES,
+  US_STATE_CODES,
   VENDOR_SETTABLE_AVAILABILITY_STATUSES,
   VENDOR_SORT_OPTIONS,
   PUBLISH_BLOCKER_KEYS,
@@ -156,6 +157,14 @@ export const reviewTypeSchema = z.enum(REVIEW_TYPES);
 export const budgetTierSchema = z.enum(BUDGET_TIERS);
 export const tagCategorySchema = z.enum(TAG_CATEGORIES);
 export const tagSuggestionStatusSchema = z.enum(TAG_SUGGESTION_STATUSES);
+/**
+ * Two-letter USPS code. The message names the fix rather than the rule,
+ * because a vendor picking from a list can only reach this by sending a value
+ * the list does not offer.
+ */
+export const usStateCodeSchema = z.enum(US_STATE_CODES, {
+  message: 'Choose the state you serve',
+});
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export const vendorSortOptionSchema = z.enum(VENDOR_SORT_OPTIONS);
 
@@ -406,7 +415,7 @@ export const createVendorProfileSchema = z.object({
   slug: slugSchema.optional(),
   categoryIds: z.array(uuidSchema).min(1, 'Select at least one category').max(5),
   city: z.string().trim().min(1, 'Enter the city you serve').max(MAX_NAME_LENGTH),
-  state: z.string().trim().min(1, 'Choose the state you serve').max(MAX_NAME_LENGTH),
+  state: usStateCodeSchema,
   bio: z
     .string()
     .trim()
