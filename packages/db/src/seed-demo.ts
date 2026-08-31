@@ -933,6 +933,23 @@ export async function seedDemoData<
     );
   });
 
+  /*
+   * The moderation notification (#15). One row, on the first vendor, so the
+   * demo data carries every type the product defines — `seed-demo.test.ts`
+   * asserts exactly that, which is what makes a new type impossible to add
+   * without also giving the demo a row for it.
+   */
+  addNotification(
+    'tag-suggestion:approved',
+    vendorUserIds[0] as string,
+    'tag_suggestion_approved',
+    'Your tag suggestion was approved',
+    'It is live on your profile now, and customers can filter by it.',
+    {},
+    addDays(now, -120),
+    true,
+  );
+
   plan.forEach((entry, planIndex) => {
     const source = requestValues[planIndex] as (typeof requestValues)[number];
     const vendorUserId = vendorUserIds[entry.vendorIndex] as string;

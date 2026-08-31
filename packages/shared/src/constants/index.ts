@@ -418,6 +418,14 @@ export const NOTIFICATION_TYPES = [
   'new_review',
   'payout_sent',
   'stripe_onboarding_complete',
+  /*
+   * Admin moderation (#15). Approving and merging both land here: the
+   * vendor's suggestion became a real tag on their profile either way, and
+   * only the body differs. A rejection deliberately sends nothing —
+   * notifying somebody their idea was turned down discourages the next one,
+   * and the admin note is recorded for the queue rather than for them.
+   */
+  'tag_suggestion_approved',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

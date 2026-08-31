@@ -1565,3 +1565,232 @@ export type ApiError = z.infer<typeof apiErrorSchema>;
  */
 export const fieldErrorDetailsSchema = z.object({ field: z.string().min(1) });
 export type FieldErrorDetails = z.infer<typeof fieldErrorDetailsSchema>;
+
+// --- Admin (#15) -----------------------------------------------------------
+
+/**
+ * The four statuses frame `13 Admin` draws in the Status column, **derived from
+ * state that already exists** rather than from a column invented for the table.
+ *
+ * There is no `flagged` or `paused` column on `vendor_profiles`, and adding one
+ * would give an operator a second place to record something the product already
+ * knows. The mapping, in order — the first match wins:
+ *
+ * | Status    | Condition                                                          |
+ * | --------- | ------------------------------------------------------------------ |
+ * | `flagged` | the account is banned — the one moderation state there is          |
+ * | `live`    | the profile is published                                           |
+ * | `paused`  | unpublished, but payouts are connected — set up and taken down     |
+ * | `review`  | unpublished and never onboarded — a draft that has never been live |
+ *
+ * `review` is therefore the "awaiting review" the frame's saved filter counts.
+ */
+export const ADMIN_VENDOR_STATUSES = ['live', 'review', 'flagged', 'paused'] as const;
+export const adminVendorStatusSchema = z.enum(ADMIN_VENDOR_STATUSES);
+export type AdminVendorStatus = (typeof ADMIN_VENDOR_STATUSES)[number];
+
+/** Whether a vendor has finished Stripe onboarding — the frame's `Payouts` filter. */
+export const ADMIN_PAYOUT_FILTERS = ['connected', 'not-connected'] as const;
+export const adminPayoutFilterSchema = z.enum(ADMIN_PAYOUT_FILTERS);
+export type AdminPayoutFilter = (typeof ADMIN_PAYOUT_FILTERS)[number];
+
+export const adminVendorRowSchema = z.object({
+  /** The `vendor_profiles` row. */
+  id: uuidSchema,
+  /** The `users` row — what ban and unban act on. */
+  userId: uuidSchema,
+  businessName: z.string(),
+  slug: z.string(),
+  categoryName: z.string().nullable(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  /** Serialised as a string, like every other decimal on the wire. */
+  avgRating: z.string(),
+  reviewCount: z.int(),
+  bookingsCount: z.int(),
+  status: adminVendorStatusSchema,
+  stripeOnboarded: z.boolean(),
+  createdAt: z.date(),
+});
+export type AdminVendorRow = z.infer<typeof adminVendorRowSchema>;
+
+export const adminVendorQuerySchema = z.object({
+  ...paginationQueryShape,
+  /** Matches business name, slug or the owner's email. */
+  q: trimmedString(MAX_NAME_LENGTH).optional(),
+  category: z.string().trim().max(MAX_NAME_LENGTH).optional(),
+  city: z.string().trim().max(MAX_NAME_LENGTH).optional(),
+  payouts: adminPayoutFilterSchema.optional(),
+  status: adminVendorStatusSchema.optional(),
+});
+export type AdminVendorQuery = z.infer<typeof adminVendorQuerySchema>;
+
+/**
+ * The count line under the title — "412 total · 38 awaiting review".
+ *
+ * Both numbers are query results over the same filter the table ran, so the
+ * sentence can never describe a different set from the rows beneath it.
+ */
+export const adminVendorPageSchema = z.object({
+  items: z.array(adminVendorRowSchema),
+  total: z.int(),
+  awaitingReview: z.int(),
+  page: z.int(),
+  pageSize: z.int(),
+});
+export type AdminVendorPage = z.infer<typeof adminVendorPageSchema>;
+
+export const adminCustomerRowSchema = z.object({
+  id: uuidSchema,
+  email: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  totalBookingsCount: z.int(),
+  isBanned: z.boolean(),
+  createdAt: z.date(),
+});
+export type AdminCustomerRow = z.infer<typeof adminCustomerRowSchema>;
+
+export const adminCustomerQuerySchema = z.object({
+  ...paginationQueryShape,
+  q: trimmedString(MAX_NAME_LENGTH).optional(),
+});
+
+export const adminBookingRowSchema = z.object({
+  id: uuidSchema,
+  status: z.string(),
+  eventDate: z.string(),
+  /** Integer cents, like every other amount. */
+  totalCents: z.int(),
+  customerName: z.string(),
+  vendorName: z.string(),
+  vendorSlug: z.string(),
+  createdAt: z.date(),
+});
+export type AdminBookingRow = z.infer<typeof adminBookingRowSchema>;
+
+/**
+ * A payment as the Payments view reads it.
+ *
+ * **There is no `payments` table** — the money lives on `bookings`
+ * (`stripe_payment_intent_id`, `platform_fee_cents`, `vendor_payout_cents`,
+ * `paid_at`), because a booking is created by the succeeded intent and the two
+ * are one-to-one. This row is that projection, not a second source.
+ */
+export const adminPaymentRowSchema = z.object({
+  bookingId: uuidSchema,
+  status: bookingStatusSchema,
+  totalAmountCents: z.int(),
+  platformFeeCents: z.int(),
+  vendorPayoutCents: z.int(),
+  stripePaymentIntentId: z.string().nullable(),
+  vendorName: z.string(),
+  customerName: z.string(),
+  paidAt: z.date().nullable(),
+});
+export type AdminPaymentRow = z.infer<typeof adminPaymentRowSchema>;
+
+export const adminReviewRowSchema = z.object({
+  id: uuidSchema,
+  rating: z.int(),
+  title: z.string().nullable(),
+  content: z.string(),
+  /** `customer_to_vendor` or `vendor_to_customer` — the column is `type`. */
+  type: reviewTypeSchema,
+  authorName: z.string(),
+  vendorName: z.string(),
+  vendorSlug: z.string(),
+  createdAt: z.date(),
+});
+export type AdminReviewRow = z.infer<typeof adminReviewRowSchema>;
+
+/** A pending suggestion with the name of the vendor who sent it. */
+export const adminTagSuggestionRowSchema = tagSuggestionSchema.extend({
+  vendorName: z.string(),
+  /** Set once resolved, so the queue's history explains itself. */
+  resolvedTagName: z.string().nullable(),
+});
+export type AdminTagSuggestionRow = z.infer<typeof adminTagSuggestionRowSchema>;
+
+export const adminTagSuggestionQuerySchema = z.object({
+  ...paginationQueryShape,
+  status: tagSuggestionStatusSchema.optional(),
+});
+
+/**
+ * What an admin does with one suggestion.
+ *
+ * `reject` requires a note — the queue is the only record of why an idea was
+ * turned down, and "rejected, no reason given" is how the same suggestion comes
+ * back next month. `merge` requires the tag it merges into; the API never
+ * guesses which existing tag was meant.
+ */
+export const resolveTagSuggestionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('approve'),
+    adminNote: z.string().trim().max(MAX_ADMIN_NOTE_LENGTH).optional(),
+  }),
+  z.object({
+    action: z.literal('reject'),
+    adminNote: trimmedString(MAX_ADMIN_NOTE_LENGTH),
+  }),
+  z.object({
+    action: z.literal('merge'),
+    mergeTagId: uuidSchema,
+    adminNote: z.string().trim().max(MAX_ADMIN_NOTE_LENGTH).optional(),
+  }),
+]);
+export type ResolveTagSuggestion = z.infer<typeof resolveTagSuggestionSchema>;
+
+/** A tag as the management table shows it — with the count that makes deactivation legible. */
+export const adminTagRowSchema = tagSchema.extend({ vendorCount: z.int() });
+export type AdminTagRow = z.infer<typeof adminTagRowSchema>;
+
+export const updateTagSchema = z
+  .object({
+    name: trimmedString(MAX_NAME_LENGTH, 2).optional(),
+    isActive: z.boolean().optional(),
+    displayOrder: z.int().min(0).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update' });
+export type UpdateTag = z.infer<typeof updateTagSchema>;
+
+/** One day of the 30-day series behind each chart. */
+export const adminMetricPointSchema = z.object({
+  /** `YYYY-MM-DD`, like every other date on the wire. */
+  date: z.string(),
+  value: z.int(),
+});
+
+/**
+ * The Overview screen. Every number is a query result; nothing here is a
+ * platform statistic rendered on a public page, so the no-invented-numbers law
+ * is satisfied by construction — this surface is admin-only.
+ */
+export const adminMetricsSchema = z.object({
+  totalRevenueCents: z.int(),
+  bookingsCount: z.int(),
+  activeVendorsCount: z.int(),
+  usersCount: z.int(),
+  pendingTagSuggestionsCount: z.int(),
+  flaggedReviewsCount: z.int(),
+  /** Colour-coded in the UI by meaning: revenue gold, bookings clay, users steel, completion sage. */
+  revenueByDay: z.array(adminMetricPointSchema),
+  bookingsByDay: z.array(adminMetricPointSchema),
+  signupsByDay: z.array(adminMetricPointSchema),
+  completedByDay: z.array(adminMetricPointSchema),
+});
+export type AdminMetrics = z.infer<typeof adminMetricsSchema>;
+
+/** What a ban actually did, so the confirmation can name it rather than guess. */
+export const adminBanResultSchema = z.object({
+  userId: uuidSchema,
+  isBanned: z.boolean(),
+  requestsDeclined: z.int(),
+  bookingsCancelled: z.int(),
+  refundsIssued: z.int(),
+  profileUnpublished: z.boolean(),
+});
+export type AdminBanResult = z.infer<typeof adminBanResultSchema>;

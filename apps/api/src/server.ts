@@ -26,6 +26,7 @@ import { storagePlugin } from './plugins/storage.js';
 import { stripePlugin } from './plugins/stripe.js';
 import { availabilityRoutes } from './modules/availability/availability.routes.js';
 import { bookingRequestRoutes } from './modules/booking-requests/booking-requests.routes.js';
+import { adminRoutes } from './modules/admin/admin.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
 import { messagingRoutes } from './modules/messaging/messaging.routes.js';
 import { customerRoutes } from './modules/customers/customers.routes.js';
@@ -144,6 +145,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
 
   await app.register(healthRoutes);
+  await app.register(adminRoutes);
   await app.register(categoryRoutes);
   await app.register(tagRoutes);
   await app.register(userRoutes);

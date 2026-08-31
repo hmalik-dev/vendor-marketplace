@@ -89,8 +89,18 @@ export interface CreatePaymentIntentInput {
 export interface CreateRefundInput {
   paymentIntentId: string;
   amountCents: number;
-  /** Distinguishes a customer cancellation from an operator-driven one. */
-  reason: 'requested_by_customer';
+  /**
+   * Distinguishes a customer cancellation from an operator-driven one.
+   *
+   * **Omitted for an operator-driven refund**, which is the accurate signal:
+   * Stripe's vocabulary is `duplicate`, `fraudulent` and
+   * `requested_by_customer`, and a refund the *platform* issued when it
+   * suspended an account (#15) is none of the three. Sending
+   * `requested_by_customer` would attribute the decision to a customer who did
+   * not make it, and `fraudulent` would put a fraud signal on a card that did
+   * nothing wrong — it feeds Stripe Radar and the issuer's own risk scoring.
+   */
+  reason?: 'requested_by_customer';
 }
 
 /**
