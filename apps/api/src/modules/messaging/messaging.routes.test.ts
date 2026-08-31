@@ -20,6 +20,8 @@ const CUSTOMER = 'user_customer';
 const OUTSIDER = 'user_customer_two';
 
 const EVENT_DATE = toDateString(addDays(new Date(), 30));
+/** A second occasion with the same vendor, for the per-request thread checks. */
+const SECOND_EVENT_DATE = toDateString(addDays(new Date(), 60));
 
 describe('messaging', () => {
   let harness: TestHarness;
@@ -86,6 +88,34 @@ describe('messaging', () => {
 
     const threads = await harness.database.db.select().from(conversations);
     return threads[0]!.id;
+  }
+
+  /**
+   * A second request to the vendor `openConversation` already published, so the
+   * customer has two live bookings with one vendor — the shape #346 is about.
+   */
+  async function requestAgain(): Promise<string> {
+    const vendor = await harness.database.db.select().from(vendorProfiles);
+    const pkg = await harness.database.db.select().from(servicePackages);
+
+    const request = await harness.app.inject({
+      method: 'POST',
+      url: '/booking-requests',
+      headers: bearer(CUSTOMER),
+      payload: {
+        vendorId: vendor[0]!.id,
+        packageId: pkg[0]!.id,
+        eventDate: SECOND_EVENT_DATE,
+        eventType: 'fundraiser',
+      },
+    });
+    expect(request.statusCode).toBe(201);
+
+    const threads = await harness.database.db.select().from(conversations);
+    const opened = threads.find((row) => row.bookingRequestId === request.json().id);
+    expect(opened).toBeDefined();
+
+    return opened!.id;
   }
 
   async function send(
@@ -273,6 +303,72 @@ describe('messaging', () => {
       });
 
       expect(response.json()[0].bookingContext).toMatch(/^[A-Z][a-z]{2} \d{1,2} wedding$/);
+    });
+
+    /*
+     * #346. The model was one thread per *vendor*, subtitled with whichever
+     * request happened to come first, so a question about the fundraiser was
+     * read by the vendor under the wedding's heading. Two requests to one
+     * vendor are two threads, and the context line is what tells them apart —
+     * the vendor's business name is identical on both rows.
+     */
+    it('gives a second request to the same vendor its own thread and context line', async () => {
+      const wedding = await openConversation();
+      const fundraiser = await requestAgain();
+
+      expect(fundraiser).not.toBe(wedding);
+
+      for (const actor of [CUSTOMER, VENDOR]) {
+        const list = await harness.app.inject({
+          method: 'GET',
+          url: '/conversations',
+          headers: bearer(actor),
+        });
+
+        expect(list.statusCode).toBe(200);
+        expect(list.json()).toHaveLength(2);
+
+        const contexts = list
+          .json()
+          .map((row: { bookingContext: string | null }) => row.bookingContext);
+
+        expect(new Set(contexts).size).toBe(2);
+        expect(contexts).toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(/wedding$/),
+            expect.stringMatching(/fundraiser$/),
+          ]),
+        );
+      }
+    });
+
+    /*
+     * The half of #346 that actually loses information: a message has to be
+     * readable against the booking it was sent from, from both sides.
+     */
+    it('keeps a message in the thread of the booking it was sent from', async () => {
+      const wedding = await openConversation();
+      const fundraiser = await requestAgain();
+
+      expect((await send(CUSTOMER, fundraiser, 'Is the raffle table extra?')).statusCode).toBe(201);
+
+      for (const actor of [CUSTOMER, VENDOR]) {
+        const inFundraiser = await harness.app.inject({
+          method: 'GET',
+          url: `/conversations/${fundraiser}/messages`,
+          headers: bearer(actor),
+        });
+        const inWedding = await harness.app.inject({
+          method: 'GET',
+          url: `/conversations/${wedding}/messages`,
+          headers: bearer(actor),
+        });
+
+        expect(inFundraiser.json().items.map((item: { content: string }) => item.content)).toEqual([
+          'Is the raffle table extra?',
+        ]);
+        expect(inWedding.json().items).toEqual([]);
+      }
     });
 
     it('counts only what the other party sent as unread', async () => {

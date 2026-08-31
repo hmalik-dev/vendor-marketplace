@@ -175,3 +175,25 @@ can resolve. `19-availability.md` recorded that `stone-250` "was never minted",
 which was true when written and is corrected in place. **It is still not the
 hatch** — those stripes stay `stone-200` / `stone-300`, and `#E0D8CA` remains
 unminted.
+
+## RESOLVED — How is a customer with several bookings from one vendor listed?
+
+**One row per booking request, not one row per vendor.** `18-messaging.md` draws
+a single list and does not say which, so #346 was filed needing the ruling before
+it could be built. It is settled by the model decision behind it: a conversation
+belongs to one booking request, plus at most one unattached thread per
+customer/vendor pair.
+
+The deciding argument is the design's. The context rail is headed **This
+request** and offers `Send revised quote`, `Accept as-is` and `Decline politely`
+— each acts on exactly one request, so a row spanning three of them cannot draw
+the rail at all. The booking context line (`Re: Jun 14 wedding`) is what makes a
+list of repeated vendor names navigable; collapsing to one row per vendor is
+precisely what made it name whichever request came first forever.
+
+**The vendor's business name is therefore not sufficient to tell two rows
+apart** — the context line is load-bearing, not decoration, and a thread with no
+request (the one `Send a message` on a profile opens) shows no context line,
+which is honest rather than a gap. Ruled 2026-08-30 (#310 for #219/#229); see
+**A thread is scoped to one booking request** in
+`.claude/plans/vendor-marketplace-decisions.md`.
