@@ -31,3 +31,4 @@
 - [Never abort a rebase you did not start](never-abort-a-rebase-you-did-not-start.md) — with many sessions in the shared checkout, possession of the live rebase decides ownership, not authorship
 - [Verify with a differently shaped check](verify-with-a-differently-shaped-check.md) — a grep that silently over- or under-matches returns a confident wrong answer; re-run differently, do not re-read
 - [Board rows mix bolded and plain ids](tracker-board-rows-are-bold.md) — never key a match on bolding; it has now caused a confident wrong answer in both directions
+- [Pathspec when a peer has work staged](pathspec-when-a-peer-has-work-staged.md) — the index is shared; `git add` + plain commit steals their staged work under your message

@@ -24,3 +24,8 @@ what you are sweeping in — read unfamiliar diffs before committing, because th
 is how the design-contract change in `639ea2e` and its landing parity break were
 caught. This does not extend to ticketed work, which follows
 [[vendor-marketplace-local-ticket-tracker]] and its atomic-commit convention.
+
+**One narrow exception**, added 2026-08-30: this covers files a peer left
+*modified*. It does **not** cover files a peer has **staged** and is about to
+commit — sweeping those in takes their commit rather than tidying the tree. See
+[[pathspec-when-a-peer-has-work-staged]].
