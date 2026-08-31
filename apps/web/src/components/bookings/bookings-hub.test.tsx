@@ -461,3 +461,143 @@ describe('BookingsHub refine chips', () => {
     expect(within(tabs).getByText('3')).toBeDefined();
   });
 });
+
+/**
+ * Browser verification of #305 found this pane hand-rolling its own copy of the
+ * empty-state glyph, with the outer ring solid where the shared component draws
+ * it dashed — two glyphs for one idea — and a `p` styled as a headline, which
+ * leaves the state with no heading in the accessibility tree.
+ */
+describe('the empty bookings pane', () => {
+  it('uses the shared glyph, dashed ring and all', () => {
+    const { container } = render(
+      <BookingsHub
+        entries={[]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    const glyph = container.querySelector('.w-\\[58px\\]');
+
+    expect(glyph).not.toBeNull();
+    expect(glyph?.querySelectorAll('span')[1]?.className).toContain('border-dashed');
+  });
+
+  it('gives the state a real heading', () => {
+    render(
+      <BookingsHub
+        entries={[]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'No bookings yet' })).toBeDefined();
+  });
+});
+
+/**
+ * #81's second finding: every card drew an empty `bg-stone-150` swatch where
+ * the vendor belonged, on all eleven of them, while `/search` and `/messages`
+ * already drew initials for the same vendors. `40-states.md` is explicit —
+ * "a generic grey box is a bug".
+ */
+describe('the vendor tile on a booking card', () => {
+  function tileFor(container: HTMLElement): HTMLElement | null {
+    return container.querySelector('.size-9\\.5');
+  }
+
+  it('shows the vendor’s photograph when there is one', () => {
+    render(
+      <BookingsHub
+        entries={[entry({ vendorImageUrl: 'https://cdn.test/kessler.jpg' })]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    const image = screen.getByRole('presentation', { hidden: true });
+    expect(image.getAttribute('src')).toBe('https://cdn.test/kessler.jpg');
+  });
+
+  it('falls back to the vendor’s initials, never an empty node', () => {
+    const { container } = render(
+      <BookingsHub
+        entries={[entry({ vendorImageUrl: null, vendorName: 'Kessler & Co.' })]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    const tile = tileFor(container);
+
+    expect(tile).not.toBeNull();
+    expect(tile?.textContent?.trim()).toBe('KC');
+  });
+
+  it('gives the monogram a tone rather than the grey swatch', () => {
+    const { container } = render(
+      <BookingsHub
+        entries={[entry({ vendorImageUrl: null })]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    const tile = tileFor(container);
+
+    expect(tile?.className).not.toContain('bg-stone-150');
+    expect(tile?.className).toMatch(/bg-(clay|sage)-100/);
+  });
+
+  it('keeps one vendor on one tone across renders', () => {
+    const first = render(
+      <BookingsHub
+        entries={[entry({ vendorImageUrl: null })]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+    const firstTone = tileFor(first.container)?.className;
+    cleanup();
+
+    const second = render(
+      <BookingsHub
+        entries={[entry({ vendorImageUrl: null, id: 'e2' })]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    expect(tileFor(second.container)?.className).toBe(firstTone);
+  });
+});

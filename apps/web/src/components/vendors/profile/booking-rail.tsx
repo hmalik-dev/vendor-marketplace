@@ -55,7 +55,22 @@ export function BookingRail({
   const errorId = `${fieldId}-message-error`;
   const router = useRouter();
   const call = useApi();
-  const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
+  /*
+   * The cheapest package, not the first one the vendor dragged into place.
+   *
+   * `findActivePackages` orders by `displayOrder`, while `startingPriceCents`
+   * is `MIN(price_cents)` — two different orderings. Preselecting `packages[0]`
+   * therefore opened the rail on an arbitrary price for any vendor who did not
+   * happen to order cheapest-first, so frame `03`'s resting state of
+   * `From $1,450` showed a different number, and the `/search` card for the
+   * same vendor disagreed with their own profile.
+   */
+  const cheapest = packages.reduce<ServicePackage | undefined>(
+    (lowest, candidate) =>
+      lowest === undefined || candidate.priceCents < lowest.priceCents ? candidate : lowest,
+    undefined,
+  );
+  const [packageId, setPackageId] = useState(cheapest?.id ?? '');
   const [packageOpen, setPackageOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
 
@@ -101,6 +116,8 @@ export function BookingRail({
 
   const selected = packages.find((servicePackage) => servicePackage.id === packageId);
   const shownPriceCents = selected?.priceCents ?? startingPriceCents;
+  /** Whether the price on screen is still the lowest this vendor charges. */
+  const isStartingPrice = shownPriceCents !== null && shownPriceCents === startingPriceCents;
 
   /*
    * Only answered fields travel. An empty `?date=` is not the same as no date,
@@ -135,7 +152,25 @@ export function BookingRail({
     >
       <div className="border-b border-stone-200 px-5 pt-4.5 pb-4">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[12.5px] text-stone-600">From</span>
+          {/*
+            "From" says the number beside it is the lowest this vendor charges,
+            so it belongs exactly while that is true. The rail opens on the
+            cheapest package, so the resting state still reads "From $1,450" as
+            `12-vendor-profile.md` draws it; choose a dearer one and the
+            qualifier goes. #81's first finding was this rail reading
+            "From $3,900" for a chosen package while the search card said
+            "From $1,450" for the same vendor — two numbers under one
+            qualifier, and only one of them a price anything starts at.
+
+            Hidden rather than removed, so the row keeps its height: an empty
+            element has no content box, so dropping the word would collapse this
+            flex row and shift the price up by a line. `invisible` is
+            `visibility: hidden`, which takes it out of the accessibility tree
+            as well as off the screen.
+          */}
+          <span className={cn('text-[12.5px] text-stone-600', !isStartingPrice && 'invisible')}>
+            From
+          </span>
           {freeOn ? (
             <span className="text-[12px] font-semibold text-sage-600">Free on {freeOn}</span>
           ) : null}

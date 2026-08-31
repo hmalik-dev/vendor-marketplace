@@ -21,8 +21,9 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
+import { useUnsavedChangesGuard } from '@/lib/use-unsaved-changes-guard';
 import { describeBlockerCount, useSubmitValidation } from '@/lib/use-submit-validation';
 import type { FieldIssue } from '@/lib/use-submit-validation';
 import {
@@ -46,6 +47,14 @@ import { FormSectionNav, type FormSection } from '@/components/form-section-nav'
 import { ImageUpload } from '@/components/image-upload';
 import { TagPicker } from '@/components/tags/tag-picker';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
@@ -374,6 +383,15 @@ export function VendorProfileForm({
   const isNew = profile === null;
   const slugPreview = form.slug.trim() || generateSlug(form.businessName || 'your-business');
   const isDirty = JSON.stringify(form) !== savedSnapshot;
+
+  /*
+   * #227: the submit bar said `Unsaved changes` and a section-rail click threw
+   * them away regardless. The indicator is only worth drawing if leaving costs
+   * something, so the same flag now guards both exits — the tab and the router.
+   */
+  const { pendingHref, confirmLeave, cancelLeave } = useUnsavedChangesGuard(isDirty, {
+    navigate: (href) => router.push(href),
+  });
   const radiusFillPercent = serviceRadiusFillPercent(form.serviceRadiusMiles);
   const bioRemaining = MAX_VENDOR_BIO_LENGTH - form.bio.length;
 
@@ -526,9 +544,7 @@ export function VendorProfileForm({
       toast.success(saved.isPublished ? 'Your profile is live.' : 'Your profile is hidden.');
       router.refresh();
     } catch (error) {
-      toast.error(
-        error instanceof ApiClientError ? error.message : 'Could not change your visibility.',
-      );
+      toast.error(userFacingError(error, 'Could not change your visibility.'));
     } finally {
       setIsSaving(false);
     }
@@ -1008,6 +1024,39 @@ export function VendorProfileForm({
           </div>
         </div>
       </form>
+
+      {/*
+        `40-states.md` interrupts "only when the user cannot continue without
+        deciding", which is exactly this: the click has already been held, and
+        the edits are lost or kept depending on the answer. Leaving is the
+        destructive option and is styled as such; staying is the escape hatch
+        the same section requires.
+      */}
+      <Dialog
+        open={pendingHref !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            cancelLeave();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Leave without saving?</DialogTitle>
+            <DialogDescription>
+              Your changes to this profile have not been saved. Leaving now discards them.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={cancelLeave}>
+              Keep editing
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmLeave}>
+              Discard changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

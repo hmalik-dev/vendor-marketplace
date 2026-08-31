@@ -366,3 +366,86 @@ describe('BookingRail', () => {
     });
   });
 });
+
+/**
+ * #81's first finding. "From" qualifies the vendor's cheapest package, so it is
+ * true only while none is chosen. The rail kept it after a selection and read
+ * "From $3,900" for a specific package, while the search card said "From
+ * $1,450" for the same vendor — two numbers under one qualifier, neither
+ * wrong on its own.
+ */
+describe('the From qualifier', () => {
+  const packages = [
+    servicePackage({ id: 'pkg-1', name: 'Half day', priceCents: 145_000 }),
+    servicePackage({ id: 'pkg-2', name: 'Full day', priceCents: 390_000 }),
+  ];
+
+  function renderRail(): void {
+    render(
+      <BookingRail
+        businessName="Kessler & Co."
+        slug="kessler-and-co"
+        startingPriceCents={145_000}
+        packages={packages}
+        reviewCount={127}
+        today="2026-01-01"
+        calendar={{}}
+      />,
+    );
+  }
+
+  it('qualifies the starting price while no package is chosen', () => {
+    renderRail();
+
+    expect(screen.getByText('From')).toBeDefined();
+    expect(screen.getByText('$1,450')).toBeDefined();
+  });
+
+  /*
+   * `findActivePackages` orders by `displayOrder` and `startingPriceCents` is
+   * `MIN(price_cents)`, so the vendor's own drag order decides which package
+   * the rail opens on. A vendor who put their headline package first used to
+   * open the rail on its price — frame `03` draws the from-price at rest, and
+   * the `/search` card for the same vendor shows it.
+   */
+  it('opens on the cheapest package even when the vendor ordered a dearer one first', () => {
+    render(
+      <BookingRail
+        businessName="Kessler & Co."
+        slug="kessler-and-co"
+        startingPriceCents={145_000}
+        packages={[
+          servicePackage({ id: 'pkg-2', name: 'Full day', priceCents: 390_000, displayOrder: 0 }),
+          servicePackage({ id: 'pkg-1', name: 'Half day', priceCents: 145_000, displayOrder: 1 }),
+        ]}
+        reviewCount={127}
+        today="2026-01-01"
+        calendar={{}}
+      />,
+    );
+
+    expect(screen.getByText('$1,450')).toBeDefined();
+    expect(screen.getByText('From').className).not.toContain('invisible');
+  });
+
+  it('keeps the row’s height when the qualifier hides, so the price does not shift', async () => {
+    renderRail();
+
+    const before = screen.getByText('From');
+    expect(before.className).not.toContain('invisible');
+
+    await pickPackage('Full day — $3,900');
+
+    // Still in the tree, just not shown — an empty node would collapse the row.
+    expect(screen.getByText('From').className).toContain('invisible');
+  });
+
+  it('drops once a package is chosen, because that price is exact', async () => {
+    renderRail();
+
+    await pickPackage('Full day — $3,900');
+
+    expect(screen.getByText('$3,900')).toBeDefined();
+    expect(screen.getByText('From').className).toContain('invisible');
+  });
+});

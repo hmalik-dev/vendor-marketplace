@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import { moveItem } from '@/lib/reorder';
 import { useApi } from '@/lib/use-api';
 import { useUploadQueue } from '@/lib/use-upload-queue';
@@ -118,7 +118,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
 
       setItems((previous) => previous.map((row) => (row.id === saved.id ? saved : row)));
     } catch (error) {
-      toast.error(error instanceof ApiClientError ? error.message : 'Could not save that caption.');
+      toast.error(userFacingError(error, 'Could not save that caption.'));
     }
   };
 
@@ -135,7 +135,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
       toast.success('Photo removed.');
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof ApiClientError ? error.message : 'Could not remove that photo.');
+      toast.error(userFacingError(error, 'Could not remove that photo.'));
     } finally {
       setIsBusy(false);
       setPendingRemoval(null);
@@ -156,9 +156,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
       setItems(saved);
     } catch (error) {
       setItems(previous);
-      toast.error(
-        error instanceof ApiClientError ? error.message : 'Could not save the new order.',
-      );
+      toast.error(userFacingError(error, 'Could not save the new order.'));
     } finally {
       setIsBusy(false);
     }

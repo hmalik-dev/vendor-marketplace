@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { PRICE_TYPE_LABELS } from '@/lib/package-labels';
 
 export { PRICE_TYPE_LABELS };
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
 import { wireServicePackageSchema, type WireServicePackage } from '@/lib/wire-schemas';
@@ -192,7 +192,7 @@ export function PackageForm({
       toast.success(isNew ? 'Package added.' : 'Package saved.');
       onSaved(saved);
     } catch (error) {
-      toast.error(error instanceof ApiClientError ? error.message : 'Could not save that package.');
+      toast.error(userFacingError(error, 'Could not save that package.'));
     } finally {
       setIsSaving(false);
     }

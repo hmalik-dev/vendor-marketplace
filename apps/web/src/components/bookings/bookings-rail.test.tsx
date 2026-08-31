@@ -140,4 +140,46 @@ describe('BookingsRail', () => {
       expect(screen.getByText('How booking works here')).toBeDefined();
     });
   });
+
+  /**
+   * #81's ninth finding. The rail carried a fixed `aria-label` of "What needs
+   * your attention" whatever it drew, so a screen-reader user was told to
+   * expect work and met the mechanism copy instead. #302 then gave the rail a
+   * third shape, which is why this is three cases and not two.
+   */
+  describe('the label follows the content', () => {
+    it('names the attention section when quotes are waiting', () => {
+      render(<BookingsRail needsYou={[entry()]} hasBookings conversations={[conversation()]} />);
+
+      expect(screen.getByRole('complementary').getAttribute('aria-label')).toBe(
+        'What needs your attention',
+      );
+    });
+
+    it('names the threads when that is what it draws', () => {
+      render(<BookingsRail needsYou={[]} hasBookings conversations={[conversation()]} />);
+
+      expect(screen.getByRole('complementary').getAttribute('aria-label')).toBe('Recent messages');
+    });
+
+    it('names the promises for a customer with nothing booked', () => {
+      render(<BookingsRail needsYou={[]} hasBookings={false} conversations={[]} />);
+
+      expect(screen.getByRole('complementary').getAttribute('aria-label')).toBe(
+        'How booking works here',
+      );
+    });
+
+    /* The defect as a property: never promise a section the reader will not find. */
+    it('never promises attention the rail is not showing', () => {
+      for (const hasBookings of [true, false]) {
+        cleanup();
+        render(<BookingsRail needsYou={[]} hasBookings={hasBookings} conversations={[]} />);
+
+        expect(screen.getByRole('complementary').getAttribute('aria-label')).not.toMatch(
+          /attention/i,
+        );
+      }
+    });
+  });
 });

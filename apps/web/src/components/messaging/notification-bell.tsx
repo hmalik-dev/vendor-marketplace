@@ -11,7 +11,19 @@ import { cn } from '@/lib/utils';
 /** Past this the badge stops being a count and becomes "a lot". */
 const BADGE_CEILING = 9;
 
-const WHEN = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+/**
+ * "Sat, Dec 19" — the weekday included, as every other date in the product
+ * carries it (`search-shell`, `request-row`, `booking-entries` all do).
+ *
+ * The bell was the one surface that dropped it, which is what made #72 read a
+ * raw-looking date here against formatted ones everywhere else. The weekday is
+ * the part that matters for a booking: people hold Saturdays, not the 19th.
+ */
+const WHEN = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+});
 
 export interface NotificationBellProps {
   /** Seed rows. Empty in the app, where the bell fetches its own on mount. */

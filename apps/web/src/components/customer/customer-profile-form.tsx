@@ -5,6 +5,7 @@ import {
   BUDGET_TIER_LABELS,
   MAX_CUSTOMER_BIO_LENGTH,
   MAX_GUEST_COUNT,
+  MAX_NAME_LENGTH,
   updateUserSchema,
   type BudgetTier,
 } from '@vendor-marketplace/shared';
@@ -134,11 +135,19 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
           <Label htmlFor={`${fieldId}-city`} className={LABEL}>
             City
           </Label>
+          {/*
+            Capped at the API's own limit so the error is unreachable by typing
+            — #72's fifth finding was a bare "Invalid input" at the submit bar,
+            reached by pasting 101 characters into a field that accepted them.
+            `40-states.md` prefers a blocker the user cannot cross to a message
+            explaining that they did.
+          */}
           <Input
             id={`${fieldId}-city`}
             value={city}
             onChange={(event) => setCity(event.target.value)}
             placeholder="Austin"
+            maxLength={MAX_NAME_LENGTH}
             className={FIELD}
           />
         </div>

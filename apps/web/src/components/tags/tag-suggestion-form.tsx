@@ -7,7 +7,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { ApiClientError } from '@/lib/api-client';
+import { userFacingError } from '@/lib/user-facing-error';
 import { TAG_CATEGORY_NOUN } from './tag-display';
 import { useApi } from '@/lib/use-api';
 import { Button } from '@/components/ui/button';
@@ -89,9 +89,7 @@ export function TagSuggestionForm({
 
       close();
     } catch (error) {
-      toast.error(
-        error instanceof ApiClientError ? error.message : 'Could not submit that suggestion.',
-      );
+      toast.error(userFacingError(error, 'Could not submit that suggestion.'));
     } finally {
       setIsSubmitting(false);
     }

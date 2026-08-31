@@ -19,7 +19,19 @@ export function EmptyStateGlyph(): React.ReactElement {
 }
 
 export interface EmptyStateProps {
-  /** A muted geometric glyph — a 32px lucide icon, not an illustration. */
+  /**
+   * The muted geometric glyph above the headline.
+   *
+   * **Defaults to `EmptyStateGlyph`, and that default is the point.**
+   * `40-states.md` lists the glyph as part of the state, not as decoration —
+   * yet seven of the nine call sites omitted it, because an optional prop is
+   * one a caller forgets. Making it the default means a tenth caller gets it
+   * without knowing it exists.
+   *
+   * Pass a lucide icon to say something more specific (search passes `SearchX`).
+   * Passing `null` removes it, which is deliberate, visible in review, and
+   * guarded by a test — not something that can happen by omission.
+   */
   icon?: ReactNode;
   headline: string;
   description: string;
@@ -56,7 +68,7 @@ export interface EmptyStateProps {
  * See design/design-plan/03-components.md.
  */
 export function EmptyState({
-  icon,
+  icon = <EmptyStateGlyph />,
   headline,
   description,
   action,

@@ -126,3 +126,40 @@ describe('noResultsDiagnosis', () => {
     expect(noResultsDiagnosis(state({ category: 'photography' }))).toBeNull();
   });
 });
+
+/**
+ * #72's fourth finding: searching a name that matches nothing claimed no
+ * vendors were **listed**, blamed two filters the customer never set, and
+ * offered no way back. The name filter was simply absent from this module.
+ */
+describe('a name search that matches nothing', () => {
+  const named = state({ name: 'Nonexistent Studio', category: 'photography' });
+
+  it('offers one tap to clear the name', () => {
+    expect(relaxations(named)).toEqual([{ label: 'Any name', patch: { name: '' } }]);
+  });
+
+  it('leads with the name, the narrowest filter in the product', () => {
+    const everything = state({
+      name: 'Nonexistent Studio',
+      date: '2026-06-14',
+      city: 'Austin',
+      minRating: 4,
+    });
+
+    expect(relaxations(everything)[0]?.label).toBe('Any name');
+  });
+
+  it('counts the name as a filter rather than claiming none are listed', () => {
+    // The false claim: seventeen photographers are listed; none match this name.
+    expect(noResultsHeadline(named)).not.toContain('listed yet');
+    expect(noResultsHeadline(named)).toBe('No photographers match that filter');
+  });
+
+  it('names the name as the culprit, not the city the customer never set', () => {
+    const diagnosis = noResultsDiagnosis(named);
+
+    expect(diagnosis).toContain('The name');
+    expect(diagnosis).not.toContain('city');
+  });
+});

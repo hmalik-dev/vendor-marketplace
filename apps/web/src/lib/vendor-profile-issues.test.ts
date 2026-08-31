@@ -1,4 +1,4 @@
-import { ERROR_CODES } from '@vendor-marketplace/shared';
+import { ERROR_CODES, updateVendorProfileSchema } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 import { ApiClientError } from './api-client';
 import {
@@ -203,5 +203,59 @@ describe('controlIdForStateKey', () => {
 
   it('returns null for a key no control owns', () => {
     expect(controlIdForStateKey('somethingElse')).toBeNull();
+  });
+});
+
+/**
+ * Browser verification of #305 reported that clearing a required field and
+ * pressing Save "does nothing" — no request, no message. Half of that is the
+ * design working: `attemptSubmit` withholds the request precisely because the
+ * form is invalid, so zero requests is the correct outcome rather than a dead
+ * end.
+ *
+ * The other half is that something must be *said*. This walks the real chain —
+ * the same schema the form parses with, through the same mapper — and asserts a
+ * blocker reaches the submit bar. The search that found nothing looked for
+ * "invalid" and "required", which `40-states.md` deliberately forbids in that
+ * message: "Needs 10 digits — you're two short", not "Invalid".
+ */
+describe('clearing a required field', () => {
+  it('produces a blocker on the field, so the submit bar has something to count', () => {
+    const parsed = updateVendorProfileSchema.safeParse({
+      businessName: '',
+      bio: '',
+      tagline: '',
+      address: '',
+      city: '',
+      state: '',
+      serviceRadiusKm: 48,
+      categoryIds: [],
+    });
+
+    expect(parsed.success).toBe(false);
+
+    const issues = parsed.success
+      ? []
+      : parsed.error.issues.map((issue) => ({
+          path: [...issue.path],
+          message: issue.message,
+        }));
+
+    const businessName = problemFromValidationIssues(issues).fields.find(
+      (field) => field.field === 'businessName',
+    );
+
+    expect(businessName).toBeDefined();
+    expect(businessName?.severity).toBe('blocker');
+    expect(businessName?.message.length).toBeGreaterThan(0);
+  });
+
+  it('says what to do without falling back on "invalid" or "required"', () => {
+    const message =
+      problemFromValidationIssues([{ path: ['businessName'], message: 'Enter your business name' }])
+        .fields[0]?.message ?? '';
+
+    expect(message).not.toMatch(/invalid/i);
+    expect(message).not.toMatch(/required/i);
   });
 });
