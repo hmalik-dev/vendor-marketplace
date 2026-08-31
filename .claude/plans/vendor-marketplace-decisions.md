@@ -623,3 +623,153 @@ retired.
 
 All four parts landed in **#323** as one ticket rather than four, because they rewrite the
 same constant and the same component; separate lanes would have collided on both.
+
+---
+
+### D16: The #335 Ruling Round — Chips, the Hero, Sort and Sign-up — *2026-08-30*
+
+**What this is.** #335 put four questions to the account holder; #339 and #313 added
+three more. All seven are answered here, and **every one is written into
+`design-plan/` in the same pass** — which is the part D12 skipped and the reason two of
+its rulings had to be asked twice.
+
+**The propagation failure, recorded so it is not repeated.** D12 ruled the booking
+deadline back to 7 days on 2026-08-30 and granted a one-off exception to edit
+`31-content-voice.md`. The edit was never made. The file still read *"Maya has 48
+hours"* — the approved-strings table every ticket copies from — so the next screen to
+quote it would have promised a deadline the API refuses, at the moment of commitment.
+D12 also ruled #299's two fields relocated rather than deleted, and the backlog
+consolidation nonetheless re-filed that same question as #335-D. **A ruling that lives
+only in this file is not landed.** It is landed when the `design-plan/` file a ticket
+actually reads says it.
+
+**1 — The hero seeds nothing** (#327). All three segments render empty, in the
+placeholder tone `#6B6459`. Frame `01` draws the City segment as the literal
+`Austin, TX` in `#23201C`, the *filled* tone, and templates the vendor type — so the
+frame reads as a seeded query and live reads as three empty fields. **The frame is
+corrected, not the code.** Rejected: hard-coding `Austin, TX`, which is a claim about
+where the marketplace operates that no query result supports; deriving a seed from the
+live-market list, which is honest but builds machinery for a state (two or more
+markets) that does not exist; and drawing the empty value in the filled tone, which
+reads as a value that is not there. The hero *badge* still reads "Now booking in
+Austin" — naming the market out loud is a different act from pre-filling a stranger's
+query. Landed in `10-landing.md`, `99-open-questions.md`.
+
+**2 — "Scarce" is never defined, because the gold chip is dropped** (#324).
+`03-components.md` said the availability chip is "gold when scarce ("2 dates left")"
+and never said what scarce was. The count is a real query result; the *threshold* —
+free dates in what window, below what number — is an invented number. Rejected: ≤2 free
+days in the next 30, and ≤3 in the searched month; both are defensible and both are
+made up. Nothing shipped the tone anyway — `vendor-card.tsx` only ever rendered sage.
+
+**3 — And the sage chip goes too, on the results grid** (#324). The sharper ruling, and
+the user's: a dated query is *filtered* on availability, so every card that survives one
+is free on that date by construction. `vendor-search.dao.ts` hard-codes
+`availableOnDate: true` on every row of a dated query and says so in its own comment.
+The chip was a tautology.
+
+**The carve-out that keeps this from breaking a screen:** the sage chip survives on the
+**"free on a nearby date instead" band** that closes frame `18 Search no results`, where
+`nearby-dates-band.tsx` passes `nearestAvailableDate` and the chip names a *different*
+date than the one searched. There it is the only thing that unsticks a dead-end query.
+Frame `18`'s two gold chips become that sage nearby-date form rather than disappearing.
+
+**4 — The stone `New` chip is a "joined recently" badge** (#324). Vendor published
+within the last 30 days. It is in no plan file and frame `02` puts it on a vendor
+already showing ★ 5.0 (17), so it is neither "unreviewed" nor an availability state.
+Rejected: reading it as a third availability tone ("no calendar set"), which fits the
+slot but not the frame's own example. With sage and gold gone from the grid it is the
+only chip a search card carries, so the collision question answers itself.
+
+**5 — Search sort defaults to `Most relevant`** (#339). No plan file had ever fixed a
+default; frame `02` draws `Top rated ▾`. The frame draws a *chosen* sort exactly as it
+draws a chosen price and a chosen rating, so it is not evidence the default is wrong —
+`parity-checker` was right not to call it a deviation. Rejected: matching the frame,
+because a new marketplace defaulting to `Top rated` ranks its thinnest review counts
+first and one 5★ review outranks forty. Revisit against real review volume.
+
+**6 — `Create my account`, and the plan was already right** (#313). Frame `12` draws it
+and `21-sign-up.md` has specified it since it was written; the live button reads Clerk's
+default `Continue`. A code defect, not a plan gap.
+
+**7 — The sign-up photograph is fixed, so no scrim** (#313). The panel sets copy over a
+600px full-bleed photograph with no automatic contrast guarantee. Safe because the asset
+is a single committed, hand-picked image the account holder validates — **not vendor
+content, never rotated, never dynamic**. Rejected: a gradient scrim, which costs a
+deviation from frame `12` and dims the art direction for a risk that the rule removes.
+Any ticket that makes the image dynamic must add the scrim in the same change.
+
+**8 — The role picker reappearing after email verification is a defect** (#313), and
+carrying the role is possible. The role is read from `?role=` server-side
+(`sign-up/[[...sign-up]]/page.tsx`) and handed to Clerk as `unsafeMetadata`
+(`sign-up-form.tsx`) before verification; Clerk's verification step is a path navigation
+that remounts the page, and the picker — local state seeded from the query string —
+resets to unselected. The role is already in `unsafeMetadata`, so it is read back from
+there, or the picker is suppressed once verification is pending. **No larger
+select-role-after-verification flow is needed.** Rejected: treating the second ask as a
+deliberate confirmation — the screen's own subhead promises the choice cannot be changed
+later, so asking again contradicts it.
+
+**Also corrected in this pass**, under D12's granted exception: `31-content-voice.md`'s
+**Request reassurance** row. It is split into **packaged** (confirm or decline — the
+price is immutable) and **custom** (confirm or send a quote), per #308, and both read
+`{expiryDays}` rather than a typed literal. A note under the table states the law: **no
+approved string hard-codes a duration the code derives.** The table's other two
+durations were checked and stay — "4 bookings across 2 upcoming events" counts rows, and
+the payout gate's "about five minutes" estimates Stripe's onboarding rather than a
+deadline this codebase enforces.
+
+**What this unblocks.** #327, #324, #299 and #313 lose their `Deferred` status; #339 and
+#320 are closed by the ruling itself. The code halves are ordinary work: remove a chip
+and a tone, correct four frames, change one button string, and carry one value across a
+redirect.
+
+---
+
+### D17: Three More Design Rulings — Avatar Tint, Missing Covers, the 500 CTA — *2026-08-30*
+
+**What this is.** Lanes 302 and 305 landed while D16 was being written and filed three
+more `[DESIGN] … needs a human` rows — #342, #348, #350. All three are answered here and
+written into `design-plan/` in the same pass, per D16's rule that a ruling living only in
+this file is not landed.
+
+**1 — `clay-150: #EADCCB` is added to the ramp** (#342). The frames draw the clay avatar
+fallback fill at **42 sites across 20 frames**; the ramp went `clay-100` (`#F7E7E0`)
+straight to `clay-200` (`#EFD8CC`) and had no step for it. Everything else about the
+avatar already resolved exactly — the clay initials are `#8E3F20` = `clay-600`, and the
+sage pair is `#E4E9DE` / `#4B5940` — so the fill was the single off-token value. **The
+ramp was incomplete, not the frame wrong**, which is the same finding #306 made about
+`#C4D6A8` / `#5C4A18`. `sage-150` and `stone-150` gave the step its name. Rejected:
+correcting 42 frame sites down to `clay-100`, which is more work and lowers contrast
+under the `clay-600` initials; and reusing `clay-200`, whose documented role is borders
+on clay surfaces and which still is not the drawn value. `avatar.tsx:17`'s
+`FALLBACK_TONES` changes one string.
+
+**2 — A published vendor with no cover gets a designed empty state** (#348). Two
+documents disagreed: `03-components.md` defines the labelled hatch as standing in "until
+real photography exists", and `web-design-parity.md` permits real photos in place of
+labelled placeholders — both about the *product* lacking imagery before launch. #228 was
+about a different absence: a live vendor's empty field, rendered by
+`vendor-card.tsx` and `profile-header.tsx` on `/search` and `/vendors/[slug]`, **shown to
+that vendor's own customers**. The hatch reads as an unfinished product rather than an
+unfinished profile, and it is addressed to a developer. So the placeholder is now
+explicitly a **build-time device** — frames and pre-launch seed rows only — and the live
+surface gets a neutral tone block at the cover's exact dimensions, no hatch and no label.
+**The cause and the fix belong in the editor, where the vendor is** (#299 builds the drop
+zone), not on the page their customers read. Rejected: making a cover a publish
+requirement, which solves the public surface by adding a publish blocker and a migration
+for every already-published vendor without one.
+
+**3 — The 500 page says "Browse vendors"** (#350), going to `/search`, and **frame `16`
+is corrected**. It drew `Go to my bookings`, offering a visitor who has never signed in a
+link to bookings they cannot have. #305 changed the string as a ticket, correctly
+reverted it — the words are the design and a ticket may not edit approved copy — and
+filed the question. This is the design pass that may. Rejected: an auth-aware pair of
+strings, because `global-error.tsx` renders **outside the Clerk provider** and cannot know
+who is reading, so it needs a signed-out default anyway and two strings on one screen
+drift apart; and accepting the inaccuracy, since it is a dead end on a page that is
+already a failure. Landed in `40-states.md`, `31-content-voice.md`, `99-open-questions.md`.
+
+**Board effect.** #342, #348 and #350 move `Deferred — needs a human` → `Backlog`. With
+D16, **nothing on the board is blocked on a design decision.** What remains needing a
+human is the launch-prep block alone: #19, #62, #46, #206 and #15's `SENTRY_DSN` half.

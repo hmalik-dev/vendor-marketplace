@@ -57,6 +57,22 @@ unpublished profile.
 Rails are never blanked in an empty state. They carry mechanism copy (real
 availability, payment held, no service fee) or a setup checklist.
 
+### A published vendor with no cover photo
+
+Ruled 2026-08-30 (D17), resolving a conflict between this file and
+`03-components.md`. **The labelled hatch placeholder is never shown on a live
+public surface.** It stands in for photography the _product_ lacks before launch;
+a real vendor's empty cover field is an absence of _their_ content, shown to
+_their_ customers, and it reads as an unfinished product rather than an
+unfinished profile.
+
+So on `/search` and `/vendors/[slug]`, a published vendor with no
+`coverImageUrl` gets a **neutral tone block** in the cover's exact dimensions —
+no hatch, no monospace label, nothing addressed to a developer. The card and the
+profile header keep their full composition; only the image is absent, and it is
+absent quietly. **The vendor sees the cause and the fix in the editor, where the
+CTA belongs** (#299 builds the drop zone) — not on the page their customers read.
+
 ## Validation
 
 - Errors appear **after a submit attempt**, never while typing. Cleared per-field on correction.
@@ -69,20 +85,20 @@ availability, payment held, no service fee) or a setup checklist.
 
 ## Screens
 
-| #   | State                    | Notes                                                                                       |
-| --- | ------------------------ | ------------------------------------------------------------------------------------------- |
-| 15  | 404                      | Marketing shell retained; recovery is category links, since most 404s are stale vendor URLs |
-| 16  | 500                      | Sage money-position banner + selectable mono incident id                                    |
-| 17  | Search loading           | Chrome real, 6 card skeletons, "Searching…" instead of a fake count                         |
-| 18  | Search no results        | Names the likely-at-fault filter, one-tap relaxations, nearby-date alternatives             |
-| 19  | Bookings hub empty       | Month grouping still drawn; rail carries the four mechanism promises                        |
-| 20  | Vendor dashboard empty   | Gold blocker banner + setup checklist; empty pane names the cause                           |
-| 21  | Checkout declined        | "You haven't been charged" + 24h date hold + no-third-attempt guidance                      |
-| 22  | Request validation       | Red fields, gold blocked-date field, counted summary at the submit bar                      |
-| 23  | Messaging offline        | Steel banner, composer stays usable, failed bubble at 55% with Retry / Delete               |
-| 24  | Image upload in progress | Non-blocking, per-tile determinate rings, one aggregate line, cover as a designation        |
-| 25  | Upload failures          | Partial success preserved; per-file reason and matching fix; one "Retry all"                |
-| 26  | State library            | Banners, toasts, field states, loaders, skeletons, 4 dialogs, 403, rate limit               |
+| #   | State                    | Notes                                                                                                            |
+| --- | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| 15  | 404                      | Marketing shell retained; recovery is category links, since most 404s are stale vendor URLs                      |
+| 16  | 500                      | Sage money-position banner + selectable mono incident id. **Recovery CTA is "Browse vendors" → `/search`** (D17) |
+| 17  | Search loading           | Chrome real, 6 card skeletons, "Searching…" instead of a fake count                                              |
+| 18  | Search no results        | Names the likely-at-fault filter, one-tap relaxations, nearby-date alternatives                                  |
+| 19  | Bookings hub empty       | Month grouping still drawn; rail carries the four mechanism promises                                             |
+| 20  | Vendor dashboard empty   | Gold blocker banner + setup checklist; empty pane names the cause                                                |
+| 21  | Checkout declined        | "You haven't been charged" + 24h date hold + no-third-attempt guidance                                           |
+| 22  | Request validation       | Red fields, gold blocked-date field, counted summary at the submit bar                                           |
+| 23  | Messaging offline        | Steel banner, composer stays usable, failed bubble at 55% with Retry / Delete                                    |
+| 24  | Image upload in progress | Non-blocking, per-tile determinate rings, one aggregate line, cover as a designation                             |
+| 25  | Upload failures          | Partial success preserved; per-file reason and matching fix; one "Retry all"                                     |
+| 26  | State library            | Banners, toasts, field states, loaders, skeletons, 4 dialogs, 403, rate limit                                    |
 
 ## Image uploads (frames 24–25)
 
@@ -135,3 +151,17 @@ Interrupt only when the user cannot continue without deciding.
 
 Upload failure detail view, partial-refund dispute flow, vendor-side payout
 failure. All follow these rules when they land.
+
+## The 500 page's recovery CTA
+
+Ruled 2026-08-30 (D17). Frame `16` drew `Go to my bookings`, which offers a
+visitor who has never signed in a link to bookings they cannot have. The approved
+string becomes **"Browse vendors"**, going to `/search`, and **frame `16` is
+corrected** — the legitimate route for changing approved copy, since a ticket may
+not. #305 made the change as a ticket, correctly reverted it, and filed the
+question instead.
+
+An auth-aware pair of strings was rejected: `global-error.tsx` renders **outside
+the Clerk provider** and cannot know who is reading, so it would need a
+signed-out default anyway, and two strings on one screen would drift. One
+destination that is true for everyone is the smaller and more honest answer.

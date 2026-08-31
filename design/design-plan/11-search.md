@@ -18,7 +18,7 @@ recognises.
 | --------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Vendor type** | Select / combobox over the eleven categories | **Cannot hold an unrecognised value.** Typing filters the list; a non-matching string shows "No matching type" plus the three closest categories. It resolves to a category id or the field stays empty — never free text.                        |
 | **City**        | Typeahead over live markets                  | Resolves to a market id. Unmatched input returns the nearest market plus a "we're not in [city] yet" state. A market is the pair `city` + two-letter state code, written `Austin, TX`; one place is one option, never two spellings of one place. |
-| **Event date**  | Single date picker                           | Optional. When set, every card carries an availability chip.                                                                                                                                                                                      |
+| **Event date**  | Single date picker                           | Optional. When set, results are **filtered** to vendors free on it — the cards carry no availability chip, because surviving the filter is the answer (D16).                                                                                      |
 
 ### Why the type field is a select, not a search box
 
@@ -164,8 +164,19 @@ popover beside their options.
 Count sentence names category, city and date. Beside it, one quiet positioning
 line: "Prices are what they charge — no quotes needed."
 
-Cards per `03-components.md` at the compact end: `aspect-ratio: 3/2` cover, 12px padding, one
-availability chip, name at 19px.
+Cards per `03-components.md` at the compact end: `aspect-ratio: 3/2` cover, 12px padding,
+name at 19px, and **no availability chip** — a dated query is filtered on
+availability, so a chip repeating that is a tautology (D16). The one chip a
+result card can carry is the stone `New` badge, for a vendor published within the
+last 30 days.
+
+**Sort defaults to `Most relevant`** (`sort: 'relevance'`). Ruled 2026-08-30
+(D16), because this file had never fixed a default and frame `02` draws
+`Top rated ▾`. The frame draws a _chosen_ sort exactly as it draws a chosen price
+and a chosen rating, so it is not evidence the default is wrong — and a new
+marketplace defaulting to `Top rated` ranks its thinnest review counts first, so
+one 5★ review outranks forty. Revisit against real review volume. **Do not
+"fix" this by matching the frame.**
 
 ## States
 

@@ -58,6 +58,31 @@ and "Already with us? Sign in".
 
 The whole panel — role choice and form — must fit inside 836px without scrolling.
 
+**`Create my account` is the approved primary action, and the plan was already
+right.** Ruled 2026-08-30 (D16): frame `12 Sign up` draws it, this file has
+specified it since it was written, and the live button reads Clerk's default
+`Continue` (`sign-up-form.tsx`). That is a code defect, not a plan gap — the
+string is what the button does at the moment of commitment, and it now also sits
+in `31-content-voice.md`.
+
+**The panel photograph is fixed and hand-picked, so contrast is guaranteed by
+selection rather than by a scrim.** Ruled 2026-08-30 (D16). The panel sets copy
+over a 600px full-bleed photograph with no automatic contrast guarantee, which is
+only safe while the image is a single committed asset chosen and checked for it.
+**It is not vendor content and is never rotated or made dynamic.** A ticket that
+swaps it, randomises it, or feeds it from uploads breaks this rule and must add a
+scrim in the same change.
+
+**The role survives email verification; the picker is never shown twice.** Ruled
+2026-08-30 (D16) as a defect. The role is read from `?role=` server-side and
+handed to Clerk as `unsafeMetadata` before verification, but Clerk's verification
+step is a path navigation that remounts the page, and the picker — local state
+seeded from the query string — resets to unselected. Since the role is already in
+`unsafeMetadata`, it is read back from there (or the picker is suppressed once
+verification is pending) rather than re-asked. **Re-asking is not a
+confirmation step**; the screen's own subhead promises the choice cannot be
+changed later, and asking again contradicts it.
+
 ## The marketing panel has three states
 
 | State       | When                                                  | Panel                          |

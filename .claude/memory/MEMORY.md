@@ -27,3 +27,4 @@
 - [Lead, do not narrate](lead-dont-narrate.md) — short answers, state the call, no option surveys
 - [Detached lane ticket ids collide silently](detached-lane-ticket-ids-collide-silently.md) — merging a stopped lane duplicates board rows and drops registry rows with no conflict
 - [Check for an existing branch before starting](check-for-an-existing-branch-before-starting-a-ticket.md) — a ticket's Branch column may already name pushed work; read it before rebuilding
+- [Cite the frame and the route in design questions](design-questions-cite-frame-and-route.md) — give the .dc.html frame + line and the live route before asking, so the user can verify

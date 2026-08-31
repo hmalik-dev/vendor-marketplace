@@ -29,34 +29,55 @@ the British spelling back, change the string, not this rule.
 
 ## Voice examples
 
-| Context                 | Not this                                | This                                                                                                                            |
-| ----------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Hero                    | "The #1 marketplace for event vendors"  | "Book your vendors without the back-and-forth."                                                                                 |
-| Hero badge              | "412 vendors in Austin"                 | "Now booking in Austin"                                                                                                         |
-| Category card           | "64 vendors · from $850"                | "Photo & film"                                                                                                                  |
-| Sign-up proof           | "2,412 events booked this year"         | "See the price. See the open dates. Then decide."                                                                               |
-| Transparency claim      | "Full pricing transparency"             | "Every vendor publishes what they charge and when they're free"                                                                 |
-| Availability claim      | "Real-time availability sync"           | "Live calendars — if a date shows open, it is"                                                                                  |
-| Search field label      | "Search" / "Keywords"                   | "Vendor type"                                                                                                                   |
-| Bookings grouping       | "Nandakumar wedding"                    | "June 2026"                                                                                                                     |
-| Customer bookings title | "Dashboard"                             | "Your bookings"                                                                                                                 |
-| Bookings summary        | "Your wedding is in 49 days"            | "4 bookings across 2 upcoming events"                                                                                           |
-| Open category           | "Still to book: Florals"                | "Add a vendor"                                                                                                                  |
-| Hero sub                | "Browse our extensive vendor network"   | "Compare real availability and pricing from vendors near you, send one request, and pay securely once the date is locked in."   |
-| Empty bookings          | "No data found"                         | "No bookings yet — find a vendor to get started"                                                                                |
-| Booking confirmed       | "Transaction complete"                  | "June 14 is yours."                                                                                                             |
-| Request reassurance     | "Payment is not required at this stage" | "You're requesting, not paying. Maya has 48 hours to confirm or send a revised quote — you approve before any card is charged." |
-| Validation error        | "Error 422: Validation failed"          | "Something doesn't look right — check the highlighted fields"                                                                   |
-| Vendor save             | "Submit profile"                        | "Save changes"                                                                                                                  |
-| Publish blocker         | "Incomplete profile"                    | "2 things left before you can publish — response time and payouts"                                                              |
-| Payout gate             | "Stripe Connect required"               | "You can't take payment until payouts are connected. It takes about five minutes."                                              |
-| Search placeholder      | "Enter search query"                    | "What kind of vendor are you looking for?"                                                                                      |
-| Search loading          | "Loading…"                              | "Finding photographers in Austin…"                                                                                              |
-| No results              | "0 results"                             | "No vendors match your search — try widening the price range or clearing the date"                                              |
-| Review prompt           | "Create review"                         | "How was your experience?"                                                                                                      |
-| Cancel confirm          | "Confirm cancellation"                  | "Cancel this booking? This notifies Maya and can't be undone."                                                                  |
-| Cancel dismiss          | "Cancel"                                | "Keep booking"                                                                                                                  |
-| Cancel proceed          | "OK"                                    | "Yes, cancel booking"                                                                                                           |
+| Context                        | Not this                                | This                                                                                                                                                        |
+| ------------------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hero                           | "The #1 marketplace for event vendors"  | "Book your vendors without the back-and-forth."                                                                                                             |
+| Hero badge                     | "412 vendors in Austin"                 | "Now booking in Austin"                                                                                                                                     |
+| Category card                  | "64 vendors · from $850"                | "Photo & film"                                                                                                                                              |
+| Sign-up proof                  | "2,412 events booked this year"         | "See the price. See the open dates. Then decide."                                                                                                           |
+| Transparency claim             | "Full pricing transparency"             | "Every vendor publishes what they charge and when they're free"                                                                                             |
+| Availability claim             | "Real-time availability sync"           | "Live calendars — if a date shows open, it is"                                                                                                              |
+| Search field label             | "Search" / "Keywords"                   | "Vendor type"                                                                                                                                               |
+| Bookings grouping              | "Nandakumar wedding"                    | "June 2026"                                                                                                                                                 |
+| Customer bookings title        | "Dashboard"                             | "Your bookings"                                                                                                                                             |
+| Bookings summary               | "Your wedding is in 49 days"            | "4 bookings across 2 upcoming events"                                                                                                                       |
+| Open category                  | "Still to book: Florals"                | "Add a vendor"                                                                                                                                              |
+| Hero sub                       | "Browse our extensive vendor network"   | "Compare real availability and pricing from vendors near you, send one request, and pay securely once the date is locked in."                               |
+| Empty bookings                 | "No data found"                         | "No bookings yet — find a vendor to get started"                                                                                                            |
+| Booking confirmed              | "Transaction complete"                  | "June 14 is yours."                                                                                                                                         |
+| Request reassurance (packaged) | "Payment is not required at this stage" | "You're requesting, not paying. Maya has {expiryDays} days to confirm or decline — the package price is fixed, and you approve before any card is charged." |
+| Request reassurance (custom)   | "Payment is not required at this stage" | "You're requesting, not paying. Maya has {expiryDays} days to confirm or send a revised quote — you approve before any card is charged."                    |
+| Validation error               | "Error 422: Validation failed"          | "Something doesn't look right — check the highlighted fields"                                                                                               |
+| Vendor save                    | "Submit profile"                        | "Save changes"                                                                                                                                              |
+| Publish blocker                | "Incomplete profile"                    | "2 things left before you can publish — response time and payouts"                                                                                          |
+| Payout gate                    | "Stripe Connect required"               | "You can't take payment until payouts are connected. It takes about five minutes."                                                                          |
+| Search placeholder             | "Enter search query"                    | "What kind of vendor are you looking for?"                                                                                                                  |
+| Search loading                 | "Loading…"                              | "Finding photographers in Austin…"                                                                                                                          |
+| No results                     | "0 results"                             | "No vendors match your search — try widening the price range or clearing the date"                                                                          |
+| Review prompt                  | "Create review"                         | "How was your experience?"                                                                                                                                  |
+| Cancel confirm                 | "Confirm cancellation"                  | "Cancel this booking? This notifies Maya and can't be undone."                                                                                              |
+| Cancel dismiss                 | "Cancel"                                | "Keep booking"                                                                                                                                              |
+| Cancel proceed                 | "OK"                                    | "Yes, cancel booking"                                                                                                                                       |
+| 500 recovery                   | "Go to my bookings"                     | "Browse vendors" — the 500 page cannot know who is reading, so the one destination true for everyone (D17)                                                  |
+
+**No approved string hard-codes a duration the code derives.** Ruled 2026-08-30
+(D16); the Request reassurance rows are why. They read "48 hours" from the day
+this file was written until 2026-08-30, while `BOOKING_REQUEST_EXPIRY_DAYS` has
+been **7 days** — so every screen that copied the approved string promised a
+deadline the API refuses, at the moment of commitment. `{expiryDays}` is a
+placeholder for that constant, not a literal to be typed out: the surface reads
+the constant and formats it.
+
+The row is split because #308 made the sentence conditional and this file did not
+follow. A **packaged** request carries an immutable price, so the vendor's only
+routes are confirm or decline; only a **custom** request can be answered with a
+quote. Quoting the wrong branch tells a customer to expect a negotiation that
+cannot happen.
+
+Two other durations in the table are deliberate and stay: "4 bookings across 2
+upcoming events" counts rows rather than naming a window, and the payout gate's
+"about five minutes" is an estimate of Stripe's onboarding, not a deadline this
+codebase enforces.
 
 ## Headline system
 

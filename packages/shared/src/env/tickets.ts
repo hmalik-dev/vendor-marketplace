@@ -48,7 +48,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
    * #336 and carry their own keys.
    */
   14: [],
-  15: ['auth', 'sentry'],
+  // Sentry moved to #353 on 2026-08-30; the admin portal reaches no external service but Clerk.
+  15: ['auth'],
   16: ['auth', 'storage'],
   17: [],
   18: [],
@@ -414,6 +415,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   350: [],
   351: [],
   352: ['auth'],
+  // Sentry only — the DSN is the whole blocker, and it is a real external service.
+  353: ['sentry'],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

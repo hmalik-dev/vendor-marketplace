@@ -71,6 +71,21 @@ path for someone who only knows the category. They set `?category=` and go.
 
 Values carry into `/search` as URL params.
 
+**The hero seeds nothing, and all three segments render in the placeholder tone**
+(`stone-600`, `#6B6459`). Ruled 2026-08-30 (D16). Frame `01 Landing` draws the
+City segment as the literal `Austin, TX` in `#23201C` — stone-900, the _filled_
+tone — while templating the vendor type (`{{ searchValue }}`, hint
+"Photography"), so the frame reads as a seeded query where live reads as three
+empty fields. **The frame is what gets corrected, not the code.** A hard-coded
+`Austin, TX` is a claim about where the marketplace operates, and drawing an
+empty value in the filled tone reads as a value that is not there. The empty
+state is the honest one, and whatever is decided for City decides the vendor-type
+tone with it.
+
+The hero badge is unaffected: "Now booking in Austin" is an approved string that
+names the market out loud, which is a different thing from pre-filling a query on
+the visitor's behalf.
+
 ## Photo cluster
 
 Three placeholder cards at 236×292 (−4°), 254×316 (+3°), 188×150 (+2°), shadows

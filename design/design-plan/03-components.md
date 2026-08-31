@@ -53,8 +53,27 @@ Both meta lines read **12.5px** here until 2026-08-29. The frames draw them at
 was corrected rather than the card (#198). 12.5px is the `14 Adaptations` size,
 for tablet and mobile.
 
-Availability chip is sage when free on the searched date, gold when scarce
-("2 dates left"), absent when no date is in the query.
+**Availability chip — ruled 2026-08-30, D16.** The search results grid draws
+**no availability chip at all**. `vendor-search.dao.ts` filters a dated query on
+availability, so every card that survives one is free on that date by
+construction and a chip saying so is a tautology — the DAO's own comment says as
+much. The sage chip survives in exactly one place: the **"free on a nearby date
+instead" band** that closes frame `18 Search no results`, where it names a
+_different_ date than the one searched (`nearby-dates-band.tsx` passes
+`nearestAvailableDate`) and is the only thing that unsticks a dead-end query.
+
+The **gold "scarce" chip is dropped from MVP.** This file said "gold when scarce
+("2 dates left")" and never defined scarce — free dates in what window, below
+what number — and that threshold is an invented number, which the
+no-invented-numbers rule forbids. Removed from frames `02` (line 294),
+`27 Search results — 1024` (315) and both `18` frames (1722, 1744); the two on
+`18` become the sage nearby-date form rather than disappearing.
+
+**New chip.** The stone chip (`#F0EAE1` / `#4A443C`, literal `New`, frame `02`
+line 297) is **not** an availability state — frame `02` puts it on a vendor
+already showing ★ 5.0 (17). It is a _joined recently_ badge: a vendor published
+within the last 30 days. With the sage and gold chips gone from the grid, it is
+the only chip a search card carries.
 
 ### Two densities
 
@@ -118,8 +137,16 @@ the submit bar simultaneously.
 ## Avatars
 
 Circle, 2px `stone-0` border when overlapping imagery. Initials fallback:
-Instrument Serif on `clay-100` (`clay-600` text) or `sage-100` (`sage-600`) —
+Instrument Serif on **`clay-150`** (`clay-600` text) or `sage-100` (`sage-600`) —
 alternate by hash so a list doesn't read as one colour. Sizes: 30 / 34 / 38 / 64 / 80.
+
+**`clay-150` is new, ruled 2026-08-30 (D17).** The frames draw the clay avatar
+fill as `#EADCCB` at **42 sites across 20 frames**, and the ramp had no step for
+it — `clay-100` (`#F7E7E0`) is far paler. The sage pair was already exact
+(`#E4E9DE` / `#4B5940`) and the clay initials were already exact (`#8E3F20`), so
+the fill was the only thing off-token. Same class of finding as #306's
+`#C4D6A8` / `#5C4A18`: **the ramp was incomplete, not the frame wrong.**
+`sage-150` and `stone-150` were the naming precedent.
 
 ## Sidebar nav
 
@@ -135,6 +162,14 @@ Always `bg-stone-0` with a 1px `stone-300` inner border, 18–20px padding, and 
 scrolls the page; if its content overflows, the rail scrolls internally.
 
 ## Placeholder imagery
+
+**The labelled placeholder is a build-time device, not a live empty state.**
+Ruled 2026-08-30 (D17). It stands in for photography the _product_ does not have
+yet — in frames, and in seeded demo rows before launch. **A real published vendor
+who has not uploaded a cover never sees it, and neither do their customers**: that
+is an empty state, and it is specified in `40-states.md`. The hatch reads as an
+unfinished product rather than an unfinished profile, and it is shown to the
+wrong audience.
 
 Until real photography exists:
 `repeating-linear-gradient(135deg, #E6DFD3 0 9px, #EFE9DF 9px 18px)` with a 9px

@@ -10,6 +10,7 @@ Tailwind 4 is CSS-first; there is no palette in a JS config.
   /* Clay — the action colour. FILL ONLY. */
   --color-clay-50: #fdf4ef;
   --color-clay-100: #f7e7e0; /* tinted surfaces: active nav, selected states */
+  --color-clay-150: #eadccb; /* avatar fallback fill — the frames' clay initials ground */
   --color-clay-200: #efd8cc; /* borders on clay surfaces */
   --color-clay-300: #dda98c;
   --color-clay-400: #b4552f; /* PRIMARY FILL — buttons, sliders, selected days */
