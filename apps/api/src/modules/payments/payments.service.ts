@@ -303,11 +303,18 @@ async function announceBooking(
       bookingId: booking.id,
     }),
     vendorUserId
-      ? notify(context, vendorUserId, 'booking_confirmed', {
-          title: 'A booking is confirmed',
-          body: 'The date is paid for and held. Payment reaches you after the event.',
-          bookingId: booking.id,
-        })
+      ? notify(
+          context,
+          vendorUserId,
+          'booking_confirmed',
+          {
+            title: 'A booking is confirmed',
+            body: 'The date is paid for and held. Payment reaches you after the event.',
+            bookingId: booking.id,
+          },
+          // The vendor reads this on their own side; `/bookings` refuses them.
+          'vendor',
+        )
       : Promise.resolve(),
   ]);
 }
@@ -544,11 +551,17 @@ export async function cancelBooking(
   const vendorUserId = await findVendorUserId(context.db, cancelled.vendorId);
 
   if (vendorUserId) {
-    await notify(context, vendorUserId, 'booking_cancelled', {
-      title: 'A booking was cancelled',
-      body: 'The date is free again on your calendar.',
-      bookingId: cancelled.id,
-    });
+    await notify(
+      context,
+      vendorUserId,
+      'booking_cancelled',
+      {
+        title: 'A booking was cancelled',
+        body: 'The date is free again on your calendar.',
+        bookingId: cancelled.id,
+      },
+      'vendor',
+    );
   }
 
   return {

@@ -647,7 +647,16 @@ export async function transitionRequest(
 
   await syncHeldDate(db, updated.vendorId, updated.eventDate);
 
-  await announce(db, updated, action, row.status, vendor.businessName, party, options.hub);
+  await announce(
+    db,
+    updated,
+    action,
+    row.status,
+    vendor.businessName,
+    party,
+    options.hub,
+    options.mail,
+  );
 
   const servicePackage = updated.packageId
     ? ((await findPackagesByIds(db, [updated.packageId]))[0] ?? null)
@@ -811,8 +820,20 @@ async function announce(
    * `quoted` request, and the notification is addressed to the other one.
    */
   party: 'customer' | 'vendor',
-  hub?: EventHub,
-  mail?: NotificationEmailDeps,
+  /*
+   * **Required, not optional — and that is the fix, not the style.**
+   *
+   * Both were optional, and `transitionRequest` then called this without
+   * `mail` at all. TypeScript was silent, every test stayed green, and four of
+   * the thirteen events in the ticket's own table quietly stopped emailing:
+   * a quote, an acceptance, a decline and a cancellation each wrote their
+   * in-app row and reached no inbox. That is precisely the "notifies in-app and
+   * not by email by accident" the design is supposed to make impossible, and an
+   * optional parameter is how it got in. Callers now pass `undefined`
+   * explicitly or the compiler stops them.
+   */
+  hub: EventHub | undefined,
+  mail: NotificationEmailDeps | undefined,
 ): Promise<void> {
   switch (action) {
     case 'quote':

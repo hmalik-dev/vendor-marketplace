@@ -1,6 +1,8 @@
 import { BRAND_NAME, type NotificationType } from '@vendor-marketplace/shared';
 import type { FastifyBaseLogger } from 'fastify';
+import type { NotificationRow } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
+import { notificationHref } from '../messaging/messaging.service.js';
 import type { EmailGateway } from '../../lib/email.js';
 import { findUserEmail } from './notification-email.dao.js';
 
@@ -29,7 +31,17 @@ import { findUserEmail } from './notification-email.dao.js';
  */
 
 /**
- * Which events reach an inbox, and the one action each carries.
+ * Which events reach an inbox, and what the one button says.
+ *
+ * **Labels only — the destination comes from `notificationHref`,** the same
+ * function the bell uses. That is not tidiness: a second table of paths went
+ * wrong in three ways at once when it existed. It sent `new_review` to
+ * `/vendor/reviews`, which is not a route; it sent the *customer* half of a
+ * `vendor_to_customer` review to a `/vendor/*` URL that refuses them; and it
+ * promised "Write a review" on a page that has no review form. Every one of
+ * those is a question `notificationHref` had already answered, including the
+ * direction-dependence a review needs and the deliberate refusal to deep-link
+ * `/bookings/<id>` for a type that can reach a vendor.
  *
  * A notification row names its own recipient, so "emails whom" is already
  * decided by whoever the row was written for — `booking_confirmed` writes two
@@ -39,42 +51,52 @@ import { findUserEmail } from './notification-email.dao.js';
  * `new_message` is **absent on purpose**: per-message email is how a product
  * teaches people to mute it. In-app only in MVP; a digest is post-MVP.
  */
-const EMAIL_ACTIONS: Partial<Record<NotificationType, { label: string; path: string }>> = {
-  new_request: { label: 'Open the request', path: '/vendor/bookings' },
-  request_quoted: { label: 'See the quote', path: '/bookings' },
-  request_accepted: { label: 'See the booking', path: '/bookings' },
-  request_declined: { label: 'Find another vendor', path: '/search' },
-  request_expired: { label: 'Send it again', path: '/search' },
-  request_cancelled: { label: 'Open your bookings', path: '/vendor/bookings' },
-  booking_confirmed: { label: 'See the booking', path: '/bookings' },
-  booking_completed: { label: 'Write a review', path: '/bookings' },
-  booking_cancelled: { label: 'Open your bookings', path: '/bookings' },
-  new_review: { label: 'Read the review', path: '/vendor/reviews' },
-  payout_sent: { label: 'See your payouts', path: '/vendor/payments' },
-  stripe_onboarding_complete: { label: 'Open your dashboard', path: '/vendor/dashboard' },
-  tag_suggestion_approved: { label: 'Open your profile', path: '/vendor/profile/edit' },
+const EMAIL_LABELS: Partial<Record<NotificationType, string>> = {
+  /*
+   * "Dashboard", not "the request": `notificationHref` sends `new_request` to
+   * `/vendor/dashboard`, and the label has to name where the button actually
+   * goes. Taking the destination from one place and the wording from another is
+   * how an email promises a surface it does not open.
+   */
+  new_request: 'Open your dashboard',
+  request_quoted: 'See the quote',
+  request_accepted: 'See the booking',
+  request_declined: 'Find another vendor',
+  request_expired: 'Open your bookings',
+  request_cancelled: 'Open your bookings',
+  booking_confirmed: 'See the booking',
+  booking_completed: 'See the booking',
+  booking_cancelled: 'Open your bookings',
+  new_review: 'Read the review',
+  payout_sent: 'Open your dashboard',
+  stripe_onboarding_complete: 'Open your dashboard',
+  tag_suggestion_approved: 'Open your profile',
 };
 
 /**
- * The vendor-side surfaces, so an action points at the reader's own half of the
- * product.
+ * The vendor's own half of the product, where the shared path is customer-only.
  *
- * A vendor sent to `/bookings` lands on the customer hub and is redirected;
- * `04-laws.md`'s "one primary action per email, pointing at the exact surface"
- * is not satisfied by a link that bounces.
+ * `/bookings` is gated by `requireRole('customer')`, so a vendor following it
+ * is redirected — and "one primary action, pointing at the exact surface" is
+ * not satisfied by a link that bounces. The bell has the same shape and lives
+ * with it because a redirect inside the app is cheap; an email is read once,
+ * often on a phone, and a bounce there is the whole interaction.
  */
-const VENDOR_PATHS: Partial<Record<NotificationType, string>> = {
-  booking_confirmed: '/vendor/bookings',
-  booking_cancelled: '/vendor/bookings',
-};
-
-export interface NotificationEmailRow {
-  id: string;
-  userId: string;
-  type: string;
-  title: string;
-  body: string | null;
+function forVendor(href: string): string {
+  return href === '/bookings' || href.startsWith('/bookings/') ? '/vendor/bookings' : href;
 }
+
+/**
+ * The row, as both the bell and the inbox read it.
+ *
+ * `data` is here because `notificationHref` needs it — a review's destination
+ * depends on whether the payload carries a vendor slug, and a quoted request
+ * deep-links by id.
+ */
+export type NotificationEmailRow = Pick<
+  NotificationRow,
+  'id' | 'userId' | 'type' | 'title' | 'body' | 'data'
+>;
 
 export interface NotificationEmailDeps {
   db: AppDatabase;
@@ -98,9 +120,9 @@ export async function sendNotificationEmail(
   /** `vendor` when the recipient reads this on their own side of the product. */
   audience: 'customer' | 'vendor' = 'customer',
 ): Promise<void> {
-  const action = EMAIL_ACTIONS[row.type as NotificationType];
+  const label = EMAIL_LABELS[row.type as NotificationType];
 
-  if (!action) {
+  if (!label) {
     return;
   }
 
@@ -120,16 +142,20 @@ export async function sendNotificationEmail(
       return;
     }
 
-    const path =
-      (audience === 'vendor' ? VENDOR_PATHS[row.type as NotificationType] : undefined) ??
-      action.path;
-    const url = `${deps.webOrigin}${path}`;
+    /*
+     * `?? '/bookings'` is unreachable in practice — every type in
+     * `EMAIL_LABELS` carries a payload `notificationHref` resolves — but a null
+     * href would otherwise render `${origin}null`, and a broken link in an
+     * archived email is worse than a general one.
+     */
+    const href = notificationHref(row as NotificationRow) ?? '/bookings';
+    const url = `${deps.webOrigin}${audience === 'vendor' ? forVendor(href) : href}`;
 
     await deps.email.send({
       to: recipient.email,
       subject: row.title,
-      html: renderHtml({ title: row.title, body: row.body, label: action.label, url }),
-      text: renderText({ title: row.title, body: row.body, label: action.label, url }),
+      html: renderHtml({ title: row.title, body: row.body, label, url }),
+      text: renderText({ title: row.title, body: row.body, label, url }),
       idempotencyKey: row.id,
     });
   } catch (error) {

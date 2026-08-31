@@ -364,7 +364,12 @@ describe('/booking-requests', () => {
 
       expect(harness.email.sent).toHaveLength(1);
       expect(harness.email.sent[0]?.subject).toBe('New booking request');
-      expect(harness.email.sent[0]?.text).toContain('/vendor/bookings');
+      /*
+       * `/vendor/dashboard`, which is where the *bell* sends this event — the
+       * email takes its destination from `notificationHref` rather than from a
+       * second table, so the two cannot point at different pages.
+       */
+      expect(harness.email.sent[0]?.text).toContain('/vendor/dashboard');
     });
 
     /*
@@ -400,6 +405,58 @@ describe('/booking-requests', () => {
         .select({ type: notifications.type })
         .from(notifications);
       expect(rows.map((row) => row.type)).toEqual(['new_request']);
+    });
+
+    /*
+     * **The four events a dropped parameter silenced.**
+     *
+     * `transitionRequest` called `announce` without its `mail` argument. Both
+     * were optional, so TypeScript said nothing and 734 tests stayed green
+     * while a quote, an acceptance, a decline and a cancellation each wrote
+     * their in-app row and reached no inbox — the exact "notifies in-app and
+     * not by email" the design exists to prevent.
+     *
+     * The parameter is required now, so the compiler catches the next one. This
+     * is the check that catches the one the compiler cannot: a hop that passes
+     * `undefined` on purpose.
+     */
+    it.each([
+      ['quote', 'request_quoted'],
+      ['accept', 'request_accepted'],
+      ['decline', 'request_declined'],
+      ['cancel', 'request_cancelled'],
+    ] as const)('emails the other party when a request is %sd', async (action, type) => {
+      /*
+       * A custom request rather than a packaged one, matching the quote tests
+       * below: a package caps the quote, and 250,000 is over the fixture
+       * package's price — which fails validation before any of this is reached.
+       */
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId = created.json<{ id: string }>().id;
+
+      harness.email.sent.length = 0;
+      harness.email.deliveredKeys.clear();
+
+      const actor = action === 'cancel' ? CUSTOMER : VENDOR;
+      const response =
+        action === 'quote'
+          ? await post(actor, `/booking-requests/${requestId}/quote`, {
+              quotedPriceCents: 250_000,
+            })
+          : await post(actor, `/booking-requests/${requestId}/${action}`);
+
+      expect(response.statusCode).toBe(200);
+
+      const rows = await harness.database.db
+        .select({ type: notifications.type })
+        .from(notifications);
+
+      // The row and the email, together — one without the other is the drift.
+      expect(rows.map((row) => row.type)).toContain(type);
+      expect(harness.email.sent).toHaveLength(1);
     });
 
     it('does not notify the vendor a second time about the same request', async () => {

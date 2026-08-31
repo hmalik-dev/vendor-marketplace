@@ -3,7 +3,11 @@ import { join } from 'node:path';
 import { BRAND_NAME, NOTIFICATION_TYPES } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 import type { EmailMessage } from '../../lib/email.js';
-import { sendNotificationEmail, type NotificationEmailDeps } from './notification-email.js';
+import {
+  sendNotificationEmail,
+  type NotificationEmailDeps,
+  type NotificationEmailRow,
+} from './notification-email.js';
 
 /*
  * The unit half of #11. The route suites assert that each event reaches an
@@ -47,12 +51,18 @@ function deps(overrides: Partial<NotificationEmailDeps> = {}): {
   };
 }
 
-const ROW = {
+/*
+ * `data` carries the booking id because `notificationHref` reads the payload to
+ * decide where the one action points — which is the whole reason the email
+ * takes the row rather than a hand-built message.
+ */
+const ROW: NotificationEmailRow = {
   id: '11111111-1111-4111-8111-111111111111',
   userId: '22222222-2222-4222-8222-222222222222',
   type: 'booking_confirmed',
   title: 'June 14 is confirmed',
   body: 'Payment is held until the event is complete.',
+  data: { bookingId: '33333333-3333-4333-8333-333333333333' },
 };
 
 describe('sendNotificationEmail', () => {
@@ -210,11 +220,72 @@ describe('the email set matches the notification set', () => {
 describe('brand literals', () => {
   const FORBIDDEN = ['Orla', 'VenMatch', 'VendorHub', 'venmatch', 'orla.com'];
 
-  /** Source with comments blanked, positions preserved. */
+  /**
+   * Source with comments blanked, positions preserved — **and string literals
+   * left alone.**
+   *
+   * The obvious regex is wrong in the one way that matters here. `//` inside a
+   * string starts a "comment" that runs to end of line, so
+   * `const HOME = 'https://orla.com/welcome'` blanks to `const HOME = 'https:`
+   * and the guard reads clean. `orla.com` is on the forbidden list and a URL is
+   * the only shape it can take, so the naive version was blind to exactly the
+   * literal it most needed to catch.
+   *
+   * A character walk rather than a cleverer regex: quoting and commenting are
+   * not a regular language, and the failure mode of getting it subtly wrong is
+   * a guard that passes.
+   */
   function withoutComments(source: string): string {
-    return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (comment) =>
-      comment.replace(/[^\n]/g, ' '),
-    );
+    let out = '';
+    let quote: string | null = null;
+    let index = 0;
+
+    while (index < source.length) {
+      const char = source[index] as string;
+      const next = source[index + 1];
+
+      if (quote) {
+        if (char === '\\') {
+          out += source.slice(index, index + 2);
+          index += 2;
+          continue;
+        }
+        if (char === quote) {
+          quote = null;
+        }
+        out += char;
+        index += 1;
+        continue;
+      }
+
+      if (char === "'" || char === '"' || char === '`') {
+        quote = char;
+        out += char;
+        index += 1;
+        continue;
+      }
+
+      if (char === '/' && next === '/') {
+        while (index < source.length && source[index] !== '\n') {
+          out += ' ';
+          index += 1;
+        }
+        continue;
+      }
+
+      if (char === '/' && next === '*') {
+        const close = source.indexOf('*/', index + 2);
+        const stop = close === -1 ? source.length : close + 2;
+        out += source.slice(index, stop).replace(/[^\n]/g, ' ');
+        index = stop;
+        continue;
+      }
+
+      out += char;
+      index += 1;
+    }
+
+    return out;
   }
 
   function sourceFiles(): [string, string][] {
@@ -238,6 +309,22 @@ describe('brand literals', () => {
 
   it('reads a brand name in a comment as prose rather than as a render', () => {
     expect(withoutComments(`/* ${BRAND_NAME} takes the payment. */`)).not.toContain(BRAND_NAME);
+  });
+
+  /*
+   * The case the naive regex missed, asserted directly. A URL is the only shape
+   * `orla.com` can take, and `//` inside it looked like the start of a comment.
+   */
+  it('does not mistake a URL’s slashes for the start of a comment', () => {
+    const line = "const HOME = 'https://" + 'orla.com' + "/welcome';";
+
+    expect(withoutComments(line)).toContain('orla.com');
+  });
+
+  it('still blanks a real line comment that follows a string', () => {
+    const line = "const x = 'safe'; // " + BRAND_NAME;
+
+    expect(withoutComments(line)).not.toContain(BRAND_NAME);
   });
 
   it.each(FORBIDDEN)('renders %s nowhere in apps/api/src', (literal) => {
