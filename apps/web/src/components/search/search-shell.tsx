@@ -376,7 +376,26 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
         ) : null}
       </div>
 
-      <div className="app-pane px-5 pb-20 min-[90rem]:px-6.5 lg:pb-4">
+      {/*
+        `pt-1 -mt-1` is headroom for the focus ring, not spacing.
+
+        `app-pane` is `overflow-y: auto`, so its padding box is a clipping box.
+        The first result row sat exactly on the content origin, which clipped
+        the top 4px of the card's ring (`ring-2` + `ring-offset-2`) — the ring
+        still painted left, right and bottom, so every value-based check passed
+        while the indicator was visibly cut.
+
+        The padding puts 4px inside the clip box and the negative margin takes
+        the same 4px back off the outside, so the first row lands on the same y
+        the frame draws it at. Spacing would have shifted the grid and failed
+        parity; this is layout-neutral by construction.
+
+        The class, not the instance: `availability-calendar.tsx` hit the same
+        thing and paid 1px off a 44px hit target for it (see `MonthNavButton`),
+        solving it structurally instead. Any `app-pane` whose first focusable
+        child is flush against the content origin has this.
+      */}
+      <div className="app-pane -mt-1 px-5 pt-1 pb-20 min-[90rem]:px-6.5 lg:pb-4">
         {hasFailed ? (
           <EmptyState
             icon={<SearchX />}
