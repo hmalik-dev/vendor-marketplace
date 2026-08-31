@@ -193,3 +193,49 @@ describe('teardown', () => {
     expect(unload().defaultPrevented).toBe(false);
   });
 });
+
+/*
+ * #360: the Back/Forward gap is deliberate, and these assert the *absence*
+ * rather than describing it.
+ *
+ * The only way to intercept a same-document history navigation is to push a
+ * decoy entry and undo it on every `popstate`. That breaks the second Back for
+ * every vendor in order to save the first Back for a vendor with unsaved work,
+ * so it is worse than the gap it closes. A future session reaching for that
+ * fix should have to delete a failing test to do it, not just disagree with a
+ * comment.
+ */
+describe('the deliberate Back/Forward gap (#360)', () => {
+  it('installs no popstate listener', () => {
+    const addEventListener = vi.spyOn(window, 'addEventListener');
+
+    renderHook(() => useUnsavedChangesGuard(true));
+
+    const types = addEventListener.mock.calls.map(([type]) => type);
+
+    // The positive half first: without it, a spy that recorded nothing at all
+    // would satisfy the assertion below and prove nothing.
+    expect(types).toContain('beforeunload');
+    expect(types).not.toContain('popstate');
+    addEventListener.mockRestore();
+  });
+
+  it('never touches the history stack', () => {
+    const pushState = vi.spyOn(window.history, 'pushState');
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+
+    const { rerender, unmount } = renderHook(({ dirty }) => useUnsavedChangesGuard(dirty), {
+      initialProps: { dirty: false },
+    });
+    rerender({ dirty: true });
+    act(() => {
+      clickAnchor();
+    });
+    unmount();
+
+    expect(pushState).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
+    pushState.mockRestore();
+    replaceState.mockRestore();
+  });
+});
