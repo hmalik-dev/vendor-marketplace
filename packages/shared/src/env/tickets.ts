@@ -452,6 +452,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   372: ['auth'], // #361's chrome renders for both signed-in roles
   373: [],
   374: [], // legal, policy and support surfaces — static routes, no external service
+  375: [], // search entry affordance — UI only, both lists are already served
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
