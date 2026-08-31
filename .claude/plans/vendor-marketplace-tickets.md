@@ -2200,6 +2200,60 @@ that need it using the token rather than an inline value or a wrong step (#277);
 initials never rendering Instrument Serif below the 16px floor at any of the five sizes
 (#230), which is an application of #74's ruling, not a new one.
 
+**Current state, verified 2026-08-31 — over half this ticket's prose is stale, and
+the largest half is void.**
+
+- **`--color-stone-800` now exists** (`theme.css:67`, `#3a342e`), added by #15 for
+  frame `13 Admin`'s header hairline and asserted by
+  `frame-13-parity.test.ts:61`. So the "seven live sites" are all **legal today**,
+  and the non-goal below — "adding a `stone-800` token to the ramp" — is
+  **overtaken by events**. D18 argued against exactly that and the same lane then
+  did it with a frame-drawn justification. Recorded rather than reversed: the
+  token has a consumer and a parity assertion.
+- **The undefined-step guard already exists**, generalised, at
+  `apps/web/src/app/design-tokens.test.ts`. It reads the theme, covers 17 utility
+  prefixes, proves it can fail against a fabricated `bg-sage-950`, and carries a
+  named ratchet whose four entries are **#376's**, with a second test that fails
+  if an exemption outlives its defect. Nothing to write. The one real gap is that
+  it scans `apps/web/src` only, not `packages/` — where nothing violates today.
+- **The `text-[Npx]` line-height defect was fixed globally by #235**
+  (`globals.css:172-174`, `line-height: normal` on `html`). A bare `text-[Npx]` is
+  no longer a defect, so the acceptance line asking for a guard that **fails** on
+  one would have gone red on 119 correct call sites. The named `h1` is a false
+  positive — `page.tsx:289` uses only named tokens. The vendor-card `h3` and price
+  span are bare but correct, and are **deliberately not resized**: lane 371's #377
+  corroborates 19px and 17px at every width, against the 1024 frame's stale 18/16.
+- **The 32x32-vs-44x44 conflict is already resolved and documented in code.**
+  `search-bar.tsx:459` gives the 30px circle a 44x44 target via
+  `after:size-11` with both translates, and the comment there works the geometry
+  through. Only the cross-reference was stale — `04-laws.md:133` is really `:137`,
+  corrected at both call sites.
+- **Counts corrected.** Six avatar sizes, not five, of which **four** fall below
+  the serif floor. **Fourteen** caret render sites, not twelve. The
+  `bookings-hub.test.tsx` line numbers were each **+1**, and two breakages the
+  ticket does not name — `refine-bar.test.tsx:157` reads `textContent`, which
+  includes `aria-hidden` nodes, and `frame-13-parity.test.ts:416` asserted the
+  glyph in source. "69 frame call sites" for the 12px radius is unreproducible;
+  the real numbers are **107 occurrences across 28 of the 46 frames**, and seven
+  inline `rounded-[12px]` call sites in the app.
+
+**What this lane actually did.** Added `--radius-panel: 12px` and moved all seven
+inline call sites onto it, with `theme-tokens.test.ts` rewritten from `toContain`
+per step to `toEqual` on the whole scale — the containment version passed on any
+superset, which is how a missing step went unnoticed. Ruled and recorded **D24**
+(the serif floor beats the frames on avatar monograms; the face changes, not the
+size), **D25** (the caret override, with the assertion that stops it coming back a
+third time after #228 and #338) and **D26** (the hatch is an editor primitive;
+`placeholder.tsx` is deleted). Three new guards: `dropdown-caret.test.ts`,
+`placeholder-hatch.test.ts`, and the per-size serif-floor check in
+`avatar.test.tsx` that closes the gap `display-type.test.ts` names but cannot read.
+
+**Not done, and why.** The inline-hex/width/radius guard D18 anticipates from this
+ticket is not in the acceptance list and is not here; the acceptance asks only that
+the sweep introduce none, which it does not. Extending `design-tokens.test.ts` over
+`packages/` is a one-line change with no current violations to catch, left for
+whoever needs it.
+
 **Non-goals:** adding a `stone-800` token to the ramp — `01-foundations.md` sets the ramp and
 this is not a ticket's to extend. The two absent frame colours (**#306** — a ruling, not an
 edit).

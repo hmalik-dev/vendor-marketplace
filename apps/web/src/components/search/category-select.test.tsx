@@ -167,4 +167,48 @@ describe('CategorySelect', () => {
       'focus-visible:bg-clay-400/10',
     );
   });
+
+  /*
+   * The open state the caret used to carry (D25) — and the reason this asserts
+   * an **absence** as well as a presence.
+   *
+   * The first fix added `font-semibold` beside a size ladder that already read
+   * `lg:font-normal`. Both are equal-specificity utilities, so at 1440 the `lg:`
+   * variant won on source order: the browser measured weight 400 open and
+   * closed while the class list read `font-semibold`. `cn` does not save this —
+   * tailwind-merge only collapses conflicts it is doing the joining for, and a
+   * responsive variant is not a conflict it resolves. So the resting weight is
+   * composed into the closed branch instead of layered under the open one, and
+   * the check is that the losing class is not emitted at all.
+   */
+  it('turns the hero value clay and semibold while its panel is open', async () => {
+    const user = userEvent.setup();
+    render(
+      <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Vendor type' });
+    /*
+     * Scoped to the trigger. Once the panel is open the same words are also a
+     * row inside it, so an unscoped query matches two elements — and the one
+     * this is about is the one in the button.
+     */
+    const value = (): HTMLElement =>
+      [...button.querySelectorAll('span')]
+        .reverse()
+        .find((span) => span.textContent === 'Any vendor type') as HTMLElement;
+
+    expect(value().className).toContain('font-medium');
+    expect(value().className).toContain('lg:font-normal');
+    expect(value().className).not.toContain('font-semibold');
+
+    await user.click(button);
+
+    await waitFor(() => expect(button.getAttribute('aria-expanded')).toBe('true'));
+
+    expect(value().className).toContain('font-semibold');
+    expect(value().className).toContain('text-clay-600');
+    // The layering that silently won at 1440 — never emitted alongside the win.
+    expect(value().className).not.toContain('lg:font-normal');
+  });
 });

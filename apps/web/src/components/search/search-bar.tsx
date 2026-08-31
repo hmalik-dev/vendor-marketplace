@@ -358,8 +358,11 @@ export function SearchBar({
               segment,
               'text-left',
               /*
-                The floor is the "Add a date" prompt plus its caret. Same rule
-                as the vendor-type segment: the width changes, not the words.
+                The floor is the "Add a date" prompt. It used to be that prompt
+                plus its caret; D25 removed the glyph and these minima were left
+                over-reserving by its width, which is harmless — a floor, not a
+                fixed width — and is recorded rather than re-derived by eye. The
+                rule is unchanged: the width changes, not the words.
               */
               isHero
                 ? /* .9 at 768, .8 from 1024. 768 also pads the field on both
@@ -388,7 +391,12 @@ export function SearchBar({
                 className={cn(
                   'truncate',
                   fieldText,
-                  draft.date === '' ? 'text-stone-600' : 'text-stone-900',
+                  /* The open state the caret used to carry (D25). */
+                  dateOpen
+                    ? 'font-semibold text-clay-600'
+                    : draft.date === ''
+                      ? 'text-stone-600'
+                      : 'text-stone-900',
                 )}
               >
                 {draft.date === '' ? (
@@ -406,12 +414,6 @@ export function SearchBar({
                     <span className="max-xl:hidden">{formattedDate.full}</span>
                   </>
                 )}
-              </span>
-              <span
-                aria-hidden="true"
-                className={cn('shrink-0 text-[9px]', dateOpen ? 'text-clay-400' : 'text-stone-600')}
-              >
-                {dateOpen ? '▴' : '▾'}
               </span>
             </span>
           </button>
@@ -453,7 +455,7 @@ export function SearchBar({
             // 30px at 1024, 32px from 1280 — the circle follows the bar.
             'relative flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 xl:size-8',
             /*
-              `04-laws.md:133`: an icon-only control carries a 44x44 hit area.
+              `04-laws.md:137`: an icon-only control carries a 44x44 hit area.
               The circle keeps the size the frames draw — #57 settled that it is
               a circle rather than a labelled pill — so the target grows past the
               paint instead of the paint growing. A hit area may exceed its own

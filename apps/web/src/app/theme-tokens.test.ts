@@ -101,18 +101,33 @@ describe('shared theme tokens', () => {
     expect(COLOR_TOKENS.get('stone-0')).not.toBe('#ffffff');
   });
 
-  it('uses the five-step radius scale', () => {
-    const radii = [
-      '--radius-sm: 6px;',
-      '--radius-md: 8px;',
-      '--radius-lg: 10px;',
-      '--radius-xl: 14px;',
-      '--radius-2xl: 18px;',
-    ];
+  /*
+   * `toEqual` on the whole scale, not `toContain` per step. The containment
+   * version passed on any superset, so a sixth step could be added and nothing
+   * would say so — which is how `12px` came to be written inline at seven call
+   * sites instead of being noticed as a missing token.
+   *
+   * `panel` is named for its role rather than given a ladder letter: inserting
+   * 12 numerically would have meant renaming `xl` and `2xl` and rewriting every
+   * call site that reads them. 28 of the 46 frames draw a 12px radius and
+   * `42-dropdowns.md` specifies the dropdown panel at 12px in writing.
+   */
+  it('uses exactly the six-step radius scale the plan documents', () => {
+    // `[a-z0-9-]+`, not `[a-z0-9]+`: a hyphenated step such as
+    // `--radius-drop-zone` would otherwise not match, drop out of `radii`, and
+    // leave this `toEqual` green — the exact failure the rewrite closes.
+    const radii = [...themeCss.matchAll(/--radius-([a-z0-9-]+): *([^;]+);/g)].map(
+      (match) => `${match[1] as string}: ${match[2] as string}`,
+    );
 
-    for (const radius of radii) {
-      expect(themeCss).toContain(radius);
-    }
+    expect(radii).toEqual([
+      'sm: 6px',
+      'md: 8px',
+      'lg: 10px',
+      'panel: 12px',
+      'xl: 14px',
+      '2xl: 18px',
+    ]);
   });
 
   it('tints every shadow with the ink rather than with neutral grey or black', () => {

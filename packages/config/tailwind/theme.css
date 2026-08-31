@@ -203,10 +203,21 @@
    */
   --tracking-label: 0.05em; /* `.lbl`, `.tl` — the uppercase micro-label */
 
-  /* Radius: five steps, varied on purpose, not 8px everywhere. */
+  /*
+   * Radius: six steps, varied on purpose, not 8px everywhere.
+   *
+   * `panel` sits between `lg` and `xl` and is named for its role rather than
+   * given a ladder letter, because inserting 12 numerically would have meant
+   * renaming `xl` and `2xl` and rewriting every call site that reads them. The
+   * step is not optional: 28 of the 46 frames draw a 12px radius, 107 times,
+   * and `42-dropdowns.md` specifies the dropdown panel at 12px in writing. With
+   * no token, seven call sites had written `rounded-[12px]` inline — which is
+   * exactly the old-design debt the parity work is retiring.
+   */
   --radius-sm: 6px; /* badges, category chips, small pills */
   --radius-md: 8px; /* table controls, filter buttons */
   --radius-lg: 10px; /* buttons, inputs */
+  --radius-panel: 12px; /* dropdown panels, stat tiles, calendar cells */
   --radius-xl: 14px; /* cards, panels, drop zones */
   --radius-2xl: 18px; /* vendor cards, booking rail, modals */
 

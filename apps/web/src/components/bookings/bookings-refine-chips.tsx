@@ -27,7 +27,7 @@ export interface BookingsRefineChipsProps {
 }
 
 /**
- * Frame `07`'s two Refine chips, `All categories ▾` and `Soonest first ▾`.
+ * Frame `07`'s two Refine chips, `All categories` and `Soonest first`.
  *
  * **They were `<span>`s until #302** — the right pixels with nothing behind
  * them: not focusable, no `role`, no handler, no URL param. `31`'s rule is that
@@ -96,7 +96,7 @@ export function BookingsRefineChips({
           onChange={(next) => go({ category: next === ALL_CATEGORIES ? null : next })}
           trigger={
             <button type="button" className={CHIP_CLASS}>
-              {`${category ?? 'All categories'} ▾`}
+              {category ?? 'All categories'}
             </button>
           }
         />
@@ -112,7 +112,7 @@ export function BookingsRefineChips({
         onChange={(next) => go({ sort: next as BookingSort })}
         trigger={
           <button type="button" className={CHIP_CLASS}>
-            {`${SORT_LABELS[sort]} ▾`}
+            {SORT_LABELS[sort]}
           </button>
         }
       />

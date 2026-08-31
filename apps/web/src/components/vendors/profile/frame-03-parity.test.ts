@@ -544,8 +544,9 @@ describe('frame 03 — chip radius (#109)', () => {
    * import removes that strip from frame 03 entirely — `#289` drops it, and the
    * frame no longer draws a 118px tile to measure — so those two assertions are
    * gone with it rather than re-derived against a strip the design deleted.
-   * `portfolio-strip.tsx` is still shipped and still `rounded-[12px]`; `#289`
-   * owns removing it.
+   * `portfolio-strip.tsx` has since been deleted — #289 finished the job — so
+   * the sentence that used to stand here, naming it as still shipped and still
+   * `rounded-[12px]`, was describing a file that is no longer in the tree.
    */
   const chipStyle = styleContaining('background:#F7E7E0', 'border-radius');
 

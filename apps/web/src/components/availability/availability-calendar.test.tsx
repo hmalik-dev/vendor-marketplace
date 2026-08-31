@@ -719,6 +719,28 @@ function colourToken(hex: string): string {
   return found[1];
 }
 
+/**
+ * The radius token whose value is this length, e.g. `12px` -> `panel`.
+ *
+ * Same shape as `colourToken` and `fontSizeToken`, and it does strictly more
+ * than the `rounded-[Npx]` assertion it replaced: that one passed on an inline
+ * arbitrary value, so the frame's 12px was measured for two years without ever
+ * asking whether the scale had a step for it. It did not — #373 added one.
+ */
+function radiusToken(px: string): string {
+  const theme = readFileSync(
+    join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+    'utf8',
+  );
+  const found = new RegExp(`--radius-([a-z0-9]+):\\s*${px}\\s*;`).exec(theme);
+
+  if (!found?.[1]) {
+    throw new Error(`No radius token has the value ${px}`);
+  }
+
+  return found[1];
+}
+
 /*
  * The frame's day grid. `[1]`, not `[0]`: each month draws two 7-column grids,
  * the weekday initials first and the day numerals second.
@@ -795,7 +817,7 @@ describe('frame 11 parity', () => {
     const panel = screen.getByText('Jun 18').parentElement;
 
     expect(panel?.className).toContain(
-      `rounded-[${styleValue(frameSelectedPanel, 'border-radius')}]`,
+      `rounded-${radiusToken(styleValue(frameSelectedPanel, 'border-radius'))}`,
     );
     expect(panel?.className).toContain(`p-[${styleValue(frameSelectedPanel, 'padding')}]`);
   });
@@ -812,7 +834,9 @@ describe('frame 11 parity', () => {
 
     const note = screen.getByText(/Saturdays in these three months/);
 
-    expect(note.className).toContain(`rounded-[${styleValue(frameMarketNote, 'border-radius')}]`);
+    expect(note.className).toContain(
+      `rounded-${radiusToken(styleValue(frameMarketNote, 'border-radius'))}`,
+    );
   });
 
   it('pads the primary selection action the way the frame draws it', async () => {

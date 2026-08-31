@@ -202,15 +202,6 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
                     ? 'Prefer not to say'
                     : `${BUDGET_TIER_LABELS[budgetTier].glyph} · ${BUDGET_TIER_LABELS[budgetTier].label} (${BUDGET_TIER_LABELS[budgetTier].range})`}
                 </span>
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'shrink-0 text-base',
-                    budgetOpen ? 'text-clay-400' : 'text-stone-600',
-                  )}
-                >
-                  {budgetOpen ? '▴' : '▾'}
-                </span>
               </button>
             }
           />

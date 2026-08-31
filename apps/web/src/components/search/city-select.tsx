@@ -104,16 +104,20 @@ export function CitySelect({
               className={cn(
                 'truncate',
                 valueClassName,
-                city === '' ? 'text-stone-600' : 'text-stone-900',
+                /*
+                  The open state the caret used to carry (D25). Without it this
+                  segment drew the same open and closed, so the state reached a
+                  screen reader through `aria-expanded` and reached nobody else.
+                  Matches the vendor-type segment beside it.
+                */
+                isOpen
+                  ? 'font-semibold text-clay-600'
+                  : city === ''
+                    ? 'text-stone-600'
+                    : 'text-stone-900',
               )}
             >
               {city === '' ? ANYWHERE_LABEL : `${city}, ${state}`}
-            </span>
-            <span
-              aria-hidden="true"
-              className={cn('shrink-0 text-[9px]', isOpen ? 'text-clay-400' : 'text-stone-600')}
-            >
-              {isOpen ? '▴' : '▾'}
             </span>
           </span>
         </button>

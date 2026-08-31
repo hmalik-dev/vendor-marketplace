@@ -119,7 +119,7 @@ export function AboutPane({
             */
             <div
               key={tile.label}
-              className="rounded-[12px] bg-stone-0 px-3 py-2.5 min-[90rem]:px-3.5 min-[90rem]:py-3"
+              className="rounded-panel bg-stone-0 px-3 py-2.5 min-[90rem]:px-3.5 min-[90rem]:py-3"
             >
               <dt className="text-label font-semibold tracking-label text-stone-600 uppercase">
                 {tile.label}

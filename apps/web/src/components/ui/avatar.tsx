@@ -86,6 +86,20 @@ function glyphSize(size: AvatarSize): number {
 }
 
 /**
+ * The smallest size Instrument Serif may be set at, from `01-foundations.md`.
+ *
+ * Exported for `avatar.test.tsx`, which renders all six sizes and asserts the
+ * face against this number rather than against one written down twice.
+ *
+ * `display-type.test.ts` declares its own `SERIF_FLOOR_PX` for the class-based
+ * scan and does **not** import this one — the two are the same value by
+ * agreement, not by linkage. Said plainly because the previous wording claimed
+ * a linkage that does not exist, and a false claim about a guard is worse than
+ * no claim.
+ */
+export const SERIF_FLOOR_PX = 16;
+
+/**
  * A stable, order-independent hash. Deliberately not `Math.random` or an array
  * index: the same person must keep the same colour between renders and between
  * the list and the detail view.
@@ -191,7 +205,27 @@ export function Avatar({
       data-slot="avatar-fallback"
       className={cn(
         shared,
-        'font-display leading-none',
+        /*
+         * The serif floor, applied where the guard could not see it.
+         *
+         * `01-foundations.md` states "Never below 16px" as a rule of the type
+         * system, and `display-type.test.ts` enforces it across the whole tree
+         * — except here, where the size comes from a numeric prop through
+         * `style` and no class states it. That exemption was a readability
+         * limitation of the guard, never a licence: four of the six sizes
+         * (`xs` 13, `row` 13, `sm` 13, `md` 15.96) were setting Instrument
+         * Serif below the floor.
+         *
+         * The frames genuinely draw `font-family:'Instrument Serif'` at 13px
+         * and 14px on these circles, so this is frame-versus-law and the law
+         * wins — recorded as D24. The alternative was raising the glyph to
+         * 16px, which changes the monogram's ratio in four frames and breaks
+         * their geometry; changing the face keeps every measured size and
+         * every circle, and deviates on the Font axis alone, at the one size
+         * range where the serif's own foundry says it should not be set.
+         */
+        glyphSize(size) >= SERIF_FLOOR_PX ? 'font-display' : 'font-sans',
+        'leading-none',
         FALLBACK_TONES[avatarToneIndex(name)],
         className,
       )}

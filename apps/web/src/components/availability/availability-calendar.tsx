@@ -637,7 +637,7 @@ export function AvailabilityCalendar({
             */
             <p className="text-sm leading-normal text-stone-700">No dates selected yet.</p>
           ) : (
-            <div className="rounded-[12px] bg-clay-100 p-[13px]">
+            <div className="rounded-panel bg-clay-100 p-[13px]">
               <p className="font-display text-[20px] text-stone-900">{formatRange(selection)}</p>
               <p className="mt-1 text-sm text-stone-700">
                 {selection.length} {selection.length === 1 ? 'day' : 'days'} · currently{' '}
@@ -768,7 +768,7 @@ export function AvailabilityCalendar({
           design/design-plan/98-post-mvp.md. Until then this panel says only
           what this vendor's own calendar says, which is true on day one.
         */}
-        <p className="rounded-[12px] bg-stone-150 p-3 text-sm leading-relaxed text-stone-700">
+        <p className="rounded-panel bg-stone-150 p-3 text-sm leading-relaxed text-stone-700">
           {quarter.openSaturdays === 0
             ? 'Every Saturday in these three months is already spoken for.'
             : `${quarter.openSaturdays} of your Saturdays in these three months are still open, alongside ${quarter.booked} booked and ${quarter.blocked} blocked dates.`}
