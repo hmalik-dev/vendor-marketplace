@@ -207,7 +207,7 @@ export function BookingRail({
             id={`${fieldId}-bar-date`}
             aria-haspopup="dialog"
             aria-expanded={barDateOpen}
-            className={`${FIELD} flex max-w-[180px] flex-1 items-center justify-between gap-2 text-left text-[13.5px]`}
+            className={`${BAR_FIELD} flex max-w-[180px] flex-1 items-center justify-between gap-2 text-left`}
           >
             <span className={cn('truncate', eventDate === '' && 'text-stone-600')}>
               {eventDate === '' ? 'Add a date' : formatMonthDay(eventDate)}
@@ -491,8 +491,27 @@ export function BookingRail({
  * calendar sub-control and lands on 39.5 — 1.5px taller than the `Guests`
  * input beside it, which reads as a misaligned pair on the frame's shared row.
  */
-const FIELD =
-  'h-[38px] w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-[13px] text-stone-900 min-[90rem]:text-base';
+const FIELD_BOX =
+  'h-[38px] w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-stone-900';
+
+/*
+ * The type step is deliberately **not** in `FIELD_BOX`.
+ *
+ * The rail is 13px at 1024 and 15px at 1440; the bar takes the frame's `.inp`
+ * at 13.5px. An earlier version appended `text-[13.5px]` to a `FIELD` that
+ * already carried `text-[13px]`, and the appended class was **inert**: both are
+ * equal-specificity arbitrary utilities, so the emitted sheet's source order
+ * decides, and `.text-\[13px\]` sits after `.text-\[13\.5px\]` in it. The
+ * override looked right in the markup and measured 13px in the browser.
+ *
+ * `cn` would not have saved it either — tailwind-merge collapses conflicting
+ * utilities by class group, but only when it is the one doing the joining, and
+ * this was a template literal.
+ */
+const FIELD = `${FIELD_BOX} text-[13px] min-[90rem]:text-base`;
+
+/** The bar's field, from frame `27 Vendor profile - 768`'s `.inp`. */
+const BAR_FIELD = `${FIELD_BOX} text-[13.5px]`;
 
 /* 4px under the micro-label at 1024, 5px at 1440. */
 const FIELD_LABEL =

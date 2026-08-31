@@ -514,7 +514,7 @@ describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
     expect(fill).toBe('stone-150');
 
     /*
-     * Asserted on the `FIELD` constant rather than on the whole file.
+     * Asserted on the `FIELD_BOX` constant rather than on the whole file.
      *
      * The old form was `railSource).not.toContain('bg-stone-0 px-')`, a
      * whole-file string search standing in for "no control is filled with the
@@ -522,8 +522,12 @@ describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
      * surface: #371's 768 bottom bar is legitimately `bg-stone-0 px-6`, and the
      * guard failed on a *correct* change while still not actually checking the
      * controls. Reading the declaration the controls share says what was meant.
+     *
+     * `FIELD_BOX` rather than `FIELD`: the type step was split out so the bar
+     * could take the frame's 13.5px without losing to `text-[13px]` on source
+     * order. The box -- and with it the fill this asserts -- stayed put.
      */
-    const field = /const FIELD =\s*\n?\s*'([^']*)'/.exec(railSource)?.[1];
+    const field = /const FIELD_BOX =\s*\n?\s*'([^']*)'/.exec(railSource)?.[1];
 
     expect(field).toBeDefined();
     expect(field).toContain(`bg-${fill}`);
