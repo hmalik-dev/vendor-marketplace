@@ -28,7 +28,7 @@ describe('DashboardStats', () => {
     const cards = container.querySelectorAll('li');
     expect(cards).toHaveLength(4);
     for (const card of cards) {
-      expect(card.className).toContain('rounded-[12px]');
+      expect(card.className).toContain('rounded-panel');
       expect(card.className).not.toContain('rounded-xl');
     }
   });

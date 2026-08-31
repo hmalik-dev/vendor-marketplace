@@ -99,28 +99,6 @@ function chipTrigger(hasClear: boolean): string {
   return cn('flex items-center gap-1.5 py-1.75 pl-3.25', hasClear ? 'pr-0' : 'pr-3.25');
 }
 
-/** The label and the caret, which flips and turns clay while the panel is open. */
-function ChipLabel({
-  label,
-  open,
-  hasClear,
-}: {
-  label: string;
-  open: boolean;
-  hasClear: boolean;
-}): React.ReactElement {
-  return (
-    <>
-      {label}
-      {hasClear ? null : (
-        <span aria-hidden="true" className={open ? 'text-clay-400' : undefined}>
-          {open ? '▴' : '▾'}
-        </span>
-      )}
-    </>
-  );
-}
-
 /** The `✕` that clears an active chip. */
 function ChipClear({ label, onClear }: { label: string; onClear: () => void }): React.ReactElement {
   return (
@@ -297,11 +275,7 @@ export function RefineBar({
           }
           trigger={
             <button type="button" className={chipTrigger(hasChosen)}>
-              <ChipLabel
-                label={hasChosen ? `${base} · ${chosen.length}` : base}
-                open={open}
-                hasClear={hasChosen}
-              />
+              {hasChosen ? `${base} · ${chosen.length}` : base}
             </button>
           }
         />
@@ -381,7 +355,7 @@ export function RefineBar({
             onApply={(next) => setState({ minPriceCents: next.min, maxPriceCents: next.max })}
             trigger={
               <button type="button" className={chipTrigger(false)}>
-                <ChipLabel label={priceLabel} open={openChip === 'price'} hasClear={false} />
+                {priceLabel}
               </button>
             }
           />
@@ -408,11 +382,7 @@ export function RefineBar({
             onChange={(next) => setState({ minRating: next === 'null' ? null : Number(next) })}
             trigger={
               <button type="button" className={chipTrigger(state.minRating !== null)}>
-                <ChipLabel
-                  label={ratingLabel}
-                  open={openChip === 'rating'}
-                  hasClear={state.minRating !== null}
-                />
+                {ratingLabel}
               </button>
             }
           />
@@ -474,11 +444,7 @@ export function RefineBar({
                 aria-label={`Sort: ${SORT_LABELS[state.sort]}`}
                 className={chipTrigger(false)}
               >
-                <ChipLabel
-                  label={SORT_LABELS[state.sort]}
-                  open={openChip === 'sort'}
-                  hasClear={false}
-                />
+                {SORT_LABELS[state.sort]}
               </button>
             }
           />

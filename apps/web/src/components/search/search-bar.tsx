@@ -407,12 +407,6 @@ export function SearchBar({
                   </>
                 )}
               </span>
-              <span
-                aria-hidden="true"
-                className={cn('shrink-0 text-[9px]', dateOpen ? 'text-clay-400' : 'text-stone-600')}
-              >
-                {dateOpen ? '▴' : '▾'}
-              </span>
             </span>
           </button>
         }
@@ -453,7 +447,7 @@ export function SearchBar({
             // 30px at 1024, 32px from 1280 — the circle follows the bar.
             'relative flex size-7.5 shrink-0 items-center justify-center rounded-full bg-clay-400 text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-500 xl:size-8',
             /*
-              `04-laws.md:133`: an icon-only control carries a 44x44 hit area.
+              `04-laws.md:137`: an icon-only control carries a 44x44 hit area.
               The circle keeps the size the frames draw — #57 settled that it is
               a circle rather than a labelled pill — so the target grows past the
               paint instead of the paint growing. A hit area may exceed its own

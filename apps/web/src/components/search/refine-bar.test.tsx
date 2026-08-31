@@ -154,7 +154,12 @@ describe('RefineBar layout', () => {
     const trigger = screen.getByRole('button', { name: 'Sort: Most relevant' });
     const chip = trigger.parentElement as HTMLElement;
 
-    expect(trigger.textContent).toBe('Most relevant▾');
+    /*
+     * `textContent`, so this reads the `aria-hidden` caret too — which is why
+     * it is the assertion that records the D25 override. The chip is the label
+     * and nothing else now.
+     */
+    expect(trigger.textContent).toBe('Most relevant');
 
     // Every number below is the frame's own, read at test time.
     const [padY, padX] = frameStyle('padding').split(/\s+/) as [string, string];

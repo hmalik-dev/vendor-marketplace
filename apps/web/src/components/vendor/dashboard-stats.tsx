@@ -18,7 +18,7 @@ function Stat({ label, value, delta, isPositive = false }: StatProps): React.Rea
       written literally rather than forced into a neighbouring token,
       the same way `RoleChip` writes its 5px.
     */
-    <li className="rounded-[12px] bg-stone-0 p-3.25 shadow-sm">
+    <li className="rounded-panel bg-stone-0 p-3.25 shadow-sm">
       <p className="text-label font-semibold tracking-label text-stone-600 uppercase">{label}</p>
       <p className="mt-1 font-display text-[30px] leading-none text-stone-900">{value}</p>
       {/*

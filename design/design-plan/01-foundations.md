@@ -260,6 +260,7 @@ failure** even when every token matches.
 --radius-sm: 6px; /* badges, category chips, small pills */
 --radius-md: 8px; /* table controls, filter buttons */
 --radius-lg: 10px; /* buttons, inputs */
+--radius-panel: 12px; /* dropdown panels, stat tiles, calendar cells */
 --radius-xl: 14px; /* cards, panels, drop zones */
 --radius-2xl: 18px; /* vendor cards, booking rail, modals */
 --radius-full: 9999px; /* avatars, status pills, the hero search bar */

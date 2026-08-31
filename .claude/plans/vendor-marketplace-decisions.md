@@ -813,3 +813,87 @@ colour on frame `13` is a defined token and the guard can run clean over the adm
 owns**. #373 adds the 12px radius step and the undefined-step guard to the same file.
 Whichever lands second rebases; the two changes are additive and do not overlap by line,
 but they must not run concurrently in two lanes.
+
+---
+
+### D24: The Serif Floor Beats the Frames on Avatar Monograms — *2026-08-31*
+
+**Ruled by #373.** `01-foundations.md:118` states "**Never below 16px**" for Instrument
+Serif as a rule of the type system, and `display-type.test.ts` enforces it across the whole
+tree. `avatar.tsx` was exempt — not licensed, but unreadable: the glyph size comes from a
+numeric prop through the `style` attribute, so no class states it and the guard could not
+see the number.
+
+Four of the six sizes were below the floor: `xs` 13px, `row` 13px, `sm` 13px and `md`
+15.96px. And the frames genuinely draw all four in the serif —
+`font-family:'Instrument Serif',serif;font-size:13px` on frame `13 Admin`'s 30px circle,
+14px on the 32px circles in `02`, `03` and `07`. So this is **frame versus law**, not code
+versus frame.
+
+**The law wins, and the face changes rather than the size.** Below the floor the monogram
+is set in Instrument Sans; at or above it, in Instrument Serif as before.
+
+**Rejected: raising the four glyphs to 16px.** It satisfies the floor on paper and breaks
+four frames' geometry — the monogram's ratio to its circle goes from the frames' 0.43 to
+0.53 on a 30px avatar, which the Layout and Style axes both read as a miss. Changing the
+face deviates on the **Font axis alone**, at exactly the size range the floor exists to
+forbid, and every measured circle and glyph size survives untouched.
+
+**The guard moves with it.** `avatar.test.tsx` now renders each of the six sizes and
+asserts the face against the component's own `SERIF_FLOOR_PX`, plus a non-vacuity check
+that four sizes fall below the floor and two above. The class-based guard still cannot read
+an inline `style`; this is the check that closes the gap it names.
+
+---
+
+### D25: The Disclosure Caret Comes Off Every Trigger — *2026-08-31*
+
+**A user override of the design contract, not a parity finding.** Recorded here because
+that distinction is the whole point: `Orla - Screens.dc.html` draws `▾` on its dropdown
+triggers and `42-dropdowns.md` specifies it in writing. The user overrides both and is
+correcting the frames themselves. For once the code leads the contract, which is the
+reverse of this repository's standing rule that design passes edit the plan and tickets
+write the code.
+
+Fourteen render sites came out in #373. Twelve were a separate `aria-hidden` span. Two —
+`bookings-refine-chips.tsx:99,115` — built the glyph into a **template literal inside the
+button**, so it was part of the accessible name: a screen reader announced *"All categories
+black down-pointing small triangle, button."* Those two chips are now named `All
+categories` and `Soonest first`, and six test assertions were rewritten to name them
+explicitly rather than loosened to a substring match.
+
+Every trigger keeps `aria-expanded` and stays visually identifiable as a control. No
+trigger was left with an empty span or padding reserving space for a glyph that is gone;
+`ChipLabel` and `SelectCaret` both existed only to pair a label with a caret and are
+deleted.
+
+**Why it needs an assertion.** It has already come back twice, as #228 and again as #338,
+because nothing recorded the override — a parity pass reads the frame, sees a caret the app
+does not draw, and correctly files it. `dropdown-caret.test.ts` states the override as a
+check, and `frame-13-parity.test.ts` inverts its own `toContain('▾')` rather than deleting
+it, keeping the frame half intact because the frame really does still draw one.
+
+---
+
+### D26: The Hatch Is an Editor Primitive; the Labelled `Placeholder` Is Retired — *2026-08-31*
+
+**Ruled by #373**, closing the question #369 left open.
+
+`03-components.md:176` already states the principle — "The labelled placeholder is a
+build-time device, not a live empty state" — and D17 ruling 2 settled the public half: a
+coverless vendor gets a neutral tone block, never a hatch and never a developer-facing
+label naming the shot the product is waiting for.
+
+What was left was a component nobody rendered. `<Placeholder>` had **zero** call sites, so
+the only way it could return was by accident, on the surface where it is forbidden: the
+frames draw hatched swatches, and the obvious way to reproduce one is to reach for the
+component named after it. `placeholder.tsx` is deleted.
+
+**`@utility placeholder-hatch` stays.** `image-upload.tsx` draws the frames' own gradient
+in the empty drop zone, which is the legitimate build-time use — an editor surface, seen by
+the vendor filling it in.
+
+`placeholder-hatch.test.ts` enforces both halves: the hatch appears only on the editor
+surfaces named in the test, and no labelled `Placeholder` ships. The second is asserted by
+the file's absence rather than by scanning for its name, because a name scan passes right
+up until the moment someone writes one.

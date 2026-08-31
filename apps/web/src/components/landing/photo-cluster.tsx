@@ -72,7 +72,7 @@ const CARDS = [
       'hidden lg:block lg:top-[152px] lg:left-[3px] lg:h-[110px] lg:w-[137px] min-[90rem]:top-52 min-[90rem]:left-1 min-[90rem]:h-37.5 min-[90rem]:w-47',
     /* Shed at 768, so this one only ever needs its 1024 and 1440 steps. */
     style:
-      'rotate-[2deg] lg:rounded-[12px] lg:shadow-[0_10px_26px_rgba(35,32,28,.14)] min-[90rem]:rounded-[14px] min-[90rem]:shadow-[0_12px_32px_rgba(35,32,28,.14)]',
+      'rotate-[2deg] lg:rounded-panel lg:shadow-[0_10px_26px_rgba(35,32,28,.14)] min-[90rem]:rounded-[14px] min-[90rem]:shadow-[0_12px_32px_rgba(35,32,28,.14)]',
   },
 ] as const;
 

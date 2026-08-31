@@ -185,17 +185,6 @@ export function CategorySelect({
             >
               {selected?.name ?? ANY_TYPE_LABEL}
             </span>
-            <span
-              aria-hidden="true"
-              className={cn(
-                'shrink-0',
-                isHero ? 'text-[9px] lg:text-[10px] min-[90rem]:text-[11px]' : 'text-[9px]',
-                // The caret flips and turns clay while the panel is open.
-                isOpen ? 'text-clay-400' : 'text-stone-600',
-              )}
-            >
-              {isOpen ? '▴' : '▾'}
-            </span>
           </span>
         </button>
       }

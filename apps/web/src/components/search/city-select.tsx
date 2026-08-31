@@ -109,12 +109,6 @@ export function CitySelect({
             >
               {city === '' ? ANYWHERE_LABEL : `${city}, ${state}`}
             </span>
-            <span
-              aria-hidden="true"
-              className={cn('shrink-0 text-[9px]', isOpen ? 'text-clay-400' : 'text-stone-600')}
-            >
-              {isOpen ? '▴' : '▾'}
-            </span>
           </span>
         </button>
       }

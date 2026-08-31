@@ -73,7 +73,7 @@ const PANEL_WIDTH: Record<DropdownWidth, string> = {
  * between `radius-md` (8px, what the rows use) and `radius-xl` (14px, what a
  * card uses), and a panel is neither.
  */
-const PANEL = 'flex flex-col rounded-[12px] border border-stone-300 bg-stone-0 shadow-dropdown';
+const PANEL = 'flex flex-col rounded-panel border border-stone-300 bg-stone-0 shadow-dropdown';
 
 /**
  * Two paddings, because the frame draws two.

@@ -215,7 +215,12 @@ describe('VendorCard', () => {
   it('shows a coverless vendor no hatch and no developer-facing label', () => {
     const { container } = render(<VendorCard vendor={vendor()} />);
 
-    expect(screen.queryByRole('img', { name: 'Placeholder for cover 3:2' })).toBeNull();
+    /*
+     * The `Placeholder for cover 3:2` query that stood here is gone with the
+     * component (D26) — nothing can render that name any more, so asserting it
+     * absent was checking nothing. `placeholder-hatch.test.ts` asserts the
+     * component's absence tree-wide; these two still bite on this card.
+     */
     expect(container.querySelector('[data-slot="placeholder"]')).toBeNull();
     expect(container.innerHTML).not.toContain('placeholder-hatch');
   });
