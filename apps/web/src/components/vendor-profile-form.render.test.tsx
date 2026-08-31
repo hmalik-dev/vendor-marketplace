@@ -289,6 +289,94 @@ describe('VendorProfileForm — a save the form itself refuses', () => {
 });
 
 /*
+ * #360, carrying #288: the preview rail.
+ *
+ * The card used to sit in the field row like a third input, asserting a
+ * business name directly above the input where that name is typed. Frame 09's
+ * note is the law being tested here: "It stays a separate surface at every
+ * width; it never becomes a field."
+ */
+describe('the storefront preview rail (#360)', () => {
+  function rail(): HTMLElement {
+    return screen.getByRole('complementary', { name: 'Storefront preview' });
+  }
+
+  it('is a separate surface, not a node inside the form', () => {
+    renderSaved();
+
+    expect(rail().closest('form')).toBeNull();
+  });
+
+  it('carries the mono label and the promise it makes', () => {
+    renderSaved();
+
+    expect(within(rail()).getByText('Preview')).toBeTruthy();
+    expect(within(rail()).getByText('Updates as you type')).toBeTruthy();
+  });
+
+  it('offers both placements of the one photo', () => {
+    renderSaved();
+
+    expect(within(rail()).getByRole('radio', { name: 'In search' })).toBeTruthy();
+    expect(within(rail()).getByRole('radio', { name: 'Your profile' })).toBeTruthy();
+  });
+
+  it('opens on the search placement', () => {
+    renderSaved();
+
+    expect(
+      within(rail()).getByRole('radio', { name: 'In search' }).getAttribute('aria-checked'),
+    ).toBe('true');
+  });
+
+  it('switches placement when the other tab is chosen', async () => {
+    const user = userEvent.setup();
+    renderSaved();
+
+    await user.click(within(rail()).getByRole('radio', { name: 'Your profile' }));
+
+    expect(
+      within(rail()).getByRole('radio', { name: 'Your profile' }).getAttribute('aria-checked'),
+    ).toBe('true');
+  });
+
+  /*
+   * "No link out." A vendor clicking their own preview must not be navigated
+   * off a form holding unsaved edits.
+   *
+   * jsdom implements `inert` as an attribute only — it does not remove the
+   * subtree from the accessibility tree or from the focus order, so
+   * `queryAllByRole('link')` still finds the card's Link here and would find
+   * it however correct the rendered page is. Asserting the attribute is the
+   * class-level fact this environment can actually establish; that the link is
+   * genuinely unreachable is **owed to the browser parity pass**, not proven
+   * here.
+   */
+  it('marks the mirrored card inert so it cannot be navigated', () => {
+    renderSaved();
+
+    const link = within(rail()).getByRole('link', { name: /Sunlit Studio/ });
+
+    expect(link.closest('[inert]')).not.toBeNull();
+  });
+
+  /*
+   * "Updates as you type" is the rail's own promise, so it is asserted rather
+   * than trusted: the mirror reads the live form, not the saved row.
+   */
+  it('mirrors the business name as it is typed', async () => {
+    const user = userEvent.setup();
+    renderSaved();
+
+    const field = screen.getByLabelText('Business name');
+    await user.clear(field);
+    await user.type(field, 'Harlow Studio');
+
+    expect(within(rail()).getByText('Harlow Studio')).toBeTruthy();
+  });
+});
+
+/*
  * #360, carrying #258: the submit bar never said when the storefront was last
  * saved, so a vendor returning to the screen could not tell a saved draft from
  * an unsaved one.

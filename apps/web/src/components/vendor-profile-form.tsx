@@ -18,6 +18,7 @@ import {
   updateVendorProfileSchema,
   UPLOAD_CONSTRAINT_LINE,
   type Category,
+  type VendorCard as VendorCardData,
   type PublishBlockerKey,
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
@@ -39,6 +40,7 @@ import {
 import { cn } from '@/lib/utils';
 import { US_STATE_OPTIONS, usStateName } from '@/lib/us-states';
 import {
+  toImageSrc,
   wireTagListSchema,
   wireVendorProfileSchema,
   type WireTag,
@@ -47,6 +49,7 @@ import {
 import { CategoryPicker } from '@/components/category-picker';
 import { FormSectionNav, type FormSection } from '@/components/form-section-nav';
 import { ImageUpload } from '@/components/image-upload';
+import { StorefrontPreview } from '@/components/vendor/storefront-preview';
 import { TagPicker } from '@/components/tags/tag-picker';
 import { Button } from '@/components/ui/button';
 import {
@@ -87,6 +90,13 @@ const DEFAULT_SERVICE_RADIUS_MILES = 30;
 
 /** How long the inline "Saved" confirmation stays up. */
 const SAVED_NOTICE_MS = 2000;
+
+/**
+ * Stands in for the row id while a profile is still being created. The preview
+ * card needs an id for its key; nothing reads this one, and it never reaches
+ * the API — the create payload carries no id at all.
+ */
+const PREVIEW_VENDOR_ID = '00000000-0000-4000-8000-000000000000';
 
 /** Characters left before the bio counter starts warning. */
 const BIO_WARNING_THRESHOLD = 100;
@@ -485,6 +495,44 @@ export function VendorProfileForm({
    */
   const payoutsBlock = profile !== null && !profile.stripeOnboarded;
 
+  /*
+   * What the preview rail mirrors: the live form, not the saved row, which is
+   * what makes "Updates as you type" true rather than decorative.
+   *
+   * `startingPriceCents` is null on purpose. A starting price is derived from
+   * this vendor's packages, which this screen does not load and cannot know —
+   * and inventing one to make the preview look complete would put a number on
+   * a card that no query produced.
+   */
+  const previewVendor: VendorCardData = useMemo(
+    () => ({
+      id: profile?.id ?? PREVIEW_VENDOR_ID,
+      businessName: form.businessName.trim() || 'Your business',
+      slug: slugPreview,
+      city: form.city.trim() || null,
+      state: form.state.trim() || null,
+      profileImageUrl: toImageSrc(form.profileImageUrl),
+      coverImageUrl: toImageSrc(form.coverImageUrl),
+      avgRating: profile?.avgRating ?? 0,
+      reviewCount: profile?.reviewCount ?? 0,
+      startingPriceCents: null,
+      categories: categories
+        .filter((category) => form.categoryIds.includes(category.id))
+        .map((category) => ({ id: category.id, name: category.name, slug: category.slug })),
+    }),
+    [
+      categories,
+      form.businessName,
+      form.categoryIds,
+      form.city,
+      form.coverImageUrl,
+      form.profileImageUrl,
+      form.state,
+      profile,
+      slugPreview,
+    ],
+  );
+
   const sections: FormSection[] = useMemo(
     () =>
       SECTION_ORDER.map((section) => ({
@@ -609,6 +657,21 @@ export function VendorProfileForm({
       <FormSectionNav
         sections={sections}
         className="hidden shrink-0 border-stone-300 bg-stone-0 lg:flex lg:w-(--sidebar-width-sm) lg:border-r"
+      />
+
+      {/*
+        Frame `09` is explicit that this "stays a separate surface at every
+        width; it never becomes a field" — so it is a sibling of the form, not
+        a node inside it. Below `lg` it orders above the fields rather than
+        below them, because a mirror the vendor has to scroll past the whole
+        form to reach is a mirror nobody looks at.
+
+        308px at 1440 and 280px from `lg`, both content-box against the frame's
+        own measurements.
+      */}
+      <StorefrontPreview
+        vendor={previewVendor}
+        className="order-first lg:order-last lg:h-full lg:w-70 lg:overflow-y-auto min-[90rem]:w-77"
       />
 
       <form onSubmit={save} className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
