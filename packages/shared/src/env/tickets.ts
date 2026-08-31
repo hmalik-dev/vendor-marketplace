@@ -454,6 +454,14 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   374: [], // legal, policy and support surfaces — static routes, no external service
   375: [], // search entry affordance — UI only, both lists are already served
   376: [], // four colour classes naming steps no ramp defines — token substitutions only
+
+  // Raised by #371's measurement pass, 2026-08-31. The first four are edits under
+  // `design/` or rulings, which a ticket may not make — see `web-design-parity.md`.
+  377: [], // the stale 1024 search frames — a design re-cut, no code
+  378: [], // the 7-row Setup card vs the 6 publish blockers — a ruling, no code
+  379: [], // the search skeleton mirroring its card — UI only
+  380: [], // `Due today` vs `Total today` — a copy ruling, no external service
+  381: ['stripe'], // a check constraint on the two payout columns Stripe onboarding writes
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
