@@ -199,8 +199,18 @@ function renderHtml({ title, body, label, url }: Rendered): string {
     body
       ? `<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#4A443C;">${escapeHtml(body)}</p>`
       : '',
+    /*
+     * 44px tall, and the arithmetic is why the numbers are what they are:
+     * `04-laws.md` sets a 44x44 minimum for anything a finger taps, and a
+     * browser pass measured this at **39px** with `padding:11px 18px` — 11 + 11
+     * plus a 17px default line box. `line-height` is stated rather than
+     * inherited because an email client supplies its own default, so leaving it
+     * open means the one number that decides the height is the one number this
+     * template does not control. 14 + 14 + 16 = 44.
+     */
     `<a href="${escapeHtml(url)}" style="display:inline-block;background:#B4552F;color:#FFFDF9;`,
-    'text-decoration:none;font-size:14px;font-weight:600;padding:11px 18px;border-radius:10px;">',
+    'text-decoration:none;font-size:14px;line-height:16px;font-weight:600;padding:14px 18px;',
+    'border-radius:10px;">',
     `${escapeHtml(label)}</a>`,
     '</td></tr></table></body></html>',
   ].join('');

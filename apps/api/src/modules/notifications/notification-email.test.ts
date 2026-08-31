@@ -114,6 +114,29 @@ describe('sendNotificationEmail', () => {
     expect(sent).toEqual([]);
   });
 
+  /*
+   * The tap target, pinned as arithmetic rather than as a class string.
+   *
+   * A browser pass measured this button at **39px** — `padding:11px 18px` plus
+   * a 17px default line box — against `04-laws.md`'s 44px minimum for anything
+   * a finger taps. The three numbers that decide the height are asserted
+   * together because changing any one of them silently changes it, and an email
+   * is read on a phone more often than not.
+   */
+  it('draws the action at the 44px tap minimum', async () => {
+    const { deps: d, sent } = deps();
+
+    await sendNotificationEmail(d, ROW);
+
+    const html = sent[0]?.html ?? '';
+    const padding = /padding:(\d+)px \d+px/.exec(html)?.[1];
+    const lineHeight = /line-height:(\d+)px/.exec(html)?.[1];
+
+    expect(padding).toBeDefined();
+    expect(lineHeight).toBeDefined();
+    expect(Number(padding) * 2 + Number(lineHeight)).toBeGreaterThanOrEqual(44);
+  });
+
   it('always sends a plain-text alternative beside the html', async () => {
     const { deps: d, sent } = deps();
 
