@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RefineBar } from './refine-bar';
@@ -146,6 +146,33 @@ describe('RefineBar layout', () => {
    * 148x33 against the frame's 92x31 and 56px to the left of it — none of
    * which a stylesheet can correct.
    */
+  /*
+   * The open state the caret used to carry (D25).
+   *
+   * Removing the glyph left every chip on this bar rendering byte-identically
+   * open and closed — a browser pass measured the wrapper's fill, border,
+   * colour and weight in both states and got the same four values. Nothing in
+   * the diff looked wrong, because the class strings had not changed: the
+   * signal had been living inside the element that was deleted.
+   *
+   * The edge rather than the fill, because the fill is already the tone's job.
+   */
+  it('darkens a chip’s edge to clay while its panel is open', async () => {
+    const user = userEvent.setup();
+    renderBar();
+
+    const trigger = screen.getByRole('button', { name: 'Sort: Most relevant' });
+    const chip = trigger.parentElement as HTMLElement;
+
+    expect(chip.className).toContain('border-stone-300');
+    expect(chip.className).not.toContain('border-clay-400');
+
+    await user.click(trigger);
+
+    await waitFor(() => expect(trigger.getAttribute('aria-expanded')).toBe('true'));
+    expect(chip.className).toContain('border-clay-400');
+  });
+
   it('draws sort as a chip rather than a native select', () => {
     const bar = renderBar();
 

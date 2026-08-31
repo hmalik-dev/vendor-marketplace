@@ -166,9 +166,7 @@ export function CategorySelect({
                 'truncate',
                 /* Matches `SearchBar`'s own ladder — the two must agree, they
                  sit side by side in the same pill. */
-                isHero
-                  ? 'text-[14px] font-medium lg:text-[13.5px] lg:font-normal min-[90rem]:text-md'
-                  : 'text-[13.5px]',
+                isHero ? 'text-[14px] lg:text-[13.5px] min-[90rem]:text-md' : 'text-[13.5px]',
                 /*
                   Open state. It used to differ between the two bars: in the
                   compact bar the open segment is the only clay element on the
@@ -179,12 +177,22 @@ export function CategorySelect({
                   only signal, so the state was announced and not drawn. Both
                   bars now turn the value, which is the treatment the frames
                   already specify for one of them.
+
+                  The resting weight is **composed here rather than layered**
+                  onto the size ladder above, where it used to sit as
+                  `font-medium lg:font-normal`. Both are equal-specificity
+                  utilities, so at 1440 the `lg:` variant won on source order
+                  and `font-semibold` never applied: the browser measured 400
+                  open and closed while the markup read `font-semibold`. A
+                  class string that names a weight the page does not paint is
+                  worse than one that names none — it reads as verified.
                 */
                 isOpen
                   ? 'font-semibold text-clay-600'
-                  : selected
-                    ? 'text-stone-900'
-                    : 'text-stone-600',
+                  : cn(
+                      isHero && 'font-medium lg:font-normal',
+                      selected ? 'text-stone-900' : 'text-stone-600',
+                    ),
               )}
             >
               {selected?.name ?? ANY_TYPE_LABEL}

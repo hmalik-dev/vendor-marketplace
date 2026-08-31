@@ -59,7 +59,8 @@ const SORT_LABELS: Record<VendorSortOption, string> = {
  * The three chip states the design distinguishes:
  *
  * - `resting` — no value, `stone-0` fill. The frames draw a `▾` here;
- *   D25 removed it from every trigger.
+ *   D25 removed it from every trigger, and `chipWrapper`'s `open` argument is
+ *   what replaced the open-state signal it was carrying.
  * - `valued` — carries a live value that isn't narrowing anything on its own
  *   (the price range), `stone-150` fill.
  * - `active` — genuinely excluding vendors, `clay-100` fill / `clay-600` text,
@@ -83,10 +84,28 @@ const CHIP_TONES: Record<ChipTone, string> = {
  * (#167), so the chip keeps only its own geometry and lets each filter pick a
  * body.
  */
-function chipWrapper(tone: ChipTone): string {
+/**
+ * `open` darkens the chip's own edge to clay.
+ *
+ * The open state used to be carried by the caret turning `text-clay-400`, and
+ * D25 removed the caret — which left every chip on this bar rendering
+ * byte-identically open and closed. `aria-expanded` still flipped, so the state
+ * was announced to a screen reader and drawn for nobody. Found in the browser,
+ * not in review: the class strings were unchanged, so nothing in the diff
+ * looked wrong.
+ *
+ * The border rather than the fill, because the fill is already the tone's job —
+ * `active` is `clay-100` and `valued` is `stone-150`, so an open cue on the fill
+ * would either collide with those or have to vary by tone. It is also the
+ * app's own idiom for a bordered control: `03-components.md` puts focus on a
+ * standalone bordered field as `border-clay-400`, on the reasoning that an
+ * element with an edge signals through that edge.
+ */
+function chipWrapper(tone: ChipTone, open: boolean): string {
   return cn(
     'flex items-center rounded-md border text-[12.5px] font-semibold transition-colors duration-(--duration-fast)',
     CHIP_TONES[tone],
+    open && 'border-clay-400',
   );
 }
 
@@ -253,7 +272,7 @@ export function RefineBar({
     const open = openChip === tagCategory;
 
     return (
-      <span key={tagCategory} className={chipWrapper(hasChosen ? 'active' : 'resting')}>
+      <span key={tagCategory} className={chipWrapper(hasChosen ? 'active' : 'resting', open)}>
         {/*
           Multi-select, and it **applies on Apply** rather than per tick. Three
           of these chips filter the same grid; ticking three languages used to
@@ -329,7 +348,7 @@ export function RefineBar({
         there is nothing an `✕` would mean here that dragging back to the ends
         doesn't already say.
       */}
-        <span className={chipWrapper(hasPrice ? 'valued' : 'resting')}>
+        <span className={chipWrapper(hasPrice ? 'valued' : 'resting', openChip === 'price')}>
           {/*
             Presets, then typed bounds, then a slider that is only a readout.
             Two bare `input[type=range]` sliders stood here: a budget is a
@@ -368,7 +387,12 @@ export function RefineBar({
           sat over the results heading and the first result card, hiding the
           answer to the question it had just been asked.
         */}
-        <span className={chipWrapper(state.minRating !== null ? 'active' : 'resting')}>
+        <span
+          className={chipWrapper(
+            state.minRating !== null ? 'active' : 'resting',
+            openChip === 'rating',
+          )}
+        >
           <SingleSelectDropdown
             open={openChip === 'rating'}
             onOpenChange={chipOpen('rating')}
@@ -424,7 +448,7 @@ export function RefineBar({
       */}
       <div className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
         Sort
-        <span className={chipWrapper('resting')}>
+        <span className={chipWrapper('resting', openChip === 'sort')}>
           <SingleSelectDropdown
             open={openChip === 'sort'}
             onOpenChange={chipOpen('sort')}
