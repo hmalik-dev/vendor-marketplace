@@ -477,12 +477,7 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
         ) : (
           <div className={GRID_COLUMNS}>
             {result?.items.map((vendor) => (
-              <VendorCard
-                key={vendor.id}
-                vendor={vendor}
-                density="compact"
-                {...(state.date ? { searchedDate: state.date } : {})}
-              />
+              <VendorCard key={vendor.id} vendor={vendor} density="compact" />
             ))}
           </div>
         )}

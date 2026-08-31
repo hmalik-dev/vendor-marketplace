@@ -155,19 +155,38 @@ describe('VendorCard', () => {
   });
 
   /*
-   * When the query carried a date, the chip is the answer to the question the
-   * customer actually asked.
+   * D16 (#324): a result card carries **no** availability chip, at any width
+   * or density. Surviving a dated filter already *is* the answer —
+   * `vendor-search.dao.ts` hard-codes `availableOnDate: true` on every row of a
+   * dated query — so a chip repeating it was a tautology, and the gold "scarce"
+   * variant rested on a threshold nobody ever defined.
+   *
+   * The card cannot distinguish the two cases on its own, which is why this is
+   * a deletion rather than a condition: the caller that knows something the
+   * card does not passes `freeOnDate` explicitly.
    */
-  it('answers the searched date with an availability chip', () => {
+  it('makes no availability claim from a searched date, even when free on it', () => {
     render(<VendorCard vendor={vendor({ availableOnDate: true })} searchedDate="2026-06-14" />);
 
-    expect(screen.getByText('Free June 14')).toBeDefined();
+    expect(screen.queryByText(/^Free /)).toBeNull();
   });
 
   it('makes no availability claim when no date was searched', () => {
     render(<VendorCard vendor={vendor()} />);
 
     expect(screen.queryByText(/^Free /)).toBeNull();
+  });
+
+  /*
+   * Sage survives in exactly one place on a card: the nearby-dates band, which
+   * passes `freeOnDate` because it is offering a **different** date than the
+   * one searched. That is the only thing that unsticks a dead-end query, so
+   * the deletion above must not reach it.
+   */
+  it('still names an explicitly offered date, which is the nearby-dates band', () => {
+    render(<VendorCard vendor={vendor()} freeOnDate="2026-06-14" density="compact" />);
+
+    expect(screen.getByText('Free Jun 14')).toBeDefined();
   });
 
   /*
@@ -211,5 +230,41 @@ describe('VendorCard', () => {
     render(<VendorCard vendor={vendor({ city: null, state: null })} />);
 
     expect(screen.queryByText(/·\s*$/)).toBeNull();
+  });
+
+  /*
+   * The storefront editor's preview rail (#360) renders the real card at full
+   * size so the preview cannot drift from the thing it previews. But frame `09`
+   * draws that card as static content, and a vendor clicking their own preview
+   * would be navigated off a form holding unsaved edits.
+   *
+   * `preview` expresses that as a contract on the card. The alternative in
+   * flight was an `inert` wrapper at the call site, which works but describes
+   * the constraint at the wrong end — the card is the thing that knows it is
+   * "ONE control", so the card is where the exception belongs.
+   */
+  describe('preview', () => {
+    it('drops the link, so the whole card stops being one control', () => {
+      const { container } = render(<VendorCard vendor={vendor()} preview />);
+
+      expect(container.querySelector('a')).toBeNull();
+    });
+
+    it('renders the same content it would as a link', () => {
+      render(<VendorCard vendor={vendor()} preview />);
+
+      // The name still reads, and still as the card's own heading rather than
+      // as link text — a preview that lost its content would defeat the point.
+      expect(screen.getByText('Kessler & Co.')).toBeDefined();
+    });
+
+    it('is a link by default, because the search grid is one control', () => {
+      const { container } = render(<VendorCard vendor={vendor()} />);
+
+      const link = container.querySelector('a');
+
+      expect(link).not.toBeNull();
+      expect(link?.getAttribute('href')).toBe('/vendors/kessler-co');
+    });
   });
 });
