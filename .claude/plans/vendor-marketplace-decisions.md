@@ -916,3 +916,52 @@ the vendor filling it in.
 surfaces named in the test, and no labelled `Placeholder` ships. The second is asserted by
 the file's absence rather than by scanning for its name, because a name scan passes right
 up until the moment someone writes one.
+
+---
+
+### D27: The Admin Account Is Human-Provisioned, and Preflight Does Not Check It — *2026-08-31*
+
+**Ruled by the account holder**, when the E2E admin account was created: *"Admin account is
+only provisioned by me so it doesn't need preflight checks necessarily since that should be
+separate."*
+
+**So `pnpm preflight` deliberately checks the customer and the vendor and not the admin,
+and its "End-to-end test accounts configured" line naming only those two is correct rather
+than stale.** Written down because the obvious next edit is to "finish" that check, and
+that edit would be wrong twice over: it would gate every ticket on a credential only one
+person can mint, and it would put a human-provisioned account on the same footing as the
+two the fixture seeds.
+
+**The distinction the ruling draws.** The customer and vendor accounts are *fixture* — the
+seed forces their roles and builds the storefront they need, so preflight asserting they
+can reach their surfaces is asserting something the repository controls. The admin account
+is *provisioned*: it exists because a person created it in Clerk. Preflight's job is the
+environment a ticket needs, not the accounts an operator owns.
+
+**What still holds.** `seed:e2e` seeds the admin row when `E2E_ADMIN_EMAIL` is present and
+says so on the way out when it is not — the key is optional precisely so a checkout without
+it is a quieter state rather than a failure. A ticket that needs `/admin` in a browser reads
+that line and knows what to ask for.
+
+**The account is persistent by intent — do not delete it.**
+
+---
+
+### Finding — the shared checkout's `node_modules` drifts, and it reads as a code failure
+
+**2026-08-31.** `pnpm test` on `main` went red with
+`Failed to resolve import "@vendor-marketplace/db" from "e2e/fixtures-data.test.ts"`, one
+failed suite against 133 passing. Nothing was wrong with the code:
+`apps/web/node_modules/@vendor-marketplace/` held `config` and `shared` and **not** `db`.
+`pnpm install` fixed it outright.
+
+**Why it is worth recording rather than just fixing.** It is the same class as the stale
+`packages/shared/dist` that cost another session an hour the same day, and it has the same
+tell: **every lane worktree was green and only the shared checkout was red**, because
+`lane:up` installs for each lane and nothing re-installs the main checkout when a
+`package.json` gains a workspace dependency. The failure names a real import in a real test
+file, so the natural reading is that a merge broke `main`.
+
+**The rule:** a red suite in the shared checkout that names a workspace package is a
+resolution failure until `pnpm install` says otherwise. Check the link before reading the
+error.
