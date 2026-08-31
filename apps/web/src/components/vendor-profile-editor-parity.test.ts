@@ -271,8 +271,13 @@ describe('the profile photo drop zone matches the frame (#143)', () => {
   it('sizes the circle 128px from `sm`, not 160px', () => {
     expect(uploadSource).toContain('size-24 rounded-full sm:size-32');
     expect(uploadSource).not.toContain('sm:size-40');
-    // The editor's wrapper has to agree or it re-crops the circle.
-    expect(formSource).toContain('className="mt-4 w-24 sm:w-32"');
+    /*
+     * The editor's wrapper has to agree on the **width** or it re-crops the
+     * circle. Only the width is asserted: #360 moved the row's `mt-4` onto the
+     * flex container that now holds the circle beside the cover zone, and the
+     * margin was never what this test was about.
+     */
+    expect(formSource).toContain('className="w-24 sm:w-32"');
   });
 });
 

@@ -2,6 +2,7 @@
 
 import {
   BRAND_DOMAIN,
+  COVER_CONSTRAINT_LINE,
   createVendorProfileSchema,
   describeBlockers,
   generateSlug,
@@ -132,6 +133,8 @@ export interface FormState {
   serviceRadiusMiles: number;
   responseTimeHours: string;
   profileImageUrl: string | null;
+  /** One file, two placements — the card's cover and the profile header (#287). */
+  coverImageUrl: string | null;
   categoryIds: string[];
   tagIds: string[];
 }
@@ -158,6 +161,7 @@ function initialState(profile: WireVendorProfile | null): FormState {
         ? NO_RESPONSE_TIME
         : String(profile.responseTimeHours),
     profileImageUrl: profile?.profileImageUrl ?? null,
+    coverImageUrl: profile?.coverImageUrl ?? null,
     categoryIds: [...(profile?.categoryIds ?? [])],
     tagIds: (profile?.tags ?? []).map((tag) => tag.id),
   };
@@ -188,6 +192,7 @@ function toPayload(form: FormState): Record<string, unknown> {
     responseTimeHours:
       form.responseTimeHours === NO_RESPONSE_TIME ? undefined : Number(form.responseTimeHours),
     profileImageUrl: form.profileImageUrl ?? undefined,
+    coverImageUrl: form.coverImageUrl ?? undefined,
     categoryIds: form.categoryIds,
   };
 }
@@ -619,29 +624,57 @@ export function VendorProfileForm({
               <h2 className="sr-only">Business</h2>
 
               {/*
-               * The profile photo alone. There is no cover drop zone: the
-               * cover is a **designation on an existing portfolio tile**, not
-               * a second upload of the same image (`40-states.md`). Whatever
-               * sits first in the portfolio is the cover, and the portfolio
-               * editor says so on the tile.
+               * The media row frame `09` draws: a 128px circle beside a
+               * 216x144 3:2 cover zone.
+               *
+               * The cover used to be described here as "a designation on an
+               * existing portfolio tile" rather than an upload. That was never
+               * built, and it left the one image the search card and the
+               * profile header both render with no editing surface at all —
+               * `coverImageUrl` has been on the schema and accepted by the API
+               * the whole time. #288 settled the spec and #360 builds it.
+               *
+               * There is deliberately **no separate profile-banner field**:
+               * one file, two placements (#287).
                */}
-              <div
-                id="profileImage"
-                role="group"
-                aria-label="Profile photo"
-                className="mt-4 w-24 sm:w-32"
-                {...describedByProps(validation.issueFor('profileImage'))}
-              >
-                <ImageUpload
-                  label="Profile photo"
-                  prefix="vendor-profile"
-                  value={form.profileImageUrl}
-                  onChange={(url) => update('profileImageUrl', url)}
-                  rounded
-                  showHint={false}
-                  disabled={isSaving}
-                />
-                <FieldMessage issue={validation.issueFor('profileImage')} />
+              <div className="mt-4 flex flex-wrap items-start gap-5.5">
+                <div
+                  id="profileImage"
+                  role="group"
+                  aria-label="Profile photo"
+                  className="w-24 sm:w-32"
+                  {...describedByProps(validation.issueFor('profileImage'))}
+                >
+                  <ImageUpload
+                    label="Profile photo"
+                    prefix="vendor-profile"
+                    value={form.profileImageUrl}
+                    onChange={(url) => update('profileImageUrl', url)}
+                    rounded
+                    showHint={false}
+                    disabled={isSaving}
+                  />
+                  <FieldMessage issue={validation.issueFor('profileImage')} />
+                </div>
+
+                <div
+                  id="coverImage"
+                  role="group"
+                  aria-label="Cover photo"
+                  className="w-54"
+                  {...describedByProps(validation.issueFor('coverImage'))}
+                >
+                  <ImageUpload
+                    label="Cover photo"
+                    prefix="vendor-cover"
+                    value={form.coverImageUrl}
+                    onChange={(url) => update('coverImageUrl', url)}
+                    showHint={false}
+                    constraintLine={COVER_CONSTRAINT_LINE}
+                    disabled={isSaving}
+                  />
+                  <FieldMessage issue={validation.issueFor('coverImage')} />
+                </div>
               </div>
               <p className="mt-2 text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p>
 

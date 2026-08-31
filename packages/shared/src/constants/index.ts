@@ -970,6 +970,31 @@ export const ACCEPTED_IMAGE_LABEL = 'JPG or PNG';
  */
 export const UPLOAD_CONSTRAINT_LINE = `${ACCEPTED_IMAGE_LABEL} · ${MAX_UPLOAD_BYTES / BYTES_PER_MB} MB each · min ${MIN_UPLOAD_IMAGE_WIDTH}px wide · ${MAX_UPLOAD_BATCH_FILES} files per upload`;
 
+/**
+ * The cover is landscape 3:2. Frame `09` draws its drop zone 216x144, and the
+ * public card and profile header crop to the same ratio.
+ *
+ * This replaces the `21:9, 1600x686 min` ask #288 retired: a spec nobody
+ * shoots, stated as arithmetic. Asking for "landscape, this big or better" is
+ * a thing a photographer can answer without a calculator.
+ */
+export const COVER_ASPECT_RATIO = 3 / 2;
+
+/**
+ * The cover zone's own constraint line, stated inside the zone before the
+ * picker opens — `40-states.md` requires the constraint at the point of
+ * choosing, and the generic `UPLOAD_CONSTRAINT_LINE` says nothing about
+ * orientation, which is the one thing that matters for a cover.
+ *
+ * The height is derived from the shared minimum width and the cover ratio
+ * rather than written down: 1200 / 1.5 = 800, which is what frame `09` draws.
+ * Writing `800` here would be a second source for a number the code already
+ * holds, and the two would drift the first time the floor moved.
+ */
+export const COVER_CONSTRAINT_LINE = `landscape · ${MIN_UPLOAD_IMAGE_WIDTH}×${Math.round(
+  MIN_UPLOAD_IMAGE_WIDTH / COVER_ASPECT_RATIO,
+)} or larger`;
+
 /** Column widths mirrored from the Drizzle schema, enforced by Zod. */
 export const MAX_SLUG_LENGTH = 200;
 export const MAX_BUSINESS_NAME_LENGTH = 200;

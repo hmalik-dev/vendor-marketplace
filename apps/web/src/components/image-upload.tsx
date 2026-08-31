@@ -46,6 +46,13 @@ export interface ImageUploadProps {
   rounded?: boolean;
   /** The format hint. Off for the second of a pair, which would repeat it. */
   showHint?: boolean;
+  /**
+   * A constraint stated **inside** the zone, under the invitation. Frame `09`
+   * draws the cover's orientation-and-size ask there in mono, which is where
+   * `40-states.md` wants a constraint: before the picker opens, not after the
+   * file is refused.
+   */
+  constraintLine?: string;
   disabled?: boolean;
 }
 
@@ -61,9 +68,15 @@ export function ImageUpload({
   prefix,
   value,
   onChange,
-  aspectClassName = 'aspect-[21/9]',
+  /*
+   * 3:2, the cover's real ratio. The old `21:9` default was the spec #288
+   * retired — no caller ever used it, because the cover drop zone this
+   * component was built for did not exist until #360 added it.
+   */
+  aspectClassName = 'aspect-3/2',
   rounded = false,
   showHint = true,
+  constraintLine,
   disabled = false,
 }: ImageUploadProps): React.ReactElement {
   const upload = useImageUpload();
@@ -261,16 +274,21 @@ export function ImageUpload({
             </span>
           </>
         ) : (
-          <span className="flex flex-col items-center gap-1 px-2 text-center text-xs text-stone-600">
+          <span className="flex flex-col items-center gap-1.5 px-2 text-center text-xs text-stone-600">
             <ImagePlus aria-hidden="true" className="size-5" />
             {rounded ? (
               'Add photo'
             ) : (
-              <>
-                {/* The full invitation needs room; a narrow frame gets the short form. */}
-                <span className="hidden sm:inline">Drag an image here, or click to choose</span>
-                <span className="sm:hidden">Add cover</span>
-              </>
+              /*
+               * Frame `09`'s words, in the frame's weight and clay tone. It
+               * replaces "Drag an image here, or click to choose", which said
+               * the same thing at twice the length and had a separate short
+               * form for narrow frames — the shorter line needs neither.
+               */
+              <span className="font-semibold text-clay-600">Drop a photo or browse</span>
+            )}
+            {constraintLine === undefined ? null : (
+              <span className="font-mono text-helper text-stone-600">{constraintLine}</span>
             )}
           </span>
         )}

@@ -1,4 +1,4 @@
-import { ERROR_CODES, type Category } from '@vendor-marketplace/shared';
+import { COVER_CONSTRAINT_LINE, ERROR_CODES, type Category } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import type { WireVendorProfile } from '@/lib/wire-schemas';
 import userEvent from '@testing-library/user-event';
@@ -285,6 +285,63 @@ describe('VendorProfileForm — a save the form itself refuses', () => {
       );
     });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+/*
+ * #360, carrying #288 and #137: the cover drop zone.
+ *
+ * #137 was stuck because the contract contradicted itself — a `21:9,
+ * 1600×686` ask nobody shoots. #288 retired it and frame `09` now draws a
+ * 216×144 3:2 zone. There is deliberately **no separate profile-banner
+ * field**: one file, two placements, per #287.
+ */
+describe('the cover drop zone (#360)', () => {
+  it('offers a cover photo zone beside the profile photo', () => {
+    renderSaved();
+
+    expect(screen.getByRole('group', { name: 'Cover photo' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Profile photo' })).toBeTruthy();
+  });
+
+  /*
+   * One file, two placements. A second banner field would be the thing #287
+   * ruled out, and it is easier to catch here than in a browser pass.
+   */
+  it('offers no separate profile-banner field', () => {
+    renderSaved();
+
+    expect(screen.queryByRole('group', { name: /banner/i })).toBeNull();
+  });
+
+  /*
+   * An absolute URL, because that is what the form is actually handed:
+   * `wireVendorProfileSchema` resolves the stored object key through
+   * `resolveImageUrl` at the client boundary. A bare key here would resolve to
+   * null whenever `NEXT_PUBLIC_S3_PUBLIC_URL` is unset and the test would be
+   * asserting against a shape the component never receives.
+   *
+   * Queried by tag, not by role: the preview carries `alt=""` on purpose — it
+   * is the vendor's own photo shown back to them, not content — so it is
+   * exposed as `presentation` and has no `img` role to find it by.
+   */
+  it('prefills the zone from the saved cover', () => {
+    const cover = 'https://cdn.example.test/vendor-cover/abc.jpg';
+    renderSaved({ coverImageUrl: cover });
+
+    const preview = screen
+      .getByRole('group', { name: 'Cover photo' })
+      .querySelector<HTMLImageElement>('img');
+
+    expect(preview?.getAttribute('src')).toBe(cover);
+  });
+
+  it('states the cover constraint before the picker opens', () => {
+    renderSaved();
+
+    expect(
+      within(screen.getByRole('group', { name: 'Cover photo' })).getByText(COVER_CONSTRAINT_LINE),
+    ).toBeTruthy();
   });
 });
 
