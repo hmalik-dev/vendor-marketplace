@@ -58,6 +58,21 @@ export interface EmptyStateProps {
    * public: it is the first thing an unauthenticated visitor sees fail.
    */
   scale?: 'app' | 'marketing';
+  /**
+   * Which of `40-states.md`'s colour semantics this state carries.
+   *
+   * `neutral` is an empty state: nothing went wrong, there is simply nothing
+   * here. `failure` is the law's red — *"Red `error-50 / error-500` — it
+   * failed"* — and exists because a failed request and an empty result were
+   * rendering identically, so a backend outage read as "nobody matches your
+   * filters" (#368).
+   *
+   * Opt-in, and it tints the glyph only. No frame draws a failure state, so
+   * there is nothing to match on the layout axis, and a colour-only change
+   * cannot move a screen that a frame *does* draw. Red is never used for
+   * `pending`, and gold is never used for a failure.
+   */
+  tone?: 'neutral' | 'failure';
   className?: string;
 }
 
@@ -74,6 +89,7 @@ export function EmptyState({
   action,
   panel = false,
   scale = 'app',
+  tone = 'neutral',
   className,
 }: EmptyStateProps): React.ReactElement {
   const isMarketing = scale === 'marketing';
@@ -98,7 +114,11 @@ export function EmptyState({
       {icon ? (
         <span
           aria-hidden="true"
-          className={cn('text-stone-400 [&_svg]:size-8', panel && 'mb-[18px]')}
+          className={cn(
+            '[&_svg]:size-8',
+            tone === 'failure' ? 'text-error-500' : 'text-stone-400',
+            panel && 'mb-[18px]',
+          )}
         >
           {icon}
         </span>

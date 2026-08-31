@@ -12,6 +12,7 @@ import { wireVendorSearchResultSchema } from '@/lib/wire-schemas';
 import { SlidersHorizontal, SearchX } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api-client';
+import { reportSwallowedError } from '@/lib/report-error';
 import type { WireTag } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
 import { useModalSheet } from '@/lib/use-modal-sheet';
@@ -189,10 +190,18 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
         setIsLoading(false);
         setSearching(false);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (controller.signal.aborted) {
           return;
         }
+
+        /*
+         * The screen says nothing useful about *why*, on purpose (below) — but
+         * something has to. Without this the page rendered the ordinary
+         * `0 vendors` heading with an empty console, so a browser pass driving
+         * a broken API saw a plausible result and reported green (#368).
+         */
+        reportSwallowedError('search: /vendors request failed', error);
         /*
          * The API's own message is deliberately not read here. "Request
          * validation failed" is written for whoever reads the logs, says
@@ -446,8 +455,15 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
       */}
       <div className="app-pane -mt-1 px-5 pt-1 pb-20 min-[90rem]:px-6.5 lg:pb-4">
         {hasFailed ? (
+          /*
+            `40-states.md`: red is "it failed". This branch previously drew the
+            same neutral glyph as the empty-result state below, so the two
+            differed in wording alone — and the wording is the part a hurried
+            reader skips. The tone is what makes them different facts on sight.
+          */
           <EmptyState
             icon={<SearchX />}
+            tone="failure"
             headline="Something went wrong"
             description="Could not load vendors just now."
           />

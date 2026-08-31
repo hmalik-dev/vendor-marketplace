@@ -146,7 +146,6 @@ function explainFailure(page: Page, testInfo: TestInfo): void {
     `  RATE_LIMIT_MAX=100000 pnpm lane:exec <n> -- pnpm --filter @vendor-marketplace/api dev`;
 
   testInfo.annotations.push({ type: 'rate-limited', description: note });
-  // eslint-disable-next-line no-console
   console.error(`\n${note}\n`);
 }
 

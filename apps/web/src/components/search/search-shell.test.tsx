@@ -379,6 +379,78 @@ describe('SearchShell against a hostile URL', () => {
     expect(screen.queryByText(/Request validation failed/)).toBeNull();
   });
 
+  /*
+   * #368. The defect this closes: with the API answering 429 for every request,
+   * `/search` rendered the ordinary empty-result heading — `No vendors listed
+   * yet` — with no error state anywhere. A backend outage was indistinguishable
+   * from "nobody matches your filters", and a browser pass driving it reported
+   * green.
+   *
+   * The two branches must therefore assert *different* text, in both
+   * directions: a failure is never the empty heading, and an empty result is
+   * never the failure heading.
+   */
+  it('renders the failure state and never the empty-result heading', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(429, ERROR_CODES.RATE_LIMITED, 'Too many requests.'),
+    );
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(screen.getByText('Something went wrong')).toBeDefined());
+    expect(screen.queryByText(/^No vendors/)).toBeNull();
+    expect(screen.queryByText(/match that filter/)).toBeNull();
+    expect(screen.queryByText(/match all/)).toBeNull();
+  });
+
+  it('renders the empty-result heading and never the failure state', async () => {
+    apiRequest.mockResolvedValue(emptyResult());
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(screen.getByText('No vendors listed yet')).toBeDefined());
+    expect(screen.queryByText('Something went wrong')).toBeNull();
+    expect(screen.queryByText('Could not load vendors just now.')).toBeNull();
+  });
+
+  /*
+   * The half that is not on the page. `40-states.md` makes red mean "it
+   * failed", and the failure state previously drew the same neutral glyph as
+   * the empty state — so the two differed in wording alone, which is the part a
+   * hurried reader skips.
+   */
+  it('tints the failure glyph red, which the empty state never is', async () => {
+    apiRequest.mockRejectedValue(new ApiClientError(500, ERROR_CODES.INTERNAL_ERROR, 'Boom'));
+
+    const { container } = render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(screen.getByText('Something went wrong')).toBeDefined());
+    expect(container.querySelector('.text-error-500')).not.toBeNull();
+    expect(container.querySelector('[data-slot="empty-state"] .text-stone-400')).toBeNull();
+  });
+
+  /*
+   * The console is the channel a browser agent reads, and it was empty. Without
+   * this the page can go back to failing silently and every visual assertion
+   * above still passes.
+   */
+  it('reports the failure to the console so a browser pass cannot miss it', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    apiRequest.mockRejectedValue(
+      new ApiClientError(429, ERROR_CODES.RATE_LIMITED, 'Too many requests.'),
+    );
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(screen.getByText('Something went wrong')).toBeDefined());
+    expect(spy).toHaveBeenCalledWith(
+      '[swallowed] search: /vendors request failed',
+      expect.anything(),
+    );
+
+    spy.mockRestore();
+  });
+
   it('says nothing about cleared params when the URL was entirely usable', async () => {
     state = baseState({ date: '2099-06-14' });
 

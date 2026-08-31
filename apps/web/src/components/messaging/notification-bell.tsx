@@ -7,6 +7,7 @@ import { useApi } from '@/lib/use-api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { wireNotificationPageSchema, type WireNotification } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
+import { reportSwallowedError } from '@/lib/report-error';
 
 /** Past this the badge stops being a count and becomes "a lot". */
 const BADGE_CEILING = 9;
@@ -132,19 +133,30 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
       current.map((item) => (item.id === id ? { ...item, readAt: new Date() } : item)),
     );
 
+    /*
+     * Justified swallow (#368): the row is already struck through optimistically
+     * and the true state returns on the next fetch, so a failure here changes
+     * nothing the reader can act on. Reported, not dropped — a mark-read that
+     * always fails is a real defect with no other symptom.
+     */
     await call(`/notifications/${id}/read`, {
       schema: wireNotificationPageSchema.nullable(),
       method: 'PUT',
-    }).catch(() => undefined);
+    }).catch((error: unknown) => {
+      reportSwallowedError('notifications: marking one read failed', error);
+    });
   }
 
   async function markAllRead(): Promise<void> {
     setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date() })));
 
+    // Same justification as `markRead` above.
     await call('/notifications/read-all', {
       schema: wireNotificationPageSchema.nullable(),
       method: 'PUT',
-    }).catch(() => undefined);
+    }).catch((error: unknown) => {
+      reportSwallowedError('notifications: marking all read failed', error);
+    });
   }
 
   return (
