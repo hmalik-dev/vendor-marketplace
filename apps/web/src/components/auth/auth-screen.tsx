@@ -207,7 +207,8 @@ export function AuthScreen({
         <StockPhoto src={photo} sizes="600px" priority className="absolute inset-0" />
         <div aria-hidden="true" className="absolute inset-0" style={{ backgroundImage: wash }} />
 
-        <div className="absolute inset-x-0 bottom-0 p-12">
+        {/* Frame `12` draws `46px 48px`, not a uniform 48. */}
+        <div className="absolute inset-x-0 bottom-0 px-12 py-11.5">
           <p className="font-display text-[38px] leading-[1.15] text-stone-0">
             {proof[0]}
             <br />
@@ -215,7 +216,9 @@ export function AuthScreen({
             <br />
             <span className={`${accentClass} italic`}>{proof[2]}</span>
           </p>
-          <p className="mt-3 max-w-100 text-md leading-relaxed text-stone-0/82">{body}</p>
+          {/* 415px is the frame's measure; the scale's nearest step, 400, wraps
+              the body a word early against the 38px headline above it. */}
+          <p className="mt-3 max-w-[415px] text-md leading-relaxed text-stone-0/82">{body}</p>
 
           {/*
             One list, two markers. A panel addressed to a single side leads each

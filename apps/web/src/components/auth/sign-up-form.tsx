@@ -1,12 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import { SignUp } from '@clerk/nextjs';
+import { SignUp, useSignUp } from '@clerk/nextjs';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { AuthScreen } from '@/components/auth/auth-screen';
 import { cn } from '@/lib/utils';
 
 export type SignUpRole = Extract<UserRole, 'customer' | 'vendor'>;
+
+const SIGN_UP_ROLES: readonly SignUpRole[] = ['customer', 'vendor'];
+
+/**
+ * Narrows whatever Clerk hands back out of `unsafeMetadata`, which is typed as
+ * open JSON and is client-writable.
+ *
+ * Anything that is not one of the two sign-up roles is treated as absent rather
+ * than trusted — `admin` is a real `UserRole` that this screen must never
+ * confer, and the API narrows a missing role to `customer` regardless, so a
+ * wrong value here is worse than no value.
+ */
+function asSignUpRole(value: unknown): SignUpRole | null {
+  return SIGN_UP_ROLES.find((role) => role === value) ?? null;
+}
 
 interface RoleChoice {
   role: SignUpRole;
@@ -76,76 +91,104 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
      to a screen reader at the moment it becomes the reason nothing happened. */
   const [roleMissing, setRoleMissing] = useState(false);
 
+  /*
+    Clerk's email-verification step is a path navigation, so it remounts this
+    component and `role` — local state seeded from `?role=` — comes back null.
+    The choice is not lost: it went to Clerk as `unsafeMetadata` before
+    verification, so it is read back from the in-flight attempt.
+
+    Re-asking is not a confirmation step. The subhead promises the choice
+    cannot be changed later, so showing the picker again contradicts the
+    screen's own copy. D16, `21-sign-up.md`.
+  */
+  const { signUp } = useSignUp();
+  const attemptedRole = asSignUpRole(signUp?.unsafeMetadata?.role);
+  const chosenRole = role ?? attemptedRole;
+  /* Only the read-back case hides the question. A fresh render with no attempt
+     still asks, and so does an attempt that carries no usable role — otherwise
+     someone finishes with none and the API narrows them to `customer`. */
+  const pickerSuppressed = role === null && attemptedRole !== null;
+
   return (
     <AuthScreen
       headline="Let's get you set up"
       subhead="First — which one are you? This can't be changed later."
-      panel={role ?? 'both'}
+      panel={chosenRole ?? 'both'}
     >
-      <fieldset className="mb-5.5">
-        <legend className="sr-only">Which one are you?</legend>
+      {/*
+        Not rendered at all once the role has been read back off the in-flight
+        attempt — that only happens after verification remounted the page, and
+        the answer is already given. `hidden` would be the wrong tool here: it
+        leaves the radios in the DOM and in the form, so the question stays
+        submittable by anything that walks it. The panel beside the form still
+        reflects the choice, so the screen does not go neutral either.
+      */}
+      {pickerSuppressed ? null : (
+        <fieldset className="mb-5.5">
+          <legend className="sr-only">Which one are you?</legend>
 
-        {/*
+          {/*
           Side by side at every width above 640: the two roles are a comparison,
           and stacking turns a choice into a scroll. At 390 the screen is a
           single column, per the degradation table in 30-responsive.md.
         */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {ROLE_CHOICES.map((choice) => {
-            const isSelected = role === choice.role;
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {ROLE_CHOICES.map((choice) => {
+              const isSelected = role === choice.role;
 
-            return (
-              <label
-                key={choice.role}
-                className={cn(
-                  'cursor-pointer rounded-xl px-3.5 py-4 transition-colors duration-(--duration-fast)',
-                  // The offset colour is not optional: without it the ring's offset
-                  // band draws Tailwind's default white on the panel's stone-50.
-                  'has-focus-visible:ring-2 has-focus-visible:ring-clay-400/30 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
-                  isSelected
-                    ? choice.selectedCard
-                    : 'border border-stone-300 bg-stone-0 hover:border-stone-400',
-                )}
-              >
-                <input
-                  type="radio"
-                  name="role"
-                  value={choice.role}
-                  checked={isSelected}
-                  onChange={() => {
-                    setRole(choice.role);
-                    setRoleMissing(false);
-                  }}
-                  className="sr-only"
-                />
-
-                <span
-                  aria-hidden="true"
+              return (
+                <label
+                  key={choice.role}
                   className={cn(
-                    'mb-2.5 flex size-8.5 items-center justify-center rounded-full',
-                    isSelected ? 'bg-stone-0' : 'bg-stone-150',
+                    'cursor-pointer rounded-xl px-3.5 py-4 transition-colors duration-(--duration-fast)',
+                    // The offset colour is not optional: without it the ring's offset
+                    // band draws Tailwind's default white on the panel's stone-50.
+                    'has-focus-visible:ring-2 has-focus-visible:ring-clay-400/30 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
+                    isSelected
+                      ? choice.selectedCard
+                      : 'border border-stone-300 bg-stone-0 hover:border-stone-400',
                   )}
                 >
-                  <span
-                    className={cn(
-                      'block size-3.25 border-[1.6px]',
-                      choice.glyph === 'circle' ? 'rounded-full' : 'rounded-[3px]',
-                      isSelected ? choice.selectedGlyph : 'border-stone-600',
-                    )}
+                  <input
+                    type="radio"
+                    name="role"
+                    value={choice.role}
+                    checked={isSelected}
+                    onChange={() => {
+                      setRole(choice.role);
+                      setRoleMissing(false);
+                    }}
+                    className="sr-only"
                   />
-                </span>
 
-                <span className="block text-[14.5px] font-semibold text-stone-900">
-                  {choice.title}
-                </span>
-                <span className="mt-1 block text-sm leading-normal text-stone-700">
-                  {choice.description}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'mb-2.5 flex size-8.5 items-center justify-center rounded-full',
+                      isSelected ? 'bg-stone-0' : 'bg-stone-150',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'block size-3.25 border-[1.6px]',
+                        choice.glyph === 'circle' ? 'rounded-full' : 'rounded-[3px]',
+                        isSelected ? choice.selectedGlyph : 'border-stone-600',
+                      )}
+                    />
+                  </span>
+
+                  <span className="block text-[14.5px] font-semibold text-stone-900">
+                    {choice.title}
+                  </span>
+                  <span className="mt-1 block text-sm leading-normal text-stone-700">
+                    {choice.description}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
 
       {/*
         Clerk's fields stay mounted and editable with no role chosen — typing
@@ -163,16 +206,19 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
       */}
       <div
         className="flex flex-col"
-        data-role-pending={role === null ? '' : undefined}
+        data-role-pending={chosenRole === null ? '' : undefined}
         onSubmitCapture={(event) => {
-          if (role === null) {
+          if (chosenRole === null) {
             event.preventDefault();
             event.stopPropagation();
             setRoleMissing(true);
           }
         }}
       >
-        <SignUp unsafeMetadata={role ? { role } : {}} fallbackRedirectUrl="/after-sign-in" />
+        <SignUp
+          unsafeMetadata={chosenRole ? { role: chosenRole } : {}}
+          fallbackRedirectUrl="/after-sign-in"
+        />
 
         {/*
           The hint explains the disabled Continue button, so it belongs directly
@@ -182,7 +228,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
           Clerk's two structural boxes and orders these three by hand: form,
           hint, footer.
         */}
-        {role === null ? (
+        {chosenRole === null ? (
           <p
             data-role-hint=""
             className="mt-1.5 text-center text-xs text-stone-600"
