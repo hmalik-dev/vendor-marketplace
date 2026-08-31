@@ -1,26 +1,51 @@
 'use client';
 
 import type { VendorCity } from '@vendor-marketplace/shared';
-import { useState } from 'react';
+import { ComboboxDropdown } from '@/components/ui/dropdown-combobox';
 import type { DropdownOption } from '@/components/ui/dropdown';
-import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
+import { rankCityMatches } from '@/lib/option-filter';
 import { cn } from '@/lib/utils';
 
 /**
- * The city picker: a select over the places that actually have vendors, and
- * **city and state always travel together**.
+ * The city picker: a **typeahead** over the places that actually have vendors,
+ * and **city and state always travel together**.
  *
- * This was a free-text box, and the two problems with that were the same
- * problem. "Springfield" names a place in thirty-odd states and "Portland"
- * names two people would fly between, so a typed city could not tell a customer
- * which one they had asked for — and a typed city that matched nothing produced
- * an empty grid with nothing to say about why. A select over real places
- * answers both: every option names its state, and every option has somebody in
- * it.
+ * The reasoning that made this a select is unchanged and is what the typeahead
+ * is built to preserve. "Springfield" names a place in thirty-odd states and
+ * "Portland" names two people would fly between, so a *typed* city cannot tell
+ * a customer which one they asked for — and a typed city matching nothing
+ * produced an empty grid with nothing to say about why. Both problems are
+ * answered by **selection, not typing, being what commits**: every suggestion
+ * names its state, every suggestion has somebody in it, and a string that
+ * matches nothing commits neither half of the pair.
  *
- * The same constraint the vendor-type field carries, for the same reason: the
- * query can only ask a question the platform can answer.
+ * **It does not open a list on focus, and that is the point (#375).** The
+ * user's instruction was explicit: *"the city should literally be an input,
+ * where the validated city appears as clickable for a user. Not a scrollable
+ * dropdown for city since cities can vary drastically."* Suggestions appear
+ * from the first character and not before. That is the one behavioural
+ * difference from `Vendor type`, which opens on its full taxonomy.
+ *
+ * The old select could not produce a "we have nobody in that city" state at
+ * all — it only offered places that existed. A typeahead can, so it must
+ * answer it in copy rather than with a blank panel.
  */
+
+const ANYWHERE_LABEL = 'Anywhere';
+
+/**
+ * At most eight suggestions render; the rest are counted.
+ *
+ * A typeahead that scrolls is the scroll list the user rejected. Eight is what
+ * fits the 360px cap at the default row height without one.
+ */
+const MAX_SUGGESTIONS = 8;
+
+/** `Austin|TX` — the pair as one option value, since neither half stands alone. */
+function keyOf(city: string, state: string): string {
+  return `${city}|${state}`;
+}
+
 export interface CitySelectProps {
   /** Every city with a published vendor, from `GET /vendors/cities`. */
   cities: readonly VendorCity[];
@@ -34,13 +59,6 @@ export interface CitySelectProps {
   valueClassName?: string;
 }
 
-const ANYWHERE_LABEL = 'Anywhere';
-
-/** `Austin|TX` — the pair as one option value, since neither half stands alone. */
-function keyOf(city: string, state: string): string {
-  return `${city}|${state}`;
-}
-
 export function CitySelect({
   cities,
   city,
@@ -52,75 +70,83 @@ export function CitySelect({
   labelClassName,
   valueClassName,
 }: CitySelectProps): React.ReactElement {
-  const [isOpen, setIsOpen] = useState(false);
   const isHero = size === 'hero';
-  const chosen = city === '' ? null : keyOf(city, state);
 
   /*
-   * "Anywhere" leads, because it is how the field is emptied. Each city carries
-   * its vendor count as the row's hint — a real query result, not a platform
-   * statistic, and the one fact that tells a customer whether a place is worth
-   * choosing before they choose it.
+   * The vendor count is a **row hint, not a suggestion**: it is a real query
+   * result — how many published vendors are in that place — rather than a
+   * platform statistic, which is what keeps it legal under the
+   * no-invented-numbers rule. It is also the ranking's third tier, so it is
+   * lifted into a map the ranker can read without re-deriving the pair key.
    */
-  const options: DropdownOption[] = [
-    { value: '', label: ANYWHERE_LABEL },
-    ...cities.map((place) => ({
-      value: keyOf(place.city, place.state),
-      label: `${place.city}, ${place.state}`,
-      hint: `${place.vendorCount} ${place.vendorCount === 1 ? 'vendor' : 'vendors'}`,
-    })),
-  ];
+  const counts = new Map(
+    cities.map((place) => [keyOf(place.city, place.state), place.vendorCount]),
+  );
+
+  const options: DropdownOption[] = cities.map((place) => ({
+    value: keyOf(place.city, place.state),
+    label: `${place.city}, ${place.state}`,
+    hint: `${place.vendorCount} ${place.vendorCount === 1 ? 'vendor' : 'vendors'}`,
+  }));
 
   return (
-    <SingleSelectDropdown
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      label="City"
-      countNoun="cities"
+    <ComboboxDropdown
       options={options}
-      value={chosen}
-      width={isHero ? 'hero' : 'compact'}
-      density={isHero ? 'default' : 'compact'}
-      scrim={isHero}
-      emptyMessage="No vendors have published a location yet."
-      onChange={(next) => {
+      value={city === '' ? '' : keyOf(city, state)}
+      onCommit={(next) => {
+        /*
+         * Clearing the field to empty commits `Anywhere`. The pair goes back to
+         * `('', '')` together — a city with no state, or the reverse, is the
+         * state this control exists to make unrepresentable.
+         */
         const [nextCity = '', nextState = ''] = next.split('|');
         onChange({ city: nextCity, state: nextState });
       }}
-      trigger={
-        <button
-          type="button"
-          id={id}
-          aria-label="City"
-          aria-haspopup="listbox"
-          aria-expanded={isOpen}
-          className={cn('flex min-w-0 flex-col rounded-full text-left outline-none', className)}
-        >
-          <span className={labelClassName}>City</span>
-          <span
-            className={cn('flex items-center justify-between gap-2', isHero ? 'pr-2.5' : 'pr-2.5')}
-          >
-            <span
-              className={cn(
-                'truncate',
-                valueClassName,
-                /*
-                  The open state the caret used to carry (D25). Without it this
-                  segment drew the same open and closed, so the state reached a
-                  screen reader through `aria-expanded` and reached nobody else.
-                  Matches the vendor-type segment beside it.
-                */
-                isOpen
-                  ? 'font-semibold text-clay-600'
-                  : city === ''
-                    ? 'text-stone-600'
-                    : 'text-stone-900',
-              )}
-            >
-              {city === '' ? ANYWHERE_LABEL : `${city}, ${state}`}
-            </span>
-          </span>
-        </button>
+      committedLabel={city === '' ? '' : `${city}, ${state}`}
+      /*
+       * Ranked, not merely filtered: exact prefix matches first, then
+       * substrings, then by vendor count. That last tier is what puts
+       * `Portland, OR` above `Portland, ME` — both are real and neither is
+       * wrong, so the one more people can book leads.
+       */
+      filter={(all, query) => rankCityMatches(all, query, counts)}
+      openOnFocus={false}
+      /*
+       * "Anywhere" is not a row here — the list is places that *have* vendors,
+       * so there is nothing to pick. Clearing the text is the gesture, and it
+       * commits the empty pair.
+       */
+      commitOnEmpty
+      label="City"
+      id={id}
+      placeholder={ANYWHERE_LABEL}
+      emptyMessage="No vendors have published a location yet."
+      /*
+       * The sheet mount opens on a tap whether or not the field suggests on
+       * focus, so this state is reachable there with nothing typed. It must not
+       * borrow the API-degraded copy above — that would tell a customer nobody
+       * has published a location while the list holds a dozen.
+       */
+      promptMessage="Start typing a city to see where we have vendors."
+
+      noMatchMessage={(query) => `No vendors in “${query}” yet. Try a nearby city.`}
+      limit={MAX_SUGGESTIONS}
+      width={isHero ? 'hero' : 'compact'}
+      density={isHero ? 'default' : 'compact'}
+      scrim={isHero}
+      className={cn('flex min-w-0 flex-col rounded-full text-left', className)}
+      labelClassName={cn('cursor-text', labelClassName)}
+      inputClassName={(open) =>
+        cn(
+          'w-full min-w-0 truncate bg-transparent outline-none placeholder:text-stone-600',
+          valueClassName,
+          /*
+            Open state, resolved in JS. See `dropdown-combobox.tsx` — a class
+            string carrying both branches loses to source order at `lg`, which
+            is the bug #373 measured on this very field.
+          */
+          open ? 'font-semibold text-clay-600' : city === '' ? 'text-stone-600' : 'text-stone-900',
+        )
       }
     />
   );

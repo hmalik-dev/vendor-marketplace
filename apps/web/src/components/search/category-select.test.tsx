@@ -43,6 +43,14 @@ const CATEGORIES: Category[] = [
   category('2', 'Videography', 2),
   category('3', 'Catering', 3),
   category('4', 'Florals', 4),
+  /*
+   * The reason matching is substring rather than prefix: "film" has to find
+   * this, and a prefix match never would. Named to avoid colliding with the
+   * `Photo & film` short description that renders as Photography's row hint —
+   * two nodes carrying the same text is a test failure about the fixture
+   * rather than about the filter.
+   */
+  category('5', 'Wedding films', 5),
 ];
 
 function renderSelect(value = ''): { onChange: ReturnType<typeof vi.fn> } {
@@ -59,19 +67,31 @@ function renderSelect(value = ''): { onChange: ReturnType<typeof vi.fn> } {
   return { onChange };
 }
 
-const trigger = (): HTMLElement => screen.getByLabelText('Vendor type');
+/**
+ * The field itself. A `combobox` input since #375, not a `button` — so this
+ * reads `.value`, and every assertion that used to read `.textContent` had to
+ * move with it.
+ */
+const trigger = (): HTMLInputElement =>
+  screen.getByRole('combobox', { name: 'Vendor type' }) as HTMLInputElement;
 
 describe('CategorySelect', () => {
   it('shows the selected category, not a free-text value', () => {
     renderSelect('photography');
 
-    expect(trigger().textContent).toContain('Photography');
+    expect(trigger().value).toBe('Photography');
   });
 
+  /*
+   * The placeholder, not the value. The distinction matters: an empty field
+   * that *contains* the words "Any vendor type" would filter against them the
+   * moment the customer typed a character, and the list would come back empty.
+   */
   it('reads "Any vendor type" when nothing is chosen', () => {
     renderSelect('');
 
-    expect(trigger().textContent).toContain('Any vendor type');
+    expect(trigger().value).toBe('');
+    expect(trigger().placeholder).toBe('Any vendor type');
   });
 
   it('resolves to a category slug when one is picked', async () => {
@@ -85,37 +105,176 @@ describe('CategorySelect', () => {
   });
 
   /*
-   * The filter field is gone (#167), and the "did you mean" recovery went with
-   * it — that existed only to answer a typo in a field that no longer accepts
-   * typing. `42-dropdowns.md` deletes both, and says why: eleven categories fit
-   * on one screen, and a filter box on a list that short is friction rather
-   * than help. Asserted as ABSENT rather than simply untested, because it
-   * shipped for months and a test that merely stopped mentioning it would let
-   * it back in.
+   * **What replaced "offers no filter field" (#375).**
+   *
+   * That assertion was right for its time and is now inverted: the field *is*
+   * the input. What it was really protecting is not the absence of a textbox —
+   * it is that a panel must never contain a **second, autofocused** field,
+   * which is D13 ruling 1's actual objection ("its focus ring would appear
+   * every single time the panel opened — permanent decoration, not feedback").
+   * That still holds, so it is what this asserts. The old wording would have
+   * banned the control the user asked for.
    */
-  it('offers no filter field, and no did-you-mean state to go with it', async () => {
+  it('puts no second field inside the panel — the trigger is the only input', async () => {
     const user = userEvent.setup();
     renderSelect('');
 
     await user.click(trigger());
-    await screen.findByRole('listbox');
+    const panel = await screen.findByRole('listbox');
 
     expect(screen.queryByPlaceholderText('Filter vendor types')).toBeNull();
-    expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryByText('No matching type')).toBeNull();
+    expect(panel.querySelector('input')).toBeNull();
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 
-  /* Type-ahead does in one keystroke what the filter field took a phrase to
-     do — the keyboard model in `42-dropdowns.md`. */
-  it('jumps to the first category matching a typed letter', async () => {
+  /*
+   * Filtering, not the jump-to-first-letter this list shipped with.
+   * `42-dropdowns.md:45` has specified "typing narrows the list in place (not a
+   * jump-to-first-letter)" since the 2026-08-30 import; D14 recorded that the
+   * code was still on the behaviour that import reversed.
+   *
+   * Asserted on **rendered rows**, not on internal state — a filter that
+   * narrows a variable while the panel still draws eleven rows is the failure
+   * this is written against.
+   */
+  it('narrows the list to what was typed, matching a substring anywhere', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.type(trigger(), 'film');
+
+    const rows = await screen.findAllByRole('option');
+    expect(rows.map((row) => row.textContent)).toEqual([expect.stringContaining('Wedding films')]);
+  });
+
+  /*
+   * Two names sharing a substring must both survive — "a category name that is
+   * a substring of another" is one of the ticket's edge cases, and a filter
+   * that collapsed them would silently hide a real choice.
+   */
+  it('keeps every category a substring matches, not just the first', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.type(trigger(), 'graph');
+
+    const rows = await screen.findAllByRole('option');
+    expect(rows.map((row) => row.textContent?.replace(/ vendors\.$/, ''))).toEqual([
+      expect.stringContaining('Photography'),
+      expect.stringContaining('Videography'),
+    ]);
+  });
+
+  it('names what was typed when nothing matches, rather than drawing a blank panel', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.type(trigger(), 'zzzz');
+
+    /*
+     * The **visible** message, not any node containing the string. The polite
+     * live region also names the query — "0 matches for zzzz" — so an unscoped
+     * `findByText` matches two nodes and throws. Both are correct; only one is
+     * what a sighted customer reads.
+     */
+    expect(await screen.findByText('No vendor type matches \u201Czzzz\u201D.')).toBeDefined();
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+  });
+
+  /*
+   * The invariant the whole ticket turns on: **typing is an input affordance,
+   * never a query term**. A customer who types a misspelling and walks away has
+   * selected nothing, and the field says so by reverting.
+   */
+  it('commits nothing on blur, and reverts to the committed label', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderSelect('photography');
+
+    await user.click(trigger());
+    await user.clear(trigger());
+    await user.type(trigger(), 'cater');
+    await user.tab();
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(trigger().value).toBe('Photography');
+  });
+
+  it('commits the slug when a row is chosen, not the typed text', async () => {
     const user = userEvent.setup();
     const { onChange } = renderSelect('');
 
     await user.click(trigger());
-    await screen.findByRole('listbox');
-    await user.keyboard('c{Enter}');
+    await user.type(trigger(), 'cater');
+    await user.click(await screen.findByRole('option', { name: /^Catering/ }));
 
+    expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith('catering');
+  });
+
+  it('opens on the full list, because the taxonomy is worth seeing', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+
+    // Every fixture plus the `Any vendor type` row that empties the field.
+    expect(await screen.findAllByRole('option')).toHaveLength(CATEGORIES.length + 1);
+  });
+
+  /*
+   * `ArrowDown` must not move the caret. In a text input the browser's own
+   * default sends it to the end of the value, which would put the caret past
+   * the word the customer is still editing.
+   */
+  it('moves the active option with the arrows without moving the caret', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderSelect('');
+
+    const field = trigger();
+    await user.click(field);
+    await user.type(field, 'ph');
+    field.setSelectionRange(1, 1);
+
+    await user.keyboard('{ArrowDown}');
+
+    /*
+     * Read before the commit. `Enter` reverts the field to the committed
+     * label, which moves the caret for a legitimate reason — asserting after
+     * it would be measuring the revert rather than the arrow.
+     */
+    expect(field.selectionStart).toBe(1);
+
+    /*
+     * `videography`, not `photography` — and that is the point rather than an
+     * accident. "ph" is a substring of *both* names ("photography" and
+     * "video**graph**y"), so both survive the filter and `ArrowDown` moves from
+     * the first to the second. A prefix filter would have left one row here and
+     * the arrow would have had nowhere to go.
+     */
+    await user.keyboard('{Enter}');
+    expect(onChange).toHaveBeenCalledWith('videography');
+  });
+
+  it('carries aria-activedescendant to a row that exists', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    const field = trigger();
+    expect(field.getAttribute('aria-expanded')).toBe('false');
+    expect(field.getAttribute('aria-activedescendant')).toBeNull();
+
+    await user.click(field);
+    await screen.findByRole('listbox');
+
+    expect(field.getAttribute('aria-expanded')).toBe('true');
+    expect(field.getAttribute('aria-autocomplete')).toBe('list');
+
+    const activeId = field.getAttribute('aria-activedescendant');
+    expect(activeId).not.toBeNull();
+    expect(document.getElementById(activeId as string)).not.toBeNull();
   });
 
   it('moves with the arrows and commits with Enter', async () => {
@@ -130,16 +289,123 @@ describe('CategorySelect', () => {
     expect(onChange).toHaveBeenCalledWith('videography');
   });
 
-  it('closes on Escape without changing the value', async () => {
+  /*
+   * **The sharpest defect the review found.** `DropdownList` seeded its active
+   * index from the current selection; the combobox took ownership of that index
+   * and started it at 0. Row 0 is `Any vendor type`, whose value is `''` — so
+   * opening a field that already held a category and pressing `Enter` *cleared*
+   * it, on the way to submitting the form. Two keystrokes that had been a
+   * no-op became a silent data loss.
+   */
+  it('opens with the committed row active, so the first Enter changes nothing', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderSelect('florals');
+
+    await user.click(trigger());
+    await screen.findByRole('listbox');
+
+    const activeId = trigger().getAttribute('aria-activedescendant');
+    expect(document.getElementById(activeId as string)?.textContent).toContain('Florals');
+
+    await user.keyboard('{Enter}');
+    expect(onChange).toHaveBeenCalledWith('florals');
+    expect(trigger().value).toBe('Florals');
+  });
+
+  /*
+   * `42-dropdowns.md`: "Focus returns to the field on close." A row is a
+   * `<button>`, so committing with the **mouse** moves focus into a panel that
+   * then unmounts — and anchor mode suppresses Radix's focus restoration, so it
+   * landed on `<body>` and the next `Tab` restarted at the top of the document.
+   */
+  it('keeps focus in the field after committing with the mouse', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.click(await screen.findByRole('option', { name: /^Catering/ }));
+
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  /*
+   * After a keyboard commit the focus is already in the field, so no `focus`
+   * event fires and `onFocus` alone could never reopen it — clicking the field
+   * did nothing, twice. Anchor mode gave up Radix's merged toggle deliberately
+   * (it closed the panel on the click that placed the caret), so the opener has
+   * to be a click handler that opens rather than toggles.
+   */
+  it('reopens on a click after a keyboard commit', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(trigger().getAttribute('aria-expanded')).toBe('false');
+
+    await user.click(trigger());
+    expect(trigger().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  /* ARIA's combobox pattern: ArrowUp opens a closed field, like ArrowDown. */
+  it('opens on ArrowUp as well as ArrowDown', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    trigger().focus();
+    await user.keyboard('{Escape}');
+    await user.keyboard('{ArrowUp}');
+
+    expect(trigger().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  /*
+   * `aria-controls` names the panel while it is open, and the no-match panel is
+   * the *common* case for a field you type into. An empty branch that dropped
+   * the id left the reference dangling exactly when a screen reader most needs
+   * somewhere to look.
+   */
+  it('points aria-controls at a real element even with no rows', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.type(trigger(), 'zzzz');
+
+    const controls = trigger().getAttribute('aria-controls');
+    expect(controls).not.toBeNull();
+    expect(document.getElementById(controls as string)).not.toBeNull();
+  });
+
+  /* The count a sighted customer reads off the shrinking list. */
+  it('announces the filtered count politely', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
+    );
+
+    await user.type(screen.getByRole('combobox', { name: 'Vendor type' }), 'graph');
+
+    const live = container.querySelector('[aria-live="polite"]');
+    // In the field, not the portalled panel — see `FilteredCount`.
+    expect(live?.textContent).toBe('2 matches for graph');
+  });
+
+  it('reverts the typed text and closes on Escape', async () => {
     const user = userEvent.setup();
     const { onChange } = renderSelect('photography');
 
     await user.click(trigger());
+    await user.clear(trigger());
+    await user.type(trigger(), 'cater');
     await screen.findByRole('listbox');
     await user.keyboard('{Escape}');
 
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
-    expect(trigger().textContent).toContain('Photography');
+    // Both halves: the panel closes *and* the field goes back to what was
+    // committed. A revert that left the typed text would show a value the
+    // query does not carry.
+    expect(trigger().value).toBe('Photography');
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -158,14 +424,20 @@ describe('CategorySelect', () => {
    * bar's halo was the only focus signal and said nothing about which
    * segment was active.
    */
-  it('tints the trigger while it holds focus, so the segment is identifiable', () => {
+  it('tints the field while it holds focus, so the segment is identifiable', () => {
     render(
       <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
     );
 
-    expect(screen.getByRole('button', { name: 'Vendor type' }).className).toContain(
-      'focus-visible:bg-clay-400/10',
-    );
+    /*
+     * `has-[:focus-visible]`, not `focus-visible`. Since #375 the focus lands
+     * on the input **inside** the segment rather than on the segment itself, so
+     * the treatment reads one level out — the same way `search-bar.tsx`'s
+     * `segment` does it for City and Event date.
+     */
+    const field = screen.getByRole('combobox', { name: 'Vendor type' }).parentElement;
+    expect(field?.className).toContain('has-[:focus-visible]:bg-clay-400/10');
+    expect(field?.className).toContain('has-[:focus-visible]:inset-ring-2');
   });
 
   /*
@@ -187,28 +459,29 @@ describe('CategorySelect', () => {
       <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
     );
 
-    const button = screen.getByRole('button', { name: 'Vendor type' });
     /*
-     * Scoped to the trigger. Once the panel is open the same words are also a
-     * row inside it, so an unscoped query matches two elements — and the one
-     * this is about is the one in the button.
+     * The value is the input itself since #375 — no span to walk. What this
+     * guards is unchanged and is the reason it survived the rewrite rather
+     * than being deleted with the span: **the two branches must never both be
+     * emitted.** `font-semibold` beside the ladder's `lg:font-normal` is two
+     * equal-specificity utilities, and at 1440 the responsive one wins on
+     * source order, so the browser paints 400 while the class list reads
+     * semibold. Asserting the *absence* of the loser is the only form of this
+     * check that fails when the bug is present.
      */
-    const value = (): HTMLElement =>
-      [...button.querySelectorAll('span')]
-        .reverse()
-        .find((span) => span.textContent === 'Any vendor type') as HTMLElement;
+    const field = screen.getByRole('combobox', { name: 'Vendor type' });
 
-    expect(value().className).toContain('font-medium');
-    expect(value().className).toContain('lg:font-normal');
-    expect(value().className).not.toContain('font-semibold');
+    expect(field.className).toContain('font-medium');
+    expect(field.className).toContain('lg:font-normal');
+    expect(field.className).not.toContain('font-semibold');
 
-    await user.click(button);
+    await user.click(field);
 
-    await waitFor(() => expect(button.getAttribute('aria-expanded')).toBe('true'));
+    await waitFor(() => expect(field.getAttribute('aria-expanded')).toBe('true'));
 
-    expect(value().className).toContain('font-semibold');
-    expect(value().className).toContain('text-clay-600');
+    expect(field.className).toContain('font-semibold');
+    expect(field.className).toContain('text-clay-600');
     // The layering that silently won at 1440 — never emitted alongside the win.
-    expect(value().className).not.toContain('lg:font-normal');
+    expect(field.className).not.toContain('lg:font-normal');
   });
 });

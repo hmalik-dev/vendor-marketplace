@@ -5,3 +5,5 @@
 - [Playwright MCP is single-context; use a scratch script for a second role](playwright-mcp-single-context-scratch-script.md) — MCP tools share one browser/cookie jar; load a second .auth/*.json via a throwaway Node+Playwright script instead
 - [Stored auth state needs marker-wait, not fixed sleep](stored-auth-state-needs-marker-wait-not-fixed-sleep.md) — client header can render signed-out for 1-2 reloads after loading .auth/*.json; wait for a DOM marker and retry, don't fixed-sleep
 - [Focus ring "renders nothing" can be a transition artifact](focus-ring-transition-artifact-false-positive.md) — Button's ring animates in over 150ms; measure/screenshot after the wait, not synchronously post-Tab
+- [MCP ref-click fails on combobox role](mcp-ref-click-fails-on-combobox-role.md) — pasted-ref click/type throws a CSS parse error on role=combobox; pass a plain CSS selector instead
+- [Search bar has hidden duplicate inputs](search-bar-has-hidden-duplicate-inputs.md) — Vendor type/City/Search button each render twice (one display:none twin); disambiguate via offsetParent before selecting

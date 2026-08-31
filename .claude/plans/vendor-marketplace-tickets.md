@@ -4284,6 +4284,41 @@ parity gates, which is the scope creep that makes two lanes collide on one file.
 
 ---
 
+### Finding — **searching by city returns 500, and has since #332**
+
+**Found 2026-08-31 by #375's browser pass. Not caused by #375 — `apps/api` is untouched by
+that ticket** (`git diff origin/main -- apps/api` is empty) — and it is filed here as prose
+rather than as a ticket only because the registry is at 376 and 377–382 are claimed by
+another lane, so no contiguous id is available.
+
+**Every city-filtered search 500s.** `GET /vendors?city=Austin&state=TX` →
+`PostgresError: function lower(us_state) does not exist`. Reproduced directly against the
+lane API, and again with a category and a date in the query.
+
+**Root cause, exactly.** #332 made `state` a **closed vocabulary** — a Postgres enum named
+`us_state`. `vendor-search.dao.ts:76` still treats it as text:
+
+```ts
+conditions.push(sql`lower(${vendorProfiles.state}) = ${query.state.toLowerCase()}`);
+```
+
+`lower()` takes `text`; there is no `lower(us_state)`. The same statement at `:73` for
+`city` is fine, because `city` is still a `varchar`. Three call sites fail together —
+`searchVendors` (`:180`), `categoryFacets` (`:265`), and the availability variant — because
+all three build on the same `conditions` array.
+
+**The fix is one cast** — `lower(${vendorProfiles.state}::text)` — but it should not ride
+along in a frontend ticket: it wants its own API test asserting a city+state search returns
+`200` and the right rows, and it is worth checking whether the enum makes `lower()`
+unnecessary altogether (an enum's values are already canonical, so `= ${query.state}` after
+validating against the vocabulary may be the better shape).
+
+**Why it went unnoticed.** The frontend degrades honestly — #368's work means the customer
+sees "Could not load vendors just now" rather than an empty grid — so the surface looks
+handled. And no API test covers `city` **with** `state`; the enum change landed without one.
+
+---
+
 ### #375: Search entry — a filtering combobox for `Vendor type`, a typeahead input for `City`
 
 **Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`

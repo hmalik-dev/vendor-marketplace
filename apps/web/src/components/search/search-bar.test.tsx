@@ -79,6 +79,28 @@ function dateField(): HTMLElement {
 
 const TODAY = '2026-06-14';
 
+/*
+ * Drive the **anchored** mount, the way `category-select.test.tsx` does and for
+ * the same reason: jsdom's stub in `vitest.setup.ts` answers every media query
+ * "no", which puts every assertion against the bottom sheet instead. That was
+ * invisible until #375, because both mounts rendered the same button trigger —
+ * now the sheet renders a button and the popover renders the field itself, so a
+ * suite that does not say which mount it means tests the wrong one.
+ */
+beforeEach(() => {
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: query.includes('min-width: 640px'),
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia;
+});
+
 describe('SearchBar', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -95,7 +117,8 @@ describe('SearchBar', () => {
   it('labels its three segments exactly as the frames do', () => {
     renderBar();
 
-    expect(screen.getByRole('button', { name: 'Vendor type' })).toBeDefined();
+    // Two comboboxes and a button since #375 — the labels are unchanged.
+    expect(screen.getByRole('combobox', { name: 'Vendor type' })).toBeDefined();
     expect(screen.getByText('City')).toBeDefined();
     expect(screen.getByText('Event date')).toBeDefined();
   });
@@ -115,19 +138,39 @@ describe('SearchBar', () => {
   });
 
   /*
-   * **No text box at all** now (#167). Vendor type was already a select; City
-   * became one too, because a typed city could not tell the two Portlands
-   * apart and a city nobody works in produced an empty grid with no
-   * explanation. All three segments are pickers, so the query can only ever ask
-   * a question the platform can answer.
+   * **The rule that survived #375, restated as what it always protected.**
+   *
+   * This asserted "no text box at all" (#167), and #375 inverted the surface of
+   * that: two of the three segments are now text inputs, on the user's explicit
+   * instruction. What it was really guarding is untouched and is what it asserts
+   * now — **there is no free-text *query*.** Typing is an input affordance; the
+   * committed value is still a category slug or empty and a real `(city, state)`
+   * pair or empty, so the query can only ever ask a question the platform can
+   * answer. That is D6, and it is not overridden.
+   *
+   * A generic `textbox` count would be the wrong check either way: a `combobox`
+   * input is not matched by `getByRole('textbox')`, so it would have passed
+   * unchanged while saying nothing.
    */
-  it('offers no free-text query field — every segment is a picker', () => {
-    renderBar();
+  it('offers no free-text query field — typing filters, only a choice commits', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={onSubmit}
+        size="hero"
+      />,
+    );
 
-    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
-    for (const name of ['Vendor type', 'City', 'Event date']) {
-      expect(screen.getByRole('button', { name })).toBeDefined();
-    }
+    const type = screen.getByRole('combobox', { name: 'Vendor type' });
+    await user.type(type, 'phot');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ category: '', city: '', state: '' });
   });
 });
 
@@ -257,21 +300,24 @@ describe('SearchBar accessible names', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'City' })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: 'City' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Search' })).toBeDefined();
-    expect(screen.getByRole('button', { name: /vendor type/i })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: /vendor type/i })).toBeDefined();
 
-    // The date is a button now, not an input (#167, #328), and it is named.
+    // The date is a button, not an input (#167, #328), and it is named.
     expect(screen.getByRole('button', { name: /date/i })).toBeDefined();
 
     /*
-     * Nothing focusable is left anonymous — and there is no form control left
-     * on the bar at all. All three segments are dropdown triggers carrying
-     * their own `aria-label`, asserted above.
+     * Nothing focusable is left anonymous. The count used to be zero — "there
+     * is no form control left on the bar at all" — and #375 put two back, so
+     * the check is now the one that actually matters: every control the bar
+     * *does* have carries a name. Each of the two is named by a real
+     * `<label htmlFor>`, which `04-laws.md:141` requires of an input and which
+     * an `aria-label` on a button did not have to satisfy.
      */
     const controls = container.querySelectorAll('input, select, textarea');
 
-    expect(controls).toHaveLength(0);
+    expect(controls).toHaveLength(2);
 
     for (const control of controls) {
       const labels = Array.from((control as HTMLInputElement).labels ?? []);
@@ -442,12 +488,18 @@ describe('SearchBar — pill and circle discipline', () => {
       />,
     );
 
-    // All three segments are trigger buttons now, and each carries the same
-    // per-segment focus tint (#167).
-    for (const name of ['City', 'Event date']) {
-      expect(screen.getByRole('button', { name }).className).toContain(
-        'has-[:focus-visible]:bg-clay-400/10',
-      );
+    /*
+     * Every segment carries the same per-segment tint (#167), and it is spelled
+     * `has-[:focus-visible]` on all of them — the focus lands on the control
+     * *inside* the segment, which since #375 is an input on two of the three.
+     */
+    expect(screen.getByRole('button', { name: 'Event date' }).className).toContain(
+      'has-[:focus-visible]:bg-clay-400/10',
+    );
+
+    for (const name of ['City', 'Vendor type']) {
+      const segment = screen.getByRole('combobox', { name }).parentElement;
+      expect(segment?.className).toContain('has-[:focus-visible]:bg-clay-400/10');
     }
   });
 
