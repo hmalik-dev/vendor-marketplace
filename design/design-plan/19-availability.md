@@ -126,9 +126,11 @@ answer — a glyph stroke sitting on the dark band is text below 4.5:1.
    of the hatch rather than on average.
 2. **The stripes are `stone-200 #EFE9E0` and `stone-300 #E4DDD1`** — two sanctioned
    tokens. `#E0D8CA` appears in no token file, and **`stone-250`, which the old
-   table named, was never minted**: the ramp goes `stone-200` to `stone-300` with
-   nothing between. A table citing a colour nobody can resolve is a defect in its
-   own right.
+   table named, resolved to nothing when this was written**: the ramp went
+   `stone-200` to `stone-300` with nothing between. A table citing a colour nobody
+   can resolve is a defect in its own right. `stone-250` was **minted on
+   2026-08-30 (D18)** as `#ECE6DC`, the ground behind every cover photograph — and
+   it is **still not the hatch**, whose stripes stay the two-token pair above.
 
 The hatch and the strike-through are unchanged, and they are what actually carries
 the state — this is a contrast fix to the numeral, not a redesign of the cell.

@@ -72,11 +72,14 @@ path for someone who only knows the category. They set `?category=` and go.
 Values carry into `/search` as URL params.
 
 **The hero seeds nothing, and all three segments render in the placeholder tone**
-(`stone-600`, `#6B6459`). Ruled 2026-08-30 (D16). Frame `01 Landing` draws the
+(`stone-600`, `#6B6459`). Ruled 2026-08-30 (D16). Frame `01 Landing` drew the
 City segment as the literal `Austin, TX` in `#23201C` — stone-900, the _filled_
 tone — while templating the vendor type (`{{ searchValue }}`, hint
-"Photography"), so the frame reads as a seeded query where live reads as three
-empty fields. **The frame is what gets corrected, not the code.** A hard-coded
+"Photography"), so the frame read as a seeded query where live reads as three
+empty fields. **The frame was what got corrected, not the code**, and it was
+corrected in the 2026-08-30 drop: all four widths of `01` now read
+**`Any vendor type` · `Anywhere` · `Add a date`**, every one of them in
+`stone-600`. Those three are the approved placeholder strings. A hard-coded
 `Austin, TX` is a claim about where the marketplace operates, and drawing an
 empty value in the filled tone reads as a value that is not there. The empty
 state is the honest one, and whatever is decided for City decides the vendor-type
@@ -84,7 +87,9 @@ tone with it.
 
 The hero badge is unaffected: "Now booking in Austin" is an approved string that
 names the market out loud, which is a different thing from pre-filling a query on
-the visitor's behalf.
+the visitor's behalf. **`02 Search` is untouched by this**, at both widths — its
+header bar shows a query the visitor actually ran, so `Photography` and
+`Austin, TX` belong there in the filled tone.
 
 ## Photo cluster
 

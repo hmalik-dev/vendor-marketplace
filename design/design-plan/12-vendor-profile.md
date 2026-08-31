@@ -27,8 +27,18 @@ The object a visitor recognises is the **card they tapped in search**, so that i
 what the profile opens with — the same card, unpacked horizontally into the page
 header. One surface: identity on the left, the cover flush to the card's top,
 right and bottom edges. Nothing floats and nothing is stranded; the photograph's
-edges _are_ the card's edges. The sage `Free Jun 14` chip persists from the card
-too, so the recognisable object arrives intact.
+edges _are_ the card's edges.
+
+The header keeps its sage `Free Jun 14` chip — but as of D16 it **no longer
+persists from the search card**, because the search card no longer has one: a
+dated query is already filtered on availability, so the chip there only restated
+the query. Frame `03`'s caption still says it persists, and that half-sentence is
+the one thing in the frame this file overrides. The chip stays for a different
+reason: the profile is **not** a filtered result. A visitor arrives from a link, a
+message or a bookmark as often as from a search, so the date the vendor is free is
+information the page owes them. It is the profile's own statement of availability,
+and one of only two surfaces still carrying sage — the other is the nearby-dates
+band on `18`.
 
 Five directions were tried; four failed:
 

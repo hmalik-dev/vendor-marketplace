@@ -58,6 +58,7 @@ the British spelling back, change the string, not this rule.
 | Cancel confirm                 | "Confirm cancellation"                  | "Cancel this booking? This notifies Maya and can't be undone."                                                                                              |
 | Cancel dismiss                 | "Cancel"                                | "Keep booking"                                                                                                                                              |
 | Cancel proceed                 | "OK"                                    | "Yes, cancel booking"                                                                                                                                       |
+| Hero search, unfilled          | "Photography · Austin, TX · Jun 14"     | "Any vendor type" · "Anywhere" · "Add a date" — the hero seeds nothing, so all three segments render in `stone-600` (D16)                                   |
 | 500 recovery                   | "Go to my bookings"                     | "Browse vendors" — the 500 page cannot know who is reading, so the one destination true for everyone (D17)                                                  |
 
 **No approved string hard-codes a duration the code derives.** Ruled 2026-08-30

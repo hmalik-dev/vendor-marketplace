@@ -47,6 +47,7 @@ Tailwind 4 is CSS-first; there is no palette in a JS config.
   --color-stone-100: #f4f0e8; /* table header, deeper panels */
   --color-stone-150: #f1ece4; /* input fill, nested surfaces */
   --color-stone-200: #efe9e0; /* hairline dividers inside cards */
+  --color-stone-250: #ece6dc; /* image ground — behind every cover, and a coverless one */
   --color-stone-300: #e4ddd1; /* borders */
   --color-stone-400: #d5cec2; /* stronger borders, unchecked controls */
   --color-stone-500: #c9c1b5; /* disabled text ONLY (fails AA by design) */

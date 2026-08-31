@@ -159,3 +159,19 @@ bookings they cannot have. Rejected: an auth-aware pair of strings, because
 reading — it would need a signed-out default anyway, and two strings on one
 screen drift. Also rejected: accepting the inaccuracy, since the click is a dead
 end on a page that is already a failure. Ruled 2026-08-30 (D17).
+
+## RESOLVED — What token is the ground behind a cover photograph?
+
+**`stone-250` = `#ECE6DC`, minted 2026-08-30 (D18).** The frames paint that fill
+behind every 3:2 cover at **30 sites**, while the ramp jumped `stone-200`
+(`#EFE9E0`) straight to `stone-300` (`#E4DDD1`) — so the fill was the one
+off-token value in the set. Same class as `clay-150` (D17) and #306's `#C4D6A8` /
+`#5C4A18`: **the ramp was incomplete, not the frame wrong.** `stone-150` and
+`sage-150` are the precedent for the step name.
+
+It had to be settled now because the coverless empty state ruled above _is_ that
+block, and a state whose only spec is "a neutral tone block" names a colour nobody
+can resolve. `19-availability.md` recorded that `stone-250` "was never minted",
+which was true when written and is corrected in place. **It is still not the
+hatch** — those stripes stay `stone-200` / `stone-300`, and `#E0D8CA` remains
+unminted.

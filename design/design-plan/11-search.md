@@ -168,7 +168,9 @@ Cards per `03-components.md` at the compact end: `aspect-ratio: 3/2` cover, 12px
 name at 19px, and **no availability chip** — a dated query is filtered on
 availability, so a chip repeating that is a tautology (D16). The one chip a
 result card can carry is the stone `New` badge, for a vendor published within the
-last 30 days.
+last 30 days. **The frames match as of the 2026-08-30 drop** — `02` and
+`27 Search results — 1024` draw no availability chip on any card, and `New`
+survives on `Wildbloom Films` alone.
 
 **Sort defaults to `Most relevant`** (`sort: 'relevance'`). Ruled 2026-08-30
 (D16), because this file had never fixed a default and frame `02` draws

@@ -43,7 +43,7 @@ Copy is imperative and specific, 2–4 words: "Request booking", "Send a message
   (avatar 34px, circle, 2px stone-0 border, overlapping the seam by 17px)
   Business name                                Instrument Serif 21px
   ★ 4.9 (127) · Austin, TX                     text-meta 12px, rating bold in stone-700
-  [Photography] [Free June 14]                 chips: stone-150/stone-700, sage-50/sage-600
+  [New]                                        chip: stone-150/stone-700 — no availability chip (D16)
   ─────────────────────────────                1px stone-200
   From                     $1,450              text-meta 12px stone-600 / 18px bold ink
 ```
@@ -65,24 +65,34 @@ _different_ date than the one searched (`nearby-dates-band.tsx` passes
 The **gold "scarce" chip is dropped from MVP.** This file said "gold when scarce
 ("2 dates left")" and never defined scarce — free dates in what window, below
 what number — and that threshold is an invented number, which the
-no-invented-numbers rule forbids. Removed from frames `02` (line 294),
-`27 Search results — 1024` (315) and both `18` frames (1722, 1744); the two on
-`18` become the sage nearby-date form rather than disappearing.
+no-invented-numbers rule forbids. **Both chips came off the frames in the
+2026-08-30 drop.** Sage left the six result cards on `02`, the four on
+`27 Search results — 1024`, and both editor preview cards on `09`, which mirror
+them. Gold left `02` (line 294) and `27` (315). On the two `18` frames (1722, 1744) the gold chip did not disappear — it became the sage nearby-date form and
+now reads `Free Jun 18`, a date other than the one searched.
 
 **New chip.** The stone chip (`#F0EAE1` / `#4A443C`, literal `New`, frame `02`
 line 297) is **not** an availability state — frame `02` puts it on a vendor
 already showing ★ 5.0 (17). It is a _joined recently_ badge: a vendor published
 within the last 30 days. With the sage and gold chips gone from the grid, it is
-the only chip a search card carries.
+the only chip a search card carries. Frame `02` keeps it on `Wildbloom Films`
+alone.
+
+**The profile header keeps its sage chip, and does not inherit it.**
+`03 Vendor profile` is not a filtered result — a visitor reaches it from a link,
+a message or a bookmark as often as from a dated search — so `Free Jun 14` there
+is information the page owes them rather than a restatement of a query they
+already made. Sage therefore survives in exactly two places: that header, and the
+nearby-dates band on `18`. See `12-vendor-profile.md`.
 
 ### Two densities
 
-|         | Search grid (compact) | Landing / featured      |
-| ------- | --------------------- | ----------------------- |
-| Cover   | `aspect-ratio: 3/2`   | `aspect-ratio: 3/2`     |
-| Padding | 12px                  | 14px                    |
-| Name    | 19px Serif            | 21px Serif              |
-| Chips   | availability only     | category + availability |
+|         | Search grid (compact) | Landing / featured  |
+| ------- | --------------------- | ------------------- |
+| Cover   | `aspect-ratio: 3/2`   | `aspect-ratio: 3/2` |
+| Padding | 12px                  | 14px                |
+| Name    | 19px Serif            | 21px Serif          |
+| Chips   | `New` only            | category + `New`    |
 
 The search grid runs at the compact end so **8 cards fit at 1440 × 900** with the
 third row peeking — that number is an acceptance criterion in `11-search.md`, and
@@ -175,6 +185,11 @@ Until real photography exists:
 `repeating-linear-gradient(135deg, #E6DFD3 0 9px, #EFE9DF 9px 18px)` with a 9px
 JetBrains Mono `stone-600` label naming the shot ("cover 3:2", "photographer /
 portrait"). Never a hand-drawn illustration, never a stock-photo stand-in.
+
+**Frame `26 State library` draws the pair** as of the 2026-08-30 drop: the live
+coverless block on the left, the hatch on the right under the heading _never on a
+public page_. The two sit side by side because the mistake this rule prevents is
+confusing one for the other.
 
 ## Empty states
 

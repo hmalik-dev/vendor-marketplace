@@ -48,6 +48,13 @@ profile banner field and there must never be one; a second image field is a
 second thing to get wrong, and the whole point of the fixed 3:2 is that the card
 and the profile header are the same file.
 
+**The rail mirrors the corrected card.** Its preview carries **no availability
+chip** at any width — the 308px desktop rail, the 768 panel above the fields, and
+the 390 bottom sheet — because the card it mirrors carries none (D16). Both frames
+that drew one, `09` and its 390 sheet, were corrected in the 2026-08-30 drop. A
+preview showing a chip the live grid never renders teaches a vendor something
+false about their own listing, which is the one thing a mirror must not do.
+
 **2.** Business name + Profile link on one row; the slug preview renders live
 under its field as `{BRAND_DOMAIN}/kessler-co`.
 

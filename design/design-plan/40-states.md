@@ -73,6 +73,14 @@ profile header keep their full composition; only the image is absent, and it is
 absent quietly. **The vendor sees the cause and the fix in the editor, where the
 CTA belongs** (#299 builds the drop zone) — not on the page their customers read.
 
+**Frame `26 State library` draws it** as of the 2026-08-30 drop: the live block on
+the left, the hatch it replaces on the right, under the heading _never on a public
+page_. The block is **`stone-250 #ECE6DC`** — the same ground the frames already
+paint behind every cover photograph, minted as a token in the same drop (D18) — at
+the cover's exact 3:2 ratio and the card's own radius, with nothing inside it. No
+hatch, no monospace label, no upload prompt: the person reading is not the person
+who can fix it, and everything they came for is below the fold of that block.
+
 ## Validation
 
 - Errors appear **after a submit attempt**, never while typing. Cleared per-field on correction.
@@ -156,9 +164,9 @@ failure. All follow these rules when they land.
 
 Ruled 2026-08-30 (D17). Frame `16` drew `Go to my bookings`, which offers a
 visitor who has never signed in a link to bookings they cannot have. The approved
-string becomes **"Browse vendors"**, going to `/search`, and **frame `16` is
-corrected** — the legitimate route for changing approved copy, since a ticket may
-not. #305 made the change as a ticket, correctly reverted it, and filed the
+string becomes **"Browse vendors"**, going to `/search`, and **frame `16` was
+corrected in the 2026-08-30 drop** — the legitimate route for changing approved
+copy, since a ticket may not. #305 made the change as a ticket, correctly reverted it, and filed the
 question instead.
 
 An auth-aware pair of strings was rejected: `global-error.tsx` renders **outside
