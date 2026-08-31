@@ -443,6 +443,15 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   367: [],
   368: [],
   369: [],
+
+  // The third backlog consolidation, 2026-08-31. 14 open rows into 4, plus #374 for a
+  // launch gap nobody had filed. The merged rows keep their registry entries so
+  // `pnpm preflight --ticket <old n>` still gates from an older branch.
+  370: ['sentry'], // #20 + #353 — the pipeline and the errors it has to report
+  371: ['stripe'], // #323's checkout frame is inside the 1024 ladder
+  372: ['auth'], // #361's chrome renders for both signed-in roles
+  373: [],
+  374: [], // legal, policy and support surfaces — static routes, no external service
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
