@@ -68,7 +68,15 @@ export function DataTable<T>({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-stone-300 bg-stone-0">
-      <div className={cn('min-h-0 flex-1 overflow-y-auto', scrollPadding && 'pb-16')}>
+      {/*
+        `pb-20` is measured, not chosen: the floating bulk bar sits at `bottom-4`
+        (16px) and is 55px tall, so a row needs 71px of clearance to scroll past
+        it. `pb-16` supplied 64 and left the last row's two 44px controls 5px
+        under the bar — the glyphs were visible but `elementFromPoint` returned
+        the bar, so the hit targets were 39px. Whoever changes the bar's height
+        or offset changes this number with it.
+      */}
+      <div className={cn('min-h-0 flex-1 overflow-y-auto', scrollPadding && 'pb-20')}>
         <div
           role="table"
           className="min-w-full"

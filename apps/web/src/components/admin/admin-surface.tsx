@@ -27,9 +27,18 @@ export interface AdminSurfaceProps {
    * Frame `13` draws no pagination, so any is a deviation — and the version
    * that sat under the table took 45px out of the pane, which is one 44px row.
    * "Fifteen rows fit at 1440x900" is a stated acceptance criterion, and it
-   * would have held only until the first page that needed a pager. Beside the
-   * count line it costs the table nothing, and the count line already says how
-   * many rows there are in total.
+   * would have held only until the first page that needed a pager. The count
+   * line already says how many rows there are in total.
+   *
+   * Beside the count line it costs **6px**, measured — not nothing, which is
+   * what this comment claimed until a browser pass measured it. The `nav` is
+   * 25px against the heading's 30px box, but it is `self-center` inside a
+   * baseline-aligned wrapper whose top is pinned by the count line, so the row
+   * grows from 30px to 36px. The pane goes from 5px short of fifteen rows to
+   * 11px short; all fifteen remain reachable because the body scrolls, so the
+   * acceptance criterion holds and this is a recorded composition delta rather
+   * than a defect. Left as-is deliberately: the alignment here has already been
+   * broken twice by fixes aimed at one pixel of baseline.
    */
   pager?: Omit<PagerProps, 'path'> & { path: string };
   /** The table, which fills the rest of the shell and scrolls inside itself. */
