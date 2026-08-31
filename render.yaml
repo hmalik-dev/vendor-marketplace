@@ -1,0 +1,88 @@
+# Render blueprint for the **demo** API — a showcase deployment, nothing else.
+#
+#   THIS IS NOT PRODUCTION AND MUST NEVER BECOME IT.
+#
+# It exists so the Orla web app can be shown to someone over a link instead of
+# over a screen share. It runs on Render's free instance type, reads the Neon
+# `staging` branch, and is wired to development-instance Clerk and test-mode
+# Stripe — so no real money can move and no real account is reachable through
+# it. `docs/demo.md` is the runbook; `docs/pre-launch.md` is what a real
+# production deployment would have to satisfy instead, and this file satisfies
+# almost none of it on purpose.
+#
+# Free instances sleep after ~15 minutes idle and cold-start in roughly a
+# minute. That is the price of costing nothing, and it is the reason nothing
+# here should be pointed at by anything that matters.
+services:
+  - type: web
+    name: orla-demo-api
+    runtime: docker
+    plan: free
+    # Ohio is the closest Render region to the Neon project (aws-us-east-2), so
+    # the per-query round trip stays in the same metro.
+    region: ohio
+    dockerfilePath: ./apps/api/Dockerfile
+    # The build context is the repository root — a pnpm workspace cannot be
+    # installed from one package's directory. See the Dockerfile's own header.
+    dockerContext: .
+    branch: main
+    # Deliberately manual. A demo that redeploys itself on every merge to main
+    # is a demo that breaks halfway through being shown to someone.
+    autoDeploy: false
+    # `/ready` reports the database and object store, where `/health` only
+    # reports that the process is alive — see docs/pre-launch.md §6.
+    healthCheckPath: /ready
+    envVars:
+      # --- Set here, because none of these are secret ---------------------
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      # Render injects its own PORT unless the service declares one. The
+      # Dockerfile expects 4000 and EXPOSEs it.
+      - key: PORT
+        value: '4000'
+      - key: LOG_LEVEL
+        value: info
+      # Higher than the 120/min default: a person clicking through a demo
+      # trips the limiter, and a 429 renders as the generic 500 page.
+      - key: RATE_LIMIT_MAX
+        value: '600'
+      - key: STRIPE_PLATFORM_FEE_RATE
+        value: '0.12'
+      - key: S3_FORCE_PATH_STYLE
+        value: 'true'
+
+      # --- Set in the Render dashboard, never in this file ----------------
+      # `sync: false` makes Render prompt for the value on first deploy and
+      # keep it out of git. Credentials live in the environment; a connection
+      # string committed here would have to be rotated, not deleted.
+      #
+      # DATABASE_URL must be the Neon **staging** branch. Never `production`.
+      - key: DATABASE_URL
+        sync: false
+      # The public origin of the demo web deployment. Doubles as the API's
+      # CORS allow-list, so a wrong value here is a browser-side failure with
+      # no server-side symptom.
+      - key: WEB_URL
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      - key: CLERK_WEBHOOK_ENDPOINT
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_PUBLIC_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false

@@ -7,6 +7,12 @@ defect the moment it stops being true.
 This file is the gate. Nothing here is optional; items marked **BLOCKER** would
 cause user-visible harm, legal exposure, or data loss on day one.
 
+**Not to be confused with `demo.md`.** That file stands up a free, sleep-when-idle
+showcase deployment on the Neon `staging` branch, so the app can be shown to
+someone over a link. It is explicitly _not_ a launch and satisfies almost none of
+what follows — most pointedly §1.1, whose fabricated vendors are exactly what it
+serves, and may serve, precisely because it is not production.
+
 The ticket tracker (`.claude/plans/vendor-marketplace-tickets.md`) holds the
 build queue. This file holds the things that are _not_ tickets — configuration,
 credentials, data and legal — plus pointers to the tickets that are.
