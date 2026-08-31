@@ -174,7 +174,13 @@ describe('CategorySelect', () => {
     await user.click(trigger());
     await user.type(trigger(), 'zzzz');
 
-    expect(await screen.findByText(/zzzz/)).toBeDefined();
+    /*
+     * The **visible** message, not any node containing the string. The polite
+     * live region also names the query — "0 matches for zzzz" — so an unscoped
+     * `findByText` matches two nodes and throws. Both are correct; only one is
+     * what a sighted customer reads.
+     */
+    expect(await screen.findByText('No vendor type matches \u201Czzzz\u201D.')).toBeDefined();
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
@@ -281,6 +287,108 @@ describe('CategorySelect', () => {
     await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
 
     expect(onChange).toHaveBeenCalledWith('videography');
+  });
+
+  /*
+   * **The sharpest defect the review found.** `DropdownList` seeded its active
+   * index from the current selection; the combobox took ownership of that index
+   * and started it at 0. Row 0 is `Any vendor type`, whose value is `''` — so
+   * opening a field that already held a category and pressing `Enter` *cleared*
+   * it, on the way to submitting the form. Two keystrokes that had been a
+   * no-op became a silent data loss.
+   */
+  it('opens with the committed row active, so the first Enter changes nothing', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderSelect('florals');
+
+    await user.click(trigger());
+    await screen.findByRole('listbox');
+
+    const activeId = trigger().getAttribute('aria-activedescendant');
+    expect(document.getElementById(activeId as string)?.textContent).toContain('Florals');
+
+    await user.keyboard('{Enter}');
+    expect(onChange).toHaveBeenCalledWith('florals');
+    expect(trigger().value).toBe('Florals');
+  });
+
+  /*
+   * `42-dropdowns.md`: "Focus returns to the field on close." A row is a
+   * `<button>`, so committing with the **mouse** moves focus into a panel that
+   * then unmounts — and anchor mode suppresses Radix's focus restoration, so it
+   * landed on `<body>` and the next `Tab` restarted at the top of the document.
+   */
+  it('keeps focus in the field after committing with the mouse', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.click(await screen.findByRole('option', { name: /^Catering/ }));
+
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  /*
+   * After a keyboard commit the focus is already in the field, so no `focus`
+   * event fires and `onFocus` alone could never reopen it — clicking the field
+   * did nothing, twice. Anchor mode gave up Radix's merged toggle deliberately
+   * (it closed the panel on the click that placed the caret), so the opener has
+   * to be a click handler that opens rather than toggles.
+   */
+  it('reopens on a click after a keyboard commit', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(trigger().getAttribute('aria-expanded')).toBe('false');
+
+    await user.click(trigger());
+    expect(trigger().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  /* ARIA's combobox pattern: ArrowUp opens a closed field, like ArrowDown. */
+  it('opens on ArrowUp as well as ArrowDown', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    trigger().focus();
+    await user.keyboard('{Escape}');
+    await user.keyboard('{ArrowUp}');
+
+    expect(trigger().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  /*
+   * `aria-controls` names the panel while it is open, and the no-match panel is
+   * the *common* case for a field you type into. An empty branch that dropped
+   * the id left the reference dangling exactly when a screen reader most needs
+   * somewhere to look.
+   */
+  it('points aria-controls at a real element even with no rows', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.type(trigger(), 'zzzz');
+
+    const controls = trigger().getAttribute('aria-controls');
+    expect(controls).not.toBeNull();
+    expect(document.getElementById(controls as string)).not.toBeNull();
+  });
+
+  /* The count a sighted customer reads off the shrinking list. */
+  it('announces the filtered count politely', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
+    );
+
+    await user.type(screen.getByRole('combobox', { name: 'Vendor type' }), 'graph');
+
+    const live = container.querySelector('[aria-live="polite"]');
+    // In the field, not the portalled panel — see `FilteredCount`.
+    expect(live?.textContent).toBe('2 matches for graph');
   });
 
   it('reverts the typed text and closes on Escape', async () => {

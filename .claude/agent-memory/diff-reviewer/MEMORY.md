@@ -13,3 +13,5 @@
 - [Frames render content-box](review-checklist-design-frames-are-content-box.md) — the .dc.html has no preflight, so a bordered div there is `D + 2×stroke`; measuring it under the app's CSS gives the wrong answer
 - [Seeded rows vs the production writer](review-checklist-seeded-rows-vs-the-production-writer.md) — diff the seed's `values` against the service that owns that insert; a column the seed nulls is a null branch the UI renders for ever
 - [Recompute in a SET clause still races](review-checklist-recompute-in-set-clause-races.md) — "derived, never incremented" is not concurrency-safe; PGlite has one connection, so prove it on the Docker Postgres with two
+- [Dirty tree vs the reviewed commit](review-checklist-dirty-tree-vs-reviewed-commit.md) — `git status` before probing; the lane may already have fixed the defect you were asked to confirm
+- [Controlled index drops the selection seed](review-checklist-controlled-index-drops-the-selection-seed.md) — hoisting an active index turns `useState(seed)` into `useState(0)`; open with a non-zero committed value, press Enter

@@ -820,7 +820,16 @@ export function DropdownList({
 
   if (options.length === 0) {
     return (
-      <div className="px-3 py-2.5">
+      /*
+        Still carries the id, even with no rows to list.
+        A combobox's `aria-controls` names this element while the panel is open,
+        and the no-match panel is the *common* case for a field you type into —
+        so an empty branch that dropped the id left the reference dangling
+        exactly when a screen reader most needs somewhere to look. `role` is
+        deliberately absent: an empty `listbox` is a list announced as having
+        nothing in it, where what is wanted is the sentence saying why.
+      */
+      <div id={listId} className="px-3 py-2.5">
         <p className="text-[12.5px] text-stone-600">
           {emptyMessage ?? 'Nothing to choose from here yet.'}
         </p>

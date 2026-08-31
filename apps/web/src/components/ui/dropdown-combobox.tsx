@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
+import { useCallback, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Dropdown, DropdownList, useAnchoredMount, type DropdownOption } from './dropdown';
 import type { DropdownDensity, DropdownWidth } from './dropdown';
 import { cn } from '@/lib/utils';
@@ -75,6 +67,17 @@ export interface ComboboxDropdownProps {
   noMatchMessage: (query: string) => string;
   /** Shown when the field is open with nothing typed and nothing to show. */
   emptyMessage: string;
+  /**
+   * Shown when the panel is open, nothing is typed, and the field is one that
+   * only suggests once you type.
+   *
+   * Without it the City sheet opened saying "No vendors have published a
+   * location yet" — the API-degraded message — while the API had just returned
+   * a full list. The two states are different and only one of them is a
+   * problem: "type to see places" is a prompt, "nobody has published" is a
+   * failure, and `40-states.md` does not let a prompt borrow a failure's copy.
+   */
+  promptMessage?: string;
   /** The caption above the rows: "Vendor type · 12 categories". */
   caption?: string;
   /**
@@ -125,6 +128,7 @@ export function ComboboxDropdown({
   placeholder,
   noMatchMessage,
   emptyMessage,
+  promptMessage,
   caption,
   commitOnEmpty = false,
   limit,
@@ -148,7 +152,18 @@ export function ComboboxDropdown({
    * the field when nobody is typing and never overwrites a word in progress.
    */
   const [query, setQuery] = useState<string | null>(null);
-  const [active, setActive] = useState(0);
+  /**
+   * `null` means "not moved yet" — the active row is then **the selected one**,
+   * derived below rather than stored.
+   *
+   * Storing `0` here is a real bug and it took a review to see: `DropdownList`
+   * seeded its own index from the current selection, and taking ownership of
+   * that index without taking the seed made row 0 active on every open. Row 0
+   * of `CategorySelect` is `Any vendor type`, whose value is `''` — so opening
+   * a field that already held `florals` and pressing `Enter` *cleared the
+   * category*, silently, on the way to submitting the form.
+   */
+  const [moved, setMoved] = useState<number | null>(null);
   const anchored = useAnchoredMount();
   const inputRef = useRef<HTMLInputElement>(null);
   /*
@@ -162,10 +177,19 @@ export function ComboboxDropdown({
   const matched = openOnFocus || typed !== '' ? filter(options, typed) : [];
   const shown = limit === undefined ? matched : matched.slice(0, limit);
   const beyondLimit = matched.length - shown.length;
+  /*
+   * Until the customer moves, the active row **is** the selected row — which is
+   * what makes the first `Enter` after opening a no-op rather than a change.
+   * Once they have moved, the stored index wins, clamped because the list
+   * shrinks as they type.
+   */
+  const selectedIndex = shown.findIndex((option) => option.value === value);
+  const active =
+    moved === null ? Math.max(0, selectedIndex) : Math.min(moved, Math.max(0, shown.length - 1));
 
   const revert = useCallback(() => {
     setQuery(null);
-    setActive(0);
+    setMoved(null);
   }, []);
 
   const commit = useCallback(
@@ -173,6 +197,15 @@ export function ComboboxDropdown({
       onCommit(next);
       revert();
       setOpen(false);
+      /*
+       * `42-dropdowns.md`: "Focus returns to the field on close." On the
+       * keyboard paths it never left — but a row is a `<button>`, so committing
+       * with the **mouse** moves focus into a panel that then unmounts, and
+       * `onCloseAutoFocus` is suppressed in anchor mode so Radix does not hand
+       * it back. Focus landed on `<body>`, and the customer's next `Tab`
+       * restarted at the top of the document.
+       */
+      inputRef.current?.focus();
     },
     [onCommit, revert],
   );
@@ -183,22 +216,17 @@ export function ComboboxDropdown({
   }, [revert]);
 
   /*
-   * The list can shrink under the active index — one more character matches
-   * fewer rows — and an active index past the end points
-   * `aria-activedescendant` at a row that does not exist, which reads as
-   * silence. Clamping on every change is cheaper than reasoning about which
-   * ones can shrink it.
+   * Derived rather than clamped in an effect. An effect would leave one render
+   * where `aria-activedescendant` names a row that no longer exists — the list
+   * shrinks with every character typed, so that render happens constantly, and
+   * a dangling reference reads as silence to a screen reader.
    */
-  useEffect(() => {
-    setActive((current) => (current >= shown.length ? 0 : current));
-  }, [shown.length]);
-
   function move(delta: number): void {
     if (shown.length === 0) {
       return;
     }
 
-    setActive((current) => (current + delta + shown.length) % shown.length);
+    setMoved((((active + delta) % shown.length) + shown.length) % shown.length);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
@@ -220,6 +248,13 @@ export function ComboboxDropdown({
         return;
       case 'ArrowUp':
         event.preventDefault();
+        // Opens too, per the ARIA combobox pattern — and without it `Escape`
+        // then `ArrowUp` moved a hidden active index, so the next `ArrowDown`
+        // opened the panel highlighting the last row rather than the first.
+        if (!open) {
+          setOpen(true);
+          return;
+        }
         move(-1);
         return;
       case 'Enter': {
@@ -255,6 +290,15 @@ export function ComboboxDropdown({
       data-slot="combobox-input"
       type="text"
       role="combobox"
+      /*
+        Named twice on purpose, with the same string. The visible
+        `<label htmlFor>` is what `04-laws.md:141` requires and is what names it
+        on the anchored mount; `aria-label` is what names it inside the sheet,
+        where the field is in the panel and the label is in the bar behind the
+        scrim. Same words either way, so nothing a screen reader reads changes
+        between mounts.
+      */
+      aria-label={label}
       autoComplete="off"
       aria-expanded={open}
       aria-controls={listId}
@@ -269,12 +313,12 @@ export function ComboboxDropdown({
       onCompositionEnd={(event) => {
         composing.current = false;
         setQuery(event.currentTarget.value);
-        setActive(0);
+        setMoved(null);
       }}
       onChange={(event) => {
         const next = event.target.value;
         setQuery(next);
-        setActive(0);
+        setMoved(null);
 
         if (composing.current) {
           return;
@@ -295,6 +339,19 @@ export function ComboboxDropdown({
         setOpen(openOnFocus ? true : next.trim() !== '');
       }}
       onFocus={() => {
+        if (openOnFocus) {
+          setOpen(true);
+        }
+      }}
+      /*
+       * `onClick` as well as `onFocus`, because after a keyboard commit focus
+       * is already in the field — so no `focus` event fires and clicking it did
+       * nothing at all, twice in a row. `triggerMode="anchor"` gave up Radix's
+       * merged toggle deliberately (it closed the panel on the click that
+       * placed the caret), so this is the opener that replaces it: it opens and
+       * never toggles, which is the distinction that made the toggle wrong.
+       */
+      onClick={() => {
         if (openOnFocus) {
           setOpen(true);
         }
@@ -326,7 +383,9 @@ export function ComboboxDropdown({
       selected={value === '' ? [] : [value]}
       visibleCount={visibleCount}
       controlled={{ activeIndex: active, listId }}
-      emptyMessage={typed.trim() === '' ? emptyMessage : noMatchMessage(typed.trim())}
+      emptyMessage={
+        typed.trim() !== '' ? noMatchMessage(typed.trim()) : (promptMessage ?? emptyMessage)
+      }
       onSelect={commit}
     />
   );
@@ -350,11 +409,49 @@ export function ComboboxDropdown({
             label". The button this replaced carried an `aria-label` instead,
             which was correct for a button and is not enough for a field.
           */}
-          <label htmlFor={id} className={labelClassName}>
+          {/*
+            `htmlFor` only where the input actually is. On the sheet mount the
+            field lives inside the panel and the trigger is a button, so a
+            `htmlFor` here would point at nothing while the sheet is closed —
+            a dangling association is worse than none, because it reads as
+            correct to anything checking that inputs have labels.
+          */}
+          <label {...(anchored ? { htmlFor: id } : {})} className={labelClassName}>
             {label}
           </label>
-          {input}
+          {/*
+            **One input in the document, never two.**
+
+            The sheet mount renders the field inside its own panel, because the
+            anchored field is behind a scrim down there and cannot be typed
+            into. Rendering `input` in both places would put two elements under
+            one `id` — which breaks `<label htmlFor>` and `getElementById`, and
+            `aria-activedescendant` is resolved by id. So below the sheet
+            breakpoint the trigger is a plain button showing the committed
+            value, and the input lives in the sheet alone.
+          */}
+          {anchored ? (
+            input
+          ) : (
+            <button
+              type="button"
+              aria-label={label}
+              aria-expanded={open}
+              aria-haspopup="listbox"
+              className={cn('truncate text-left', inputClassName?.(open))}
+            >
+              {committedLabel === '' ? placeholder : committedLabel}
+            </button>
+          )}
           {children}
+          {/*
+            **Outside the panel, on purpose.** A live region has to be in the
+            document *before* its text changes — a screen reader that sees the
+            region appear and populate in the same commit announces nothing. The
+            panel is portalled and unmounts on close, so a region living inside
+            it would be mounting at exactly the moment it had something to say.
+          */}
+          <FilteredCount count={shown.length} query={open ? typed : ''} />
         </div>
       }
       label={label}
@@ -370,9 +467,32 @@ export function ComboboxDropdown({
         customer can reach it.
       */}
       {anchored ? null : <div className="px-4 pb-2">{input}</div>}
+      {/*
+        The sheet's copy is the *only* copy — see the trigger above. The
+        anchored mount is the reverse: the field is the trigger, and the panel
+        holds nothing but rows.
+      */}
       {list}
       <PanelOverflowNote hidden={beyondLimit} />
     </Dropdown>
+  );
+}
+
+/**
+ * What a sighted customer gets for free from a shrinking list.
+ *
+ * `polite`, so it waits for a pause rather than interrupting each keystroke,
+ * and it announces the **count** rather than the rows: reading five city names
+ * on every character is worse than reading none. `aria-atomic` so the whole
+ * sentence is re-read rather than the digit alone.
+ */
+function FilteredCount({ count, query }: { count: number; query: string }): React.ReactElement {
+  return (
+    <p aria-live="polite" aria-atomic="true" className="sr-only">
+      {query.trim() === ''
+        ? ''
+        : `${count} ${count === 1 ? 'match' : 'matches'} for ${query.trim()}`}
+    </p>
   );
 }
 

@@ -161,7 +161,10 @@ describe('CitySelect', () => {
 
     await user.type(field(), 'Atlantis');
 
-    expect(await screen.findByText(/Atlantis/)).toBeDefined();
+    // The visible message, not the live region, which also names the query.
+    expect(
+      await screen.findByText('No vendors in \u201CAtlantis\u201D yet. Try a nearby city.'),
+    ).toBeDefined();
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
@@ -216,7 +219,14 @@ describe('CitySelect', () => {
 
     await user.type(screen.getByRole('combobox', { name: 'City' }), 'aus');
 
-    expect(await screen.findByText(/aus/)).toBeDefined();
+    /*
+     * The no-match copy, not the API-degraded one. An empty list and a typed
+     * query that matches nothing are the same panel from the customer's side,
+     * and both have to name what they typed rather than going blank.
+     */
+    expect(
+      await screen.findByText('No vendors in \u201Caus\u201D yet. Try a nearby city.'),
+    ).toBeDefined();
   });
 
   /*
@@ -232,6 +242,29 @@ describe('CitySelect', () => {
     await user.clear(field());
 
     expect(onChange).toHaveBeenCalledWith({ city: '', state: '' });
+  });
+
+  /*
+   * The sheet mount opens on a tap whether or not the field suggests on focus,
+   * so this state is reachable with nothing typed — and it must not borrow the
+   * API-degraded copy. Telling a customer nobody has published a location while
+   * the list holds a dozen is a failure message on a prompt's state, which
+   * `40-states.md` does not allow.
+   */
+  it('prompts rather than claiming an empty platform when nothing is typed', () => {
+    render(
+      <CitySelect
+        cities={CITIES}
+        city=""
+        state=""
+        onChange={vi.fn()}
+        size="compact"
+        id="city-sheet"
+      />,
+    );
+
+    // The two strings are different, and only one of them reports a problem.
+    expect(screen.queryByText('No vendors have published a location yet.')).toBeNull();
   });
 
   it('carries the combobox roles and a live active descendant', async () => {

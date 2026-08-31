@@ -79,6 +79,28 @@ function dateField(): HTMLElement {
 
 const TODAY = '2026-06-14';
 
+/*
+ * Drive the **anchored** mount, the way `category-select.test.tsx` does and for
+ * the same reason: jsdom's stub in `vitest.setup.ts` answers every media query
+ * "no", which puts every assertion against the bottom sheet instead. That was
+ * invisible until #375, because both mounts rendered the same button trigger —
+ * now the sheet renders a button and the popover renders the field itself, so a
+ * suite that does not say which mount it means tests the wrong one.
+ */
+beforeEach(() => {
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: query.includes('min-width: 640px'),
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia;
+});
+
 describe('SearchBar', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });

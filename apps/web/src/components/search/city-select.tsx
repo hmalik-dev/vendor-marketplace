@@ -121,6 +121,14 @@ export function CitySelect({
       id={id}
       placeholder={ANYWHERE_LABEL}
       emptyMessage="No vendors have published a location yet."
+      /*
+       * The sheet mount opens on a tap whether or not the field suggests on
+       * focus, so this state is reachable there with nothing typed. It must not
+       * borrow the API-degraded copy above — that would tell a customer nobody
+       * has published a location while the list holds a dozen.
+       */
+      promptMessage="Start typing a city to see where we have vendors."
+
       noMatchMessage={(query) => `No vendors in “${query}” yet. Try a nearby city.`}
       limit={MAX_SUGGESTIONS}
       width={isHero ? 'hero' : 'compact'}

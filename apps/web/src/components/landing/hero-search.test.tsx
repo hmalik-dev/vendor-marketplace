@@ -1,7 +1,7 @@
 import type { Category } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const push = vi.fn<(href: string) => void>();
 
@@ -28,6 +28,28 @@ const CITIES = [
   { city: 'Austin', state: 'TX', vendorCount: 11 },
   { city: 'Portland', state: 'OR', vendorCount: 3 },
 ];
+
+/*
+ * Drive the **anchored** mount, the way `category-select.test.tsx` does and for
+ * the same reason: jsdom's stub in `vitest.setup.ts` answers every media query
+ * "no", which puts every assertion against the bottom sheet instead. That was
+ * invisible until #375, because both mounts rendered the same button trigger —
+ * now the sheet renders a button and the popover renders the field itself, so a
+ * suite that does not say which mount it means tests the wrong one.
+ */
+beforeEach(() => {
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: query.includes('min-width: 640px'),
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia;
+});
 
 describe('HeroSearch', () => {
   afterEach(() => {
