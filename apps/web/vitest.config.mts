@@ -24,6 +24,13 @@ export default defineConfig({
      */
     testTimeout: 60_000,
     hookTimeout: 60_000,
-    include: ['src/**/*.test.{ts,tsx}'],
+    /*
+     * `e2e/` holds two kinds of file and they run on different runners:
+     * `*.spec.ts` are Playwright journeys needing a live server, `*.test.ts` are
+     * ordinary unit tests over the harness's own helpers — the base-URL resolver
+     * and the fixture-drift guard. Without this second glob those never ran,
+     * which is the failure mode where a guard exists and defends nothing.
+     */
+    include: ['src/**/*.test.{ts,tsx}', 'e2e/**/*.test.ts'],
   },
 });
