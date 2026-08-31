@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -271,8 +271,13 @@ describe('the profile photo drop zone matches the frame (#143)', () => {
   it('sizes the circle 128px from `sm`, not 160px', () => {
     expect(uploadSource).toContain('size-24 rounded-full sm:size-32');
     expect(uploadSource).not.toContain('sm:size-40');
-    // The editor's wrapper has to agree or it re-crops the circle.
-    expect(formSource).toContain('className="mt-4 w-24 sm:w-32"');
+    /*
+     * The editor's wrapper has to agree on the **width** or it re-crops the
+     * circle. Only the width is asserted: #360 moved the row's `mt-4` onto the
+     * flex container that now holds the circle beside the cover zone, and the
+     * margin was never what this test was about.
+     */
+    expect(formSource).toContain('className="w-24 sm:w-32"');
   });
 });
 
@@ -622,5 +627,179 @@ describe('helper lines the frame does not draw (#152)', () => {
    */
   it('keeps the upload constraint line, which 40-states.md mandates', () => {
     expect(formSource).toContain('UPLOAD_CONSTRAINT_LINE');
+  });
+});
+
+/*
+ * The section rail (#360, carrying #140 and #338).
+ *
+ * The pass that first reported a missing entry was scoped to the Tags row and
+ * read the rest of the rail only in passing, so #360 requires the nav be
+ * re-measured in full before anything is changed. This is that measurement,
+ * written so it keeps holding: the labels and **their order** are read out of
+ * the frame at test time, which is what makes a reordering fail rather than
+ * pass on set equality.
+ */
+describe('the section rail matches frame 09’s nav (#360)', () => {
+  /** The rail block, ending where the legend under it begins. */
+  function railBlock(): string {
+    const side = editorFrame.slice(editorFrame.indexOf('<div class="side"'));
+    const legend = side.indexOf('Gold dots block publishing');
+
+    return side.slice(0, legend === -1 ? undefined : legend);
+  }
+
+  /** The rail's items, in the order the frame draws them. */
+  function frameNavLabels(): string[] {
+    return [...railBlock().matchAll(/<div class="nav[^"]*">([^<]*)/g)].map((match) =>
+      (match[1] ?? '').trim(),
+    );
+  }
+
+  /** The items whose row carries a blocker dot in the frame. */
+  function frameDottedLabels(): string[] {
+    return [
+      ...railBlock().matchAll(/<div class="nav[^"]*">([^<]*)<span[^>]*border-radius:50%/g),
+    ].map((match) => (match[1] ?? '').trim());
+  }
+
+  /** `SECTION_ORDER`'s labels, in source order. */
+  function liveNavLabels(): string[] {
+    const start = formSource.indexOf('const SECTION_ORDER = [');
+    expect(start).toBeGreaterThan(-1);
+
+    return [
+      ...formSource
+        .slice(start, formSource.indexOf('] as const;', start))
+        .matchAll(/label: '([^']+)'/g),
+    ].map((match) => match[1] ?? '');
+  }
+
+  it('reads seven items off the frame', () => {
+    expect(frameNavLabels()).toEqual([
+      'Business',
+      'Location',
+      'Tags',
+      'Response time',
+      'Packages',
+      'Portfolio',
+      'Payouts',
+    ]);
+  });
+
+  it('renders every item the frame draws, in the frame’s order', () => {
+    expect(liveNavLabels()).toEqual(frameNavLabels());
+  });
+
+  /*
+   * Both dotted rows are things waiting on someone rather than failures, which
+   * is why the dot is gold in `40-states.md`'s vocabulary and never red.
+   */
+  it('puts a blocker dot on Response time and Payouts in the frame', () => {
+    expect(frameDottedLabels()).toEqual(['Response time', 'Payouts']);
+  });
+
+  it('draws that dot gold, never red', () => {
+    const navSource = read('src/components/form-section-nav.tsx');
+
+    expect(navSource).toContain('bg-gold-400');
+    expect(navSource).not.toMatch(/bg-(error|red)-/);
+  });
+});
+
+/*
+ * D16's relocation (#360, carrying #138 and #152).
+ *
+ * This is the one place the editor deliberately deviates from frame `09`, so
+ * it is pinned rather than left to be rediscovered as drift. The frame's field
+ * list omits `Your line` and `Years in business`; deleting them would strip the
+ * only editing surface for two things frame `03` displays. D16 relocated them
+ * and recorded the frame's list as non-exhaustive.
+ */
+describe('Your line and Years in business are relocated, not deleted (#360)', () => {
+  /** Every `htmlFor` in the Business section, in the order the form renders. */
+  function fieldOrder(): string[] {
+    return [...formSource.matchAll(/<Label htmlFor="([a-zA-Z]+)"/g)].map((match) => match[1] ?? '');
+  }
+
+  it('still offers both fields', () => {
+    expect(fieldOrder()).toContain('tagline');
+    expect(fieldOrder()).toContain('yearsInBusiness');
+  });
+
+  it('places both after About your business, not above it', () => {
+    const order = fieldOrder();
+
+    expect(order.indexOf('bio')).toBeLessThan(order.indexOf('tagline'));
+    expect(order.indexOf('tagline')).toBeLessThan(order.indexOf('yearsInBusiness'));
+  });
+
+  it('leads with the frame’s own order: business name, profile link, about', () => {
+    const order = fieldOrder();
+
+    expect(order.indexOf('businessName')).toBeLessThan(order.indexOf('slug'));
+    expect(order.indexOf('slug')).toBeLessThan(order.indexOf('bio'));
+  });
+
+  /* #152: the helper sentences that came with the two fields. */
+  it('drops the tagline helper', () => {
+    expect(formSource).not.toContain('One sentence, in your own words');
+  });
+
+  it('drops the years helper', () => {
+    expect(formSource).not.toContain('Counted from when you started');
+  });
+
+  /* D16 keeps the counters and spreads them to every capped input. */
+  it('keeps the character counter on both capped inputs', () => {
+    expect(formSource).toContain('{form.tagline.length} / {MAX_TAGLINE_LENGTH}');
+    expect(formSource).toContain('{form.bio.length} / {MAX_VENDOR_BIO_LENGTH}');
+  });
+});
+
+/*
+ * The slug preview (#360, carrying #257).
+ *
+ * The defect this guards against is a *disagreement between two places* — a
+ * preview advertising a URL the App Router does not serve — so the assertion is
+ * the agreement itself rather than either side's value. Writing down
+ * `/vendors/` here would re-encode one side and pass happily while the router
+ * moved underneath it.
+ *
+ * Frame `09` draws the shorter domain-plus-slug form, with no path segment
+ * between them. That is a vanity URL nothing serves, and a 404 promised to a
+ * vendor about their own storefront is a functional defect rather than a
+ * composition the code should copy.
+ */
+describe('the slug preview names a URL the router actually serves (#360)', () => {
+  /** The path segment the preview advertises, read out of the form. */
+  function advertisedSegment(): string {
+    const match = /\{BRAND_DOMAIN}\/([a-z-]+)\/\{slugPreview}/.exec(formSource);
+    expect(
+      match,
+      'the form no longer renders a {BRAND_DOMAIN}/…/{slugPreview} preview',
+    ).not.toBeNull();
+
+    return match?.[1] ?? '';
+  }
+
+  it('advertises a segment that exists as a dynamic route', () => {
+    const routeFile = join(process.cwd(), 'src/app', advertisedSegment(), '[slug]', 'page.tsx');
+
+    expect(existsSync(routeFile), `${advertisedSegment()}/[slug]/page.tsx does not exist`).toBe(
+      true,
+    );
+  });
+
+  it('sends the Preview link to that same segment', () => {
+    expect(formSource).toContain(`href={\`/${advertisedSegment()}/\${profile.slug}\`}`);
+  });
+
+  /*
+   * The preview must be the whole path, not a prefix of it. A bare
+   * a bare domain-plus-slug would render plausibly and 404 for every vendor.
+   */
+  it('does not advertise the bare domain-plus-slug form the frame draws', () => {
+    expect(formSource).not.toMatch(/\{BRAND_DOMAIN}\/\{slugPreview}/);
   });
 });

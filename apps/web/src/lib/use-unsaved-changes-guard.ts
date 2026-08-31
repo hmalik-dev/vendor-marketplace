@@ -24,8 +24,19 @@ import { useCallback, useEffect, useState } from 'react';
  *   way to block one: `popstate` arrives *after* the entry has changed, so the
  *   only "fix" is to push a decoy entry and undo it, which corrupts the history
  *   stack the user is trying to walk. Left uncovered deliberately rather than
- *   half-covered, and filed as **#349** so it is a known gap rather than a
- *   silent one. A vendor who presses Back on a dirty form still loses the edit.
+ *   half-covered. A vendor who presses Back on a dirty form still loses the
+ *   edit.
+ *
+ *   **Re-examined and upheld under #360**, which owns this decision now that
+ *   #349 is merged into it. The trackpad swipe is the same event as Back and
+ *   is covered by the same answer. Covering it badly is worse than the gap: a
+ *   decoy entry would break the second Back for every vendor, to save the
+ *   first Back for a vendor with unsaved work. If a supported blocking API
+ *   ever lands in the App Router, this is the comment to revisit.
+ *
+ *   The absence is enforced, not just described — `use-unsaved-changes-guard.
+ *   test.ts` asserts this hook installs no `popstate` listener and never
+ *   touches `history`, so the decoy-entry "fix" cannot be added quietly.
  *
  * The interception is deliberately narrow: a modified click (new tab), an
  * external origin, an explicit `target`, and a download all pass straight

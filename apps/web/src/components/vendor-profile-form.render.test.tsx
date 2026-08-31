@@ -1,7 +1,8 @@
-import { ERROR_CODES, type Category } from '@vendor-marketplace/shared';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { COVER_CONSTRAINT_LINE, ERROR_CODES, type Category } from '@vendor-marketplace/shared';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import type { WireVendorProfile } from '@/lib/wire-schemas';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '@/lib/api-client';
 
 const requestMock = vi.fn();
@@ -38,6 +39,66 @@ afterEach(() => {
 /** A vendor onboarding: no profile row yet, so the form is in create mode. */
 function renderOnboarding(): void {
   render(<VendorProfileForm profile={null} categories={CATEGORIES} allTags={[]} />);
+}
+
+/**
+ * A saved storefront, complete enough that nothing else paints a blocker dot —
+ * so a dot in these tests can only have come from the thing under test.
+ */
+function savedProfile(overrides: Partial<WireVendorProfile> = {}): WireVendorProfile {
+  return {
+    id: '33333333-3333-4333-8333-333333333333',
+    userId: '44444444-4444-4444-8444-444444444444',
+    businessName: 'Sunlit Studio',
+    slug: 'sunlit-studio',
+    bio: 'Ten years photographing weddings across central Texas.',
+    tagline: 'Film for the portraits, digital for everything else',
+    yearsInBusiness: 10,
+    profileImageUrl: null,
+    coverImageUrl: null,
+    address: '1204 E Cesar Chavez St',
+    city: 'Austin',
+    state: 'Texas',
+    latitude: null,
+    longitude: null,
+    serviceRadiusKm: 96,
+    responseTimeHours: 24,
+    stripeAccountId: 'acct_1',
+    stripeOnboarded: true,
+    isPublished: true,
+    isDeleted: false,
+    avgRating: 4.9,
+    reviewCount: 17,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    categoryIds: [CATEGORIES[0]!.id],
+    tags: [],
+    publishBlockers: [],
+    ...overrides,
+  };
+}
+
+function renderSaved(overrides: Partial<WireVendorProfile> = {}): void {
+  render(
+    <VendorProfileForm profile={savedProfile(overrides)} categories={CATEGORIES} allTags={[]} />,
+  );
+}
+
+/**
+ * The rail row for a section that lives on its own route, which renders as a
+ * link. `Payouts` is one of those — it points at `/vendor/payments`.
+ */
+function railLink(label: string): HTMLElement {
+  const rail = screen.getByRole('navigation', { name: 'Storefront sections' });
+  const item = within(rail)
+    .getAllByRole('link')
+    .find((node) => node.textContent?.startsWith(label));
+
+  if (!item) {
+    throw new Error(`No rail link labelled ${label}`);
+  }
+
+  return item;
 }
 
 async function chooseState(user: User): Promise<void> {
@@ -224,5 +285,265 @@ describe('VendorProfileForm — a save the form itself refuses', () => {
       );
     });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+/*
+ * #360, carrying #288: the preview rail.
+ *
+ * The card used to sit in the field row like a third input, asserting a
+ * business name directly above the input where that name is typed. Frame 09's
+ * note is the law being tested here: "It stays a separate surface at every
+ * width; it never becomes a field."
+ */
+describe('the storefront preview rail (#360)', () => {
+  function rail(): HTMLElement {
+    return screen.getByRole('complementary', { name: 'Storefront preview' });
+  }
+
+  it('is a separate surface, not a node inside the form', () => {
+    renderSaved();
+
+    expect(rail().closest('form')).toBeNull();
+  });
+
+  it('carries the mono label and the promise it makes', () => {
+    renderSaved();
+
+    expect(within(rail()).getByText('Preview')).toBeTruthy();
+    expect(within(rail()).getByText('Updates as you type')).toBeTruthy();
+  });
+
+  it('offers both placements of the one photo', () => {
+    renderSaved();
+
+    expect(within(rail()).getByRole('radio', { name: 'In search' })).toBeTruthy();
+    expect(within(rail()).getByRole('radio', { name: 'Your profile' })).toBeTruthy();
+  });
+
+  it('opens on the search placement', () => {
+    renderSaved();
+
+    expect(
+      within(rail()).getByRole('radio', { name: 'In search' }).getAttribute('aria-checked'),
+    ).toBe('true');
+  });
+
+  it('switches placement when the other tab is chosen', async () => {
+    const user = userEvent.setup();
+    renderSaved();
+
+    await user.click(within(rail()).getByRole('radio', { name: 'Your profile' }));
+
+    expect(
+      within(rail()).getByRole('radio', { name: 'Your profile' }).getAttribute('aria-checked'),
+    ).toBe('true');
+  });
+
+  /*
+   * "No link out." A vendor clicking their own preview must not be navigated
+   * off a form holding unsaved edits.
+   *
+   * jsdom implements `inert` as an attribute only — it does not remove the
+   * subtree from the accessibility tree or from the focus order, so
+   * `queryAllByRole('link')` still finds the card's Link here and would find
+   * it however correct the rendered page is. Asserting the attribute is the
+   * class-level fact this environment can actually establish; that the link is
+   * genuinely unreachable is **owed to the browser parity pass**, not proven
+   * here.
+   */
+  it('marks the mirrored card inert so it cannot be navigated', () => {
+    renderSaved();
+
+    const link = within(rail()).getByRole('link', { name: /Sunlit Studio/ });
+
+    expect(link.closest('[inert]')).not.toBeNull();
+  });
+
+  /*
+   * "Updates as you type" is the rail's own promise, so it is asserted rather
+   * than trusted: the mirror reads the live form, not the saved row.
+   */
+  it('mirrors the business name as it is typed', async () => {
+    const user = userEvent.setup();
+    renderSaved();
+
+    const field = screen.getByLabelText('Business name');
+    await user.clear(field);
+    await user.type(field, 'Harlow Studio');
+
+    expect(within(rail()).getByText('Harlow Studio')).toBeTruthy();
+  });
+});
+
+/*
+ * #360, carrying #258: the submit bar never said when the storefront was last
+ * saved, so a vendor returning to the screen could not tell a saved draft from
+ * an unsaved one.
+ *
+ * The clock is faked rather than read: `shortTimeAgo` is relative, so a real
+ * clock would make this assert a different string on every run.
+ */
+describe('the submit bar says when the storefront was last saved (#360)', () => {
+  const NOW = new Date('2026-08-30T12:00:00.000Z');
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reports how long ago the last save was', () => {
+    renderSaved({ updatedAt: new Date(NOW.getTime() - 2 * 60 * 60 * 1000) });
+
+    expect(screen.getByText('Saved 2h ago')).toBeTruthy();
+  });
+
+  it('floors at a minute rather than counting seconds', () => {
+    renderSaved({ updatedAt: new Date(NOW.getTime() - 9 * 1000) });
+
+    expect(screen.getByText('Saved 1m ago')).toBeTruthy();
+  });
+
+  /*
+   * A profile that has never been saved has nothing to report, and the word
+   * "never" beside a Create button would be noise rather than information.
+   */
+  it('says nothing on a profile that has never been saved', () => {
+    renderOnboarding();
+
+    expect(screen.queryByText(/^Saved /)).toBeNull();
+  });
+});
+
+/*
+ * #360, carrying #288 and #137: the cover drop zone.
+ *
+ * #137 was stuck because the contract contradicted itself — a `21:9,
+ * 1600×686` ask nobody shoots. #288 retired it and frame `09` now draws a
+ * 216×144 3:2 zone. There is deliberately **no separate profile-banner
+ * field**: one file, two placements, per #287.
+ */
+describe('the cover drop zone (#360)', () => {
+  it('offers a cover photo zone beside the profile photo', () => {
+    renderSaved();
+
+    expect(screen.getByRole('group', { name: 'Cover photo' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Profile photo' })).toBeTruthy();
+  });
+
+  /*
+   * One file, two placements. A second banner field would be the thing #287
+   * ruled out, and it is easier to catch here than in a browser pass.
+   */
+  it('offers no separate profile-banner field', () => {
+    renderSaved();
+
+    expect(screen.queryByRole('group', { name: /banner/i })).toBeNull();
+  });
+
+  /*
+   * An absolute URL, because that is what the form is actually handed:
+   * `wireVendorProfileSchema` resolves the stored object key through
+   * `resolveImageUrl` at the client boundary. A bare key here would resolve to
+   * null whenever `NEXT_PUBLIC_S3_PUBLIC_URL` is unset and the test would be
+   * asserting against a shape the component never receives.
+   *
+   * Queried by tag, not by role: the preview carries `alt=""` on purpose — it
+   * is the vendor's own photo shown back to them, not content — so it is
+   * exposed as `presentation` and has no `img` role to find it by.
+   */
+  it('prefills the zone from the saved cover', () => {
+    const cover = 'https://cdn.example.test/vendor-cover/abc.jpg';
+    renderSaved({ coverImageUrl: cover });
+
+    const preview = screen
+      .getByRole('group', { name: 'Cover photo' })
+      .querySelector<HTMLImageElement>('img');
+
+    expect(preview?.getAttribute('src')).toBe(cover);
+  });
+
+  it('states the cover constraint before the picker opens', () => {
+    renderSaved();
+
+    expect(
+      within(screen.getByRole('group', { name: 'Cover photo' })).getByText(COVER_CONSTRAINT_LINE),
+    ).toBeTruthy();
+  });
+});
+
+/*
+ * #360: the rail's `Payouts` entry, and the one thing about it that could
+ * silently rot — a dot showing invented status rather than the vendor's real
+ * Connect state. Asserted in BOTH directions, because a dot hard-coded on and
+ * a dot correctly driven look identical from the failing side alone.
+ */
+describe('the Payouts rail entry (#360)', () => {
+  it('links to the payouts surface #9 shipped', () => {
+    renderSaved();
+
+    expect(railLink('Payouts').getAttribute('href')).toBe('/vendor/payments');
+  });
+
+  it('marks Payouts as blocking while Stripe onboarding is incomplete', () => {
+    renderSaved({ stripeOnboarded: false });
+
+    expect(
+      within(railLink('Payouts')).getByRole('img', {
+        name: 'Needs attention before publishing',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('clears the dot once Stripe onboarding completes', () => {
+    renderSaved({ stripeOnboarded: true });
+
+    expect(
+      within(railLink('Payouts')).queryByRole('img', {
+        name: 'Needs attention before publishing',
+      }),
+    ).toBeNull();
+  });
+
+  /*
+   * Gold is "waiting on someone" in `40-states.md`; red is "it failed".
+   * Payouts not set up yet is the former, so the dot must never go red — and
+   * the class is the assertion because jsdom resolves no Tailwind colours.
+   */
+  it('paints that dot gold rather than red', () => {
+    renderSaved({ stripeOnboarded: false });
+
+    const dot = within(railLink('Payouts')).getByRole('img', {
+      name: 'Needs attention before publishing',
+    });
+
+    expect(dot.className).toContain('bg-gold-400');
+    expect(dot.className).not.toMatch(/bg-(error|red)-/);
+  });
+
+  /*
+   * Publishing does not require Stripe — a storefront can be live and simply
+   * unable to accept a booking — so an incomplete payout setup must not be
+   * reported as a publish blocker anywhere else on the screen.
+   *
+   * The positive half is asserted first on purpose: a `queryBy…` that returns
+   * null because the string never renders under any condition is not a check.
+   * This establishes that a real blocker does produce the line, so the absence
+   * below is evidence rather than a vacuous pass.
+   */
+  it('shows the publish-blocker line when a real blocker stands', () => {
+    renderSaved({ stripeOnboarded: true, publishBlockers: ['packages'] });
+
+    expect(screen.getByText(/before you can publish/i)).toBeTruthy();
+  });
+
+  it('does not count payouts as a publish blocker', () => {
+    renderSaved({ stripeOnboarded: false, publishBlockers: [] });
+
+    expect(screen.queryByText(/before you can publish/i)).toBeNull();
   });
 });
