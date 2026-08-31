@@ -564,7 +564,7 @@ describe('SearchBar — pill and circle discipline', () => {
 
     // Painted at the size the frames draw — the circle must not have grown.
     expect(button.className).toContain('size-7.5');
-    expect(button.className).toContain('xl:size-8');
+    expect(button.className).toContain('min-[90rem]:size-8');
 
     // and targeted at 44, centred on it.
     expect(button.className).toContain('after:size-11');
@@ -664,7 +664,7 @@ describe('SearchBar — the compact bar’s own measurements', () => {
     const form = container.querySelector('form');
 
     expect(form?.className).toContain('lg:h-10');
-    expect(form?.className).toContain('xl:h-[42px]');
+    expect(form?.className).toContain('min-[90rem]:h-[42px]');
   });
 
   it('shortens the date label, which is what leaves room for a date', () => {
@@ -753,11 +753,16 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
   it('hides the year below 1440 and shows it at 1440', () => {
     render(<SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />);
 
+    /*
+     * `min-[90rem]:`, not `xl:`. The test's own name says 1440 and `xl` is
+     * 1280, so this asserted the wrong width in the right shape -- 1280-1439
+     * got the 1440 spelling. #322's law: no frame draws 1280.
+     */
     expect(screen.getByText(dateLiteralIn('27 Search results — 1024')).className).toContain(
-      'xl:hidden',
+      'min-[90rem]:hidden',
     );
     expect(screen.getByText(dateLiteralIn('17 Search loading')).className).toContain(
-      'max-xl:hidden',
+      'max-[90rem]:hidden',
     );
   });
 

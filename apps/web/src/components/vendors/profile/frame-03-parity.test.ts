@@ -502,8 +502,22 @@ describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
     const fill = tokenFor(declaration(rule, 'background'));
 
     expect(fill).toBe('stone-150');
-    expect(railSource).toContain(`bg-${fill}`);
-    expect(railSource).not.toContain('bg-stone-0 px-');
+
+    /*
+     * Asserted on the `FIELD` constant rather than on the whole file.
+     *
+     * The old form was `railSource).not.toContain('bg-stone-0 px-')`, a
+     * whole-file string search standing in for "no control is filled with the
+     * card colour". It stopped meaning that the moment the file gained a second
+     * surface: #371's 768 bottom bar is legitimately `bg-stone-0 px-6`, and the
+     * guard failed on a *correct* change while still not actually checking the
+     * controls. Reading the declaration the controls share says what was meant.
+     */
+    const field = /const FIELD =\s*\n?\s*'([^']*)'/.exec(railSource)?.[1];
+
+    expect(field).toBeDefined();
+    expect(field).toContain(`bg-${fill}`);
+    expect(field).not.toContain('bg-stone-0');
   });
 
   it('pads and rounds them to the frame', () => {

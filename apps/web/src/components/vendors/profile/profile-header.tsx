@@ -86,7 +86,15 @@ export function ProfileHeader({
       not have. (No class name is spelled out in this comment: the parity test
       below greps this file, and a quoted utility would satisfy it.)
     */
-    <div className="grid w-full gap-8 px-4 pt-6 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-x-5 lg:px-6 lg:pt-5 min-[90rem]:grid-cols-[minmax(0,1fr)_380px] min-[90rem]:gap-x-7 min-[90rem]:px-10 min-[90rem]:pt-6">
+    /*
+     * `pb-26` below `lg` reserves the bottom bar's own height plus clearance.
+     * `04-laws.md` rule 5 -- nothing sticky covers content -- is not satisfied
+     * by pinning a bar; it is satisfied by the scrolling content ending above
+     * it. The editor fails this same rule at 768 today (its pane's
+     * `padding-bottom` computes 0 under a sticky save bar), which is #371's
+     * remaining work rather than a reason to repeat it here.
+     */
+    <div className="grid w-full gap-8 px-4 pt-6 pb-26 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:pb-14 lg:gap-x-5 lg:px-6 lg:pt-5 min-[90rem]:grid-cols-[minmax(0,1fr)_380px] min-[90rem]:gap-x-7 min-[90rem]:px-10 min-[90rem]:pt-6">
       <div className="min-w-0">
         {/*
           The card. `overflow-hidden` is what crops the cover to the rounded
