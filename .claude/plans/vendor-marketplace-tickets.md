@@ -121,22 +121,27 @@ verification (`e2e`) is implicit on every ticket.
 
 ## Beta gate — what blocks shipping to real users
 
-> ## The one-line answer, verified 2026-08-29
+> ## The one-line answer, corrected 2026-08-30
 >
-> **No booking can be created by anyone.** `POST /booking-requests/:id/accept` returns
-> **`402 - "Finish your payout setup before accepting bookings"`**, and payout setup does
-> not exist: all **17** vendor profiles are `is_published = true, stripe_onboarded = false`,
-> and there is no Stripe onboarding route, link or `accountLink` anywhere in the tree. The
-> only mentions of payouts in the web code are two comments saying it is deliberately absent
-> until **#9**.
+> **#9 and #10 have landed, and the paragraph that stood here was stale.** It said the
+> product could not transact — that `POST /booking-requests/:id/accept` returned a 402 with
+> no payout setup behind it, and that there was "no Stripe onboarding route, link or
+> `accountLink` anywhere in the tree." That was true when it was written on 2026-08-29 and
+> false by the time anyone read it. Verified in the tree on 2026-08-30:
+> `stripe.v2.core.accountLinks.create` at `apps/api/src/lib/stripe.ts:284`,
+> `POST /vendor/stripe/connect` with its own route tests, `/vendor/payments` and
+> `/vendor/payments/return` as pages, and `/bookings/[requestId]/checkout` as a route.
 >
-> The 918 bookings in the database are **seed data**. Not one can be reproduced through the
-> application. Everything downstream of accept - the date hold, payment capture, completion,
-> reviews - is unreachable and therefore untested and unverifiable.
+> **The 402 is still there and is now correct**
+> (`booking-requests.service.ts:723`): it gates a vendor who has not finished onboarding,
+> and onboarding now exists for them to finish. That is a working guard, not a dead end.
 >
-> **The product cannot transact.** That is #9 and #10, not a defect list. Until they land,
-> the only honest beta is browse-and-enquire, and the shipped payment copy has to come out
-> (**#217**, **#220**). See **#220** and **#221**.
+> **Read the Status Board, not this section, for what blocks a beta.** Nothing here is a
+> transaction blocker any more. What remains is parity, chrome, tooling and one human
+> sitting at four provider consoles (**#362**). This block is kept rather than deleted
+> because the lesson is the durable part: **a "verified" claim at the top of a tracker is
+> the first thing to go stale and the last thing anyone re-checks.** It was read by every
+> session that opened this file for a day after it stopped being true.
 
 
 Added 2026-08-28 after five adversarial passes (136 findings). This separates **defective**
@@ -194,52 +199,56 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 
 | # | Ticket | Phase | Milestone | Priority | Status | Branch | Blocked By | Capabilities | Notes |
 |---|--------|-------|-----------|----------|--------|--------|------------|--------------|-------|
-| 46 | Clerk webhooks point at a CLI relay, not the API | P1.5 | M4.5 | P1 High | Blocked — needs a human | main | Secret rotation (Clerk dashboard) | `core` `auth` | Code shipped `34cd28c`, `ed41aed`. Scope 1 (reconciliation) and 2 (guard) are **Done**; scope 3 (**rotate `CLERK_WEBHOOK_SECRET`**, leaked into a chat transcript 2026-08-27) needs a human in the Clerk dashboard and is the only thing left. The API now refuses to boot when its Clerk endpoint is a relay, a foreign origin, the wrong route, or plain HTTP — silent off a platform, since a relay is the correct local setup. `CLERK_WEBHOOK_ENDPOINT` added to the env registry and set on Railway. Reconciliation routes corrections through the webhook handler itself, so deletion behaves once, and skips `seed_mkt_…` rows Clerk never issued — the first dry run would otherwise have retired 50 of 54 rows and taken the seeded marketplace down. Production dry run: **4 real users, 0 drift, 0 retirements, 50 skipped**, so the write-mode run is a proven no-op; `pnpm reconcile:clerk [--dry-run]` when wanted |
-| 62 | Stripe public business name is "VendYou", not Orla | P1.5 | M4.5 | P1 High | Blocked — needs a human | — | Stripe dashboard | `core` `stripe` | **Found 2026-08-28** from `stripe config --list` during #9 setup: `display_name = 'VendYou'`. Stripe renders the platform's public business name on the **hosted Connect Express onboarding page** (#9), on Checkout (#10), and as the statement descriptor on cardholders' statements. Harmless in sandbox, wrong in front of a real vendor. **A #19 prerequisite** — only the account holder can change it |
-| 19 | Production Environment Provisioning | P1.5 | M4.5 | P0 Critical | Deferred — needs a human | — | #17 | all | **BLOCKED on a human** — external accounts only, no repo code. Parallel with #18; schedule after #10  **Deferred 2026-08-28:** the ticket says so itself — "almost entirely external account configuration rather than repository code", with a provisioned environment rather than a diff as its deliverable. Every value must be newly minted in Clerk, Stripe, R2 and Resend by the account holder; nothing here can be produced autonomously |
+| 46 | Clerk webhooks point at a CLI relay, not the API | P1.5 | M4.5 | P1 High | **Superseded** | main | Secret rotation (Clerk dashboard) | `core` `auth` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #362**, because one person, one sitting, at the provider consoles. The row and its detail section stay: they carry the measurements #362 was built from, and `pnpm preflight --ticket 46` still gates for anyone on an older branch. **Never worked directly.** Code shipped `34cd28c`, `ed41aed`. Scope 1 (reconciliation) and 2 (guard) are **Done**; scope 3 (**rotate `CLERK_WEBHOOK_SECRET`**, leaked into a chat transcript 2026-08-27) needs a human in the Clerk dashboard and is the only thing left. The API now refuses to boot when its Clerk endpoint is a relay, a foreign origin, the wrong route, or plain HTTP — silent off a platform, since a relay is the correct local setup. `CLERK_WEBHOOK_ENDPOINT` added to the env registry and set on Railway. Reconciliation routes corrections through the webhook handler itself, so deletion behaves once, and skips `seed_mkt_…` rows Clerk never issued — the first dry run would otherwise have retired 50 of 54 rows and taken the seeded marketplace down. Production dry run: **4 real users, 0 drift, 0 retirements, 50 skipped**, so the write-mode run is a proven no-op; `pnpm reconcile:clerk [--dry-run]` when wanted |
+| 62 | Stripe public business name is "VendYou", not Orla | P1.5 | M4.5 | P1 High | **Superseded** | — | Stripe dashboard | `core` `stripe` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #362**, because one person, one sitting, at the provider consoles. The row and its detail section stay: they carry the measurements #362 was built from, and `pnpm preflight --ticket 62` still gates for anyone on an older branch. **Never worked directly.** **Found 2026-08-28** from `stripe config --list` during #9 setup: `display_name = 'VendYou'`. Stripe renders the platform's public business name on the **hosted Connect Express onboarding page** (#9), on Checkout (#10), and as the statement descriptor on cardholders' statements. Harmless in sandbox, wrong in front of a real vendor. **A #19 prerequisite** — only the account holder can change it |
+| 19 | Production Environment Provisioning | P1.5 | M4.5 | P0 Critical | **Superseded** | — | #17 | all | **Superseded 2026-08-30 by the second backlog consolidation — merged into #362**, because one person, one sitting, at the provider consoles. The row and its detail section stay: they carry the measurements #362 was built from, and `pnpm preflight --ticket 19` still gates for anyone on an older branch. **Never worked directly.** **BLOCKED on a human** — external accounts only, no repo code. Parallel with #18; schedule after #10  **Deferred 2026-08-28:** the ticket says so itself — "almost entirely external account configuration rather than repository code", with a provisioned environment rather than a diff as its deliverable. Every value must be newly minted in Clerk, Stripe, R2 and Resend by the account holder; nothing here can be produced autonomously |
 | 20 | Deploy Pipeline | P1.5 | M4.5 | P0 Critical | Backlog | — | #19 | `core` | **Blockers corrected 2026-08-30: #18 and #30 are Done; only #19 remains.**  First production deploy |
 | 11 | Transactional Email Notifications | P3 | M6 | P2 Medium | Backlog | — | None | `core` `auth` `email` | **Unblocked 2026-08-30 by lane 329 — the key is in place.** `pnpm preflight --ticket 11` now passes **35 of 35**, `RESEND_API_KEY — set, shape ok`. It had been `Deferred — needs a human` since 2026-08-28 on a placeholder key that has since been supplied, so the row was holding a solved blocker. The project's own rule is that a ticket does not start until the gate passes, and the acceptance requires verifying that each row of the event table actually sends. **Unblocks with one key** from https://resend.com/api-keys. Everything it hangs off is ready: `NOTIFICATION_TYPES` is the shared enum, and #7/#8 already emit every event at a single call site, so email attaches there without a second source of truth |
-| 14 | Demo Dataset (`seed:demo`) | P3 | M6 | P1 High | Done | worktree-14 | None | `core` | **Split 2026-08-30 by lane 14: the eight Playwright E2E suites moved to #340**, which is the half this ticket does not build. What is left is the deterministic demo dataset itself.  **Blocker cleared 2026-08-30: #12 is Done, so this is workable.**  **Content gap partly closed by ef8b341:** `pnpm db:seed:marketing` now seeds 16 photography vendors with covers, packages, and 918 reviews behind 918 completed bookings. **Still open here:** the other 10 categories (5 of 6 landing cards still lead to an empty search), portfolio images, messages, notifications, the non-completed booking statuses, and the 8 E2E suites. Asset tracking for the covers is **#32** **Done 2026-08-30** — squash `5f2a747`, PR #64, CI green. `pnpm preflight --ticket 14` passes 24/24 once the capabilities were narrowed to `core` (the seed reaches no external service), which is the unblock `f1f988c` asked for rather than a human setting SENTRY_DSN |
 | 15 | Admin Portal | P3 | M6 | P1 High | **Backlog** | — | **None** | `core` `auth` | **Split 2026-08-30: the Sentry half is now #353, and this row is the admin portal alone.** The `sentry` capability moves with it, so `pnpm preflight --ticket 15` no longer fails on the placeholder `SENTRY_DSN` — the admin portal reaches no external service beyond Clerk. Sentry is launch-prep work: it needs a DSN only the account holder can mint, and it catches errors in an environment that does not exist until #19. **#14 landed 2026-08-30 (`5f2a747`), so the ticket blocker is clear — but the *gate* is not. `pnpm preflight --ticket 15` fails 1 of 34 on `SENTRY_DSN`, still the placeholder. Unlike #14, the `sentry` capability here is real: the ticket integrates `@sentry/node` and `@sentry/nextjs`, so narrowing the row is not the unblock and a human must supply the DSN. **The admin portal half needs no Sentry and is independently workable** — split it out if the DSN stays absent, rather than leaving a P1 feature parked behind a key. Found on run 2 of an unattended batch by running the gate, not by reading the board.**  Frame `22`. **MVP-minimal** — `/suspended` already exists and implies suspension, so something must be able to suspend. Preflight enforces `sentry` |
 | **353** | **[PRE-LAUNCH] Sentry integration** | P3 | M6 | **P2 Medium** | **Deferred — needs a human** | — | **`SENTRY_DSN` (Sentry dashboard)** | `core` `sentry` | **Filed 2026-08-30, carved out of #15.** The two Sentry bullets in #15 were holding a P1 admin portal behind a credential. Unlike #14, the `sentry` capability here is real — the ticket installs `@sentry/node` and `@sentry/nextjs` — so narrowing is not the unblock and a human must supply the DSN. **Launch-prep block, with #19, #62, #46 and #206**: error tracking catches errors in an environment that does not exist until #19 provisions it, so doing it before then instruments nothing. |
-| **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P3 Low** | **Deferred — needs a human** | — | **Launch prep — not current work** | `core` | **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. **Reconciliation 2026-08-29:** overlaps **#19**, which already covers external-account provisioning and is `Deferred — needs a human`. The plan's launch checklist also requires the pooled string on Railway and the unpooled one on Railway *and* GitHub Actions. **Deferred to launch prep 2026-08-29 (user ruling).** Free is the correct plan while there is no real data — usage is **8.9 of 100 CU-hours**, 34 MB of 512 MB, 3 of 10 branches. Nothing here blocks development. **The checklist moved to `docs/pre-launch.md` §3.2**, which is where launch-gated work belongs; this row is a pointer, not a queue item. Do not re-surface it as active work. |
-| **299** | **09 Vendor profile editor — cover field, preview rail and parity close-out** | P1 | M3 | **P0 Critical** | **Backlog** | — | **None** | `core` `storage` | **Unblocked 2026-08-30 by D16 (#335-D) — and D12 had already answered it.** `Your line` and `Years in business` are **relocated into About your business**, not deleted: both are the only editing surface for content frame `03` displays, so deleting the editor without deleting the display leaves content nobody can change. Frame `09`'s ordered field list is recorded as non-exhaustive, and that is the deviation. The character counters stay and **spread to every capped input in the product**. **Re-pointed 2026-08-30: the ruling this waits on is question D of #335.**  **Filed 2026-08-29 by the backlog consolidation.** Merges **#137, #138, #140, #141, #152, #257, #258, #288**. **#288 leads and unblocks #137**, which was stuck because the design contract contradicted itself on the cover field: the media row becomes a 128px circle profile photo beside a **216×144, 3:2** cover drop zone reading *"Drop a photo or browse · landscape · 1200×800 or larger"* — the `21:9, 1600×686 min` ask is retired, and the drop zone that is missing entirely today (#137) is built to that spec. The card preview is **never a field**: a **308px right-edge rail** at ≥1024 with a mono `PREVIEW` label, an **In search / Your profile** toggle and the real card, 280px at 1280, a panel above the fields at 768, a bottom sheet at 390. **There is no separate profile-banner field and there must never be one** — one file, two placements, per #287, which is why this is blocked on #298. Then the parity remainder: two undocumented fields to remove (#138) and the eight helper strings that came with them (#152, already `Blocked by #138`), the section nav's missing `Payouts` entry and gold dot (#140 — the dot depends on #9), the form pane over its scroll budget (#141), the slug preview promising a vanity URL the router does not serve (#257), and the submit bar never saying when the storefront was last saved (#258). Parity gate at 1440 / 1024 / 768 / 390. **Deferred 2026-08-30 — started, then released unstarted with no code written.** #298 unblocked this ticket but also sharpened the contradiction at its centre. Acceptance requires removing the two undocumented fields (#138) so every remaining string traces to frame `09`. **Both fields are the only editing surface for content frame `03` displays:** #298 moved the tagline into the identity card, and `yearsInBusiness` is read by the About pane's `Experience` tile. Deleting the inputs makes public-profile content permanently unsettable — a regression dressed as a parity fix. Keeping them fails frame `09`'s parity gate on the Layout and Text axes. **Lane 137 reached the identical conclusion on #138 and escalated rather than guessing; the question was never answered, and it is now load-bearing for a P0.** The repo's tie-breaker ("where the two disagree, build the frame and correct the plan") settles frame-vs-plan and does **not** arbitrate frame-vs-frame, which is what this is: frame `03` plus `12-vendor-profile.md` require the data, frame `09` plus `17-vendor-profile-editor.md`'s ordered field list omit the inputs. **The question, unchanged from lane 137:** delete `Your line` and `Years in business` outright, accepting that frame `03` loses its tagline and Experience tile, or relocate them into `About your business`, accepting that frame `09`'s field list is not exhaustive? Relocating also serves #141's scroll budget without destroying data. The field list determines the form's layout and every parity assertion, so the rest of the ticket cannot close its gate ahead of the ruling. Everything else in #299 (cover drop zone #288/#137, the 308px preview rail, `Payouts` nav #140, slug preview #257, last-saved #258) is implementable the moment this is answered. |
+| **206** | **[PLATFORM] Upgrade production to Launch and give it a real recovery story** | **INFRA** | **M-OPS** | **P3 Low** | **Superseded** | — | **Launch prep — not current work** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #362**, because one person, one sitting, at the provider consoles. The row and its detail section stay: they carry the measurements #362 was built from, and `pnpm preflight --ticket 206` still gates for anyone on an older branch. **Never worked directly.** **Platform / durability.** Filed 2026-08-28. Free-plan production is not launch-safe: **6-hour** history window, **zero** snapshots taken, `protected: false` on the production branch, scale-to-zero **cannot be disabled** (cold start for the first visitor after 5 min idle), 0.5 GB storage cap whose breach makes **inserts/updates/deletes fail**, 5 GB/month account-wide egress, community support, no SLA. Launch is pay-as-you-go with no minimum — roughly **$5–25/month** here. On upgrade: enable **protected branches** on `production`, widen the history window to **7 days**, set a **scheduled backup**, disable scale-to-zero once real traffic exists, and set a **spending notification**. Separately and regardless of plan: **`pg_dump` to R2 on a schedule** — PITR and snapshots protect against your mistakes, an off-platform dump protects against the platform's (lockout, billing failure). Keeping that habit from self-managed Postgres is the point **Human gate: billing.** Entering payment details and selecting the Launch plan is the account owner's action alone. Every post-upgrade setting — protected branch, 7-day history, backup schedule, spending notification — is agent-executable afterwards. **Reconciliation 2026-08-29:** overlaps **#19**, which already covers external-account provisioning and is `Deferred — needs a human`. The plan's launch checklist also requires the pooled string on Railway and the unpooled one on Railway *and* GitHub Actions. **Deferred to launch prep 2026-08-29 (user ruling).** Free is the correct plan while there is no real data — usage is **8.9 of 100 CU-hours**, 34 MB of 512 MB, 3 of 10 branches. Nothing here blocks development. **The checklist moved to `docs/pre-launch.md` §3.2**, which is where launch-gated work belongs; this row is a pointer, not a queue item. Do not re-surface it as active work. |
+| **299** | **09 Vendor profile editor — cover field, preview rail and parity close-out** | P1 | M3 | **P0 Critical** | **Superseded** | — | **None** | `core` `storage` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #360**, because one route, and #338 was already acceptance line 5 of #299. The row and its detail section stay: they carry the measurements #360 was built from, and `pnpm preflight --ticket 299` still gates for anyone on an older branch. **Never worked directly.** **Unblocked 2026-08-30 by D16 (#335-D) — and D12 had already answered it.** `Your line` and `Years in business` are **relocated into About your business**, not deleted: both are the only editing surface for content frame `03` displays, so deleting the editor without deleting the display leaves content nobody can change. Frame `09`'s ordered field list is recorded as non-exhaustive, and that is the deviation. The character counters stay and **spread to every capped input in the product**. **Re-pointed 2026-08-30: the ruling this waits on is question D of #335.**  **Filed 2026-08-29 by the backlog consolidation.** Merges **#137, #138, #140, #141, #152, #257, #258, #288**. **#288 leads and unblocks #137**, which was stuck because the design contract contradicted itself on the cover field: the media row becomes a 128px circle profile photo beside a **216×144, 3:2** cover drop zone reading *"Drop a photo or browse · landscape · 1200×800 or larger"* — the `21:9, 1600×686 min` ask is retired, and the drop zone that is missing entirely today (#137) is built to that spec. The card preview is **never a field**: a **308px right-edge rail** at ≥1024 with a mono `PREVIEW` label, an **In search / Your profile** toggle and the real card, 280px at 1280, a panel above the fields at 768, a bottom sheet at 390. **There is no separate profile-banner field and there must never be one** — one file, two placements, per #287, which is why this is blocked on #298. Then the parity remainder: two undocumented fields to remove (#138) and the eight helper strings that came with them (#152, already `Blocked by #138`), the section nav's missing `Payouts` entry and gold dot (#140 — the dot depends on #9), the form pane over its scroll budget (#141), the slug preview promising a vanity URL the router does not serve (#257), and the submit bar never saying when the storefront was last saved (#258). Parity gate at 1440 / 1024 / 768 / 390. **Deferred 2026-08-30 — started, then released unstarted with no code written.** #298 unblocked this ticket but also sharpened the contradiction at its centre. Acceptance requires removing the two undocumented fields (#138) so every remaining string traces to frame `09`. **Both fields are the only editing surface for content frame `03` displays:** #298 moved the tagline into the identity card, and `yearsInBusiness` is read by the About pane's `Experience` tile. Deleting the inputs makes public-profile content permanently unsettable — a regression dressed as a parity fix. Keeping them fails frame `09`'s parity gate on the Layout and Text axes. **Lane 137 reached the identical conclusion on #138 and escalated rather than guessing; the question was never answered, and it is now load-bearing for a P0.** The repo's tie-breaker ("where the two disagree, build the frame and correct the plan") settles frame-vs-plan and does **not** arbitrate frame-vs-frame, which is what this is: frame `03` plus `12-vendor-profile.md` require the data, frame `09` plus `17-vendor-profile-editor.md`'s ordered field list omit the inputs. **The question, unchanged from lane 137:** delete `Your line` and `Years in business` outright, accepting that frame `03` loses its tagline and Experience tile, or relocate them into `About your business`, accepting that frame `09`'s field list is not exhaustive? Relocating also serves #141's scroll budget without destroying data. The field list determines the form's layout and every parity assertion, so the rest of the ticket cannot close its gate ahead of the ruling. Everything else in #299 (cover drop zone #288/#137, the 308px preview rail, `Payouts` nav #140, slug preview #257, last-saved #258) is implementable the moment this is answered. |
 | **300** | **08 Vendor dashboard — re-measure, then close parity** | P1 | M3 | **P2 Medium** | **Backlog** | — | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#124, #127, #135, #79**. Re-measure frame `08` first — all four predate #74/#165/#198. #127 and #135 are the **same missing string** (`See all N →` beside `Requests waiting on you`) filed twice, from the Layout axis and the Text axis; close them together. Plus `View my public profile` moved out of the header into the content column (#124) and the vendor nav labels and their order diverging from the frame (#79). Small, self-contained, one browser pass. |
-| **305** | **`40-states.md` compliance sweep — copy, glyphs and unsaved work** | P1 | M3 | **P1 High** | **Done** | worktree-305 | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#72, #261, #225, #227, #228, #81**. `40-states.md` is a law, and it is violated in five places of error and empty-state copy (#72) — steel is information, gold is waiting on someone, red is failure; **red is never `pending` and gold is never a failure**. The two-circle empty-state glyph is absent from **seven of the nine** `EmptyState` call sites (#261), so the sweep is one component plus its callers. Alongside them, three defects in the same class of "the screen says something untrue": the success toast covering the submit button it confirms (#225), unsaved profile edits discarded silently with no prompt (#227), and a newly onboarded vendor's public storefront still showing placeholder copy (#228). **#81** is itself a rollup of nine smaller adversarial-sweep defects — triage it inside this ticket and carry anything that does not belong here out as its own row rather than silently dropping it. **Done 2026-08-30** — squash `528dfe8`, PR #66, CI green. Landed after a rebase onto #302, which had rewritten the same rail; the seven tickets this lane filed collided with that lane's and were renumbered #346–#352 by the contiguity guard rather than silently duplicating |
 | **313** | **Sign-up and session entry** | P1 | M3 | **P1 High** | **Backlog** | worktree-313 | **None** | `core` `auth` | **Unblocked 2026-08-30 by D16 — all three rulings given.** (1) `Create my account` is the approved string and the plan already said so; live reads Clerk's default `Continue`, which is a code defect. (2) The panel photograph is **fixed and hand-picked**, contrast guaranteed by selection — **no scrim**, and it is never rotated or made dynamic. (3) The role picker reappearing after verification is a **defect**: the role is already in `unsafeMetadata` before verification, so it is read back from there rather than re-asked. No larger select-role-after-verification flow needed. **Filed 2026-08-29 by the backlog consolidation.** Merges **#194, #197, #226, #234, #259**. **Two halves, and the first is implementable today**: the header renders its signed-out variant on the first navigation in a fresh browser context (#259), and Clerk's own sign-in card reads `vendor-marketplace` to the user instead of `BRAND_NAME` (#234). The second half is **three rulings, and this ticket asks for all three at once rather than three tickets asking separately** — the primary action reads `Continue` where the frame says `Create my account` (#194); panel text over photography is not contrast-guaranteed and needs either a scrim or a ruling that the photography is fixed (#197); and sign-up returns to the role picker after email verification (#226), which is either a Clerk redirect defect or an intended re-confirmation. Do the first half, then return **BLOCKED with the three questions together** if they are still unanswered. **First half done 2026-08-30 (`worktree-313`).** #259 is **not a product defect** — it reproduces only from a restored `storageState`; a real sign-in takes 0 handshake hops and paints correctly on the first navigation. Filed as **#321**, which matters more than the ticket it came from because every browser verification here restores state. #234 is fixed as far as code reaches: `.cl-headerTitle` now reads the brand, though it was never visible (the app hides Clerk's header). **Four questions now wait on a human**, the three rulings plus renaming the Clerk application itself — that name is the source every `{{applicationName}}` key interpolates, and it is dashboard configuration on the shared instance. | **Found 2026-08-30 by #9's parity pass:** the site header renders **signed-out chrome on an authenticated vendor page** — `window.Clerk.loaded === true` and `Clerk.user.id` is populated after a 15s settle, yet `/vendor/dashboard`'s header reads `Sign in` / `Sign up` where frame `08` draws `View my public profile` and the avatar. Reproduced at 1440x900 signed in as the vendor.
-| **322** | **Vendor surfaces at 1024 and 768** | P1 | M3 | **P1 High** | **Done** | worktree-322 | **None** | `core` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. #304 verified landing and the shared chrome; these five frames are **not** verified and their components carry no 1024 or 1440 steps at all — `profile-header.tsx` and `bookings-hub.tsx` contain **zero** `min-[90rem]:` between them, so they render one composition at every width, exactly as landing did before #304. Frames: `27 Vendor profile — 1024`, `27 Vendor profile — 768`, `27 Vendor dashboard — 1024`, `27 Vendor dashboard — empty · 1024`, `27 Vendor profile editor — 768`. **#169's own numbers to check first:** sidebars stay 220px with labels (no icon rail), right rails narrow 420 → 340 and never stack, and the dashboard's right column is 300px with the calendar on the **booking week** rather than the month. The shared chrome from #304 already helps — gutter ladder, 56px header below 1440, capped popovers — so start by **re-measuring** rather than assuming the deltas match landing's. Needs `pnpm db:seed:e2e`; a vendor surface is unreachable without it. **Landed 2026-08-30 as `3478925` (PR #67, squashed from `worktree-322`)** — the **1024 pass only**. Both 1024 frames verified in the browser at 1024, 1280 and 1440: the sidebar steps 241 → 265, the right column exists at 1024 and 1280 at 300px, the stats row is deleted at 1024 (four cards computed to 89.5px in a 394px pane, every label wrapping to three lines), the requests column is 423px against the frame's 423, and the profile's whole interior ladder — gutter, gap, radii, type, rail — steps between frames `27` and `03`. Every 1440 step moved off `xl:` (1280, which no frame draws) onto `min-[90rem]:`. The published rail is now the booking week and the next payout, per frame `27`, reading the availability calendar rather than a second derivation. **Three of the five frames are not done and are filed as #354, #355 and #356.** Two recorded deviations, both in `16-vendor-dashboard.md`: the payout card states the event date rather than a payout date (no schedule until #10), and the week strip's day number is 16px rather than the frame's 15 (the serif floor). Also fixed a clipped focus ring on the profile tab strip and corrected two stale 1280 cells in `30-responsive.md`. |
+| **322** | **Vendor surfaces at 1024 and 768** | P1 | M3 | **P1 High** | **Done** | worktree-322 | **None** | `core` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. #304 verified landing and the shared chrome; these five frames are **not** verified and their components carry no 1024 or 1440 steps at all — `profile-header.tsx` and `bookings-hub.tsx` contain **zero** `min-[90rem]:` between them, so they render one composition at every width, exactly as landing did before #304. Frames: `27 Vendor profile — 1024`, `27 Vendor profile — 768`, `27 Vendor dashboard — 1024`, `27 Vendor dashboard — empty · 1024`, `27 Vendor profile editor — 768`. **#169's own numbers to check first:** sidebars stay 220px with labels (no icon rail), right rails narrow 420 → 340 and never stack, and the dashboard's right column is 300px with the calendar on the **booking week** rather than the month. The shared chrome from #304 already helps — gutter ladder, 56px header below 1440, capped popovers — so start by **re-measuring** rather than assuming the deltas match landing's. Needs `pnpm db:seed:e2e`; a vendor surface is unreachable without it. **Landed 2026-08-30 as `3478925` (PR #67, squashed from `worktree-322`)** — the **1024 pass only**. Both 1024 frames verified in the browser at 1024, 1280 and 1440: the sidebar steps 241 → 265, the right column exists at 1024 and 1280 at 300px, the stats row is deleted at 1024 (four cards computed to 89.5px in a 394px pane, every label wrapping to three lines), the requests column is 423px against the frame's 423, and the profile's whole interior ladder — gutter, gap, radii, type, rail — steps between frames `27` and `03`. Every 1440 step moved off `xl:` (1280, which no frame draws) onto `min-[90rem]:`. The published rail is now the booking week and the next payout, per frame `27`, reading the availability calendar rather than a second derivation. **Three of the five frames are not done and are filed as #357, #358 and #359.** Two recorded deviations, both in `16-vendor-dashboard.md`: the payout card states the event date rather than a payout date (no schedule until #10), and the week strip's day number is 16px rather than the frame's 15 (the serif floor). Also fixed a clipped focus ring on the profile tab strip and corrected two stale 1280 cells in `30-responsive.md`. |
 | **323** | **Search and checkout at 1024** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-30 by lane 304**, carved out of **#169** when #304 landed. Frames: `27 Search results — 1024`, `27 Search — loading · 1024`, `27 Search — no results · 1024`, `27 Checkout — 1024`. **Coordinate with #297**, which owns `/search` parity at 1440 — this is the 1024 composition only, and the two will collide in `search-shell.tsx` and `refine-bar.tsx` if run concurrently. #304 already moved the `/search` **header** inset to 20px at 1024 (`SEARCH_INSET`), which the three search frames draw and which had been inheriting landing's 28px; the page body below it is untouched. `search-bar.tsx`'s **`compact`** variant is likewise untouched — #304 stepped only `hero`. **Checkout has a route as of 2026-08-30** (`apps/web/src/app/bookings/[requestId]/checkout/page.tsx`); #304 had recorded it as unimplemented and that finding is now stale. **#169's hard constraint applies: "Due today" must stay above the fold at 1024, asserted rather than eyeballed** — its rect bottom ≤ 640. |
-| **324** | **02 Search — the availability chip draws one tone where the frame draws three** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Unblocked 2026-08-30 by D16 (#335-B, C).** The **gold chip is dropped from MVP** — `scarce` was never defined and the threshold is an invented number. **The sage chip is dropped from the results grid too**: a dated query is filtered on availability (`vendor-search.dao.ts` hard-codes `availableOnDate: true` and says so), so the chip was a tautology. It survives **only** on the nearby-dates band that closes frame `18`, where it names a different date. The stone `New` chip is a **joined-recently badge** (published < 30 days), the only chip a search card now carries. **Re-pointed 2026-08-30: the two decisions this waits on are questions B and C of #335.**  **Filed 2026-08-30 by lane 297**, carved out of **#297** (originally #243) because it cannot be finished without two product decisions. **The finding is confirmed from source, not inferred from one dataset**: `vendor-card.tsx` renders exactly one availability tone, `bg-sage-50 text-sage-600`, and no branch can produce another. Frame `02` draws three — sage `Free Jun 14` (`#EDF0E9`/`#4B5940`), gold `2 dates left` (`#F5EEDC`/`#7A5A12`) and stone `New` (`#F0EAE1`/`#4A443C`). **The sage tone is shipped and correct.** What blocks the other two: (1) `03-components.md:56` says the chip is "gold when scarce (\"2 dates left\")" and **never defines scarce** — a count of free dates in what window, below what number? The count itself is a real query result and may ship, but the *threshold* is an invented number and the no-invented-numbers rule covers it. (2) The stone `New` chip is in **no** plan file at all, and in the frame it sits on a vendor already showing `★ 5.0 (17)` — so it is not "unreviewed", and nothing says what it is. **Do not guess either one.** |
-| **326** | **18 Search no results — residual parity after #297** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 297** from the `parity-checker` pass that closed #297. #297 fixed frame 18's headline scale, measure, both colour failures and both text failures; these are what it did **not** take, each measured at 1440x900. **Layout:** the count row (`0 photographers in Marfa` + the clause + `Prices are what they charge`) renders at y=118–173 where frame `18` draws **no count row at all** — its pane opens straight into `padding:44px 26px`, which puts the glyph at y=162 against the live y=221. **Style, shared compact header bar** (measured against frames `17`/`18`, since frame `02`'s header is ruled stale by #57): bar padding `0 4 0 16` vs `0 5 0 18`; segment values 13.5px/400 vs **13px/500**; segment inner padding-left 14 vs 16. **Style, description:** `line-height: 21.6px` (`leading-prose` 1.6) vs the frame's `13.5px/1.65` = 22.28px — 0.68px, and `leading-prose` is global, so this needs a per-call-site override rather than a token change. **Text, needs a ruling not a fix:** live draws an `Anywhere` relaxation and a `Clear all` text button, neither of which is in frame `18` or `31-content-voice.md`, and `Clear all` duplicates the Refine bar's own `Clear`. **Known and owned elsewhere, do not re-file:** the two-circle glyph vs `SearchX` (**#305**), the nearby-dates band and its `See all 14 in the region →` (**#50**), the wordmark at 24px vs 23px (**#118**). |
-| **327** | **01 Landing — the hero query has no seed value, and the frame hard-codes one** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Unblocked 2026-08-30 by D16 (#335-A).** The hero **seeds nothing** — all three segments render in the placeholder tone `#6B6459`. **Frame `01` is corrected, not the code**: a hard-coded `Austin, TX` is a claim about where the marketplace operates, and an empty value in the filled tone reads as a value that is not there. The hero badge "Now booking in Austin" is unaffected. **Re-pointed 2026-08-30: the ruling this waits on is question A of #335.**  **Filed 2026-08-30 by lane 296**, carved out of **#296** (originally #88), which instructs in its own acceptance to return `BLOCKED` with this question rather than invent a seed. Frame `01 Landing` draws the City segment as the **literal** `Austin, TX` in `#23201C` (stone-900, the filled tone). Live renders an empty `input` with `placeholder="Anywhere"` in `#6B6459` (stone-600, the placeholder tone). **The measurement pass found the question is wider than City.** The frame *templates* the vendor type (`{{ searchValue }}`, hint "Photography") but *hard-codes* the city, and live renders `Any vendor type` in the placeholder tone too — so the hero's centrepiece reads as three empty fields where the frame reads as a seeded query. Whatever is decided for City decides the vendor-type tone with it; ruling on one alone leaves the two segments disagreeing. **The options, none of them free:** seed a real city (which city, and on what basis — geolocation is not MVP and a hard-coded `Austin, TX` is a claim about where the marketplace operates); seed nothing and accept the placeholder tone as the honest empty state, correcting frame `01` in a design pass; or seed nothing but draw the empty value in the filled tone, which reads as a value that is not there. **Do not guess.** |
-
+| **324** | **02 Search — the availability chip draws one tone where the frame draws three** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #358**, because one route, three states, one browser pass. The row and its detail section stay: they carry the measurements #358 was built from, and `pnpm preflight --ticket 324` still gates for anyone on an older branch. **Never worked directly.** **Unblocked 2026-08-30 by D16 (#335-B, C).** The **gold chip is dropped from MVP** — `scarce` was never defined and the threshold is an invented number. **The sage chip is dropped from the results grid too**: a dated query is filtered on availability (`vendor-search.dao.ts` hard-codes `availableOnDate: true` and says so), so the chip was a tautology. It survives **only** on the nearby-dates band that closes frame `18`, where it names a different date. The stone `New` chip is a **joined-recently badge** (published < 30 days), the only chip a search card now carries. **Re-pointed 2026-08-30: the two decisions this waits on are questions B and C of #335.**  **Filed 2026-08-30 by lane 297**, carved out of **#297** (originally #243) because it cannot be finished without two product decisions. **The finding is confirmed from source, not inferred from one dataset**: `vendor-card.tsx` renders exactly one availability tone, `bg-sage-50 text-sage-600`, and no branch can produce another. Frame `02` draws three — sage `Free Jun 14` (`#EDF0E9`/`#4B5940`), gold `2 dates left` (`#F5EEDC`/`#7A5A12`) and stone `New` (`#F0EAE1`/`#4A443C`). **The sage tone is shipped and correct.** What blocks the other two: (1) `03-components.md:56` says the chip is "gold when scarce (\"2 dates left\")" and **never defines scarce** — a count of free dates in what window, below what number? The count itself is a real query result and may ship, but the *threshold* is an invented number and the no-invented-numbers rule covers it. (2) The stone `New` chip is in **no** plan file at all, and in the frame it sits on a vendor already showing `★ 5.0 (17)` — so it is not "unreviewed", and nothing says what it is. **Do not guess either one.** |
+| **326** | **18 Search no results — residual parity after #297** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #358**, because one route, three states, one browser pass. The row and its detail section stay: they carry the measurements #358 was built from, and `pnpm preflight --ticket 326` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 297** from the `parity-checker` pass that closed #297. #297 fixed frame 18's headline scale, measure, both colour failures and both text failures; these are what it did **not** take, each measured at 1440x900. **Layout:** the count row (`0 photographers in Marfa` + the clause + `Prices are what they charge`) renders at y=118–173 where frame `18` draws **no count row at all** — its pane opens straight into `padding:44px 26px`, which puts the glyph at y=162 against the live y=221. **Style, shared compact header bar** (measured against frames `17`/`18`, since frame `02`'s header is ruled stale by #57): bar padding `0 4 0 16` vs `0 5 0 18`; segment values 13.5px/400 vs **13px/500**; segment inner padding-left 14 vs 16. **Style, description:** `line-height: 21.6px` (`leading-prose` 1.6) vs the frame's `13.5px/1.65` = 22.28px — 0.68px, and `leading-prose` is global, so this needs a per-call-site override rather than a token change. **Text, needs a ruling not a fix:** live draws an `Anywhere` relaxation and a `Clear all` text button, neither of which is in frame `18` or `31-content-voice.md`, and `Clear all` duplicates the Refine bar's own `Clear`. **Known and owned elsewhere, do not re-file:** the two-circle glyph vs `SearchX` (**#305**), the nearby-dates band and its `See all 14 in the region →` (**#50**), the wordmark at 24px vs 23px (**#118**). |
+| **327** | **01 Landing — the hero query has no seed value, and the frame hard-codes one** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #357**, because the ruling is landed; what is left is the frame file and the code sites it names, and one lane must own `Orla - Screens.dc.html`. The row and its detail section stay: they carry the measurements #357 was built from, and `pnpm preflight --ticket 327` still gates for anyone on an older branch. **Never worked directly.** **Unblocked 2026-08-30 by D16 (#335-A).** The hero **seeds nothing** — all three segments render in the placeholder tone `#6B6459`. **Frame `01` is corrected, not the code**: a hard-coded `Austin, TX` is a claim about where the marketplace operates, and an empty value in the filled tone reads as a value that is not there. The hero badge "Now booking in Austin" is unaffected. **Re-pointed 2026-08-30: the ruling this waits on is question A of #335.**  **Filed 2026-08-30 by lane 296**, carved out of **#296** (originally #88), which instructs in its own acceptance to return `BLOCKED` with this question rather than invent a seed. Frame `01 Landing` draws the City segment as the **literal** `Austin, TX` in `#23201C` (stone-900, the filled tone). Live renders an empty `input` with `placeholder="Anywhere"` in `#6B6459` (stone-600, the placeholder tone). **The measurement pass found the question is wider than City.** The frame *templates* the vendor type (`{{ searchValue }}`, hint "Photography") but *hard-codes* the city, and live renders `Any vendor type` in the placeholder tone too — so the hero's centrepiece reads as three empty fields where the frame reads as a seeded query. Whatever is decided for City decides the vendor-type tone with it; ruling on one alone leaves the two segments disagreeing. **The options, none of them free:** seed a real city (which city, and on what basis — geolocation is not MVP and a hard-coded `Austin, TX` is a claim about where the marketplace operates); seed nothing and accept the placeholder tone as the honest empty state, correcting frame `01` in a design pass; or seed nothing but draw the empty value in the filled tone, which reads as a value that is not there. **Do not guess.** |
 | **332** | **`state` becomes a closed vocabulary, from the form to the column** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the backlog consolidation.** Merges **#330 and #331**. `Austin, TX` and `Austin, Texas` are two rows in the dev database (11 and 1), so a customer who picks one never sees the other's vendors — the split is entirely in `state`, and it **widens with every new vendor**, because `us-states.ts` offers full names while the majority of rows hold codes. Canonical form is the **two-letter USPS code**, ruled 2026-08-30. The two rows were split by layer: #330 put the vocabulary in `createVendorProfileSchema` and repaired the data, #331 constrained the column. Merged because #331 must run **after** #330's repair or it fails on exactly the row that motivated it, and shipping them apart means two migrations on one column and an unconstrained column in between. City stays free text, deliberately — a validated city list needs a dataset decision that is not this ticket. |
 | **333** | **Token scale completion, and the guard against a step that does not exist** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the backlog consolidation.** Merges **#303 and #325**. `text-stone-800` compiles, renders, and puts an off-palette colour on the page: the warm ramp defines no `stone-800`, so Tailwind 4 resolves its own cool `#292524` with no error and nothing in the suite able to notice — **seven call sites are still live**, verified 2026-08-30. The same hole is open on every family (`gold-100`, `steel-300`, `clay-700`, `sage-500`). Alongside it the token-file remainder after #74/#165/#198/#235: the `text-[Npx]` line-height defect, the radius scale's missing **12px step** (confirmed absent from `theme.css`, which runs 6/8/10/14/18), and avatar initials rendering Instrument Serif below its 16px floor. Merged because both halves complete a scale **and** add a source-scanning guard over the same class strings — one scanner closes both, and #325's guard is what stops #303's radius work reopening the class. |
-| **334** | **Repo guardrails — lane tooling, preflight hygiene and the route/frame ledger** | P2 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the backlog consolidation.** Merges **#316 and #319**. Lane hygiene: `lane:up` migrates but never seeds, so a fresh lane's vendor surfaces 404 with nothing to say why; a resumed lane hands back a stale `worktreePath`; three parallel lanes exhaust the file-descriptor limit and `next dev` dies with a Clerk error three steps from the cause; the `stripe listen` secret drifts from `.env` and every webhook 401s; a malformed body answers 400 where a 403 belongs; and a `packages/preflight` test fails only under parallel Turbo runs. Ledger: **#80 named five unframed routes, the count is now nine**, because four arrived after the 2026-08-28 mapping and nothing forced the ledger forward — parity is unprovable on an unframed route. Merged because both ship only tooling and tests: no user-facing behaviour, no parity gate, one verification shape. |
-| **335** | **[DESIGN] Ruling round — four open questions blocking parity** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Ruled 2026-08-30 — all five questions answered, recorded as D16, and the `design-plan/` edits are landed** (`03-components.md`, `10-landing.md`, `11-search.md`, `21-sign-up.md`, `31-content-voice.md`, `99-open-questions.md`), including the **overdue 48-hour correction D12 granted an exception for and never made**. #327, #324, #299 and #313 are moved to Backlog; #320 and #339 are closed by the ruling. **What is left is code, not decisions:** correct frames `01`, `02`, `12` and `18` (plus their 1024 variants) in `Orla - Screens.dc.html`, and add the guard test asserting no approved string in `31-content-voice.md` hard-codes a duration the code derives. **Filed 2026-08-30 by the backlog consolidation.** Merges **#320** whole and takes the ruling half out of **#327 (A)**, **#324 (B, C)** and **#299 (D)**. Four tickets are each stalled on one decision nobody has made, and every one of them needs a `design-plan/` edit that **a ticket may not make** — `web-design-parity.md` is explicit that design passes edit the plan and tickets write the code. Follows the **#306** precedent, which closed the same way. One sitting answers all four; the code halves stay in their own rows and go `Deferred` → `Backlog` as each is ruled. **Do not guess any of the four** — three of them are invented numbers or claims about the business, which the no-invented-numbers rule covers. |
-| **336** | **01/02 header — the signed-in cluster draws `Dashboard` and a bell where frame `02` draws `Bookings`** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Frame `02`'s signed-in header draws **`Messages` · `Bookings` · avatar**. Live renders **`Messages` · `Dashboard` · a notification bell · the Clerk `UserButton`** — `apps/web/src/components/site-header.tsx` lines 145–162. Two separate deviations: the link **text** is wrong on the Text axis (`site-header.tsx:157`), and the **bell is not in the frame at all** on the Layout axis. Not caused by #329 and not touched by it; the chip removal is on the row below. Decide per element — the bell may be a real surface the frame predates, in which case the frame is what needs the ruling |
-| **337** | **The card focus ring is clipped by the scroll container on the first row of results** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. `div.app-pane` is the `overflow:auto` scroller and has **zero top padding**; its content-box top is `y=173` and the first row of cards starts at exactly `y=173`, so the ring's outward 4px falls at `y=169–172` — outside the scroller. **Measured, not inferred**: pixel-differencing a focused card against a blurred one shows rows 169–172 identical `rgb(248,245,239)` in both, first difference at `y=173`. The ring still paints left, right, bottom and corners, so the indicator is visible and **WCAG 2.4.7 holds** — this is a partial clip, not the "clipped to nothing" failure `04-laws.md` names, which is why it is P2 and not P1. Fix is top padding or `scroll-padding-top` on `.app-pane`; check every other `overflow` scroller for the same shape rather than patching one |
-| **338** | **09 Vendor profile editor — the Storefront nav is missing `Payouts` and its blocker dot** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live renders **six** section-nav items (Business, Location, Tags, Response time, Packages, Portfolio); frame `09` draws **seven**, with **`Payouts` last, carrying a gold blocker dot**. Gold is correct there under `40-states.md` — it is waiting on someone, not a failure. Payouts exists as a surface (#9 shipped Connect onboarding), so this is a missing nav entry rather than a missing feature. **Re-measure frame `09` before fixing**: the parity pass was scoped to the Tags row and read the rest only in passing, so treat the six-vs-seven count as the finding and everything else about that nav as unverified |
-| **339** | **[DESIGN] Search `Sort` has no specified default — the frame draws a chosen one** | P1 | M3 | **P3 Low** | **Backlog** | — | **None** | `core` | **Ruled 2026-08-30 by D16 — `Most relevant` stands.** Frame `02`'s `Top rated ▾` is a *chosen* sort, not a default, and a new marketplace defaulting to it ranks its thinnest review counts first. Recorded in `11-search.md` and `99-open-questions.md`; **no code change**. What is left is the plan edit's verification only. **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live defaults to **`Most relevant`** (`sort: 'relevance'`); frame `02` draws **`Top rated ▾`**. Neither `11-search.md` nor `42-dropdowns.md` fixes a default, and the frame draws a *chosen* sort exactly as it draws a chosen price and a chosen rating — so this is **not** evidence the default is wrong, and `parity-checker` correctly did not call it a deviation. It is an unresolved gap in the plan: **a new marketplace defaulting to `Top rated` ranks its thinnest review counts first**, which is a product decision, not a parity one. Needs a one-line ruling, then either the code or the plan changes. Do not "fix" this by matching the frame |
-| **340** | **Playwright E2E harness and the eight critical-journey suites** | P3 | M6 | **P1 High** | **Backlog** | — | **#14** | `core` `auth` `stripe` | **Filed 2026-08-30 by lane 14**, split out of #14. The repo has **no `playwright.config`, no `e2e/` directory and no test-runner harness at all** — Playwright is currently MCP-driven for agentic verification only, so this ticket builds the runner from nothing. Depends on #14 for the fixed-UUID dataset the suites select on. Carries the eight suites verbatim from #14: auth, vendor profile, search, booking request, payment, messaging, reviews, admin — plus `@clerk/testing` for programmatic sign-in and the 1440x900 / 1024 / 768 / 390 viewport matrix |
-| **341** | **`seed:marketing` and `seed:e2e` write an event-type label into a slug column** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 14.** `seed-marketing.ts:406` and `seed-e2e.ts:465` both write `eventType: 'Wedding'`. `booking_requests.event_type` holds an `EVENT_TYPES` **slug** — `eventTypeSchema` is `z.enum(EVENT_TYPES)` at the API edge — so the correct value is `'wedding'`. Harmless today because reads are typed as a plain string, wrong the moment anything renders the label via `EVENT_TYPE_LABELS` or validates on read. Same defect was found and fixed in `seed-demo.ts` by #14; **close the class with a guard**, not two edits — a test asserting every seeded `event_type` is in `EVENT_TYPES` |
-| **342** | **[DESIGN] The avatar tint the frames draw has no token** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Ruled 2026-08-30 by D17 — `clay-150: #EADCCB` is added to the ramp.** The frames draw that fill at **42 sites across 20 frames** and the ramp had no step between `clay-100` (`#F7E7E0`) and `clay-200` (`#EFD8CC`); the clay initials and the whole sage pair already resolved exactly, so the fill was the one off-token value. **The ramp was incomplete, not the frame wrong** — same finding as #306. `01-foundations.md` and `03-components.md` are updated; the code change is one string in `avatar.tsx:17`'s `FALLBACK_TONES`, and it affects every avatar fallback in the app. **Filed 2026-08-30 by lane 302**, from the `parity-checker` pass that closed #302. Frame `07`'s `Recent messages` rows draw two avatar palettes: **`#EADCCB` fill with `#8E3F20` initials**, and `#E4E9DE` with `#4B5940`. The sage pair resolves to tokens exactly and renders correctly. **`#EADCCB` is not in `01-foundations.md`** — the `Avatar` primitive alternates `clay-100` (`#F7E7E0`) and `sage-100` by a hash of the name, so the initials colour matches the frame and the fill does not. This is the same class as the `#C4D6A8` / `#5C4A18` values **#306** ruled on: a frame colour with no token behind it. **Do not substitute silently** — either the token gains a step or the frame is corrected, and both are design passes. Affects every avatar fallback in the app, not just this rail |
-| **343** | **07 Bookings hub — residual parity after #302** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302, which fixed the Access axis and the deviations #302 itself introduced. These are **pre-existing** and were out of that ticket's scope. **Layout:** the title row should be `flex` with `Your bookings` left and today's date (`12.5px`, `#6B6459`) right — **the date is absent from the screen entirely**; the sidebar draws two rows where the frame draws four (`Messages` with an unread dot and `Saved vendors` are missing, and `bookings-sidebar.tsx:10-17` justifies that under #31's dead-control rule, which **no longer applies now that `/messages` exists and is linked from the header**). **Style:** `StatusPill` is `700 11px` / `padding 6px 10px` where `.pill` is `700 10px` / `5px 10px` — **shared, so it affects every screen carrying a pill**; the dashed tile border is `#D5CEC2` (`stone-400`) where the frame draws `#DDD5C7`. **Font:** the summary sentence is `text-md` (15px) with `leading-prose` where the frame draws **14px / normal** — and **there is no 14px token**, so this one needs a scale decision, not a class swap. Sidebar card body and CTA are 11px where the frame draws 11.5 and 12 |
-| **344** | **19 Bookings hub empty — the app renders frame 07's shell around frame 19's panel** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. #302's own assertion is verified — with bookings the rail draws `Recent messages` and not `How booking works here` — and the **empty pane itself matches frame `19` exactly**: dashed panel, the two-circle mark, `No bookings yet`, the body copy character for character including the curly apostrophe, the `Find a vendor` button, and the `01/02/03` steps in JetBrains Mono. **The shell around it does not.** Frame `19` draws a different title (`My bookings`), a `Nothing booked yet` sub-line, a `Find a vendor` button in the title row, pill filters `All / Pending / Confirmed / Past`, a sidebar with a `Booking` section label plus `Payments` and an Account/`Settings` block, and a **bordered radius-18 card** rail rather than `07`'s flush border-left. None of that is present. **This long predates #302** and may well be a deliberate one-shell reconciliation of frames `07` and `19` — but nothing in the repo records that decision, so it currently reads as unexplained drift. **Decide and record before building**: one shell is probably right, and if so frame `19` is what needs correcting. **Also unverified:** the rail's `How booking works here` block on a live empty hub — the E2E customer has bookings and `.claude/rules/e2e-auth.md` forbids a throwaway account, so it was not driven and is not recorded as matching |
-| **345** | **04 Booking request — `31-content-voice.md` states a deadline the product does not use** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. Frame `04` **and** `31-content-voice.md`'s approved string both read *"Maya has **48 hours** to confirm or send a **revised quote**"*. The app renders *"…has **7 days** to confirm or send a **quote**"*. **The code is right** — the sent-confirmation and the request card both say 7d, and the interval is derived from the constant rather than written down — so **the plan is what is stale**, and `04-laws.md`'s precedence rule says correct it in the same pass. Two more from the same frame: the copy neutralises the vendor's pronoun (*"the more **they know**"* for the frame's *"**she knows**"*, and *"Anything else **they** should know?"*), which is deliberate and correct but is a wording change from the frame and needs recording rather than leaving as drift; and `Continue to review` carries a `shadow-sm` the frame's `.btnP` does not. **Two small ones for the same visit:** the `Start time` field is 42px against `Guest count`'s 38px — the native `<input type="time"]` clock affordance adds 4px to a pair the frame draws at one height — and removing the marketing footer left a **stray empty `<section>` at `y=900`, height 0**, which should be deleted rather than emitted |
+| **334** | **Repo guardrails — lane tooling, preflight hygiene and the route/frame ledger** | P2 | M4.5 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #363**, because tooling and tests only — no parity gate, no browser pass, one verification shape. The row and its detail section stay: they carry the measurements #363 was built from, and `pnpm preflight --ticket 334` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by the backlog consolidation.** Merges **#316 and #319**. Lane hygiene: `lane:up` migrates but never seeds, so a fresh lane's vendor surfaces 404 with nothing to say why; a resumed lane hands back a stale `worktreePath`; three parallel lanes exhaust the file-descriptor limit and `next dev` dies with a Clerk error three steps from the cause; the `stripe listen` secret drifts from `.env` and every webhook 401s; a malformed body answers 400 where a 403 belongs; and a `packages/preflight` test fails only under parallel Turbo runs. Ledger: **#80 named five unframed routes, the count is now nine**, because four arrived after the 2026-08-28 mapping and nothing forced the ledger forward — parity is unprovable on an unframed route. Merged because both ship only tooling and tests: no user-facing behaviour, no parity gate, one verification shape. |
+| **335** | **[DESIGN] Ruling round — four open questions blocking parity** | P1 | M3 | **P1 High** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #357**, because the ruling is landed; what is left is the frame file and the code sites it names, and one lane must own `Orla - Screens.dc.html`. The row and its detail section stay: they carry the measurements #357 was built from, and `pnpm preflight --ticket 335` still gates for anyone on an older branch. **Never worked directly.** **Ruled 2026-08-30 — all five questions answered, recorded as D16, and the `design-plan/` edits are landed** (`03-components.md`, `10-landing.md`, `11-search.md`, `21-sign-up.md`, `31-content-voice.md`, `99-open-questions.md`), including the **overdue 48-hour correction D12 granted an exception for and never made**. #327, #324, #299 and #313 are moved to Backlog; #320 and #339 are closed by the ruling. **What is left is code, not decisions:** correct frames `01`, `02`, `12` and `18` (plus their 1024 variants) in `Orla - Screens.dc.html`, and add the guard test asserting no approved string in `31-content-voice.md` hard-codes a duration the code derives. **Filed 2026-08-30 by the backlog consolidation.** Merges **#320** whole and takes the ruling half out of **#327 (A)**, **#324 (B, C)** and **#299 (D)**. Four tickets are each stalled on one decision nobody has made, and every one of them needs a `design-plan/` edit that **a ticket may not make** — `web-design-parity.md` is explicit that design passes edit the plan and tickets write the code. Follows the **#306** precedent, which closed the same way. One sitting answers all four; the code halves stay in their own rows and go `Deferred` → `Backlog` as each is ruled. **Do not guess any of the four** — three of them are invented numbers or claims about the business, which the no-invented-numbers rule covers. |
+| **336** | **01/02 header — the signed-in cluster draws `Dashboard` and a bell where frame `02` draws `Bookings`** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #361**, because one signed-in render of one component cluster, owned by no parity pass. The row and its detail section stay: they carry the measurements #361 was built from, and `pnpm preflight --ticket 336` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Frame `02`'s signed-in header draws **`Messages` · `Bookings` · avatar**. Live renders **`Messages` · `Dashboard` · a notification bell · the Clerk `UserButton`** — `apps/web/src/components/site-header.tsx` lines 145–162. Two separate deviations: the link **text** is wrong on the Text axis (`site-header.tsx:157`), and the **bell is not in the frame at all** on the Layout axis. Not caused by #329 and not touched by it; the chip removal is on the row below. Decide per element — the bell may be a real surface the frame predates, in which case the frame is what needs the ruling |
+| **337** | **The card focus ring is clipped by the scroll container on the first row of results** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #358**, because one route, three states, one browser pass. The row and its detail section stay: they carry the measurements #358 was built from, and `pnpm preflight --ticket 337` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. `div.app-pane` is the `overflow:auto` scroller and has **zero top padding**; its content-box top is `y=173` and the first row of cards starts at exactly `y=173`, so the ring's outward 4px falls at `y=169–172` — outside the scroller. **Measured, not inferred**: pixel-differencing a focused card against a blurred one shows rows 169–172 identical `rgb(248,245,239)` in both, first difference at `y=173`. The ring still paints left, right, bottom and corners, so the indicator is visible and **WCAG 2.4.7 holds** — this is a partial clip, not the "clipped to nothing" failure `04-laws.md` names, which is why it is P2 and not P1. Fix is top padding or `scroll-padding-top` on `.app-pane`; check every other `overflow` scroller for the same shape rather than patching one |
+| **338** | **09 Vendor profile editor — the Storefront nav is missing `Payouts` and its blocker dot** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` `stripe` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #360**, because one route, and #338 was already acceptance line 5 of #299. The row and its detail section stay: they carry the measurements #360 was built from, and `pnpm preflight --ticket 338` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live renders **six** section-nav items (Business, Location, Tags, Response time, Packages, Portfolio); frame `09` draws **seven**, with **`Payouts` last, carrying a gold blocker dot**. Gold is correct there under `40-states.md` — it is waiting on someone, not a failure. Payouts exists as a surface (#9 shipped Connect onboarding), so this is a missing nav entry rather than a missing feature. **Re-measure frame `09` before fixing**: the parity pass was scoped to the Tags row and read the rest only in passing, so treat the six-vs-seven count as the finding and everything else about that nav as unverified |
+| **339** | **[DESIGN] Search `Sort` has no specified default — the frame draws a chosen one** | P1 | M3 | **P3 Low** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #357**, because the ruling is landed; what is left is the frame file and the code sites it names, and one lane must own `Orla - Screens.dc.html`. The row and its detail section stay: they carry the measurements #357 was built from, and `pnpm preflight --ticket 339` still gates for anyone on an older branch. **Never worked directly.** **Ruled 2026-08-30 by D16 — `Most relevant` stands.** Frame `02`'s `Top rated ▾` is a *chosen* sort, not a default, and a new marketplace defaulting to it ranks its thinnest review counts first. Recorded in `11-search.md` and `99-open-questions.md`; **no code change**. What is left is the plan edit's verification only. **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Live defaults to **`Most relevant`** (`sort: 'relevance'`); frame `02` draws **`Top rated ▾`**. Neither `11-search.md` nor `42-dropdowns.md` fixes a default, and the frame draws a *chosen* sort exactly as it draws a chosen price and a chosen rating — so this is **not** evidence the default is wrong, and `parity-checker` correctly did not call it a deviation. It is an unresolved gap in the plan: **a new marketplace defaulting to `Top rated` ranks its thinnest review counts first**, which is a product decision, not a parity one. Needs a one-line ruling, then either the code or the plan changes. Do not "fix" this by matching the frame |
+| **340** | **Playwright E2E harness and the eight critical-journey suites** | P3 | M6 | **P1 High** | **Backlog** | — | **#14** (**Done** — archived 2026-08-30) | `core` `auth` `stripe` | **Filed 2026-08-30 by lane 14**, split out of #14. The repo has **no `playwright.config`, no `e2e/` directory and no test-runner harness at all** — Playwright is currently MCP-driven for agentic verification only, so this ticket builds the runner from nothing. Depends on #14 for the fixed-UUID dataset the suites select on. Carries the eight suites verbatim from #14: auth, vendor profile, search, booking request, payment, messaging, reviews, admin — plus `@clerk/testing` for programmatic sign-in and the 1440x900 / 1024 / 768 / 390 viewport matrix |
+| **341** | **`seed:marketing` and `seed:e2e` write an event-type label into a slug column** | P3 | M6 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #363**, because tooling and tests only — no parity gate, no browser pass, one verification shape. The row and its detail section stay: they carry the measurements #363 was built from, and `pnpm preflight --ticket 341` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 14.** `seed-marketing.ts:406` and `seed-e2e.ts:465` both write `eventType: 'Wedding'`. `booking_requests.event_type` holds an `EVENT_TYPES` **slug** — `eventTypeSchema` is `z.enum(EVENT_TYPES)` at the API edge — so the correct value is `'wedding'`. Harmless today because reads are typed as a plain string, wrong the moment anything renders the label via `EVENT_TYPE_LABELS` or validates on read. Same defect was found and fixed in `seed-demo.ts` by #14; **close the class with a guard**, not two edits — a test asserting every seeded `event_type` is in `EVENT_TYPES` |
+| **342** | **[DESIGN] The avatar tint the frames draw has no token** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #357**, because the ruling is landed; what is left is the frame file and the code sites it names, and one lane must own `Orla - Screens.dc.html`. The row and its detail section stay: they carry the measurements #357 was built from, and `pnpm preflight --ticket 342` still gates for anyone on an older branch. **Never worked directly.** **Ruled 2026-08-30 by D17 — `clay-150: #EADCCB` is added to the ramp.** The frames draw that fill at **42 sites across 20 frames** and the ramp had no step between `clay-100` (`#F7E7E0`) and `clay-200` (`#EFD8CC`); the clay initials and the whole sage pair already resolved exactly, so the fill was the one off-token value. **The ramp was incomplete, not the frame wrong** — same finding as #306. `01-foundations.md` and `03-components.md` are updated; the code change is one string in `avatar.tsx:17`'s `FALLBACK_TONES`, and it affects every avatar fallback in the app. **Filed 2026-08-30 by lane 302**, from the `parity-checker` pass that closed #302. Frame `07`'s `Recent messages` rows draw two avatar palettes: **`#EADCCB` fill with `#8E3F20` initials**, and `#E4E9DE` with `#4B5940`. The sage pair resolves to tokens exactly and renders correctly. **`#EADCCB` is not in `01-foundations.md`** — the `Avatar` primitive alternates `clay-100` (`#F7E7E0`) and `sage-100` by a hash of the name, so the initials colour matches the frame and the fill does not. This is the same class as the `#C4D6A8` / `#5C4A18` values **#306** ruled on: a frame colour with no token behind it. **Do not substitute silently** — either the token gains a step or the frame is corrected, and both are design passes. Affects every avatar fallback in the app, not just this rail |
+| **343** | **07 Bookings hub — residual parity after #302** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #359**, because frames 04/07/19 are one customer fixture and one browser pass; 07 and 19 are the same shell. The row and its detail section stay: they carry the measurements #359 was built from, and `pnpm preflight --ticket 343` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302, which fixed the Access axis and the deviations #302 itself introduced. These are **pre-existing** and were out of that ticket's scope. **Layout:** the title row should be `flex` with `Your bookings` left and today's date (`12.5px`, `#6B6459`) right — **the date is absent from the screen entirely**; the sidebar draws two rows where the frame draws four (`Messages` with an unread dot and `Saved vendors` are missing, and `bookings-sidebar.tsx:10-17` justifies that under #31's dead-control rule, which **no longer applies now that `/messages` exists and is linked from the header**). **Style:** `StatusPill` is `700 11px` / `padding 6px 10px` where `.pill` is `700 10px` / `5px 10px` — **shared, so it affects every screen carrying a pill**; the dashed tile border is `#D5CEC2` (`stone-400`) where the frame draws `#DDD5C7`. **Font:** the summary sentence is `text-md` (15px) with `leading-prose` where the frame draws **14px / normal** — and **there is no 14px token**, so this one needs a scale decision, not a class swap. Sidebar card body and CTA are 11px where the frame draws 11.5 and 12 |
+| **344** | **19 Bookings hub empty — the app renders frame 07's shell around frame 19's panel** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #359**, because frames 04/07/19 are one customer fixture and one browser pass; 07 and 19 are the same shell. The row and its detail section stay: they carry the measurements #359 was built from, and `pnpm preflight --ticket 344` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. #302's own assertion is verified — with bookings the rail draws `Recent messages` and not `How booking works here` — and the **empty pane itself matches frame `19` exactly**: dashed panel, the two-circle mark, `No bookings yet`, the body copy character for character including the curly apostrophe, the `Find a vendor` button, and the `01/02/03` steps in JetBrains Mono. **The shell around it does not.** Frame `19` draws a different title (`My bookings`), a `Nothing booked yet` sub-line, a `Find a vendor` button in the title row, pill filters `All / Pending / Confirmed / Past`, a sidebar with a `Booking` section label plus `Payments` and an Account/`Settings` block, and a **bordered radius-18 card** rail rather than `07`'s flush border-left. None of that is present. **This long predates #302** and may well be a deliberate one-shell reconciliation of frames `07` and `19` — but nothing in the repo records that decision, so it currently reads as unexplained drift. **Decide and record before building**: one shell is probably right, and if so frame `19` is what needs correcting. **Also unverified:** the rail's `How booking works here` block on a live empty hub — the E2E customer has bookings and `.claude/rules/e2e-auth.md` forbids a throwaway account, so it was not driven and is not recorded as matching |
+| **345** | **04 Booking request — `31-content-voice.md` states a deadline the product does not use** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #359**, because frames 04/07/19 are one customer fixture and one browser pass; 07 and 19 are the same shell. The row and its detail section stay: they carry the measurements #359 was built from, and `pnpm preflight --ticket 345` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. Frame `04` **and** `31-content-voice.md`'s approved string both read *"Maya has **48 hours** to confirm or send a **revised quote**"*. The app renders *"…has **7 days** to confirm or send a **quote**"*. **The code is right** — the sent-confirmation and the request card both say 7d, and the interval is derived from the constant rather than written down — so **the plan is what is stale**, and `04-laws.md`'s precedence rule says correct it in the same pass. Two more from the same frame: the copy neutralises the vendor's pronoun (*"the more **they know**"* for the frame's *"**she knows**"*, and *"Anything else **they** should know?"*), which is deliberate and correct but is a wording change from the frame and needs recording rather than leaving as drift; and `Continue to review` carries a `shadow-sm` the frame's `.btnP` does not. **Two small ones for the same visit:** the `Start time` field is 42px against `Guest count`'s 38px — the native `<input type="time"]` clock affordance adds 4px to a pair the frame draws at one height — and removing the marketing footer left a **stray empty `<section>` at `y=900`, height 0**, which should be deleted rather than emitted |
 | **346** | **`/messages` keys threads by vendor, so one booking's question lands in another's thread** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 305**, carved out of #81 (item 3) because it is a data-model change, not the copy fix the rest of that ticket was. A customer asking about their Jun 11 fundraiser sends it into a thread the vendor reads as "Mar 15 birthday" — the subtitle names one arbitrary booking out of several. `conversations` already carries a nullable `booking_request_id` and a `conversations_request_key` unique index, so the schema supports a thread per request; what does not exist is the read path, the list grouping, or a rule for the vendor-initiated thread that belongs to no request. Needs a design ruling on how a multi-booking relationship is listed before it is built |
-| **347** | **`/search` has no pagination control, so page 2 is unreachable and page 2+ renders blank** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 305**, carved out of #81 (item 4) because it is a missing feature rather than a defect in one. `?page=2` returns HTTP 200 with an empty results pane while the `h1` claims the full count; there is no control anywhere to reach it, and `pageSize=20` means it is unreachable in practice today. Two halves: the control itself (frame `02` draws none — needs a design ruling), and an out-of-range page rendering an empty state whose heading agrees with its body rather than a blank pane |
-| **348** | **[DESIGN] Does a real vendor with no cover get the labelled placeholder, or a designed empty state?** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Ruled 2026-08-30 by D17 — a designed empty state, not the labelled placeholder.** The hatch is a **build-time device** for photography the *product* lacks before launch; a live vendor's empty cover is *their* missing content shown to *their* customers, and it reads as an unfinished product. `/search` and `/vendors/[slug]` render a neutral tone block at the cover's exact dimensions — no hatch, no mono label (`vendor-card.tsx:149`, `profile-header.tsx:199`). The cause and the fix stay in the editor, where the vendor is. Recorded in `40-states.md` and `03-components.md`. **Filed 2026-08-30 by lane 305**, the residue of #228 after #305 closed its literal finding. The `COVER · FULL-BLEED BANNER` string #228 measured is gone — `CHANGE-ORDER-2026-08-29.md` retired that composition. What remains is a genuine conflict between two documents. `03-components.md` defines `Placeholder` as "stand-in imagery **until real photography exists**", and `web-design-parity.md` permits "real photography in place of the labelled placeholders" — both about the *product* lacking photos before launch. #228 was about a different absence: a real vendor who has not uploaded a cover, whose live public page then reads as unfinished to their own customers. `40-states.md` would give that a designed empty state. Deciding which applies is a ruling, not an implementation choice, so #305 closed the finding and filed this rather than guessing. The upload control itself is #299 |
-| **349** | **Back and Forward discard unsaved profile edits without prompting** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 305**, the third exit #227 did not name. `useUnsavedChangesGuard` covers leaving the site (`beforeunload`) and leaving the page by link (a capture-phase click intercept), and deliberately does **not** cover a history navigation: `beforeunload` does not fire for a same-document one, and `popstate` arrives *after* the entry has already changed, so the only way to "block" it is to push a decoy entry and undo it — which corrupts the history stack the user is walking. A vendor who presses Back on a dirty `/vendor/profile/edit` still loses the edit. Needs either a supported App Router navigation-blocking API, or a ruling that the decoy-entry trade is worth making |
-| **350** | **The 500 page offers "Go to my bookings" to a signed-out visitor, and the frame draws it that way** | P1 | M3 | **P3 Low** | **Backlog** | — | **None** | `core` | **Ruled 2026-08-30 by D17 — "Browse vendors" → `/search`, and frame `16` is corrected.** #305 was right to revert its own change: a ticket may not edit approved copy, and this is the design pass that may. An auth-aware pair was rejected because `global-error.tsx` renders outside the Clerk provider and cannot know who is reading. `error-screen.tsx:74` changes href and label. **Filed 2026-08-30 by lane 305**, carved out of #81 (item 7). A visitor who has never signed in is offered a link to bookings they cannot have. #305 changed the label to "Browse vendors" and then **reverted it**: frame `16` draws `Go to my bookings` verbatim, every other string on that screen matches the frame exactly, and `web-design-parity.md` is explicit that "the words *are* the design" and that design passes edit the plan while tickets write the code. Changing approved copy to fix a logic problem is the reverse of that. Also note `global-error.tsx` renders outside the Clerk provider, so it cannot know who is reading — any auth-aware answer needs a default, and the frame gives none. Needs a ruling: a second frame for the signed-out 500, or an accepted inaccuracy |
-| **351** | **The notification dropdown's empty state is a bare paragraph, not an `EmptyState`** | P1 | M3 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 305**, found by browser verification. The bell renders `<p class="px-4 py-6 text-center text-base text-stone-600">No notifications yet</p>` — no glyph, no heading, no CTA, and `closest('[data-slot="empty-state"]')` is null. #305 made the two-circle glyph the default for every `EmptyState`, which is why this one stands out: it is not a call site, so the default cannot reach it. Whether a dropdown that small should carry the full glyph-headline-sentence-CTA stack is a judgement — frame `08/09/11 shared` draws the panel but `40-states.md` does not name a dropdown among its empty states — so this needs a look at the frame before it is changed rather than a mechanical swap |
-| **352** | **The user-menu avatar's alt text reads "'s logo" — the business name interpolates empty** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-08-30 by lane 305**, found by browser verification on every signed-in page. The avatar in the user menu has `alt="'s logo"`, so the name it should carry is an empty string — a screen-reader user hears a possessive with nothing in front of it. Present for both roles. The template is right and the value reaching it is not, so the fix is wherever that name is resolved, not in the alt attribute. `04-laws.md` covers alternative text and the parity `Access` axis is what would have caught it |
+| **347** | **`/search` has no pagination control, so page 2 is unreachable and page 2+ renders blank** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #358**, because one route, three states, one browser pass. The row and its detail section stay: they carry the measurements #358 was built from, and `pnpm preflight --ticket 347` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 305**, carved out of #81 (item 4) because it is a missing feature rather than a defect in one. `?page=2` returns HTTP 200 with an empty results pane while the `h1` claims the full count; there is no control anywhere to reach it, and `pageSize=20` means it is unreachable in practice today. Two halves: the control itself (frame `02` draws none — needs a design ruling), and an out-of-range page rendering an empty state whose heading agrees with its body rather than a blank pane |
+| **348** | **[DESIGN] Does a real vendor with no cover get the labelled placeholder, or a designed empty state?** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #357**, because the ruling is landed; what is left is the frame file and the code sites it names, and one lane must own `Orla - Screens.dc.html`. The row and its detail section stay: they carry the measurements #357 was built from, and `pnpm preflight --ticket 348` still gates for anyone on an older branch. **Never worked directly.** **Ruled 2026-08-30 by D17 — a designed empty state, not the labelled placeholder.** The hatch is a **build-time device** for photography the *product* lacks before launch; a live vendor's empty cover is *their* missing content shown to *their* customers, and it reads as an unfinished product. `/search` and `/vendors/[slug]` render a neutral tone block at the cover's exact dimensions — no hatch, no mono label (`vendor-card.tsx:149`, `profile-header.tsx:199`). The cause and the fix stay in the editor, where the vendor is. Recorded in `40-states.md` and `03-components.md`. **Filed 2026-08-30 by lane 305**, the residue of #228 after #305 closed its literal finding. The `COVER · FULL-BLEED BANNER` string #228 measured is gone — `CHANGE-ORDER-2026-08-29.md` retired that composition. What remains is a genuine conflict between two documents. `03-components.md` defines `Placeholder` as "stand-in imagery **until real photography exists**", and `web-design-parity.md` permits "real photography in place of the labelled placeholders" — both about the *product* lacking photos before launch. #228 was about a different absence: a real vendor who has not uploaded a cover, whose live public page then reads as unfinished to their own customers. `40-states.md` would give that a designed empty state. Deciding which applies is a ruling, not an implementation choice, so #305 closed the finding and filed this rather than guessing. The upload control itself is #299 |
+| **349** | **Back and Forward discard unsaved profile edits without prompting** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #360**, because one route, and #338 was already acceptance line 5 of #299. The row and its detail section stay: they carry the measurements #360 was built from, and `pnpm preflight --ticket 349` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 305**, the third exit #227 did not name. `useUnsavedChangesGuard` covers leaving the site (`beforeunload`) and leaving the page by link (a capture-phase click intercept), and deliberately does **not** cover a history navigation: `beforeunload` does not fire for a same-document one, and `popstate` arrives *after* the entry has already changed, so the only way to "block" it is to push a decoy entry and undo it — which corrupts the history stack the user is walking. A vendor who presses Back on a dirty `/vendor/profile/edit` still loses the edit. Needs either a supported App Router navigation-blocking API, or a ruling that the decoy-entry trade is worth making |
+| **350** | **The 500 page offers "Go to my bookings" to a signed-out visitor, and the frame draws it that way** | P1 | M3 | **P3 Low** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #357**, because the ruling is landed; what is left is the frame file and the code sites it names, and one lane must own `Orla - Screens.dc.html`. The row and its detail section stay: they carry the measurements #357 was built from, and `pnpm preflight --ticket 350` still gates for anyone on an older branch. **Never worked directly.** **Ruled 2026-08-30 by D17 — "Browse vendors" → `/search`, and frame `16` is corrected.** #305 was right to revert its own change: a ticket may not edit approved copy, and this is the design pass that may. An auth-aware pair was rejected because `global-error.tsx` renders outside the Clerk provider and cannot know who is reading. `error-screen.tsx:74` changes href and label. **Filed 2026-08-30 by lane 305**, carved out of #81 (item 7). A visitor who has never signed in is offered a link to bookings they cannot have. #305 changed the label to "Browse vendors" and then **reverted it**: frame `16` draws `Go to my bookings` verbatim, every other string on that screen matches the frame exactly, and `web-design-parity.md` is explicit that "the words *are* the design" and that design passes edit the plan while tickets write the code. Changing approved copy to fix a logic problem is the reverse of that. Also note `global-error.tsx` renders outside the Clerk provider, so it cannot know who is reading — any auth-aware answer needs a default, and the frame gives none. Needs a ruling: a second frame for the signed-out 500, or an accepted inaccuracy |
+| **351** | **The notification dropdown's empty state is a bare paragraph, not an `EmptyState`** | P1 | M3 | **P3 Low** | **Superseded** | — | **None** | `core` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #361**, because one signed-in render of one component cluster, owned by no parity pass. The row and its detail section stay: they carry the measurements #361 was built from, and `pnpm preflight --ticket 351` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 305**, found by browser verification. The bell renders `<p class="px-4 py-6 text-center text-base text-stone-600">No notifications yet</p>` — no glyph, no heading, no CTA, and `closest('[data-slot="empty-state"]')` is null. #305 made the two-circle glyph the default for every `EmptyState`, which is why this one stands out: it is not a call site, so the default cannot reach it. Whether a dropdown that small should carry the full glyph-headline-sentence-CTA stack is a judgement — frame `08/09/11 shared` draws the panel but `40-states.md` does not name a dropdown among its empty states — so this needs a look at the frame before it is changed rather than a mechanical swap |
+| **352** | **The user-menu avatar's alt text reads "'s logo" — the business name interpolates empty** | P1 | M3 | **P2 Medium** | **Superseded** | — | **None** | `core` `auth` | **Superseded 2026-08-30 by the second backlog consolidation — merged into #361**, because one signed-in render of one component cluster, owned by no parity pass. The row and its detail section stay: they carry the measurements #361 was built from, and `pnpm preflight --ticket 352` still gates for anyone on an older branch. **Never worked directly.** **Filed 2026-08-30 by lane 305**, found by browser verification on every signed-in page. The avatar in the user menu has `alt="'s logo"`, so the name it should carry is an empty string — a screen-reader user hears a possessive with nothing in front of it. Present for both roles. The template is right and the value reaching it is not, so the fix is wherever that name is resolved, not in the alt attribute. `04-laws.md` covers alternative text and the parity `Access` axis is what would have caught it |
 | **354** | **27 Vendor profile — 768: the booking rail must become a sticky bottom bar** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 322**, from the 1024 pass that closed the first two of its five frames. **This is a composition change, not a ladder step**, which is why it was not folded into #322. `30-responsive.md` gives 768 "Card + rail → sticky bottom bar", and frame `27 Vendor profile — 768` draws it: `position:absolute;left:0;right:0;bottom:0`, `background:#FFFDF9`, `border-top:1px solid #E4DDD1`, `padding:12px 24px`, `gap:16px`, `box-shadow:0 -4px 18px rgba(35,32,28,.07)`, holding an 11px `From` over a serif 24px price at `line-height:1.1`, an `.inp` at `flex:1;max-width:180px` carrying the date, a `flex:1` centred `Request booking` at `600 14px` on `padding:13px 0;border-radius:10px`, and a `.btnS Message` at `12px 18px`. **Today the rail simply stacks under the content below `lg`** — the grid is `lg:grid-cols-[…]` and nothing replaces it. The 768 interior is also its own ladder and is not built: pane `22px 24px 0`, card radius 16 on a 179px floor, identity pane `20px 22px`, avatar 56, name 29px, tagline 18px on a 13px offset, tab strip `margin-top:18px` at `gap:22px` and 13px, bio `14px/1.7` inside 600 on a 16px offset, stat grid `gap:12px` on an 18px offset inside 480 with `11px 13px` cards and 21px values, and `What's included` at `margin-top:20px` inside 600 with a 9px label offset over 13.5px rows. **Re-measure before fixing** — #322 moved every one of these files. |
 | **355** | **27 Vendor profile editor — 768** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 322**, from the 1024 pass that closed the first two of its five frames. The fifth of #322's frames and **the one never opened at all** — no measurement of it exists yet, so this ticket starts by taking one rather than by fixing anything. What is known from `30-responsive.md`'s degradation table: at 768 the editor puts its **nav on top**, turns the preview rail into a **panel above the fields**, and lays the fields out **two columns**; at 1024 the section nav keeps its labels — no dots rail, no icon rail — and the preview rail is 280px. The editor is the one vendor route that suppresses the shared sidebar (`VendorNav` returns `null` under `/vendor/profile/edit`) and carries its own 200px section rail in `vendor-profile-form.tsx`, which is **not** `box-content` — so the footprint arithmetic #322 fixed on the shared nav does not apply here and has to be derived separately. Needs `pnpm db:seed:e2e`. |
 | **356** | **27 Vendor dashboard — empty · 1024: the draft-profile state is a different screen** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 322**, from the 1024 pass that closed the first two of its five frames. Frame `27 Vendor dashboard — empty · 1024` is **not** the populated dashboard with an empty list. It opens with a gold blocker banner the code has no counterpart for — a 16px `#C99A2E` dot on `#F5EEDC` inside `1px #E8DBB8` at `border-radius:11px`, `padding:12px 14px`, reading *"Your profile isn't live yet — three things left"* over *"Add at least 6 portfolio images · Set a starting price · Connect payouts."* with an inline `Finish profile` — where the page draws only `<Banner status="pending" title="Payouts not connected">`. Below it the checklist is an **in-pane 300px card** (`border-radius:16px`, `padding:16px`, `1px #E4DDD1`), not #322's bordered outer rail, and it is a **seven**-row `Setup · 4 of 7 done` list with strikethrough on the done rows against the six of `PUBLISH_BLOCKER_KEYS`. The empty pane's copy differs too: frame says *"No requests yet"* / *"Nothing has come in because your listing is still a draft."* / `Preview my profile`, code says *"Nobody can find you yet"* / *"Your profile is not published…"* / `Finish your profile`; panel radius 16 against `rounded-2xl`'s 18, `padding:0 28px` against `px-10`, description capped at 340 against 420, headline 23px. **The state is also unreachable in a lane database**: all 17 `vendor_profiles` rows are `is_published = true` and only the E2E account has a sign-in path, so verifying it needs a seed that can produce an unpublished vendor with zero requests — decide that first, because a pass that cannot render the frame proves nothing. |
-**This board carries open work only. The 311 closed rows moved to `.claude/plans/vendor-marketplace-tickets-archive.md` on 2026-08-30**, whole — 180 `Done` and 131 `Superseded`, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
+| 357 | **Apply the D16/D17 rulings — correct the frames, then the five code sites** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#327, #335, #339, #342, #348, #350**. Every one of these had its decision taken by D16 or D17 and its `design-plan/` edit landed; what each has left is code or the frame file. **They are one ticket because five of the six end in an edit to `Orla - Screens.dc.html`** — frames `01`, `02`, `12`, `16`, `18` and their 1024 variants — and four concurrent lanes editing one 27-frame HTML file is a guaranteed conflict on the repo's own acceptance criterion. The code sites are named and small: `avatar.tsx:17`'s `FALLBACK_TONES` → `clay-150` (#342), `vendor-card.tsx:149` and `profile-header.tsx:199` → the neutral coverless block (#348), `error-screen.tsx:74`'s href and label → `Browse vendors` → `/search` (#350). #327 is **frame-only** — the hero seeds nothing and the code is already right. #339 is **verification only** — `Most relevant` already ships. Plus the guard test D16 asked for: no approved string in `31-content-voice.md` hard-codes a duration the code derives. |
+| 358 | **02/17/18 Search — close 1440 parity and the two reachability defects** | P1 | M3 | **P2 Medium** | **Backlog** | — | **#357** (frames `02`/`18`) | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#324, #326, #337, #347**. One route, three states, one browser pass — #326's own measurements say the compact-header fix *"lands on `/search` at every state"*, #337 was found there, and #347's blank page 2 is reached from it. **#324 is now a deletion:** D16 dropped the gold chip (scarce was never defined) and the sage chip on the results grid (a dated query is already filtered on availability, so the chip was a tautology), leaving the stone `New` badge — published < 30 days — as the only chip a card carries. Sage survives **only** on the nearby-dates band. Sequence **after #357**, which corrects the frames this is measured against, and **do not run concurrently with #323**, which owns the same two components at 1024. |
+| 359 | **04/07/19 Bookings — hub, empty hub and the request form** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#343, #344, #345** — all three filed by lane 302 from one `parity-checker` pass. **#343 and #344 are the same shell**, and #345 is one click away, so this is one customer fixture and one browser pass. Carries an unrecorded decision that must be settled before building: the app renders frame `07`'s shell around frame `19`'s pane, which may well be a deliberate reconciliation — one shell for a hub that is sometimes empty is the better product — but **nothing in the repo records it**, so it reads as drift and the next pass finds it again. Also needs an **empty-hub customer fixture**: the E2E customer has bookings and `.claude/rules/e2e-auth.md` forbids a throwaway account, so the empty rail has never been driven. |
+| 360 | **09 Vendor storefront editor — cover, preview rail, nav and the unsaved-work guard** | P1 | M3 | **P0 Critical** | **Backlog** | — | **None** | `core` `storage` `stripe` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#299, #338, #349**. **#338 is a duplicate** — "the section nav carries `Payouts` and its gold dot" is already acceptance line 5 of #299 (filed there as #140) — and #349 is the same route's form. #299 in turn merges #137, #138, #140, #141, #152, #257, #258, #288, with **#288 leading** because it unblocks #137. **D16 settled the field question:** `Your line` and `Years in business` are **relocated, not deleted** — both are the only editing surface for content frame `03` displays, so deleting the editor without the display leaves content nobody can change. The `Payouts` dot reads real Stripe onboarding state and is **gold, never red**. Re-measure frame `09`'s nav in full first: the pass that found the missing entry was scoped to the Tags row. |
+| 361 | **Site header and chrome — signed-in cluster, notification dropdown, avatar alt** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#336, #351, #352** — `site-header.tsx`, `NotificationBell` and the Clerk `UserButton`, found and fixed in one signed-in render on every page. **They are one ticket for the reason each slipped:** as #352 puts it, *"the user menu is chrome rather than a framed screen, so no parity pass owns it."* The link text needs no ruling — frame `02` draws `Bookings`, live draws `Dashboard` at `site-header.tsx:157`, and the frame is the authority. **The bell is the open question and must not be deleted to pass parity**: it is a real surface with real behaviour and a frame that predates it is not evidence it should go. The avatar alt reads `"'s logo"` on both roles — a data defect, not a template one, so the fix belongs where the name is resolved. |
+| 362 | **[PLATFORM] External-account provisioning — one dashboard session** | INFRA | M-OPS | **P0 Critical** | **Deferred — needs a human** | — | **The account holder — every item is a provider-console action** | all | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#19, #46 (residual), #62, #206**. Every item is the same actor doing the same kind of thing — signing into a provider console to mint, rename or rotate a value — and **none of it is repository code**. Three of the four already point at each other: #62 calls itself *"a #19 prerequisite"*, #206's Notes say it *"overlaps #19"* and is *"a pointer, not a queue item"*, and #46's remaining scope is one rotation (its code scopes 1 and 2 are Done in `34cd28c`, `ed41aed`). Split, this is four separate asks of one person. The checklist: **rotate `CLERK_WEBHOOK_SECRET`** (leaked to a transcript 2026-08-27 — rotate, deleting is not enough); **rename the Clerk application** to `BRAND_NAME`, which is the source every `{{applicationName}}` key reads; **change the Stripe public business name** from `VendYou`, which renders on Connect onboarding, on Checkout and as the **statement descriptor**; **mint production credentials** in Clerk, Stripe, R2 and Resend, newly minted rather than copied; pooled string on Railway, unpooled on Railway **and** GitHub Actions. **Supplying `SENTRY_DSN` belongs here too and unblocks #353.** The Neon Launch upgrade (#206) stays **launch-gated** in `docs/pre-launch.md` §3.2 and is not current work. |
+| 363 | **Repo guardrails — lane tooling, preflight hygiene, seed and route ledgers** | P2 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#334, #341**; #334 in turn merges #316 and #319. **All of it is tooling and tests — no user-facing behaviour, so no parity gate and no browser pass** — which is the whole reason to batch it: they share the entire verification shape. #341 is the same species as the rest, a guard closing a class of mistake three seeds made independently. Contents: `lane:up` **seeds** rather than only migrating (lane 9 came up with 0 categories and every vendor surface 404ing); `laneUp` re-derives `worktreePath` on an active manifest (#256); preflight compares the `stripe listen` secret against `STRIPE_WEBHOOK_SECRET` by **digest only**; `ulimit -n 65536` before `next dev` (three lanes died on `EMFILE` reported as a Clerk middleware error); `POST /vendor/stripe/connect` answers **403 not 400** to a customer's malformed body; the `packages/preflight` parallel-run flake is **reproduced before it is fixed** (#64); seeds write slugs not labels, with a guard over `EVENT_TYPES`; and the route/frame ledger becomes a **test** over `apps/web/src/app/**/page.tsx`, because #80's five unframed routes are now nine and prose did not notice. |
+**This board carries open work only. The closed rows live in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **310 rows as of 2026-08-30: 172 `Done` and 138 `Superseded`**, recounted programmatically in the second consolidation, which also moved #14 and #305 across. The earlier figures here (311 / 180 / 131) were a snapshot that nothing updated as rows moved, with their detail sections. Nothing was deleted or summarised. Read the archive when a Notes cell names a ticket you cannot find here; `packages/shared/src/env/tickets.ts` still holds a registry row for every archived number, so `pnpm preflight --ticket <old n>` gates unchanged, and `tickets.board.test.ts` reads both files so an archived row still has to agree with its registry entry.
 
-Rows are ordered by build sequence, not by ticket number. **35 rows — 33 open (31 Backlog, 2 Deferred) plus #305 and #322, closed and not yet archived.** Recounted programmatically on 2026-08-30 by lane 322, which found the previous sentence claiming 39 rows against 32 and naming an `In Progress` and a `Blocked` bucket that no row was in. Before that, recounted after the **D16 and D17 ruling rounds**, which answered every open design question and moved nine rows out of `Deferred` — #299, #313, #324, #327, #335, #339, #342, #348 and #350 — and after #15 was split, its Sentry half becoming #353. **Nothing is blocked on a design decision any more.** The five rows that still need a human are the launch-prep block alone: #19, #206 and #353 deferred, #46 and #62 blocked, all of them credentials or dashboard settings the account holder alone can supply. Recounted programmatically on 2026-08-30 after #302 and #305 closed, and after #342–#345 and #346–#352 were filed by two lanes that were open at once. **#305 is the worked example of why a Backlog count is not a ready count**: it read workable, and its own ticket ids collided at merge with a concurrent lane's, which the contiguity guard caught rather than silently duplicating. Two more are `Backlog` but gated: **#20** on #19 and **#15** on the Sentry DSN, so a Backlog count is not a ready count — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over it. Of the workable set, **#335 unblocks three of the deferred rows in one sitting** and is the highest-leverage thing on the board.
+Rows are ordered by build sequence, not by ticket number. **44 rows — 19 open (16 Backlog, 1 In Progress, 2 Deferred) and 25 `Superseded`.** **#14 and #305 moved to the archive in this pass**, restoring the 2026-08-30 convention that this board carries open work only; they had been left here after closing. Recounted programmatically on 2026-08-30 after the **second backlog consolidation**, which replaced 25 rows with **#357–#363**. That pass was only possible because D16 and D17 had just ruled every open design question: eleven rows that could never start became ordinary code work, and the shape underneath them — twenty-five rows that were really seven pieces of work — became visible. **The blank line that had split this table in two is gone**; rows #332–#352 had been rendering as a separate headerless table, though `tickets.board.test.ts` parses line by line and never noticed. **A Backlog count is still not a ready count** — **#20** waits on #362 and **#353** on the Sentry DSN, and #358 is sequenced behind #357, which owns `Orla - Screens.dc.html` for one pass. Read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -332,8 +341,18 @@ table cell is not a gate; #3 shipped needing `storage` with no note at all.
 **Critical path — shipped:** #0 → #1 → #2 → #3 → #17 → #21 → #4 → #6a → #23 → #24 →
 #6c → #31 → #28 → #29 → #6b → #16 → #7 → #22b → #22a → #8 → #30 ✅
 
-**Critical path — remaining:** **#9 ◄── NEXT, and it needs a human (Stripe dashboard)**
-→ #10 → #19 → #20 → #12 → #11 → #14 → #15
+**Critical path — remaining:** **#362** (a human, at four provider consoles) → **#20** →
+**#11** → **#353**, with **#15** (Admin Portal) parallel-safe.
+
+> **The block below is a historical snapshot and is no longer accurate.** Corrected
+> 2026-08-30 by the second backlog consolidation, which found it still naming **#9 as
+> NEXT** when #9 and #10 have both been `Done` for days, and still listing #61, #63, #64
+> and #65 as "unblocked right now" when all four are closed. #19, #46 and #62 are now
+> `Superseded` into **#362**. It is kept because the phase structure is still a fair
+> picture of how the product was built — but **the Status Board is the only authority on
+> what is open, and `pnpm preflight --ticket <n>` on whether it can start.** This is the
+> same staleness the Beta gate section above records as its own lesson; it was found in
+> the same pass, two hundred lines apart.
 
 ```
 PHASE 0-1: Foundation  ✅ complete
@@ -598,70 +617,6 @@ campaigns; user-configurable notification preferences (that is #16's surface); S
 
 ---
 
-### #14: Demo Dataset (`seed:demo`)
-
-**Milestone:** M6 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
-
-**Split 2026-08-30 by lane 14.** This ticket was filed as "Demo Dataset +
-Playwright E2E" and carried two subsystems. The eight Playwright suites — and
-the test-runner harness they need, which does not exist in this repo at all —
-moved to **#340**. What remains here is the dataset itself, which #340 then
-selects against.
-
-**User value:** Fully populated realistic marketplace for stress testing, demos
-and every empty-versus-populated state the design plan distinguishes.
-
-**Scope:**
-
-- `packages/db`: `seed:demo` script — deterministic, idempotent full dataset
-- 1 admin, 3 customers, 12-15 vendors across all **11** categories
-- 29+ booking requests across all statuses, conversations with messages, 20+ reviews
-- No external service calls: Clerk and Stripe identities are local rows
-
-**Demo data specification:**
-
-- **Users:** 1 admin, 3 customers (varying profiles: new member, active booker, power user with reviews), 12-15 vendors across all **11** categories from `CATEGORY_SEEDS` (at least 1 per category, some in multiple)
-- **Vendor profiles:** Realistic business names, bios, cities (mix of NYC, LA, Chicago, Miami, Houston), tags (mix of languages/cultural/dietary)
-- **Imagery — resolved 2026-08-30 by lane 14.** The seed references **only files that already exist** under `apps/web/public/categories/`, and writes `null` everywhere it has none. It does **not** invent placeholder URLs: `VendorCard` and `Avatar` render a designed placeholder for a null image, but a non-null value becomes a raw `<img>` with no error handling, so a path to a missing file is a broken-image glyph on every card — strictly worse than null. Six of the eleven categories have a licensed image; the other five render the placeholder, which is useful rather than a shortfall, because `40-states.md` distinguishes the two card states. No new asset is added and none is borrowed from `apps/web/public/stock/`, whose `CREDITS.md` records unverified provenance as a launch blocker
-- **Packages:** 2-4 per vendor, varying price types and amounts ($500-$15K range)
-- **Portfolios:** 3-6 items for each vendor whose category has a licensed image; none for the rest (see Imagery)
-- **Availability:** Random future dates blocked/booked, most dates available
-- **Booking requests:** 29+ across all statuses — pending, quoted, accepted, declined, expired, cancelled, and the bookings behind accepted ones: confirmed, completed, cancelled, disputed
-- **Conversations:** 1 per booking request, each with 3-10 messages back and forth
-- **Reviews:** 20+ reviews — mix of 3-5 star ratings, realistic content, both customer→vendor and vendor→customer
-- **Notifications:** Matching the booking lifecycle events
-- **Deterministic:** seeded PRNG and derived UUIDs, so data is identical across runs. Fixed UUIDs for key entities to enable stable Playwright selectors in **#340**.
-
-**Non-goals:** load or performance testing; visual-regression snapshots (the design
-parity gate is a human/Playwright comparison against the frames, not a pixel diff);
-seeding the Neon `production` branch, which stays empty until launch (**#48**); the
-Playwright suites themselves, which are **#340**.
-
-**Edge cases:**
-
-- Re-running `seed:demo` over an existing dataset must not duplicate rows.
-- **Re-running must also remove rows an earlier version of the seed wrote and this one no longer emits.** An upsert only repairs rows still in a `values()` list, so a dropped row survives for ever — the `.claude/rules/db-schema.md` "corrected writer leaves a legacy" trap. Hit for real during this ticket: 23 portfolio rows with dead image paths outlived the fix that stopped writing them, and kept rendering broken galleries on five vendors.
-- Missing Clerk/Stripe credentials must skip external calls, not fail the seed.
-- Tearing down must survive a booking made against a demo vendor by a customer the seed does not own — all three `bookings` foreign keys are `RESTRICT`.
-- A booked event date and a derived blocked date for one vendor must not collide
-  on `availability_vendor_date_key`.
-
-**Acceptance:**
-
-- [x] `pnpm db:seed:demo` completes in **<60s** and is idempotent — asserted by running it twice and diffing row counts
-- [x] Re-running converges: rows the seed no longer emits are pruned, not stranded
-- [x] Deterministic: two fresh runs produce identical data, verified by comparing a fingerprint of the seeded rows
-- [x] All **11** categories from `CATEGORY_SEEDS` have at least one published vendor
-- [x] 29+ booking requests covering **every** status in `BOOKING_REQUEST_STATUSES` and `BOOKING_STATUSES`
-- [x] Reviews cover both directions per the resolved asymmetry in `99-open-questions.md` #3 — customer→vendor public, vendor→customer private
-- [x] Seeding works with Clerk/Stripe credentials absent — external calls skipped, local DB still seeded
-- [x] Derived columns (`avg_rating`, `review_count`) are **recomputed** by the seed, never written directly
-- [x] Seed points only at a non-production branch — it must refuse to run against `production`
-
-**Blocked by:** None (#12 landed 2026-08-30)
-
----
-
 ### #340: Playwright E2E harness and the eight critical-journey suites
 
 **Milestone:** M6 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
@@ -721,7 +676,12 @@ sees it.
 
 ### #341: `seed:marketing` and `seed:e2e` write an event-type label into a slug column
 
-**Milestone:** M6 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #363 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #363 was built from, and so `pnpm preflight --ticket 341` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M6 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 
 **Filed 2026-08-30 by lane 14**, found while fixing the same defect in the new
 demo seed.
@@ -801,7 +761,12 @@ single list and does not answer it, so building either shape is a guess.
 
 ### #347: `/search` has no pagination control, so page 2 is unreachable and page 2+ renders blank
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #358 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #358 was built from, and so `pnpm preflight --ticket 347` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 305**, carved out of #81 (item 4) as a missing
@@ -836,7 +801,12 @@ marketplace grows.
 
 ### #348: [DESIGN] Does a real vendor with no cover get the labelled placeholder, or a designed empty state?
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Deferred — needs a human | **Capabilities:** `core`
+> **Superseded — merged into #357 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #357 was built from, and so `pnpm preflight --ticket 348` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** A design ruling
 
 **Filed 2026-08-30 by lane 305**, the residue of #228 after #305 closed its
@@ -880,7 +850,12 @@ missing piece and lives in **#299**.
 
 ### #349: Back and Forward discard unsaved profile edits without prompting
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #360 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #360 was built from, and so `pnpm preflight --ticket 349` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 305** — the third exit #227 did not name, found by
@@ -916,7 +891,12 @@ second Back.
 
 ### #350: The 500 page offers "Go to my bookings" to a signed-out visitor, and the frame draws it that way
 
-**Milestone:** M3 | **Priority:** P3 Low | **Status:** Deferred — needs a human | **Capabilities:** `core`
+> **Superseded — merged into #357 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #357 was built from, and so `pnpm preflight --ticket 350` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** A design ruling
 
 **Filed 2026-08-30 by lane 305**, carved out of #81 (item 7).
@@ -956,7 +936,12 @@ unknown, and the frame supplies none.
 
 ### #351: The notification dropdown's empty state is a bare paragraph, not an `EmptyState`
 
-**Milestone:** M3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #361 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #361 was built from, and so `pnpm preflight --ticket 351` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 305**, found by browser verification.
@@ -989,7 +974,12 @@ whoever wrote the paragraph.
 
 ### #352: The user-menu avatar's alt text reads "'s logo" — the business name interpolates empty
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+> **Superseded — merged into #361 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #361 was built from, and so `pnpm preflight --ticket 352` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core` `auth`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 305**, found by browser verification on every
@@ -1177,7 +1167,12 @@ traces. It belongs in the same sitting as #19, #62, #46 and #206.
 
 ### #19: Production Environment Provisioning
 
-**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Deferred — needs a human | **Capabilities:** all
+> **Superseded — merged into #362 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #362 was built from, and so `pnpm preflight --ticket 19` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Superseded | **Capabilities:** all
 **Blocked by:** #17 | **Parallel with:** #18 | **Schedule after:** #10
 
 **User value:** As the operator, production has its own credentials for every service,
@@ -1351,7 +1346,12 @@ decisions D6 and D7 in the plan); blue-green or canary releases.
 
 ### #46: Clerk webhooks point at a CLI relay, not the API
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Blocked — needs a human | **Capabilities:** `core` `auth`
+> **Superseded — merged into #362 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #362 was built from, and so `pnpm preflight --ticket 46` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Superseded | **Capabilities:** `core` `auth`
 **Blocked by:** None
 
 **User value:** As a user who changes their name or email in Clerk, the marketplace shows
@@ -1498,7 +1498,12 @@ post-verification redirect during #31's browser pass**; if it reproduces, it bel
 `/after-sign-in`.
 ### #62: Stripe public business name is "VendYou", not Orla
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Blocked — needs a human | **Capabilities:** `core` `stripe`
+> **Superseded — merged into #362 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #362 was built from, and so `pnpm preflight --ticket 62` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Superseded | **Capabilities:** `core` `stripe`
 **Blocked by:** Stripe dashboard — only the account holder can change it
 
 **Found 2026-08-28**, from `stripe config --list` while setting up #9's credentials:
@@ -1632,7 +1637,12 @@ surface their siblings were measured against. Third, **one frame is one browser 
 
 ### #299: 09 Vendor profile editor — cover field, preview rail and parity close-out
 
-**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Deferred — needs a human | **Capabilities:** `core` `storage`
+> **Superseded — merged into #360 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #360 was built from, and so `pnpm preflight --ticket 299` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Superseded | **Capabilities:** `core` `storage`
 **Blocked by:** #298
 
 Merges **#137, #138, #140, #141, #152, #257, #258, #288**. **#288 leads and unblocks #137**,
@@ -1691,80 +1701,6 @@ once off the Layout axis and once off the Text axis.
 - [ ] A parity assertion reading the nav label list and order out of the frame at test time,
       so a reordering fails rather than passing on set equality
 
----
-
-### #305: `40-states.md` compliance sweep — copy, glyphs and unsaved work
-
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
-**Blocked by:** None
-
-Merges **#72, #261, #225, #227, #228, #81**.
-
-## Outcome — worked 2026-08-30 by lane 305
-
-Every finding is accounted for. Nothing was silently dropped, which is what the
-last acceptance line asks for.
-
-**Fixed**
-
-| From | Finding | How |
-| --- | --- | --- |
-| #72 | Raw upstream error strings reaching users at 11 call sites | `userFacingError` is now the boundary: a 5xx never surfaces, the API's five generic shapes are replaced by the caller's own sentence, and a message the product wrote is kept. The two string-only paths — the upload mapper and the profile-save summary — go through `isUpstreamErrorShape` |
-| #72 | `?name=` with no results claimed none were listed, blamed filters the customer never set, offered no way out | `relaxations` was missing the name filter entirely. Adding it fixes the count, the culprit and the one-tap escape at once |
-| #72 | City accepted more than the API's 100-char cap | `maxLength` on the field, so the error is unreachable by typing |
-| #72 | Notification dates dropped the weekday every other surface carries | `weekday: 'short'`, matching `search-shell`, `request-row` and `booking-entries` |
-| #261 | Seven of nine `EmptyState` call sites drew no glyph | The glyph is the **default** rather than an optional prop, so a tenth caller inherits it. Removing it now takes an explicit `icon={null}`, which a test forbids |
-| #225 | Success toast covered the submit button that produced it | The toast clears the sticky submit bar. Still bottom-right, which is what `03-components.md` fixes; only the inset moved, and it is measured against the bar's own padding |
-| #227 | Unsaved profile edits vanished with no prompt | `useUnsavedChangesGuard` covers both exits — `beforeunload` for the tab, a capture-phase click intercept for the router — and the form asks with the product's own dialog |
-| #81-1 | `From` qualified a price that was no longer the lowest | Shown while the price on screen **is** the starting price, so the frame's default reading survives and a dearer package drops it |
-| #81-2 | Blank grey swatch on every bookings card | The vendor's monogram, from `Avatar`'s own initials and tone helpers so one vendor keeps one colour everywhere |
-
-| #81-9 | Bookings rail `aria-label` described a section that was not rendered | The label follows the content |
-| verification | `/bookings` hand-rolled a second empty-state glyph, its outer ring solid where the shared one is dashed, under a `p` styled as a headline | Uses `EmptyStateGlyph` and a real `h2`, so one glyph ships and the state has a heading in the accessibility tree |
-
-**Closed with a reason**
-
-| From | Finding | Why |
-| --- | --- | --- |
-| #72 | Empty state named a "style" filter that does not exist | Fixed by **#329**, which removed the Style group; `relaxations.ts` already says "Any tag" |
-| #81-5 | `State` accepted `ZZZZZZZZZZ` | **#332** is exactly this, from the form to the column. Half-fixing it here is work #332 would undo |
-| #81-6 | Profile tabs used history `replace` | Already `useQueryState`'s default with search explicitly pushing; no longer reproducible |
-| #81-8 | Results `h1` ran together | Fixed by **#242** |
-| #81-10 | A past date still fired the request | `search-shell` clears it before the call and announces the clear |
-| #228 | `COVER · FULL-BLEED BANNER` on a coverless storefront | The composition was retired by `CHANGE-ORDER-2026-08-29.md`; the string is gone. What remained was a documented conflict, filed as **#348** |
-
-**Filed rather than fixed**
-
-| From | Now | Why |
-| --- | --- | --- |
-| #81-3 | **#346** | One thread per vendor is a data-model change needing a ruling, not a copy fix |
-| #81-4 | **#347** | Pagination does not exist; frame `02` draws no control, so its shape is a ruling |
-| #228 | **#348** | Whether a *real* vendor's missing cover gets the sanctioned `Placeholder` or a designed empty state is a design ruling, and `03-components.md` is not a sweep's to overrule |
-| verification | **#351** | The notification dropdown's empty state is a bare `<p>`, not an `EmptyState`, so the new glyph default cannot reach it. Whether a dropdown should carry the full stack is a frame question |
-| verification | **#352** | The user-menu avatar's alt reads `'s logo` — the name interpolates empty, on every signed-in page. The fix is where that name is resolved, not in the attribute |
-| #227 | **#349** | Back/Forward is a third exit the guard does not cover. `beforeunload` does not fire for a same-document navigation and `popstate` arrives too late, so the only block corrupts the history stack. Named in the hook's own contract rather than implied away |
-| #81-7 | **#350** | Changed the 500 page's CTA to "Browse vendors", then **reverted it**: frame `16` draws `Go to my bookings` verbatim and `web-design-parity.md` says "the words *are* the design". Rewording approved copy to fix a logic problem is the reversal that rule forbids |
-
-**Acceptance:**
-
-- [x] The five copy violations are corrected against `40-states.md`'s colour semantics —
-      steel is information, gold is waiting on someone, red is failure, sage is settled.
-      **Red is never `pending`; gold is never a failure** (#72)
-- [x] The two-circle empty-state glyph is present at all nine `EmptyState` call sites (#261)
-- [x] The success toast does not cover the submit button it confirms (#225)
-- [x] Unsaved profile edits prompt rather than vanishing (#227)
-- [x] A newly onboarded vendor's public storefront shows the vendor's own content, never
-      placeholder copy (#228)
-- [x] **#81**'s nine adversarial-sweep defects are each either fixed here or filed as their
-      own row with a reason — none is silently dropped
-
-**Tests (required):**
-
-- [x] A test over the `EmptyState` call sites asserting the glyph, so a tenth caller cannot
-      be added without it
-- [x] A test that leaving a dirty profile form prompts, and that a clean one does not
-
----
 
 ### #313: Sign-up and session entry
 
@@ -1827,7 +1763,12 @@ Do the first half, then return `BLOCKED` with **all four questions together**.
 
 ### #324: 02 Search — the availability chip draws one tone where the frame draws three
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Deferred — needs a human | **Capabilities:** `core`
+> **Superseded — merged into #358 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #358 was built from, and so `pnpm preflight --ticket 324` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** A scarcity threshold, and a definition for the `New` chip
 
 Carved out of **#297** (filed there as #243). Everything else in #297 landed; this
@@ -1885,7 +1826,12 @@ of its four semantics.
 
 ### #326: 18 Search no results — residual parity after #297
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #358 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #358 was built from, and so `pnpm preflight --ticket 326` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 The remainder of frame `18` after **#297** closed its headline scale, its measure,
@@ -1949,7 +1895,12 @@ the live `SearchX` (**#305**), the `Free on a nearby date instead` band and
 
 ### #327: 01 Landing — the hero query has no seed value, and the frame hard-codes one
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Deferred — needs a human | **Capabilities:** `core`
+> **Superseded — merged into #357 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #357 was built from, and so `pnpm preflight --ticket 327` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** A product ruling on the hero's seed
 
 Carved out of **#296** (filed there as #88), whose acceptance says in as many words:
@@ -2182,7 +2133,12 @@ edit).
 
 ### #334: Repo guardrails — lane tooling, preflight hygiene and the route/frame ledger
 
-**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #363 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #363 was built from, and so `pnpm preflight --ticket 334` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 Merges **#316 and #319**. Both ship only tooling and tests — no user-facing behaviour, so no
@@ -2252,7 +2208,12 @@ silently, as four just did.
 
 ### #335: [DESIGN] Ruling round — four open questions blocking parity
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Deferred — needs a human | **Capabilities:** `core`
+> **Superseded — merged into #357 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #357 was built from, and so `pnpm preflight --ticket 335` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** Four product/design decisions, below
 
 Merges **#320** whole, and takes the ruling half out of **#327**, **#324** and **#299**, which
@@ -2336,7 +2297,12 @@ reintroduces a deadline the API refuses, at the moment of commitment.
 
 ### #336: 01/02 header — the signed-in cluster draws `Dashboard` and a bell where frame `02` draws `Bookings`
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #361 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #361 was built from, and so `pnpm preflight --ticket 336` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329. Found
@@ -2369,7 +2335,12 @@ ruling and this ticket splits.
 
 ### #337: The card focus ring is clipped by the scroll container on the first row of results
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #358 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #358 was built from, and so `pnpm preflight --ticket 337` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329.
@@ -2405,7 +2376,12 @@ its content box has the same defect. Sweep them.
 
 ### #338: 09 Vendor profile editor — the Storefront nav is missing `Payouts` and its blocker dot
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `stripe`
+> **Superseded — merged into #360 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #360 was built from, and so `pnpm preflight --ticket 338` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core` `stripe`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329.
@@ -2434,7 +2410,12 @@ and whether the other six match.
 
 ### #339: [DESIGN] Search `Sort` has no specified default — the frame draws a chosen one
 
-**Milestone:** M3 | **Priority:** P3 Low | **Status:** Deferred — needs a human | **Capabilities:** `core`
+> **Superseded — merged into #357 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #357 was built from, and so `pnpm preflight --ticket 339` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P3 Low | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** A design ruling on the default sort
 
 **Filed 2026-08-30 by lane 329**, from the `parity-checker` pass that closed #329.
@@ -2465,7 +2446,12 @@ changes or the plan gains the line it is missing.
 
 ### #342: [DESIGN] The avatar tint the frames draw has no token
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Deferred — needs a human | **Capabilities:** `core`
+> **Superseded — merged into #357 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #357 was built from, and so `pnpm preflight --ticket 342` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** A colour ruling
 
 **Filed 2026-08-30 by lane 302**, from the `parity-checker` pass that closed #302.
@@ -2499,7 +2485,12 @@ local override.
 
 ### #343: 07 Bookings hub — residual parity after #302
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #359 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #359 was built from, and so `pnpm preflight --ticket 343` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302. That
@@ -2542,7 +2533,12 @@ is **pre-existing** and was outside its scope.
 
 ### #344: 19 Bookings hub empty — the app renders frame 07's shell around frame 19's panel
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #359 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #359 was built from, and so `pnpm preflight --ticket 344` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302.
@@ -2585,7 +2581,12 @@ that is a design pass rather than this ticket.
 
 ### #345: 04 Booking request — `31-content-voice.md` states a deadline the product does not use
 
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+> **Superseded — merged into #359 on 2026-08-30 by the second backlog consolidation.**
+> **Do not work this ticket directly.** This section is kept for the measurements and
+> the reasoning #359 was built from, and so `pnpm preflight --ticket 345` still gates for
+> anyone on a branch or commit message that predates the merge.
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Superseded | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-08-30 by lane 302** from the `parity-checker` pass that closed #302.
@@ -2628,3 +2629,586 @@ from the frame on the Text axis and needs recording rather than standing as drif
 
 ---
 
+
+## Consolidated Tickets — filed 2026-08-30
+
+**These seven tickets replace twenty-five open ones.** The board carried 37 open rows the
+morning after the D16/D17 ruling rounds landed. Those rounds are what made this pass
+possible: eleven rows that could never start — each stalled on one decision a ticket may
+not make — became ordinary code work overnight, and the shape underneath them became
+visible. What was left was not ninety measurements against nine frames, as in the
+2026-08-29 pass, but **twenty-five rows that were really seven pieces of work**, split by
+the axis a finding was measured on or the day a lane happened to find it.
+
+**Nothing was discarded.** Every merged ticket keeps its row, its registry row — so
+`pnpm preflight --ticket <old number>` still gates for anyone working from an older branch
+or commit message — and, where it had one, its detail section, carrying the `expected` vs
+`observed` tables the replacement was built from. Each of those sections now opens with a
+`Superseded` banner naming its replacement, because a detail section is what `/ticket <id>`
+lands on and the board row alone does not reach it. **#206 is the one exception: it never
+had a detail section**, and its content survives in its Notes cell and in
+`docs/pre-launch.md` §3.2. A `Superseded` ticket is never worked directly.
+
+**Four rules govern the tickets below.**
+
+1. **#357 goes first, and alone.** Five of the six tickets it merges end in an edit to
+   `design/Orla - Screens.dc.html` — the repo's own acceptance criterion, one HTML file
+   holding all 27 frames. Concurrent lanes editing it conflict by construction. #358 is
+   measured against two of the frames it corrects.
+2. **Re-measure before fixing**, as in the 2026-08-29 pass. #302, #305 and #329 all landed
+   after most of these findings were filed.
+3. **One frame is one browser pass**, and a ticket that touches a shared primitive
+   (`StatusPill`, `Avatar`, `SearchBar`, `.app-pane`) measures every screen that draws it
+   before changing it — not just the one it was found on.
+4. **#358 and #323 must not run concurrently.** They own the same two components,
+   `search-shell.tsx` and `refine-bar.tsx`, at two different widths.
+
+---
+
+### #357: Apply the D16/D17 rulings — correct the frames, then the five code sites
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Merges **#327, #335, #339, #342, #348, #350**.
+
+**Why one ticket.** All six were `Deferred — needs a human` until D16 and D17 answered them
+on 2026-08-30, with the `design-plan/` edits landed in the same pass — five of the six were
+*filed* that same day, by the lanes that closed #302, #305 and #329, and never had a chance
+to start. What each has left is code, and for **three** of them — #327, #350 and #335's own
+umbrella over frames `02`, `12` and `18` — that code is a correction to
+`design/Orla - Screens.dc.html`. That file holds all 27 frames and **is** the parity
+acceptance criterion, so lanes editing it concurrently conflict on the one artifact every
+other ticket is measured against. **Five frames change here, not five tickets** — the frame
+table below is the authority on which, and two of them (`02` and `18`) carry corrections
+whose *code* half lives in #358, which is why #358 is sequenced behind this. One lane owns
+the file for one pass.
+
+**The frame corrections** — the ruling half is done; this is the landing:
+
+| Frame | Correction | Ruling |
+| --- | --- | --- |
+| `01 Landing` (+ 1024) | City segment drawn empty in the **placeholder** tone `#6B6459`, not the literal `Austin, TX` in `#23201C`. The vendor-type segment matches it. The hero **badge** "Now booking in Austin" is unaffected | D16-A (#327) |
+| `02 Search` (+ 1024) | The gold `2 dates left` and sage `Free Jun 14` chips come off the result cards; the stone `New` chip stays | D16-B, C (#324) |
+| `12 Sign up` | Primary action reads `Create my account` — the plan already said so | D16-6 (#313) |
+| `16 500` | Secondary CTA reads `Browse vendors` → `/search` | D17 (#350) |
+| `18 Search no results` (+ 1024) | Its two gold chips become the sage **nearby-date** form, which is the one place the chip survives | D16-B, C (#324) |
+
+**The code sites, all named in the rulings:**
+
+- `avatar.tsx:17` — `FALLBACK_TONES` takes the new `--color-clay-150: #eadccb`. The frames
+  draw that fill at **42 sites across 20 frames**; the ramp had no step between `clay-100`
+  (`#F7E7E0`) and `clay-200` (`#EFD8CC`), and the clay initials and the whole sage pair
+  already resolved exactly, so the fill was the one off-token value. **The ramp was
+  incomplete, not the frame wrong** — the same finding as #306 (#342)
+- `vendor-card.tsx:149` and `profile-header.tsx:199` — a published vendor with no
+  `coverImageUrl` gets a **neutral tone block at the cover's exact dimensions**: no hatch,
+  no monospace label, nothing addressed to a developer. The hatch is a build-time device
+  for photography the *product* lacks; a live vendor's empty cover is *their* missing
+  content shown to *their* customers. The cause and the fix stay in the editor, which is
+  **#360**, not on the page their customers read (#348)
+- `error-screen.tsx:74` — href and label (#350)
+
+**#327 is frame-only and #339 is verification-only.** The hero code already renders all
+three segments empty in the placeholder tone, which is what D16 ruled correct; `Most
+relevant` already ships and D16 confirmed it stands. Both close on evidence, not edits.
+
+**Non-goals:** the rest of frames `01` and `02` (closed by #296 and #297); the `New`
+badge's implementation, which is **#358**; the cover *upload* control, which is **#360**.
+
+**Acceptance:**
+
+- [ ] Every frame in the table above is corrected in `design/Orla - Screens.dc.html`, and
+      the 1024 variants with them
+- [ ] The three code sites render what their rulings say, verified in a browser
+- [ ] A published vendor with no cover renders the neutral block on **both** `/search` and
+      `/vendors/[slug]`, and the labelled hatch appears on **no** live public surface
+- [ ] `#327` and `#339` are closed with the evidence that no code change was needed —
+      not with a change made to look like one
+- [ ] `parity-checker` returns MATCH on frames `01`, `02`, `12`, `16` and `18` afterwards
+- [ ] No other frame in `Orla - Screens.dc.html` is altered — verified by hashing the
+      untouched frame blocks against `origin/main`, the method the 2026-08-27 import used
+
+**Tests (required):**
+
+- [ ] The guard D16 asked for: **no approved string in `31-content-voice.md` hard-codes a
+      duration the code derives.** Same shape as `one-deadline-one-fee.test.ts`, pointed at
+      the plan rather than the app. It is the only thing that would have caught the 48-hour
+      row, since the file is prose nothing imports
+- [ ] A token test that `clay-150` exists and that `FALLBACK_TONES` resolves to defined
+      ramp steps only — the gap #333 generalises
+- [ ] A test that a vendor with `coverImageUrl: null` renders no monospace placeholder
+      label on either public surface, asserted by role or text rather than by class
+
+---
+
+### #358: 02/17/18 Search — close 1440 parity and the two reachability defects
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** #357 (frames `02` and `18`)
+
+Merges **#324, #326, #337, #347**. One route, three states, one browser pass.
+
+**Why one ticket.** #326's measurements say its compact-header fix *"lands on `/search` at
+every state"* — it is the shared `SearchBar`, so frames `17` and `18` are the same pass.
+#337 was found there, #347's blank page 2 is reached from it, and #324's code touches
+`vendor-card.tsx`, which all three states render. Split, this is four serial passes on one
+shared Playwright browser for one route.
+
+**#324 is now a deletion, not a feature.** D16 dropped the gold chip — `03-components.md`
+said "gold when scarce" and never defined scarce, and the threshold is an invented number —
+**and dropped the sage chip from the results grid**, because a dated query is already
+filtered on availability: `vendor-search.dao.ts` hard-codes `availableOnDate: true` on every
+row of one and says so in its own comment. The chip was a tautology. **Sage survives only**
+on the "free on a nearby date instead" band (`nearby-dates-band.tsx`), where it names a
+*different* date than the one searched and is the only thing that unsticks a dead-end query.
+The stone `New` chip is a **joined-recently badge** — vendor published within the last 30
+days — and becomes the only chip a search card carries.
+
+**The compact header bar**, measured at 1440×900 in Chromium during #297's pass. Frame
+`02`'s header is ruled stale by **#57**, so these are against `17`/`18`:
+
+| Element | Frame | Live |
+| --- | --- | --- |
+| Bar padding | `0 5px 0 18px` | `0 4px 0 16px` |
+| Segment value | 13px / 500 | 13.5px / 400 |
+| Segment inner padding-left | 16px | 14px |
+
+**The empty state's glyph sits 59px low** because a count row renders above it: `0
+photographers in Marfa`, the `free on …` clause and `Prices are what they charge — no quotes
+needed` occupy y=118–173, where frame `18` opens directly into `padding:44px 26px`. The
+glyph lands at y=**221** against the frame's y=**162**. The description's `line-height` is
+21.6px against the frame's `13.5px/1.65` = 22.28px — and `--leading-prose` is global at 1.6,
+so this is a **per-call-site override, not a token change**.
+
+**The focus-ring clip, measured by pixel-differencing** a focused card against a blurred
+one: `div.app-pane` is the `overflow:auto` scroller and carries **no top padding**; its
+content-box top is `y=173` and the first result row starts at exactly `y=173`, so the ring's
+top 4px (`ring-2` + `ring-offset-2`) is clipped. Rows 169–172 are identical
+`rgb(248,245,239)` in both and the first differing pixel is at `y=173`. **WCAG 2.4.7 holds**
+— the ring still paints left, right, bottom and corners, so this is a partial clip, not the
+"clipped to nothing" failure `04-laws.md` describes. That is why it is P2. **Fix the class,
+not the instance:** any `overflow` scroller whose first focusable child sits flush against
+its content box has it.
+
+**Pagination.** `/search?page=2` returns HTTP 200 with a blank results pane while the `h1`
+still claims the full count. `pageSize=20` against 17 vendors means nothing is lost today —
+which is why this is Medium, and why it stops being true the moment the marketplace grows.
+Frame `02` draws no pagination, so the **control's shape** is undecided; the **out-of-range
+page** is unambiguous and lands regardless.
+
+**Known and owned elsewhere — do not re-file:** the `Free on a nearby date instead` band and
+`See all 14 in the region →` (**#50**), the wordmark at 24px against 23px (**#118**), the
+1024 composition (**#323**), the `Anywhere` relaxation and the second `Clear all` — neither
+string is in frame `18` or `31-content-voice.md`, and `Clear all` duplicates the Refine
+bar's own `Clear` on the same screen, so **record it as an open wording question rather than
+inventing copy**.
+
+**Acceptance:**
+
+- [ ] The gold and sage availability chips are gone from the results grid; sage survives on
+      the nearby-dates band only, naming the nearby date
+- [ ] The `New` chip reads a real published-at within 30 days, at request time — never a
+      hard-coded flag, and never a threshold invented here
+- [ ] The empty state draws no count row above it, so its glyph lands where frame `18` puts it
+- [ ] The compact header bar matches frames `17`/`18` on all three measurements
+- [ ] The empty-state description carries the frame's 1.65 **without** moving `--leading-prose`
+- [ ] A focused first-row card's ring is unclipped on all four sides, proven by the same
+      pixel-difference method rather than by a computed-style read
+- [ ] Every other scroll container in the app is checked for the same shape, and what was
+      found is recorded — **including "none" if that is the answer**
+- [ ] An out-of-range page renders an empty state whose heading agrees with its body, and the
+      heading never claims a count the pane does not show
+- [ ] `parity-checker` returns MATCH on frames `02`, `17` and `18`, or names only #50, #118
+      and the recorded wording question
+
+**Tests (required):**
+
+- [ ] A test per chip state driven by the DAO's real output rather than a hand-built prop,
+      **including that a dated query renders no availability chip on the grid** — the ruling
+      stated as a test
+- [ ] A test that a vendor with no availability data draws no chip at all
+- [ ] Parity assertions reading the header bar's three values out of frame `17` at test time,
+      so `02`'s stale header cannot be picked up by mistake
+- [ ] A test that the no-results state renders without the count row, asserting the absence
+      **by role**, not by class
+- [ ] A test asserting an out-of-range page's heading agrees with its body
+- [ ] The focus-ring assertion needs a real browser, or must assert the class-level fact and
+      say so — **jsdom performs no layout**, so a geometry assertion there passes on the
+      broken version
+
+---
+
+### #359: 04/07/19 Bookings — hub, empty hub and the request form
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+Merges **#343, #344, #345** — all three filed 2026-08-30 by lane 302 from the single
+`parity-checker` pass that closed #302. That ticket fixed the Access axis and the deviations
+it introduced itself; everything here is **pre-existing** and was outside its scope.
+
+**Why one ticket.** #343 and #344 are the same shell, and #345 is one click away in the same
+flow. One customer fixture, one browser pass.
+
+**Frame 07 — layout.** The title row should be `flex` with `Your bookings` left and today's
+date right (`12.5px`, `#6B6459`); **the date is absent from the screen entirely** — the `h1`
+is a full-width block with no sibling. The sidebar draws **two** rows where the frame draws
+**four**: `Messages` (with an unread dot) and `Saved vendors` are missing.
+`bookings-sidebar.tsx:10-17` justifies this under #31's *"a control that opens nothing is
+furniture"* rule — but **`/messages` now exists and is linked from the header**, so that
+justification has expired for at least that row.
+
+**Frame 07 — style and font.** The dashed "Book another vendor" tile borders `#D5CEC2`
+(`stone-400`) where the frame draws `#DDD5C7`. Sidebar card body 11px against 11.5; its CTA
+11px against 12. The summary sentence is `text-md` (15px) with `leading-prose` (24px) where
+the frame draws **14px at `normal`** — and **there is no 14px token** (`--text-base` is 13.5,
+`--text-md` is 15), so decide whether the frame earns a step or the sentence takes `base`.
+`StatusPill` computes `700 11px` / `6px 10px` where `.pill` is `700 10px` / `5px 10px` — a
+**shared primitive**, so measure every frame that draws a pill before changing it.
+
+**Frame 19 — the shell, not the pane.** The empty pane matches frame `19` **exactly**:
+dashed panel at `radius 18`, the 58×36 two-circle mark, `No bookings yet` at 26px Instrument
+Serif, the body copy character for character including the curly apostrophe in "vendor's",
+the `Find a vendor` button, and the `01/02/03` steps in JetBrains Mono at `500 10.5px` with
+`1.05px` tracking. **What does not match is the shell around it.** Frame `19` draws a
+different title (`My bookings`), a `Nothing booked yet` sub-line, a `Find a vendor` button in
+the title row, `All / Pending / Confirmed / Past` pill filters, a sidebar carrying a
+`Booking` section label plus `Payments` and a Settings block, and a bordered radius-18 card
+rail rather than `07`'s flush border-left. The app renders frame `07`'s shell and swaps only
+the pane.
+
+**Decide the shell before building.** This long predates #302 and may well be a deliberate
+reconciliation — one shell for a hub that is sometimes empty is the better product — but
+**nothing in the repo records that decision**, so it reads as unexplained drift and the next
+parity pass finds it again. If one shell is right, frame `19` is what needs correcting, and
+that is a design pass rather than this ticket.
+
+**Frame 04 — the stale string is already corrected.** D16 rewrote `31-content-voice.md`'s
+**Request reassurance** row: split into **packaged** (confirm or decline — the price is
+immutable) and **custom** (confirm or send a quote), both reading `{expiryDays}` rather than
+a typed literal, per #308. The app already renders **7 days**, derived from
+`BOOKING_REQUEST_EXPIRY_DAYS`. **Verify the app against the corrected row** rather than
+re-deriving the ruling.
+
+**Frame 04 — what is left.** The pronoun neutralisation is correct but unrecorded: the frame
+writes *"The more **she knows** now…"* and *"Anything else **she** should know?"*, the app
+writes *"they"*. Vendor gender is unknown, so the app is right — but it is a Text-axis change
+from the frame and needs recording rather than standing as drift. Plus: `Continue to review`
+carries `shadow-sm` (`0 2px 10px rgba(35,32,28,.06)`) where the frame's `.btnP` has none;
+`Start time` renders 42px tall beside `Guest count` at 38px, because the native
+`<input type="time">` clock affordance adds 4px to a pair the frame draws at one height,
+visibly misaligned; and removing the marketing footer (#192) left a **stray empty `<section>`
+at y=900, height 0** — harmless, zero extent, no text, but it should be deleted rather than
+emitted.
+
+**Acceptance:**
+
+- [ ] Every measurement above is fixed, or recorded with the reason it stands
+- [ ] The one-shell question is answered on the record, in `20-customer-bookings-hub.md`
+- [ ] The `StatusPill` change, if one is made, is measured against **every** frame that draws
+      a pill first
+- [ ] `Messages` is in the bookings sidebar, since the route it opens now exists
+- [ ] **The empty rail is driven in a browser rather than inferred.** `How booking works
+      here` on a live empty hub was never driven: the E2E customer has bookings and
+      `.claude/rules/e2e-auth.md` forbids creating a throwaway account
+- [ ] An empty-hub customer fixture exists, so the next pass can drive it
+- [ ] The pronoun decision is recorded
+- [ ] `parity-checker` returns MATCH on frames `04`, `07` and `19`
+
+**Tests (required):**
+
+- [ ] A fixture test that the empty-hub customer really has zero bookings, so it cannot rot
+      into a non-empty one silently
+- [ ] A test that nothing rendered on frame `04` carries a typed duration — it reads the
+      constant or it fails
+- [ ] A test pinning the bookings sidebar's rows by name and order
+
+---
+
+### #360: 09 Vendor storefront editor — cover, preview rail, nav and the unsaved-work guard
+
+**Milestone:** M3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `storage` `stripe`
+**Blocked by:** None
+
+Merges **#299, #338, #349**. #299 in turn merges **#137, #138, #140, #141, #152, #257, #258,
+#288**, with **#288 leading** because it unblocks #137, which was stuck on a design contract
+that contradicted itself about the cover field.
+
+**#338 is a duplicate.** "The section nav carries `Payouts` and its gold dot" is already
+acceptance line 5 of #299, filed there as #140. It was re-filed on 2026-08-30 by lane 329
+from a different parity pass, which is exactly the failure mode a consolidated backlog
+exists to prevent. **#349 is the same route's form.**
+
+**D16 settled the field question** (#335-D, and D12 had already answered it): `Your line` and
+`Years in business` are **relocated, not deleted**. Both are the only editing surface for
+content frame `03` displays — #298 moved the tagline into the identity card and
+`yearsInBusiness` is read by the public profile — so deleting the editor without deleting the
+display leaves content nobody can change.
+
+**Acceptance:**
+
+- [ ] The media row is a 128px circle profile photo beside a **216×144, 3:2** cover drop zone
+      reading *"Drop a photo or browse · landscape · 1200×800 or larger"*. The `21:9, 1600×686
+      min` ask is retired (#288), and the drop zone missing entirely today exists (#137)
+- [ ] **There is no separate profile-banner field** — one file, two placements, per #287
+- [ ] The card preview is a **308px right-edge rail** at ≥1024 (`stone-100`, `stone-300` left
+      border) with a mono `PREVIEW` label, "Updates as you type", an **In search / Your
+      profile** toggle and the real card at full size, and **no link out**. 280px at 1280, a
+      panel above the fields at 768, a bottom sheet at 390 (#288)
+- [ ] `Your line` and `Years in business` are **relocated** per D16, and the eight helper
+      strings that came with the removed fields go (#152) — every remaining string traces to
+      the frame or to `31-content-voice.md`
+- [ ] **Frame `09`'s section nav is re-measured in full before any code change.** The pass
+      that found the missing entry was scoped to the Tags row and read the rest only in
+      passing, so the order, the dot's exact token and whether the other six match are all
+      unverified. Live renders **six** items — Business, Location, Tags, Response time,
+      Packages, Portfolio — where the frame draws **seven**
+- [ ] The nav renders every item the frame draws, in the frame's order, with `Payouts` last
+- [ ] The blocker dot reads the vendor's **real** Stripe onboarding state — no invented status
+      — and is **gold, never red**: payouts not yet set up is waiting on someone, not a
+      failure (`40-states.md`). Payouts exists as a surface, since #9 shipped Connect
+      onboarding, so this is a missing nav entry rather than a missing feature
+- [ ] The form pane is inside its scroll budget (#141)
+- [ ] The slug preview shows the URL the router actually serves — no extra path segment, no
+      vanity URL that 404s (#257)
+- [ ] The submit bar says when the storefront was last saved (#258)
+- [ ] A dirty form prompts on **Back and trackpad swipe**, or the reason it deliberately does
+      not is recorded. `useUnsavedChangesGuard` covers `beforeunload` and a capture-phase
+      click intercept; **a history navigation is neither** — `beforeunload` does not fire for
+      a same-document one and `popstate` arrives *after* the entry changed, so the only block
+      is a decoy entry re-pushed on every `popstate`, which corrupts the stack the user is
+      walking and breaks a second Back. Next's App Router exposes no supported blocking API.
+      **Covering it badly is worse than the gap** — #305 left it uncovered deliberately and
+      said so in the hook's own contract
+- [ ] Whatever lands does not leave the history stack in a state a second Back handles
+      wrongly, and the hook's contract comment matches what it actually covers
+- [ ] `parity-checker` returns MATCH on all six axes at **1440 / 1024 / 768 / 390**
+
+**Tests (required):**
+
+- [ ] A test that the slug preview and the route resolve to the same URL — the defect is a
+      disagreement between two places, so assert the **agreement**, not either side
+- [ ] A parity assertion reading the nav label list **and its order** out of the frame at test
+      time, so a reordering fails rather than passing on set equality
+- [ ] A test that the payout dot follows real onboarding state in both directions
+- [ ] Parity assertions read from the frame at test time, at all four viewports
+
+---
+
+### #361: Site header and chrome — signed-in cluster, notification dropdown, avatar alt
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+Merges **#336, #351, #352** — `site-header.tsx`, `NotificationBell` and the Clerk
+`UserButton`.
+
+**Why one ticket, and why all three slipped.** As #352 puts it: *"the user menu is chrome
+rather than a framed screen, so no parity pass owns it."* `04-laws.md` covers alternative
+text and the parity `Access` axis is the gate for it, but chrome falls between the frames.
+All three are found and fixed in the same signed-in render, on every page, for both roles.
+
+**The link text needs no ruling.** Frame `02` signed in draws `Messages` · `Bookings` ·
+avatar. Live renders `Messages` · `Dashboard` · a bell · the Clerk `UserButton`.
+
+| Axis | Expected (frame `02`) | Observed |
+| --- | --- | --- |
+| Text | `Bookings` | `Dashboard` — `site-header.tsx:157` |
+| Layout | no bell in the cluster | `<NotificationBell />` between the nav links and the avatar |
+
+**These are two decisions, not one.** The link text is a plain Text-axis miss and the frame
+is the authority. **The bell is different: do not delete it to pass parity.** It is a real
+surface with real behaviour, and a frame that predates it is not evidence it should be
+removed. Establish first whether the frame is stale; if it is, that is a design ruling and
+this ticket splits.
+
+**The avatar alt is a data defect, not a template one.** It reads `alt="'s logo"` — the name
+that should precede the possessive is an empty string, so a screen-reader user hears a
+possessive with nothing in front of it. On **both roles**, on every signed-in page. The
+template is right and the value reaching it is not, so the fix belongs wherever that name is
+resolved for the menu, **not in the alt attribute**. Worth checking whether the same value is
+empty anywhere else it is rendered without a possessive to make it obvious.
+
+**The dropdown's empty state** is a bare
+`<p class="px-4 py-6 text-center text-base text-stone-600">No notifications yet</p>` — no
+glyph, no heading, no CTA, and `closest('[data-slot="empty-state"]')` is null. #305 made the
+two-circle glyph the default for every `EmptyState`, so nine call sites gained it without
+being edited; this one **is not a call site**, so the default cannot reach it. It is the only
+empty state in the product that opted out by never opting in. **Not a mechanical swap:**
+`40-states.md` lists empty states by screen and names no dropdown, and frame
+`08/09/11 shared` draws the panel without one — a full glyph-headline-sentence-CTA stack
+inside a dropdown that size may be wrong. The point is that it should be **decided**, not
+inherited from whoever wrote the paragraph.
+
+**Acceptance:**
+
+- [ ] The signed-in header's link reads the string frame `02` draws, verified by
+      `parity-checker` on the Text axis
+- [ ] The bell is either in the frame or out of the header, **with the reasoning recorded** —
+      not left as an undeclared deviation
+- [ ] The alt text names the account, on **both** roles
+- [ ] Either the dropdown uses `EmptyState`, or the frame's treatment is recorded as
+      deliberate with the reason
+- [ ] Whatever lands is reachable from the glyph guard in `empty-state-callers.test.ts`, or
+      exempted there **in writing**
+
+**Tests (required):**
+
+- [ ] A test pinning the header's signed-in cluster **by name**, so the next drift is caught
+      in the suite rather than by a parity pass
+- [ ] A test asserting the avatar alt is non-empty and does not begin with an apostrophe, for
+      both roles
+- [ ] The `empty-state-callers.test.ts` entry or its written exemption
+
+---
+
+### #362: [PLATFORM] External-account provisioning — one dashboard session
+
+**Milestone:** M-OPS | **Phase:** INFRA | **Priority:** P0 Critical | **Status:** Deferred — needs a human | **Capabilities:** `all`
+**Blocked by:** The account holder — every item is a provider-console action
+
+Merges **#19, #46 (residual), #62, #206**.
+
+**Why one ticket.** Every item is the same actor doing the same kind of thing: signing into a
+provider console and minting, renaming or rotating a value. **None of it is repository
+code** — #19's own text says it is *"almost entirely external account configuration rather
+than repository code"*, with a provisioned environment rather than a diff as its deliverable.
+Three of the four already point at each other: #62 calls itself *"a #19 prerequisite"*,
+#206's Notes say it *"overlaps #19"* and is *"a pointer, not a queue item"*, and #46's
+remaining scope is one rotation. Split, this is four separate asks of one person, each of
+which stalls a different part of the board. Merged, it is one sitting with a checklist.
+
+**No ticket can do any of it, and none should try.** `~/.claude/CLAUDE.md` is explicit: a
+credential that reached a command line or a config file is already exposed, and an approved
+command can be saved verbatim as a permission rule. Every value here is read from the
+environment or it does not exist.
+
+**The checklist:**
+
+- [ ] **Clerk — rotate `CLERK_WEBHOOK_SECRET`** (#46). Leaked into a chat transcript on
+      2026-08-27. Scopes 1 and 2 of #46 are **Done** in code (`34cd28c`, `ed41aed`): the API
+      refuses to boot when its Clerk endpoint is a relay, a foreign origin, the wrong route
+      or plain HTTP, and `pnpm reconcile:clerk` proved a no-op in production (4 real users,
+      0 drift, 0 retirements, 50 seeded rows skipped). **Deleting the value is not enough —
+      rotate it.**
+- [ ] **Clerk — rename the application** from `vendor-marketplace` to the brand name (#313).
+      The name Clerk interpolates into every `{{applicationName}}` key comes from the
+      instance's display config, which is dashboard configuration rather than code. #313
+      corrected the two observed keys as defence in depth; **this is the source**, and it
+      fixes every key at once including the ones nobody has enumerated. It touches the shared
+      instance the E2E accounts live in, so it is not a lane's call to make.
+- [ ] **Stripe — change the public business name** from `VendYou` to the brand name (#62).
+      Found 2026-08-28 from `stripe config --list`: `display_name = 'VendYou'`. Stripe renders
+      it on the hosted Connect Express onboarding page (#9), on Checkout (#10), and **as the
+      statement descriptor on cardholders' statements**. Harmless in sandbox, wrong in front
+      of a real vendor.
+- [ ] **Sentry — supply a real `SENTRY_DSN`**, which **unblocks #353**. `pnpm preflight
+      --ticket 353` fails on the placeholder, and the `sentry` capability there is real — the
+      ticket integrates `@sentry/node` and `@sentry/nextjs` — so narrowing the row is not the
+      unblock.
+- [ ] **Mint production credentials** in Clerk, Stripe, R2 and Resend (#19) — newly minted by
+      the account holder, never copied from development.
+- [ ] Pooled connection string on Railway; unpooled on Railway **and** GitHub Actions.
+- [ ] **Neon Launch upgrade (#206) is launch prep, not current work.** Free is the correct
+      plan while there is no real data — 8.9 of 100 CU-hours, 34 MB of 512 MB, 3 of 10
+      branches — and nothing here blocks development. When it happens: protected branch on
+      `production`, history window to **7 days**, a scheduled backup, scale-to-zero disabled
+      once real traffic exists, and a spending notification; roughly **$5–25/month**.
+      Separately and regardless of plan, **`pg_dump` to R2 on a schedule** — PITR and
+      snapshots protect against your mistakes, an off-platform dump protects against the
+      platform's. The full checklist lives in `docs/pre-launch.md` §3.2. **Do not re-surface
+      it as active work.**
+
+**Acceptance:**
+
+- [ ] Every value above exists in the environment it belongs to and **nowhere else** — not
+      inline in a command, not in `.claude/`, not in a transcript
+- [ ] `pnpm preflight --ticket 353` and `--ticket 20` both pass
+- [ ] `pnpm env:example` regenerated from the registry; no real value in it
+- [ ] `pnpm secrets:scan:all` is clean over the whole tree
+- [ ] The Neon items stay recorded as launch-gated in `docs/pre-launch.md` and are **not**
+      brought back onto the board
+
+---
+
+### #363: Repo guardrails — lane tooling, preflight hygiene, seed and route ledgers
+
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Blocked by:** None
+
+Merges **#334, #341**; #334 in turn merges **#316 and #319**.
+
+**Why one ticket.** All of it ships **only tooling and tests — no user-facing behaviour, so
+no parity gate and no browser pass.** They share the entire verification shape, which is the
+reason to batch them. #341 is the same species as the rest: a guard that closes a class of
+mistake three seeds made independently, which is what #334 is already full of.
+
+**Lane and preflight hygiene** (#316, plus three found 2026-08-30 by lane 9, which hit them
+all inside one ticket):
+
+- [ ] `lane:up` **seeds**, not just migrates. Lane 9's database came up with 0 categories and
+      0 tags, so every vendor surface 404s and redirects to profile creation, and the first
+      browser pass was blocked outright with nothing to say why. `pnpm lane:exec <n> -- pnpm
+      db:seed` fixes it by hand; any ticket touching a vendor or search surface is dead on
+      arrival in a fresh lane until `lane:up` does it
+- [ ] `laneUp` re-derives `worktreePath` and `branch` when it returns an existing
+      `state: 'active'` manifest instead of handing back stale values (#256) — the same class
+      as the manifest drift fixed on 2026-08-29. The fix belongs in `pnpm lane:pr`'s path, and
+      manifests are never hand-edited
+- [ ] Preflight compares the `stripe listen` signing secret against `STRIPE_WEBHOOK_SECRET` —
+      **digests only, never the values.** Preflight checks the env var's *shape* and that the
+      CLI is installed and reports green, but the forwarder mints its own secret; when the two
+      disagree every locally delivered webhook 401s, which reads exactly like a
+      signature-verification bug in the ticket under test
+- [ ] The lane's dev script sets `ulimit -n 65536` before `next dev`. With three lanes up it
+      died with `EMFILE: too many open files`, the watcher never started, middleware never
+      compiled, and every page 500d with Clerk reporting "can't detect usage of
+      clerkMiddleware()" — a misleading error three steps from the cause
+- [ ] `POST /vendor/stripe/connect` answers **403, not 400**, to a customer sending a
+      malformed body. Fastify parses the body before the `preHandler` role guard runs, so a
+      denial is reported as a validation failure. Denial is still correct on every other shape
+      and no customer reaches the route — but a 400 where a 403 belongs misleads an audit
+- [ ] The `packages/preflight` test that fails only under parallel Turbo runs is **reproduced
+      first**, then fixed (#64). It has never had a detail section, so the reproduction is
+      part of the deliverable — load `debug-flaky-test` before guessing at it
+
+**Seeds write slugs, not labels** (#341). `seed:marketing` and `seed:e2e` write an event-type
+**label** into a slug column. Correct both call sites, then **close the class rather than the
+two instances**: a guard asserting that every `event_type` any seed writes is in
+`EVENT_TYPES`. `seed-demo.test.ts` already has that assertion for its own seed; generalise
+it. A written rule is what let three seeds make the same mistake independently. Existing rows
+carrying a label are corrected on the next seed run, not stranded
+(`.claude/rules/db-schema.md`).
+
+**The route/frame ledger** (#319, filed by #306 while ruling on #80):
+
+| | |
+| --- | --- |
+| **Expected** | every live route is drawn as a frame, or recorded as deliberately unframed with a reason |
+| **Observed** | #80 named **five** unframed routes; the count is now **nine**. Four appeared after the 2026-08-28 mapping — `/bookings/[requestId]` (#308), `/vendor/bookings` (#307), `/vendor/payments` and `/vendor/payments/return` (#9) — and nothing noticed |
+
+The routes themselves are ruled: `00-README.md` records four as exempt, four as needing a
+frame, and one (`/vendor/portfolio`) as already framed by `24` and `25` and mis-recorded.
+**That table will go stale the same way**, because it is prose and the thing that changes is
+the filesystem. Parity is the repo's hard gate and it is *unprovable* on a route with no
+frame, so a route that appears without one is a screen nobody can check — and it arrives
+silently, as four just did.
+
+- [ ] A test enumerates `apps/web/src/app/**/page.tsx` and asserts every route appears in the
+      parity ledger with **either** a frame **or** a recorded exemption naming a reason
+- [ ] It fails on a route added with neither — **proven by adding one**
+- [ ] The ledger's `/vendor/portfolio` contradiction is resolved to the frames that exist
+- [ ] Dynamic segments (`[slug]`, `[requestId]`) resolve to one ledger entry each, not one
+      per instance
+
+**Tests (required):**
+
+- [ ] A test that a resumed lane's manifest reports the worktree path that exists on disk
+- [ ] A test that a freshly created lane's database answers `GET /categories` non-empty
+- [ ] Whatever the reproduction shows the preflight flake to be
+- [ ] A route test that a customer's malformed-body `POST /vendor/stripe/connect` is a 403
+- [ ] A test that no seed writes an `event_type` outside `EVENT_TYPES`, naming the seed and
+      the bad value
+- [ ] The ledger enumeration test, **plus a guard asserting it found a plausible number of
+      routes** — a scan that matches nothing passes forever

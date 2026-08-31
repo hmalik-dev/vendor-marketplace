@@ -341,6 +341,8 @@ Active tracker: `.claude/plans/vendor-marketplace-tickets.md`
 | **331** | **`vendor_profiles.state` should be a database enum, not a `varchar(100)` Zod happens to guard** | P1 | M3 | **P2 Medium** | ****Superseded**** | — | #332 | `core` | **Superseded 2026-08-30 by the backlog consolidation — the work is #332.** Its own text called it "the layer below #330, not a duplicate"; the layers now land together. The reasoning for the enum over a `CHECK`, and for storing the code, is below and still binds #332. **Filed 2026-08-30, user-directed — the layer below #330.** #330 puts the state vocabulary in `createVendorProfileSchema`, which is the right place for a 400 with a message but is **not** a guarantee: the column stays `varchar(100)` (`vendor-profiles.ts:51`), so `db:seed`, a migration, `db:studio` or any future route that forgets the schema can still write `Texas` and reopen the split. This makes the column itself unable to hold a bad value — `us_state` enum, or a `CHECK` against the 51 codes. **Runs after #330**, which does the data repair; a constraint added before the repair fails on the rows that motivated it. The same argument applies to `users.state` if that column exists — check before assuming. |
 | **329** | **Remove the `style` tag group from every input, dropdown and filter** | P1 | M3 | **P1 High** | **Done** | worktree-329 | **None** | `core` | **Done 2026-08-30 — `eccb760`, PR #63.** The red test on `main` is inverted: `refine-bar.test.tsx` now reads frame `02`'s exact five-chip set by name and proves `Style` absent. Removed at the root, not hidden — `TAG_CATEGORIES` drives the pgEnum, the Zod schema, the picker and the Refine bar, so dropping `'style'` carried all four. **`tags.vendor_category_id` went with it**, plus `tags_scoped_category_name_key`, `SCOPED_TAG_CATEGORY` and the `vendorCategorySlug` wire field: that scoping mechanism existed solely for `style`, and `SCOPED_TAG_CATEGORY = 'style' satisfies TagCategory` would not compile without it. `tags_category_name_key` is now unconditional. Two migrations and the **order is load-bearing** — `0016` clears the rows (`vendor_tags` and `tag_suggestions` before `tags`; the suggestions table carries the same enum and a generated diff would have missed it), `0017` recreates the enum; `drop-style-tags.test.ts` replays the journal to `0015`, builds the fixture, and genuinely fails without the data step. Proven against a pg_dump clone of the dev database — **51 real style tags** → three enum values, three groups, no scope column. `relaxations.ts` named the group twice in customer-facing copy (the chip **and** the empty-state diagnosis, the latter untested and caught by `diff-reviewer`); both now say "tag". `parity-checker` **PASS** on frame `02`, all six axes, no `Style` at 1440/1280/1024/768/390; editor Tags shows three peer multi-selects. 2,818 tests green. **Filed 2026-08-30, user-directed — reverses #281 and #92.** The Style filter was built inside **#297** and then ruled out of the MVP the same day, so the product now disagrees with itself three ways: the **code** ships a `Style ▾` chip (`TAG_CATEGORIES` carries `'style'`), the **frames** no longer draw one (`c4c8fa2` removed it from four screens), and **`11-search.md`** still specifies it at lines 109 and 154. Supersedes **#25**. Removal is wider than the chip — the group is also a section in the vendor profile editor's Tags picker, a `tag_category` enum member, and seed data. **Note the enum:** Postgres cannot drop a value in place, so this needs the create-new-type / swap-column / drop-old migration, plus a data step for any `tags` and `vendor_tags` rows already on `style`. |
 | **302** | **07 Bookings hub and 06 Booking request — dead controls and parity** | P1 | M3 | **P1 High** | **Done** | worktree-302 | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#187, #188, #189, #190, #191, #192, #193** — seven findings across two screens in one component tree. Four are dead or lying controls: `All categories` and `Soonest first` do nothing (#187), the notifications bell opens nothing (#188), the hub renders the **EMPTY-state rail on a hub holding 11 bookings** (#189), and the count sentence contradicts the tab it sits above (#190). Then booking cards with no focus ring that link to the vendor profile instead of the booking (#191 — the destination is the booking detail #309 builds, so sequence them), a marketing footer appended below the app shell on the request screen (#192), and a form field moved into the context rail (#193). Re-measure frames `06` and `07` before fixing. **Released 2026-08-30 unstarted, with two blockers found and no code written.** Traced all seven items first. Five are implementable as filed (#188 bell, #189 rail state, #191 card destination + focus ring, #192 footer, #193 field placement) and **#191's destination already exists** — #308 built `/bookings/[requestId]`, which is the interim surface the ticket says to use while #309 is blocked. Two are not: **(a) #187's `All categories` filter has no data to filter on.** Both entry builders in `booking-entries.ts` hardcode `categoryName: null`, and `bookingRequestDetailSchema.vendor` carries slug, business name and avatar but no category — so the filter needs a field plumbed through DAO, response schema and web before it can do anything. The sort half is client-side and trivial by comparison. Note `20-customer-bookings-hub.md` also draws the **booking card** as `Category · …`, so the same missing field is a Text-axis gap on the card, not only a dead control. **(b) #190 needs approved copy that does not exist.** Its second acceptance bullet asks that *each tab* have approved copy for its empty and populated states. `20-customer-bookings-hub.md` specifies exactly one sentence — the upcoming summary — and `31-content-voice.md` carries no per-tab wording. Deriving the sentence from the active tab is easy; **inventing History and All copy would fail the Text axis**, and a ticket may not write the plan. That is a design ruling, and it is the only thing standing between this ticket and its parity gate on frames `06` and `07`.  **Done 2026-08-30 — `beae4a7`, PR #65.** Verified against the repository first: **#191a** and **#188** were already fixed, **#190 is not a defect** (the count sentence sits *above* the tab bar, says "upcoming" explicitly, and frame `07` draws that composition), and **#193 is blocked on a design ruling** — a field does live in the context rail, but `13-booking-request.md:32-33` specifies it there. Three needed work. **#187**: the chips were `<span>`s, now dropdowns on URL state — which required the vendor's primary category to reach the request read model, promised by `bookingRequestDetailSchema`'s own comment and never delivered. **#189**: the rail drew frames `07` and `19` at once; split on `hasBookings`, and frame `07`'s `Recent messages` block built. **#192**: `/vendors/<slug>/request` does not start with `/vendor/` (index 7 is `s`), so it fell through to the public branch and drew the marketing footer. **Two defects found only by review**: the category chip offered categories from every tab while filtering one, and `?category=a&category=b` threw *above* the auth check. **One found only in parity**: the card focus ring was clipped on column 1. **The ticket's frame label is wrong** — frame `06` is *Booking confirmed*; the request screen is `04`. Residual parity deviations filed as **#340–#343**. |
+| 14 | Demo Dataset (`seed:demo`) | P3 | M6 | P1 High | Done | worktree-14 | None | `core` | **Split 2026-08-30 by lane 14: the eight Playwright E2E suites moved to #340**, which is the half this ticket does not build. What is left is the deterministic demo dataset itself.  **Blocker cleared 2026-08-30: #12 is Done, so this is workable.**  **Content gap partly closed by ef8b341:** `pnpm db:seed:marketing` now seeds 16 photography vendors with covers, packages, and 918 reviews behind 918 completed bookings. **Still open here:** the other 10 categories (5 of 6 landing cards still lead to an empty search), portfolio images, messages, notifications, the non-completed booking statuses, and the 8 E2E suites. Asset tracking for the covers is **#32** **Done 2026-08-30** — squash `5f2a747`, PR #64, CI green. `pnpm preflight --ticket 14` passes 24/24 once the capabilities were narrowed to `core` (the seed reaches no external service), which is the unblock `f1f988c` asked for rather than a human setting SENTRY_DSN |
+| **305** | **`40-states.md` compliance sweep — copy, glyphs and unsaved work** | P1 | M3 | **P1 High** | **Done** | worktree-305 | None | `core` | **Filed 2026-08-29 by the backlog consolidation.** Merges **#72, #261, #225, #227, #228, #81**. `40-states.md` is a law, and it is violated in five places of error and empty-state copy (#72) — steel is information, gold is waiting on someone, red is failure; **red is never `pending` and gold is never a failure**. The two-circle empty-state glyph is absent from **seven of the nine** `EmptyState` call sites (#261), so the sweep is one component plus its callers. Alongside them, three defects in the same class of "the screen says something untrue": the success toast covering the submit button it confirms (#225), unsaved profile edits discarded silently with no prompt (#227), and a newly onboarded vendor's public storefront still showing placeholder copy (#228). **#81** is itself a rollup of nine smaller adversarial-sweep defects — triage it inside this ticket and carry anything that does not belong here out as its own row rather than silently dropping it. **Done 2026-08-30** — squash `528dfe8`, PR #66, CI green. Landed after a rebase onto #302, which had rewritten the same rail; the seven tickets this lane filed collided with that lane's and were renumbered #346–#352 by the contiguity guard rather than silently duplicating |
 
 ---
 
@@ -12056,3 +12058,142 @@ Merges **#187, #188, #189, #190, #191, #192, #193**.
 - [ ] A test per control asserting the **observable effect** — a filter that renders a
       different result set, a sort that reorders — never that a handler was attached
 - [ ] A test that a hub with bookings does not render the empty state, seeded with a real row
+
+### #14: Demo Dataset (`seed:demo`)
+
+**Milestone:** M6 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+
+**Split 2026-08-30 by lane 14.** This ticket was filed as "Demo Dataset +
+Playwright E2E" and carried two subsystems. The eight Playwright suites — and
+the test-runner harness they need, which does not exist in this repo at all —
+moved to **#340**. What remains here is the dataset itself, which #340 then
+selects against.
+
+**User value:** Fully populated realistic marketplace for stress testing, demos
+and every empty-versus-populated state the design plan distinguishes.
+
+**Scope:**
+
+- `packages/db`: `seed:demo` script — deterministic, idempotent full dataset
+- 1 admin, 3 customers, 12-15 vendors across all **11** categories
+- 29+ booking requests across all statuses, conversations with messages, 20+ reviews
+- No external service calls: Clerk and Stripe identities are local rows
+
+**Demo data specification:**
+
+- **Users:** 1 admin, 3 customers (varying profiles: new member, active booker, power user with reviews), 12-15 vendors across all **11** categories from `CATEGORY_SEEDS` (at least 1 per category, some in multiple)
+- **Vendor profiles:** Realistic business names, bios, cities (mix of NYC, LA, Chicago, Miami, Houston), tags (mix of languages/cultural/dietary)
+- **Imagery — resolved 2026-08-30 by lane 14.** The seed references **only files that already exist** under `apps/web/public/categories/`, and writes `null` everywhere it has none. It does **not** invent placeholder URLs: `VendorCard` and `Avatar` render a designed placeholder for a null image, but a non-null value becomes a raw `<img>` with no error handling, so a path to a missing file is a broken-image glyph on every card — strictly worse than null. Six of the eleven categories have a licensed image; the other five render the placeholder, which is useful rather than a shortfall, because `40-states.md` distinguishes the two card states. No new asset is added and none is borrowed from `apps/web/public/stock/`, whose `CREDITS.md` records unverified provenance as a launch blocker
+- **Packages:** 2-4 per vendor, varying price types and amounts ($500-$15K range)
+- **Portfolios:** 3-6 items for each vendor whose category has a licensed image; none for the rest (see Imagery)
+- **Availability:** Random future dates blocked/booked, most dates available
+- **Booking requests:** 29+ across all statuses — pending, quoted, accepted, declined, expired, cancelled, and the bookings behind accepted ones: confirmed, completed, cancelled, disputed
+- **Conversations:** 1 per booking request, each with 3-10 messages back and forth
+- **Reviews:** 20+ reviews — mix of 3-5 star ratings, realistic content, both customer→vendor and vendor→customer
+- **Notifications:** Matching the booking lifecycle events
+- **Deterministic:** seeded PRNG and derived UUIDs, so data is identical across runs. Fixed UUIDs for key entities to enable stable Playwright selectors in **#340**.
+
+**Non-goals:** load or performance testing; visual-regression snapshots (the design
+parity gate is a human/Playwright comparison against the frames, not a pixel diff);
+seeding the Neon `production` branch, which stays empty until launch (**#48**); the
+Playwright suites themselves, which are **#340**.
+
+**Edge cases:**
+
+- Re-running `seed:demo` over an existing dataset must not duplicate rows.
+- **Re-running must also remove rows an earlier version of the seed wrote and this one no longer emits.** An upsert only repairs rows still in a `values()` list, so a dropped row survives for ever — the `.claude/rules/db-schema.md` "corrected writer leaves a legacy" trap. Hit for real during this ticket: 23 portfolio rows with dead image paths outlived the fix that stopped writing them, and kept rendering broken galleries on five vendors.
+- Missing Clerk/Stripe credentials must skip external calls, not fail the seed.
+- Tearing down must survive a booking made against a demo vendor by a customer the seed does not own — all three `bookings` foreign keys are `RESTRICT`.
+- A booked event date and a derived blocked date for one vendor must not collide
+  on `availability_vendor_date_key`.
+
+**Acceptance:**
+
+- [x] `pnpm db:seed:demo` completes in **<60s** and is idempotent — asserted by running it twice and diffing row counts
+- [x] Re-running converges: rows the seed no longer emits are pruned, not stranded
+- [x] Deterministic: two fresh runs produce identical data, verified by comparing a fingerprint of the seeded rows
+- [x] All **11** categories from `CATEGORY_SEEDS` have at least one published vendor
+- [x] 29+ booking requests covering **every** status in `BOOKING_REQUEST_STATUSES` and `BOOKING_STATUSES`
+- [x] Reviews cover both directions per the resolved asymmetry in `99-open-questions.md` #3 — customer→vendor public, vendor→customer private
+- [x] Seeding works with Clerk/Stripe credentials absent — external calls skipped, local DB still seeded
+- [x] Derived columns (`avg_rating`, `review_count`) are **recomputed** by the seed, never written directly
+- [x] Seed points only at a non-production branch — it must refuse to run against `production`
+
+**Blocked by:** None (#12 landed 2026-08-30)
+
+---
+
+---
+
+### #305: `40-states.md` compliance sweep — copy, glyphs and unsaved work
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+Merges **#72, #261, #225, #227, #228, #81**.
+
+
+## Outcome — worked 2026-08-30 by lane 305
+
+Every finding is accounted for. Nothing was silently dropped, which is what the
+last acceptance line asks for.
+
+**Fixed**
+
+| From | Finding | How |
+| --- | --- | --- |
+| #72 | Raw upstream error strings reaching users at 11 call sites | `userFacingError` is now the boundary: a 5xx never surfaces, the API's five generic shapes are replaced by the caller's own sentence, and a message the product wrote is kept. The two string-only paths — the upload mapper and the profile-save summary — go through `isUpstreamErrorShape` |
+| #72 | `?name=` with no results claimed none were listed, blamed filters the customer never set, offered no way out | `relaxations` was missing the name filter entirely. Adding it fixes the count, the culprit and the one-tap escape at once |
+| #72 | City accepted more than the API's 100-char cap | `maxLength` on the field, so the error is unreachable by typing |
+| #72 | Notification dates dropped the weekday every other surface carries | `weekday: 'short'`, matching `search-shell`, `request-row` and `booking-entries` |
+| #261 | Seven of nine `EmptyState` call sites drew no glyph | The glyph is the **default** rather than an optional prop, so a tenth caller inherits it. Removing it now takes an explicit `icon={null}`, which a test forbids |
+| #225 | Success toast covered the submit button that produced it | The toast clears the sticky submit bar. Still bottom-right, which is what `03-components.md` fixes; only the inset moved, and it is measured against the bar's own padding |
+| #227 | Unsaved profile edits vanished with no prompt | `useUnsavedChangesGuard` covers both exits — `beforeunload` for the tab, a capture-phase click intercept for the router — and the form asks with the product's own dialog |
+| #81-1 | `From` qualified a price that was no longer the lowest | Shown while the price on screen **is** the starting price, so the frame's default reading survives and a dearer package drops it |
+| #81-2 | Blank grey swatch on every bookings card | The vendor's monogram, from `Avatar`'s own initials and tone helpers so one vendor keeps one colour everywhere |
+
+| #81-9 | Bookings rail `aria-label` described a section that was not rendered | The label follows the content |
+| verification | `/bookings` hand-rolled a second empty-state glyph, its outer ring solid where the shared one is dashed, under a `p` styled as a headline | Uses `EmptyStateGlyph` and a real `h2`, so one glyph ships and the state has a heading in the accessibility tree |
+
+**Closed with a reason**
+
+| From | Finding | Why |
+| --- | --- | --- |
+| #72 | Empty state named a "style" filter that does not exist | Fixed by **#329**, which removed the Style group; `relaxations.ts` already says "Any tag" |
+| #81-5 | `State` accepted `ZZZZZZZZZZ` | **#332** is exactly this, from the form to the column. Half-fixing it here is work #332 would undo |
+| #81-6 | Profile tabs used history `replace` | Already `useQueryState`'s default with search explicitly pushing; no longer reproducible |
+| #81-8 | Results `h1` ran together | Fixed by **#242** |
+| #81-10 | A past date still fired the request | `search-shell` clears it before the call and announces the clear |
+| #228 | `COVER · FULL-BLEED BANNER` on a coverless storefront | The composition was retired by `CHANGE-ORDER-2026-08-29.md`; the string is gone. What remained was a documented conflict, filed as **#348** |
+
+**Filed rather than fixed**
+
+| From | Now | Why |
+| --- | --- | --- |
+| #81-3 | **#346** | One thread per vendor is a data-model change needing a ruling, not a copy fix |
+| #81-4 | **#347** | Pagination does not exist; frame `02` draws no control, so its shape is a ruling |
+| #228 | **#348** | Whether a *real* vendor's missing cover gets the sanctioned `Placeholder` or a designed empty state is a design ruling, and `03-components.md` is not a sweep's to overrule |
+| verification | **#351** | The notification dropdown's empty state is a bare `<p>`, not an `EmptyState`, so the new glyph default cannot reach it. Whether a dropdown should carry the full stack is a frame question |
+| verification | **#352** | The user-menu avatar's alt reads `'s logo` — the name interpolates empty, on every signed-in page. The fix is where that name is resolved, not in the attribute |
+| #227 | **#349** | Back/Forward is a third exit the guard does not cover. `beforeunload` does not fire for a same-document navigation and `popstate` arrives too late, so the only block corrupts the history stack. Named in the hook's own contract rather than implied away |
+| #81-7 | **#350** | Changed the 500 page's CTA to "Browse vendors", then **reverted it**: frame `16` draws `Go to my bookings` verbatim and `web-design-parity.md` says "the words *are* the design". Rewording approved copy to fix a logic problem is the reversal that rule forbids |
+
+**Acceptance:**
+
+- [x] The five copy violations are corrected against `40-states.md`'s colour semantics —
+      steel is information, gold is waiting on someone, red is failure, sage is settled.
+      **Red is never `pending`; gold is never a failure** (#72)
+- [x] The two-circle empty-state glyph is present at all nine `EmptyState` call sites (#261)
+- [x] The success toast does not cover the submit button it confirms (#225)
+- [x] Unsaved profile edits prompt rather than vanishing (#227)
+- [x] A newly onboarded vendor's public storefront shows the vendor's own content, never
+      placeholder copy (#228)
+- [x] **#81**'s nine adversarial-sweep defects are each either fixed here or filed as their
+      own row with a reason — none is silently dropped
+
+**Tests (required):**
+
+- [x] A test over the `EmptyState` call sites asserting the glyph, so a tenth caller cannot
+      be added without it
+- [x] A test that leaving a dirty profile form prompts, and that a clean one does not
+---

@@ -53,7 +53,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   16: ['auth', 'storage'],
   17: [],
   18: [],
-  19: [...CAPABILITIES],
+  19: [...CAPABILITIES], // MERGED into #362 (2026-08-30 consolidation)
   20: [],
   21: ['auth'],
   22: ['auth'],
@@ -90,7 +90,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   43: [],
   44: [],
   45: [],
-  46: ['auth'],
+  46: ['auth'], // MERGED into #362 (2026-08-30 consolidation)
   47: ['storage'],
   48: [], // MERGED — superseded by #19 (2026-08-29 consolidation)
   49: ['auth'],
@@ -108,7 +108,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   // #61 hardens the key-shape checks themselves, so it needs a real Clerk key
   // and a real Stripe key present to assert the live-key refusal fires.
   61: ['auth', 'stripe'],
-  62: ['stripe'],
+  62: ['stripe'], // MERGED into #362 (2026-08-30 consolidation)
   63: [],
   64: [], // MERGED — superseded by #316 (2026-08-29 consolidation)
   65: [],
@@ -257,7 +257,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   203: [],
   204: [],
   205: [],
-  206: [],
+  206: [], // MERGED into #362 (2026-08-30 consolidation)
   207: [], // MERGED — superseded by #315 (2026-08-29 consolidation)
   208: [], // NEVER FILED — no ticket #208 was ever opened; row exists only to keep the range contiguous
   209: [], // NEVER FILED — no ticket #209 was ever opened; row exists only to keep the range contiguous
@@ -360,7 +360,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   296: [],
   297: [],
   298: ['storage'],
-  299: ['storage'],
+  299: ['storage'], // MERGED into #360 (2026-08-30 consolidation)
   300: [],
   301: [],
   302: [],
@@ -385,41 +385,51 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   321: ['auth'],
   322: [],
   323: ['stripe'],
-  324: [],
+  324: [], // MERGED into #358 (2026-08-30 consolidation)
   325: [],
-  326: [],
-  327: [],
+  326: [], // MERGED into #358 (2026-08-30 consolidation)
+  327: [], // MERGED into #357 (2026-08-30 consolidation)
   328: [],
   329: [],
   330: [],
   331: [],
   332: [],
   333: [],
-  334: [],
-  335: [],
-  336: [],
-  337: [],
-  338: ['stripe'],
-  339: [],
+  334: [], // MERGED into #363 (2026-08-30 consolidation)
+  335: [], // MERGED into #357 (2026-08-30 consolidation)
+  336: [], // MERGED into #361 (2026-08-30 consolidation)
+  337: [], // MERGED into #358 (2026-08-30 consolidation)
+  338: ['stripe'], // MERGED into #360 (2026-08-30 consolidation)
+  339: [], // MERGED into #357 (2026-08-30 consolidation)
   // Drives sign-in and the Stripe test-mode payment, and nothing else external.
   340: ['auth', 'stripe'],
-  341: [],
-  342: [],
-  343: [],
-  344: [],
-  345: [],
+  341: [], // MERGED into #363 (2026-08-30 consolidation)
+  342: [], // MERGED into #357 (2026-08-30 consolidation)
+  343: [], // MERGED into #359 (2026-08-30 consolidation)
+  344: [], // MERGED into #359 (2026-08-30 consolidation)
+  345: [], // MERGED into #359 (2026-08-30 consolidation)
   346: [],
-  347: [],
-  348: [],
-  349: [],
-  350: [],
-  351: [],
-  352: ['auth'],
+  347: [], // MERGED into #358 (2026-08-30 consolidation)
+  348: [], // MERGED into #357 (2026-08-30 consolidation)
+  349: [], // MERGED into #360 (2026-08-30 consolidation)
+  350: [], // MERGED into #357 (2026-08-30 consolidation)
+  351: [], // MERGED into #361 (2026-08-30 consolidation)
+  352: ['auth'], // MERGED into #361 (2026-08-30 consolidation)
   // Sentry only — the DSN is the whole blocker, and it is a real external service.
   353: ['sentry'],
   354: [],
   355: [],
   356: [],
+  // Filed 2026-08-30 by the second backlog consolidation. #357-#363 replace 25 rows.
+  // Those 25 keep their entries above, each marked `MERGED into #<n>`, so
+  // `pnpm preflight --ticket <old number>` still gates from an older branch.
+  357: [],
+  358: [],
+  359: [],
+  360: ['storage', 'stripe'],
+  361: ['auth'],
+  362: [...CAPABILITIES],
+  363: ['stripe'],
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
