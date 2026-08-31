@@ -239,8 +239,8 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **354** | **27 Vendor profile — 768: the booking rail must become a sticky bottom bar** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 322**, from the 1024 pass that closed the first two of its five frames. **This is a composition change, not a ladder step**, which is why it was not folded into #322. `30-responsive.md` gives 768 "Card + rail → sticky bottom bar", and frame `27 Vendor profile — 768` draws it: `position:absolute;left:0;right:0;bottom:0`, `background:#FFFDF9`, `border-top:1px solid #E4DDD1`, `padding:12px 24px`, `gap:16px`, `box-shadow:0 -4px 18px rgba(35,32,28,.07)`, holding an 11px `From` over a serif 24px price at `line-height:1.1`, an `.inp` at `flex:1;max-width:180px` carrying the date, a `flex:1` centred `Request booking` at `600 14px` on `padding:13px 0;border-radius:10px`, and a `.btnS Message` at `12px 18px`. **Today the rail simply stacks under the content below `lg`** — the grid is `lg:grid-cols-[…]` and nothing replaces it. The 768 interior is also its own ladder and is not built: pane `22px 24px 0`, card radius 16 on a 179px floor, identity pane `20px 22px`, avatar 56, name 29px, tagline 18px on a 13px offset, tab strip `margin-top:18px` at `gap:22px` and 13px, bio `14px/1.7` inside 600 on a 16px offset, stat grid `gap:12px` on an 18px offset inside 480 with `11px 13px` cards and 21px values, and `What's included` at `margin-top:20px` inside 600 with a 9px label offset over 13.5px rows. **Re-measure before fixing** — #322 moved every one of these files. |
 | **355** | **27 Vendor profile editor — 768** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 322**, from the 1024 pass that closed the first two of its five frames. The fifth of #322's frames and **the one never opened at all** — no measurement of it exists yet, so this ticket starts by taking one rather than by fixing anything. What is known from `30-responsive.md`'s degradation table: at 768 the editor puts its **nav on top**, turns the preview rail into a **panel above the fields**, and lays the fields out **two columns**; at 1024 the section nav keeps its labels — no dots rail, no icon rail — and the preview rail is 280px. The editor is the one vendor route that suppresses the shared sidebar (`VendorNav` returns `null` under `/vendor/profile/edit`) and carries its own 200px section rail in `vendor-profile-form.tsx`, which is **not** `box-content` — so the footprint arithmetic #322 fixed on the shared nav does not apply here and has to be derived separately. Needs `pnpm db:seed:e2e`. |
 | **356** | **27 Vendor dashboard — empty · 1024: the draft-profile state is a different screen** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by lane 322**, from the 1024 pass that closed the first two of its five frames. Frame `27 Vendor dashboard — empty · 1024` is **not** the populated dashboard with an empty list. It opens with a gold blocker banner the code has no counterpart for — a 16px `#C99A2E` dot on `#F5EEDC` inside `1px #E8DBB8` at `border-radius:11px`, `padding:12px 14px`, reading *"Your profile isn't live yet — three things left"* over *"Add at least 6 portfolio images · Set a starting price · Connect payouts."* with an inline `Finish profile` — where the page draws only `<Banner status="pending" title="Payouts not connected">`. Below it the checklist is an **in-pane 300px card** (`border-radius:16px`, `padding:16px`, `1px #E4DDD1`), not #322's bordered outer rail, and it is a **seven**-row `Setup · 4 of 7 done` list with strikethrough on the done rows against the six of `PUBLISH_BLOCKER_KEYS`. The empty pane's copy differs too: frame says *"No requests yet"* / *"Nothing has come in because your listing is still a draft."* / `Preview my profile`, code says *"Nobody can find you yet"* / *"Your profile is not published…"* / `Finish your profile`; panel radius 16 against `rounded-2xl`'s 18, `padding:0 28px` against `px-10`, description capped at 340 against 420, headline 23px. **The state is also unreachable in a lane database**: all 17 `vendor_profiles` rows are `is_published = true` and only the E2E account has a sign-in path, so verifying it needs a seed that can produce an unpublished vendor with zero requests — decide that first, because a pass that cannot render the frame proves nothing. |
-| 357 | **Apply the D16/D17 rulings — correct the frames, then the five code sites** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#327, #335, #339, #342, #348, #350**. Every one of these had its decision taken by D16 or D17 and its `design-plan/` edit landed; what each has left is code or the frame file. **They are one ticket because five of the six end in an edit to `Orla - Screens.dc.html`** — frames `01`, `02`, `12`, `16`, `18` and their 1024 variants — and four concurrent lanes editing one 27-frame HTML file is a guaranteed conflict on the repo's own acceptance criterion. The code sites are named and small: `avatar.tsx:17`'s `FALLBACK_TONES` → `clay-150` (#342), `vendor-card.tsx:149` and `profile-header.tsx:199` → the neutral coverless block (#348), `error-screen.tsx:74`'s href and label → `Browse vendors` → `/search` (#350). #327 is **frame-only** — the hero seeds nothing and the code is already right. #339 is **verification only** — `Most relevant` already ships. Plus the guard test D16 asked for: no approved string in `31-content-voice.md` hard-codes a duration the code derives. |
-| 358 | **02/17/18 Search — close 1440 parity and the two reachability defects** | P1 | M3 | **P2 Medium** | **Backlog** | — | **#357** (frames `02`/`18`) | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#324, #326, #337, #347**. One route, three states, one browser pass — #326's own measurements say the compact-header fix *"lands on `/search` at every state"*, #337 was found there, and #347's blank page 2 is reached from it. **#324 is now a deletion:** D16 dropped the gold chip (scarce was never defined) and the sage chip on the results grid (a dated query is already filtered on availability, so the chip was a tautology), leaving the stone `New` badge — published < 30 days — as the only chip a card carries. Sage survives **only** on the nearby-dates band. Sequence **after #357**, which corrects the frames this is measured against, and **do not run concurrently with #323**, which owns the same two components at 1024. |
+| 357 | **Apply the D16/D17 rulings — the four code sites the frames now expect** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#327, #335, #339, #342, #348, #350**. Every one of these had its decision taken by D16 or D17 and its `design-plan/` edit landed; what each has left is code or the frame file. **They are one ticket because five of the six end in an edit to `Orla - Screens.dc.html`** — frames `01`, `02`, `12`, `16`, `18` and their 1024 variants — and four concurrent lanes editing one 27-frame HTML file is a guaranteed conflict on the repo's own acceptance criterion. The code sites are named and small: `avatar.tsx:17`'s `FALLBACK_TONES` → `clay-150` (#342), `vendor-card.tsx:149` and `profile-header.tsx:199` → the neutral coverless block (#348), `error-screen.tsx:74`'s href and label → `Browse vendors` → `/search` (#350). #327 is **frame-only** — the hero seeds nothing and the code is already right. #339 is **verification only** — `Most relevant` already ships. Plus the guard test D16 asked for: no approved string in `31-content-voice.md` hard-codes a duration the code derives. **The frame half landed out-of-band on 2026-08-30**, from the user's own updated copy of the document — all six corrections plus `12`'s `Create my account`, which was already right. See `design/design-plan/CHANGE-ORDER-2026-08-30.md`. **What is left here is code only**: the four sites above and the guard test. `stone-250 #ECE6DC` was minted (D18) in the same pass, so the coverless block now has a token to name. |
+| 358 | **02/17/18 Search — close 1440 parity and the two reachability defects** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** (was #357; its frames landed 2026-08-30 in `72ddd73`) | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#324, #326, #337, #347**. One route, three states, one browser pass — #326's own measurements say the compact-header fix *"lands on `/search` at every state"*, #337 was found there, and #347's blank page 2 is reached from it. **#324 is now a deletion:** D16 dropped the gold chip (scarce was never defined) and the sage chip on the results grid (a dated query is already filtered on availability, so the chip was a tautology), leaving the stone `New` badge — published < 30 days — as the only chip a card carries. Sage survives **only** on the nearby-dates band. Sequence **after #357**, which corrects the frames this is measured against, and **do not run concurrently with #323**, which owns the same two components at 1024. **Frames `02` and `18` were corrected on 2026-08-30**, so the measurement target is already stable; the remaining #357 dependency is `vendor-card.tsx`, which both tickets touch. |
 | 359 | **04/07/19 Bookings — hub, empty hub and the request form** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#343, #344, #345** — all three filed by lane 302 from one `parity-checker` pass. **#343 and #344 are the same shell**, and #345 is one click away, so this is one customer fixture and one browser pass. Carries an unrecorded decision that must be settled before building: the app renders frame `07`'s shell around frame `19`'s pane, which may well be a deliberate reconciliation — one shell for a hub that is sometimes empty is the better product — but **nothing in the repo records it**, so it reads as drift and the next pass finds it again. Also needs an **empty-hub customer fixture**: the E2E customer has bookings and `.claude/rules/e2e-auth.md` forbids a throwaway account, so the empty rail has never been driven. |
 | 360 | **09 Vendor storefront editor — cover, preview rail, nav and the unsaved-work guard** | P1 | M3 | **P0 Critical** | **Backlog** | — | **None** | `core` `storage` `stripe` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#299, #338, #349**. **#338 is a duplicate** — "the section nav carries `Payouts` and its gold dot" is already acceptance line 5 of #299 (filed there as #140) — and #349 is the same route's form. #299 in turn merges #137, #138, #140, #141, #152, #257, #258, #288, with **#288 leading** because it unblocks #137. **D16 settled the field question:** `Your line` and `Years in business` are **relocated, not deleted** — both are the only editing surface for content frame `03` displays, so deleting the editor without the display leaves content nobody can change. The `Payouts` dot reads real Stripe onboarding state and is **gold, never red**. Re-measure frame `09`'s nav in full first: the pass that found the missing entry was scoped to the Tags row. |
 | 361 | **Site header and chrome — signed-in cluster, notification dropdown, avatar alt** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#336, #351, #352** — `site-header.tsx`, `NotificationBell` and the Clerk `UserButton`, found and fixed in one signed-in render on every page. **They are one ticket for the reason each slipped:** as #352 puts it, *"the user menu is chrome rather than a framed screen, so no parity pass owns it."* The link text needs no ruling — frame `02` draws `Bookings`, live draws `Dashboard` at `site-header.tsx:157`, and the frame is the authority. **The bell is the open question and must not be deleted to pass parity**: it is a real surface with real behaviour and a frame that predates it is not evidence it should go. The avatar alt reads `"'s logo"` on both roles — a data defect, not a template one, so the fix belongs where the name is resolved. |
@@ -2666,7 +2666,7 @@ had a detail section**, and its content survives in its Notes cell and in
 
 ---
 
-### #357: Apply the D16/D17 rulings — correct the frames, then the five code sites
+### #357: Apply the D16/D17 rulings — the four code sites the frames now expect
 
 **Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
 **Blocked by:** None
@@ -2676,14 +2676,16 @@ Merges **#327, #335, #339, #342, #348, #350**.
 **Why one ticket.** All six were `Deferred — needs a human` until D16 and D17 answered them
 on 2026-08-30, with the `design-plan/` edits landed in the same pass — five of the six were
 *filed* that same day, by the lanes that closed #302, #305 and #329, and never had a chance
-to start. What each has left is code, and for **three** of them — #327, #350 and #335's own
-umbrella over frames `02`, `12` and `18` — that code is a correction to
-`design/Orla - Screens.dc.html`. That file holds all 27 frames and **is** the parity
-acceptance criterion, so lanes editing it concurrently conflict on the one artifact every
-other ticket is measured against. **Five frames change here, not five tickets** — the frame
-table below is the authority on which, and two of them (`02` and `18`) carry corrections
-whose *code* half lives in #358, which is why #358 is sequenced behind this. One lane owns
-the file for one pass.
+to start. What each had left was code, and for three of them the
+"code" was a correction to `design/Orla - Screens.dc.html` — which is why they were batched
+here in the first place: that file holds all 27 frames and **is** the parity acceptance
+criterion, so lanes editing it concurrently conflict on the one artifact every other ticket
+is measured against.
+
+**That half is now done** — the user landed the six frame corrections on 2026-08-30 as
+`72ddd73`, recorded in `design/design-plan/CHANGE-ORDER-2026-08-30.md`. **The sequencing
+reason for this ticket has therefore expired, and #358 is no longer behind it.** What is
+left is four code sites and one guard test, and they are independent of each other.
 
 **The frame corrections — done.** Landed 2026-08-30 from the user's updated copy of the document; `design/design-plan/CHANGE-ORDER-2026-08-30.md` records them and the plan edits that followed. The table stays as the record of what changed, not as work:
 
@@ -2703,8 +2705,12 @@ the file for one pass.
   already resolved exactly, so the fill was the one off-token value. **The ramp was
   incomplete, not the frame wrong** — the same finding as #306 (#342)
 - `vendor-card.tsx:149` and `profile-header.tsx:199` — a published vendor with no
-  `coverImageUrl` gets a **neutral tone block at the cover's exact dimensions**: no hatch,
-  no monospace label, nothing addressed to a developer. The hatch is a build-time device
+  `coverImageUrl` gets a **`stone-250` (`#ECE6DC`) block at the cover's exact 3:2 and the
+  card's own radius, with nothing inside it**: no hatch, no monospace label, nothing
+  addressed to a developer. `stone-250` was **minted for this** by D18 on 2026-08-30,
+  between `stone-200` and `stone-300`; the hatch stripes stay `stone-200`/`stone-300`, and
+  frame `26 State library` now carries the two-tile **Missing cover photo** group showing
+  the live block beside the hatch, the hatch marked *never on a public page*. The hatch is a build-time device
   for photography the *product* lacks; a live vendor's empty cover is *their* missing
   content shown to *their* customers. The cause and the fix stay in the editor, which is
   **#360**, not on the page their customers read (#348)
@@ -2719,16 +2725,19 @@ badge's implementation, which is **#358**; the cover *upload* control, which is 
 
 **Acceptance:**
 
-- [ ] Every frame in the table above is corrected in `design/Orla - Screens.dc.html`, and
-      the 1024 variants with them
-- [ ] The three code sites render what their rulings say, verified in a browser
-- [ ] A published vendor with no cover renders the neutral block on **both** `/search` and
-      `/vendors/[slug]`, and the labelled hatch appears on **no** live public surface
-- [ ] `#327` and `#339` are closed with the evidence that no code change was needed —
-      not with a change made to look like one
+- [x] ~~Every frame in the table above is corrected~~ — **landed 2026-08-30 as `72ddd73`**,
+      by the user, across frames `01`, `02`, `09`, `16`, `18`, `26` and their 1024 variants.
+      46 frames unchanged. This ticket does **not** edit `Orla - Screens.dc.html`
+- [ ] The four code sites render what their rulings say, verified in a browser
+- [ ] A published vendor with no cover renders the **`stone-250`** block on **both**
+      `/search` and `/vendors/[slug]`, and the labelled hatch appears on **no** live public
+      surface
+- [ ] **Frame `03`'s sage chip is left alone.** The change order is explicit that it stays —
+      a profile is not a filtered result — and that only its *reasoning* changed. Removing it
+      here would be the failure mode this ticket exists to avoid
+- [ ] `#327` and `#339` are closed with the evidence that no code change was needed — not
+      with a change made to look like one
 - [ ] `parity-checker` returns MATCH on frames `01`, `02`, `12`, `16` and `18` afterwards
-- [ ] No other frame in `Orla - Screens.dc.html` is altered — verified by hashing the
-      untouched frame blocks against `origin/main`, the method the 2026-08-27 import used
 
 **Tests (required):**
 
@@ -2746,7 +2755,9 @@ badge's implementation, which is **#358**; the cover *upload* control, which is 
 ### #358: 02/17/18 Search — close 1440 parity and the two reachability defects
 
 **Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** #357 (frames `02` and `18`)
+**Blocked by:** None — **unblocked 2026-08-30**; frames `02` and `18` now draw what this is
+measured against (`72ddd73`, `CHANGE-ORDER-2026-08-30.md`). Still **must not run concurrently
+with #323**, which owns `search-shell.tsx` and `refine-bar.tsx` at 1024.
 
 Merges **#324, #326, #337, #347**. One route, three states, one browser pass.
 
