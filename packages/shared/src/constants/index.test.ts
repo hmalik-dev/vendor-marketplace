@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  US_STATE_CODES,
+  US_STATE_NAMES,
   describeBlockers,
   PUBLISH_BLOCKER_KEYS,
   PUBLISH_BLOCKERS,
@@ -367,5 +369,50 @@ describe('vendorNounFor', () => {
       }
       expect(category.vendorNoun.many).not.toMatch(/(ing|phy|ty)$/);
     }
+  });
+});
+
+/*
+ * `Austin, TX` and `Austin, Texas` were two rows in one database, so a
+ * customer who picked one never saw the other's vendors. The code is the
+ * canonical stored form (ruled 2026-08-30) and the name exists only to be
+ * read, which is what stops the two spellings diverging again.
+ */
+describe('the US state vocabulary', () => {
+  it('covers the fifty states and DC, and nothing else', () => {
+    expect(US_STATE_CODES).toHaveLength(51);
+    expect(US_STATE_CODES).toContain('DC');
+    // Territories are deliberately absent — the product does not serve them,
+    // and an unserved option on a required field is a dead end.
+    expect(US_STATE_CODES).not.toContain('PR');
+    expect(US_STATE_CODES).not.toContain('GU');
+  });
+
+  it('names every code exactly once, with no name left over', () => {
+    const named = Object.keys(US_STATE_NAMES).sort();
+
+    expect(named).toEqual([...US_STATE_CODES].sort());
+  });
+
+  it('holds only two-letter uppercase codes', () => {
+    const malformed = US_STATE_CODES.filter((code) => !/^[A-Z]{2}$/.test(code));
+
+    expect(malformed).toEqual([]);
+  });
+
+  it('repeats no code and no name', () => {
+    expect(new Set(US_STATE_CODES).size).toBe(US_STATE_CODES.length);
+
+    const names = Object.values(US_STATE_NAMES);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  /*
+   * The two spellings that caused the split, asserted by name: the form must
+   * be able to show `Texas` while the column stores `TX`.
+   */
+  it('maps the spelling that split the data to the code that replaced it', () => {
+    expect(US_STATE_NAMES.TX).toBe('Texas');
+    expect(US_STATE_NAMES.CA).toBe('California');
   });
 });

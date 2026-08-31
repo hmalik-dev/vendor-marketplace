@@ -1,5 +1,5 @@
 import { EVENT_TYPES } from '@vendor-marketplace/shared';
-import type { CATEGORY_SLUGS, EventType, PriceType } from '@vendor-marketplace/shared';
+import type { CATEGORY_SLUGS, EventType, PriceType, UsStateCode } from '@vendor-marketplace/shared';
 
 /**
  * The cast for the demo marketplace — `pnpm db:seed:demo`.
@@ -74,7 +74,7 @@ export interface DemoVendorSeed {
   readonly tagline: string;
   readonly bio: string;
   readonly city: string;
-  readonly state: string;
+  readonly state: UsStateCode;
   readonly yearsInBusiness: number;
   readonly responseTimeHours: number;
   readonly portfolioCount: number;
@@ -86,7 +86,7 @@ export interface DemoCustomerSeed {
   readonly firstName: string;
   readonly lastName: string;
   readonly city: string;
-  readonly state: string;
+  readonly state: UsStateCode;
   readonly bio: string | null;
   /**
    * Share of the booking graph this customer receives. A zero share is the

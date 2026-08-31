@@ -10,6 +10,7 @@ import {
   REVIEW_TYPES,
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
+  US_STATE_CODES,
   USER_ROLES,
 } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
@@ -62,6 +63,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'budget_tier', values: BUDGET_TIERS },
     { enumName: 'price_type', values: PRICE_TYPES },
     { enumName: 'tag_suggestion_status', values: TAG_SUGGESTION_STATUSES },
+    { enumName: 'us_state', values: US_STATE_CODES },
   ];
 
   it.each(cases)(

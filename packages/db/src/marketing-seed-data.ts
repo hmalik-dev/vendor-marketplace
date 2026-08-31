@@ -17,6 +17,8 @@
  * 127 reviews therefore has 127 reviews to show.
  */
 
+import type { UsStateCode } from '@vendor-marketplace/shared';
+
 /** Cover art lives in `apps/web/public/marketing/vendors`, keyed by slug. */
 export const MARKETING_COVER_BASE = '/marketing/vendors';
 
@@ -43,7 +45,7 @@ export interface MarketingVendorSeed {
   readonly firstName: string;
   readonly lastName: string;
   readonly city: string;
-  readonly state: string;
+  readonly state: UsStateCode;
   readonly bio: string;
   /**
    * The vendor's own line, opening the About tab as a pull-quote.

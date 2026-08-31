@@ -35,7 +35,7 @@ import {
   type ProfileSaveProblem,
 } from '@/lib/vendor-profile-issues';
 import { cn } from '@/lib/utils';
-import { US_STATES } from '@/lib/us-states';
+import { US_STATE_OPTIONS, usStateName } from '@/lib/us-states';
 import {
   wireTagListSchema,
   wireVendorProfileSchema,
@@ -800,7 +800,7 @@ export function VendorProfileForm({
                     onOpenChange={(next) => setOpenSelect(next ? 'state' : null)}
                     label="State"
                     countNoun="states"
-                    options={US_STATES.map((state) => ({ value: state, label: state }))}
+                    options={US_STATE_OPTIONS}
                     value={form.state === '' ? null : form.state}
                     onChange={(value) => update('state', value)}
                     trigger={
@@ -812,7 +812,7 @@ export function VendorProfileForm({
                         className={cn(FORM_SELECT_TRIGGER, form.state === '' && 'text-stone-600')}
                         {...errorProps(validation.issueFor('state'))}
                       >
-                        {form.state === '' ? 'Choose a state' : form.state}
+                        {form.state === '' ? 'Choose a state' : usStateName(form.state)}
                         <SelectCaret open={openSelect === 'state'} />
                       </button>
                     }
