@@ -73,6 +73,47 @@ describe('BookingRail', () => {
     cleanup();
   });
 
+  /*
+   * The clearance for the fixed bar, asserted as the two class-level facts that
+   * make it work rather than as geometry.
+   *
+   * jsdom performs no layout and loads no stylesheet, so the thing that
+   * actually failed -- the footer's `All vendors` link sitting 12 of its 16px
+   * under the bar, with its centre intercepted -- **cannot be reproduced here**
+   * and is verified in a browser instead. What can be pinned is that the bar
+   * still carries the marker the rule keys on, and that the rule still exists:
+   * either one silently disappearing is how the overlap returns.
+   */
+  it('carries the marker the footer clearance rule keys on', () => {
+    render(
+      <BookingRail
+        businessName="Kessler & Co."
+        slug="kessler-and-co"
+        startingPriceCents={175_000}
+        packages={[servicePackage()]}
+        reviewCount={0}
+        today="2026-01-01"
+        calendar={{}}
+      />,
+    );
+
+    const bar = screen.getByRole('region', { name: 'Book Kessler & Co.' });
+
+    expect(bar.hasAttribute('data-booking-bar')).toBe(true);
+    expect(bar.className).toContain('fixed');
+    expect(bar.className).toContain('lg:hidden');
+  });
+
+  it('is cleared by a footer rule that names that marker', () => {
+    const globals = readFileSync(join(process.cwd(), 'src', 'app', 'globals.css'), 'utf8');
+    const rule = /body:has\(\[data-booking-bar\]\)\s*>\s*footer\s*\{[^}]*padding-bottom:/;
+
+    expect(globals).toMatch(rule);
+    // Below `lg` only: at 1024 and up the bar is `display:none` and the rail is
+    // an ordinary grid column, so the footer must pay nothing.
+    expect(globals).toMatch(/@media \(width < 64rem\) \{\s*body:has\(\[data-booking-bar\]\)/);
+  });
+
   it('leads with the from-price in dollars', () => {
     render(
       <BookingRail

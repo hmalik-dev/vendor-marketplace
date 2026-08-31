@@ -88,9 +88,18 @@ export function ProfileHeader({
     */
     /*
      * `pb-26` below `lg` reserves the bottom bar's own height plus clearance.
-     * `04-laws.md` rule 5 -- nothing sticky covers content -- is not satisfied
-     * by pinning a bar; it is satisfied by the scrolling content ending above
-     * it. The editor fails this same rule at 768 today (its pane's
+     * `30-responsive.md`: "any pane with a fixed bottom action bar needs bottom
+     * padding equal to the bar's height ... or the last card's price row lands
+     * underneath it."
+     *
+     * This clears the profile's own content. It does **not** clear the site
+     * footer, which is a sibling of `<main>` and therefore out of reach from
+     * here -- that is done in `globals.css` off the bar's `data-booking-bar`
+     * marker. An earlier version of this comment cited `04-laws.md` rule 5 for
+     * the requirement; rule 5 is "Forms are grids, not queues", and the rule
+     * being satisfied is the `30-responsive.md` line above.
+     *
+     * The editor fails the same requirement at 768 today (its pane's
      * `padding-bottom` computes 0 under a sticky save bar), which is #371's
      * remaining work rather than a reason to repeat it here.
      */

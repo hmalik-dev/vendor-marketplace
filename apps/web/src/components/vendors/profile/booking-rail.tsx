@@ -173,6 +173,13 @@ export function BookingRail({
     <div
       aria-label={`Book ${businessName}`}
       role="region"
+      /*
+       * `data-booking-bar` is not decoration: `globals.css` uses it to give the
+       * footer this bar's height as bottom padding. The bar is `fixed`, and the
+       * footer is a sibling of `<main>`, so no padding inside this component can
+       * reach it -- which is exactly the overlap the browser pass measured.
+       */
+      data-booking-bar=""
       className="fixed inset-x-0 bottom-0 z-(--z-sticky) flex items-center gap-4 border-t border-stone-300 bg-stone-0 px-6 py-3 shadow-[0_-4px_18px_rgba(35,32,28,.07)] lg:hidden"
     >
       <div className="shrink-0">
@@ -200,7 +207,7 @@ export function BookingRail({
             id={`${fieldId}-bar-date`}
             aria-haspopup="dialog"
             aria-expanded={barDateOpen}
-            className={`${FIELD} flex max-w-[180px] flex-1 items-center justify-between gap-2 text-left`}
+            className={`${FIELD} flex max-w-[180px] flex-1 items-center justify-between gap-2 text-left text-[13.5px]`}
           >
             <span className={cn('truncate', eventDate === '' && 'text-stone-600')}>
               {eventDate === '' ? 'Add a date' : formatMonthDay(eventDate)}
@@ -215,7 +222,13 @@ export function BookingRail({
         }
       />
 
-      <Button asChild variant="primary" className="flex-1 justify-center py-3.25">
+      {/*
+       * `px-0` and `text-[14px]`: the frame gives this `padding:13px 0` and
+       * centres it with `flex:1`, so the primary's default horizontal padding
+       * would narrow the clay box inside a button that is already the right
+       * width.
+       */}
+      <Button asChild variant="primary" className="flex-1 justify-center px-0 py-3.25 text-[14px]">
         <Link href={requestHref}>Request booking</Link>
       </Button>
       {/*
