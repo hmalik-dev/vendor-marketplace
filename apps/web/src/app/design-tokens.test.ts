@@ -153,3 +153,107 @@ describe('every colour class names a step the theme defines', () => {
     expect(stale).toEqual([]);
   });
 });
+
+/*
+ * The same trap, one namespace over.
+ *
+ * `--color-stone-800` was a step somebody wrote that the theme did not define,
+ * which Tailwind silently resolved to its own cool built-in. `rounded-xs` is
+ * the identical mistake against the radius scale: `theme.css` declares
+ * `sm/md/lg/panel/xl/2xl`, Tailwind ships `--radius-xs: 0.125rem`, and a class
+ * naming it compiles, renders, and rounds at 2px from a scale that is not this
+ * product's — with no error and nothing in the suite able to notice.
+ *
+ * Found by `diff-reviewer` on #373, which had just closed the colour half. The
+ * two live sites are ratcheted rather than fixed: both are focus-ring roundings
+ * on inline links, and 2px against the scale's smallest step of 6px is a
+ * visible difference on a control that hugs its text — a design call rather
+ * than a mechanical substitution. What matters is that they are now visible and
+ * that no third one can appear unnoticed.
+ */
+describe('every radius class names a step the theme defines', () => {
+  /** Every `--radius-<name>` the theme declares. */
+  const steps = new Set(
+    [...themeCss.matchAll(/--radius-([a-z0-9-]+):/g)].map((match) => match[1] as string),
+  );
+
+  /**
+   * The two live when the radius half of this guard was written.
+   *
+   * A ratchet, not an allowlist: it only ever shrinks. Neither is fixed here
+   * because the substitution is not mechanical — see the block comment above.
+   */
+  const KNOWN_UNDEFINED_RADII = [
+    'src/app/bookings/[requestId]/page.tsx — rounded-xs',
+    'src/components/vendors/profile/about-pane.tsx — rounded-xs',
+  ] as const;
+
+  it('reads a real scale out of the theme, so the scan cannot be vacuous', () => {
+    expect(steps.size).toBe(6);
+    expect(steps.has('panel')).toBe(true);
+    expect(steps.has('xs')).toBe(false);
+  });
+
+  it('finds none beyond the two already recorded', () => {
+    /*
+     * `full` and `none` are Tailwind keywords rather than scale steps. An
+     * arbitrary `rounded-[Npx]` is excluded by the pattern — inline-value debt
+     * is a different finding from a class naming a step that does not exist.
+     */
+    const keywords = new Set(['full', 'none']);
+    /*
+     * `rounded[-side][-step]`, where the step is not an arbitrary value. The
+     * side segment has to be optional *and* allowed to stand alone — `rounded-t`
+     * is a whole class, and a pattern that requires a step after the side reads
+     * the `t` of `rounded-t-[18px]` as the step name.
+     */
+    const SIDES = new Set([
+      't',
+      'r',
+      'b',
+      'l',
+      's',
+      'e',
+      'tl',
+      'tr',
+      'br',
+      'bl',
+      'ss',
+      'se',
+      'ee',
+      'es',
+    ]);
+    const undefinedRadii = [...sourceFiles(), ['src/app/globals.css', globalsCss] as const]
+      .flatMap(([file, contents]) =>
+        [...contents.matchAll(/\brounded((?:-[a-z0-9]+)*)(-\[)?/g)].flatMap(
+          ([, tail, arbitrary]) => {
+            if (arbitrary !== undefined) {
+              return [];
+            }
+
+            const segments = (tail as string).split('-').filter(Boolean);
+            const step =
+              segments.length > 1 || !SIDES.has(segments[0] ?? '') ? segments.at(-1) : undefined;
+
+            return step === undefined || keywords.has(step) || steps.has(step)
+              ? []
+              : [`${file} — rounded-${step}`];
+          },
+        ),
+      )
+      .filter((entry, index, all) => all.indexOf(entry) === index)
+      .sort();
+
+    expect(undefinedRadii).toEqual([...KNOWN_UNDEFINED_RADII]);
+  });
+
+  it('carries no exemption for a step that is now defined', () => {
+    const stale = KNOWN_UNDEFINED_RADII.filter((entry) => {
+      const [, step] = /rounded-([a-z0-9-]+)$/.exec(entry) ?? [];
+
+      return step !== undefined && steps.has(step);
+    });
+
+    expect(stale).toEqual([]);
+  });
+});

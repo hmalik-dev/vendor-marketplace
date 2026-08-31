@@ -190,7 +190,6 @@ function SuggestionCard({
                     className="flex items-center gap-1.5 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900"
                   >
                     {mergeable.find((tag) => tag.id === mergeTarget)?.name ?? 'An existing tag…'}
-                    <span aria-hidden="true">▾</span>
                   </button>
                 }
               />

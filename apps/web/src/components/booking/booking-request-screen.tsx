@@ -405,15 +405,6 @@ export function BookingRequestScreen({
                       <span className={form.eventDate === '' ? 'text-stone-600' : undefined}>
                         {form.eventDate === '' ? 'Pick a date' : formatEventDate(form.eventDate)}
                       </span>
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'shrink-0 text-[9px]',
-                          dateOpen ? 'text-clay-400' : 'text-stone-600',
-                        )}
-                      >
-                        {dateOpen ? '▴' : '▾'}
-                      </span>
                     </button>
                   }
                 />
@@ -459,15 +450,6 @@ export function BookingRequestScreen({
                         {form.eventType === ''
                           ? 'Choose an occasion'
                           : EVENT_TYPE_LABELS[form.eventType]}
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'shrink-0 text-[9px]',
-                          eventTypeOpen ? 'text-clay-400' : 'text-stone-600',
-                        )}
-                      >
-                        {eventTypeOpen ? '▴' : '▾'}
                       </span>
                     </button>
                   }

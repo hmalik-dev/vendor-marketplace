@@ -489,7 +489,7 @@ describe('SearchBar — pill and circle discipline', () => {
 
   /*
    * #94 (Access half). #57 settled that the compact header keeps the circle
-   * rather than the frame 02 text pill, so the 44x44 law in `04-laws.md:133`
+   * rather than the frame 02 text pill, so the 44x44 law in `04-laws.md:137`
    * has to be met without changing what is painted — the target is grown past
    * the circle instead. `size-11` is 44px.
    *

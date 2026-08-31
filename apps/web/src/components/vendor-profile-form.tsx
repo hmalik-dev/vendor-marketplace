@@ -342,18 +342,6 @@ function ErrorCard({ children }: { children: React.ReactNode }): React.ReactElem
 const FORM_SELECT_TRIGGER =
   'mt-1.5 flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-stone-0 px-[13px] text-base text-stone-900 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 sm:h-[38px]';
 
-/** The caret, which flips and turns clay while its panel is open. */
-function SelectCaret({ open }: { open: boolean }): React.ReactElement {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn('shrink-0 text-[9px]', open ? 'text-clay-400' : 'text-stone-600')}
-    >
-      {open ? '▴' : '▾'}
-    </span>
-  );
-}
-
 /** The red line under a control. `40-states.md`: it says how to fix it. */
 function FieldMessage({ issue }: { issue: FieldIssue | null }): React.ReactElement | null {
   if (issue === null) {
@@ -966,7 +954,6 @@ export function VendorProfileForm({
                         {...errorProps(validation.issueFor('state'))}
                       >
                         {form.state === '' ? 'Choose a state' : usStateName(form.state)}
-                        <SelectCaret open={openSelect === 'state'} />
                       </button>
                     }
                   />
@@ -1058,7 +1045,6 @@ export function VendorProfileForm({
                           : form.responseTimeHours === NO_RESPONSE_TIME
                             ? 'Not specified'
                             : RESPONSE_TIME_LABELS[Number(form.responseTimeHours)]}
-                        <SelectCaret open={openSelect === 'responseTime'} />
                       </button>
                     }
                   />

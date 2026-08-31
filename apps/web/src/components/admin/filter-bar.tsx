@@ -72,9 +72,6 @@ export function FilterSelect({
           )}
         >
           {chosen ? chosen.label : label}
-          <span aria-hidden="true" className={open ? 'text-clay-400' : 'text-stone-900'}>
-            ▾
-          </span>
         </button>
       }
     />

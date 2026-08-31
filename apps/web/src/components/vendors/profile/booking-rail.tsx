@@ -244,15 +244,6 @@ export function BookingRail({
                   <span className={cn('truncate', eventDate === '' && 'text-stone-600')}>
                     {eventDate === '' ? 'Add a date' : formatMonthDay(eventDate)}
                   </span>
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'shrink-0 text-base',
-                      dateOpen ? 'text-clay-400' : 'text-stone-600',
-                    )}
-                  >
-                    {dateOpen ? '▴' : '▾'}
-                  </span>
                 </button>
               }
             />
@@ -310,15 +301,6 @@ export function BookingRail({
                     {selected
                       ? `${selected.name} — ${formatPrice(selected.priceCents)}`
                       : 'Choose a package'}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'shrink-0 text-base',
-                      packageOpen ? 'text-clay-400' : 'text-stone-600',
-                    )}
-                  >
-                    {packageOpen ? '▴' : '▾'}
                   </span>
                 </button>
               }

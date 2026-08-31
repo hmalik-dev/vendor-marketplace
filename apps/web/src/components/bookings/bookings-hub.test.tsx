@@ -198,8 +198,8 @@ describe('BookingsHub', () => {
 
     expect(screen.getByRole('link', { name: 'Upcoming 1' })).toBeDefined();
     expect(screen.getByRole('link', { name: 'History 1' })).toBeDefined();
-    expect(screen.getByText('All categories ▾')).toBeDefined();
-    expect(screen.getByText('Soonest first ▾')).toBeDefined();
+    expect(screen.getByText('All categories')).toBeDefined();
+    expect(screen.getByText('Soonest first')).toBeDefined();
   });
 
   /* The word belongs to the vendor's screen, not the customer's. */
@@ -352,7 +352,7 @@ describe('BookingsHub refine chips', () => {
     expect(within(list).getByText(/Catering/)).toBeDefined();
     expect(within(list).queryByText(/Photography/)).toBeNull();
     expect(within(list).queryByText(/Florals/)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Catering ▾' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Catering' })).toBeDefined();
   });
 
   /*
@@ -424,8 +424,8 @@ describe('BookingsHub refine chips', () => {
      * and the chip must say `All categories` rather than `Catering` — the whole
      * point being that the label and the list agree.
      */
-    expect(screen.getByRole('button', { name: 'All categories ▾' })).toBeDefined();
-    expect(screen.queryByRole('button', { name: 'Catering ▾' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'All categories' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Catering' })).toBeNull();
     expect(screen.getByText(/Photography/)).toBeDefined();
   });
 
@@ -447,7 +447,7 @@ describe('BookingsHub refine chips', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'All categories ▾' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'All categories' })).toBeDefined();
     expect(screen.queryByRole('button', { name: /Taxidermy/ })).toBeNull();
   });
 

@@ -255,7 +255,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **370** | **Production deploy pipeline and error visibility** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **#362** (production credentials and `SENTRY_DSN`) | `core` `sentry` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#20, #353**. One deliverable: merging to `main` ships — migrations first, both services after, a failed `/ready` poll stops the release — and what it ships reports its own errors somewhere a human reads. Split, the two waited on the same #362 sitting. |
 | **371** | **Responsive parity at 1024 and 768** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#323, #354, #355, #356**. One ladder walked once — search, checkout, vendor profile, the profile editor and the empty dashboard, at both widths. Four tickets that were the same work split by frame. |
 | **372** | **Design parity close-out — dashboard, bookings, chrome and the error page** | P1 | M3 | **P2 Medium** | **Backlog** | — | **#374** (owns the `Contact support` destination) — **#358 landed 2026-08-31 (`8e9208d`), so its collision is cleared** | `core` `auth` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#300, #359, #361, #366, #367**. The last 1440 parity debt in one pass: frames `08`, `04`/`07`/`19`, `16`, `18`, and the site chrome no frame owns. |
-| **373** | **Design-system completion — token scale, undefined-step guard, and the caret override** | P1 | M3 | **P1 High** | **In Progress** | `worktree-373` | **None** | `core` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#333, #364, #369**. One pass over `theme.css` and `apps/web/src`, each half closed by a guard — the shape that stops the next parity pass re-finding the same class of defect. |
+| **373** | **Design-system completion — token scale, undefined-step guard, and the caret override** | P1 | M3 | **P1 High** | **Done** | `worktree-373` | **None** | `core` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#333, #364, #369**. One pass over `theme.css` and `apps/web/src`, each half closed by a guard — the shape that stops the next parity pass re-finding the same class of defect. **Done 2026-08-31 — squash `ada3518`, PR #80.** **Over half the ticket's prose was stale and its largest half void**: #15 had already added `--color-stone-800`, the undefined-step guard already existed and was already generalised, #235 had closed the `text-[Npx]` line-height defect globally, and the 44x44 hit area already shipped. Corrected in the detail section rather than rebuilt. Shipped: `--radius-panel: 12px` with all seven inline call sites moved onto it, **D24** (the serif floor beats the frames on avatar monograms — the face changes, not the size), **D25** (the unicode caret override, with the assertion that stops it returning a third time after #228 and #338), **D26** (`placeholder.tsx` retired, the hatch guarded as editor-only), and a **radius half for the undefined-step guard** that `diff-reviewer` found — `rounded-xs` names a step the theme never declares, ratcheted at two sites. **Two defects only the browser could find**, both a class string naming a style the page never painted: the hero's Vendor type value measured weight 400 open and closed while its classes read `font-semibold` (`lg:font-normal` won on source order at 1440), and every Refine chip was byte-identical open and closed because the open signal had been living inside the deleted caret. Both fixed and re-measured. Verified: `turbo run test/typecheck/lint/build --force` uncached, `diff-reviewer`, and two `browser-verifier` passes at 1440x900 reading computed values. |
 | **374** | **Launch legal, policy and support surfaces** | P3 | M6 | **P0 Critical** | **Deferred — needs a human** | — | **The account holder: (1) the operative wording of the terms, privacy policy and vendor agreement — a ticket must not invent binding text; (2) a real monitored support address or destination** | `core` | **Filed 2026-08-31.** Not a consolidation — a gap nobody had filed. `docs/pre-launch.md` §1.5 and §7 require terms, a privacy policy, a cookie notice, a vendor agreement covering the 12% commission and payout timing, a refund and cancellation policy shown **before** payment, and a support route that reaches a human. **None of those routes exist in `apps/web/src/app`.** The product cannot take money from strangers without them. |
 | **375** | **Search entry — a filtering combobox for `Vendor type`, a typeahead input for `City`** | P1 | M3 | **P1 High** | **Backlog** | — | **None** (coordinate with **#373**, which removes the caret from the same two triggers) | `core` | **Filed 2026-08-31 on the user's explicit instruction.** *"It should allow typing that appears directly in the input and matching text appears in the category type dropdown, and the city should literally be an input, where the validated city appears as clickable for a user. Not a scrollable dropdown for city since cities can vary drastically. Category should have a dropdown with all categories but as a user types the dropdown should be filtered with each input."* **A user override of decision D6 and `42-dropdowns.md`**, which deleted the filter field from the category panel and made city a select. Both fields stay **validated** — only the affordance changes. |
 | **376** | **Four colour classes name ramp steps the theme never defines** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by lane 15**, by the guard that found them. `design-tokens.test.ts` asserts that every colour class names a step the shared theme declares; it was generalised from #147's `stone-800` assertion and immediately found four more, in the two ramps that assertion never covered. Each falls through to Tailwind's own cool default, so the rendered colour belongs to no palette in this product. Exempted by name and by this ticket number in that test, which is a ratchet rather than an allowlist — the list only shrinks. **Not latent — already invisible on screen, measured 2026-08-31 by lane 371** on the running stylesheet: `--color-sage-500` resolves to `""`, `bg-sage-500` computes `rgba(0,0,0,0)` on a probe element, and there are **0** stylesheet rules mentioning it — against `bg-sage-400`, which emits 1 rule and computes `rgb(94,107,79)`. Both call sites are in checkout (`app/bookings/[requestId]/checkout/page.tsx:66`, `components/checkout/checkout-screen.tsx:291`) and both are sage dots that currently paint nothing. |
@@ -2200,6 +2200,60 @@ that need it using the token rather than an inline value or a wrong step (#277);
 initials never rendering Instrument Serif below the 16px floor at any of the five sizes
 (#230), which is an application of #74's ruling, not a new one.
 
+**Current state, verified 2026-08-31 — over half this ticket's prose is stale, and
+the largest half is void.**
+
+- **`--color-stone-800` now exists** (`theme.css:67`, `#3a342e`), added by #15 for
+  frame `13 Admin`'s header hairline and asserted by
+  `frame-13-parity.test.ts:61`. So the "seven live sites" are all **legal today**,
+  and the non-goal below — "adding a `stone-800` token to the ramp" — is
+  **overtaken by events**. D18 argued against exactly that and the same lane then
+  did it with a frame-drawn justification. Recorded rather than reversed: the
+  token has a consumer and a parity assertion.
+- **The undefined-step guard already exists**, generalised, at
+  `apps/web/src/app/design-tokens.test.ts`. It reads the theme, covers 17 utility
+  prefixes, proves it can fail against a fabricated `bg-sage-950`, and carries a
+  named ratchet whose four entries are **#376's**, with a second test that fails
+  if an exemption outlives its defect. Nothing to write. The one real gap is that
+  it scans `apps/web/src` only, not `packages/` — where nothing violates today.
+- **The `text-[Npx]` line-height defect was fixed globally by #235**
+  (`globals.css:172-174`, `line-height: normal` on `html`). A bare `text-[Npx]` is
+  no longer a defect, so the acceptance line asking for a guard that **fails** on
+  one would have gone red on 119 correct call sites. The named `h1` is a false
+  positive — `page.tsx:289` uses only named tokens. The vendor-card `h3` and price
+  span are bare but correct, and are **deliberately not resized**: lane 371's #377
+  corroborates 19px and 17px at every width, against the 1024 frame's stale 18/16.
+- **The 32x32-vs-44x44 conflict is already resolved and documented in code.**
+  `search-bar.tsx:459` gives the 30px circle a 44x44 target via
+  `after:size-11` with both translates, and the comment there works the geometry
+  through. Only the cross-reference was stale — `04-laws.md:133` is really `:137`,
+  corrected at both call sites.
+- **Counts corrected.** Six avatar sizes, not five, of which **four** fall below
+  the serif floor. **Fourteen** caret render sites, not twelve. The
+  `bookings-hub.test.tsx` line numbers were each **+1**, and two breakages the
+  ticket does not name — `refine-bar.test.tsx:157` reads `textContent`, which
+  includes `aria-hidden` nodes, and `frame-13-parity.test.ts:416` asserted the
+  glyph in source. "69 frame call sites" for the 12px radius is unreproducible;
+  the real numbers are **107 occurrences across 28 of the 46 frames**, and seven
+  inline `rounded-[12px]` call sites in the app.
+
+**What this lane actually did.** Added `--radius-panel: 12px` and moved all seven
+inline call sites onto it, with `theme-tokens.test.ts` rewritten from `toContain`
+per step to `toEqual` on the whole scale — the containment version passed on any
+superset, which is how a missing step went unnoticed. Ruled and recorded **D24**
+(the serif floor beats the frames on avatar monograms; the face changes, not the
+size), **D25** (the caret override, with the assertion that stops it coming back a
+third time after #228 and #338) and **D26** (the hatch is an editor primitive;
+`placeholder.tsx` is deleted). Three new guards: `dropdown-caret.test.ts`,
+`placeholder-hatch.test.ts`, and the per-size serif-floor check in
+`avatar.test.tsx` that closes the gap `display-type.test.ts` names but cannot read.
+
+**Not done, and why.** The inline-hex/width/radius guard D18 anticipates from this
+ticket is not in the acceptance list and is not here; the acceptance asks only that
+the sweep introduce none, which it does not. Extending `design-tokens.test.ts` over
+`packages/` is a one-line change with no current violations to catch, left for
+whoever needs it.
+
 **Non-goals:** adding a `stone-800` token to the ramp — `01-foundations.md` sets the ramp and
 this is not a ticket's to extend. The two absent frame colours (**#306** — a ruling, not an
 edit).
@@ -3947,7 +4001,7 @@ correct, reads `BOOKING_REQUEST_EXPIRY_DAYS`).
 
 ### #373: Design-system completion — token scale, undefined-step guard, and the caret override
 
-**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
 
 Merges **#333, #364, #369**.
