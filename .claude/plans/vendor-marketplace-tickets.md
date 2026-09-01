@@ -214,14 +214,14 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **387** | **Checkout is a dead end — an accepted booking's `Pay` CTA answers 404** | P1.5 | M4.5 | **P0 Critical** | **In Progress** | `worktree-387` | **None** | `core` `stripe` | **Filed 2026-08-31 by the pre-launch QA passthrough.** The money path does not complete. `/bookings/<id>` renders `Pay $1,450` on an accepted booking; the link is `/bookings/<id>/checkout`, and that route answers **404** with copy that says the listing may be gone. Stripe rejects the PaymentIntent — `No such destination: 'acct_e2e_fixture_not_a_real_account'`, `param: transfer_data[destination]`, `code: resource_missing` — the API answers **400**, and `openCheckout` folds 400/402/404/409/422 into `null`, which the page turns into `notFound()`. **#381 would not catch this**: its proposed `stripe_onboarded implies stripe_account_id is not null` constraint passes on a non-null placeholder. The seed writes exactly such a placeholder, so **no browser or E2E pass can ever reach checkout** — which is why this survived. Contrast the accept-time 402, which is handled well |
 | **388** | **Forms reject the first submit in silence** | P1 | M3 | **P1 High** | **In Progress** | `worktree-388` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** Two of the three form surfaces a vendor must clear reject a pristine submit with **no POST, no `aria-invalid`, no `role=alert`, no message anywhere on the page** — the button appears inert. Confirmed on **Add package** (`/vendor/packages`) and **Create profile** (`/vendor/profile/edit`, the screen every new vendor is funnelled to). Focus moves to the offending control, which is the only signal, and it is silent for a screen reader. A **second** submit does render the summary, so the machinery exists and the first pass does not reach it. The booking-request form validates correctly but never announces it either. Includes the Price filter, which discards non-numeric input with no message |
 | **389** | **Admin tables let each row size its own columns** | P1 | M3 | **P1 High** | **Done** | `worktree-389` | **None** | `core` | **Landed 2026-08-31 — squash `3e6ef74`, PR #88, required CI green on the merged head.** `resolveTrack` in `data-table.tsx` floors every flexible track as `minmax(0, …)` before joining the template, so a bare `fr`'s `min-content` minimum can no longer let one row's content resize that row alone; `width` is narrowed to ``TableTrack = `${number}fr` | `${number}px` `` so `auto` and the other intrinsic keywords — which a regex reading only `fr` cannot see, and which reopen this exactly — are a compile error rather than a comment. **Two things the fix exposed rather than caused, both repaired here because acceptance 2 and 3 name them:** the header labels had been leaning on the same `min-content` floor with no truncation of their own, so removing it left five of six labels on `/admin/reviews` at 390 overprinting the next one (`Rating` over its 12.2px track by 17.66px, rendering `RATIN|VENDOR|AUTHOR|ABOUT`, invisible at 768 and above); and `admin-header.tsx`'s identity block could not compress below the address it prints, reaching `right=406.78` and giving **every** `/admin` route a document `scrollWidth` of 407 against a 390 viewport — pre-existing and unrelated to the table, but the entire remaining cause of acceptance 2 failing. **Verified in-browser as the admin at 1440/1024/768/390:** zero template mismatches across 24 route×viewport combinations (vendors 14/14, bookings 15/15, customers 4/4, payments 15/15, reviews 15/15, tags 23/23), 28/28 routes at `scrollWidth == clientWidth` including 390/390, action column back inside at `right=1398.98`, 15/15 rows truncating (widest `scrollWidth 704` vs `clientWidth 274`), zero console errors. The check has teeth: stripping `minmax(0, …)` from the live custom property at runtime took reviews to **0 of 15** rows matching and moved the action column to `right=1468`. **`parity-checker` on frame `13 Admin`: no axis fails because of this change** — tracks match the frame digit for digit, header labels resolve to `stone-600` so the recorded `BUSINESS` colour leak has not returned, and no header cell on any of the six tables contains a focusable element, so the new `overflow:hidden` cannot clip a ring (verified, not assumed). 10 tests fail against the pre-fix source and pass after. **Filed #392 and #393** for what the pass found and this ticket did not own. **Filed 2026-08-31 by the pre-launch QA passthrough.** `components/admin/data-table.tsx` gives the header and **every row its own grid container**, sharing only a template string through `--admin-table-columns`. The admin pages declare bare `fr` tracks, and a bare `fr` cannot shrink below its content's min-content — so any row with long text resolves its own widths. On `/admin/reviews` **13 of 15 rows** disagree with the header, the action column is pushed to `right=1454` in a 1440 viewport, and at 390 the document scrolls sideways. **Fix verified live in-browser:** wrapping the flexible tracks in `minmax(0, …)` took matching rows from 2/6 to 6/6. Latent on bookings, customers and payments — they escape only because their cells are short |
-| **390** | **Server-rendered pages have no upstream timeout** | P1.5 | M4.5 | **P1 High** | **In Progress** | `worktree-390` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** With the API reachable but not answering, `/` and `/vendors/<slug>` send **zero bytes and never respond** — measured at 30s against a 0.10s baseline, so the visitor holds a blank tab until the platform 504s. `/search` returns its skeleton in 0.14s under the identical fault, so the correct pattern is already in the repo. No fetch in the web app sets a deadline, so a slow dependency is indistinguishable from a hung one |
+| **390** | **Server-rendered pages have no upstream timeout** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-390` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** With the API reachable but not answering, `/` and `/vendors/<slug>` send **zero bytes and never respond** — measured at 30s against a 0.10s baseline, so the visitor holds a blank tab until the platform 504s. `/search` returns its skeleton in 0.14s under the identical fault, so the correct pattern is already in the repo. No fetch in the web app sets a deadline, so a slow dependency is indistinguishable from a hung one |
 | **392** | **Frame `13 Admin` parity debt — four class-level misses and the missing chevrons** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's `parity-checker` pass.** Frame `13` matched on all six axes for #389's own change, and the pass surfaced five pre-existing misses it did not own. **#372 does not cover these** — it closes frames `08`, `04`/`07`/`19`, `16`, `18` and the site chrome, not `13`. **All five are class- or token-level, so no viewport can change them** — re-derived from source after a peer challenged whether the readings were taken at 1440: the pane uses `rounded-xl` → `--radius-xl: 14px` (`theme.css:221`) where the frame draws 12px, which is `--radius-panel` on the line above; `admin-nav.tsx:66` is `min-h-11` in a `gap-1` list, a 48px pitch by construction against the frame's 34px, ending the rail 93px low; `status-pill.tsx:40` is `px-2.5 py-1.5 text-xs font-bold` against the frame's `10px/700` with `padding 5px 10px` (47.36×26 vs 44.88×23), and that size comes from `03-components.md`'s vocabulary, so **the plan is what needs correcting, not only the component**; the avatar initial renders `font-sans` where the frame draws Instrument Serif; and `filter-bar.tsx`'s `Category ▾ / City ▾ / Payouts ▾` triggers render **no `▾` glyph at all** (`innerHTML` is bare text, zero children), which walks City 15px and Payouts 25.6px left of their frame positions. **Not in scope:** frame `13`'s table pane clipping its own fifteenth row by 4px — that is **#385**'s to rule on, and the app reproduces it within a pixel or two |
 | **393** | **Admin tables have no responsive strategy below 1024** | P1 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's browser pass.** `30-responsive.md:31` specifies Admin as `768 → Horizontal scroll` and `390 → Card list, not a table`. **Neither exists.** After #389 the layout is correct at every width and nothing overflows — but at 390 `/admin/reviews` resolves to `12.2px 31.73px 31.73px 21.97px 46.38px 21.97px 70px`, so headers render `R…`, `A…`, `W…` and body cells `4…`, `Ro…`, `T…`. **A 12px column cannot show more than an ellipsis**, so the tables are legible only at 1024 and above. This is #389's fix working, not failing: before it, the rows were mutually misaligned *and* the document scrolled sideways, so the contract's 768 row was never actually implemented either — the old horizontal scroll was incoherence, not a degradation. Ruling needed on whether 768 keeps the contract's scroll-inside-the-pane or follows 390 to cards |
 | **391** | **The vendor dashboard's earnings month is a local month with UTC edges** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 from #381's verification pass**, which found it because the API suite went red locally and green in CI — the tell. `getVendorDashboard` derives `today` as a **local** calendar date, `monthBounds` turns it into `YYYY-MM-DD` strings, and those are then pinned to **UTC** midnight before being compared against `bookings.paid_at`, a `timestamptz`. The window is therefore a local month with UTC edges, and a vendor west of UTC loses the last hours of every month from `earningsThisMonthCents` — CDT loses 19:00–23:59 on the final day. East of UTC it is the mirror image. `countBookingsBetween` on the adjacent line takes the date strings directly, so `bookingsThisMonth` and `earningsThisMonthCents`, which render side by side, can disagree about which month a booking belongs to. Same class as the law in `.claude/rules/shared-contracts.md` — *never round-trip a date through a `Date` in local time* — inverted: a date string round-tripped into an instant |
 | **394** | **The booking confirmation screen answers 500 for every customer** | P1 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 from #363's browser pass**, which could not verify its own change because the screen never renders. `GET /customer/booking-requests/:id/booking` (`payments.routes.ts:70`) serialises with **`bookingSchema`**, which declares neither `eventType` nor `venue`, so Fastify's serialiser strips both from a 200. The web parses the same body with `wireBookingSchema` = `bookingWithContextSchema`, where both are **`.nullable()` — nullable, not optional** — so the parse throws, `getBookingForRequest` raises, and the RSC 500s. The list route is correct (`booking-requests.routes.ts:167` uses `z.array(bookingWithContextSchema)`), which is why `/bookings` renders and only the single read fails. **Also carries the frame `06` label fix, lifted out of #363** so both land in one browser pass: `booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds the slug, so the occasion renders `wedding · Barr Mansion · Austin, TX` in lower case. The component fix and its two tests were written and shown failing-before under #363; they were reverted from that lane because the 500 makes them unverifiable and the route fix belongs to a file lane #387 is live in |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **373 rows as of 2026-08-31: 189 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-08-31, after #381 and #389 landed and #391-#394 were filed: 20 rows — 10 Backlog, 6 In Progress, 2 Deferred — needs a human, and 2 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-08-31, after #390 landed and #394 was filed: 20 rows — 10 Backlog, 5 In Progress, 2 Deferred — needs a human, and 3 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -2178,7 +2178,8 @@ every column spec, not in the Reviews page.
 
 ### #390: Server-rendered pages have no upstream timeout
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Landed:** squash `5c1539d`, PR #89, branch `worktree-390`
 **Blocked by:** None
 
 **Filed 2026-08-31 by the pre-launch QA passthrough.**
@@ -2217,6 +2218,83 @@ No fetch in the web app sets a deadline, so "slow" and "never" are the same even
 6. The landing hero image `/stock/portrait.jpg` is the LCP element and lacks
    `priority`; Next warns on every load. Set it, since this ticket owns how the landing
    page is delivered.
+
+#### Outcome — landed `5c1539d`, PR #89
+
+Measured on lane 390 with the API under `SIGSTOP` (accepts the connection, never
+answers), before and after:
+
+| Route | API up | API hung — before | API hung — after |
+| --- | --- | --- | --- |
+| `/` | 200 · 0.08s | **000 · 35.00s · 0 bytes** | **200 · 8.26s · 185 KB** |
+| `/vendors/<slug>` | 200 · 2.57s | **000 · 35.00s · 0 bytes** | **500 · 16.48s · 80 KB**, designed frame `16` |
+| `/search` | 200 · 4.65s | 200 · 0.09s | 200 · 0.11s |
+
+`API_REQUEST_TIMEOUT_MS = 8_000` in `api-client.ts`, on the fetch path rather
+than per call site. **Server-side only** — `apiRequest` is also every client
+write's path and none carries an idempotency key, so aborting one that already
+landed reports "that did not send" with the draft preserved, and the customer
+sends again into a thread that now has it twice. `ApiTimeoutError` is
+deliberately not an `ApiClientError`, so `getPublicVendorProfile` can never turn
+a slow upstream into "this vendor does not exist".
+
+**One claim in this ticket was wrong, and the correction matters for #372 and
+anything else reasoning from it.** *"`/search` is already correct under the
+identical fault: it streams its shell and skeleton immediately"* — it does not.
+`/search` answered fast because its three reference reads carry
+`revalidate: 3600` and Next's data cache served them. Verified by clearing
+`.next/cache`, restarting the web server with the API suspended, and reading the
+HTML back: the category names were still present, so they came from the cache,
+not from a resilient render. There is **no `<Suspense>` anywhere in `src/app`**.
+The pattern `/search` actually uses is degrade-to-empty plus a client-side
+results fetch — which `/` already followed.
+
+**Three acceptance lines are not met, deliberately:**
+
+- **2, for `/vendors/<slug>` only.** It is bounded but spends two deadlines, not
+  one. Verified by instrumenting `apiRequest` with stack traces: Next 15.5 runs
+  `generateMetadata` in a **separate React cache scope** from the page component
+  and after it, so `cache()` cannot dedupe the profile read across the boundary
+  and each side arms its own deadline. Catching the timeout in `generateMetadata`
+  was tried and reverted — it does not save the second deadline, and its neutral
+  title labelled a **500** as `Page not found`. Closing it means not reading the
+  profile in metadata at all, which changes what this page tells crawlers.
+- **4** (stream the shell before any API read). Built with `<Suspense>` and an
+  async child, then reverted: it broke 24 of 28 tests in `page.test.tsx`, which
+  renders the RSC tree in jsdom via `render(await HomePage())`, where React
+  rejects an async child as "an async Client Component". With
+  `loading-boundaries.test.ts` already guarding against a boundary above a
+  `notFound()` page, adding the first `<Suspense>` in `src/app` is an app-wide
+  testing-strategy change rather than a ticket-sized one.
+- **6** (`priority` on the hero image). **The ticket names the wrong file**: the
+  console warning names `/stock/florals.jpg`, read from the live browser, not
+  `/stock/portrait.jpg`. `photo-cluster-parity.test.ts` also enforces #186,
+  which measured three wasted `/_next/image` fetches at 390x844 because the
+  cluster is `display:none` below 768 and eager images load anyway. `priority`
+  has no media-query form, so #186 and #390 cannot both be satisfied. Reversing
+  a measured, test-enforced ruling is a product decision, not a ticket's — and
+  it should be re-measured against whichever element is actually LCP at
+  1440x900.
+
+Also fixed along the way: both halves of the exchange are bounded, so an
+upstream that sends headers and then stalls mid-body no longer hangs; a deadline
+firing while the *error* body is read keeps the known status, so a late 401 still
+redirects to sign-in rather than rendering the error boundary; and
+`getPublicVendorAvailability` gained the `slugSchema` guard its two siblings
+already had, now that it is read before the `notFound()` gate rather than after.
+
+`vitest.setup.ts` guards its DOM patches with `typeof Element !== 'undefined'`,
+so a `@vitest-environment node` test file can exist at all —
+`api-client.deadline.test.ts` is one, because the deadline is armed only where
+there is no `window` and asserting it under jsdom would prove the opposite.
+
+Verified: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (3316 tests).
+`browser-verifier` at 1440x900 signed out and as the customer — landing, all five
+vendor-profile tabs (availability draws a real calendar, reviews say "No reviews
+yet" rather than the timeout copy, so both companion reads succeed inside the new
+single wave), both 404 paths still **HTTP 404** with the designed page, and eight
+searches cancelled mid-flight under injected latency with no failure copy and no
+console error.
 
 
 ---
