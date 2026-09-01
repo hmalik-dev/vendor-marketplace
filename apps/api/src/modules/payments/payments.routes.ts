@@ -1,5 +1,6 @@
 import {
   bookingSchema,
+  bookingWithContextSchema,
   cancelBookingSchema,
   cancelledBookingSchema,
   checkoutIntentSchema,
@@ -67,7 +68,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
     '/customer/booking-requests/:requestId/booking',
     {
       preHandler: requireAuth,
-      schema: { params: requestParamsSchema, response: { 200: bookingSchema } },
+      schema: { params: requestParamsSchema, response: { 200: bookingWithContextSchema } },
     },
     async (request) => {
       const booking = await reconcileBooking(

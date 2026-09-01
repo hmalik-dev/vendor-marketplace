@@ -288,7 +288,7 @@ function SummaryActions({
         )}
       </Button>
       <p className="flex items-center justify-center gap-1.75 text-[11.5px] text-stone-600">
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-sage-500" />
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-sage-400" />
         Held by Stripe until the event is complete
       </p>
     </div>

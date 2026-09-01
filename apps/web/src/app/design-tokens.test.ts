@@ -104,22 +104,22 @@ describe('every colour class names a step the theme defines', () => {
   });
 
   /**
-   * The four this guard found on its first run, each owned by **#376**.
+   * What is left of the four this guard found on its first run, each owned by
+   * **#376**.
    *
    * A ratchet, not an allowlist: the list only ever shrinks, and #376's
-   * acceptance is that these are deleted rather than amended. They are recorded
-   * here rather than fixed in the lane that found them because they sit on three
-   * surfaces that lane touches nothing else in — two of which carry their own
-   * frames, so the right step is a measurement rather than a guess.
+   * acceptance is that these are deleted rather than amended. The two checkout
+   * `bg-sage-500` entries were deleted by **#387**, which made frame
+   * `05 Checkout` reachable for the end-to-end customer and so could finally
+   * *measure* the dot against the frame rather than guessing at a ramp step:
+   * both frame occurrences draw `#5E6B4F`, which is `sage-400`.
    */
   const KNOWN_UNDEFINED_STEPS = [
-    'src/app/bookings/[requestId]/checkout/page.tsx — bg-sage-500 (sage has no 500)',
     'src/components/bookings/booking-confirmed.tsx — text-sage-700 (sage has no 700)',
-    'src/components/checkout/checkout-screen.tsx — bg-sage-500 (sage has no 500)',
     'src/components/portfolio/portfolio-manager.tsx — text-steel-700 (steel has no 700)',
   ] as const;
 
-  it('finds none in the app’s own source beyond the four #376 owns', () => {
+  it('finds none in the app’s own source beyond the two #376 still owns', () => {
     const pattern = new RegExp(
       `(?:${COLOUR_UTILITIES.join('|')})-(${[...ramps.keys()].join('|')})-(\\d+)`,
       'g',

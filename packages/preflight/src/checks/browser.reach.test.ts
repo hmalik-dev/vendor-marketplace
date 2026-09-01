@@ -1,8 +1,8 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { evaluateE2eReach } from './browser.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describePayoutRoute, evaluateE2eReach } from './browser.js';
 
 /**
  * The check exists because configured credentials are not the same thing as a
@@ -48,5 +48,85 @@ describe('evaluateE2eReach', () => {
 
     expect(result.ok).toBe(false);
     expect(result.fix).toBe('pnpm db:seed:e2e');
+  });
+});
+
+/**
+ * #387 — the gate certified the one capability that did not work.
+ *
+ * `stripe_onboarded` was true beside `acct_e2e_fixture_not_a_real_account`, so
+ * every run reported "and payouts" while `POST .../checkout` answered 400 and
+ * the customer got a 404. A column is a claim; these are the evidence.
+ */
+describe('describePayoutRoute', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Stripe's v1 account read, stubbed — this suite makes no network call. */
+  function stripeAnswers(status: number, body: unknown): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status }))),
+    );
+  }
+
+  it('refuses an id Stripe could never resolve, without asking Stripe', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const route = await describePayoutRoute('acct_e2e_fixture_not_a_real_account', 'sk_test_key');
+
+    expect(route).toEqual({
+      ok: false,
+      reason: expect.stringContaining('not an id Stripe can resolve'),
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('refuses a payout-ready vendor with no account id at all', async () => {
+    const route = await describePayoutRoute(null, 'sk_test_key');
+
+    expect(route).toEqual({
+      ok: false,
+      reason: expect.stringContaining('no connected account id'),
+    });
+  });
+
+  it('fails when Stripe does not recognise the account', async () => {
+    stripeAnswers(403, { error: { message: 'No such account' } });
+
+    const route = await describePayoutRoute('acct_1Gone000000000000', 'sk_test_key');
+
+    expect(route).toEqual({
+      ok: false,
+      reason: expect.stringContaining('checkout will answer 400'),
+    });
+  });
+
+  /*
+   * `transfers` is the exact capability `transfer_data.destination` requires,
+   * so an account that exists but has not been activated still fails.
+   */
+  it('fails when Stripe has the account but transfers are inactive', async () => {
+    stripeAnswers(200, { capabilities: { transfers: 'inactive' } });
+
+    const route = await describePayoutRoute('acct_1Restricted00000', 'sk_test_key');
+
+    expect(route).toEqual({
+      ok: false,
+      reason: expect.stringContaining('has not activated transfers'),
+    });
+  });
+
+  it('passes and says so when Stripe accepts the account', async () => {
+    stripeAnswers(200, { capabilities: { transfers: 'active' } });
+
+    const route = await describePayoutRoute('acct_1Works00000000000', 'sk_test_key');
+
+    expect(route).toEqual({
+      ok: true,
+      summary: 'payouts Stripe accepts through acct_1Works00000000000',
+    });
   });
 });
