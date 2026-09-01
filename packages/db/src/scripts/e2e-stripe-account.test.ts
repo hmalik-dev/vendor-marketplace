@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createStripeFixtureGateway,
   ensureE2eConnectedAccount,
-  isStripeAccountId,
   type E2eAccountStatus,
   type StripeFixtureGateway,
 } from './e2e-stripe-account.js';
@@ -43,27 +42,6 @@ function fakeGateway(statuses: (E2eAccountStatus | null)[]): {
 /** Never actually waits — the poll interval is 3s and this suite is not. */
 const noWait = async (): Promise<void> => {};
 
-describe('isStripeAccountId', () => {
-  /*
-   * The whole point of #387: the fixture id that made every browser pass stop
-   * one click short of a payment must never read as an id Stripe would accept.
-   */
-  it('rejects the placeholder the fixture used to write', () => {
-    expect(isStripeAccountId('acct_e2e_fixture_not_a_real_account')).toBe(false);
-  });
-
-  it.each(['acct_1UAgirFAZlrXdcC8', 'acct_1Fixture0000000000'])('accepts %s', (value) => {
-    expect(isStripeAccountId(value)).toBe(true);
-  });
-
-  it.each([null, undefined, '', 'acct_', 'acct_demo_june_harlow', 'cus_1234'])(
-    'rejects %s',
-    (value) => {
-      expect(isStripeAccountId(value)).toBe(false);
-    },
-  );
-});
-
 describe('ensureE2eConnectedAccount', () => {
   it('reuses an account Stripe still reports as able to receive transfers', async () => {
     const gateway = fakeGateway([ACTIVE]);
@@ -100,8 +78,15 @@ describe('ensureE2eConnectedAccount', () => {
     expect(gateway.attachVerifiedBankAccount).toHaveBeenCalledWith(PROVISIONED);
   });
 
-  it('does not even ask Stripe about a placeholder id', async () => {
-    const gateway = fakeGateway([ACTIVE]);
+  /*
+   * Stripe decides, not a regex. An earlier cut skipped the lookup unless the
+   * id matched `^acct_[A-Za-z0-9]+$`, which made a read-side heuristic decide a
+   * *write*: an id Stripe would have recognised but the pattern did not — and
+   * Stripe does not publish its charset as a contract (D29) — fell through to
+   * provisioning and orphaned the account it named.
+   */
+  it('asks Stripe about a stored id rather than judging its shape', async () => {
+    const gateway = fakeGateway([null, ACTIVE]);
 
     await ensureE2eConnectedAccount(
       gateway,
@@ -109,8 +94,23 @@ describe('ensureE2eConnectedAccount', () => {
       noWait,
     );
 
-    expect(gateway.readStatus).not.toHaveBeenCalledWith('acct_e2e_fixture_not_a_real_account');
+    expect(gateway.readStatus).toHaveBeenCalledWith('acct_e2e_fixture_not_a_real_account');
+    // Stripe said no, so it is replaced — the decision Stripe made, not the regex.
     expect(gateway.createRecipientAccount).toHaveBeenCalledTimes(1);
+  });
+
+  /* An id Stripe *does* recognise is kept, whatever its shape. */
+  it('keeps an unusually shaped id that Stripe still resolves', async () => {
+    const gateway = fakeGateway([ACTIVE]);
+
+    const result = await ensureE2eConnectedAccount(
+      gateway,
+      { ...INPUT, existingAccountId: 'acct_1Odd_Shape' },
+      noWait,
+    );
+
+    expect(result).toEqual({ accountId: 'acct_1Odd_Shape', onboarded: true, created: false });
+    expect(gateway.createRecipientAccount).not.toHaveBeenCalled();
   });
 
   /*

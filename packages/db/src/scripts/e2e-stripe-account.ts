@@ -1,15 +1,5 @@
 import Stripe from 'stripe';
 
-/**
- * Stripe's own account-id shape: `acct_` followed by base62.
- *
- * The fixture this replaced wrote `acct_e2e_fixture_not_a_real_account`, which
- * fails this pattern on its underscores — deliberately, so that the id which
- * made **every** browser pass stop one click short of a payment can never be
- * mistaken for one Stripe would accept.
- */
-const STRIPE_ACCOUNT_ID_PATTERN = /^acct_[A-Za-z0-9]+$/;
-
 /** The bank account Stripe documents as instantly verified in test mode. */
 const TEST_BANK_ACCOUNT = 'btok_us_verified';
 
@@ -38,14 +28,15 @@ const TEST_IDENTITY = {
   ssn: '000000000',
 } as const;
 
+/**
+ * The statuses that mean "this key cannot resolve that account", as opposed to
+ * "Stripe is unwell". Everything else propagates.
+ */
+const UNRESOLVABLE = new Set([400, 403, 404]);
+
 /** How long to wait for Stripe to finish activating the capabilities. */
 const ACTIVATION_ATTEMPTS = 10;
 const ACTIVATION_INTERVAL_MS = 3000;
-
-/** Whether a stored value is shaped like an id Stripe could actually resolve. */
-export function isStripeAccountId(value: string | null | undefined): value is string {
-  return typeof value === 'string' && STRIPE_ACCOUNT_ID_PATTERN.test(value);
-}
 
 /** What Stripe reports about a recipient account's two capabilities. */
 export interface E2eAccountStatus {
@@ -125,10 +116,18 @@ export function createStripeFixtureGateway(secretKey: string): StripeFixtureGate
         };
       } catch (error: unknown) {
         /*
-         * A key pointing at a different Stripe instance, or an account someone
-         * removed, is a re-provision rather than a failure.
+         * A key pointing at a different Stripe instance, an account someone
+         * removed, or a stored value that was never an account id at all is a
+         * re-provision rather than a failure.
+         *
+         * 403 as well as 404, because that is what Stripe actually answers for
+         * an id outside this key's reach — measured, not assumed:
+         * `GET /v1/accounts/acct_nonexistent` returns **403**. Matching only on
+         * 404 would let the fixture's own historical placeholder throw, and the
+         * caller would degrade the seed to "no payout route" rather than
+         * replacing the dead id.
          */
-        if (error instanceof Stripe.errors.StripeError && error.statusCode === 404) {
+        if (error instanceof Stripe.errors.StripeError && UNRESOLVABLE.has(error.statusCode ?? 0)) {
           return null;
         }
 
@@ -209,7 +208,17 @@ export async function ensureE2eConnectedAccount(
   input: E2eStripeAccountInput,
   wait: (ms: number) => Promise<void> = defaultWait,
 ): Promise<E2eStripeAccountResult> {
-  if (isStripeAccountId(input.existingAccountId)) {
+  /*
+   * **Stripe decides, not the shape of the string.** This used to skip the
+   * lookup unless the stored id matched `^acct_[A-Za-z0-9]+$`, which quietly
+   * turned a read-side heuristic into a write decision: an id Stripe would have
+   * recognised but the pattern did not — Stripe does not publish its charset as
+   * a contract (D29) — fell straight through to `createRecipientAccount` and
+   * orphaned the account it named. That is the exact leak the id/flag
+   * decoupling exists to prevent, reintroduced one branch earlier. Asking
+   * Stripe about anything non-empty costs one request that 404s.
+   */
+  if (input.existingAccountId !== null && input.existingAccountId !== '') {
     const accountId = input.existingAccountId;
     const status = await gateway.readStatus(accountId);
 
