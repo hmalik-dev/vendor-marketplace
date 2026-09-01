@@ -7,11 +7,7 @@ import { createDatabase } from '../client.js';
 import { loadEnv } from '../load-env.js';
 import { users, vendorProfiles } from '../schema/index.js';
 import { seedE2eFixtures, type E2eAccount } from '../seed-e2e.js';
-import {
-  createStripeFixtureGateway,
-  ensureE2eConnectedAccount,
-  isStripeAccountId,
-} from './e2e-stripe-account.js';
+import { createStripeFixtureGateway, ensureE2eConnectedAccount } from './e2e-stripe-account.js';
 import { assertSafeTarget } from './safe-target.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -170,9 +166,17 @@ async function resolveConnectedAccount(
     return NO_PAYOUT_ROUTE;
   }
 
-  const existingAccountId = isStripeAccountId(pinnedAccountId)
-    ? pinnedAccountId
-    : await readStoredAccountId(db, vendorEmail);
+  /*
+   * The pin wins when there is one, and its *shape* is not judged here — Stripe
+   * is asked about whatever it holds. A format test at this seam would decide a
+   * write for the same reason D29 refuses one at the column: an id the pattern
+   * did not recognise would be silently dropped in favour of the database's,
+   * and a replacement account provisioned over the top of a live one.
+   */
+  const existingAccountId =
+    pinnedAccountId !== undefined && pinnedAccountId !== ''
+      ? pinnedAccountId
+      : await readStoredAccountId(db, vendorEmail);
 
   let account;
 
