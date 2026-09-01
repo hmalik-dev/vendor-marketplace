@@ -27,6 +27,15 @@ import { createTestDatabase, type TestDatabase } from './testing/test-db.js';
 describe('seedE2eFixtures', () => {
   let database: TestDatabase;
 
+  /**
+   * A connected account shaped the way Stripe's really are.
+   *
+   * The fixture used to hardcode `acct_e2e_fixture_not_a_real_account`, which
+   * Stripe rejects — so the id now comes from the caller and this suite passes
+   * a plausible one rather than re-inventing the placeholder (#387).
+   */
+  const FIXTURE_ACCOUNT_ID = 'acct_1Fixture0000000000';
+
   const INPUT: E2eSeedInput = {
     vendor: {
       clerkUserId: 'user_e2e_vendor',
@@ -40,6 +49,7 @@ describe('seedE2eFixtures', () => {
       firstName: 'Cal',
       lastName: 'Customer',
     },
+    stripeAccountId: FIXTURE_ACCOUNT_ID,
     now: new Date('2026-08-30T00:00:00.000Z'),
   };
 
@@ -272,11 +282,19 @@ describe('seedE2eFixtures', () => {
       .where(eq(vendorProfiles.id, result.vendorProfileId));
 
     expect(profile?.stripeOnboarded).toBe(true);
-    expect(profile?.stripeAccountId).toBe('acct_e2e_fixture_not_a_real_account');
+    expect(profile?.stripeAccountId).toBe(FIXTURE_ACCOUNT_ID);
   });
 
-  it('leaves both payout columns empty when payouts are not ready', async () => {
-    const result = published(await seedE2eFixtures(database.db, { ...INPUT, payoutsReady: false }));
+  /*
+   * #387, and the reason a dead checkout reached pre-launch. With no real
+   * connected account there is nothing to be payout-ready *with*, so the
+   * fixture must leave the vendor un-onboarded rather than write a placeholder
+   * id: Stripe refuses it as `transfer_data.destination`, the API answers 400,
+   * and the customer is shown a 404 for a booking that is very much alive.
+   */
+  it('leaves the vendor un-onboarded when there is no real connected account', async () => {
+    const { stripeAccountId: _omitted, ...withoutAccount } = INPUT;
+    const result = published(await seedE2eFixtures(database.db, withoutAccount));
 
     const [profile] = await database.db
       .select()
@@ -285,6 +303,47 @@ describe('seedE2eFixtures', () => {
 
     expect(profile?.stripeOnboarded).toBe(false);
     expect(profile?.stripeAccountId).toBeNull();
+  });
+
+  /*
+   * `db-schema.md`'s legacy rule: the corrected writer has to repair the rows
+   * the old one left behind, and the adoption path is exactly where an
+   * idempotence guard would otherwise skip the repair.
+   */
+  it('replaces a placeholder account id left by an older seed', async () => {
+    const first = published(
+      await seedE2eFixtures(database.db, {
+        ...INPUT,
+        stripeAccountId: 'acct_e2e_fixture_not_a_real_account',
+      }),
+    );
+
+    await seedE2eFixtures(database.db, INPUT);
+
+    const [profile] = await database.db
+      .select()
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.id, first.vendorProfileId));
+
+    expect(profile?.stripeAccountId).toBe(FIXTURE_ACCOUNT_ID);
+  });
+
+  /*
+   * The flag narrows, the id does not. An account claimed but not yet activated
+   * by Stripe is the state a real vendor passes through, and keeping the id is
+   * what lets the seed read it back and finish rather than provisioning a
+   * second connected account on every run.
+   */
+  it('keeps the account id but clears the flag when payouts are not ready', async () => {
+    const result = published(await seedE2eFixtures(database.db, { ...INPUT, payoutsReady: false }));
+
+    const [profile] = await database.db
+      .select()
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.id, result.vendorProfileId));
+
+    expect(profile?.stripeOnboarded).toBe(false);
+    expect(profile?.stripeAccountId).toBe(FIXTURE_ACCOUNT_ID);
   });
 
   /*

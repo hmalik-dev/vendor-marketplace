@@ -25,6 +25,8 @@ export interface PayableRequestRow {
   status: string;
   eventDate: string;
   eventLocation: string | null;
+  /** The occasion, which the confirmed screen renders beside the venue. */
+  eventType: string | null;
   guestCount: number | null;
   /** The price locked when the request was made or quoted. */
   finalPriceCents: number | null;
@@ -52,6 +54,7 @@ export async function findPayableRequest(
       status: bookingRequests.status,
       eventDate: bookingRequests.eventDate,
       eventLocation: bookingRequests.eventLocation,
+      eventType: bookingRequests.eventType,
       guestCount: bookingRequests.guestCount,
       finalPriceCents: bookingRequests.finalPriceCents,
       quotedPriceCents: bookingRequests.quotedPriceCents,
@@ -73,14 +76,33 @@ export async function findPayableRequest(
   return rows?.[0] ?? null;
 }
 
-/** The booking a request produced, or `null` if payment has not landed yet. */
+/** A booking with the occasion the confirmed screen renders beside the venue. */
+export interface BookingWithEventTypeRow extends BookingRow {
+  eventType: string | null;
+}
+
+/**
+ * The booking a request produced, or `null` if payment has not landed yet.
+ *
+ * Joined to the request for `event_type`, which lives there rather than on the
+ * booking — the same join `findBookings` makes for the hub, and for the same
+ * reason: frame `06` reads "Wedding · Barr Mansion", and a second round trip
+ * per booking to say so is not worth it.
+ */
 export async function findBookingByRequest(
   db: AppDatabase,
   requestId: string,
-): Promise<BookingRow | null> {
-  const rows = await db.select().from(bookings).where(eq(bookings.requestId, requestId)).limit(1);
+): Promise<BookingWithEventTypeRow | null> {
+  const rows = await db
+    .select({ booking: bookings, eventType: bookingRequests.eventType })
+    .from(bookings)
+    .innerJoin(bookingRequests, eq(bookings.requestId, bookingRequests.id))
+    .where(eq(bookings.requestId, requestId))
+    .limit(1);
 
-  return rows?.[0] ?? null;
+  const row = rows?.[0];
+
+  return row ? { ...row.booking, eventType: row.eventType } : null;
 }
 
 export async function findBookingById(

@@ -260,6 +260,9 @@ importers:
       postgres:
         specifier: 3.4.9
         version: 3.4.9
+      stripe:
+        specifier: ^22.6.0
+        version: 22.6.0(@types/node@24.13.3)
     devDependencies:
       '@electric-sql/pglite':
         specifier: 0.5.7

@@ -71,6 +71,12 @@ describe('swallowed errors', () => {
    */
   it('reports from every data path that catches without telling the user', () => {
     const expected = [
+      // #387: the checkout's error screen reads the request to tell an
+      // unaccepted booking from a closed one. That read carries #390's
+      // server-side deadline, and a timeout must not turn the screen that
+      // explains a failure into the 500 boundary — so it falls back to the
+      // vaguer of the two variants and logs why.
+      'src/app/bookings/[requestId]/checkout/page.tsx',
       'src/components/messaging/messages-screen.tsx',
       'src/components/messaging/notification-bell.tsx',
       'src/components/search/nearby-dates-band.tsx',

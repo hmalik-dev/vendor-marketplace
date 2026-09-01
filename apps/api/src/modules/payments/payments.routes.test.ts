@@ -434,6 +434,52 @@ describe('payments', () => {
           .statusCode,
       ).toBe(404);
     });
+
+    /*
+     * Found by driving the flow for #387, the first time anyone reached a paid
+     * booking in a browser. The route answered `bookingSchema`, so Fastify
+     * stripped `eventType` and `venue` — and the confirmed screen validates
+     * with `bookingWithContextSchema`, which requires both. Frame `06` reads
+     * "Wedding · Barr Mansion", and the screen was rendering the 500 boundary
+     * over a booking that had been paid for.
+     */
+    it('answers with the occasion and venue the confirmed screen renders', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+
+      const response = await inject(
+        'GET',
+        `/customer/booking-requests/${requestId}/booking`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        status: 'confirmed',
+        eventType: 'wedding',
+        venue: 'Barr Mansion, Austin, TX',
+        eventLocation: 'Barr Mansion, Austin, TX',
+      });
+    });
+
+    /*
+     * The already-booked branch returned whatever booking the request id named
+     * to any signed-in caller — amounts, payout split and Stripe intent id — so
+     * a stranger walking ids read other people's bookings. 404, not 403, so a
+     * prober still learns nothing about which ids exist.
+     */
+    it('will not let another customer read someone elses booking', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+
+      const response = await inject(
+        'GET',
+        `/customer/booking-requests/${requestId}/booking`,
+        OUTSIDER,
+      );
+
+      expect(response.statusCode).toBe(404);
+    });
   });
 
   describe('completion', () => {

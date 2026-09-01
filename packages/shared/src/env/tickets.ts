@@ -485,6 +485,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   393: [], // the admin tables' responsive strategy below 1024, no external service
   // Filed 2026-08-31 from #363's browser pass.
   394: [], // a response schema, a label lookup and their tests — no external service
+  395: ['stripe'], // frame `05 Checkout` parity — the screen only renders with a live intent
+  396: ['stripe'], // the CSP that blocks Stripe; verifying it means driving the payment path
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

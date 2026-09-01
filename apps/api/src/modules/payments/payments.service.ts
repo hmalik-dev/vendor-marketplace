@@ -3,6 +3,7 @@ import {
   MIN_BOOKING_AMOUNT_CENTS,
   calculateFees,
   calculateRefund,
+  type BookingWithContext,
   type CancelledBooking,
   type CheckoutIntent,
 } from '@vendor-marketplace/shared';
@@ -374,11 +375,23 @@ export async function reconcileBooking(
   context: PaymentContext,
   user: AuthenticatedUser,
   requestId: string,
-): Promise<BookingRow | null> {
+): Promise<BookingWithContext | null> {
   const existing = await findBookingByRequest(context.db, requestId);
 
   if (existing) {
-    return existing;
+    /*
+     * Checked here and not only on the reconciliation path below. This branch
+     * used to return whatever booking the request id named, to any signed-in
+     * caller — amounts, payout split, Stripe intent id and all — so a stranger
+     * walking request ids read other people's bookings. `null` rather than 403,
+     * matching `requirePayableByCustomer`: a prober learns nothing about which
+     * ids exist.
+     */
+    if (existing.customerId !== user.id) {
+      return null;
+    }
+
+    return withContext(existing, existing.eventType);
   }
 
   const row = await findPayableRequest(context.db, requestId);
@@ -400,7 +413,18 @@ export async function reconcileBooking(
 
   const { booking } = await recordSuccessfulPayment(context, intent);
 
-  return booking;
+  return withContext(booking, row.eventType);
+}
+
+/**
+ * The booking as the confirmed screen and the hubs read it.
+ *
+ * `eventType` lives on the request and `venue` mirrors `eventLocation`, exactly
+ * as `listBookings` assembles them — the two reads answer with the same shape
+ * because the same `bookingWithContextSchema` validates both ends of each.
+ */
+function withContext(booking: BookingRow, eventType: string | null): BookingWithContext {
+  return { ...booking, eventType, venue: booking.eventLocation };
 }
 
 /** The two sides of a booking, and which one this caller is. */
