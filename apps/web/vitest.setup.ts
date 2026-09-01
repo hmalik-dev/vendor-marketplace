@@ -29,16 +29,27 @@ if (!('IntersectionObserver' in globalThis)) {
   };
 }
 
-if (!Element.prototype.scrollIntoView) {
-  Element.prototype.scrollIntoView = function scrollIntoView(): void {};
-}
+/*
+ * Everything below patches the DOM, and this file is the whole suite's setup —
+ * so it also runs for a file that opts into the **node** environment with
+ * `@vitest-environment node`, where `Element` and `window` do not exist and a
+ * bare reference is a `ReferenceError` that fails the suite before its first
+ * test. `api-client.deadline.test.ts` is such a file, deliberately: the
+ * deadline it covers is armed only when there is no `window`, so asserting it
+ * under jsdom would assert the opposite of the claim.
+ */
+if (typeof Element !== 'undefined') {
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = function scrollIntoView(): void {};
+  }
 
-if (!Element.prototype.hasPointerCapture) {
-  Element.prototype.hasPointerCapture = function hasPointerCapture(): boolean {
-    return false;
-  };
-  Element.prototype.setPointerCapture = function setPointerCapture(): void {};
-  Element.prototype.releasePointerCapture = function releasePointerCapture(): void {};
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = function hasPointerCapture(): boolean {
+      return false;
+    };
+    Element.prototype.setPointerCapture = function setPointerCapture(): void {};
+    Element.prototype.releasePointerCapture = function releasePointerCapture(): void {};
+  }
 }
 
 /*
@@ -52,7 +63,7 @@ if (!Element.prototype.hasPointerCapture) {
  * Reports "not matching", which is the small-viewport answer and therefore the
  * one that leaves sheet behaviour on for the suites that exercise it.
  */
-if (!window.matchMedia) {
+if (typeof window !== 'undefined' && !window.matchMedia) {
   window.matchMedia = function matchMedia(query: string): MediaQueryList {
     return {
       matches: false,
