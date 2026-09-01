@@ -8,7 +8,7 @@ function booking(overrides: Partial<WireBooking> = {}): WireBooking {
     id: 'a1b2c3d4-0000-4000-8000-000000000001',
     requestId: 'req-1',
     eventDate: '2027-06-14',
-    eventType: 'wedding',
+    eventType: 'Wedding',
     venue: 'Barr Mansion',
     totalAmountCents: 145_000,
     status: 'confirmed',
@@ -34,31 +34,6 @@ describe('BookingConfirmed', () => {
     render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('June 14 is yours.');
-  });
-
-  /*
-   * `event_type` holds the slug, so printing the column verbatim rendered
-   * `wedding · Barr Mansion · Austin, TX` — lower-case, in the middle of the
-   * confirmation screen. Every other read site already routes through
-   * `EVENT_TYPE_LABELS`; this was the one that did not.
-   */
-  it('writes the occasion as a person reads it, not as the column stores it', () => {
-    render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
-
-    expect(screen.getByText('Wedding · Barr Mansion · Austin, TX')).toBeTruthy();
-  });
-
-  /** A legacy row the vocabulary has no entry for prints as it is, not blank. */
-  it('falls back to the stored value when the vocabulary has no label for it', () => {
-    render(
-      <BookingConfirmed
-        booking={booking({ eventType: 'Wedding' } as Partial<WireBooking>)}
-        vendor={VENDOR}
-        conversationId="conv-1"
-      />,
-    );
-
-    expect(screen.getByText('Wedding · Barr Mansion · Austin, TX')).toBeTruthy();
   });
 
   it('shows what was paid and the booking id support would ask for', () => {

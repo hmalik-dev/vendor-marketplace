@@ -218,9 +218,10 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **392** | **Frame `13 Admin` parity debt — four class-level misses and the missing chevrons** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's `parity-checker` pass.** Frame `13` matched on all six axes for #389's own change, and the pass surfaced five pre-existing misses it did not own. **#372 does not cover these** — it closes frames `08`, `04`/`07`/`19`, `16`, `18` and the site chrome, not `13`. **All five are class- or token-level, so no viewport can change them** — re-derived from source after a peer challenged whether the readings were taken at 1440: the pane uses `rounded-xl` → `--radius-xl: 14px` (`theme.css:221`) where the frame draws 12px, which is `--radius-panel` on the line above; `admin-nav.tsx:66` is `min-h-11` in a `gap-1` list, a 48px pitch by construction against the frame's 34px, ending the rail 93px low; `status-pill.tsx:40` is `px-2.5 py-1.5 text-xs font-bold` against the frame's `10px/700` with `padding 5px 10px` (47.36×26 vs 44.88×23), and that size comes from `03-components.md`'s vocabulary, so **the plan is what needs correcting, not only the component**; the avatar initial renders `font-sans` where the frame draws Instrument Serif; and `filter-bar.tsx`'s `Category ▾ / City ▾ / Payouts ▾` triggers render **no `▾` glyph at all** (`innerHTML` is bare text, zero children), which walks City 15px and Payouts 25.6px left of their frame positions. **Not in scope:** frame `13`'s table pane clipping its own fifteenth row by 4px — that is **#385**'s to rule on, and the app reproduces it within a pixel or two |
 | **393** | **Admin tables have no responsive strategy below 1024** | P1 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's browser pass.** `30-responsive.md:31` specifies Admin as `768 → Horizontal scroll` and `390 → Card list, not a table`. **Neither exists.** After #389 the layout is correct at every width and nothing overflows — but at 390 `/admin/reviews` resolves to `12.2px 31.73px 31.73px 21.97px 46.38px 21.97px 70px`, so headers render `R…`, `A…`, `W…` and body cells `4…`, `Ro…`, `T…`. **A 12px column cannot show more than an ellipsis**, so the tables are legible only at 1024 and above. This is #389's fix working, not failing: before it, the rows were mutually misaligned *and* the document scrolled sideways, so the contract's 768 row was never actually implemented either — the old horizontal scroll was incoherence, not a degradation. Ruling needed on whether 768 keeps the contract's scroll-inside-the-pane or follows 390 to cards |
 | **391** | **The vendor dashboard's earnings month is a local month with UTC edges** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 from #381's verification pass**, which found it because the API suite went red locally and green in CI — the tell. `getVendorDashboard` derives `today` as a **local** calendar date, `monthBounds` turns it into `YYYY-MM-DD` strings, and those are then pinned to **UTC** midnight before being compared against `bookings.paid_at`, a `timestamptz`. The window is therefore a local month with UTC edges, and a vendor west of UTC loses the last hours of every month from `earningsThisMonthCents` — CDT loses 19:00–23:59 on the final day. East of UTC it is the mirror image. `countBookingsBetween` on the adjacent line takes the date strings directly, so `bookingsThisMonth` and `earningsThisMonthCents`, which render side by side, can disagree about which month a booking belongs to. Same class as the law in `.claude/rules/shared-contracts.md` — *never round-trip a date through a `Date` in local time* — inverted: a date string round-tripped into an instant |
+| **394** | **The booking confirmation screen answers 500 for every customer** | P1 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 from #363's browser pass**, which could not verify its own change because the screen never renders. `GET /customer/booking-requests/:id/booking` (`payments.routes.ts:70`) serialises with **`bookingSchema`**, which declares neither `eventType` nor `venue`, so Fastify's serialiser strips both from a 200. The web parses the same body with `wireBookingSchema` = `bookingWithContextSchema`, where both are **`.nullable()` — nullable, not optional** — so the parse throws, `getBookingForRequest` raises, and the RSC 500s. The list route is correct (`booking-requests.routes.ts:167` uses `z.array(bookingWithContextSchema)`), which is why `/bookings` renders and only the single read fails. **Also carries the frame `06` label fix, lifted out of #363** so both land in one browser pass: `booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds the slug, so the occasion renders `wedding · Barr Mansion · Austin, TX` in lower case. The component fix and its two tests were written and shown failing-before under #363; they were reverted from that lane because the 500 makes them unverifiable and the route fix belongs to a file lane #387 is live in |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **373 rows as of 2026-08-31: 189 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-08-31, after #381 and #389 landed and #391-#393 were filed: 19 rows — 11 Backlog, 4 In Progress, 2 Deferred — needs a human, and 2 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-08-31, after #381 and #389 landed and #391-#394 were filed: 20 rows — 11 Backlog, 5 In Progress, 2 Deferred — needs a human, and 2 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
@@ -1056,6 +1057,22 @@ which is how two lanes collide on one file.
 **Nothing user-reachable changed, so there is no browser or parity pass** — as this
 ticket's own framing says.
 
+A frame `06` fix was carried here briefly and then **lifted back out into #394**.
+`diff-reviewer` noticed that `booking-confirmed.tsx` prints `event_type`
+verbatim, so the seed correction above would have shown the fixture's occasion in
+lower case. The one-line fix and two tests were written and shown failing-before,
+then the browser pass found the screen answers **500 for every customer** — a
+response-schema mismatch in `payments.routes.ts`, which lane #387 is holding. The
+label fix is unverifiable until that lands and belongs in the same lane as it, so
+both are **#394** and this ticket stays what it says it is.
+
+The same pass also found the vendor dashboard's month window built in local time
+and compared against UTC, so earnings read `$0` around every month boundary —
+**already filed as #391** by #381's verification pass an hour earlier, and
+already in flight on `worktree-391`. It was written up here as a second ticket
+and **dropped before pushing** rather than filed and superseded: a row that
+exists only to be closed is worse than one that never existed.
+
 **Tests (required):**
 
 - [ ] A test that a resumed lane's manifest reports the worktree path that exists on disk
@@ -1852,6 +1869,98 @@ the frame's 6 merely illustrative.
 - [ ] A test asserting the skeleton and the loaded card share a radius token, so the two
       cannot drift apart again
 
+
+### #394: The booking confirmation screen answers 500 for every customer
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None. **Touches `apps/api/src/modules/payments/payments.routes.ts`, which lane #387 is live in — do not run the two concurrently.**
+
+**Filed 2026-08-31 by #363's browser pass**, which set out to verify a one-line
+change on this screen and found the screen does not render at all.
+
+#### What happens
+
+Signed in as the E2E customer, with a `confirmed` booking for request
+`80c8ec6d…`, at 1440x900:
+
+`/bookings/80c8ec6d…/confirmed` returns **HTTP 500** and renders the server-error
+page — *"Something broke on our end … No payment was taken and no booking was
+changed."* It does not redirect to `/checkout` and does not 404. The heading is
+`Something broke on our end`; there is no date sentence and no
+`<main aria-label="Booking confirmed">`.
+
+The copy is wrong in the way that matters most: a payment **was** taken. This is
+the screen a customer lands on immediately after paying.
+
+#### Why
+
+`GET /customer/booking-requests/:requestId/booking`
+(`apps/api/src/modules/payments/payments.routes.ts:70`) declares:
+
+```ts
+schema: { params: requestParamsSchema, response: { 200: bookingSchema } },
+```
+
+`bookingSchema` (`packages/shared/src/schemas/index.ts:765`) declares neither
+`eventType` nor `venue`, so Fastify's response serialiser **strips both**. The
+observed 200 body carries 18 keys and neither of those two.
+
+The web parses that body with `wireBookingSchema` — `bookingWithContextSchema`
+(`:792`) plus date coercions — where `eventType` and `venue` are `.nullable()`,
+**not `.optional()`**. A missing key is not a null, so the parse throws:
+
+```
+ApiClientError: API response for /customer/booking-requests/80c8ec6d…/booking
+  did not match its schema
+    at apiRequest (src/lib/api-client.ts:88:15)
+    at getBookingForRequest (src/lib/customer-data.ts:150:16)
+    at BookingConfirmedPage
+```
+
+The list route gets it right — `booking-requests.routes.ts:167` serialises with
+`z.array(bookingWithContextSchema)` — which is why `/bookings` renders and only
+the single-booking read fails.
+
+#### The second half — the occasion renders as a slug
+
+Lifted out of **#363** so both defects on this screen land in one browser pass.
+
+`booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds
+the slug, so the line reads `wedding · Barr Mansion · Austin, TX` — lower-case,
+in the middle of the confirmation screen. Every other read site already routes
+through `EVENT_TYPE_LABELS` with a fallback (`request-row.tsx:81`,
+`accepted-request.tsx:43`, `quote-review.tsx:96`, `reviews-pane.tsx:66`,
+`customer-history.tsx:76`, `booking-entries.ts:87`); this one does not.
+
+The fix and its two tests were **written and shown failing-before** under #363 —
+reverting the line made the occasion test fail — then reverted from that lane,
+because the 500 makes them unverifiable in a browser and the route fix belongs to
+a file another lane is holding. Recover them from that branch rather than
+rewriting them.
+
+#### Acceptance
+
+1. `/bookings/<id>/confirmed` renders frame `06` for a customer with a paid
+   booking — driven in a real browser at 1440x900, signed in, screenshotted.
+2. The occasion line reads `Wedding · <venue> · <city>`, capitalised through
+   `EVENT_TYPE_LABELS`, with the stored value as the fallback for a legacy row.
+3. No console errors on that page.
+4. The signed-out URL still redirects to sign-in carrying `returnTo`.
+5. A test asserts the single-booking route's 200 body **includes** `eventType`
+   and `venue` — the schema mismatch is invisible to a route test that only
+   checks the status.
+6. Rule on `.nullable()` vs `.optional()` for these two fields and make the two
+   sides agree; a client that requires a key the server may omit is the class,
+   not the instance.
+
+#### Tests (required)
+
+- [ ] An API test that the serialised 200 carries `eventType` and `venue`
+- [ ] A web test that the confirmed page renders rather than throwing, for a
+      booking whose `eventType` is a slug
+- [ ] The two `booking-confirmed.test.tsx` cases recovered from `worktree-363`
+
+---
 
 ### #387: Checkout is a dead end — an accepted booking's `Pay` CTA answers 404
 

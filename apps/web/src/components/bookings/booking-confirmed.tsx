@@ -1,6 +1,6 @@
 'use client';
 
-import { EVENT_TYPE_LABELS, formatPrice } from '@vendor-marketplace/shared';
+import { formatPrice } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
@@ -48,19 +48,6 @@ export function BookingConfirmed({
   conversationId,
 }: BookingConfirmedProps): React.ReactElement {
   const day = EVENT_DAY.format(new Date(`${booking.eventDate}T00:00:00Z`));
-
-  /*
-   * The occasion is stored as a slug (`wedding`), never as the label a person
-   * reads — the column is `$type<EventType>()` and `eventTypeSchema` holds the
-   * API edge to `EVENT_TYPES`. This line printed the column verbatim and so
-   * rendered `wedding · Barr Mansion · Austin, TX`, lower-case, in the middle
-   * of the confirmation screen. Same fallback as every other read site: a
-   * legacy row carrying something the map has no entry for prints as it is,
-   * rather than vanishing from the line.
-   */
-  const occasion = booking.eventType
-    ? (EVENT_TYPE_LABELS[booking.eventType as keyof typeof EVENT_TYPE_LABELS] ?? booking.eventType)
-    : null;
 
   /*
    * The check springs in, once. `prefers-reduced-motion` is honoured by the
@@ -117,7 +104,7 @@ export function BookingConfirmed({
           <div>
             <p className="font-display text-[18px] text-stone-900">{vendor.businessName}</p>
             <p className="mt-0.5 text-xs text-stone-600">
-              {[occasion, booking.venue, vendor.city].filter(Boolean).join(' · ')}
+              {[booking.eventType, booking.venue, vendor.city].filter(Boolean).join(' · ')}
             </p>
           </div>
         </div>
