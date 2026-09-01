@@ -28,11 +28,15 @@ as two other lanes filed between its rebases. The collision is loud, but each
 resolution is a four-file renumber plus every cross-reference in the prose.
 **Allocate the id immediately before pushing, not when you start writing**, and
 `git fetch` first. Worse than the churn: one of those filings was a *duplicate*
-of a ticket another lane had already filed and begun implementing — same defect,
-found independently by two verification passes an hour apart. **Before filing,
-grep the board for the mechanism, not the title**, and if a peer is already on
-it, drop the row rather than filing and superseding: a row that exists only to be
-closed is worse than one that never existed.
+of a ticket another lane had **already filed and begun implementing** — filed an
+hour earlier, from a different ticket's verification pass, and already on
+`origin/main` when the second lane wrote its row. So the board held the answer
+the whole time; nobody read it. The two rows shared no words — *"earnings month
+is a local month with UTC edges"* against *"earnings read $0 around every month
+boundary"* — so a title search finds nothing and a mechanism search finds it at
+once. **Before filing, grep the board for the mechanism, not the title**, and if
+a peer is already on it, drop the row rather than filing and superseding: a row
+that exists only to be closed is worse than one that never existed.
 
 **`pnpm test` will lie to you here.** The guards read the tracker markdown, which
 is **not** an input to the turbo task hash, so editing the board does not
