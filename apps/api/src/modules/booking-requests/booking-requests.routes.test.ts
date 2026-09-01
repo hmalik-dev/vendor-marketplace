@@ -82,11 +82,19 @@ describe('/booking-requests', () => {
     });
     expect(created.statusCode).toBe(201);
 
+    const onboarded = options.onboarded ?? true;
+
     await harness.database.db
       .update(vendorProfiles)
       .set({
         isPublished: options.publish ?? true,
-        stripeOnboarded: options.onboarded ?? true,
+        stripeOnboarded: onboarded,
+        /*
+         * The pair travels together — `vendor_profiles` refuses onboarding
+         * without an account id (#381), and a fixture that set only the flag is
+         * the row that made checkout answer 404 in production.
+         */
+        stripeAccountId: onboarded ? 'acct_test_vendor' : null,
       })
       .where(eq(vendorProfiles.id, vendorId));
 

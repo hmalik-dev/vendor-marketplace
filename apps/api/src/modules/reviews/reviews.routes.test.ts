@@ -146,7 +146,7 @@ describe('reviews', () => {
 
     await harness.database.db
       .update(vendorProfiles)
-      .set({ isPublished: true, stripeOnboarded: true })
+      .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
       .where(eq(vendorProfiles.id, profile.json().id));
 
     return {

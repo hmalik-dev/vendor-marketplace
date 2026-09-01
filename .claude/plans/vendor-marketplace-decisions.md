@@ -1032,3 +1032,58 @@ list on focus, so a later refactor cannot quietly make the two fields the same.
   400 while the class list read semibold. An `aria-expanded:` Tailwind variant would
   reintroduce that exactly, so the component takes `inputClassName` as a **function of the
   open state** and emits one branch.
+
+---
+
+### D29: `stripe_onboarded` Implies an Account Id — and the Format Check Is Refused — *2026-08-31*
+
+**#381.** `vendor_profiles` now carries
+`vendor_profiles_stripe_onboarded_requires_account`, a CHECK asserting
+`stripe_onboarded = false OR stripe_account_id IS NOT NULL`. Migration `0020` stands the
+existing orphans down to `false` before `0021` validates the constraint against the table.
+
+**Why a constraint and not a DAO guard.** The pair is written from four places — the
+Connect service, the account webhook, `seed-demo`, `seed-e2e` — and it had already been
+split by one of them. A rule kept in application code is one each new writer has to
+remember; **seven API test files, eight call sites**, were writing the impossible row too,
+and the constraint is what found them — 144 tests went red the moment it existed.
+
+**What the split row cost.** `openCheckout` refuses a vendor with no account id with a
+deliberate **402** — that guard is right and stays — but `customer-data.ts` folds 402 into
+`null` and the checkout page turns `null` into `notFound()`, so a customer pressing `Pay`
+on an accepted booking was told **404 · NOT FOUND**: "the link may be old, or a vendor may
+have taken their listing down", every word of it false. Meanwhile `admin.dao.ts`'s
+`Payouts: connected` filter reads `stripe_onboarded` alone and reported that same vendor as
+connected. One impossible row, two surfaces, opposite answers. That filter is now correct
+without being touched, because the flag entails the id.
+
+**Not to be confused with #387's Stripe 400.** That is a different row: a *non-null* but
+fabricated id (`acct_e2e_fixture_not_a_real_account`) passes both this constraint and
+`openCheckout`'s guard, reaches Stripe as `transfer_data[destination]`, and is rejected
+there. #381 does not close that and does not claim to — #387 does, by making the seed
+provision a real test-mode account. The two failures land on the same 404 shell, which is
+why they read as one bug.
+
+**The refusal.** #387's acceptance line 6 asked whether the guard should also require
+`acct_` plus Stripe's id charset. **It should not, and this is the ruling.**
+
+1. **Stripe does not publish the charset as a contract.** A regex is a guess, and the way
+   it fails is that a legitimate future account id is refused at the moment a real vendor
+   finishes onboarding — the outage this constraint exists to prevent, inverted, and in
+   production only.
+2. **This repository writes non-Stripe ids on purpose.** `seed-demo` gives its thirteen
+   offline vendors `acct_demo_<key>` — `acct_demo_silver_alder`, built from the demo key
+   with hyphens underscored — precisely so they cannot be mistaken for real accounts, and
+   the API suite writes `acct_test_vendor`. Making those Stripe-shaped would be strictly
+   worse: an id that looks issued and is not.
+3. **Shape was never the defect this ticket had.** #381's row was *unaccompanied* — a
+   writer asserting onboarding it had not done — and that is the thing now unrepresentable.
+   A regex would not have caught it, because there was no id to inspect.
+4. **And a regex is the wrong remedy for the one it does not catch.** A fabricated non-null
+   id is stopped by not writing fixture ids into a real database — `assertSafeTarget` on
+   the seeds, and #387 provisioning a real test-mode account — not by pattern-matching the
+   column. `stripeOnboarded = true` therefore means "this vendor has an account on file",
+   never "Stripe will accept a transfer to it". Only Stripe can answer the second.
+
+The reasoning is carried in the schema beside the constraint, so the next reader does not
+re-derive the rejected answer.

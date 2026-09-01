@@ -333,7 +333,7 @@ describe('admin routes', () => {
 
       await harness.database.db
         .update(vendorProfiles)
-        .set({ isPublished: false, stripeOnboarded: true })
+        .set({ isPublished: false, stripeOnboarded: true, stripeAccountId: 'acct_test_paused' })
         .where(eq(vendorProfiles.id, vendor.profileId));
       const paused = await harness.app.inject({
         method: 'GET',
