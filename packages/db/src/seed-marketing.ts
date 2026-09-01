@@ -1,4 +1,9 @@
-import { DEFAULT_PLATFORM_FEE_RATE, calculateFees, toDateString } from '@vendor-marketplace/shared';
+import {
+  DEFAULT_PLATFORM_FEE_RATE,
+  type EventType,
+  calculateFees,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgQueryResultHKT } from 'drizzle-orm/pg-core';
@@ -35,6 +40,9 @@ export const MARKETING_SEED_PREFIX = 'seed_mkt_';
 
 /** The category every demo vendor is filed under. */
 const MARKETING_CATEGORY_SLUG = 'photography';
+
+/** The occasion every seeded booking is for — the slug. See `bookings.ts`. */
+const MARKETING_EVENT_TYPE: EventType = 'wedding';
 
 /**
  * Reviews are dated backwards from this many days ago, so a freshly seeded
@@ -403,7 +411,7 @@ async function seedReviewHistory<
         customerId: customerIds[(index + hashString(vendor.slug)) % customerIds.length]!,
         vendorId,
         eventDate,
-        eventType: 'Wedding',
+        eventType: MARKETING_EVENT_TYPE,
         eventLocation: `${vendor.city}, ${vendor.state}`,
         guestCount: 60 + Math.floor(random() * 140),
         status: 'accepted' as const,

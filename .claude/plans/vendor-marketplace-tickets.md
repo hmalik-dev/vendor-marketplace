@@ -201,7 +201,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 |---|--------|-------|-----------|----------|--------|--------|------------|--------------|-------|
 | **313** | **Sign-up and session entry** | P1 | M3 | **P1 High** | **Backlog** | `worktree-313b` | **#385** — the contrast ruling only. **The other two blockers are gone:** D16 answered the submit label (the row below records it as answered, now code), and `#333` was superseded by **#373**, which landed 2026-08-31. Renaming the Clerk application moved to **#362** | `core` `auth` | **Second slice landed 2026-08-30 — squash `a806d63`, PR #70, required CI green, browser-verified at 1440x900.** The role now survives email verification: Clerk's verification step is a path navigation that remounts the form, so `role` came back null and the picker asked again, contradicting the subhead's own promise. It is read back from the in-flight `unsafeMetadata`, **narrowed** to the two sign-up roles because that metadata is client-writable and `admin` is a real `UserRole` this screen must never confer, and the picker is **not rendered** rather than `hidden` (which would leave the radios submittable). Also corrected frame `12`'s panel padding to `46px 48px` and its body measure to 415px, verified on `/sign-in` as well since `AuthScreen` is shared. **Blocked on three decisions, none of them code:** (1) **`Create my account` is not reachable by changing a string** — verified against Clerk's own `en-US` source that `formButtonPrimary` appears **once, at the top level**, with no `signUp.start` variant, and `<SignUp />` takes **no `localization` prop**, so setting it also relabels `/sign-in`. The comment in `clerk-copy.ts` was **right**, and #365 was wrong to call it stale. Scoping needs a route-aware or nested `ClerkProvider` — an auth-stability decision. The password helper `At least 10 characters` is blocked identically, since it belongs inside Clerk's card. (2) **The contrast ruling and the measurement disagree** — D16 ruled no scrim with contrast guaranteed by selection; parity found a scrim matching the frame byte for byte and the gold italic accent at **3.81:1** against a blanket 4.5:1 with no large-text carve-out. (3) **`sage-175` and the missing 14px/11.5px type steps belong to #333**, which owns scale completion. **The post-verification remount is unit-tested, not browser-driven** — it needs a fresh Clerk sign-up with a reachable inbox, which no lane has. Said plainly rather than implied. **Unblocked 2026-08-30 by D16 — all three rulings given.** (1) `Create my account` is the approved string and the plan already said so; live reads Clerk's default `Continue`, which is a code defect. (2) The panel photograph is **fixed and hand-picked**, contrast guaranteed by selection — **no scrim**, and it is never rotated or made dynamic. (3) The role picker reappearing after verification is a **defect**: the role is already in `unsafeMetadata` before verification, so it is read back from there rather than re-asked. No larger select-role-after-verification flow needed. **Filed 2026-08-29 by the backlog consolidation.** Merges **#194, #197, #226, #234, #259**. **Two halves, and the first is implementable today**: the header renders its signed-out variant on the first navigation in a fresh browser context (#259), and Clerk's own sign-in card reads `vendor-marketplace` to the user instead of `BRAND_NAME` (#234). The second half is **three rulings, and this ticket asks for all three at once rather than three tickets asking separately** — the primary action reads `Continue` where the frame says `Create my account` (#194); panel text over photography is not contrast-guaranteed and needs either a scrim or a ruling that the photography is fixed (#197); and sign-up returns to the role picker after email verification (#226), which is either a Clerk redirect defect or an intended re-confirmation. Do the first half, then return **BLOCKED with the three questions together** if they are still unanswered. **First half done 2026-08-30 (`worktree-313`).** #259 is **not a product defect** — it reproduces only from a restored `storageState`; a real sign-in takes 0 handshake hops and paints correctly on the first navigation. Filed as **#321**, which matters more than the ticket it came from because every browser verification here restores state. #234 is fixed as far as code reaches: `.cl-headerTitle` now reads the brand, though it was never visible (the app hides Clerk's header). **Four questions now wait on a human**, the three rulings plus renaming the Clerk application itself — that name is the source every `{{applicationName}}` key interpolates, and it is dashboard configuration on the shared instance. | **Found 2026-08-30 by #9's parity pass:** the site header renders **signed-out chrome on an authenticated vendor page** — `window.Clerk.loaded === true` and `Clerk.user.id` is populated after a 15s settle, yet `/vendor/dashboard`'s header reads `Sign in` / `Sign up` where frame `08` draws `View my public profile` and the avatar. Reproduced at 1440x900 signed in as the vendor.
 | **362** | **[PLATFORM] External-account provisioning — one dashboard session** | INFRA | M-OPS | **P0 Critical** | **Deferred — needs a human** | — | **The account holder — every item is a provider-console action** | all | **Filed 2026-08-30 by the second backlog consolidation.** Merges **#19, #46 (residual), #62, #206**. Every item is the same actor doing the same kind of thing — signing into a provider console to mint, rename or rotate a value — and **none of it is repository code**. Three of the four already point at each other: #62 calls itself *"a #19 prerequisite"*, #206's Notes say it *"overlaps #19"* and is *"a pointer, not a queue item"*, and #46's remaining scope is one rotation (its code scopes 1 and 2 are Done in `34cd28c`, `ed41aed`). Split, this is four separate asks of one person. The checklist: **rotate `CLERK_WEBHOOK_SECRET`** (leaked to a transcript 2026-08-27 — rotate, deleting is not enough); **rename the Clerk application** to `BRAND_NAME`, which is the source every `{{applicationName}}` key reads; **change the Stripe public business name** from `VendYou`, which renders on Connect onboarding, on Checkout and as the **statement descriptor**; **mint production credentials** in Clerk, Stripe, R2 and Resend, newly minted rather than copied; pooled string on Railway, unpooled on Railway **and** GitHub Actions. **Supplying `SENTRY_DSN` belongs here too and unblocks #353.** The Neon Launch upgrade (#206) stays **launch-gated** in `docs/pre-launch.md` §3.2 and is not current work. |
-| **363** | **Repo guardrails — lane tooling, preflight hygiene, seed and route ledgers** | P2 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` `stripe` | **Absorbs #382 (2026-08-31, fourth backlog consolidation)** — a guard for the stale `packages/shared/dist` that fails `seed-demo.test.ts` on a notification-type count and names the *other* ticket's symbol, so the natural reading is "that merge broke main". Same file set and the same "tooling only, no browser pass" verification shape as the rest of this ticket, and it is the fix-plus-its-guard pairing. **Also swept in:** `.claude/lanes/371.json` still reads `"state": "active"` with `"prUrl": null` after PR #83 merged, and its worktree is checked out on a different branch entirely — a lane manifest that outlives its lane is the tripwire this ticket exists to remove. **Filed 2026-08-30 by the second backlog consolidation.** Merges **#334, #341**; #334 in turn merges #316 and #319. **All of it is tooling and tests — no user-facing behaviour, so no parity gate and no browser pass** — which is the whole reason to batch it: they share the entire verification shape. #341 is the same species as the rest, a guard closing a class of mistake three seeds made independently. Contents: `lane:up` **seeds** rather than only migrating (lane 9 came up with 0 categories and every vendor surface 404ing); `laneUp` re-derives `worktreePath` on an active manifest (#256); preflight compares the `stripe listen` secret against `STRIPE_WEBHOOK_SECRET` by **digest only**; `ulimit -n 65536` before `next dev` (three lanes died on `EMFILE` reported as a Clerk middleware error); `POST /vendor/stripe/connect` answers **403 not 400** to a customer's malformed body; the `packages/preflight` parallel-run flake is **reproduced before it is fixed** (#64); seeds write slugs not labels, with a guard over `EVENT_TYPES`; and the route/frame ledger becomes a **test** over `apps/web/src/app/**/page.tsx`, because #80's five unframed routes are now nine and prose did not notice. |
+| **363** | **Repo guardrails — lane tooling, preflight hygiene, seed and route ledgers** | P2 | M4.5 | **P2 Medium** | **In Progress** | `worktree-363` | **None** | `core` `stripe` | **Absorbs #382 (2026-08-31, fourth backlog consolidation)** — a guard for the stale `packages/shared/dist` that fails `seed-demo.test.ts` on a notification-type count and names the *other* ticket's symbol, so the natural reading is "that merge broke main". Same file set and the same "tooling only, no browser pass" verification shape as the rest of this ticket, and it is the fix-plus-its-guard pairing. **Also swept in:** `.claude/lanes/371.json` still reads `"state": "active"` with `"prUrl": null` after PR #83 merged, and its worktree is checked out on a different branch entirely — a lane manifest that outlives its lane is the tripwire this ticket exists to remove. **Filed 2026-08-30 by the second backlog consolidation.** Merges **#334, #341**; #334 in turn merges #316 and #319. **All of it is tooling and tests — no user-facing behaviour, so no parity gate and no browser pass** — which is the whole reason to batch it: they share the entire verification shape. #341 is the same species as the rest, a guard closing a class of mistake three seeds made independently. Contents: `lane:up` **seeds** rather than only migrating (lane 9 came up with 0 categories and every vendor surface 404ing); `laneUp` re-derives `worktreePath` on an active manifest (#256); preflight compares the `stripe listen` secret against `STRIPE_WEBHOOK_SECRET` by **digest only**; `ulimit -n 65536` before `next dev` (three lanes died on `EMFILE` reported as a Clerk middleware error); `POST /vendor/stripe/connect` answers **403 not 400** to a customer's malformed body; the `packages/preflight` parallel-run flake is **reproduced before it is fixed** (#64); seeds write slugs not labels, with a guard over `EVENT_TYPES`; and the route/frame ledger becomes a **test** over `apps/web/src/app/**/page.tsx`, because #80's five unframed routes are now nine and prose did not notice. |
 | **370** | **Production deploy pipeline and error visibility** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **#362** (production credentials and `SENTRY_DSN`) | `core` `sentry` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#20, #353**. One deliverable: merging to `main` ships — migrations first, both services after, a failed `/ready` poll stops the release — and what it ships reports its own errors somewhere a human reads. Split, the two waited on the same #362 sitting. |
 | **371** | **Responsive parity at 1024 and 768** | P1 | M3 | **P1 High** | **In Progress** | `worktree-371` | **#385** (the ruling round that absorbed #377 and #378) | `core` `stripe` | **MEASUREMENT PASS COMPLETE 2026-08-31 — acceptance line 1 is met.** All seven frames measured at their declared sizes before any edit, each against **both** neighbouring widths rather than in isolation. **That method changed the ticket.** **Three frames are blocked, not unbuilt.** `27 Search results / loading / no-results — 1024` are **stale**: corroborated against `02 Search` (1440) and `14 Search tablet` (768), the 1024 frame alone disagrees with both on card radius (16/**14**/16), name (19/**18**/19), price (17/**16**/17), meta (12/**11.5**/12) and the count-heading band (drawn/**absent**/drawn), and still draws a `Distance` chip, a `Free on Jun 14 ✕` chip and an `18 free that day` count that **D16** removed. Only the 20px gutter and the 3-column grid survive. Edits already made from those numbers were **reverted** rather than shipped. Filed as **#377**. **Two frames were unrenderable and are now fixed** — the ticket's own rule is that a pass which cannot render the frame proves nothing. `27 Vendor dashboard — empty · 1024` had no producible state (all 17 profiles published, one sign-in path) → `pnpm db:seed:e2e:draft`, `3da72be`. `27 Checkout — 1024` answered **404** for the E2E customer at every viewport, because the fixture wrote `stripeOnboarded` without `stripeAccountId` — a state the product cannot reach → `be02b46`; the class is **#381**. **A live P1 was found on the way and fixed:** every state-filtered search returned **500** (`lower()` on the `us_state` enum #332 introduced), so the canonical `/search` URL the app builds for itself was the failure page for every visitor — `26f4503`, three regression tests, the filter had none. **Acceptance line 6 is answered: the six is correct**, not the frames' seven — see **#378** for the four sources. **`27 Vendor profile — 768` and `27 Vendor profile editor — 768` corroborated clean and are the deliverable remainder.** Measured, not yet built: the booking rail **does not become a sticky bottom bar** (it is `position:static`, a stacked card — the ticket's headline item, frame spec `position:absolute;left:0;right:0;bottom:0`, `#FFFDF9`, `1px solid #E4DDD1`, `12px 24px`, `gap:16px`, `0 -4px 18px rgba(35,32,28,.07)`, holding From/price, a 180px date field, `Request booking`, `Message`); the editor renders **no section nav at all** at 768 (`display:none`, frame draws a 48px horizontal chip row) and its whole responsive story sits on `lg:`, so **768 renders the 390 composition** — one breakpoint short of the frame set, not a set of tuning misses; the editor's scroll budget is **2.09×** against `04-laws.md`'s 1.0×; **`04-laws.md` rule 5 fails, measured** — the sticky save bar overlaps two live controls at `scrollY 900` because the scrolling pane's `padding-bottom` is `0px`; the publish switch is **32×18** against the 44×44 law at 768; and bio/stats max-widths render the **1024** frame's values at 768 (520/440 vs 600/480). **RECORDED DEVIATION — the bar overlays content mid-scroll, and that is the design, not a defect.** The browser pass was given "no interactive element is overlapped at any scroll offset" as its criterion and correctly reported **FAIL** at mid-scroll: at 768x600, scrollY 164, two footer links signed in (three signed out) were fully covered with their centres intercepted. **The criterion was wrong, not the code.** A bar whose stated job is to persist over scrolling content necessarily overlays it — `30-responsive.md:88`: *"The primary action stays reachable. On mobile that means a sticky bottom bar, not a button pushed below a scroll"* — and frame `27 Vendor profile — 768` draws it `position:absolute;bottom:0` **over** the pane. The requirement that does bind is `30-responsive.md:160`: *"any pane with a fixed bottom action bar needs bottom padding equal to the bar's height ... or the last card's price row lands underneath it"* — content must not **end** underneath it. That is met and measured: at 768x1024 **zero** intersections across every link, button and input, both auth states, with `All vendors` moved from `404,951` to `404,863`, 74px clear; and at 768x600 max scroll every footer link resolves to itself. The defect that mattered — a page that did not scroll at all, leaving `All vendors` permanently unreachable — is gone. **Also recorded:** `xl:` (1280, a width no frame draws) survives in ~10 more files — **#372** owns most of those surfaces and should absorb the sweep plus a guard test. **Filed:** #377, #378, #379, #380, #381. **Filed 2026-08-31 by the third backlog consolidation.** Merges **#323, #354, #355, #356**. One ladder walked once — search, checkout, vendor profile, the profile editor and the empty dashboard, at both widths. Four tickets that were the same work split by frame. |
 | **372** | **Design parity close-out — dashboard, bookings, chrome and the error page** | P1 | M3 | **P2 Medium** | **Backlog** | — | **#374** (owns the `Contact support` destination) — **#358 landed 2026-08-31 (`8e9208d`), so its collision is cleared** | `core` `auth` | **Filed 2026-08-31 by the third backlog consolidation.** Merges **#300, #359, #361, #366, #367**. The last 1440 parity debt in one pass: frames `08`, `04`/`07`/`19`, `16`, `18`, and the site chrome no frame owns. |
@@ -218,10 +218,10 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **392** | **Frame `13 Admin` parity debt — four class-level misses and the missing chevrons** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's `parity-checker` pass.** Frame `13` matched on all six axes for #389's own change, and the pass surfaced five pre-existing misses it did not own. **#372 does not cover these** — it closes frames `08`, `04`/`07`/`19`, `16`, `18` and the site chrome, not `13`. **All five are class- or token-level, so no viewport can change them** — re-derived from source after a peer challenged whether the readings were taken at 1440: the pane uses `rounded-xl` → `--radius-xl: 14px` (`theme.css:221`) where the frame draws 12px, which is `--radius-panel` on the line above; `admin-nav.tsx:66` is `min-h-11` in a `gap-1` list, a 48px pitch by construction against the frame's 34px, ending the rail 93px low; `status-pill.tsx:40` is `px-2.5 py-1.5 text-xs font-bold` against the frame's `10px/700` with `padding 5px 10px` (47.36×26 vs 44.88×23), and that size comes from `03-components.md`'s vocabulary, so **the plan is what needs correcting, not only the component**; the avatar initial renders `font-sans` where the frame draws Instrument Serif; and `filter-bar.tsx`'s `Category ▾ / City ▾ / Payouts ▾` triggers render **no `▾` glyph at all** (`innerHTML` is bare text, zero children), which walks City 15px and Payouts 25.6px left of their frame positions. **Not in scope:** frame `13`'s table pane clipping its own fifteenth row by 4px — that is **#385**'s to rule on, and the app reproduces it within a pixel or two |
 | **393** | **Admin tables have no responsive strategy below 1024** | P1 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's browser pass.** `30-responsive.md:31` specifies Admin as `768 → Horizontal scroll` and `390 → Card list, not a table`. **Neither exists.** After #389 the layout is correct at every width and nothing overflows — but at 390 `/admin/reviews` resolves to `12.2px 31.73px 31.73px 21.97px 46.38px 21.97px 70px`, so headers render `R…`, `A…`, `W…` and body cells `4…`, `Ro…`, `T…`. **A 12px column cannot show more than an ellipsis**, so the tables are legible only at 1024 and above. This is #389's fix working, not failing: before it, the rows were mutually misaligned *and* the document scrolled sideways, so the contract's 768 row was never actually implemented either — the old horizontal scroll was incoherence, not a degradation. Ruling needed on whether 768 keeps the contract's scroll-inside-the-pane or follows 390 to cards |
 | **391** | **The vendor dashboard's earnings month is a local month with UTC edges** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 from #381's verification pass**, which found it because the API suite went red locally and green in CI — the tell. `getVendorDashboard` derives `today` as a **local** calendar date, `monthBounds` turns it into `YYYY-MM-DD` strings, and those are then pinned to **UTC** midnight before being compared against `bookings.paid_at`, a `timestamptz`. The window is therefore a local month with UTC edges, and a vendor west of UTC loses the last hours of every month from `earningsThisMonthCents` — CDT loses 19:00–23:59 on the final day. East of UTC it is the mirror image. `countBookingsBetween` on the adjacent line takes the date strings directly, so `bookingsThisMonth` and `earningsThisMonthCents`, which render side by side, can disagree about which month a booking belongs to. Same class as the law in `.claude/rules/shared-contracts.md` — *never round-trip a date through a `Date` in local time* — inverted: a date string round-tripped into an instant |
+| **394** | **The booking confirmation screen answers 500 for every customer** | P1 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 from #363's browser pass**, which could not verify its own change because the screen never renders. `GET /customer/booking-requests/:id/booking` (`payments.routes.ts:70`) serialises with **`bookingSchema`**, which declares neither `eventType` nor `venue`, so Fastify's serialiser strips both from a 200. The web parses the same body with `wireBookingSchema` = `bookingWithContextSchema`, where both are **`.nullable()` — nullable, not optional** — so the parse throws, `getBookingForRequest` raises, and the RSC 500s. The list route is correct (`booking-requests.routes.ts:167` uses `z.array(bookingWithContextSchema)`), which is why `/bookings` renders and only the single read fails. **Also carries the frame `06` label fix, lifted out of #363** so both land in one browser pass: `booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds the slug, so the occasion renders `wedding · Barr Mansion · Austin, TX` in lower case. The component fix and its two tests were written and shown failing-before under #363; they were reverted from that lane because the 500 makes them unverifiable and the route fix belongs to a file lane #387 is live in |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **373 rows as of 2026-08-31: 189 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-08-31, after #390 landed: 19 rows — 10 Backlog, 4 In Progress, 2 Deferred — needs a human, and 3 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
-
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-08-31, after #390 landed and #394 was filed: 20 rows — 10 Backlog, 5 In Progress, 2 Deferred — needs a human, and 3 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -883,7 +883,7 @@ environment or it does not exist.
 
 ### #363: Repo guardrails — lane tooling, preflight hygiene, seed and route ledgers
 
-**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** In Progress | **Capabilities:** `core` `stripe`
 **Blocked by:** None
 
 Merges **#334, #341, #382**; #334 in turn merges **#316 and #319**.
@@ -977,6 +977,100 @@ silently, as four just did.
 - [ ] The ledger's `/vendor/portfolio` contradiction is resolved to the frames that exist
 - [ ] Dynamic segments (`[slug]`, `[requestId]`) resolve to one ledger entry each, not one
       per instance
+
+#### Verified 2026-08-31 in lane `worktree-363` — most of this had already landed
+
+**Trust the repository over the ticket's prose.** Every bullet above was re-checked
+against the code before implementing. Nine of eleven were already done, by the tickets
+this one consolidated and by lanes that passed through the same files since:
+
+| Bullet | State | Evidence |
+| --- | --- | --- |
+| `lane:up` seeds, not just migrates | Done | `lane.ts:281` runs `deps.seed()` after `deps.migrate()`; `lane.test.ts:134` asserts the order `install, build, migrate, seed` |
+| `laneUp` re-derives `worktreePath` and `branch` on a resumed lane | Done | `lane.ts:366-381`; `lane.test.ts:172` |
+| Preflight compares the `stripe listen` secret against `STRIPE_WEBHOOK_SECRET`, digests only | Done | `checks/webhooks.ts:24-56`, SHA-256 both sides, never the values |
+| The lane dev script sets `ulimit -n 65536` | Done | `apps/web/package.json` — `ulimit -n 65536 2>/dev/null; next dev …` |
+| `POST /vendor/stripe/connect` answers 403, not the parser's 400 | Done | `stripe-connect.routes.ts:34` — `onRequest: requireRoleBeforeValidation('vendor')`; test at `stripe-connect.routes.test.ts:197` |
+| The preflight flake (#64) | Done | `lane/manifest.test.ts:96` — real timers stretched ~17x under parallel Turbo; `vi.useFakeTimers()` |
+| The route/frame ledger enumeration | Done | `apps/web/src/app/route-parity-ledger.test.ts` — enumerates every `page.tsx`, holds each to a frame or a recorded exemption, proves itself by failing on a synthetic route (`:258`), and carries the plausible-count guard (`:203`) |
+| `/vendor/portfolio`'s contradiction | Done | resolved to frames `24` and `25`; asserted at `route-parity-ledger.test.ts:239` |
+| A lane manifest may not outlive its lane | Done | `laneEnqueued` (`lane.ts:463`) writes `prUrl` and moves the lane to `pending-merge`; tested at `lane.test.ts:559-587`. **`.claude/lanes/` is gitignored**, so there is no committed state a test could hold to reality — a repository-level tripwire is not available here, and the closure is `lane:pr` being the only writer. `371.json` went stale because its session never called it, not because the writer is wrong |
+
+**Two were genuinely open, and are what this ticket changed.**
+
+**#341 — two seeds wrote the display label.** `seed-e2e.ts:574` and
+`seed-marketing.ts:406` both wrote `eventType: 'Wedding'` into a column the product
+only ever reads as the slug `'wedding'`. `event_type` is a `varchar`, so Postgres
+takes it and `eventTypeSchema` at the API edge is the only thing that would have
+rejected it — which a seed never passes. The row renders its occasion blank, on the
+vendor dashboard the E2E fixture exists to make reachable.
+
+**The class is closed in the schema, not in a test.**
+`booking_requests.event_type` now carries `.$type<EventType>()`
+(`schema/bookings.ts`), so writing the label is a **compile error** at every typed
+write site in the repository — proven by reinstating `'Wedding'` and watching
+`tsc` reject it (`seed-marketing.ts(432,15): error TS2769`). It is TypeScript
+only: `pnpm db:generate` reports *No schema changes*, the column stays `varchar`,
+and widening `EVENT_TYPES` still needs no migration, which is the whole reason the
+column is not a `pgEnum`. The two seeds now name a constant typed `EventType`, and
+each seed's own suite asserts the rows that actually land are in the vocabulary —
+the half a type cannot cover, since it says nothing about rows already written.
+
+A source-scanning test was written first and **deleted in review**: it parsed
+`seed*.ts` with a regex, which missed `demo-seed-data.ts` — the file the *previous*
+instance of this bug lived in — resolved only same-file constants, and waved
+through the three write sites that are not bare literals. It guarded the two lines
+this ticket had just fixed. The annotation guards every write site in the
+repository, for a fifth of the code.
+
+`$type` narrows reads too, asserting legacy rows are in-vocabulary when they may
+not be. That claim stays inside `packages/db`: the API re-parses the column as
+`z.string()` on the way out, deliberately and with its own comment saying why.
+
+Existing rows are **repaired, not stranded** (`.claude/rules/db-schema.md`, the #317
+precedent): `seed-marketing` already deletes and rebuilds its own booking graph, and
+`seed-e2e`'s adoption path now corrects an event type outside the vocabulary. That
+is the one repair there that overwrites a non-null value, and only a value the
+vocabulary does not declare — `'corporate'` set by hand is left alone.
+
+**#382 — a stale `packages/shared/dist` blames the wrong ticket.**
+`packages/db` resolves `@vendor-marketplace/shared` through its compiled `dist`, so
+a build older than the source hands the suite a constant the repository no longer
+declares. `shared-dist-freshness.test.ts` asserts the oldest file in `dist` is newer
+than the newest file in `src` and fails naming both paths and the rebuild command.
+Shown failing on a deliberately stale `dist` (`touch packages/shared/src/constants/index.ts`)
+and green again after the rebuild it names. `pnpm test` runs `^build` first so it
+cannot fire there; it fires where the defect bit, on `vitest` run directly in the
+package. This is the ticket's second candidate shape, taken verbatim.
+
+**Two deeper alternatives were considered and refused, with reasons.** Aliasing
+`@vendor-marketplace/shared` to its *source* in `packages/db/vitest.config.ts`
+would remove the failure mode rather than detect it — but it silently changes what
+213 tests import, and it stops the suite exercising the artifact every other
+consumer resolves. Hoisting the check to a `globalSetup` shared by all four
+packages that import through `dist` is the right generalisation and is **the
+follow-up worth taking**; it was refused *here* only because it edits
+`apps/web` and `apps/api` vitest configs while four lanes are live in those trees,
+which is how two lanes collide on one file.
+
+**Nothing user-reachable changed, so there is no browser or parity pass** — as this
+ticket's own framing says.
+
+A frame `06` fix was carried here briefly and then **lifted back out into #394**.
+`diff-reviewer` noticed that `booking-confirmed.tsx` prints `event_type`
+verbatim, so the seed correction above would have shown the fixture's occasion in
+lower case. The one-line fix and two tests were written and shown failing-before,
+then the browser pass found the screen answers **500 for every customer** — a
+response-schema mismatch in `payments.routes.ts`, which lane #387 is holding. The
+label fix is unverifiable until that lands and belongs in the same lane as it, so
+both are **#394** and this ticket stays what it says it is.
+
+The same pass also found the vendor dashboard's month window built in local time
+and compared against UTC, so earnings read `$0` around every month boundary —
+**already filed as #391** by #381's verification pass an hour earlier, and
+already in flight on `worktree-391`. It was written up here as a second ticket
+and **dropped before pushing** rather than filed and superseded: a row that
+exists only to be closed is worse than one that never existed.
 
 **Tests (required):**
 
@@ -1774,6 +1868,98 @@ the frame's 6 merely illustrative.
 - [ ] A test asserting the skeleton and the loaded card share a radius token, so the two
       cannot drift apart again
 
+
+### #394: The booking confirmation screen answers 500 for every customer
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None. **Touches `apps/api/src/modules/payments/payments.routes.ts`, which lane #387 is live in — do not run the two concurrently.**
+
+**Filed 2026-08-31 by #363's browser pass**, which set out to verify a one-line
+change on this screen and found the screen does not render at all.
+
+#### What happens
+
+Signed in as the E2E customer, with a `confirmed` booking for request
+`80c8ec6d…`, at 1440x900:
+
+`/bookings/80c8ec6d…/confirmed` returns **HTTP 500** and renders the server-error
+page — *"Something broke on our end … No payment was taken and no booking was
+changed."* It does not redirect to `/checkout` and does not 404. The heading is
+`Something broke on our end`; there is no date sentence and no
+`<main aria-label="Booking confirmed">`.
+
+The copy is wrong in the way that matters most: a payment **was** taken. This is
+the screen a customer lands on immediately after paying.
+
+#### Why
+
+`GET /customer/booking-requests/:requestId/booking`
+(`apps/api/src/modules/payments/payments.routes.ts:70`) declares:
+
+```ts
+schema: { params: requestParamsSchema, response: { 200: bookingSchema } },
+```
+
+`bookingSchema` (`packages/shared/src/schemas/index.ts:765`) declares neither
+`eventType` nor `venue`, so Fastify's response serialiser **strips both**. The
+observed 200 body carries 18 keys and neither of those two.
+
+The web parses that body with `wireBookingSchema` — `bookingWithContextSchema`
+(`:792`) plus date coercions — where `eventType` and `venue` are `.nullable()`,
+**not `.optional()`**. A missing key is not a null, so the parse throws:
+
+```
+ApiClientError: API response for /customer/booking-requests/80c8ec6d…/booking
+  did not match its schema
+    at apiRequest (src/lib/api-client.ts:88:15)
+    at getBookingForRequest (src/lib/customer-data.ts:150:16)
+    at BookingConfirmedPage
+```
+
+The list route gets it right — `booking-requests.routes.ts:167` serialises with
+`z.array(bookingWithContextSchema)` — which is why `/bookings` renders and only
+the single-booking read fails.
+
+#### The second half — the occasion renders as a slug
+
+Lifted out of **#363** so both defects on this screen land in one browser pass.
+
+`booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds
+the slug, so the line reads `wedding · Barr Mansion · Austin, TX` — lower-case,
+in the middle of the confirmation screen. Every other read site already routes
+through `EVENT_TYPE_LABELS` with a fallback (`request-row.tsx:81`,
+`accepted-request.tsx:43`, `quote-review.tsx:96`, `reviews-pane.tsx:66`,
+`customer-history.tsx:76`, `booking-entries.ts:87`); this one does not.
+
+The fix and its two tests were **written and shown failing-before** under #363 —
+reverting the line made the occasion test fail — then reverted from that lane,
+because the 500 makes them unverifiable in a browser and the route fix belongs to
+a file another lane is holding. Recover them from that branch rather than
+rewriting them.
+
+#### Acceptance
+
+1. `/bookings/<id>/confirmed` renders frame `06` for a customer with a paid
+   booking — driven in a real browser at 1440x900, signed in, screenshotted.
+2. The occasion line reads `Wedding · <venue> · <city>`, capitalised through
+   `EVENT_TYPE_LABELS`, with the stored value as the fallback for a legacy row.
+3. No console errors on that page.
+4. The signed-out URL still redirects to sign-in carrying `returnTo`.
+5. A test asserts the single-booking route's 200 body **includes** `eventType`
+   and `venue` — the schema mismatch is invisible to a route test that only
+   checks the status.
+6. Rule on `.nullable()` vs `.optional()` for these two fields and make the two
+   sides agree; a client that requires a key the server may omit is the class,
+   not the instance.
+
+#### Tests (required)
+
+- [ ] An API test that the serialised 200 carries `eventType` and `venue`
+- [ ] A web test that the confirmed page renders rather than throwing, for a
+      booking whose `eventType` is a slug
+- [ ] The two `booking-confirmed.test.tsx` cases recovered from `worktree-363`
+
+---
 
 ### #387: Checkout is a dead end — an accepted booking's `Pay` CTA answers 404
 

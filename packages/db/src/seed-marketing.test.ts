@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
-import { generateSlug } from '@vendor-marketplace/shared';
+import { EVENT_TYPES, generateSlug } from '@vendor-marketplace/shared';
 import { MARKETING_CUSTOMERS, MARKETING_VENDORS } from './marketing-seed-data.js';
 import {
   availability,
@@ -217,6 +217,26 @@ describe('seedMarketingData', () => {
       .leftJoin(bookings, eq(reviews.bookingId, bookings.id))
       .where(eq(bookings.status, 'completed'));
     expect(orphaned).toHaveLength(totalReviews);
+  }, 120_000);
+
+  /*
+   * `event_type` is a `varchar`, so only `eventTypeSchema` at the API edge holds
+   * it to `EVENT_TYPES` — and a seed writes past that edge. This one wrote the
+   * display label `Wedding`, which misses `EVENT_TYPE_LABELS` and renders the
+   * occasion blank wherever the product prints it. The seed deletes and rebuilds
+   * its own booking graph, so a re-run corrects the rows it already wrote.
+   */
+  it('writes event types from the closed vocabulary, not display labels', async () => {
+    await seedMarketingData(testDb.db, NOW);
+
+    const rows = await testDb.db
+      .select({ eventType: bookingRequests.eventType })
+      .from(bookingRequests);
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(EVENT_TYPES).toContain(row.eventType);
+    }
   }, 120_000);
 
   it('never dates a completed booking in the future', async () => {

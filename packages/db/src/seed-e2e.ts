@@ -1,4 +1,9 @@
-import { BOOKING_REQUEST_EXPIRY_DAYS, toDateString } from '@vendor-marketplace/shared';
+import {
+  BOOKING_REQUEST_EXPIRY_DAYS,
+  EVENT_TYPES,
+  type EventType,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
@@ -63,6 +68,9 @@ const E2E_CATEGORY_SLUG = 'photography';
  * distinction could matter.
  */
 const E2E_STRIPE_ACCOUNT_ID = 'acct_e2e_fixture_not_a_real_account';
+
+/** The occasion the seeded request is for — the slug. See `bookings.ts`. */
+const SEEDED_EVENT_TYPE: EventType = 'wedding';
 
 /** How far ahead the seeded request's event sits, before avoiding clashes. */
 const EVENT_DAYS_AHEAD = 45;
@@ -510,6 +518,7 @@ async function ensureBookingRequest(
       packageId: bookingRequests.packageId,
       finalPriceCents: bookingRequests.finalPriceCents,
       expiresAt: bookingRequests.expiresAt,
+      eventType: bookingRequests.eventType,
     })
     .from(bookingRequests)
     .where(
@@ -531,10 +540,26 @@ async function ensureBookingRequest(
      * insert that would get it right. An already-seeded database is precisely
      * one of the states this fixture has to survive.
      *
-     * Only nulls are filled. A request that legitimately carries no package is
-     * left alone, and a price already locked is never overwritten.
+     * Nulls are filled, and nothing else — with one named exception below. A
+     * request that legitimately carries no package is left alone, and a price
+     * already locked is never overwritten.
      */
-    const repair: { finalPriceCents?: number; expiresAt?: Date } = {};
+    const repair: { finalPriceCents?: number; expiresAt?: Date; eventType?: EventType } = {};
+
+    /*
+     * The named exception: this is the one repair that overwrites a non-null
+     * value. The seed wrote the display label `Wedding` for months, so every
+     * database seeded before the fix carries a row whose occasion renders
+     * blank — and `$type` cannot reach a row already written. Null is filled
+     * for the same reason the price and the expiry are; a value the vocabulary
+     * does declare is left exactly as it is, whoever wrote it.
+     *
+     * `unknown[]`, so the null and the out-of-vocabulary string are one test
+     * rather than two.
+     */
+    if (!(EVENT_TYPES as readonly unknown[]).includes(existing.eventType)) {
+      repair.eventType = SEEDED_EVENT_TYPE;
+    }
 
     if (existing.finalPriceCents === null && existing.packageId !== null) {
       repair.finalPriceCents = input.servicePackage.priceCents;
@@ -571,7 +596,7 @@ async function ensureBookingRequest(
       packageId: input.servicePackage.id,
       eventDate,
       eventLocation: 'Barr Mansion, Austin TX',
-      eventType: 'Wedding',
+      eventType: SEEDED_EVENT_TYPE,
       guestCount: 120,
       customDetails: 'Seeded request, so the vendor dashboard has something to act on.',
       status: 'pending',

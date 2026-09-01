@@ -483,6 +483,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   // Filed 2026-08-31 from #389's verification and parity passes.
   392: [], // frame `13` parity debt — tokens and component classes, no external service
   393: [], // the admin tables' responsive strategy below 1024, no external service
+  // Filed 2026-08-31 from #363's browser pass.
+  394: [], // a response schema, a label lookup and their tests — no external service
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
