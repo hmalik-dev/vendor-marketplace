@@ -178,6 +178,17 @@ function landingCategories(categories: readonly Category[]): Category[] {
 export default async function HomePage(): Promise<React.ReactElement> {
   await redirectVendorToDashboard();
 
+  /*
+    One wave, and every read in it bounded by `API_REQUEST_TIMEOUT_MS` (#390).
+
+    All three degrade to an empty list, so a wedged upstream costs this page
+    its category row and its featured row and keeps everything else — but
+    before the deadline existed, "degrades" was theoretical: a suspended API
+    never answers at all, so `/` held the connection open with zero bytes
+    flushed until the platform's gateway ended it. The visitor got a blank tab
+    and then somebody else's 504 page. Measured 2026-08-31: 35s and 0 bytes
+    before, 8.1s and a rendered page after.
+  */
   const [categories, cities, featuredVendors] = await Promise.all([
     getCategories(),
     getVendorCities(),
@@ -487,7 +498,10 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
       {/*
         Nothing is invented here: an empty marketplace shows no featured row at
-        all rather than four placeholder businesses.
+        all rather than four placeholder businesses. An upstream that failed or
+        timed out degrades to the same empty list, and to the same absent row —
+        the front door has no honest way to tell those apart, and inventing one
+        would mean claiming a vendor count nobody queried.
       */}
       {featuredVendors.length > 0 ? (
         <section aria-labelledby="featured-heading" className={`${CONTAINER} py-14`}>
