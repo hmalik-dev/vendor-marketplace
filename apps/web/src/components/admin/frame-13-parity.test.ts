@@ -138,7 +138,13 @@ describe('the table', () => {
     const tracks = [...vendorTable.matchAll(/width: '([^']+)'/g)].map((match) => match[1]);
     expect(tracks.join(' ')).toBe('22px 1.6fr 1.1fr 1fr .7fr .8fr .9fr 70px');
 
-    expect(dataTable).toContain("columns.map((column) => column.width).join(' ')");
+    /*
+     * Joined once, and each flexible track floored at zero on the way through
+     * — `#389`. The column specs stay the frame's own track list, read back
+     * verbatim above; `resolveTrack` is what stops a bare `<flex>` minimum
+     * letting one row's content resize that row alone.
+     */
+    expect(dataTable).toContain("columns.map((column) => resolveTrack(column.width)).join(' ')");
     expect(dataTable.match(/grid-cols-\(--admin-table-columns\)/g)).toHaveLength(2);
   });
 
@@ -258,9 +264,13 @@ describe('what the parity pass measured, kept from drifting back', () => {
   });
 
   it('keeps a body cell’s colour out of the header label', () => {
-    // `text-stone-900` on the business column leaked into `BUSINESS`, which the
-    // frame draws in `stone-600` like the other five.
-    expect(dataTable).toContain('className={column.headerClassName}');
+    /*
+     * `text-stone-900` on the business column leaked into `BUSINESS`, which the
+     * frame draws in `stone-600` like the other five. The header cell takes
+     * `headerClassName` and nothing from `className` — `truncate` beside it is
+     * the header's own (`#389`), and carries no colour.
+     */
+    expect(dataTable).toContain("cn('truncate', column.headerClassName)");
     expect(vendorTable).not.toContain("headerClassName: 'font-semibold text-stone-900'");
   });
 
@@ -316,7 +326,9 @@ describe('what the parity pass measured, kept from drifting back', () => {
      * put the `Admin` chip at x=103.5 against the frame's x=110 — drift that
      * survives a source read because neither side writes the resolved value.
      */
-    expect(header).toContain('flex items-center gap-[9px]');
+    // `shrink-0` since `#389`: the identity block on the other side of the bar
+    // is the half that gives way when the header runs out of room, not this one.
+    expect(header).toContain('flex shrink-0 items-center gap-[9px]');
     /*
      * The named size, not the literal 15 it holds — `LOGO_SIZES` exists "so no
      * surface picks a logo size by eye", and asserting the literal would make
