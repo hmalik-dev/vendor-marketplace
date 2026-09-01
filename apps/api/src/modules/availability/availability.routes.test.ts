@@ -188,7 +188,7 @@ describe('/vendor/availability', () => {
 
       await harness.database.db
         .update(vendorProfiles)
-        .set({ isPublished: true, stripeOnboarded: true })
+        .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
         .where(eq(vendorProfiles.id, vendorId));
 
       const request = await harness.app.inject({

@@ -141,6 +141,20 @@
       "when": 1788146849100,
       "tag": "0019_worried_prodigy",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788227200131,
+      "tag": "0020_clear_orphan_stripe_onboarded",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788227260601,
+      "tag": "0021_flawless_sue_storm",
+      "breakpoints": true
     }
   ]
 }

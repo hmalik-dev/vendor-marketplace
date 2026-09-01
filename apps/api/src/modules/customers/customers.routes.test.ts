@@ -92,7 +92,7 @@ describe('/customers', () => {
 
     await harness.database.db
       .update(vendorProfiles)
-      .set({ isPublished: true, stripeOnboarded: true })
+      .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
       .where(eq(vendorProfiles.id, vendorId));
 
     return { vendorId, packageId: created.json().id };

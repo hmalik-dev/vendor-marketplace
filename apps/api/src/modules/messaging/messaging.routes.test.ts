@@ -70,7 +70,7 @@ describe('messaging', () => {
 
     await harness.database.db
       .update(vendorProfiles)
-      .set({ isPublished: true, stripeOnboarded: true })
+      .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
       .where(eq(vendorProfiles.id, vendorId));
 
     const request = await harness.app.inject({
@@ -435,7 +435,7 @@ describe('messaging', () => {
 
       await harness.database.db
         .update(vendorProfiles)
-        .set({ isPublished: true, stripeOnboarded: true })
+        .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
         .where(eq(vendorProfiles.id, profile.json().id));
 
       return profile.json().slug;
