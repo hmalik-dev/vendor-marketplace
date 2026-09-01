@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
+/**
+ * A single grid track, as a column may declare it: flexible (`1.6fr`, `.9fr`)
+ * or fixed (`22px`, `70px`). Nothing else — see `width` below.
+ */
+export type TableTrack = `${number}fr` | `${number}px`;
+
 export interface DataTableColumn<T> {
   key: string;
   /** The uppercase micro-label in the fixed header row. Empty for a control column. */
@@ -13,8 +19,16 @@ export interface DataTableColumn<T> {
    * editing the string misaligned the header from the body with no type error
    * and no test — which is the single most visible way a table like this
    * breaks. Now the two cannot disagree, because there is only one.
+   *
+   * Narrowed from `string` to these two shapes by `#389`. `resolveTrack` floors
+   * a flexible track so one row's content cannot resize it, but it can only
+   * recognise the forms it is given — `auto`, `min-content`, `max-content` and
+   * `fit-content()` all size against each row's own content in exactly the same
+   * way and would reintroduce the bug past a regex that only reads `fr`. The
+   * type is what makes that unwritable rather than merely unwritten, and it
+   * accepts every one of the 37 tracks the six admin tables declare.
    */
-  width: string;
+  width: TableTrack;
   cell: (row: T) => ReactNode;
   /**
    * Overrides for one **body** cell — right alignment on the overflow column,
@@ -28,6 +42,39 @@ export interface DataTableColumn<T> {
   className?: string;
   /** Overrides for the header cell alone, where one is genuinely needed. */
   headerClassName?: string;
+}
+
+/** A bare `<flex>` track as a column declares it — `1.6fr`, `.9fr`. */
+const FLEX_TRACK = /^\d*\.?\d+fr$/;
+
+/**
+ * A flexible track, floored at zero. Fixed tracks pass through untouched.
+ *
+ * A bare `<flex>` track's automatic minimum is `min-content`, not zero — so a
+ * cell wider than its share widens its own track and steals the difference from
+ * the rest. `DataTable` gives the header and **every body row** their own grid
+ * container, sharing only this template string, so those widths resolve per row
+ * against that row's own content: on `/admin/reviews` 13 of 15 rows disagreed
+ * with the header, the trailing action column was pushed to `right=1454` in a
+ * 1440 viewport, and at 390 the document scrolled sideways.
+ *
+ * `minmax(0, …)` is what makes the template mean the same thing in every
+ * container, and it is also what lets the cells' own `text-ellipsis` fire — a
+ * track that grows to fit its content never overflows, so it never truncates.
+ *
+ * Applied here rather than in the six column specs on purpose: a new table, or
+ * a new column on an existing one, cannot reintroduce the bug by declaring a
+ * bare `fr`. The specs stay readable as the frame's own track list, which
+ * `frame-13-parity.test.ts` reads back verbatim.
+ *
+ * **What this function does not do is the other half of the guard.** It floors
+ * flexible tracks; it does not, and cannot, rescue an intrinsic sizing function
+ * — `auto` and `min-content` would sail through untouched and size against each
+ * row's content again. `TableTrack` is what keeps those unwritable, so the two
+ * belong together: widening the type without widening this regex reopens #389.
+ */
+function resolveTrack(width: TableTrack): string {
+  return FLEX_TRACK.test(width) ? `minmax(0, ${width})` : width;
 }
 
 export interface DataTableProps<T> {
@@ -64,7 +111,7 @@ export function DataTable<T>({
   scrollPadding = false,
 }: DataTableProps<T>): React.ReactElement {
   // Joined once here; the header row and every body row read this one value.
-  const template = columns.map((column) => column.width).join(' ');
+  const template = columns.map((column) => resolveTrack(column.width)).join(' ');
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-stone-300 bg-stone-0">
@@ -87,7 +134,29 @@ export function DataTable<T>({
             className="sticky top-0 z-10 grid items-center gap-3 border-b border-stone-300 bg-stone-100 px-4 py-2.5 text-label font-semibold tracking-label text-stone-600 uppercase grid-cols-(--admin-table-columns)"
           >
             {columns.map((column) => (
-              <span role="columnheader" key={column.key} className={column.headerClassName}>
+              <span
+                role="columnheader"
+                key={column.key}
+                /*
+                  The header truncates like a body cell does, and it has to for
+                  the same reason the body does. Body cells always carried
+                  `text-ellipsis` (below); the header carried nothing and was
+                  silently propped up by the `min-content` floor on a bare
+                  `<flex>` track — the very floor `resolveTrack` removes. With
+                  the floor gone and nothing to truncate against, five of six
+                  labels on `/admin/reviews` at 390 overprinted the next one:
+                  `RATIN|VENDOR|AUTHOR|ABOUT`, `Rating` overflowing its 12.2px
+                  track by 17.66px. Measured at 390 only — at 768 and above
+                  every header cell's `scrollWidth` equals its `clientWidth`,
+                  which is why nothing showed at the widths the frame draws.
+
+                  `truncate`, not the body's `overflow-clip` pair: the
+                  `[overflow-clip-margin:6px]` there exists to let a focused
+                  control's ring escape its cell, and a header label is static
+                  text with nothing to focus.
+                */
+                className={cn('truncate', column.headerClassName)}
+              >
                 {column.header}
               </span>
             ))}

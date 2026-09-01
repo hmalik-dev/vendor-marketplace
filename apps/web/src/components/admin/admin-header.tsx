@@ -25,7 +25,7 @@ export interface AdminHeaderProps {
 export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactElement {
   return (
     <header className="flex h-(--header-height) shrink-0 items-center justify-between border-b border-stone-800 bg-stone-900 px-8">
-      <div className="flex items-center gap-[9px]">
+      <div className="flex shrink-0 items-center gap-[9px]">
         <Link href="/admin" className="rounded-sm">
           {/*
             Both numbers are measured off a *rendered* frame `13`, not read off
@@ -50,8 +50,20 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
         </span>
       </div>
 
-      <div className="flex items-center gap-4.5">
-        <span className="text-action text-stone-400">Logged in as {email}</span>
+      {/*
+        `min-w-0` on the block and `truncate` on the label, because a flex item's
+        automatic minimum is `min-content` — the same rule that let one admin
+        table row resize its own columns (#389). `Logged in as` plus an address
+        measures 239.25px and could not compress below it, so at 390 the pair
+        reached `right=406.78` and every `/admin` route reported
+        `scrollWidth 407` against a 390 viewport: the whole document scrolled
+        sideways, and the table was blamed for it. The `title` keeps the full
+        address readable once the label starts eliding.
+      */}
+      <div className="flex min-w-0 items-center gap-4.5">
+        <span className="truncate text-action text-stone-400" title={email}>
+          Logged in as {email}
+        </span>
         <Avatar name={name} size="xs" className="bg-stone-700 text-clay-150" />
       </div>
     </header>
