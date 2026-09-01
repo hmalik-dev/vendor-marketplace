@@ -1,7 +1,8 @@
+import { cache } from 'react';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { slugSchema, type Category } from '@vendor-marketplace/shared';
-import { ApiClientError, apiRequest } from './api-client';
+import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
 import {
@@ -296,27 +297,46 @@ export async function getFeaturedVendors(): Promise<WireVendorCard[]> {
  * over-long slug with **414**, not the 400 its schema gives a malformed one,
  * and a status list would have missed it. The decision belongs here rather
  * than in the page, so every caller gets it.
+ *
+ * **`cache()`, and so are the profile's two companion reads below** (#390).
+ * The profile is read in `generateMetadata` as well as in the page, and each
+ * read is bounded by `API_REQUEST_TIMEOUT_MS`, so a repeat against a wedged
+ * upstream costs another full deadline rather than another round trip.
+ *
+ * It does **not** dedupe those two: measured on Next 15.5, `generateMetadata`
+ * runs in a separate cache scope from the page component, so the route still
+ * spends two deadlines end to end (~16s for an 8s timeout). What it does
+ * remove is every repeat *within* a scope — the error boundary's re-render of
+ * the segment most of all. The remaining gap is recorded at the catch in
+ * `generateMetadata`, which is the only place that can see it.
+ *
+ * `cache()` is per-request and never shared between visitors, so this is not
+ * the response caching `revalidate` does and carries none of its
+ * cross-visitor risk.
  */
-export async function getPublicVendorProfile(
-  slug: string,
-): Promise<WirePublicVendorProfile | null> {
-  if (!slugSchema.safeParse(slug).success) {
-    return null;
-  }
-
-  try {
-    return await apiRequest(`/vendors/${encodeURIComponent(slug)}`, {
-      schema: wirePublicVendorProfileSchema,
-    });
-  } catch (error) {
-    // A well-formed slug the API still refuses: it names nothing either.
-    if (error instanceof ApiClientError && (error.statusCode === 404 || error.statusCode === 400)) {
+export const getPublicVendorProfile = cache(
+  async (slug: string): Promise<WirePublicVendorProfile | null> => {
+    if (!slugSchema.safeParse(slug).success) {
       return null;
     }
 
-    throw error;
-  }
-}
+    try {
+      return await apiRequest(`/vendors/${encodeURIComponent(slug)}`, {
+        schema: wirePublicVendorProfileSchema,
+      });
+    } catch (error) {
+      // A well-formed slug the API still refuses: it names nothing either.
+      if (
+        error instanceof ApiClientError &&
+        (error.statusCode === 404 || error.statusCode === 400)
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
+  },
+);
 
 /**
  * The vendor's calendar for the profile's Availability tab.
@@ -327,19 +347,35 @@ export async function getPublicVendorProfile(
  * of the others depending on it. The profile read above is the one that must
  * propagate, because without it there is no page.
  */
-export async function getPublicVendorAvailability(slug: string): Promise<WireAvailability[]> {
-  try {
-    return await apiRequest(`/vendors/${encodeURIComponent(slug)}/availability`, {
-      schema: wireAvailabilityListSchema,
-    });
-  } catch (error) {
-    if (error instanceof ApiClientError) {
+export const getPublicVendorAvailability = cache(
+  async (slug: string): Promise<WireAvailability[]> => {
+    /*
+      The same guard the other two public reads carry, and for the same reason
+      stated on `getPublicVendorProfile`: a path segment that cannot name a
+      vendor costs no request. It matters more since #390, because the vendor
+      page now issues all three reads in one wave — before the `notFound()`
+      gate rather than after it — so without this a crawler on stale vendor
+      URLs turned one refused request into two.
+    */
+    if (!slugSchema.safeParse(slug).success) {
       return [];
     }
 
-    throw error;
-  }
-}
+    try {
+      return await apiRequest(`/vendors/${encodeURIComponent(slug)}/availability`, {
+        schema: wireAvailabilityListSchema,
+      });
+    } catch (error) {
+      // An upstream that never answered is the same to this tab as one that
+      // answered badly: a calendar nobody can draw, beside four tabs that render.
+      if (error instanceof ApiClientError || error instanceof ApiTimeoutError) {
+        return [];
+      }
+
+      throw error;
+    }
+  },
+);
 
 /**
  * The cities that have vendors, for the search bar's City field.
@@ -357,7 +393,11 @@ export async function getVendorCities(): Promise<WireVendorCity[]> {
       revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
     });
   } catch (error) {
-    if (error instanceof ApiClientError || error instanceof TypeError) {
+    if (
+      error instanceof ApiClientError ||
+      error instanceof ApiTimeoutError ||
+      error instanceof TypeError
+    ) {
       return [];
     }
 
@@ -387,42 +427,55 @@ export async function getVendorCities(): Promise<WireVendorCity[]> {
  * rather than that there are none — the vendor's own count is what tells those
  * two apart, and it comes from a different read.
  */
-export async function getPublicVendorReviews(slug: string): Promise<WireVendorReviewsPage | null> {
-  if (!slugSchema.safeParse(slug).success) {
-    return null;
-  }
-
-  const { getToken } = await auth();
-  const token = await getToken();
-
-  const read = async (bearer: string | null): Promise<WireVendorReviewsPage> =>
-    apiRequest(`/vendors/${encodeURIComponent(slug)}/reviews`, {
-      schema: wireVendorReviewsPageSchema,
-      token: bearer,
-    });
-
-  try {
-    return await read(token);
-  } catch (error) {
-    if (!(error instanceof ApiClientError)) {
-      throw error;
+export const getPublicVendorReviews = cache(
+  async (slug: string): Promise<WireVendorReviewsPage | null> => {
+    if (!slugSchema.safeParse(slug).success) {
+      return null;
     }
 
-    if (token && (error.statusCode === 401 || error.statusCode === 403)) {
-      try {
-        return await read(null);
-      } catch (retry) {
-        if (retry instanceof ApiClientError) {
-          return null;
-        }
+    const { getToken } = await auth();
+    const token = await getToken();
 
-        throw retry;
+    const read = async (bearer: string | null): Promise<WireVendorReviewsPage> =>
+      apiRequest(`/vendors/${encodeURIComponent(slug)}/reviews`, {
+        schema: wireVendorReviewsPageSchema,
+        token: bearer,
+      });
+
+    try {
+      return await read(token);
+    } catch (error) {
+      /*
+      A timeout gets the documented `null` rather than propagating, and gets it
+      without a retry. The pane then says the reviews are on their way, which
+      is exactly what an upstream that has stopped answering means — while
+      re-reading would spend a second full deadline to learn the same thing and
+      double this page's worst case.
+    */
+      if (error instanceof ApiTimeoutError) {
+        return null;
       }
-    }
 
-    return null;
-  }
-}
+      if (!(error instanceof ApiClientError)) {
+        throw error;
+      }
+
+      if (token && (error.statusCode === 401 || error.statusCode === 403)) {
+        try {
+          return await read(null);
+        } catch (retry) {
+          if (retry instanceof ApiClientError || retry instanceof ApiTimeoutError) {
+            return null;
+          }
+
+          throw retry;
+        }
+      }
+
+      return null;
+    }
+  },
+);
 
 /**
  * The vendor's payout state, read on every dashboard render.

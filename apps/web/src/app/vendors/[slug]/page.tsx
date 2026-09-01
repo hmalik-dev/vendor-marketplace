@@ -86,6 +86,27 @@ interface PageProps {
  */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
+
+  /*
+    This read is **deliberately not guarded against a timeout** (#390).
+
+    Next runs `generateMetadata` in a separate React cache scope from the page
+    component, and after it, so the `cache()` on this read does not dedupe
+    between the two and each spends its own `API_REQUEST_TIMEOUT_MS`. Against
+    a suspended API the route therefore answers in ~16s rather than ~8s —
+    twice the deadline, and the one part of this ticket's second acceptance
+    line still outstanding. It is recorded here rather than hidden because
+    this is the only place that can see it.
+
+    Catching the timeout here was tried and reverted: it does not save the
+    second deadline (the read still runs), and the neutral title it falls back
+    to is `Page not found`, which measurably labelled a **500** response as a
+    missing page. A wedged upstream is not a 404, and telling a visitor and a
+    crawler that it is, is worse than an unhelpful title. The fix that would
+    actually close the gap is to stop reading the profile here at all — a
+    title derived from the slug — which is a change to what this page tells
+    crawlers, not a change to its timeout behaviour.
+  */
   const vendor = await getPublicVendorProfile(slug);
 
   if (!vendor) {
@@ -118,7 +139,31 @@ export default async function VendorProfilePage({
   params,
 }: PageProps): Promise<React.ReactElement> {
   const { slug } = await params;
-  const vendor = await getPublicVendorProfile(slug);
+
+  /*
+    One wave, not two (#390).
+
+    These used to run as the profile, and then — once it had landed — these
+    other two. Each wave is bounded by `API_REQUEST_TIMEOUT_MS`, so against a
+    wedged upstream the route spent two full deadlines in series: measured at
+    16.1s for an 8s timeout, which is not "the timeout plus a margin" by any
+    reading. Neither of the other two needs anything from the profile; both
+    take only the slug, which is in hand on the line above. Issuing all three
+    together makes the page's worst case one deadline rather than the sum of
+    two.
+
+    `Promise.all` rather than starting them and awaiting later, because
+    `notFound()` below throws: a read still in flight at that point would
+    reject with nobody listening. Awaiting all three first means every
+    rejection has a handler, and the 404 costs two reads whose results are
+    discarded — a page nobody can see is not worth a second round trip to
+    optimise.
+  */
+  const [vendor, availability, reviews] = await Promise.all([
+    getPublicVendorProfile(slug),
+    getPublicVendorAvailability(slug),
+    getPublicVendorReviews(slug),
+  ]);
 
   /*
    * Missing, unpublished and deleted all arrive here as `null`, and all three
@@ -128,13 +173,6 @@ export default async function VendorProfilePage({
   if (!vendor) {
     notFound();
   }
-
-  /* Independent of each other, and neither blocks the header — the tabs render
-     from one payload apiece and there is no reason to wait for them in turn. */
-  const [availability, reviews] = await Promise.all([
-    getPublicVendorAvailability(slug),
-    getPublicVendorReviews(slug),
-  ]);
   const today = todayDateString();
 
   /* The same keyed view of availability the request form takes, so the rail's

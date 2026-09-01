@@ -1,6 +1,6 @@
 import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiClientError } from './api-client';
+import { API_REQUEST_TIMEOUT_MS, ApiClientError, ApiTimeoutError } from './api-client';
 
 /*
  * `vendor-data` resolves the Clerk session at module scope for its protected
@@ -28,8 +28,10 @@ const {
   getActiveTags,
   getCategories,
   getFeaturedVendors,
+  getPublicVendorAvailability,
   getPublicVendorProfile,
   getPublicVendorReviews,
+  getVendorCities,
 } = await import('./vendor-data');
 
 const upstream500 = new ApiClientError(
@@ -272,5 +274,69 @@ describe('reference reads', () => {
     apiRequest.mockRejectedValue(navigation);
 
     await expect(getCategories()).rejects.toBe(navigation);
+  });
+});
+
+/**
+ * What each loader does when the API stops answering (#390).
+ *
+ * The timeout is a third outcome beside "answered" and "answered badly", and
+ * each loader has to place it deliberately: the sections that degrade to empty
+ * must swallow it, and the profile read must **not**, because its `null` means
+ * "no such vendor" and is rendered as the designed 404.
+ */
+describe('an upstream that never answers', () => {
+  const timedOut = new ApiTimeoutError('/vendors/june-harlow', API_REQUEST_TIMEOUT_MS);
+
+  beforeEach(() => {
+    apiRequest.mockReset();
+    apiRequest.mockRejectedValue(timedOut);
+  });
+
+  it('costs the landing page its featured row and nothing else', async () => {
+    await expect(getFeaturedVendors()).resolves.toEqual([]);
+  });
+
+  it('costs the header its taxonomy without taking the page down', async () => {
+    await expect(getCategories()).resolves.toEqual([]);
+    await expect(getActiveTags()).resolves.toEqual([]);
+  });
+
+  it('leaves the city field offering Anywhere', async () => {
+    await expect(getVendorCities()).resolves.toEqual([]);
+  });
+
+  it('opens the availability tab on a free month rather than breaking the page', async () => {
+    await expect(getPublicVendorAvailability('june-harlow')).resolves.toEqual([]);
+  });
+
+  it('says the reviews are on their way, without spending a second deadline', async () => {
+    await expect(getPublicVendorReviews('june-harlow')).resolves.toBeNull();
+
+    /*
+     * One read, not two. The 401/403 branch retries unauthenticated, and a
+     * timeout routed through it would double this page's worst case to learn
+     * the same thing.
+     */
+    expect(apiRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('never turns a slow profile read into "this vendor does not exist"', async () => {
+    /*
+     * The one that must propagate. `null` here is rendered as the designed 404
+     * with its category recovery, so degrading a timeout to `null` would tell
+     * a visitor a real vendor is gone because the upstream was wedged — and
+     * hand a crawler a 404 for a live page.
+     */
+    await expect(getPublicVendorProfile('june-harlow')).rejects.toBeInstanceOf(ApiTimeoutError);
+  });
+
+  it('still answers a well-formed slug the API calls missing with null', async () => {
+    // The contrast that makes the test above mean something.
+    apiRequest.mockRejectedValue(
+      new ApiClientError(404, ERROR_CODES.NOT_FOUND, 'Vendor not found'),
+    );
+
+    await expect(getPublicVendorProfile('june-harlow')).resolves.toBeNull();
   });
 });
