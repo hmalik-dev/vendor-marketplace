@@ -2,9 +2,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'dotenv';
+import { eq, sql } from 'drizzle-orm';
 import { createDatabase } from '../client.js';
 import { loadEnv } from '../load-env.js';
+import { users, vendorProfiles } from '../schema/index.js';
 import { seedE2eFixtures, type E2eAccount } from '../seed-e2e.js';
+import {
+  createStripeFixtureGateway,
+  ensureE2eConnectedAccount,
+  isStripeAccountId,
+} from './e2e-stripe-account.js';
 import { assertSafeTarget } from './safe-target.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -87,6 +94,130 @@ async function resolveAccount(email: string, secretKey: string, role: string): P
 }
 
 /**
+ * The `.env.e2e.local` key that pins the fixture's connected account.
+ *
+ * Optional, and worth setting: without it every fresh lane database looks like
+ * a vendor who has never onboarded and provisions a new test-mode account. An
+ * account id is an identifier, not a credential — it lives here only because
+ * this is the file the end-to-end fixture already owns.
+ */
+const E2E_STRIPE_ACCOUNT_KEY = 'E2E_VENDOR_STRIPE_ACCOUNT_ID';
+
+/**
+ * The business URL the fixture account is created with.
+ *
+ * Stripe validates it and refuses placeholder domains — `example.com` comes
+ * back `url_invalid` — so this is the product's own deployed origin rather than
+ * `WEB_URL`, which is `localhost` on every machine that runs this.
+ */
+const FIXTURE_BUSINESS_URL = 'https://web-gules-eta-41.vercel.app';
+
+/** The account id already on the fixture vendor's storefront, if any. */
+async function readStoredAccountId(
+  db: ReturnType<typeof createDatabase>['db'],
+  vendorEmail: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ stripeAccountId: vendorProfiles.stripeAccountId })
+    .from(vendorProfiles)
+    .innerJoin(users, eq(users.id, vendorProfiles.userId))
+    .where(
+      sql`lower(${users.email}) = lower(${vendorEmail}) and ${vendorProfiles.isDeleted} = false`,
+    )
+    .limit(1);
+
+  return row?.stripeAccountId ?? null;
+}
+
+/** What the fixture writes to the storefront's two payout columns. */
+interface PayoutRoute {
+  /** The real connected account, kept even when it is not usable yet. */
+  accountId: string | null;
+  /** Whether Stripe reports both capabilities — the `isOnboarded` conjunction. */
+  onboarded: boolean;
+}
+
+/** A vendor with no payout route at all, which the product already handles. */
+const NO_PAYOUT_ROUTE: PayoutRoute = { accountId: null, onboarded: false };
+
+/**
+ * The connected account the fixture vendor is payable through.
+ *
+ * Real or nothing, and that is the whole of #387: a fixture with no payout route
+ * is honest and the product already handles it (the accept gate answers 402 and
+ * says so), while a fixture with a made-up account id is a lie that only
+ * surfaces as a 404 at the last click of the money path.
+ *
+ * **Stripe cannot fail the seed.** Every Stripe outcome — no key, a live key, a
+ * rotated one, a key for another instance, an outage — degrades to "no payout
+ * route" rather than throwing. The rest of the fixture is what makes `/vendor`
+ * and `/admin` reachable at all, and losing the vendor, customer and admin rows
+ * because one column could not be filled would break every lane for a fixture
+ * whose Stripe-dependent part is one column.
+ */
+async function resolveConnectedAccount(
+  db: ReturnType<typeof createDatabase>['db'],
+  vendorEmail: string,
+  pinnedAccountId: string | undefined,
+): Promise<PayoutRoute> {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+
+  if (!secretKey) {
+    console.log(
+      'STRIPE_SECRET_KEY is not set, so the fixture vendor is left without payouts. Checkout ' +
+        'and accept will answer 402 until it is.',
+    );
+    return NO_PAYOUT_ROUTE;
+  }
+
+  const existingAccountId = isStripeAccountId(pinnedAccountId)
+    ? pinnedAccountId
+    : await readStoredAccountId(db, vendorEmail);
+
+  let account;
+
+  try {
+    account = await ensureE2eConnectedAccount(createStripeFixtureGateway(secretKey), {
+      existingAccountId,
+      contactEmail: vendorEmail,
+      displayName: 'E2E Test Studio',
+      businessUrl: FIXTURE_BUSINESS_URL,
+    });
+  } catch (error: unknown) {
+    console.log(
+      `  Stripe could not supply a connected account (${error instanceof Error ? error.message : 'unknown error'}), ` +
+        'so the fixture vendor is left without payouts.',
+    );
+    return NO_PAYOUT_ROUTE;
+  }
+
+  if (account.created) {
+    console.log(`  provisioned Stripe test account ${account.accountId}`);
+    console.log(`  pin it: add ${E2E_STRIPE_ACCOUNT_KEY}=${account.accountId} to ${E2E_ENV_FILE}`);
+  }
+
+  if (!account.onboarded) {
+    /*
+     * The id is kept even so, which is what makes the next run converge: it is
+     * read back, Stripe is asked again, and the account finishes activating.
+     * Returning `null` here instead would blank the column, orphan the account
+     * that was just created, and have the following run provision another —
+     * one abandoned test-mode account per lane, for ever.
+     *
+     * `account_id` set with `onboarded` false is also the real product state:
+     * the account is claimed first and the flag flips when Stripe reports the
+     * capabilities.
+     */
+    console.log(
+      `  Stripe has not activated both capabilities on ${account.accountId} yet — re-run to pick ` +
+        'them up',
+    );
+  }
+
+  return { accountId: account.accountId, onboarded: account.onboarded };
+}
+
+/**
  * Gives the end-to-end accounts a storefront they can reach.
  *
  * Opt-in and additive: it never touches `db:seed:marketing`'s rows, so one
@@ -98,9 +229,9 @@ async function main(): Promise<void> {
 
   /*
    * Stricter than it looks necessary. This fixture does not merely add rows: it
-   * forces a `users.role` to `vendor` and marks a vendor able to take payment
-   * without Stripe ever saying so. Neither belongs in a database holding real
-   * accounts, so the target is refused before Clerk is even asked.
+   * forces a `users.role` to `vendor` and attaches a Stripe connected account
+   * created for a fictional person. Neither belongs in a database holding real
+   * accounts, so the target is refused before Clerk or Stripe is even asked.
    */
   assertSafeTarget('end-to-end fixtures');
 
@@ -142,10 +273,14 @@ async function main(): Promise<void> {
   const { db, client } = createDatabase({ max: 1 });
 
   try {
+    const payouts = await resolveConnectedAccount(db, vendor.email, values[E2E_STRIPE_ACCOUNT_KEY]);
+
     const result = await seedE2eFixtures(db, {
       vendor,
       customer,
       ...(admin === undefined ? {} : { admin }),
+      stripeAccountId: payouts.accountId,
+      payoutsReady: payouts.onboarded,
       storefront: draft ? 'draft' : 'published',
     });
 
@@ -160,7 +295,10 @@ async function main(): Promise<void> {
 
     console.log(
       'Seeded the end-to-end fixtures: the vendor account owns a published storefront with ' +
-        'one package and one pending request, and can take payment.',
+        'one package and one pending request, and ' +
+        (payouts.onboarded
+          ? `takes payment through ${payouts.accountId}.`
+          : 'no payout route yet, so accept and checkout answer 402.'),
     );
     console.log(`  vendor profile ${result.vendorProfileId}`);
     console.log(`  booking request ${result.bookingRequestId}`);

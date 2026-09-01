@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { ApiClientError, apiRequest } from './api-client';
+import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
 import {
@@ -104,6 +104,43 @@ export async function getOwnBookingRequest(requestId: string): Promise<WireBooki
 }
 
 /**
+ * Why a checkout could not be opened.
+ *
+ * Four outcomes rather than one nullable intent, because #387: the page folded
+ * every failure into `null` and turned all of them into `notFound()`, so a
+ * Stripe misconfiguration told the customer *"this page isn't here. The link
+ * may be old, or a vendor may have taken their listing down"* — three claims,
+ * all false, about a live booking on a published vendor. What Stripe cannot do
+ * and what does not exist are different answers and get different screens.
+ */
+export type CheckoutOutcome =
+  /** The intent exists and the card form can render. */
+  | { state: 'ready'; checkout: WireCheckoutIntent }
+  /**
+   * There is nothing here to pay for: no such request, or not this customer's.
+   *
+   * **402 is deliberately folded in with them.** The vendor has not finished
+   * connecting payouts, the booking may well become payable later, and there is
+   * nothing the customer can do about it from here — naming the vendor's Stripe
+   * status to their customer is not information they are owed.
+   */
+  | { state: 'not-found' }
+  /** The request left `accepted` underneath the customer — 409. */
+  | { state: 'not-payable' }
+  /**
+   * Payment could not be started, and the booking is untouched.
+   *
+   * 400 or 422 from the API, and also the 8s deadline #390 put on every
+   * server-side call. This is a POST issued from a Server Component — the
+   * intent has to exist before the card form can render — so it carries that
+   * deadline, and a timeout would otherwise reach the generic 500 boundary.
+   * Retrying is safe because the endpoint is idempotent on
+   * `pay_<requestId>`: a retry after a lost response reaches the same intent
+   * rather than minting a second one.
+   */
+  | { state: 'failed' };
+
+/**
  * Opens checkout for one accepted request.
  *
  * A POST from a Server Component, which is unusual and is the right call here:
@@ -112,38 +149,40 @@ export async function getOwnBookingRequest(requestId: string): Promise<WireBooki
  * customer a payment form that is not yet backed by a charge, and turns every
  * checkout into two round trips. It is safe to repeat because the endpoint is
  * idempotent, so a refresh reaches the same intent rather than a second one.
- *
- * `null` covers every reason there is nothing to pay: the request is not
- * theirs, it was never accepted, or it has since lapsed. The page renders the
- * same not-found surface for all of them, because a customer who cannot pay for
- * something does not need to be told which of those it was.
  */
-export async function openCheckout(requestId: string): Promise<WireCheckoutIntent | null> {
+export async function openCheckout(requestId: string): Promise<CheckoutOutcome> {
   const token = await customerToken();
 
   try {
-    return await apiRequest(`/customer/booking-requests/${requestId}/checkout`, {
-      method: 'POST',
-      schema: wireCheckoutIntentSchema,
-      token,
-    });
+    return {
+      state: 'ready',
+      checkout: await apiRequest(`/customer/booking-requests/${requestId}/checkout`, {
+        method: 'POST',
+        schema: wireCheckoutIntentSchema,
+        token,
+      }),
+    };
   } catch (error) {
     if (isNavigationSignal(error)) {
       throw error;
     }
-    if (error instanceof ApiClientError && error.statusCode === 401) {
+    if (error instanceof ApiTimeoutError) {
+      return { state: 'failed' };
+    }
+    if (!(error instanceof ApiClientError)) {
+      throw error;
+    }
+    if (error.statusCode === 401) {
       redirect(await signInPathReturningHere());
     }
-
-    /*
-     * 402 is the vendor's payout setup, and it reaches the page as `null` like
-     * the rest. It is a real difference — the booking could become payable
-     * later — but there is nothing the customer can do about it from here, and
-     * naming the vendor's Stripe status to their customer is not information
-     * they are owed.
-     */
-    if (error instanceof ApiClientError && [400, 402, 404, 409, 422].includes(error.statusCode)) {
-      return null;
+    if (error.statusCode === 404 || error.statusCode === 402) {
+      return { state: 'not-found' };
+    }
+    if (error.statusCode === 409) {
+      return { state: 'not-payable' };
+    }
+    if (error.statusCode === 400 || error.statusCode === 422) {
+      return { state: 'failed' };
     }
 
     throw error;

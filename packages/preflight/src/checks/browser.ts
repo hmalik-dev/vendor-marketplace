@@ -87,6 +87,78 @@ export function evaluateE2eCredentials(repoRoot: string): CheckResult {
   return pass('e2e', name, `${E2E_ENV_FILE} supplies a ${roles} account`);
 }
 
+/** Stripe's own account-id shape: `acct_` followed by base62. */
+const STRIPE_ACCOUNT_ID_PATTERN = /^acct_[A-Za-z0-9]+$/;
+
+/** Stripe's v1 account read, which needs no API-version header. */
+const STRIPE_ACCOUNTS_API = 'https://api.stripe.com/v1/accounts';
+
+/** How long to wait on Stripe before deciding the gate cannot answer. */
+const STRIPE_TIMEOUT_MS = 8000;
+
+export type PayoutRoute =
+  /** `summary` is appended to the pass message, so the gate says what it checked. */
+  { ok: true; summary: string } | { ok: false; reason: string };
+
+/**
+ * Whether the fixture vendor can really be paid — asked of Stripe, not of the
+ * column.
+ *
+ * This check used to report *"a published storefront with a package, a live
+ * request and payouts"* on `stripe_onboarded` alone, and the seed set that flag
+ * beside `acct_e2e_fixture_not_a_real_account`. So the gate certified the one
+ * capability that did not work, on every run, while `POST .../checkout` answered
+ * 400 and the customer was shown a 404 (#387). A column is a claim; Stripe
+ * accepting the account is the evidence.
+ */
+export async function describePayoutRoute(
+  accountId: string | null,
+  secretKey: string,
+): Promise<PayoutRoute> {
+  if (accountId === null || !STRIPE_ACCOUNT_ID_PATTERN.test(accountId)) {
+    return {
+      ok: false,
+      reason:
+        accountId === null
+          ? 'the vendor account is marked payout-ready with no connected account id'
+          : `the vendor account carries "${accountId}", which is not an id Stripe can resolve`,
+    };
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${STRIPE_ACCOUNTS_API}/${accountId}`, {
+      headers: { authorization: `Bearer ${secretKey}` },
+      signal: AbortSignal.timeout(STRIPE_TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, reason: 'Stripe could not be reached to verify payouts' };
+  }
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      reason: `Stripe does not recognise ${accountId} (${response.status}) — checkout will answer 400`,
+    };
+  }
+
+  const account = (await response.json()) as { capabilities?: { transfers?: string } };
+
+  /*
+   * `transfers` is the exact capability `transfer_data.destination` requires,
+   * which is why it is the one asserted rather than `charges_enabled`.
+   */
+  if (account.capabilities?.transfers !== 'active') {
+    return {
+      ok: false,
+      reason: `Stripe has not activated transfers on ${accountId}, so checkout cannot open`,
+    };
+  }
+
+  return { ok: true, summary: `payouts Stripe accepts through ${accountId}` };
+}
+
 /**
  * Whether the end-to-end vendor account can actually reach a vendor surface.
  *
@@ -110,6 +182,16 @@ export function evaluateE2eCredentials(repoRoot: string): CheckResult {
 export async function evaluateE2eReach(
   repoRoot: string,
   connectionString: string | undefined,
+  /**
+   * The Stripe key the payout route is verified with, or `undefined` to check
+   * the columns alone.
+   *
+   * Only supplied for a ticket that declares the `stripe` capability, because
+   * every other ticket's `STRIPE_SECRET_KEY` may legitimately be a placeholder
+   * and a network call on it would fail the gate for work that never touches
+   * payment.
+   */
+  stripeSecretKey?: string,
 ): Promise<CheckResult> {
   const name = 'End-to-end accounts can reach their surfaces';
 
@@ -140,6 +222,7 @@ export async function evaluateE2eReach(
         role: string | null;
         profile_id: string | null;
         payouts_ready: boolean | null;
+        stripe_account_id: string | null;
         packages: number;
         live_requests: number;
       }[]
@@ -148,6 +231,7 @@ export async function evaluateE2eReach(
         u.role::text as role,
         v.id::text as profile_id,
         v.stripe_onboarded as payouts_ready,
+        v.stripe_account_id,
         (select count(*) from service_packages p where p.vendor_id = v.id)::int as packages,
         (
           select count(*) from booking_requests r
@@ -208,10 +292,34 @@ export async function evaluateE2eReach(
       return fail('e2e', name, `the vendor account has ${missing.join(', ')}`, 'pnpm db:seed:e2e');
     }
 
+    /*
+     * Asked of Stripe only for a ticket that declares the capability.
+     * `env-registry.md` promises that a ticket which never touches Stripe is
+     * never blocked on Stripe, and that has to hold for the *fixture's* Stripe
+     * state as much as for the keys: #388, #389 and #390 declare no
+     * capabilities, and failing their gate on the payout route would strand
+     * three lanes on a column none of them reads.
+     */
+    if (stripeSecretKey === undefined) {
+      return pass(
+        'e2e',
+        name,
+        'the vendor account owns a published storefront with a package, a live request and ' +
+          'payouts (columns only — this ticket declares no stripe capability)',
+      );
+    }
+
+    const payouts = await describePayoutRoute(row.stripe_account_id, stripeSecretKey);
+
+    if (!payouts.ok) {
+      return fail('e2e', name, payouts.reason, 'pnpm db:seed:e2e');
+    }
+
     return pass(
       'e2e',
       name,
-      'the vendor account owns a published storefront with a package, a live request and payouts',
+      'the vendor account owns a published storefront with a package, a live request and ' +
+        payouts.summary,
     );
   } catch (error: unknown) {
     return fail(
@@ -244,7 +352,13 @@ export const browserCheck: Check = {
       return results;
     }
 
-    results.push(await evaluateE2eReach(context.repoRoot, context.env.DATABASE_URL));
+    results.push(
+      await evaluateE2eReach(
+        context.repoRoot,
+        context.env.DATABASE_URL,
+        context.capabilities.has('stripe') ? context.env.STRIPE_SECRET_KEY : undefined,
+      ),
+    );
 
     return results;
   },

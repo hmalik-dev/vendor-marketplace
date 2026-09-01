@@ -81,8 +81,20 @@ Database:
 creates a `users` row and nothing else — `vendor_profiles` is only ever written
 by `POST /vendor/profile` — so without it the E2E vendor lands on an empty
 profile form and every `/vendor` route redirects there. It gives that account a
-published storefront, one package, one live booking request, and
-`stripe_onboarded`, so `accept` is not blocked by the 402.
+published storefront, one package, one live booking request, and a **real
+Stripe test-mode connected account**, so neither `accept` nor checkout is
+blocked by the 402.
+
+**The connected account is provisioned, not invented (#387).** The fixture used
+to write `acct_e2e_fixture_not_a_real_account`, which every column-shaped check
+read as payment-capable and Stripe refused as `transfer_data.destination` — so
+`/bookings/<id>/checkout` answered 404 for the only account an automated pass can
+drive, and every browser run stopped one click short of the money path. The seed
+now creates the account through Stripe, waits for its capabilities, and reuses it
+on later runs. Without `STRIPE_SECRET_KEY` it leaves the vendor **not onboarded**
+rather than writing a placeholder. Pin the account across lanes by adding
+`E2E_VENDOR_STRIPE_ACCOUNT_ID` to `.env.e2e.local`; without it every fresh lane
+database provisions its own. A live key is refused outright.
 
 **It also seeds the admin account, and that is the only way `/admin` is reachable
 at all.** `role = 'admin'` cannot be reached from inside the product: it is read
@@ -102,7 +114,8 @@ in** — it resolves their real Clerk ids rather than inventing them, because a
 sign-in collide on the email index and locks it out. It refuses to run against
 `NODE_ENV=production` or a protected Neon branch, and `lane:up` runs it for
 every lane. `pnpm preflight` **fails** when the accounts cannot reach their
-surfaces.
+surfaces — and for a ticket declaring the `stripe` capability it asks Stripe
+whether the connected account is real, rather than trusting the column.
 
 Deployed web: `web-gules-eta-41.vercel.app` — the parity target after every push.
 

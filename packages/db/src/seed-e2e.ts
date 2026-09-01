@@ -48,27 +48,6 @@ export const E2E_VENDOR_SLUG = 'e2e-test-studio';
 /** The category the fixture vendor is filed under, so search can find them. */
 const E2E_CATEGORY_SLUG = 'photography';
 
-/**
- * The connected-account id that travels with `payoutsReady`.
- *
- * **Both columns or neither.** The real flow claims `stripe_account_id` when the
- * Connect account is created and flips `stripe_onboarded` later, when Stripe
- * reports the capabilities — so `onboarded = true` with a null account id is a
- * state the product cannot produce, and the fixture was producing it. The cost
- * was not theoretical: `openCheckout` throws 402 on a null account id,
- * `customer-data` maps that to null and the checkout page calls `notFound()`, so
- * **`/bookings/<id>/checkout` answered 404 for the end-to-end customer at every
- * viewport** — and `/vendor/payments` read "Payouts connected, nothing else to
- * do here", so there was no way out from inside the product either.
- *
- * Deliberately not shaped like a real id. It exists to get the *screen* to
- * render for a browser pass; anything that actually reaches Stripe with it —
- * `transfer_data.destination` on a PaymentIntent — must fail loudly rather than
- * look plausible. `assertSafeTarget` already refuses any database where that
- * distinction could matter.
- */
-const E2E_STRIPE_ACCOUNT_ID = 'acct_e2e_fixture_not_a_real_account';
-
 /** The occasion the seeded request is for — the slug. See `bookings.ts`. */
 const SEEDED_EVENT_TYPE: EventType = 'wedding';
 
@@ -123,11 +102,32 @@ export interface E2eSeedInput {
    */
   admin?: E2eAccount;
   /**
+   * The **real** connected account the fixture vendor is payable through, or
+   * `null` when there is none.
+   *
+   * Real or nothing — there is no third option, and that is the whole of #387.
+   * The fixture used to write `acct_e2e_fixture_not_a_real_account` whenever
+   * `payoutsReady` was set, which every column-shaped check read as
+   * payment-capable and Stripe rejected the moment a PaymentIntent named it as
+   * `transfer_data.destination`. The API answered 400, the web app folded that
+   * into `notFound()`, and `/bookings/<id>/checkout` served a 404 to the only
+   * account an automated pass can drive — so every browser and end-to-end run
+   * stopped one click short of the money path, and a dead checkout reached
+   * pre-launch. `scripts/e2e-stripe-account.ts` provisions the real one.
+   */
+  stripeAccountId?: string | null;
+  /**
    * Whether the fixture vendor is marked as able to take payment.
    *
    * `true` by default, because the gate it clears — `accept` answering 402
    * until Stripe reports both capabilities — is a Stripe round trip no
    * unattended run can complete. Set it `false` to drive the gate itself.
+   *
+   * It can only ever **narrow** `stripeAccountId`: with no account there is
+   * nothing to be ready with, so the fixture is left un-onboarded rather than
+   * claiming a payout route it does not have. The reverse is allowed — an
+   * account id with `stripe_onboarded` false is the state a vendor is in
+   * between claiming the account and Stripe activating it.
    */
   payoutsReady?: boolean;
   /**
@@ -194,7 +194,8 @@ export async function seedE2eFixtures<
   input: E2eSeedInput,
 ): Promise<E2eSeedResult> {
   const now = input.now ?? new Date();
-  const payoutsReady = input.payoutsReady ?? true;
+  const stripeAccountId = input.stripeAccountId ?? null;
+  const payoutsReady = (input.payoutsReady ?? true) && stripeAccountId !== null;
   const draft = (input.storefront ?? 'published') === 'draft';
 
   return db.transaction(async (tx) => {
@@ -209,7 +210,11 @@ export async function seedE2eFixtures<
      */
     const adminUserId = input.admin ? await upsertAccount(tx, input.admin, 'admin') : undefined;
 
-    const vendorProfileId = await ensureProfile(tx, vendorUserId, payoutsReady, draft);
+    const vendorProfileId = await ensureProfile(tx, vendorUserId, {
+      stripeAccountId,
+      payoutsReady,
+      draft,
+    });
     await attachCategory(tx, vendorProfileId);
 
     if (draft) {
@@ -306,11 +311,17 @@ async function upsertAccount(
  * first and updated in place, keeping its slug; only an account with no profile
  * at all reaches the insert.
  */
+interface ProfileState {
+  /** The real connected account, or `null` for a vendor with no payout route. */
+  stripeAccountId: string | null;
+  payoutsReady: boolean;
+  draft: boolean;
+}
+
 async function ensureProfile(
   tx: Tx,
   vendorUserId: string,
-  payoutsReady: boolean,
-  draft: boolean,
+  { stripeAccountId, payoutsReady, draft }: ProfileState,
 ): Promise<string> {
   const [owned] = await tx
     .select({ id: vendorProfiles.id })
@@ -324,8 +335,21 @@ async function ensureProfile(
       .set({
         isPublished: !draft,
         isDeleted: false,
+        /*
+         * Both columns, unconditionally, on every adoption. `db-schema.md`'s
+         * legacy rule applies and this is the repair: a database seeded before
+         * #387 holds the placeholder id, and re-running the seed is what
+         * replaces it with the real account rather than leaving the row to
+         * fail at `transfer_data.destination` for ever.
+         *
+         * The id is written even when the vendor is not payout-ready, and only
+         * the flag is narrowed. That is the real product state — the account is
+         * claimed first and `stripe_onboarded` flips when Stripe reports the
+         * capabilities — and it is what lets the next run read the account back
+         * and finish activating it rather than provisioning another.
+         */
         stripeOnboarded: payoutsReady,
-        stripeAccountId: payoutsReady ? E2E_STRIPE_ACCOUNT_ID : null,
+        stripeAccountId,
         updatedAt: sql`now()`,
       })
       .where(eq(vendorProfiles.id, owned.id))
@@ -353,7 +377,7 @@ async function ensureProfile(
       isPublished: !draft,
       isDeleted: false,
       stripeOnboarded: payoutsReady,
-      stripeAccountId: payoutsReady ? E2E_STRIPE_ACCOUNT_ID : null,
+      stripeAccountId,
     })
     .onConflictDoUpdate({
       target: vendorProfiles.slug,
