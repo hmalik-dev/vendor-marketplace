@@ -479,6 +479,10 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
 
   // Filed 2026-08-31 from #381's verification pass.
   391: [], // a timezone boundary in a dashboard query — no external service
+
+  // Filed 2026-08-31 from #389's verification and parity passes.
+  392: [], // frame `13` parity debt — tokens and component classes, no external service
+  393: [], // the admin tables' responsive strategy below 1024, no external service
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
