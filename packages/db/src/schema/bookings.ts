@@ -1,3 +1,4 @@
+import type { EventType } from '@vendor-marketplace/shared';
 import { sql } from 'drizzle-orm';
 import {
   date,
@@ -38,7 +39,20 @@ export const bookingRequests = pgTable(
     eventDate: date('event_date').notNull(),
     /** Local wall-clock start, `HH:MM`. No zone: the venue's clock is the clock. */
     eventStartTime: time('event_start_time'),
-    eventType: varchar('event_type', { length: 200 }),
+    /**
+     * The occasion, as the slug `EVENT_TYPES` declares — never the display
+     * label. `varchar` rather than `pgEnum` on purpose (see `EVENT_TYPES`):
+     * widening the vocabulary must not need a migration. `$type` is the half
+     * of that trade that costs nothing — TypeScript only, no column change and
+     * no diff from `db:generate` — and it is what makes writing `'Wedding'`
+     * here a compile error rather than a row the product cannot render. Three
+     * seeds wrote the label before it was annotated.
+     *
+     * It narrows reads too, which is a claim about legacy rows this column
+     * cannot make. That stays inside `packages/db`: the API re-parses the
+     * column as `z.string()` on the way out, deliberately.
+     */
+    eventType: varchar('event_type', { length: 200 }).$type<EventType>(),
     eventLocation: varchar('event_location', { length: 500 }),
     guestCount: integer('guest_count'),
     customDetails: text('custom_details'),

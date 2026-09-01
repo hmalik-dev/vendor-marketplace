@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { EVENT_TYPES } from '@vendor-marketplace/shared';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { seedReferenceData } from './seed.js';
 import {
@@ -484,6 +485,75 @@ describe('seedE2eFixtures', () => {
 
     expect(repaired?.finalPriceCents).toBe(145_000);
     expect(repaired?.expiresAt).toBeInstanceOf(Date);
+  });
+
+  /*
+   * `event_type` is a `varchar`, so the database takes any string and only
+   * `eventTypeSchema` at the API edge holds it to `EVENT_TYPES`. This fixture
+   * writes past that edge and wrote the display label `Wedding` — a row the
+   * product would refuse, whose occasion misses `EVENT_TYPE_LABELS` and renders
+   * blank on the vendor dashboard the fixture exists to make reachable.
+   */
+  it('writes the event-type slug, not the display label', async () => {
+    const result = published(await seedE2eFixtures(database.db, INPUT));
+
+    const [request] = await database.db
+      .select({ eventType: bookingRequests.eventType })
+      .from(bookingRequests)
+      .where(eq(bookingRequests.id, result.bookingRequestId));
+
+    expect(EVENT_TYPES).toContain(request?.eventType);
+  });
+
+  /*
+   * And every database seeded before that fix carries the label already. This
+   * is the one repair that overwrites a non-null value, for the same reason the
+   * price repair exists: the early return means a re-seed never reaches the
+   * insert that would get it right.
+   */
+  it('repairs a live request carrying an event type outside the vocabulary', async () => {
+    const first = published(await seedE2eFixtures(database.db, INPUT));
+
+    /*
+     * Exactly what the previous fixture wrote — and it has to go in as raw SQL,
+     * because `event_type` is now `$type<EventType>()` and the label is a
+     * compile error at every typed write site. Which is the point: the only way
+     * to produce this row today is to be an older build.
+     */
+    await database.db
+      .update(bookingRequests)
+      .set({ eventType: sql`'Wedding'` })
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    const second = published(await seedE2eFixtures(database.db, INPUT));
+
+    expect(second.bookingRequestId).toBe(first.bookingRequestId);
+
+    const [repaired] = await database.db
+      .select({ eventType: bookingRequests.eventType })
+      .from(bookingRequests)
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    expect(repaired?.eventType).toBe('wedding');
+  });
+
+  /** An event type the vocabulary does declare belongs to whoever set it. */
+  it('leaves an event type already in the vocabulary alone', async () => {
+    const first = published(await seedE2eFixtures(database.db, INPUT));
+
+    await database.db
+      .update(bookingRequests)
+      .set({ eventType: 'corporate' })
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    await seedE2eFixtures(database.db, INPUT);
+
+    const [untouched] = await database.db
+      .select({ eventType: bookingRequests.eventType })
+      .from(bookingRequests)
+      .where(eq(bookingRequests.id, first.bookingRequestId));
+
+    expect(untouched?.eventType).toBe('corporate');
   });
 
   /** A price already locked is never overwritten — repair fills nulls only. */

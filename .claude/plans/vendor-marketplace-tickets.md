@@ -978,6 +978,84 @@ silently, as four just did.
 - [ ] Dynamic segments (`[slug]`, `[requestId]`) resolve to one ledger entry each, not one
       per instance
 
+#### Verified 2026-08-31 in lane `worktree-363` — most of this had already landed
+
+**Trust the repository over the ticket's prose.** Every bullet above was re-checked
+against the code before implementing. Nine of eleven were already done, by the tickets
+this one consolidated and by lanes that passed through the same files since:
+
+| Bullet | State | Evidence |
+| --- | --- | --- |
+| `lane:up` seeds, not just migrates | Done | `lane.ts:281` runs `deps.seed()` after `deps.migrate()`; `lane.test.ts:134` asserts the order `install, build, migrate, seed` |
+| `laneUp` re-derives `worktreePath` and `branch` on a resumed lane | Done | `lane.ts:366-381`; `lane.test.ts:172` |
+| Preflight compares the `stripe listen` secret against `STRIPE_WEBHOOK_SECRET`, digests only | Done | `checks/webhooks.ts:24-56`, SHA-256 both sides, never the values |
+| The lane dev script sets `ulimit -n 65536` | Done | `apps/web/package.json` — `ulimit -n 65536 2>/dev/null; next dev …` |
+| `POST /vendor/stripe/connect` answers 403, not the parser's 400 | Done | `stripe-connect.routes.ts:34` — `onRequest: requireRoleBeforeValidation('vendor')`; test at `stripe-connect.routes.test.ts:197` |
+| The preflight flake (#64) | Done | `lane/manifest.test.ts:96` — real timers stretched ~17x under parallel Turbo; `vi.useFakeTimers()` |
+| The route/frame ledger enumeration | Done | `apps/web/src/app/route-parity-ledger.test.ts` — enumerates every `page.tsx`, holds each to a frame or a recorded exemption, proves itself by failing on a synthetic route (`:258`), and carries the plausible-count guard (`:203`) |
+| `/vendor/portfolio`'s contradiction | Done | resolved to frames `24` and `25`; asserted at `route-parity-ledger.test.ts:239` |
+| A lane manifest may not outlive its lane | Done | `laneEnqueued` (`lane.ts:463`) writes `prUrl` and moves the lane to `pending-merge`; tested at `lane.test.ts:559-587`. **`.claude/lanes/` is gitignored**, so there is no committed state a test could hold to reality — a repository-level tripwire is not available here, and the closure is `lane:pr` being the only writer. `371.json` went stale because its session never called it, not because the writer is wrong |
+
+**Two were genuinely open, and are what this ticket changed.**
+
+**#341 — two seeds wrote the display label.** `seed-e2e.ts:574` and
+`seed-marketing.ts:406` both wrote `eventType: 'Wedding'` into a column the product
+only ever reads as the slug `'wedding'`. `event_type` is a `varchar`, so Postgres
+takes it and `eventTypeSchema` at the API edge is the only thing that would have
+rejected it — which a seed never passes. The row renders its occasion blank, on the
+vendor dashboard the E2E fixture exists to make reachable.
+
+**The class is closed in the schema, not in a test.**
+`booking_requests.event_type` now carries `.$type<EventType>()`
+(`schema/bookings.ts`), so writing the label is a **compile error** at every typed
+write site in the repository — proven by reinstating `'Wedding'` and watching
+`tsc` reject it (`seed-marketing.ts(432,15): error TS2769`). It is TypeScript
+only: `pnpm db:generate` reports *No schema changes*, the column stays `varchar`,
+and widening `EVENT_TYPES` still needs no migration, which is the whole reason the
+column is not a `pgEnum`. The two seeds now name a constant typed `EventType`, and
+each seed's own suite asserts the rows that actually land are in the vocabulary —
+the half a type cannot cover, since it says nothing about rows already written.
+
+A source-scanning test was written first and **deleted in review**: it parsed
+`seed*.ts` with a regex, which missed `demo-seed-data.ts` — the file the *previous*
+instance of this bug lived in — resolved only same-file constants, and waved
+through the three write sites that are not bare literals. It guarded the two lines
+this ticket had just fixed. The annotation guards every write site in the
+repository, for a fifth of the code.
+
+`$type` narrows reads too, asserting legacy rows are in-vocabulary when they may
+not be. That claim stays inside `packages/db`: the API re-parses the column as
+`z.string()` on the way out, deliberately and with its own comment saying why.
+
+Existing rows are **repaired, not stranded** (`.claude/rules/db-schema.md`, the #317
+precedent): `seed-marketing` already deletes and rebuilds its own booking graph, and
+`seed-e2e`'s adoption path now corrects an event type outside the vocabulary. That
+is the one repair there that overwrites a non-null value, and only a value the
+vocabulary does not declare — `'corporate'` set by hand is left alone.
+
+**#382 — a stale `packages/shared/dist` blames the wrong ticket.**
+`packages/db` resolves `@vendor-marketplace/shared` through its compiled `dist`, so
+a build older than the source hands the suite a constant the repository no longer
+declares. `shared-dist-freshness.test.ts` asserts the oldest file in `dist` is newer
+than the newest file in `src` and fails naming both paths and the rebuild command.
+Shown failing on a deliberately stale `dist` (`touch packages/shared/src/constants/index.ts`)
+and green again after the rebuild it names. `pnpm test` runs `^build` first so it
+cannot fire there; it fires where the defect bit, on `vitest` run directly in the
+package. This is the ticket's second candidate shape, taken verbatim.
+
+**Two deeper alternatives were considered and refused, with reasons.** Aliasing
+`@vendor-marketplace/shared` to its *source* in `packages/db/vitest.config.ts`
+would remove the failure mode rather than detect it — but it silently changes what
+213 tests import, and it stops the suite exercising the artifact every other
+consumer resolves. Hoisting the check to a `globalSetup` shared by all four
+packages that import through `dist` is the right generalisation and is **the
+follow-up worth taking**; it was refused *here* only because it edits
+`apps/web` and `apps/api` vitest configs while four lanes are live in those trees,
+which is how two lanes collide on one file.
+
+**Nothing user-reachable changed, so there is no browser or parity pass** — as this
+ticket's own framing says.
+
 **Tests (required):**
 
 - [ ] A test that a resumed lane's manifest reports the worktree path that exists on disk
