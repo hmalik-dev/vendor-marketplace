@@ -40,7 +40,14 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/vendor/dashboard',
     { preHandler: vendorOnly, schema: { response: { 200: vendorDashboardSchema } } },
-    async (request) => getVendorDashboard(app.db, assertRole(request.auth, ['vendor']).id),
+    /*
+     * `app.clock()` rather than the service's own `new Date()` default: every
+     * date-sensitive route reads the instance clock, which is what lets a test
+     * stand on a month boundary instead of waiting for one. `/vendors/nearby`
+     * below already did; this one was reading the wall clock directly.
+     */
+    async (request) =>
+      getVendorDashboard(app.db, assertRole(request.auth, ['vendor']).id, app.clock()),
   );
 
   /*

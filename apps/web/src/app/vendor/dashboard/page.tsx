@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { VENDOR_PAYMENTS_PATH, pageTitle, todayDateString } from '@vendor-marketplace/shared';
+import { VENDOR_PAYMENTS_PATH, pageTitle, toDateString } from '@vendor-marketplace/shared';
 import { DashboardStats } from '@/components/vendor/dashboard-stats';
 import { PublishChecklist } from '@/components/vendor/publish-checklist';
 import { PublishedRail } from '@/components/vendor/published-rail';
@@ -46,7 +46,24 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
     redirect(PROFILE_EDIT_PATH);
   }
 
-  const today = todayDateString();
+  /*
+   * The UTC day, matching the API's. #391.
+   *
+   * This is a server component, so `todayDateString()` here read the **Next.js
+   * process's** local day — and its only consumer is `DashboardStats`, which
+   * splits it to name the month the `bookingsThisMonth` delta is measured
+   * against. That figure comes from the API, which anchors its month on UTC. On
+   * a web host west of UTC the two disagreed for the last hours of every month:
+   * the card counted September's bookings and labelled them `vs July`, while
+   * `Earnings this month` showed September's payouts on a screen still reading
+   * as August.
+   *
+   * The label has to be derived from the same clock as the number it annotates,
+   * and only one of the two is negotiable — the API cannot know a visitor's day.
+   * Production runs UTC at both ends, so this was invisible there and reliably
+   * wrong in local development, which is where #391 was found.
+   */
+  const today = toDateString(new Date());
   /*
    * One query behind both the title and the list, so the number in the heading
    * and the number of rows can never disagree — the count is derived from the
