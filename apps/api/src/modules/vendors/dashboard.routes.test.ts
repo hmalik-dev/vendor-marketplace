@@ -9,12 +9,7 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import {
-  addDays,
-  parseDateString,
-  todayDateString,
-  toDateString,
-} from '@vendor-marketplace/shared';
+import { addDays, parseDateString, toDateString } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -124,14 +119,20 @@ describe('/vendor/dashboard', () => {
   /**
    * `offset` days from the dashboard's own today.
    *
-   * Anchored on `todayDateString` rather than on `toDateString(new Date())`:
-   * the first is the local calendar day and the second is the UTC one, and for
-   * part of every day they name different dates. The service anchors the week
-   * on the local day, so a test that anchored on the UTC one would fail for a
-   * few hours a day and pass for the rest — the definition of flaky.
+   * Anchored on `toDateString` — the **UTC** calendar day — because since #391
+   * that is what the service anchors on. It previously anchored on
+   * `todayDateString`, the local day, and this helper was matched to it: the
+   * comment here recorded that as a deliberate choice to avoid a test that
+   * "would fail for a few hours a day and pass for the rest".
+   *
+   * That reasoning was sound about flakiness and wrong about which side to fix.
+   * The service was the thing reading a client-only helper on the server, and
+   * matching the test to it made the defect look like the contract. The flake
+   * it describes was the bug reporting itself once a day, and the fix removed
+   * it at the source rather than by agreeing with it.
    */
   function dayFrom(offset: number): string {
-    return toDateString(addDays(parseDateString(todayDateString())!, offset));
+    return toDateString(addDays(parseDateString(toDateString(new Date()))!, offset));
   }
 
   beforeAll(async () => {
@@ -276,7 +277,7 @@ describe('/vendor/dashboard', () => {
       requestId,
       customerId: customer[0]!.id,
       vendorId,
-      eventDate: todayDateString(),
+      eventDate: dayFrom(0),
       totalAmountCents: 145_000,
       platformFeeCents: 17_400,
       vendorPayoutCents: 127_600,
@@ -290,7 +291,7 @@ describe('/vendor/dashboard', () => {
     // The payout share again, this time as the *next* one owed — the amount is
     // real, so the card never has to invent it.
     expect(body.nextPayout).toMatchObject({
-      eventDate: todayDateString(),
+      eventDate: dayFrom(0),
       customerFirstName: 'Test',
       vendorPayoutCents: 127_600,
     });
@@ -340,7 +341,7 @@ describe('/vendor/dashboard', () => {
 
       const week = ((await read()).json() as DashboardBody).bookingWeek;
 
-      expect(week[0]?.date).toBe(todayDateString());
+      expect(week[0]?.date).toBe(dayFrom(0));
       expect(week[6]?.date).toBe(dayFrom(6));
       expect(week.every((day) => day.status === 'available')).toBe(true);
     });

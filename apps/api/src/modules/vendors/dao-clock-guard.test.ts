@@ -81,3 +81,106 @@ describe('DAO clock discipline', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * The same collapse, one layer up: **no server-side module reads the local
+ * calendar day.**
+ *
+ * `todayDateString` is the *client's* day — its own docstring says it is "only
+ * ever meaningful on the client" and that "nothing server-side compares against
+ * it" — and `dashboard.service.ts` compared against it anyway. Every bound it
+ * fed was then matched against a `date` column or pinned to `T00:00:00.000Z`,
+ * so the vendor dashboard reported a **local month with UTC edges**: west of
+ * UTC a vendor's `earningsThisMonthCents` silently lost every payment taken
+ * after 19:00 on the last day of the month (#391).
+ *
+ * The DAO scan above could not see it, because the offending call was in a
+ * service. This is the same rule at the layer the defect actually lived in: the
+ * API has no visitor timezone to consult, so the only calendar day it may
+ * compute is the UTC one, from `toDateString`.
+ *
+ * Tests are exempt. A test may legitimately construct a local day to prove a
+ * UTC-anchored figure does *not* move with it — `dashboard-month-window.test.ts`
+ * pins `TZ` and does exactly that.
+ */
+const CLIENT_ONLY_TODAY = [
+  // The helper itself. This is what `dashboard.service.ts` imported.
+  /\btodayDateString\b/,
+  /*
+   * And the hand-rolled forms, which are the obvious way to reintroduce it
+   * without tripping the name. `getFullYear`/`getMonth`/`getDate`/`getHours`
+   * all read the local zone; their `getUTC*` twins do not and are used
+   * legitimately in `availability.service.ts`.
+   */
+  /\.get(?:FullYear|Month|Date|Hours)\(\)/,
+  /\btoLocaleDate|\btoLocaleString\b/,
+];
+
+/**
+ * `Intl.DateTimeFormat` with no `timeZone` formats in the process's zone.
+ *
+ * Judged over the whole constructor call rather than the line it opens on: both
+ * existing instances — `booking-requests.service.ts` and `messaging.service.ts`
+ * — do pin `timeZone: 'UTC'`, several lines down inside a multi-line options
+ * object. A line-scoped pattern flagged both, which is how a guard earns a
+ * reputation for crying wolf and gets deleted.
+ */
+const INTL_FORMATTER = /Intl\.DateTimeFormat\(/;
+const PINNED_ZONE = /timeZone\s*:/;
+/** Options objects in this repo run to five lines; eight leaves headroom. */
+const OPTIONS_WINDOW = 8;
+
+const API_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+async function serverSourceFiles(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const found: string[] = [];
+
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...(await serverSourceFiles(full)));
+    } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+      found.push(full);
+    }
+  }
+
+  return found;
+}
+
+describe('server-side calendar-day discipline', () => {
+  it('finds the source it is meant to be guarding', async () => {
+    const files = await serverSourceFiles(API_SRC);
+
+    // Guards the guard, as above: a scan matching nothing passes forever.
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.map((file) => path.relative(API_SRC, file))).toContain(
+      path.join('modules', 'vendors', 'dashboard.service.ts'),
+    );
+  });
+
+  it('never reads the local calendar day outside a test', async () => {
+    const files = await serverSourceFiles(API_SRC);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = await readFile(file, 'utf8');
+      const lines = source.split('\n');
+
+      for (const [index, line] of lines.entries()) {
+        // Prose explaining why the rule exists is not a violation of it.
+        const code = line.replace(/^\s*(\*|\/\/|\/\*).*$/, '');
+
+        const unpinnedFormatter =
+          INTL_FORMATTER.test(code) &&
+          !PINNED_ZONE.test(lines.slice(index, index + OPTIONS_WINDOW).join('\n'));
+
+        if (CLIENT_ONLY_TODAY.some((pattern) => pattern.test(code)) || unpinnedFormatter) {
+          offenders.push(`${path.relative(API_SRC, file)}:${index + 1}: ${line.trim()}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});

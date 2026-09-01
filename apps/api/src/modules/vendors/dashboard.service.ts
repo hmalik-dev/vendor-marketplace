@@ -3,7 +3,6 @@ import {
   addDays,
   parseDateString,
   toDateString,
-  todayDateString,
   type AvailabilityStatus,
   type VendorDashboard,
 } from '@vendor-marketplace/shared';
@@ -52,7 +51,7 @@ function monthBounds(date: string): { start: string; next: string; previous: str
  * local-time `Date`.
  */
 function weekFrom(today: string): { days: string[]; end: string } {
-  // `today` reaches here from `todayDateString`, so it always parses; the
+  // `today` reaches here from `toDateString`, so it always parses; the
   // fallback exists because `parseDateString` is honest about malformed input
   // rather than because this caller can produce any.
   const start = parseDateString(today) ?? new Date(`${today}T00:00:00.000Z`);
@@ -80,7 +79,26 @@ export async function getVendorDashboard(
   now: Date = new Date(),
 ): Promise<VendorDashboard> {
   const vendor = await requireOwnVendorProfile(db, userId);
-  const today = todayDateString(now);
+  /*
+   * The UTC day, not the server's local one. #391.
+   *
+   * `todayDateString` was used here, and its own contract forbids it: it is the
+   * day on the *caller's* wall, "only ever meaningful on the client", and the
+   * server has no way to know a visitor's day. Every bound derived below is
+   * either compared against a `date` column or pinned to `T00:00:00.000Z` and
+   * compared against a `timestamptz` — both of which are UTC — so anchoring on
+   * a local day produced a **local month with UTC edges**, wrong by the
+   * server's offset at each end. In `America/Chicago` a vendor's
+   * `earningsThisMonthCents` silently dropped every payment taken after 19:00
+   * on the last day of the month; east of UTC it claimed the previous month's.
+   * Nothing errored — the figure was simply short, on the one screen where a
+   * vendor checks what they are owed.
+   *
+   * This is the same collapse `dao-clock-guard.test.ts` already polices in the
+   * DAOs: an instant becoming a day is the step that consults a clock, and the
+   * only clock a server may consult is UTC.
+   */
+  const today = toDateString(now);
   const { start, next, previous } = monthBounds(today);
 
   const since = new Date(now.getTime() - RESPONSE_WINDOW_DAYS * 86_400_000);
