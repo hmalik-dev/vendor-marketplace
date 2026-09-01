@@ -215,6 +215,7 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **388** | **Forms reject the first submit in silence** | P1 | M3 | **P1 High** | **In Progress** | `worktree-388` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** Two of the three form surfaces a vendor must clear reject a pristine submit with **no POST, no `aria-invalid`, no `role=alert`, no message anywhere on the page** — the button appears inert. Confirmed on **Add package** (`/vendor/packages`) and **Create profile** (`/vendor/profile/edit`, the screen every new vendor is funnelled to). Focus moves to the offending control, which is the only signal, and it is silent for a screen reader. A **second** submit does render the summary, so the machinery exists and the first pass does not reach it. The booking-request form validates correctly but never announces it either. Includes the Price filter, which discards non-numeric input with no message |
 | **389** | **Admin tables let each row size its own columns** | P1 | M3 | **P1 High** | **In Progress** | `worktree-389` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** `components/admin/data-table.tsx` gives the header and **every row its own grid container**, sharing only a template string through `--admin-table-columns`. The admin pages declare bare `fr` tracks, and a bare `fr` cannot shrink below its content's min-content — so any row with long text resolves its own widths. On `/admin/reviews` **13 of 15 rows** disagree with the header, the action column is pushed to `right=1454` in a 1440 viewport, and at 390 the document scrolls sideways. **Fix verified live in-browser:** wrapping the flexible tracks in `minmax(0, …)` took matching rows from 2/6 to 6/6. Latent on bookings, customers and payments — they escape only because their cells are short |
 | **390** | **Server-rendered pages have no upstream timeout** | P1.5 | M4.5 | **P1 High** | **In Progress** | `worktree-390` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** With the API reachable but not answering, `/` and `/vendors/<slug>` send **zero bytes and never respond** — measured at 30s against a 0.10s baseline, so the visitor holds a blank tab until the platform 504s. `/search` returns its skeleton in 0.14s under the identical fault, so the correct pattern is already in the repo. No fetch in the web app sets a deadline, so a slow dependency is indistinguishable from a hung one |
+| **391** | **The vendor dashboard's earnings month is a local month with UTC edges** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 from #381's verification pass**, which found it because the API suite went red locally and green in CI — the tell. `getVendorDashboard` derives `today` as a **local** calendar date, `monthBounds` turns it into `YYYY-MM-DD` strings, and those are then pinned to **UTC** midnight before being compared against `bookings.paid_at`, a `timestamptz`. The window is therefore a local month with UTC edges, and a vendor west of UTC loses the last hours of every month from `earningsThisMonthCents` — CDT loses 19:00–23:59 on the final day. East of UTC it is the mirror image. `countBookingsBetween` on the adjacent line takes the date strings directly, so `bookingsThisMonth` and `earningsThisMonthCents`, which render side by side, can disagree about which month a booking belongs to. Same class as the law in `.claude/rules/shared-contracts.md` — *never round-trip a date through a `Date` in local time* — inverted: a date string round-tripped into an instant |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **373 rows as of 2026-08-31: 189 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-08-31 after the superseded sweep: 16 rows, all of them open — 11 Backlog, 3 In Progress, 2 Deferred — needs a human.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
@@ -2028,3 +2029,82 @@ No fetch in the web app sets a deadline, so "slow" and "never" are the same even
 6. The landing hero image `/stock/portrait.jpg` is the LCP element and lacks
    `priority`; Next warns on every load. Set it, since this ticket owns how the landing
    page is delivered.
+
+---
+
+### #391: The vendor dashboard's earnings month is a local month with UTC edges
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-31 from #381's verification pass.** Not looked for — the API suite went red
+on this machine and green in CI, and that split is the tell.
+
+#### Observed
+
+`apps/api/src/modules/vendors/dashboard.routes.test.ts` — *"reports the payout share, not
+the gross the customer paid"* — fails on clean `origin/main` in `America/Chicago` on the
+last day of a month, and passes under `TZ=UTC`. `earningsThisMonthCents` reads **0** where
+the booking's `vendorPayoutCents` is **127600**. CI runs UTC, so the suite is green there
+and the bug has never surfaced in a run that anyone reads.
+
+#### Mechanism
+
+`getVendorDashboard`, `apps/api/src/modules/vendors/dashboard.service.ts:81-109`:
+
+```ts
+const today = todayDateString(now);              // LOCAL calendar date
+const { start, next, previous } = monthBounds(today);
+...
+sumPayoutsBetween(
+  db, vendor.id,
+  new Date(`${start}T00:00:00.000Z`),            // pinned to UTC midnight
+  new Date(`${next}T00:00:00.000Z`),
+),
+```
+
+`sumPayoutsBetween` (`dashboard.dao.ts:39-54`) filters `bookings.paid_at`, a `timestamptz`.
+So the window is a **local** month expressed at **UTC** boundaries, shifted by the server's
+offset. A payment taken in the last hours of a month falls outside it.
+
+**The two figures can also disagree with each other.**
+`countBookingsBetween(db, vendor.id, start, next)` on the same lines takes the date strings
+directly rather than pinning them to instants — so `bookingsThisMonth` and
+`earningsThisMonthCents`, which the dashboard renders side by side, do not resolve the same
+boundary.
+
+#### Why it is not a test artefact
+
+This is a vendor's own money. A vendor in US Pacific who takes a booking at 18:00 on the
+31st sees this month's earnings not move, and next month opens with a figure they cannot
+place. Nothing errors, so nothing surfaces it — and the dashboard's own rule is that every
+number is recomputed from source rows precisely so a derived figure cannot drift from what
+it claims to describe.
+
+The repository already carries the law this breaks, in `.claude/rules/shared-contracts.md`:
+*"Event dates are Postgres `DATE` and stay `YYYY-MM-DD` strings end to end. Never
+round-trip one through a `Date` in local time — that is how an event moves a day when the
+user is west of UTC."* This is the same class from the other side: a date string
+round-tripped **into** an instant.
+
+#### Acceptance
+
+1. The month window and the row filter agree on one timezone, named once rather than at
+   each call site.
+2. **Rule and record which month "this month" means.** A vendor-local month needs a stored
+   vendor timezone, and no such column exists — so UTC is the likely answer, and the point
+   is to state it rather than arrive at it by accident. If UTC, say so where a vendor can
+   discover it.
+3. `bookingsThisMonth`, `bookingsLastMonth` and `earningsThisMonthCents` derive from the
+   same bounds, so they cannot disagree about a booking.
+4. `nextPayout` is checked against the same boundary while the file is open.
+
+#### Tests (required)
+
+- [ ] A test that fixes `now` at a month boundary and runs under **a non-UTC timezone** —
+      the existing test passes today only because CI is UTC, which is exactly what hid this.
+- [ ] A test that the three month-scoped figures agree about a booking paid within an hour
+      of the boundary.
+- [ ] The existing dashboard assertions still pass under both `TZ=UTC` and a western zone.
+
+---

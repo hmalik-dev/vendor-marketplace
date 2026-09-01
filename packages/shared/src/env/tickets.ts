@@ -476,6 +476,9 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   388: [], // form validation feedback — client rendering only, no external service
   389: [], // a grid template in the shared admin table, no external service
   390: [], // a fetch deadline and a streamed fallback, no external service
+
+  // Filed 2026-08-31 from #381's verification pass.
+  391: [], // a timezone boundary in a dashboard query — no external service
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
