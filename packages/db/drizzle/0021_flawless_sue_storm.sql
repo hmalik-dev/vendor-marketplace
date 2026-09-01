@@ -1,0 +1,1 @@
+ALTER TABLE "vendor_profiles" ADD CONSTRAINT "vendor_profiles_stripe_onboarded_requires_account" CHECK ("vendor_profiles"."stripe_onboarded" = false OR "vendor_profiles"."stripe_account_id" IS NOT NULL);

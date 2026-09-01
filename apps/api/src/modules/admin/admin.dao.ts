@@ -131,6 +131,23 @@ function vendorFilterCondition(filters: AdminVendorFilters) {
   }
 
   if (filters.payouts) {
+    /*
+     * `stripeOnboarded` alone is the whole condition, and since #381 it is
+     * enough for the defect this filter had:
+     * `vendor_profiles_stripe_onboarded_requires_account` makes the flag entail
+     * an account id, so a vendor can no longer be filtered in here with *no*
+     * destination for `transfer_data`. Before that constraint they could be,
+     * and were — the console reported one E2E vendor payouts-connected while
+     * their customer's `Pay` answered 404. Reading both columns here would have
+     * hidden that row rather than made it impossible, so the fix went to the
+     * schema.
+     *
+     * **It entails an id, not a Stripe-issued one.** `seed-demo` writes
+     * `acct_demo_<key>` for its thirteen offline vendors, and D29 refuses a format check
+     * on purpose, so this column answers "the vendor has an account on file",
+     * never "Stripe will accept a transfer". Only Stripe can answer the second,
+     * and a seeded database is the one place the two can still disagree.
+     */
     conditions.push(eq(vendorProfiles.stripeOnboarded, filters.payouts === 'connected'));
   }
 
