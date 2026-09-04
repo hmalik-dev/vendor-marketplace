@@ -92,6 +92,13 @@ export default function RootLayout({
           ui={ui}
           appearance={{ theme: shadcn, variables: { borderRadius: 'var(--radius-lg)' } }}
           localization={CLERK_COPY}
+          /*
+            Clerk's SDK posts usage telemetry to `clerk-telemetry.com`, which
+            the enforced CSP (#396) rightly blocks — it is Clerk's product
+            analytics, not anything this app reads. Off, rather than widening
+            `connect-src` to let a console error through as an outbound channel.
+          */
+          telemetry={false}
         >
           {/*
             The adapter sits above the header, not inside the search page: on
