@@ -433,3 +433,51 @@ export function toObjectKey(publicBaseUrl: string, stored: string): string {
 
   return stored.startsWith(`${base}/`) ? stored.slice(base.length + 1) : stored;
 }
+
+/**
+ * A JSON-LD payload, serialised so it cannot end the `<script>` element that
+ * carries it.
+ *
+ * `JSON.stringify` escapes what JSON needs and nothing HTML needs, so a vendor
+ * whose business name contains `</script><script>alert(1)</script>` closed the
+ * element and got a second one — stored XSS on the most-visited public page in
+ * the product, found by the 2026-09-04 sweep (#398). React's escaping does not
+ * apply here: the string reaches the DOM through `dangerouslySetInnerHTML`,
+ * which is the only way to put JSON-LD on a page.
+ *
+ * Escaped, in order: `<` and `>` so no tag can be closed or opened, `&` so the
+ * first two cannot be smuggled back in as entities, and U+2028/U+2029, which
+ * are legal in JSON strings and illegal in JavaScript source. The `\uXXXX`
+ * forms are still valid JSON, so a crawler parses exactly the object handed in.
+ */
+export function serialiseJsonLd(payload: unknown): string {
+  return JSON.stringify(payload)
+    .replace(/&/g, '\\u0026')
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/**
+ * The Unicode bidirectional formatting characters, which reorder the text
+ * around them without being visible themselves.
+ *
+ * U+202A–U+202E are the legacy embedding and override codes; U+2066–U+2069 are
+ * the isolates that replaced them. An override in a venue name reverses the
+ * sentence it sits in, so a booking for `Barr Mansion` can be made to read as
+ * one for somewhere else on the vendor's screen while the stored value says
+ * otherwise — the same trick as a filename that appears to end in `.txt`.
+ *
+ * Stripped rather than escaped, and stripped on the way in rather than at each
+ * of the dozen places text is rendered: no legitimate business name, venue or
+ * message needs one, every surface is a different escaping context, and the
+ * database is what a dispute is read out of. Ordinary right-to-left text is
+ * untouched — the letters carry their own direction, and only these eight
+ * codepoints override it.
+ */
+const BIDI_CONTROLS = /[\u202a-\u202e\u2066-\u2069]/g;
+
+export function stripBidiControls(value: string): string {
+  return value.replace(BIDI_CONTROLS, '');
+}

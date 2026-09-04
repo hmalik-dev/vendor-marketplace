@@ -552,6 +552,16 @@ export async function cancelBooking(
     paymentIntentId: booking.stripePaymentIntentId,
     amountCents: quote.refundCents,
     reason: 'requested_by_customer',
+    /*
+     * Keyed on the booking, because the refund is sent *before* the guarded
+     * update that decides who won. The update's `status = 'confirmed'`
+     * predicate means only one of two concurrent cancels writes the row — but
+     * both reached this line first, and without a key Stripe would have paid
+     * the customer twice for one cancellation. The key makes the second call
+     * return the first refund instead of creating another. One booking, one
+     * cancellation, one refund. (#399)
+     */
+    idempotencyKey: `cancel_${bookingId}`,
   });
 
   const cancelled = await cancelBookingAndFreeDate(context.db, bookingId, {

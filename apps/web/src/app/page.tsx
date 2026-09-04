@@ -6,6 +6,7 @@ import {
   CATEGORY_SEEDS,
   LANDING_CATEGORY_COUNT,
   LANDING_JUMP_CATEGORY_SLUGS,
+  serialiseJsonLd,
   type Category,
 } from '@vendor-marketplace/shared';
 import { ShieldCheck, Star, Tag } from 'lucide-react';
@@ -200,8 +201,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
     <>
       <script
         type="application/ld+json"
-        // Serialised from a literal above, so there is no untrusted input in it.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
+        /*
+          A literal above, so nothing untrusted reaches it — but it goes through
+          the same serialiser as the vendor page's so that the two JSON-LD sites
+          cannot drift, and so the guard in `json-ld-escaping.test.ts` is a rule
+          about the sink rather than about which payloads someone judged safe.
+        */
+        dangerouslySetInnerHTML={{ __html: serialiseJsonLd(STRUCTURED_DATA) }}
       />
 
       {/* Full-bleed so the gradient runs edge to edge behind the headline. */}

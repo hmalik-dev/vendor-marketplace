@@ -583,8 +583,38 @@ describe('payments', () => {
           paymentIntentId: booking!.stripePaymentIntentId,
           amountCents: PRICE_CENTS,
           reason: 'requested_by_customer',
+          idempotencyKey: `cancel_${booking!.id}`,
         },
       ]);
+    });
+
+    /*
+     * #399. The refund is sent before the guarded update that decides who won,
+     * so two concurrent cancels both reach Stripe. The update's
+     * `status = 'confirmed'` predicate means only one writes the row — and
+     * without an idempotency key the customer was paid twice for one
+     * cancellation. Fired with `Promise.all` so both are genuinely in flight.
+     */
+    it('refunds once when two cancels race, and answers the loser with a conflict', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      const responses = await Promise.all([
+        inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}),
+        inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}),
+      ]);
+
+      expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+      // Both calls reached Stripe; one key, so Stripe answers the second with
+      // the first refund rather than making another.
+      expect(new Set(harness.stripe.refunds.map((refund) => refund.idempotencyKey)).size).toBe(1);
+      expect(harness.stripe.refunds.every((refund) => refund.idempotencyKey !== undefined)).toBe(
+        true,
+      );
+
+      const [row] = await harness.database.db.select().from(bookings);
+      expect(row?.status).toBe('cancelled');
     });
 
     it('refunds half inside the cutoff', async () => {

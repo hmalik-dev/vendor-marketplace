@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import {
-  addDays,
   BRAND_NAME,
+  addDays,
   pageTitle,
   parseDateString,
+  serialiseJsonLd,
   toDateString,
   todayDateString,
   type AvailabilityStatus,
@@ -221,9 +222,13 @@ export default async function VendorProfilePage({
     <>
       <script
         type="application/ld+json"
-        // Serialised from values this page just read, so there is no untrusted
-        // markup in it.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        /*
+          `serialiseJsonLd`, not `JSON.stringify`: the payload carries the
+          vendor's own business name and bio, and `dangerouslySetInnerHTML` is
+          the only way to put JSON-LD on a page, so an unescaped `</script>` in
+          either one closed this element and opened another (#398).
+        */
+        dangerouslySetInnerHTML={{ __html: serialiseJsonLd(structuredData) }}
       />
 
       <ProfileHeader

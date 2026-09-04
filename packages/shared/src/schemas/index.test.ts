@@ -992,3 +992,36 @@ describe('imageRefSchema', () => {
     ).toBe(true);
   });
 });
+
+/*
+ * #398. Every free-text field is built on the same helper, so the strip is
+ * asserted once, on the boundary, rather than per field — and asserted before
+ * the length checks, so invisible padding cannot buy a longer value either.
+ */
+describe('free text drops the bidi controls that reorder it', () => {
+  it('strips an override out of a business name', () => {
+    const parsed = createVendorProfileSchema.parse({
+      businessName: 'Barr ‮Mansion',
+      categoryIds: ['11111111-1111-4111-8111-111111111111'],
+      city: 'Austin',
+      state: 'TX',
+    });
+
+    expect(parsed.businessName).toBe('Barr Mansion');
+  });
+
+  it('counts the length after the strip, so invisible padding buys nothing', () => {
+    const padded = `Barr Mansion${'\u202e'.repeat(400)}`;
+
+    // 412 characters in, 12 after the strip — well inside the 200 the column
+    // holds, where the raw string is not.
+    expect(
+      createVendorProfileSchema.parse({
+        businessName: padded,
+        categoryIds: ['11111111-1111-4111-8111-111111111111'],
+        city: 'Austin',
+        state: 'TX',
+      }).businessName,
+    ).toBe('Barr Mansion');
+  });
+});

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { formatPrice, isBeyondBookingHorizon, isUniversallyPastDate } from '../utils/index.js';
+import {
+  formatPrice,
+  isBeyondBookingHorizon,
+  isUniversallyPastDate,
+  stripBidiControls,
+} from '../utils/index.js';
 import {
   ADMIN_PAGE_SIZE,
   AVAILABILITY_STATUSES,
@@ -121,7 +126,21 @@ export const phoneSchema = z
   .regex(/^\+?[0-9 ()\-.]+$/, 'Must be a valid phone number');
 
 /** A non-empty string once surrounding whitespace is removed. */
-const trimmedString = (max: number, min = 1) => z.string().trim().min(min).max(max);
+/**
+ * Free text, as every write path accepts it.
+ *
+ * `overwrite` rather than `transform` so the result is still a `ZodString` and
+ * the twenty-odd call sites can keep chaining `.nullable()`, `.optional()` and
+ * the rest. It runs before the length checks, so a string padded out with
+ * invisible controls cannot use them to pass a maximum either.
+ *
+ * The bidi strip is here, at the one boundary every free-text field crosses,
+ * rather than at each rendering site: a venue name carrying an override
+ * reorders the sentence around it on screen while the stored value says
+ * something else (#398).
+ */
+const trimmedString = (max: number, min = 1) =>
+  z.string().overwrite(stripBidiControls).trim().min(min).max(max);
 
 /**
  * Integer cents within the platform's $25–$100,000 price band.
@@ -411,7 +430,14 @@ export const createVendorProfileSchema = z.object({
    * can actually leave blank, and Zod's default "Invalid input" gives no clue
    * which field the form is complaining about.
    */
-  businessName: z.string().trim().min(2, 'Enter your business name').max(MAX_BUSINESS_NAME_LENGTH),
+  businessName: z
+    .string()
+    // Hand-written rather than `trimmedString` for the message, so the bidi
+    // strip has to be repeated here — see the helper for why it exists (#398).
+    .overwrite(stripBidiControls)
+    .trim()
+    .min(2, 'Enter your business name')
+    .max(MAX_BUSINESS_NAME_LENGTH),
   /** Optional — the service generates one from the business name when omitted. */
   slug: slugSchema.optional(),
   categoryIds: z.array(uuidSchema).min(1, 'Select at least one category').max(5),
@@ -716,7 +742,12 @@ export const createBookingRequestSchema = z
     }),
     eventStartTime: clockTimeSchema.optional(),
     eventType: eventTypeSchema.optional(),
-    eventLocation: z.string().trim().max(MAX_ADDRESS_LENGTH).optional(),
+    eventLocation: z
+      .string()
+      .overwrite(stripBidiControls)
+      .trim()
+      .max(MAX_ADDRESS_LENGTH)
+      .optional(),
     guestCount: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
     customDetails: z.string().trim().max(BOOKING_REQUEST_NOTES_MAX_LENGTH).optional(),
   })

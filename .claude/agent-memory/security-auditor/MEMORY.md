@@ -26,3 +26,4 @@
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes were left as low-severity on purpose
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — adding hosts to script-src is never the escalation; CSP_ENFORCE can only turn enforcement on
 - [The review profanity filter is a hard-reject floor](review-profanity-filter-is-a-hard-reject-floor.md) — the failure mode and the easy bypasses are settled until #15; the `\w*` over-match on "spicy" is not
+- [JSON-LD is the only raw-HTML sink in web](json-ld-is-the-only-raw-html-sink.md) — `serialiseJsonLd` is mandatory; the source-scan guard misses `next/script` + a non-literal type
