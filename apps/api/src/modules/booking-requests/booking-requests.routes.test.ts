@@ -778,6 +778,31 @@ describe('/booking-requests', () => {
       expect(held).toEqual([{ status: 'booked' }]);
     });
 
+    /*
+     * #399. Two pending requests from different customers for the same vendor
+     * and date: both accepts read the calendar, saw nothing booked, and wrote
+     * `accepted`. Two commitments and two payable requests for one evening,
+     * under a single `booked` cell that neither of them owned. Fired with
+     * `Promise.all`, so both are genuinely in flight rather than sequential.
+     */
+    it('lets only one of two accepts on the same date win', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const mine = await createRequest(vendorId, { packageId });
+      const theirs = await createRequest(vendorId, { packageId }, OTHER_CUSTOMER);
+
+      const responses = await Promise.all([
+        post(VENDOR, `/booking-requests/${mine.json().id}/accept`),
+        post(VENDOR, `/booking-requests/${theirs.json().id}/accept`),
+      ]);
+
+      expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+
+      const rows = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests);
+      expect(rows.filter((row) => row.status === 'accepted')).toHaveLength(1);
+    });
+
     it('pending -> quoted -> accepted locks the quoted price', async () => {
       const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, {

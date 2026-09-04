@@ -16,3 +16,4 @@
 - [Dirty tree vs the reviewed commit](review-checklist-dirty-tree-vs-reviewed-commit.md) — `git status` before probing; the lane may already have fixed the defect you were asked to confirm
 - [Controlled index drops the selection seed](review-checklist-controlled-index-drops-the-selection-seed.md) — hoisting an active index turns `useState(seed)` into `useState(0)`; open with a non-zero committed value, press Enter
 - [Skeleton geometry from the wrong frame](review-checklist-skeleton-geometry-from-the-wrong-frame.md) — read it off the component, not the loading frame; and an undefined ramp step compiles to nothing, it does not fall through
+- [PGlite serialises whole transactions](review-checklist-pglite-serialises-transactions.md) — a `Promise.all` lock test in the API suite passes with the lock deleted; prove the race on the Docker Postgres with two connections

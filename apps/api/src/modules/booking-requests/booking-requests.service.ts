@@ -49,6 +49,8 @@ import {
   insertRequest,
   setHeldDate,
   statusesOnDate,
+  hasRivalAcceptanceOn,
+  lockHeldDate,
 } from './booking-requests.dao.js';
 import type { CustomerIdentityRow, VendorSummaryRow } from './booking-requests.dao.js';
 
@@ -638,14 +640,37 @@ export async function transitionRequest(
   }
 
   const patch = await prepareTransition({ db, row, vendor, action, party, options });
-  const updated = await applyTransition(db, row.id, row.status, { ...patch, status: target });
 
-  if (!updated) {
-    // The status moved under us between the read and the write.
-    throw invalidTransition(row.status, target);
-  }
+  /*
+   * The write and the calendar it implies commit together, and an accept takes
+   * the date's row first so two of them cannot both win (#399).
+   *
+   * Before this, the two statements ran outside a transaction: a failure
+   * between them left an accepted request on a date nothing held, and two
+   * accepts for one date each read a free calendar, each wrote `accepted`, and
+   * each became payable. The lock is on the availability row rather than the
+   * requests, because that is the thing there is exactly one of per date.
+   */
+  const updated = await db.transaction(async (tx) => {
+    if (target === 'accepted') {
+      await lockHeldDate(tx, row.vendorId, row.eventDate);
 
-  await syncHeldDate(db, updated.vendorId, updated.eventDate);
+      if (await hasRivalAcceptanceOn(tx, row.vendorId, row.eventDate, row.id)) {
+        throw conflict('That date was booked while this request was open');
+      }
+    }
+
+    const written = await applyTransition(tx, row.id, row.status, { ...patch, status: target });
+
+    if (!written) {
+      // The status moved under us between the read and the write.
+      throw invalidTransition(row.status, target);
+    }
+
+    await syncHeldDate(tx, written.vendorId, written.eventDate);
+
+    return written;
+  });
 
   await announce(
     db,

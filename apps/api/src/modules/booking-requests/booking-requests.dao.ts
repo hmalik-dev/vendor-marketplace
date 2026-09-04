@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -339,6 +339,63 @@ export async function findAvailabilityOn(
     .limit(1);
 
   return rows?.[0] ?? null;
+}
+
+/**
+ * Takes the vendor's calendar cell for one date, so nothing else can decide it
+ * until this transaction commits.
+ *
+ * An `INSERT … ON CONFLICT DO UPDATE` locks the row it touches, and creates one
+ * to lock when the date has no row yet — which is the ordinary case, since a
+ * free date stores nothing. Setting the status to what it already holds keeps
+ * the lock honest: the caller decides what the cell should say afterwards.
+ *
+ * This is what makes two accepts on one date serialise (#399). Both used to
+ * read `findAvailabilityOn`, see nothing booked, and write `accepted` — two
+ * commitments and two payable requests for one evening, with the calendar
+ * showing a single `booked` cell that neither request owned.
+ */
+export async function lockHeldDate(db: AppDatabase, vendorId: string, date: string): Promise<void> {
+  await db
+    .insert(availability)
+    .values({ vendorId, date, status: 'pending' })
+    .onConflictDoUpdate({
+      target: [availability.vendorId, availability.date],
+      set: { status: sql`${availability.status}` },
+    });
+}
+
+/**
+ * Whether some *other* request has already been accepted on this vendor's
+ * date.
+ *
+ * `exceptRequestId` is the whole point: a duplicate accept of the same request
+ * — a double click, a client retry — would otherwise read its own row back and
+ * be told a rival booking took the date, which is both untrue and
+ * nondeterministic (it depends on whether the second read lands before or
+ * after the first commit). That case belongs to `applyTransition`'s status
+ * predicate, which answers it honestly as an invalid transition (#399).
+ */
+export async function hasRivalAcceptanceOn(
+  db: AppDatabase,
+  vendorId: string,
+  date: string,
+  exceptRequestId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: bookingRequests.id })
+    .from(bookingRequests)
+    .where(
+      and(
+        eq(bookingRequests.vendorId, vendorId),
+        eq(bookingRequests.eventDate, date),
+        eq(bookingRequests.status, 'accepted'),
+        ne(bookingRequests.id, exceptRequestId),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 /** Every request status this vendor holds on one date, live or settled. */
