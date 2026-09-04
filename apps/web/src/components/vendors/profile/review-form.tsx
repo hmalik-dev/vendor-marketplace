@@ -130,6 +130,7 @@ export function ReviewForm({
       // than an unlabelled region between the summary and the reviews.
       aria-labelledby={`${fieldId}-prompt`}
       className="mt-4 rounded-[14px] border border-stone-300 bg-stone-0 px-5 py-4.5"
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
         validation.attemptSubmit(() => void send());

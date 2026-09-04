@@ -205,6 +205,16 @@ export interface RefineBarProps {
   tags: readonly WireTag[];
   /** Per-option counts, shown inside the popover beside the option. */
   facets: readonly CategoryFacet[];
+  /**
+   * Called on every price Apply, saying whether it dropped something the reader
+   * typed but the control could not read — `Min = abc` (#388).
+   *
+   * It reports the clean applies too, and that is the point: the notice it
+   * drives has to be retracted by something. Firing only on the bad case would
+   * leave "that price range isn't one we can use" on screen over a range that
+   * was subsequently accepted.
+   */
+  onPriceApplied?: (discarded: boolean) => void;
   className?: string;
 }
 
@@ -213,6 +223,7 @@ export function RefineBar({
   setState,
   clearRefinements,
   tags,
+  onPriceApplied,
   className,
 }: RefineBarProps): React.ReactElement {
   /*
@@ -372,7 +383,10 @@ export function RefineBar({
             format={formatPrice}
             parse={dollarsToCents}
             toEditable={centsToDollars}
-            onApply={(next) => setState({ minPriceCents: next.min, maxPriceCents: next.max })}
+            onApply={(next, { discarded }) => {
+              setState({ minPriceCents: next.min, maxPriceCents: next.max });
+              onPriceApplied?.(discarded);
+            }}
             trigger={
               <button type="button" className={chipTrigger(false)}>
                 {priceLabel}

@@ -10,15 +10,23 @@ import {
   type PriceType,
 } from '@vendor-marketplace/shared';
 import { Plus, X } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { PRICE_TYPE_LABELS } from '@/lib/package-labels';
 
 export { PRICE_TYPE_LABELS };
+import { NO_PACKAGE_PROBLEM, packageProblemFrom } from '@/lib/package-issues';
 import { userFacingError } from '@/lib/user-facing-error';
+import { useSubmitValidation } from '@/lib/use-submit-validation';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
 import { wireServicePackageSchema, type WireServicePackage } from '@/lib/wire-schemas';
+import {
+  errorProps,
+  FieldMessage,
+  FormErrorCard,
+  FormErrorSummary,
+} from '@/components/form-error-summary';
 import { Button } from '@/components/ui/button';
 import { Input, INPUT_TOUCH_HEIGHT } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
@@ -115,20 +123,37 @@ export function PackageForm({
   const fieldId = useId();
   const [form, setForm] = useState<FormState>(() => initialState(servicePackage));
   const [isSaving, setIsSaving] = useState(false);
-  /*
-   * The price band is checked here, not only at the server. `40-states.md`:
-   * validation errors belong on the field after a submit attempt, never in a
-   * toast and never while typing — so this is set on submit and cleared the
-   * moment the vendor edits the field.
-   */
-  const [priceError, setPriceError] = useState<string | null>(null);
 
   const isNew = servicePackage === null;
+
+  /*
+   * Recomputed from the current values on every render, exactly as the
+   * storefront editor and the booking request screen do it: a corrected field
+   * stops producing an issue and its message disappears on its own, with no
+   * per-field bookkeeping to get wrong.
+   *
+   * #388 replaced a single `priceError` string with this. The old shape could
+   * only ever describe one field, so a blank name and a blank description had
+   * nowhere to be said and became a toast — or, once the browser's own
+   * validation cancelled the submit first, nothing at all.
+   */
+  const problem = useMemo(() => {
+    const schema = isNew ? createServicePackageSchema : updateServicePackageSchema;
+    const parsed = schema.safeParse(toPayload(form));
+
+    return parsed.success ? NO_PACKAGE_PROBLEM : packageProblemFrom(parsed.error.issues, fieldId);
+  }, [form, isNew, fieldId]);
+
+  const validation = useSubmitValidation(problem.fields);
+  /** Nothing is said in red before a submit attempt (`40-states.md`). */
+  const formMessage = validation.attempted ? problem.formMessage : null;
 
   // Selecting a different package replaces what the pane is editing.
   useEffect(() => {
     setForm(initialState(servicePackage));
-    setPriceError(null);
+    validation.reset();
+    // `validation` is recreated every render; only the selection should reseed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [servicePackage]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
@@ -149,34 +174,19 @@ export function PackageForm({
     }));
   };
 
-  const save = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-
-    const payload = toPayload(form);
+  const send = async (): Promise<void> => {
     const schema = isNew ? createServicePackageSchema : updateServicePackageSchema;
-    const parsed = schema.safeParse(payload);
+    const parsed = schema.safeParse(toPayload(form));
 
+    /*
+     * `problem` is computed from the same values by the same schema, so a
+     * failure here cannot happen — `attemptSubmit` only calls this when the
+     * blocker list is empty. Narrowing rather than asserting keeps that true
+     * by construction instead of by comment.
+     */
     if (!parsed.success) {
-      const issues = parsed.error.issues;
-      const price = issues.find((issue) => issue.path[0] === 'priceCents');
-
-      setPriceError(price?.message ?? null);
-
-      /*
-       * A field that shows its own error does not also raise a toast. The
-       * toast is for what has no field to sit on — and if price was the only
-       * problem, there is nothing left to say twice.
-       */
-      const elsewhere = issues.find((issue) => issue.path[0] !== 'priceCents');
-
-      if (elsewhere) {
-        toast.error(elsewhere.message);
-      }
-
       return;
     }
-
-    setPriceError(null);
 
     setIsSaving(true);
     try {
@@ -198,12 +208,51 @@ export function PackageForm({
     }
   };
 
+  /** Read once per render; every field below is looked up by its control id. */
+  const issueFor = validation.issueFor;
+  const priceIssue = issueFor(`${fieldId}-price`);
+
+  const save = (event: React.FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+
+    validation.attemptSubmit(() => {
+      // A rule on a field this pane does not lay out still has to stop the
+      // save; it is said at form level instead of on a control.
+      if (problem.formMessage !== null) {
+        return;
+      }
+
+      void send();
+    });
+  };
+
   return (
-    <form onSubmit={(event) => void save(event)} className="flex h-full min-h-0 flex-col">
+    /*
+      `noValidate` is load-bearing (#388). The `required` attributes below stay —
+      they are what tells a screen reader a field is required *before* it blocks
+      anything — but the browser's own enforcement of them cancelled the submit
+      before React saw it, so nothing below ever ran and the button read as
+      inert. This pane judges every field itself.
+    */
+    <form onSubmit={save} noValidate className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
         <h2 className="font-display text-lg font-semibold text-stone-800">
           {isNew ? 'New package' : 'Edit package'}
         </h2>
+
+        {validation.attempted && validation.blockers.length > 0 ? (
+          <div className="mt-4">
+            <FormErrorSummary blockers={validation.blockers} />
+          </div>
+        ) : null}
+
+        {formMessage !== null ? (
+          <div className="mt-4">
+            <FormErrorCard>
+              <p className="text-base text-stone-900">{formMessage}</p>
+            </FormErrorCard>
+          </div>
+        ) : null}
 
         <div className="field-grid mt-4">
           <div className="sm:col-span-2">
@@ -216,7 +265,9 @@ export function PackageForm({
               required
               maxLength={200}
               className={cn('mt-1.5', INPUT_TOUCH_HEIGHT)}
+              {...errorProps(issueFor(`${fieldId}-name`))}
             />
+            <FieldMessage issue={issueFor(`${fieldId}-name`)} />
           </div>
 
           <div className="sm:col-span-2">
@@ -229,7 +280,9 @@ export function PackageForm({
               required
               maxLength={MAX_DESCRIPTION_LENGTH}
               className="mt-1.5 min-h-[110px]"
+              {...errorProps(issueFor(`${fieldId}-description`))}
             />
+            <FieldMessage issue={issueFor(`${fieldId}-description`)} />
           </div>
 
           <div>
@@ -239,25 +292,22 @@ export function PackageForm({
               <InputGroupInput
                 id={`${fieldId}-price`}
                 value={form.priceDollars}
-                onChange={(event) => {
-                  update('priceDollars', event.target.value);
-                  setPriceError(null);
-                }}
+                onChange={(event) => update('priceDollars', event.target.value)}
                 inputMode="decimal"
                 placeholder="1200"
                 required
-                aria-invalid={priceError !== null || undefined}
-                aria-describedby={priceError === null ? undefined : `${fieldId}-price-error`}
+                {...errorProps(priceIssue, ...(priceIssue ? [] : [`${fieldId}-price-help`]))}
               />
             </InputGroup>
-            {priceError === null ? (
-              <p className="mt-1 text-xs leading-normal text-stone-600">
+            {priceIssue === null ? (
+              <p
+                id={`${fieldId}-price-help`}
+                className="mt-1 text-xs leading-normal text-stone-600"
+              >
                 Between $25 and $100,000.
               </p>
             ) : (
-              <p id={`${fieldId}-price-error`} role="alert" className="mt-1 text-xs text-error-500">
-                {priceError}
-              </p>
+              <FieldMessage issue={priceIssue} />
             )}
           </div>
 
@@ -292,7 +342,9 @@ export function PackageForm({
               inputMode="decimal"
               placeholder="Optional"
               className={cn('mt-1.5', INPUT_TOUCH_HEIGHT)}
+              {...errorProps(issueFor(`${fieldId}-duration`))}
             />
+            <FieldMessage issue={issueFor(`${fieldId}-duration`)} />
           </div>
 
           <div>
@@ -305,7 +357,9 @@ export function PackageForm({
               placeholder="Optional"
               max={MAX_GUEST_COUNT}
               className={cn('mt-1.5', INPUT_TOUCH_HEIGHT)}
+              {...errorProps(issueFor(`${fieldId}-guests`))}
             />
+            <FieldMessage issue={issueFor(`${fieldId}-guests`)} />
           </div>
 
           <fieldset className="sm:col-span-2">

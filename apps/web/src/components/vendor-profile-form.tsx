@@ -27,8 +27,7 @@ import { toast } from 'sonner';
 import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { useUnsavedChangesGuard } from '@/lib/use-unsaved-changes-guard';
-import { describeBlockerCount, useSubmitValidation } from '@/lib/use-submit-validation';
-import type { FieldIssue } from '@/lib/use-submit-validation';
+import { useSubmitValidation } from '@/lib/use-submit-validation';
 import {
   controlIdForStateKey,
   mergeProblems,
@@ -47,6 +46,13 @@ import {
   type WireVendorProfile,
 } from '@/lib/wire-schemas';
 import { CategoryPicker } from '@/components/category-picker';
+import {
+  describedByProps,
+  errorProps,
+  FieldMessage,
+  FormErrorCard,
+  FormErrorSummary,
+} from '@/components/form-error-summary';
 import { FormSectionNav, type FormSection } from '@/components/form-section-nav';
 import { ImageUpload } from '@/components/image-upload';
 import { StorefrontPreview } from '@/components/vendor/storefront-preview';
@@ -283,57 +289,6 @@ const PUBLISH_BLOCKER_FORM_KEYS = [
 ] as const;
 
 /**
- * Ties a control's message to it, for anything that is not itself a form
- * control — the two pickers and the photo, which are groups of buttons.
- *
- * `aria-invalid` is not a global attribute: on a generic element it is inert,
- * so writing it there would look like accessible feedback while announcing
- * nothing. The group is named and described instead, and the summary card
- * carries the announcement.
- */
-function describedByProps(issue: FieldIssue | null): { 'aria-describedby'?: string } {
-  return issue ? { 'aria-describedby': `${issue.field}-error` } : {};
-}
-
-/**
- * The attributes that tie a real control to its red message.
- *
- * Returned as a pair with the message element below rather than written out
- * per field, because the failure mode is an `aria-describedby` pointing at an
- * id that is not rendered — which reads as fixed and announces nothing.
- */
-function errorProps(
-  issue: FieldIssue | null,
-  ...alsoDescribedBy: readonly string[]
-): { 'aria-invalid'?: true; 'aria-describedby'?: string } {
-  const described = [...(issue ? [`${issue.field}-error`] : []), ...alsoDescribedBy];
-
-  return {
-    ...(issue ? { 'aria-invalid': true as const } : {}),
-    ...(described.length > 0 ? { 'aria-describedby': described.join(' ') } : {}),
-  };
-}
-
-/**
- * Frame `22`'s red card, used for both things that can go wrong at form level:
- * the counted summary, and a refusal that belongs to no single control.
- *
- * `role="alert"` is the part #222 was missing — a save that failed announced
- * nothing, so the button read as dead.
- */
-function ErrorCard({ children }: { children: React.ReactNode }): React.ReactElement {
-  return (
-    <div
-      role="alert"
-      className="mb-5 flex max-w-[640px] items-start gap-3 rounded-xl border border-error-200 bg-error-50 px-4 py-3.25"
-    >
-      <span aria-hidden="true" className="mt-0.25 size-4.5 shrink-0 rounded-full bg-error-500" />
-      {children}
-    </div>
-  );
-}
-
-/**
  * The trigger shape both selects on this form share.
  *
  * 44px below `lg` where the input method is a finger, 38px above it — the same
@@ -341,19 +296,6 @@ function ErrorCard({ children }: { children: React.ReactNode }): React.ReactElem
  */
 const FORM_SELECT_TRIGGER =
   'mt-1.5 flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-stone-0 px-[13px] text-base text-stone-900 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 sm:h-[38px]';
-
-/** The red line under a control. `40-states.md`: it says how to fix it. */
-function FieldMessage({ issue }: { issue: FieldIssue | null }): React.ReactElement | null {
-  if (issue === null) {
-    return null;
-  }
-
-  return (
-    <p id={`${issue.field}-error`} className="mt-1.5 text-helper text-error-500">
-      {issue.message}
-    </p>
-  );
-}
 
 /**
  * The vendor's business profile, used for both first-time onboarding and later
@@ -662,7 +604,15 @@ export function VendorProfileForm({
         className="order-first lg:order-last lg:h-full lg:w-70 lg:overflow-y-auto min-[90rem]:w-77"
       />
 
-      <form onSubmit={save} className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
+      {/*
+        `noValidate` is load-bearing (#388). The `required` attributes below stay
+        — they are what tells a screen reader the field is required *before* it
+        blocks anything — but the browser's own enforcement of them cancelled the
+        submit before React saw it, so `attemptSubmit` never ran and a pristine
+        press produced no summary, no `aria-invalid` and no message. This form
+        judges every field itself; the browser must not judge any of them first.
+      */}
+      <form onSubmit={save} noValidate className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
         <div className="app-pane min-h-0 flex-1 px-4 pt-5.5 sm:px-7">
           <div className="max-w-[65rem]">
             <h1 className="display-heading text-display-md text-stone-900">Your storefront</h1>
@@ -671,33 +621,12 @@ export function VendorProfileForm({
             </p>
           </div>
 
-          {showSummary ? (
-            <ErrorCard>
-              <div>
-                <p className="mb-0.75 text-base font-semibold text-stone-900">
-                  {describeBlockerCount(validation.blockers.length)}
-                </p>
-                <p className="text-sm text-stone-700">
-                  {validation.blockers.map((issue, index) => (
-                    <span key={issue.field}>
-                      {index > 0 ? ' · ' : null}
-                      <a
-                        href={`#${issue.field}`}
-                        className="font-semibold text-error-500 underline underline-offset-2"
-                      >
-                        {issue.label}
-                      </a>
-                    </span>
-                  ))}
-                </p>
-              </div>
-            </ErrorCard>
-          ) : null}
+          {showSummary ? <FormErrorSummary blockers={validation.blockers} /> : null}
 
           {formMessage !== null ? (
-            <ErrorCard>
+            <FormErrorCard>
               <p className="text-base text-stone-900">{formMessage}</p>
-            </ErrorCard>
+            </FormErrorCard>
           ) : null}
 
           <div className="max-w-[65rem] divide-y divide-stone-200">
@@ -722,6 +651,7 @@ export function VendorProfileForm({
                 <div
                   id="profileImage"
                   role="group"
+                  tabIndex={-1}
                   aria-label="Profile photo"
                   className="w-24 sm:w-32"
                   {...describedByProps(validation.issueFor('profileImage'))}
@@ -741,6 +671,7 @@ export function VendorProfileForm({
                 <div
                   id="coverImage"
                   role="group"
+                  tabIndex={-1}
                   aria-label="Cover photo"
                   className="w-54"
                   {...describedByProps(validation.issueFor('coverImage'))}
@@ -878,6 +809,7 @@ export function VendorProfileForm({
                   <div
                     id="categories"
                     role="group"
+                    tabIndex={-1}
                     aria-labelledby="categories-label"
                     className="mt-1.5"
                     {...describedByProps(validation.issueFor('categories'))}
@@ -1079,7 +1011,9 @@ export function VendorProfileForm({
                 How customers find someone who fits their celebration.
               </p>
               <div
+                id="tags"
                 role="group"
+                tabIndex={-1}
                 aria-label="Tags"
                 className="mt-4"
                 {...describedByProps(validation.issueFor('tags'))}

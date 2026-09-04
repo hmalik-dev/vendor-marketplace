@@ -31,7 +31,10 @@ export interface SubmitValidation {
   blockers: readonly FieldIssue[];
   /** Gold issues. Always visible, because they are advice rather than errors. */
   costly: readonly FieldIssue[];
-  /** Runs `onValid` only when nothing is blocking; otherwise reveals the errors. */
+  /**
+   * Runs `onValid` only when nothing is blocking; otherwise reveals the errors
+   * and moves focus to the first blocked control.
+   */
   attemptSubmit: (onValid: () => void) => void;
   /** Puts the form back to its pre-submit silence — used when a step changes. */
   reset: () => void;
@@ -73,7 +76,25 @@ export function useSubmitValidation(issues: readonly FieldIssue[]): SubmitValida
 
       if (blockers.length === 0) {
         onValid();
+        return;
       }
+
+      /*
+       * The browser used to do this, as a side effect of cancelling the submit
+       * on an empty `required` input — and cancelling it was the #388 defect,
+       * because it also stopped the summary and the field messages from ever
+       * rendering. Forms own their validation now, so they owe the focus move
+       * too: it is the signal a mouse user notices, and the control it lands on
+       * is `aria-describedby` its own message, so the reason is announced on
+       * arrival rather than only the label.
+       *
+       * Deferred a frame because the message it points at is rendered by the
+       * commit `setAttempted` has only just scheduled. Focusing now would move
+       * to a control that is not yet described by anything.
+       */
+      const { field } = blockers[0];
+
+      requestAnimationFrame(() => document.getElementById(field)?.focus());
     },
     [blockers],
   );

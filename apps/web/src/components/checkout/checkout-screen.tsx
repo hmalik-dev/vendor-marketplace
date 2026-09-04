@@ -191,7 +191,8 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
           locks {SHORT_DAY.format(event)} in their calendar.
         </p>
 
-        <form onSubmit={pay} className="flex max-w-[620px] flex-col gap-4">
+        {/* This screen refuses in its own voice; the browser must not do it first. */}
+        <form onSubmit={pay} noValidate className="flex max-w-[620px] flex-col gap-4">
           {decline ? <DeclineBanner decline={decline} event={event} /> : null}
 
           <PaymentElement options={{ layout: 'tabs' }} />

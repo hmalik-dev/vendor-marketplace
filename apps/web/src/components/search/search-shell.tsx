@@ -233,6 +233,14 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
    * nothing more.
    */
   const [droppedPastDate, setDroppedPastDate] = useState<string | null>(null);
+  /*
+   * #388: a Refine control that could make nothing of what was typed applied
+   * the rest and said nothing — `Min = abc` closed the panel, left the URL
+   * alone and left the reader to notice. It never reaches the URL, so
+   * `dropped` cannot carry it; the bar reports it and it is read out here,
+   * beside the params the URL asked for and did not get.
+   */
+  const [discardedPrice, setDiscardedPrice] = useState(false);
 
   useEffect(() => {
     if (state.date !== '' && isPastDate(state.date, todayDateString())) {
@@ -251,7 +259,7 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
     droppedPastDate === null
       ? null
       : `${AVAILABILITY_DATE_FORMATTER.format(new Date(`${droppedPastDate}T00:00:00Z`))} has already passed, so the date was cleared — pick a new one to check availability.`,
-    clearedParamsLine(dropped),
+    clearedParamsLine(discardedPrice ? [...dropped, 'minPriceCents'] : dropped),
   ].filter((line): line is string => line !== null);
 
   const refineCount = activeRefineCount(state);
@@ -334,9 +342,15 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
         <RefineBar
           state={state}
           setState={setState}
-          clearRefinements={clearRefinements}
+          clearRefinements={() => {
+            // Clearing the refinements retracts the notice with them; the
+            // discarded bound is one of the things being cleared.
+            setDiscardedPrice(false);
+            clearRefinements();
+          }}
           tags={tags}
           facets={result?.facets.categories ?? []}
+          onPriceApplied={setDiscardedPrice}
           className="w-full max-lg:border-b-0 max-lg:px-0 max-lg:py-0"
         />
 

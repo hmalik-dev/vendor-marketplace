@@ -58,6 +58,7 @@ export function NameSearch({ value, onSubmit }: NameSearchProps): React.ReactEle
         </DialogHeader>
 
         <form
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             commit(draft.trim());

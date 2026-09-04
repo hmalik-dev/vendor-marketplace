@@ -442,6 +442,80 @@ describe('filter popovers are reachable and know when they are finished', () => 
   });
 
   /*
+   * #388: `Min = abc` parsed to `null`, which is indistinguishable from "no
+   * minimum" — so Apply closed the panel, changed nothing, and said nothing.
+   * The inverted range on the same control already explains itself; one control
+   * cannot have two contracts. The bar reports the discard and the shell
+   * announces it in the live region the cleared params already use.
+   */
+  it('reports a typed bound it could not use, rather than dropping it in silence', async () => {
+    const user = userEvent.setup();
+    const setState = vi.fn();
+    const onPriceApplied = vi.fn();
+
+    render(
+      <RefineBar
+        state={state()}
+        setState={setState}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+        onPriceApplied={onPriceApplied}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), 'abc');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(onPriceApplied).toHaveBeenCalledWith(true);
+  });
+
+  it('says nothing when every typed bound was usable', async () => {
+    const user = userEvent.setup();
+    const onPriceApplied = vi.fn();
+
+    render(
+      <RefineBar
+        state={state()}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+        onPriceApplied={onPriceApplied}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), '1200');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(onPriceApplied).toHaveBeenCalledWith(false);
+  });
+
+  /* Clearing a bound is not discarding it — an empty field means "no bound". */
+  it('does not report an empty bound as discarded', async () => {
+    const user = userEvent.setup();
+    const onPriceApplied = vi.fn();
+
+    render(
+      <RefineBar
+        state={state()}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+        onPriceApplied={onPriceApplied}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(onPriceApplied).toHaveBeenCalledWith(false);
+  });
+
+  /*
    * Moving between chips takes **one** click, not two.
    *
    * Only one panel may be open, and that is held on the bar rather than in each

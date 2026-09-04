@@ -108,9 +108,13 @@ async function chooseState(user: User): Promise<void> {
 }
 
 /**
- * Everything the create schema demands, so a submit reaches the API. Native
- * constraint validation stops a submit before React ever sees it, which is why
- * the `required` inputs are filled even in the tests about the server's answer.
+ * Everything the create schema demands, so a submit reaches the API.
+ *
+ * The `required` inputs are filled even in the tests about the server's answer
+ * because the form's own validation blocks the send otherwise. It used to be
+ * the browser that blocked it, which is what #388 removed — the outcome for
+ * these tests is the same, but nothing here depends on native validation any
+ * more.
  */
 async function completeTheProfile(user: User): Promise<void> {
   await user.type(screen.getByLabelText('Business name'), 'Sunlit Studio');
@@ -214,9 +218,80 @@ describe('VendorProfileForm — a save the API refuses', () => {
 
 describe('VendorProfileForm — a save the form itself refuses', () => {
   /*
+   * #388: the form used to leave the empty `required` inputs to the browser,
+   * which cancels the submit before React sees it. `attemptSubmit` never ran,
+   * so a pristine press produced no summary, no `aria-invalid` and no message —
+   * only a silent focus move. The form owns its own validation now, and these
+   * two tests are the ones that were missing: they press the button with
+   * nothing filled in, which is exactly what the browser used to intercept.
+   */
+  it('answers a pristine submit on the first press', async () => {
+    const user = userEvent.setup();
+    renderOnboarding();
+
+    await createProfile(user);
+
+    expect(requestMock).not.toHaveBeenCalled();
+
+    const summary = await screen.findByRole('alert');
+    expect(summary.textContent).toContain('fields need fixing before this can go out');
+    expect(screen.getByLabelText('Business name').getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText('Enter your business name')).toBeTruthy();
+  });
+
+  /*
+   * Focus was the only signal the old native path gave, and it is still worth
+   * having — but it has to land on a control that is now described by its own
+   * message, so a screen reader reads the reason on arrival rather than just
+   * the label.
+   */
+  it('moves focus to the first field it names, and that field is described by its message', async () => {
+    const user = userEvent.setup();
+    renderOnboarding();
+
+    await createProfile(user);
+
+    const businessName = await screen.findByLabelText('Business name');
+    await waitFor(() => expect(document.activeElement).toBe(businessName));
+
+    const describedBy = businessName.getAttribute('aria-describedby');
+    expect(describedBy).toBe('businessName-error');
+    expect(document.getElementById('businessName-error')?.textContent).toBe(
+      'Enter your business name',
+    );
+  });
+
+  /*
+   * Four of the thirteen blocker targets on this form are `role="group"`
+   * wrappers, not inputs — categories, tags and the two photo fields. A
+   * `getElementById(...).focus()` on a div with no `tabindex` is a no-op, so
+   * "forgot to tick a category" (the ordinary path, `categoryIds` is `min(1)`)
+   * left focus on the button and announced nothing on arrival. The groups
+   * carry `tabIndex={-1}` so the move lands and the group's label and message
+   * are read.
+   */
+  it('lands focus on a group target, not only on inputs', async () => {
+    const user = userEvent.setup();
+    renderOnboarding();
+
+    await user.type(screen.getByLabelText('Business name'), 'Sunlit Studio');
+    await user.type(screen.getByLabelText('City'), 'Austin');
+    await chooseState(user);
+    // No category chosen, which is what makes `categories` the first blocker.
+    await createProfile(user);
+
+    const group = document.getElementById('categories');
+    expect(group?.getAttribute('role')).toBe('group');
+    await waitFor(() => expect(document.activeElement).toBe(group));
+
+    const describedBy = group?.getAttribute('aria-describedby');
+    expect(describedBy).toBe('categories-error');
+    expect(document.getElementById('categories-error')?.textContent).toBeTruthy();
+  });
+
+  /*
    * The other half of the same defect: a schema failure was one toast naming
-   * one issue, with nothing on the fields it named. Native validation covers
-   * the empty `required` inputs, so these are the rules only the schema knows.
+   * one issue, with nothing on the fields it named.
    */
   it('marks each rejected field and counts them at the head of the form', async () => {
     const user = userEvent.setup();

@@ -1,5 +1,6 @@
 import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ApiClientError } from '@/lib/api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearedParamsLine, type SearchPatch, type SearchState } from './search-state';
@@ -449,6 +450,38 @@ describe('SearchShell against a hostile URL', () => {
     );
 
     spy.mockRestore();
+  });
+
+  /*
+   * #388's sixth acceptance item ends at the screen, not at the callback: the
+   * Refine bar reports the discarded bound, and the shell is what has to put
+   * the sentence in the live region. Without this, the only test of the
+   * behaviour asserted a boolean, and the preset-after-unreadable-text bug
+   * (which announced a range as cleared while applying it) rendered green.
+   */
+  it('announces a price bound it could not read, in the register the URL uses', async () => {
+    const user = userEvent.setup();
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), 'abc');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toContain(clearedParamsLine(['minPriceCents']) ?? '');
+  });
+
+  /* A preset replaces the unreadable text, so it also replaces the verdict. */
+  it('retracts the notice when a preset supplies the bound instead', async () => {
+    const user = userEvent.setup();
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), 'abc');
+    await user.click(screen.getByRole('button', { name: '$1–2k' }));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(screen.queryByText(/isn't one we can use/)).toBeNull();
   });
 
   it('says nothing about cleared params when the URL was entirely usable', async () => {

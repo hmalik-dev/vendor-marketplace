@@ -139,6 +139,25 @@ describe('validation', () => {
   });
 
   /*
+   * #388: this screen set `aria-invalid` and wired a well-written message
+   * through `aria-describedby`, but its summary card was a hand-copied version
+   * of the storefront editor's that had lost the `role="alert"` — so a refusal
+   * it rendered perfectly well announced nothing, and focus stayed on the
+   * button the customer had just pressed. The card is shared now.
+   */
+  it('announces the summary and moves focus to the field it names', async () => {
+    renderScreen();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('One field needs fixing before this can go out');
+
+    const eventType = screen.getByLabelText('Event type');
+    await waitFor(() => expect(document.activeElement).toBe(eventType));
+  });
+
+  /*
    * The select and the textarea render their own className, so the tier
    * styling reaches them only if they merge what the field hands down. They
    * shipped once without it: the message went red and the control did not.

@@ -22,17 +22,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { DateDropdown } from '@/components/ui/dropdown-date';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
+import { FormErrorCard, FormErrorSummary } from '@/components/form-error-summary';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { useSavedDraft } from '@/lib/use-saved-draft';
-import {
-  describeBlockerCount,
-  useSubmitValidation,
-  type FieldIssue,
-} from '@/lib/use-submit-validation';
+import { useSubmitValidation, type FieldIssue } from '@/lib/use-submit-validation';
 import { cn } from '@/lib/utils';
 
 export interface BookingRequestScreenProps {
@@ -327,41 +324,12 @@ export function BookingRequestScreen({
           </div>
         ) : null}
 
-        {validation.attempted && validation.blockers.length > 0 ? (
-          <div className="mb-5 flex max-w-[640px] items-start gap-3 rounded-xl border border-error-200 bg-error-50 px-4 py-3.25">
-            <span
-              aria-hidden="true"
-              className="mt-0.25 size-4.5 shrink-0 rounded-full bg-error-500"
-            />
-            <div>
-              <p className="mb-0.75 text-base font-semibold text-stone-900">
-                {describeBlockerCount(validation.blockers.length)}
-              </p>
-              <p className="text-sm text-stone-700">
-                {validation.blockers.map((issue, index) => (
-                  <span key={issue.field}>
-                    {index > 0 ? ' · ' : null}
-                    <a
-                      href={`#${issue.field}`}
-                      className="font-semibold text-error-500 underline underline-offset-2"
-                    >
-                      {issue.label}
-                    </a>
-                  </span>
-                ))}
-              </p>
-            </div>
-          </div>
-        ) : null}
+        {validation.attempted ? <FormErrorSummary blockers={validation.blockers} /> : null}
 
         {sendFailure ? (
-          <div className="mb-5 flex max-w-[640px] items-start gap-3 rounded-xl border border-error-200 bg-error-50 px-4 py-3.25">
-            <span
-              aria-hidden="true"
-              className="mt-0.25 size-4.5 shrink-0 rounded-full bg-error-500"
-            />
+          <FormErrorCard>
             <p className="text-base text-stone-900">{sendFailure}</p>
-          </div>
+          </FormErrorCard>
         ) : null}
 
         {step === 1 ? (

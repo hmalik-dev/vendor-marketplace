@@ -36,7 +36,14 @@ export interface RangeDropdownProps {
   /** The `lbl` caption's second half — "starting rate" on price. */
   caption: string;
   value: RangeValue;
-  onApply: (value: RangeValue) => void;
+  /**
+   * `discarded` is true when a bound held text the reader typed and `parse`
+   * could make nothing of — `abc`, or a lone `$`. It is not the same as an
+   * empty bound, which legitimately means "no limit": the value is dropped
+   * either way, but only one of the two is a surprise, and #388 is what it
+   * cost to treat them identically and say nothing.
+   */
+  onApply: (value: RangeValue, meta: { discarded: boolean }) => void;
   presets: readonly RangePreset[];
   /** The slider's span, so the readout knows what "full" means. */
   bounds: { min: number; max: number };
@@ -94,11 +101,17 @@ export function RangeDropdown({
 }: RangeDropdownProps): React.ReactElement {
   const fieldId = useId();
   const [draft, setDraft] = useState<RangeValue>(value);
+  /** Which bounds currently hold text `parse` could make nothing of. */
+  const [unusable, setUnusable] = useState<{ min: boolean; max: boolean }>({
+    min: false,
+    max: false,
+  });
 
   // Re-seeded on open, so a panel dismissed without Apply discards its edits.
   useEffect(() => {
     if (open) {
       setDraft(value);
+      setUnusable({ min: false, max: false });
     }
   }, [open, value]);
 
@@ -128,7 +141,10 @@ export function RangeDropdown({
           format={format}
           parse={parse}
           toEditable={toEditable}
-          onChange={(min) => setDraft((current) => ({ ...current, min }))}
+          onChange={(min, isUnusable) => {
+            setDraft((current) => ({ ...current, min }));
+            setUnusable((current) => ({ ...current, min: isUnusable }));
+          }}
         />
         <span aria-hidden="true" className="mt-3.5 text-stone-500">
           –
@@ -140,7 +156,10 @@ export function RangeDropdown({
           format={format}
           parse={parse}
           toEditable={toEditable}
-          onChange={(max) => setDraft((current) => ({ ...current, max }))}
+          onChange={(max, isUnusable) => {
+            setDraft((current) => ({ ...current, max }));
+            setUnusable((current) => ({ ...current, max: isUnusable }));
+          }}
         />
       </div>
 
@@ -177,7 +196,16 @@ export function RangeDropdown({
             key={preset.label}
             type="button"
             aria-pressed={index === activePreset}
-            onClick={() => setDraft({ min: preset.min, max: preset.max })}
+            onClick={() => {
+              setDraft({ min: preset.min, max: preset.max });
+              /*
+               * A preset replaces whatever was typed, so it also replaces the
+               * verdict on it. Without this, `abc` in Min followed by `$1–2k`
+               * applied the preset and still announced the range as discarded
+               * — a notice that contradicted the chip beside it.
+               */
+              setUnusable({ min: false, max: false });
+            }}
             className={cn(
               'rounded-full border px-2.5 py-[5px] text-[11.5px]',
               index === activePreset
@@ -193,10 +221,13 @@ export function RangeDropdown({
       <DropdownFooter
         applyLabel="Apply"
         onApply={() => {
-          onApply(draft);
+          onApply(draft, { discarded: unusable.min || unusable.max });
           onOpenChange(false);
         }}
-        onClear={() => setDraft(EMPTY)}
+        onClear={() => {
+          setDraft(EMPTY);
+          setUnusable({ min: false, max: false });
+        }}
       />
     </Dropdown>
   );
@@ -224,7 +255,8 @@ function AmountField({
   format: (value: number) => string;
   parse: (raw: string) => number | null;
   toEditable: (value: number) => string;
-  onChange: (value: number | null) => void;
+  /** `unusable` distinguishes "typed something we cannot read" from "empty". */
+  onChange: (value: number | null, unusable: boolean) => void;
 }): React.ReactElement {
   const [editing, setEditing] = useState(false);
   const [raw, setRaw] = useState('');
@@ -246,8 +278,11 @@ function AmountField({
         }}
         onBlur={() => setEditing(false)}
         onChange={(event) => {
-          setRaw(event.target.value);
-          onChange(parse(event.target.value));
+          const typed = event.target.value;
+          const parsed = parse(typed);
+
+          setRaw(typed);
+          onChange(parsed, parsed === null && typed.trim() !== '');
         }}
         className="w-full rounded-md border border-stone-300 bg-stone-150 px-2.5 py-2 text-[13px] text-stone-900 outline-none focus-visible:border-[1.5px] focus-visible:border-clay-400 focus-visible:px-[9px] focus-visible:py-[7px] focus-visible:shadow-[0_0_0_3px_rgba(180,85,47,.15)]"
       />
