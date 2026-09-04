@@ -487,6 +487,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   394: [], // a response schema, a label lookup and their tests — no external service
   395: ['stripe'], // frame `05 Checkout` parity — the screen only renders with a live intent
   396: ['stripe'], // the CSP that blocks Stripe; verifying it means driving the payment path
+  397: ['stripe'], // the webhook's answer to a succeeded intent it cannot apply — proven with `stripe trigger`
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

@@ -78,3 +78,34 @@ regenerated `.auth/customer.json` and `.auth/vendor.json`.
 - The 10 commits on `worktree-371` were not blindly landed: they are partial
   work on a ticket blocked by a design ruling, and land only after the gate
   and a review, as part of the drain.
+
+## Phase 1 — sweep (in progress)
+
+`/hunt-bugs` failed twice before it ran: the Workflow sandbox has no
+`process`, and the script read `process.env` at load. Fixed in `f49a36c`
+(origins from args first; the lane-ports test still passes; a new case covers
+the args channel). The named workflow is served from a cache, so it was
+relaunched by `scriptPath` against the repo file. Running as `wf_fe833cfc-171`.
+
+Ran in parallel with it (read-only): an accessibility `bug-hunter` (report
+saved in the run scratchpad and summarised under Findings below), an `Explore`
+audit of `docs/pre-launch.md` against the tree, and an `Explore` brief of every
+open ticket with its real file set.
+
+### Landed during the sweep (code the browser drive then exercises)
+
+| Commit | What | Tickets | Reviews |
+| --- | --- | --- | --- |
+| `1908064` | Stripe hosts on the CSP and Permissions-Policy; `CSP_ENFORCE` registered and hashed; `shouldEnforceCsp` pinned; occasion label on the confirmation screen; webhook acknowledges foreign succeeded intents | #396, #394 (In Progress — browser pass pending), #397 (filed and closed) | diff-reviewer REQUEST-CHANGES → 4 items applied; security-auditor PASS-WITH-NOTES → 3 notes applied |
+
+### Pre-launch checklist audit — what the tree says
+
+Machine-doable and open: #396 (done above). Everything else the checklist
+lists as a code item is already landed (security headers, robots/sitemap/
+manifest/opengraph-image, soft 404, upload limits 12 MB / 1200px / 20 files,
+seed guard on production, #47 key-based image URLs) or is a human action
+already consolidated into #362 / #374 / #370. Two small guards remain
+unowned and are candidates for filing after the sweep: a check that a
+configured webhook target is a real API origin (§2.3), and preflight refusing
+a non-production Neon branch when `NODE_ENV=production` (§3.2 — today only the
+opposite direction is enforced).
