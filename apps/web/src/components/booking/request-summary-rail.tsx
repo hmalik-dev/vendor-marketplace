@@ -1,5 +1,7 @@
 'use client';
 
+import { FieldMessage, errorProps } from '@/components/form-error-summary';
+import type { FieldIssue } from '@/lib/use-submit-validation';
 import { bookingRequestWindowPhrase, formatPrice } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -30,7 +32,13 @@ export interface RequestSummaryRailProps {
   customDetails: string;
   onCustomDetailsChange: (value: string) => void;
   customDetailsId: string;
-  customDetailsInvalid: boolean;
+  /**
+   * The blocker on the brief, if there is one. The whole issue rather than a
+   * boolean, because `aria-invalid` alone is what #388's browser pass caught
+   * here: the textarea announced itself invalid with no reason attached and no
+   * message rendered anywhere in the document.
+   */
+  customDetailsIssue: FieldIssue | null;
   /** Frame `04`'s primary: "Continue to review", then "Send request" on step 2. */
   primaryLabel: string;
   onPrimary: () => void;
@@ -55,7 +63,7 @@ export function RequestSummaryRail({
   customDetails,
   onCustomDetailsChange,
   customDetailsId,
-  customDetailsInvalid,
+  customDetailsIssue,
   primaryLabel,
   onPrimary,
   submitting,
@@ -119,10 +127,11 @@ export function RequestSummaryRail({
             id={customDetailsId}
             value={customDetails}
             onChange={(event) => onCustomDetailsChange(event.target.value)}
-            aria-invalid={customDetailsInvalid}
+            {...errorProps(customDetailsIssue)}
             placeholder="Two hours of engagement portraits at Zilker, golden hour."
             className="min-h-24 rounded-[10px] border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900"
           />
+          <FieldMessage issue={customDetailsIssue} />
         </div>
       )}
 

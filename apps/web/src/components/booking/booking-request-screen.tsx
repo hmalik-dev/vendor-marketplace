@@ -520,9 +520,7 @@ export function BookingRequestScreen({
           customDetails={customDetails}
           onCustomDetailsChange={setCustomDetails}
           customDetailsId={`${fieldId}-customDetails`}
-          customDetailsInvalid={
-            validation.issueFor(`${fieldId}-customDetails`)?.severity === 'blocker'
-          }
+          customDetailsIssue={validation.issueFor(`${fieldId}-customDetails`)}
           primaryLabel={primaryLabel}
           submitting={submitting}
           blockerCount={validation.attempted ? validation.blockers.length : 0}

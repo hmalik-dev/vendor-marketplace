@@ -81,6 +81,28 @@ async function chooseEventType(label = 'Wedding'): Promise<void> {
 
 /** The frame's own two-column pairing: only the textareas get a row to themselves. */
 describe('field layout', () => {
+  /*
+   * #388's browser pass: the brief in the summary rail announced itself
+   * `aria-invalid` with no `aria-describedby` and no message rendered
+   * anywhere, so a screen reader following the summary link landed on a
+   * control that said it was wrong and would not say why. The two fields in
+   * the left column were wired correctly; this one was not.
+   */
+  it('gives the brief the same message wiring as every other blocking field', async () => {
+    renderScreen({ servicePackage: null });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+
+    const brief = screen.getByLabelText('Describe what you need');
+    expect(brief.getAttribute('aria-invalid')).toBe('true');
+
+    const describedBy = brief.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy ?? '')?.textContent).toBe(
+      'Describe what you need in a sentence or two, so there is something to quote.',
+    );
+  });
+
   it('pairs every field except the two textareas', () => {
     renderScreen();
 
