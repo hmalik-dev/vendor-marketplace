@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["NODE_ENV"],
+  "globalEnv": ["NODE_ENV", "CSP_ENFORCE"],
   "globalPassThroughEnv": [
     "API_URL",
     "CLERK_SECRET_KEY",

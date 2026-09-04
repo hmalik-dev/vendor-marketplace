@@ -223,6 +223,18 @@ export const ENV_REGISTRY = [
     setup: APP_SETUP,
   },
   {
+    key: 'CSP_ENFORCE',
+    capability: 'core',
+    audience: 'server',
+    consumers: ['web'],
+    environments: 'shared',
+    shape: /^[01]$/,
+    defaultValue: '0',
+    description:
+      'Set to 1 to send Content-Security-Policy instead of Content-Security-Policy-Report-Only from a non-production apps/web. Production always enforces. Read at build time by next.config.ts; a browser pass under report-only cannot fail on a blocked origin, so any pass over checkout, sign-in or upload runs with this on.',
+    setup: APP_SETUP,
+  },
+  {
     key: 'NEXT_PUBLIC_API_URL',
     capability: 'core',
     audience: 'browser',

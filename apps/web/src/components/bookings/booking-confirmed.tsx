@@ -1,11 +1,24 @@
 'use client';
 
-import { formatPrice } from '@vendor-marketplace/shared';
+import { EVENT_TYPE_LABELS, formatPrice, type EventType } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 import type { WireBooking } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
+
+/**
+ * The column holds the slug; a person reads the label. The stored value is the
+ * fallback so a legacy row never renders as nothing (#394).
+ */
+function occasionLabel(eventType: string | null | undefined): string | null {
+  if (!eventType) return null;
+  // `hasOwn`, not `??`: a stored `constructor` or `toString` would otherwise
+  // read an inherited function off the record and print it on the receipt.
+  return Object.hasOwn(EVENT_TYPE_LABELS, eventType)
+    ? EVENT_TYPE_LABELS[eventType as EventType]
+    : eventType;
+}
 
 const EVENT_DAY = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -104,7 +117,9 @@ export function BookingConfirmed({
           <div>
             <p className="font-display text-[18px] text-stone-900">{vendor.businessName}</p>
             <p className="mt-0.5 text-xs text-stone-600">
-              {[booking.eventType, booking.venue, vendor.city].filter(Boolean).join(' · ')}
+              {[occasionLabel(booking.eventType), booking.venue, vendor.city]
+                .filter(Boolean)
+                .join(' · ')}
             </p>
           </div>
         </div>

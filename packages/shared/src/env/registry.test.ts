@@ -457,12 +457,16 @@ describe('registrySchemaShape', () => {
    * `WEB_URL` joined this list in #30: the web tier builds `metadataBase`, the
    * sitemap and robots from its own origin, and it reads the same value the
    * API allow-lists rather than a second one that could disagree.
+   * `CSP_ENFORCE` joined in #396: it existed only as an undocumented read in
+   * `next.config.ts`, and the browser pass that would have caught the Stripe
+   * CSP block never knew to turn it on.
    */
   it('lists the keys the web build reads for a capability', () => {
     expect(registryKeys({ consumer: 'web', capabilities: ['core'] })).toEqual([
       'NODE_ENV',
       'WEB_URL',
       'API_URL',
+      'CSP_ENFORCE',
       'NEXT_PUBLIC_API_URL',
     ]);
   });

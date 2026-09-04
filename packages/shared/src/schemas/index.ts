@@ -788,6 +788,16 @@ export type Booking = z.infer<typeof bookingSchema>;
  * A booking as the hubs render it. `eventType` lives on the request rather than
  * the booking row, and the hub card's sub-line reads "$1,450 paid · Barr
  * Mansion" — so both travel with every booking the API returns.
+ *
+ * **Ruling (#394): `nullable()`, never `optional()`.** A null is a fact about
+ * the booking — the request named no occasion or no venue. A missing key is a
+ * fact about the server — a route serialised with `bookingSchema` and
+ * stripped the context. Making the client tolerate the missing key would turn
+ * that serialiser bug into a blank line on the confirmation screen; keeping
+ * it strict is what turned it into the 500 that got it fixed. A route that
+ * answers a screen reading `eventType` or `venue` therefore declares this
+ * schema; `bookingSchema` alone is for actions whose client parses the
+ * reply with the same two fields omitted (`cancelledBookingWireSchema`).
  */
 export const bookingWithContextSchema = bookingSchema.extend({
   eventType: z.string().max(MAX_BUSINESS_NAME_LENGTH).nullable(),

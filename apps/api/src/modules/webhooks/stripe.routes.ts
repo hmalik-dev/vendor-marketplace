@@ -145,6 +145,23 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           return 'ignored';
         }
 
+        /*
+         * A succeeded intent that names no booking request was not created by
+         * this platform — `stripe trigger`, a Dashboard test payment, another
+         * product on the same account. Answering it with 4xx made Stripe retry
+         * for three days and count the endpoint as failing, for an event that
+         * could never be applied. Acknowledge it, say so in the log, and move
+         * on; `recordSuccessfulPayment` still refuses to book from such an
+         * intent for the reconciliation path, which only ever sees our own.
+         */
+        if (!intent.metadata.requestId) {
+          request.log.warn(
+            { paymentIntentId: intent.id },
+            'Ignored a succeeded payment intent that names no booking request',
+          );
+          return 'ignored';
+        }
+
         const { created } = await recordSuccessfulPayment(
           {
             db: app.db,

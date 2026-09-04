@@ -51,7 +51,15 @@ export function renderEnvExample(): string {
  * busts the task cache, which is the correct behaviour for a value that changes
  * what the build produces.
  */
-export const TURBO_GLOBAL_ENV_KEYS: readonly string[] = ['NODE_ENV'];
+/**
+ * Keys that change what a build *produces*, so they belong in turbo's
+ * `globalEnv` (hashed) rather than `globalPassThroughEnv` (visible, unhashed).
+ * `CSP_ENFORCE` joined in #396: `next.config.ts` bakes the enforce-or-report
+ * choice into the routes manifest at build time, and a pass-through key left
+ * the hash identical for `0` and `1` — so `CSP_ENFORCE=1 pnpm build` replayed
+ * a cached report-only build and a browser pass against it could not fail.
+ */
+export const TURBO_GLOBAL_ENV_KEYS: readonly string[] = ['NODE_ENV', 'CSP_ENFORCE'];
 
 export function passThroughKeys(): string[] {
   return ENV_REGISTRY.map((variable) => variable.key)

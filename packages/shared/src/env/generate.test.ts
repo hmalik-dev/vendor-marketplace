@@ -3,7 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ENV_REGISTRY } from './registry.js';
-import { passThroughKeys, renderEnvExample, renderTurboJson } from './generate.js';
+import {
+  passThroughKeys,
+  renderEnvExample,
+  renderTurboJson,
+  TURBO_GLOBAL_ENV_KEYS,
+} from './generate.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 
@@ -47,7 +52,20 @@ describe('passThroughKeys', () => {
     expect(keys).toEqual([...keys].sort((left, right) => left.localeCompare(right, 'en')));
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys).not.toContain('NODE_ENV');
+    expect(keys).not.toContain('CSP_ENFORCE');
     expect(keys).toContain('DATABASE_URL_UNPOOLED');
+  });
+
+  /*
+   * `globalEnv` is hand-maintained in `turbo.json` while the pass-through
+   * block is generated; the two only stay disjoint if this pins them together.
+   * A key present in neither is invisible to the build, one in pass-through
+   * that changes output is a stale cache waiting to be replayed (#396).
+   */
+  it('matches the globalEnv block turbo.json actually carries', () => {
+    const turbo = JSON.parse(read('turbo.json')) as { globalEnv: string[] };
+
+    expect([...turbo.globalEnv].sort()).toEqual([...TURBO_GLOBAL_ENV_KEYS].sort());
   });
 });
 

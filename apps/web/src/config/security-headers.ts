@@ -48,6 +48,57 @@ const CLERK_HOSTS = [
 ];
 
 /**
+ * Stripe's hosts, per directive, as Stripe documents them for Stripe.js and
+ * the Payment Element (docs.stripe.com/security/guide, "Content Security
+ * Policy"). This file named Stripe exactly once before #396 — in a comment
+ * explaining why nothing here was needed — and the enforced production policy
+ * refused the Elements frame, its script and its API in one go, so checkout
+ * could not load on the deployed origin at all.
+ *
+ * #396 asked for exact hosts and no wildcards, and three wildcards ship
+ * anyway, deliberately: `*.js.stripe.com` is Stripe's own recommendation (it
+ * lets Stripe.js start frames on separate origins it does not enumerate),
+ * `*.stripe.com` on `img-src` is how Stripe documents its card-brand and
+ * wallet artwork, and `*.link.com` is how it documents Link, whose
+ * subdomains (`checkout.`, `statics.`, …) are Stripe's to add. Narrowing any
+ * of them to the hosts seen in one browser session would break the next
+ * one Stripe adds. `hooks.stripe.com` is the 3-D
+ * Secure challenge frame a card can demand mid-payment. `link.com` is Link,
+ * which the Payment Element offers by default. `m.stripe.network`,
+ * `m.stripe.com` and `r.stripe.com` are the fraud-signal frame and the two
+ * telemetry endpoints Stripe.js reaches without documenting them; leaving them
+ * out would not break a payment, but every page would log violations, and a
+ * policy that is noisy by design is one nobody reads.
+ */
+const STRIPE_HOSTS = {
+  script: ['https://js.stripe.com', 'https://*.js.stripe.com'],
+  frame: [
+    'https://js.stripe.com',
+    'https://*.js.stripe.com',
+    'https://hooks.stripe.com',
+    'https://m.stripe.network',
+    'https://link.com',
+    'https://*.link.com',
+  ],
+  connect: [
+    'https://api.stripe.com',
+    'https://m.stripe.com',
+    'https://r.stripe.com',
+    'https://link.com',
+    'https://*.link.com',
+  ],
+  image: ['https://*.stripe.com', 'https://*.link.com'],
+} as const;
+
+/**
+ * The origins whose frames may use the Payment Request API. `PaymentElement`
+ * surfaces Apple Pay and Google Pay from inside Stripe's iframe, so the policy
+ * has to name that frame's origin as well as this one; `self` alone leaves a
+ * working card form whose wallet buttons silently never appear.
+ */
+const PAYMENT_ALLOWLIST = ['self', ...STRIPE_HOSTS.script.map((host) => `"${host}"`)].join(' ');
+
+/**
  * `unsafe-inline` is present on **both** `style-src` and `script-src`, and it
  * is worth being plain about that rather than implying a stricter policy than
  * this is.
@@ -73,7 +124,7 @@ export function contentSecurityPolicy({
   https,
   allowEval,
 }: CspOrigins): string {
-  const connect = ["'self'", apiOrigin, ...CLERK_HOSTS];
+  const connect = ["'self'", apiOrigin, ...CLERK_HOSTS, ...STRIPE_HOSTS.connect];
   /*
    * `img.clerk.com` is Clerk's avatar CDN, and it is not covered by
    * `*.clerk.com` on `connect-src` because avatars are images. Leaving it out
@@ -85,6 +136,7 @@ export function contentSecurityPolicy({
     'data:',
     'blob:',
     'https://img.clerk.com',
+    ...STRIPE_HOSTS.image,
     ...(imageOrigin ? [imageOrigin] : []),
   ];
   /*
@@ -98,7 +150,9 @@ export function contentSecurityPolicy({
     "'unsafe-inline'",
     ...(allowEval === true ? ["'unsafe-eval'"] : []),
     ...CLERK_HOSTS,
+    ...STRIPE_HOSTS.script,
   ];
+  const frames = ["'self'", ...CLERK_HOSTS, ...STRIPE_HOSTS.frame];
 
   return [
     `default-src 'self'`,
@@ -112,9 +166,24 @@ export function contentSecurityPolicy({
     `font-src 'self' data:`,
     `img-src ${images.join(' ')}`,
     `connect-src ${connect.join(' ')}`,
-    `frame-src 'self' ${CLERK_HOSTS.join(' ')}`,
+    `frame-src ${frames.join(' ')}`,
     ...(https === true ? ['upgrade-insecure-requests'] : []),
   ].join('; ');
+}
+
+/**
+ * Whether the policy is enforced or only reported. Production always
+ * enforces; `CSP_ENFORCE=1` turns enforcement on elsewhere so a browser pass
+ * can fail on a blocked origin — under report-only it cannot (#396). The
+ * expression is monotone on purpose: no value of the flag can switch
+ * production back to report-only, and the test pins that branch because a
+ * default is exactly the code no test otherwise covers.
+ */
+export function shouldEnforceCsp(env: {
+  readonly cspEnforce: string | undefined;
+  readonly nodeEnv: string | undefined;
+}): boolean {
+  return env.nodeEnv === 'production' || env.cspEnforce === '1';
 }
 
 export interface SecurityHeaderOptions extends CspOrigins {
@@ -146,12 +215,19 @@ export function securityHeaders(options: SecurityHeaderOptions): HeaderRule[] {
     /*
      * Nothing here uses a camera, a microphone or a location, so all three are
      * denied outright rather than left at the browser's default of "ask".
-     * Payment is denied too — Stripe Checkout is a redirect, not an embedded
-     * Payment Request, so #10 does not need it back.
+     *
+     * Payment used to be denied too, on the reasoning that "Stripe Checkout is
+     * a redirect, not an embedded Payment Request, so #10 does not need it
+     * back". That premise stopped being true when #10 shipped embedded
+     * Elements (`checkout-screen.tsx` mounts `PaymentElement` and calls
+     * `stripe.confirmPayment`), and `payment=()` blocks the Payment Request
+     * API that Apple Pay and Google Pay go through — inside Stripe's frame,
+     * which is why the allowlist names Stripe's origins and not only `self`.
+     * Reversed by #396; the sentence is kept so the next reader sees why.
      */
     {
       key: 'Permissions-Policy',
-      value: 'camera=(), microphone=(), geolocation=(), payment=(), interest-cohort=()',
+      value: `camera=(), microphone=(), geolocation=(), payment=(${PAYMENT_ALLOWLIST}), interest-cohort=()`,
     },
     {
       key: options.enforceCsp ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only',

@@ -371,6 +371,40 @@ describe('payments', () => {
       ]);
     });
 
+    /**
+     * `stripe trigger payment_intent.succeeded`, a Dashboard test payment, or
+     * any other product sharing the Stripe account produces a succeeded intent
+     * that names no booking request. Answering it with 4xx made Stripe retry
+     * for three days and count the endpoint as failing; an intent the platform
+     * did not create is acknowledged and ignored, exactly like one that has
+     * not succeeded yet. Observed on 2026-09-03 as a 422 per trigger.
+     */
+    it('acknowledges and ignores a succeeded intent the platform never created', async () => {
+      harness.stripe.paymentIntents.set('pi_foreign', {
+        id: 'pi_foreign',
+        status: 'succeeded',
+        amountReceivedCents: 5_000,
+        clientSecret: null,
+        metadata: {},
+      });
+      harness.stripe.nextEvent = {
+        type: 'payment_intent.succeeded',
+        accountId: null,
+        objectId: 'pi_foreign',
+      };
+
+      const webhook = await harness.app.inject({
+        method: 'POST',
+        url: '/webhooks/stripe',
+        headers: { 'stripe-signature': 'valid-signature', 'content-type': 'application/json' },
+        payload: { id: 'evt_test', type: 'payment_intent.succeeded' },
+      });
+
+      expect(webhook.statusCode).toBe(200);
+      expect(webhook.json().outcome).toBe('ignored');
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+    });
+
     it('ignores an intent that has not succeeded', async () => {
       const requestId = await acceptedRequest();
       const checkout = await inject(

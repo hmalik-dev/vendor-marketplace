@@ -2,7 +2,7 @@ import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import type { NextConfig } from 'next';
 import { assertWebEnv } from './src/config/env';
-import { securityHeaders } from './src/config/security-headers';
+import { securityHeaders, shouldEnforceCsp } from './src/config/security-headers';
 
 // Next.js only reads `.env` files beside the app, but the file developers edit
 // is the one at the repository root — the same one `apps/api` loads explicitly.
@@ -73,7 +73,10 @@ const nextConfig: NextConfig = {
           apiOrigin,
           ...(imageOrigin() ? { imageOrigin: imageOrigin()! } : {}),
           allowEval: !isProduction,
-          enforceCsp: process.env.CSP_ENFORCE === '1' || isProduction,
+          enforceCsp: shouldEnforceCsp({
+            cspEnforce: process.env.CSP_ENFORCE,
+            nodeEnv: process.env.NODE_ENV,
+          }),
           https: isProduction,
         }),
       },

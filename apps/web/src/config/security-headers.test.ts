@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contentSecurityPolicy, securityHeaders } from './security-headers';
+import { contentSecurityPolicy, securityHeaders, shouldEnforceCsp } from './security-headers';
 
 const ORIGINS = { apiOrigin: 'https://api.example.com', imageOrigin: 'https://cdn.example.com' };
 
@@ -38,9 +38,22 @@ describe('securityHeaders', () => {
   it('denies the permissions nothing here uses', () => {
     const policy = headerMap({ ...ORIGINS, enforceCsp: true, https: true })['Permissions-Policy'];
 
-    for (const feature of ['camera', 'microphone', 'geolocation', 'payment']) {
+    for (const feature of ['camera', 'microphone', 'geolocation']) {
       expect(policy).toContain(`${feature}=()`);
     }
+  });
+
+  /*
+   * `payment=()` shipped on the premise that checkout was a redirect. It is
+   * embedded Elements, and Apple Pay and Google Pay run through the Payment
+   * Request API from inside Stripe's frame — so the allowlist has to name
+   * Stripe's script origins, not only `self` (#396).
+   */
+  it('lets this page and the Stripe frame use the Payment Request API', () => {
+    const policy = headerMap({ ...ORIGINS, enforceCsp: true, https: true })['Permissions-Policy'];
+
+    expect(policy).toContain('payment=(self "https://js.stripe.com" "https://*.js.stripe.com")');
+    expect(policy).not.toContain('payment=()');
   });
 
   /*
@@ -115,6 +128,65 @@ describe('contentSecurityPolicy', () => {
     }
   });
 
+  /*
+   * #396: the enforced production policy refused Stripe's script, frame and
+   * API, so checkout could not load on the deployed origin — and this file
+   * passed, because it asserted the directives were present rather than what
+   * they permitted. This enumerates the origins the payment path loads from
+   * and asserts each one is allowed where Stripe documents it must be.
+   */
+  it('permits every origin the embedded payment form loads from', () => {
+    const directives = new Map(
+      contentSecurityPolicy(ORIGINS)
+        .split('; ')
+        .map((directive) => [directive.split(' ')[0], directive] as const),
+    );
+    /*
+     * Literal hosts, on purpose: reading them back from `STRIPE_HOSTS` would
+     * pass after a host was deleted from it, which is the failure this test
+     * exists to catch.
+     */
+    const expectations: Array<[string, readonly string[]]> = [
+      ['script-src', ['https://js.stripe.com', 'https://*.js.stripe.com']],
+      [
+        'frame-src',
+        [
+          'https://js.stripe.com',
+          'https://*.js.stripe.com',
+          'https://hooks.stripe.com',
+          'https://m.stripe.network',
+          'https://link.com',
+          'https://*.link.com',
+        ],
+      ],
+      [
+        'connect-src',
+        [
+          'https://api.stripe.com',
+          'https://m.stripe.com',
+          'https://r.stripe.com',
+          'https://link.com',
+          'https://*.link.com',
+        ],
+      ],
+      ['img-src', ['https://*.stripe.com', 'https://*.link.com']],
+    ];
+
+    for (const [directive, hosts] of expectations) {
+      for (const host of hosts) {
+        expect(directives.get(directive), `${directive} must allow ${host}`).toContain(host);
+      }
+    }
+  });
+
+  it('keeps Stripe off the directives it has no business in', () => {
+    const directives = contentSecurityPolicy(ORIGINS).split('; ');
+
+    for (const name of ['style-src', 'font-src', 'worker-src', 'form-action']) {
+      expect(directives.find((d) => d.startsWith(name))).not.toContain('stripe');
+    }
+  });
+
   it('forbids embedding, plugins and a rewritten base URI', () => {
     const policy = contentSecurityPolicy(ORIGINS);
 
@@ -165,5 +237,20 @@ describe('contentSecurityPolicy', () => {
 
     expect(script({ ...ORIGINS, allowEval: true })).toContain("'unsafe-eval'");
     expect(script({ ...ORIGINS })).not.toContain("'unsafe-eval'");
+  });
+});
+
+describe('shouldEnforceCsp', () => {
+  it('always enforces in production, whatever the flag says', () => {
+    for (const cspEnforce of ['0', '1', undefined, 'false']) {
+      expect(shouldEnforceCsp({ cspEnforce, nodeEnv: 'production' })).toBe(true);
+    }
+  });
+
+  it('reports only in development unless the flag is exactly 1', () => {
+    expect(shouldEnforceCsp({ cspEnforce: undefined, nodeEnv: 'development' })).toBe(false);
+    expect(shouldEnforceCsp({ cspEnforce: '0', nodeEnv: 'development' })).toBe(false);
+    expect(shouldEnforceCsp({ cspEnforce: 'true', nodeEnv: 'test' })).toBe(false);
+    expect(shouldEnforceCsp({ cspEnforce: '1', nodeEnv: 'development' })).toBe(true);
   });
 });

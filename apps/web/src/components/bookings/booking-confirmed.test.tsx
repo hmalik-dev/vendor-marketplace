@@ -36,6 +36,48 @@ describe('BookingConfirmed', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('June 14 is yours.');
   });
 
+  /*
+   * The column holds the slug (`wedding`), and every other read site routes it
+   * through `EVENT_TYPE_LABELS`. This one printed the slug verbatim, so the
+   * line under the heading read `wedding · Barr Mansion · Austin, TX` in the
+   * middle of the receipt (#394).
+   */
+  it('writes the occasion the way a person reads it, not as the stored slug', () => {
+    render(
+      <BookingConfirmed
+        booking={booking({ eventType: 'wedding' })}
+        vendor={VENDOR}
+        conversationId="conv-1"
+      />,
+    );
+
+    expect(screen.getByText('Wedding · Barr Mansion · Austin, TX')).toBeDefined();
+  });
+
+  it('never reads a label off the prototype chain', () => {
+    render(
+      <BookingConfirmed
+        booking={booking({ eventType: 'constructor' })}
+        vendor={VENDOR}
+        conversationId="conv-1"
+      />,
+    );
+
+    expect(screen.getByText('constructor · Barr Mansion · Austin, TX')).toBeDefined();
+  });
+
+  it('falls back to the stored value for an occasion the vocabulary does not know', () => {
+    render(
+      <BookingConfirmed
+        booking={booking({ eventType: 'Vow renewal' })}
+        vendor={VENDOR}
+        conversationId="conv-1"
+      />,
+    );
+
+    expect(screen.getByText('Vow renewal · Barr Mansion · Austin, TX')).toBeDefined();
+  });
+
   it('shows what was paid and the booking id support would ask for', () => {
     render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
 
