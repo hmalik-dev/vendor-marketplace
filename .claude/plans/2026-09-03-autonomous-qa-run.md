@@ -109,3 +109,11 @@ unowned and are candidates for filing after the sweep: a check that a
 configured webhook target is a real API origin (§2.3), and preflight refusing
 a non-production Neon branch when `NODE_ENV=production` (§3.2 — today only the
 opposite direction is enforced).
+
+### Lane 371 closed out
+
+An `Explore` triage of `worktree-371` against main, confirmed with a per-file
+`git diff origin/main worktree-371`, found every app change on the branch
+already on `main` byte-identical and its seed changes superseded by #387. The
+lane database, worktree and branch were removed. #371 stays in Backlog with
+only its #385-blocked remainder.

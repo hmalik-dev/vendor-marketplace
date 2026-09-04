@@ -53,6 +53,12 @@ blob-report/
 # tree — four of them were committed by a careless `git add -A` in #30 and cost
 # 1.7MB. The repo has no legitimate PNG at its root, so this cannot hide one.
 /*.png
+# Same artefact, other encodings: `browser_take_screenshot` writes JPEG when asked
+# for it, and on 2026-09-03 a hunter's `search-by-name-after-click.jpeg` at the
+# root blocked every commit until it was accounted for.
+/*.jpg
+/*.jpeg
+/*.webp
 
 # Parity measurement dumps — the element geometry a parity sweep reads out of a
 # frame, written to the root as `f01.json`, `f02.json` and so on. Same class of
