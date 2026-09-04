@@ -141,3 +141,39 @@ The first `/hunt-bugs` pass (`wf_fe833cfc-171`) ran 417 agents and produced
 limit stopped it at 07:10 local; the report stage never ran. It was resumed at
 10:29 with the cache warm so only the missing verdicts and the report re-run.
 The journal summary is in the run scratchpad (`hunt-summary.md`).
+
+## Phase 1 — sweep results (2026-09-04)
+
+`/hunt-bugs` completed on its second resume. It spent 417 agents and ~30.6M
+subagent tokens across two runs: eleven read-only hunters over the codebase,
+seven adversarial browser flows driven one at a time, then three skeptics per
+candidate, each prompted to refute. **131 candidates, 92 upheld** — 5 high, 44
+medium, 43 low. Both interruptions were account limits, not failures; the cache
+made each resume replay the completed agents and run only what was missing.
+
+Filed as fifteen grouped tickets, **#398–#412** (`759dbde`), by the file set one
+lane would open. The five high-severity ones:
+
+| Ticket | Finding |
+| --- | --- |
+| #398 | Stored XSS — vendor bio and business name go into the public page's JSON-LD through `JSON.stringify` + `dangerouslySetInnerHTML` with no escaping |
+| #399 | `createRefund` carries no idempotency key, so two concurrent cancels refund twice; two accepts on one vendor date both win (reproduced against the real harness with `Promise.all`) |
+| #400 | Cancelling frees the date but leaves the request `accepted`, and every read still reports the booking as paid |
+| #402 | Message threads page from the oldest message, so everything past the fiftieth is invisible after a reload |
+
+The static accessibility hunt ran alongside it and is filed as **#411**, minus
+what #383 (focus rings) and #388 (silent submits) already own.
+
+### Landed since the sweep
+
+| Commit | What | Ticket |
+| --- | --- | --- |
+| `7fc4469` | Every form answers its first submit: counted summary in a `role="alert"`, `aria-invalid` + `aria-describedby` per blocking field, focus moved to the first blocker (including the four `role="group"` targets), the Price filter says when it could not read a bound | #388 (browser pass outstanding) |
+| `58722a2` | Clerk telemetry off, so the enforced CSP has nothing to block | follow-up to #396 |
+| `759dbde` | #398–#412 filed | — |
+
+`worktree-388` is merged and its lane is gone. `worktree-386` is squash-merged
+into the index and **not yet committed**: its one conflict (`design-tokens.test.ts`)
+resolved to an empty `KNOWN_UNDEFINED_STEPS`, because #387 fixed the two
+`bg-sage-500` sites and #386 fixes the other two, so the ratchet reaches zero.
+It waits on its `diff-reviewer` verdict.
