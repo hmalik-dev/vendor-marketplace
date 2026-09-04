@@ -294,6 +294,40 @@ describe('reviews', () => {
     });
 
     /*
+     * #399. Two reviews of one booking must answer 201 and 409, never 500.
+     *
+     * **What this test does and does not reach.** PGlite runs on one
+     * connection, so these two injects do not overlap: the second one's *read*
+     * finds the first review and returns the friendly conflict without ever
+     * reaching the unique index. The constraint path — the one that fires when
+     * two connections genuinely race — is covered by
+     * `lib/constraint-violation.test.ts`, which takes a real wrapped driver
+     * error and asserts the shape the old guard was reading is not there.
+     * Keep both: this one pins the answer, that one pins the mechanism.
+     */
+    it('answers a second review of the same booking with a conflict, never a 500', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Kessler & Co.');
+      const bookingId = await completedBooking(vendorId, packageId);
+
+      const responses = await Promise.all([
+        harness.app.inject({
+          method: 'POST',
+          url: `/bookings/${bookingId}/reviews`,
+          headers: bearer(CUSTOMER),
+          payload: reviewBody({ rating: 5 }),
+        }),
+        harness.app.inject({
+          method: 'POST',
+          url: `/bookings/${bookingId}/reviews`,
+          headers: bearer(CUSTOMER),
+          payload: reviewBody({ rating: 4 }),
+        }),
+      ]);
+
+      expect(responses.map((response) => response.statusCode).sort()).toEqual([201, 409]);
+    });
+
+    /*
      * The type is decided from the booking's two parties, never from the
      * client. A vendor reviewing their own customer must not land as a public
      * `customer_to_vendor` row on their own profile.

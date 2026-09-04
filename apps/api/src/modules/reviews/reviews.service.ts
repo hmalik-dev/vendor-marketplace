@@ -11,6 +11,7 @@ import {
   type NotificationEmailDeps,
 } from '../notifications/notification-email.js';
 import type { EventHub } from '../../lib/event-stream.js';
+import { violatesConstraint } from '../../lib/constraint-violation.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
 import { toNotification } from '../messaging/messaging.service.js';
 /*
@@ -218,8 +219,10 @@ export async function createReview(
 
     return written.review;
   } catch (error) {
-    // The race the read above cannot close.
-    if (error instanceof Error && /reviews_booking_reviewer_key/.test(error.message)) {
+    // The race the read above cannot close. Read off the error chain rather
+    // than its message: Drizzle 0.45 wraps the driver error, and the wrapper's
+    // message is `Failed query: …` with the constraint name only on `cause`.
+    if (violatesConstraint(error, 'reviews_booking_reviewer_key')) {
       throw conflict('You have already reviewed this booking');
     }
 
