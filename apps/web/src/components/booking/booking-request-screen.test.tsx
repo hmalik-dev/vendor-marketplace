@@ -14,6 +14,18 @@ const FREE_DATE = '2026-09-12';
 const BLOCKED_DATE = '2026-09-13';
 const BOOKED_DATE = '2026-09-14';
 
+/**
+ * What the API answers with. The response is parsed through
+ * `wireBookingRequestSchema`, so `expiresAt` is a `Date` by the time the panel
+ * sees it — the mock stands in for a parsed response, not for raw JSON.
+ *
+ * Pinned to the faked clock this file installs, not to `Date.now()` at module
+ * load: the two are ~99 days apart, and reading the real clock here would make
+ * the countdown assertion below meaningless.
+ */
+const SENT_DEADLINE = new Date(`${TODAY}T12:00:00Z`);
+SENT_DEADLINE.setUTCDate(SENT_DEADLINE.getUTCDate() + 3);
+
 const CALENDAR: Record<string, AvailabilityStatus> = {
   [BLOCKED_DATE]: 'blocked',
   [BOOKED_DATE]: 'booked',
@@ -248,7 +260,10 @@ describe('the rail', () => {
 
 describe('sending', () => {
   it('reviews first, then posts the request and lands on the success panel', async () => {
-    requestMock.mockResolvedValue({ id: '22222222-2222-4222-8222-222222222222' });
+    requestMock.mockResolvedValue({
+      id: '22222222-2222-4222-8222-222222222222',
+      expiresAt: SENT_DEADLINE,
+    });
     renderScreen();
 
     await chooseEventType();
@@ -276,6 +291,29 @@ describe('sending', () => {
     ).toBeDefined();
     expect(screen.getByText(/usually replies within 4 hours/)).toBeDefined();
     expect(screen.getByRole('link', { name: 'See your requests' })).toBeDefined();
+  });
+
+  /*
+   * #401: the panel promised a flat "7 days" from `bookingRequestWindowPhrase`
+   * and said it twice. The reply window is now capped at the event date, so a
+   * request sent close to its event closes in days — the panel has to read the
+   * row's own `expiresAt` and state it once.
+   */
+  it('states the deadline this request actually got, once, from the row', async () => {
+    requestMock.mockResolvedValue({
+      id: '22222222-2222-4222-8222-222222222222',
+      expiresAt: SENT_DEADLINE,
+    });
+    renderScreen({ responseTimeHours: null });
+
+    await chooseEventType();
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+
+    await screen.findByRole('heading', { name: 'Your request is with Kessler & Co.' });
+
+    expect(screen.getByText(/the request expires in 3d if it goes unanswered/)).toBeDefined();
+    expect(screen.queryByText(/7 days/)).toBeNull();
   });
 
   it('keeps the form and says what happened when the send fails', async () => {
@@ -341,7 +379,10 @@ describe('the request survives leaving the page', () => {
   });
 
   it('starts the next request empty once one has been sent', async () => {
-    requestMock.mockResolvedValue({ id: '33333333-3333-4333-8333-333333333333' });
+    requestMock.mockResolvedValue({
+      id: '33333333-3333-4333-8333-333333333333',
+      expiresAt: SENT_DEADLINE,
+    });
     renderScreen();
 
     await chooseEventType();

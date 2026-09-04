@@ -65,6 +65,34 @@ describe('notification copy never carries a raw ISO date', () => {
     }
   });
 
+  /*
+   * A raw producer, not only a raw field.
+   *
+   * The bans above match `${row.eventDate}` and interpolations whose text
+   * contains "date". `lastReplyDay` returns a bare `YYYY-MM-DD` and its name
+   * contains neither, so `${lastReplyDay(row.expiresAt, now)}` written without
+   * the formatter would emit `2026-09-08` past every other assertion here.
+   */
+  it('wraps the reply-day producer in the formatter', () => {
+    for (const template of copyTemplates()) {
+      expect(template).not.toMatch(/\$\{\s*lastReplyDay\s*\(/);
+    }
+  });
+
+  /*
+   * The deadline is per-row since #401, so no notification may state it as a
+   * length. Both strings that ticket had to correct — "You have 7 days to
+   * reply" and "It went unanswered for a week" — were in this file's own reach
+   * and no assertion here saw them; `one-deadline-one-fee.test.ts` holds the
+   * same line but only scans `apps/web/src`, and the regression was in the API.
+   */
+  it('states no reply window as a duration', () => {
+    for (const template of copyTemplates()) {
+      expect(template).not.toMatch(/\b\d+ days?\b/);
+      expect(template).not.toMatch(/\ba week\b/i);
+    }
+  });
+
   it('hard-codes no ISO date in any template', () => {
     for (const template of copyTemplates()) {
       expect(template).not.toMatch(/\d{4}-\d{2}-\d{2}/);

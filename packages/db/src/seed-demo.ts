@@ -1,8 +1,8 @@
 import {
-  BOOKING_REQUEST_EXPIRY_DAYS,
   DEFAULT_PLATFORM_FEE_RATE,
   addDays,
   calculateFees,
+  replyDeadline,
   toDateString,
 } from '@vendor-marketplace/shared';
 import type {
@@ -668,9 +668,12 @@ export async function seedDemoData<
        * Stamped on every request, as production does, and never cleared on
        * settle. The countdown on a quote is driven off it, so a null here drops
        * the "expires in Nd" line from the customer's quote review entirely.
-       * Capped at the event: a request cannot outlive the date it is for.
+       * Capped at the event, through the same helper the API writes with: this
+       * file's contract is that a demo row is shaped the way
+       * `createBookingRequest` shapes one, and a second cap computed here
+       * drifted from it the moment #401 gave the product a canonical answer.
        */
-      expiresAt: earliest(addDays(createdAt, BOOKING_REQUEST_EXPIRY_DAYS), eventDate),
+      expiresAt: replyDeadline(createdAt, toDateString(eventDate)),
       createdAt,
       updatedAt: settledAt,
     };

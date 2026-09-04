@@ -15,10 +15,20 @@ import {
   MAX_PACKAGE_PRICE_CENTS,
   MIN_BOOKING_AMOUNT_CENTS,
   toDateString,
+  universallyPastFrom,
 } from '@vendor-marketplace/shared';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+
+/** The notification body's date format, stated here rather than imported. */
+function readable(date: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T00:00:00Z`));
+}
 
 const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
@@ -266,6 +276,113 @@ describe('/booking-requests', () => {
 
       const days = (rows[0]!.expiresAt!.getTime() - Date.now()) / 86_400_000;
       expect(Math.round(days)).toBe(BOOKING_REQUEST_EXPIRY_DAYS);
+    });
+
+    /*
+     * #401: the flat week outlived the event. A request three days out kept
+     * saying "awaiting reply · expires in 4d" four days *after* the date, with
+     * `Accept` and `Send quote` still offered on a day nobody could work.
+     */
+    it('caps expiry at the event rather than a flat week', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const soon = toDateString(addDays(NOW, 3));
+
+      const created = await createRequest(vendorId, { packageId, eventDate: soon });
+      expect(created.statusCode).toBe(201);
+
+      const rows = await harness.database.db
+        .select({ expiresAt: bookingRequests.expiresAt })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, created.json().id));
+
+      /*
+       * On the wire too, not only in the row: the request screen parses the
+       * 201 with `wireBookingRequestSchema.pick({ id, expiresAt })` to state
+       * the deadline on its success panel, so a serializer that stopped
+       * emitting this field would show "The request did not reach us" after a
+       * send that in fact succeeded.
+       */
+      expect(created.json().expiresAt).toBe(universallyPastFrom(soon)!.toISOString());
+      expect(rows[0]!.expiresAt!.toISOString()).toBe(universallyPastFrom(soon)!.toISOString());
+      expect(rows[0]!.expiresAt!.getTime()).toBeLessThan(
+        addDays(NOW, BOOKING_REQUEST_EXPIRY_DAYS).getTime(),
+      );
+    });
+
+    /*
+     * The notification is written after the row exists, so it must speak the
+     * row's deadline. Promising a week beside an `expires_at` three days out
+     * is the same two-voices defect `one-deadline-one-fee.test.ts` guards.
+     */
+    it('tells the vendor the window this request actually has', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const soon = toDateString(addDays(NOW, 3));
+
+      await createRequest(vendorId, { packageId, eventDate: soon });
+
+      const rows = await harness.database.db
+        .select({ body: notifications.body })
+        .from(notifications)
+        .where(eq(notifications.type, 'new_request'));
+
+      /*
+       * A date, not a countdown: this body is stored and rendered verbatim for
+       * as long as the notification lives, so "expires in 5d" would be true
+       * only on the day it was written. The last repliable day is the day
+       * before the deadline's UTC midnight, which is the day after the event.
+       */
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.body).toContain(
+        `Reply by ${readable(toDateString(addDays(universallyPastFrom(soon)!, -1)))}`,
+      );
+      expect(rows[0]!.body).not.toContain(`${BOOKING_REQUEST_EXPIRY_DAYS} days`);
+      expect(rows[0]!.body).not.toMatch(/expires in|expires today/);
+    });
+
+    /*
+     * The uncapped branch, which the capped one cannot exercise: a week-long
+     * window ends at the creation time-of-day, so the day the deadline falls
+     * in is only usable up to that clock time. Naming it tells a vendor west
+     * of UTC to reply on a day that is entirely past their deadline, so the
+     * copy names the last day they have in full instead.
+     */
+    it('names a whole day, not the one the week-long deadline lands in', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const far = toDateString(addDays(NOW, 30));
+
+      await createRequest(vendorId, { packageId, eventDate: far });
+
+      const rows = await harness.database.db
+        .select({ body: notifications.body })
+        .from(notifications)
+        .where(eq(notifications.type, 'new_request'));
+
+      const deadline = addDays(new Date(), BOOKING_REQUEST_EXPIRY_DAYS);
+      const wholeDay = new Date(new Date(deadline).setUTCHours(0, 0, 0, 0) - 1);
+
+      expect(rows[0]!.body).toContain(`Reply by ${readable(toDateString(wholeDay))}`);
+      // The day the deadline itself falls in is the over-promise.
+      expect(rows[0]!.body).not.toContain(`Reply by ${readable(toDateString(deadline))}`);
+    });
+
+    /*
+     * The cap must not close the window it is protecting: a request for today
+     * is legitimate, and the vendor still has to be able to answer it.
+     */
+    it('leaves a same-day request answerable', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const today = toDateString(NOW);
+
+      const created = await createRequest(vendorId, { packageId, eventDate: today });
+      expect(created.statusCode).toBe(201);
+
+      const rows = await harness.database.db
+        .select({ expiresAt: bookingRequests.expiresAt })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, created.json().id));
+
+      expect(rows[0]!.expiresAt!.toISOString()).toBe(universallyPastFrom(today)!.toISOString());
+      expect(rows[0]!.expiresAt!.getTime()).toBeGreaterThan(Date.now());
     });
 
     /*

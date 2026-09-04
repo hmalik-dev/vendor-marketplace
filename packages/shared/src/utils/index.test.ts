@@ -10,12 +10,15 @@ import {
   generateSlug,
   isFutureDate,
   isPastDate,
+  isUniversallyPastDate,
   kmToMiles,
   milesToKm,
   parseDateString,
+  replyDeadline,
   shortTimeAgo,
   toDateString,
   todayDateString,
+  universallyPastFrom,
 } from './index.js';
 
 describe('generateSlug', () => {
@@ -210,6 +213,59 @@ describe('date helpers', () => {
 
   it('treats an unparseable date as not in the future', () => {
     expect(isFutureDate('nope', new Date('2026-07-04T12:00:00.000Z'))).toBe(false);
+  });
+});
+
+describe('universallyPastFrom', () => {
+  /*
+   * The point of this helper is that it cannot drift from the predicate it
+   * names, so the test asserts the boundary against `isUniversallyPastDate`
+   * itself rather than against a second hand-computed constant.
+   */
+  it('returns the first instant at which the date is past everywhere', () => {
+    const boundary = universallyPastFrom('2026-07-04');
+    expect(boundary).not.toBeNull();
+
+    expect(isUniversallyPastDate('2026-07-04', boundary!)).toBe(true);
+    expect(isUniversallyPastDate('2026-07-04', new Date(boundary!.getTime() - 1))).toBe(false);
+  });
+
+  it('leaves the event date itself, and the day after it, still live somewhere', () => {
+    const boundary = universallyPastFrom('2026-07-04')!;
+
+    expect(isUniversallyPastDate('2026-07-04', new Date('2026-07-04T23:59:59.999Z'))).toBe(false);
+    expect(isUniversallyPastDate('2026-07-04', new Date('2026-07-05T23:59:59.999Z'))).toBe(false);
+    expect(boundary.toISOString()).toBe('2026-07-06T00:00:00.000Z');
+  });
+
+  it('returns null for a malformed or impossible date string', () => {
+    expect(universallyPastFrom('2026-02-30')).toBeNull();
+    expect(universallyPastFrom('nope')).toBeNull();
+  });
+});
+
+describe('replyDeadline', () => {
+  const created = new Date('2026-07-04T09:00:00.000Z');
+
+  it('is a week out when the event is further away than that', () => {
+    expect(replyDeadline(created, '2026-12-25')?.toISOString()).toBe('2026-07-11T09:00:00.000Z');
+  });
+
+  it('is capped at the event, never outliving it', () => {
+    // Seven days from creation would be 2026-07-11; the event is the 6th.
+    expect(replyDeadline(created, '2026-07-06')?.toISOString()).toBe('2026-07-08T00:00:00.000Z');
+  });
+
+  it('still leaves a same-day request answerable', () => {
+    const deadline = replyDeadline(created, '2026-07-04');
+
+    expect(deadline).not.toBeNull();
+    expect(deadline!.getTime()).toBeGreaterThan(created.getTime());
+    expect(isUniversallyPastDate('2026-07-04', deadline!)).toBe(true);
+  });
+
+  it('falls back to the plain week when the date cannot be parsed', () => {
+    expect(replyDeadline(created, 'nope')?.toISOString()).toBe('2026-07-11T09:00:00.000Z');
   });
 });
 

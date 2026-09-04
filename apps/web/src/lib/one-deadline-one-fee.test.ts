@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BOOKING_REQUEST_EXPIRY_DAYS, MONEY_COPY } from '@vendor-marketplace/shared';
+import { MONEY_COPY } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -11,8 +11,8 @@ import { describe, expect, it } from 'vitest';
  * **The deadline.** Four surfaces wrote it as a literal and three disagreed:
  * the review rail promised "48 hours", the success screen "after a week", the
  * booking card "expires in 7d", the vendor's notification "a week to reply".
- * The API had always written exactly `BOOKING_REQUEST_EXPIRY_DAYS`, so the
- * 48-hour claim was simply false — and it was the one shown at the moment of
+ * The API then wrote exactly one window, so the 48-hour claim was simply
+ * false — and it was the one shown at the moment of
  * commitment, which is the worst place to be wrong. On top of that, two
  * separate `expiryPhrase` helpers rendered the same stored `expiresAt`
  * differently, so the vendor saw "expires in 60h" where the customer saw
@@ -113,10 +113,28 @@ describe('one deadline', () => {
     expect(redefiners).toEqual([]);
   });
 
-  it('derives the window phrase from the constant', async () => {
-    const { bookingRequestWindowPhrase } = await import('@vendor-marketplace/shared');
+  /*
+   * There is no flat window phrase any more. `bookingRequestWindowPhrase`
+   * returned a flat day count and every surface read it,
+   * which was right while every request got a week — #401 capped the window at
+   * the event date, so the only true statement of this deadline is the row's
+   * own `expiresAt`. The helper is gone rather than left as a ceiling nobody
+   * should reach for, and this asserts nothing brings it back under a new name.
+   */
+  it('states the reply deadline only from the row, never as a length', async () => {
+    const files = await sourceFiles(SRC);
 
-    expect(bookingRequestWindowPhrase()).toBe(`${BOOKING_REQUEST_EXPIRY_DAYS} days`);
+    const restaters: string[] = [];
+    for (const file of files) {
+      const source = await readFile(file, 'utf8');
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+      if (/BOOKING_REQUEST_EXPIRY_DAYS/.test(code) || /bookingRequestWindowPhrase/.test(code)) {
+        restaters.push(path.relative(SRC, file));
+      }
+    }
+
+    expect(restaters).toEqual([]);
   });
 });
 

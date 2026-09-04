@@ -5,8 +5,7 @@ import {
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
   MAX_GUEST_COUNT,
-  bookingRequestDetailSchema,
-  bookingRequestWindowPhrase,
+  expiryCountdown,
   isUniversallyPastDate,
   type AvailabilityStatus,
   type EventType,
@@ -27,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { userFacingError } from '@/lib/user-facing-error';
+import { wireBookingRequestSchema } from '@/lib/wire-schemas';
 import { useApi } from '@/lib/use-api';
 import { useSavedDraft } from '@/lib/use-saved-draft';
 import { useSubmitValidation, type FieldIssue } from '@/lib/use-submit-validation';
@@ -126,7 +126,7 @@ export function BookingRequestScreen({
   const [eventTypeOpen, setEventTypeOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [sentAt, setSentAt] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ id: string; expiresAt: Date | null } | null>(null);
   const [sendFailure, setSendFailure] = useState<string | null>(null);
 
   /*
@@ -155,12 +155,12 @@ export function BookingRequestScreen({
    * offered their own sent request as an unfinished one.
    */
   useEffect(() => {
-    if (sentAt !== null) {
+    if (sent !== null) {
       return;
     }
 
     draft.save({ form, customDetails });
-  }, [draft, form, customDetails, sentAt]);
+  }, [draft, form, customDetails, sent]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]): void =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -244,7 +244,19 @@ export function BookingRequestScreen({
 
     try {
       const created = await request('/booking-requests', {
-        schema: bookingRequestDetailSchema.pick({ id: true }),
+        /*
+         * `expiresAt` as well as the id, because the panel below states the
+         * reply deadline and #401 made it a per-row value: the window is
+         * capped at the event date, so a request for next weekend closes in
+         * days rather than the flat week the copy used to promise.
+         */
+        /*
+         * The **wire** schema, not the domain one: JSON has no date type, so
+         * `expiresAt` arrives as an ISO string and the domain schema's
+         * `z.date()` would reject it. `wireBookingRequestSchema` is where that
+         * coercion lives for this shape.
+         */
+        schema: wireBookingRequestSchema.pick({ id: true, expiresAt: true }),
         method: 'POST',
         body: {
           vendorId,
@@ -265,7 +277,7 @@ export function BookingRequestScreen({
       // Sent, so the draft has served its purpose: the next request to this
       // vendor should start empty rather than repeating one already made.
       draft.clear();
-      setSentAt(created.id);
+      setSent({ id: created.id, expiresAt: created.expiresAt });
     } catch (error) {
       setSendFailure(
         userFacingError(
@@ -278,13 +290,14 @@ export function BookingRequestScreen({
     }
   }
 
-  if (sentAt) {
+  if (sent) {
     return (
       <SuccessPanel
         businessName={vendor.businessName}
         vendorSlug={vendorSlug}
         responseTimeHours={responseTimeHours}
         isPackaged={servicePackage !== null}
+        expiresAt={sent.expiresAt}
       />
     );
   }
@@ -716,6 +729,14 @@ interface SuccessPanelProps {
    * be false on the default path every customer takes.
    */
   isPackaged: boolean;
+  /**
+   * The row's own deadline, read back from the response rather than assumed.
+   * #401 capped the reply window at the event date, so the flat week this
+   * panel used to promise is now wrong for any request sent close to its
+   * event — and `bookingRequestWindowPhrase`'s own contract says anything
+   * rendered after the row exists must read the stored value.
+   */
+  expiresAt: Date | null;
 }
 
 /**
@@ -731,7 +752,28 @@ function SuccessPanel({
   vendorSlug,
   responseTimeHours,
   isPackaged,
+  expiresAt,
 }: SuccessPanelProps): React.ReactElement {
+  /*
+   * One statement of the deadline, from the stored value, in the voice
+   * `/bookings` already uses for the same field.
+   *
+   * The panel used to say it twice — "has 7 days to confirm" and "closes on
+   * its own after 7 days" — both from the flat `bookingRequestWindowPhrase`.
+   * #401 made that figure per-row, so the first sentence now says only *what*
+   * the vendor can do and the second says *when* it closes, which leaves the
+   * deadline stated once and read from the row rather than assumed.
+   */
+  const countdown = expiryCountdown(expiresAt);
+
+  const nextStep = responseTimeHours
+    ? `${businessName} usually replies within ${responseTimeHours} ${responseTimeHours === 1 ? 'hour' : 'hours'}.`
+    : `${businessName} can ${isPackaged ? 'confirm the date or decline' : 'confirm or send a quote'}.`;
+
+  const closing = countdown
+    ? `You will get a notification either way, and the request ${countdown} if it goes unanswered.`
+    : 'You will get a notification either way.';
+
   return (
     <div className="mx-auto w-full max-w-[660px] px-6 py-14 xl:px-10">
       <RequestStepper current={3} />
@@ -748,13 +790,7 @@ function SuccessPanel({
           <h1 className="mb-2 display-heading text-[26px] text-stone-900">
             Your request is with {businessName}
           </h1>
-          <p className="mb-5 text-md leading-prose text-stone-700">
-            {responseTimeHours
-              ? `${businessName} usually replies within ${responseTimeHours} ${responseTimeHours === 1 ? 'hour' : 'hours'}.`
-              : `${businessName} has ${bookingRequestWindowPhrase()} ${isPackaged ? 'to confirm the date or decline' : 'to confirm or send a quote'}.`}{' '}
-            You will get a notification either way, and the request closes on its own after{' '}
-            {bookingRequestWindowPhrase()} if it goes unanswered.
-          </p>
+          <p className="mb-5 text-md leading-prose text-stone-700">{`${nextStep} ${closing}`}</p>
 
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="primary">

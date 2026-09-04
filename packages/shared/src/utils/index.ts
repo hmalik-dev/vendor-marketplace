@@ -72,24 +72,6 @@ export function formatPrice(cents: number): string {
 }
 
 /**
- * How long a vendor has to answer, for copy written **before** the request
- * exists and therefore before there is an `expiresAt` to read.
- *
- * Four surfaces stated this deadline as a literal and three of them disagreed:
- * the review rail promised 48 hours, the success screen "after a week", the
- * booking card "expires in 7d", the vendor's notification "a week to reply".
- * The API had always written exactly `BOOKING_REQUEST_EXPIRY_DAYS`, so the
- * 48-hour claim was simply wrong — and it was the one shown at the moment of
- * commitment, which is the worst place to be wrong.
- *
- * Anything rendered **after** the row exists must use `expiryCountdown` against
- * the stored `expiresAt` instead. This is only for the promise made beforehand.
- */
-export function bookingRequestWindowPhrase(): string {
-  return `${BOOKING_REQUEST_EXPIRY_DAYS} days`;
-}
-
-/**
  * The countdown to a stored deadline, in one voice.
  *
  * There were two implementations of this under the same name, and they
@@ -349,6 +331,60 @@ export function isUniversallyPastDate(value: string, now: Date = new Date()): bo
   }
 
   return parsed.getTime() < addDays(now, -1).setUTCHours(0, 0, 0, 0);
+}
+
+/**
+ * The first instant at which `isUniversallyPastDate(value)` becomes true — the
+ * moment the date stops being anybody's today, anywhere.
+ *
+ * Derived from that predicate's own arithmetic rather than stated separately,
+ * so the two cannot drift: a caller that needs "when does this date stop
+ * counting" gets exactly the answer the caller that asks "has it stopped"
+ * would give. `null` for a date string the parser rejects, matching every
+ * other helper here.
+ */
+export function universallyPastFrom(value: string): Date | null {
+  const parsed = parseDateString(value);
+
+  /*
+   * `isUniversallyPastDate` fires when the UTC day *before* `now` has passed
+   * the date, so the first `now` that satisfies it is two days on: one for
+   * the UTC-12 tail the predicate allows, one because the comparison is
+   * strict.
+   */
+  return parsed === null ? null : addDays(parsed, 2);
+}
+
+/**
+ * When a booking request stops awaiting a reply: a week from when it was sent,
+ * or the moment its event date is past everywhere, whichever comes first.
+ *
+ * The cap is the fix for #401. The window used to be a flat seven days, so a
+ * request for an event three days out stayed "awaiting reply · expires in 4d"
+ * four days *after* the event had come and gone — the vendor was still offered
+ * `Accept` and `Send quote` on a date nobody could work, and the customer's
+ * history showed a live negotiation over something already missed.
+ *
+ * The cap is the same instant `accept` starts refusing rather than a rounder
+ * one, so a request is never live while unacceptable. That is also why the
+ * bound is not the event date's own midnight: a request sent for today is
+ * legitimate, and midnight-today has already passed, so that bound would make
+ * it dead on arrival.
+ *
+ * **There is deliberately no floor.** `createBookingRequest` accepts a date up
+ * to one UTC day back — it cannot know the caller's timezone, and that day may
+ * still be their today — so a request sent at the very edge of its date is born
+ * with hours to live. That is the honest answer rather than a defect: the
+ * window is short because the date is nearly gone. A floor would have to invent
+ * a minimum this product has not decided on, and it would have to grant it past
+ * the point `accept` refuses, which is the one thing this cap exists to
+ * prevent.
+ */
+export function replyDeadline(createdAt: Date, eventDate: string): Date {
+  const week = addDays(createdAt, BOOKING_REQUEST_EXPIRY_DAYS);
+  const cap = universallyPastFrom(eventDate);
+
+  return cap !== null && cap.getTime() < week.getTime() ? cap : week;
 }
 
 /**

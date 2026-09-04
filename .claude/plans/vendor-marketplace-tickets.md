@@ -222,7 +222,7 @@ a date twice. The sweep reproduced the double-accept against the real harness
 request stays `accepted`, so the next transition on that date re-locks it
 permanently; every read that asks "is there a booking for this request" gets a
 row back and reports it as paid. The customer sees a booking they cancelle |
-| **401** | **A request can be accepted into a state that can never be paid** | P1.5 | M4.5 | **P1 High** | **In Progress** | `main` | **None** | `core` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 4 verified findings. Accept does not check that the thing being accepted is payable. A custom **Two of the four landed 2026-09-04 (`main`).** Accept now refuses a request carrying no price (a custom request accepted straight from `pending` produced a terminal `accepted` row checkout 404s on, and which cannot go back to be quoted) and one whose event date has passed everywhere on earth — `isUniversallyPastDate`, so nobody is stopped from accepting a booking that is still today where they are. Each has a test that fails before. An existing test encoded the old behaviour by accepting an unpriced custom request; it now quotes first, which is that transition's real shape. **What remains:** the reply window still outlives the event date (a request for tomorrow is answerable a week later — it should be `min(created + 7 days, event date)`), and the booking request page still admits an admin the API refuses.. **Browser-verified 2026-09-04 (the pass that died on 09-03 at 15:20, re-run).** `1d333ed` acceptance 1 driven at 1440x900: a genuinely custom request (`669c536b`, no package, sidebar `Estimated total: Set by the quote`) renders **no Accept button at all** on the vendor dashboard — `[Send quote, Decline]` against `[Accept, Send quote, Decline]` on the priced request beside it — and the server, driven directly because the UI hides the control, answers **400 VALIDATION_ERROR** `Send a quote before accepting — there is no price on this request yet`, a clean JSON refusal and not the 500 page. Row stayed `pending` with both price columns NULL and **no** availability row for its date. The legitimate path is not blocked: quoted $800, customer accepted, **200**, `final_price_cents=80000`, and the customer screen reads `Total today $800 / Pay $800` |
+| **401** | **A request can be accepted into a state that can never be paid** | P1.5 | M4.5 | **P1 High** | **Done** | `main` | **None** | `core` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 4 verified findings. Accept does not check that the thing being accepted is payable. A custom **Two of the four landed 2026-09-04 (`main`).** Accept now refuses a request carrying no price (a custom request accepted straight from `pending` produced a terminal `accepted` row checkout 404s on, and which cannot go back to be quoted) and one whose event date has passed everywhere on earth — `isUniversallyPastDate`, so nobody is stopped from accepting a booking that is still today where they are. Each has a test that fails before. An existing test encoded the old behaviour by accepting an unpriced custom request; it now quotes first, which is that transition's real shape. **What remains:** the reply window still outlives the event date (a request for tomorrow is answerable a week later — it should be `min(created + 7 days, event date)`), and the booking request page still admits an admin the API refuses.. **Browser-verified 2026-09-04 (the pass that died on 09-03 at 15:20, re-run).** `1d333ed` acceptance 1 driven at 1440x900: a genuinely custom request (`669c536b`, no package, sidebar `Estimated total: Set by the quote`) renders **no Accept button at all** on the vendor dashboard — `[Send quote, Decline]` against `[Accept, Send quote, Decline]` on the priced request beside it — and the server, driven directly because the UI hides the control, answers **400 VALIDATION_ERROR** `Send a quote before accepting — there is no price on this request yet`, a clean JSON refusal and not the 500 page. Row stayed `pending` with both price columns NULL and **no** availability row for its date. The legitimate path is not blocked: quoted $800, customer accepted, **200**, `final_price_cents=80000`, and the customer screen reads `Total today $800 / Pay $800`. **Closed 2026-09-04.** Acceptances 1 and 2 landed in `1d333ed` and were browser-verified today. The remainder landed here: the reply window is now `replyDeadline(now, eventDate)` — `min(created + 7 days, universallyPastFrom(eventDate))`, the instant `accept` starts refusing, so a request can never be live while unacceptable (the deviation from the acceptance's literal arithmetic is recorded in the detail section, with why the literal bound would kill a same-day request at birth); migration `0022_cap_reply_window_at_event` pulls every **live** row back, because acceptance 3 is a property of the data and not of the writer — the local database held the exact reported row (event Aug 31, `expires_at` Sep 7) and now holds Sep 2; and the request page calls `requireRole('customer')` instead of hand-bouncing vendors only, so an admin is redirected before filling the form rather than 403'd on send. Capping the window also made three surfaces state a deadline they no longer grant, all fixed here: the vendor's `new_request` notification now stores the deadline **as a date** (a countdown is only true the day it is written, and that body is rendered verbatim by the bell and the email for the life of the row), the expiry notification no longer claims 'for a week', and the success panel reads the row's own `expiresAt` off a widened response and states it once. `bookingRequestWindowPhrase` is **deleted** — with a per-row deadline there is no flat window to state, and `one-deadline-one-fee.test.ts` now guards that nothing reintroduces one. diff-reviewer: REQUEST-CHANGES, five blocking items, all five applied |
 request with no price, or one whose event date has already passed, becomes a
 terminal `accepted` row; the customer's checkout for it renders the 500 page.
 Reproduced end to end by the browser sweep. |
@@ -2001,7 +2001,7 @@ described as booked, on a screen they cannot reach by navigation.
 
 ### #401: A request can be accepted into a state that can never be paid
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core` `stripe`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2028,10 +2028,40 @@ Reproduced end to end by the browser sweep.
 3. A request cannot be created for a date that has already passed, and its reply window never outlives the event date.
 4. The booking request page does not admit a role the API refuses — an admin sees the same answer before filling the form, not a 403 on send.
 
+**Amended 2026-09-04, after implementation.** Acceptance 3's second half shipped
+as `min(created + 7 days, universallyPastFrom(eventDate))`, **not** the
+`min(created + 7 days, event date)` this ticket's Tests line asked for. The
+literal bound is unimplementable: the event date's own midnight has already
+passed for a request sent *for today*, which the product explicitly allows and
+the hub explicitly renders, so it would expire a same-day request the instant it
+was created. `universallyPastFrom(eventDate)` is the first instant at which
+`isUniversallyPastDate` returns true — which is the instant `accept` starts
+refusing — so a request can never be live while unacceptable. It falls two days
+after the event, which is the UTC-12 timezone tail the same predicate already
+allows everywhere else. The acceptance's *intent* — a window that does not
+outlive the event by a week — is met; its arithmetic is not what shipped.
+
+There is deliberately **no floor** on the window. Creation accepts a date up to
+one UTC day back, because the server cannot know the caller's timezone, so a
+request sent at the very edge of its date is born with hours to live. That is
+the honest answer, not a defect, and a floor would have to invent a minimum and
+grant it past the point `accept` refuses.
+
+**Two consequences signed off consciously, so a later sweep lands here rather
+than refiling them.** (1) For a capped row the vendor's notification reads
+"A customer asked about September 7. Reply by September 8" — an instruction to
+reply the day *after* the event. That is the honest rendering of the alignment
+with `accept`, which does succeed on September 8 and does produce a payable
+booking; it was merely invisible while the copy said "7 days". (2) There is no
+floor on the window, per the paragraph above, and nothing on the success panel
+distinguishes a request with hours to live from one with a healthy week. Both
+statements a near-edge row makes are true; whether the customer should be
+*warned* is a product question, not a defect.
+
 #### Tests (required)
 
-- [ ] API tests for each refusal, asserting status and body shape
-- [ ] A test that a request's reply deadline is `min(created + 7 days, event date)`
+- [x] API tests for each refusal, asserting status and body shape
+- [x] A test that a request's reply deadline is capped at the event — see the amendment above for why the cap is `universallyPastFrom(eventDate)` and not the event date itself
 
 ---
 

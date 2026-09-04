@@ -26,8 +26,12 @@ import { findUserEmail } from './notification-email.dao.js';
  *   means both parties read the same refund figure by construction.
  * - **No platform statistic and no vendor-side fee claim can appear**, because
  *   the in-app copy carries neither and this adds no numbers of its own.
- * - **No duration is hard-coded.** `new_request`'s body already reads the
- *   window through `bookingRequestWindowPhrase()`, which D16 requires.
+ * - **No duration is hard-coded.** `new_request`'s body states the row's own
+ *   deadline as a date, which D16 requires. It used to read the flat
+ *   `bookingRequestWindowPhrase()`; #401 capped the window at the event, so
+ *   that phrase became false for a request sent close to its date — and a
+ *   countdown could not replace it here, because an email body is written once
+ *   and read days later.
  */
 
 /**

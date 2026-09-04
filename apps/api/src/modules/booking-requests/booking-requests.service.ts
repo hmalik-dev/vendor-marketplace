@@ -4,9 +4,10 @@ import {
   ERROR_CODES,
   EXPIRABLE_BOOKING_REQUEST_STATUSES,
   addDays,
-  bookingRequestWindowPhrase,
   disclosesCustomerContact,
   isUniversallyPastDate,
+  replyDeadline,
+  toDateString,
   type BookingRequestDetail,
   type BookingRequestStatus,
   type BookingWithContext,
@@ -79,6 +80,39 @@ const NOTIFICATION_DATE = new Intl.DateTimeFormat('en-US', {
  */
 function readableDate(date: string): string {
   return NOTIFICATION_DATE.format(new Date(`${date}T00:00:00Z`));
+}
+
+/**
+ * The last calendar day that is **wholly** before the deadline.
+ *
+ * A bare date in a notification body is read as a local day, and the deadline
+ * is an instant. Naming the day the deadline falls in over-promises by the
+ * whole of it: an uncapped window ends at the creation time-of-day, so a
+ * request sent at 01:00 UTC on a Saturday — Friday evening in Austin — expires
+ * at 01:00 UTC the next Saturday, and a vendor who replies at any hour of
+ * *their* Saturday is already too late. Formatting `expiresAt − 1ms` names the
+ * right UTC day and still hands them a day that is mostly gone.
+ *
+ * So the deadline is floored to its own UTC midnight first: the day named is
+ * one the vendor has in full, in every timezone at or east of UTC, and most of
+ * it west. A capped window is unaffected — it already ends at midnight, so the
+ * floor is the deadline itself and the answer is the day before, exactly as
+ * before. It can never name a day earlier than creation: the tightest window
+ * the product writes still spans the creation instant's own midnight.
+ *
+ * The residual is inherent to a bare day label: "Reply by September 5" for a
+ * deadline of September 6 00:00 UTC is still over by seven hours in Austin.
+ * The vendor's queue renders the live countdown, which is the surface that can
+ * be exact; this one is written once and read days later, so it trades
+ * precision for a statement that does not go stale.
+ *
+ * Falls back to the deadline the product grants when the row carries none, so
+ * the copy never has to say "no deadline".
+ */
+function lastReplyDay(expiresAt: Date | null, now: Date): string {
+  const deadline = expiresAt ?? addDays(now, BOOKING_REQUEST_EXPIRY_DAYS);
+
+  return toDateString(new Date(new Date(deadline).setUTCHours(0, 0, 0, 0) - 1));
 }
 
 /** Postgres NUMERIC arrives as a string; the wire contract is a number. */
@@ -223,7 +257,15 @@ async function ageIfExpired(
     'request_expired',
     {
       title: 'Your request expired',
-      body: 'It went unanswered for a week. Send it again, or find another vendor for the date.',
+      /*
+       * "for a week" was a literal that #401 made false: the reply window is
+       * now capped at the event, so a request sent four days before its date
+       * expires in four days, not seven. The duration is dropped rather than
+       * recomputed — the customer's next move does not depend on how long it
+       * waited, and a second place that states this deadline is a second place
+       * for it to drift.
+       */
+      body: 'It closed without a reply. Send it again, or find another vendor for the date.',
     },
     undefined,
     mail,
@@ -435,7 +477,7 @@ export async function createBookingRequest(
     status: 'pending',
     // Locked at the price on offer today; a later package edit cannot move it.
     finalPriceCents: servicePackage?.priceCents ?? null,
-    expiresAt: addDays(now, BOOKING_REQUEST_EXPIRY_DAYS),
+    expiresAt: replyDeadline(now, input.eventDate),
   };
 
   /*
@@ -461,9 +503,29 @@ export async function createBookingRequest(
       bookingRequestId: row.id,
     });
 
+    /*
+     * The row's own deadline, as a date rather than a countdown.
+     *
+     * #401 capped the reply window at the event, so the week
+     * `bookingRequestWindowPhrase` promises is no longer true of every row: a
+     * request for a date three days out gives the vendor less than that.
+     * Telling them otherwise recreates exactly the disagreement
+     * `one-deadline-one-fee.test.ts` exists to prevent — in a shape that guard
+     * cannot see, since it bans hard-coded literals and not a helper that has
+     * become conditionally wrong. That helper's own contract already says as
+     * much: it is the promise made *before* a row exists, and anything written
+     * after one does must read the stored `expiresAt`.
+     *
+     * A **date**, and deliberately not `expiryCountdown`. This body is stored
+     * and then rendered verbatim by the bell and the email for as long as the
+     * notification lives, so a relative phrase is only true at write time: a
+     * row saying "expires in 5d" sits in the vendor's bell four days later
+     * beside a queue row that reads "expires today", which is the same two
+     * voices displaced in time rather than removed.
+     */
     const delivery = await recordNotification(tx, row, 'vendor', 'new_request', {
       title: 'New booking request',
-      body: `A customer asked about ${readableDate(row.eventDate)}. You have ${bookingRequestWindowPhrase()} to reply.`,
+      body: `A customer asked about ${readableDate(row.eventDate)}. Reply by ${readableDate(lastReplyDay(row.expiresAt, now))}.`,
     });
 
     return { row, delivery };

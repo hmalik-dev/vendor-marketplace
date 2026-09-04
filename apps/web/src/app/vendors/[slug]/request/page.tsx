@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { pageTitle, todayDateString, type AvailabilityStatus } from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
-import { requireCurrentUser } from '@/lib/current-user';
+import { requireRole } from '@/lib/current-user';
 import { parseGuestCountParam } from '@/lib/guest-count';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
@@ -43,10 +43,6 @@ export default async function BookingRequestPage({
   }
 
   /*
-   * A vendor cannot request their own listing, and has no customer identity to
-   * do it with — sending them to their dashboard is more use than a 403 page.
-   */
-  /*
    * Signing in comes back here, with the package and date the customer already
    * chose in the rail — losing them meant starting the booking over.
    */
@@ -56,12 +52,21 @@ export default async function BookingRequestPage({
   if (query.guests) returnQuery.set('guests', query.guests);
   const returnSuffix = returnQuery.toString();
 
-  const user = await requireCurrentUser(
+  /*
+   * The same gate the API applies, rather than a subset of it.
+   *
+   * This bounced `role === 'vendor'` by hand — right about vendors, who cannot
+   * request their own listing and have no customer identity to do it with, but
+   * silent about admins. `POST /booking-requests` is `requireRole('customer')`,
+   * so an admin rendered the two-step form, filled it, and learned on submit
+   * that they were never allowed to send it: a generic 403 after the work
+   * rather than a redirect before it (#401). `requireRole` sends each role to
+   * its own dashboard, so both land somewhere they can act.
+   */
+  await requireRole(
+    'customer',
     `/vendors/${slug}/request${returnSuffix ? `?${returnSuffix}` : ''}`,
   );
-  if (user.role === 'vendor') {
-    redirect('/vendor/dashboard');
-  }
 
   const today = todayDateString();
   const availability = await getPublicVendorAvailability(slug);

@@ -8,7 +8,7 @@
 - [`redirect_url` is Clerk's param, not ours](clerk-redirect-url-param-collision.md) — the raw search param outranks `fallbackRedirectUrl`, skipping our validator and `/after-sign-in`
 - [safeReturnPath's validate/return mismatch is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise landed in #76; 894k-case chain fuzz is clean, do not re-report
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths; slugSchema and 404s close the gap
-- [The role bounce can redirect into itself](role-bounce-self-loop-admin-bookings.md) — `DASHBOARD_PATH_BY_ROLE.admin` is `/bookings`, which is `requireRole('customer')`-gated
+- [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `DASHBOARD_PATH_BY_ROLE.admin` is `/admin` now; the check-every-destination invariant still stands
 - [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema without the read schemas on the same column and a user's data 500s someone else's page
 - [imageRefSchema's scheme check is whitespace-bypassable](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `" javascript:…"` validates; only `resolveImageUrl`'s trim-then-prefix keeps it harmless
 - [Customer PII has two disclosure gates](customer-pii-has-two-disclosure-gates.md) — the profile relationship gate is permanent and customer-wide; the request-status gate is per-request, and they share no code
@@ -27,3 +27,4 @@
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — adding hosts to script-src is never the escalation; CSP_ENFORCE can only turn enforcement on
 - [The review profanity filter is a hard-reject floor](review-profanity-filter-is-a-hard-reject-floor.md) — the failure mode and the easy bypasses are settled until #15; the `\w*` over-match on "spicy" is not
 - [JSON-LD is the only raw-HTML sink in web](json-ld-is-the-only-raw-html-sink.md) — `serialiseJsonLd` is mandatory; the source-scan guard misses `next/script` + a non-literal type
+- [The reply-window cap lives in four places](reply-deadline-cap-must-match-accept-guard.md) — `event_date + 2` UTC days is in a predicate, a helper, an expiry compare and raw SQL; drift makes rows live-but-unacceptable

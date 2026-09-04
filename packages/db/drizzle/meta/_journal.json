@@ -155,6 +155,13 @@
       "when": 1788227260601,
       "tag": "0021_flawless_sue_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788227320601,
+      "tag": "0022_cap_reply_window_at_event",
+      "breakpoints": true
     }
   ]
 }

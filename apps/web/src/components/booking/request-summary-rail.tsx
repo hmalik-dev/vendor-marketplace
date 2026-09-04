@@ -2,7 +2,7 @@
 
 import { FieldMessage, errorProps } from '@/components/form-error-summary';
 import type { FieldIssue } from '@/lib/use-submit-validation';
-import { bookingRequestWindowPhrase, formatPrice } from '@vendor-marketplace/shared';
+import { formatPrice } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -165,11 +165,19 @@ export function RequestSummaryRail({
             revised quote here was false on the default path every customer
             takes, which is the path that reaches this rail with a package
             attached. A custom request has no locked price and can be quoted.
+
+            No duration. It used to promise a flat "7 days" — true while every
+            request got a week, and false from #401 onwards, which capped the
+            window at the event date: a request sent for next weekend closes in
+            days, and this sentence is read at the moment of commitment. The
+            deadline is stated once the row exists and can be read from it, on
+            the success panel and on `/bookings`; it is not knowable here
+            without a clock, and a clock in this component would render one
+            number on the server and another in the browser.
           */}
-          You&rsquo;re requesting, not paying. {vendor.businessName} has{' '}
-          {bookingRequestWindowPhrase()}{' '}
-          {servicePackage ? 'to confirm the date or decline' : 'to confirm or send a quote'} — you
-          approve before any card is charged.
+          You&rsquo;re requesting, not paying. {vendor.businessName} can{' '}
+          {servicePackage ? 'confirm the date or decline' : 'confirm or send a quote'} — you approve
+          before any card is charged.
         </p>
       </div>
 
