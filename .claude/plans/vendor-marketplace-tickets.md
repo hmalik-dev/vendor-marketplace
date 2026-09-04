@@ -213,9 +213,68 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **392** | **Frame `13 Admin` parity debt — four class-level misses and the missing chevrons** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's `parity-checker` pass.** Frame `13` matched on all six axes for #389's own change, and the pass surfaced five pre-existing misses it did not own. **#372 does not cover these** — it closes frames `08`, `04`/`07`/`19`, `16`, `18` and the site chrome, not `13`. **All five are class- or token-level, so no viewport can change them** — re-derived from source after a peer challenged whether the readings were taken at 1440: the pane uses `rounded-xl` → `--radius-xl: 14px` (`theme.css:221`) where the frame draws 12px, which is `--radius-panel` on the line above; `admin-nav.tsx:66` is `min-h-11` in a `gap-1` list, a 48px pitch by construction against the frame's 34px, ending the rail 93px low; `status-pill.tsx:40` is `px-2.5 py-1.5 text-xs font-bold` against the frame's `10px/700` with `padding 5px 10px` (47.36×26 vs 44.88×23), and that size comes from `03-components.md`'s vocabulary, so **the plan is what needs correcting, not only the component**; the avatar initial renders `font-sans` where the frame draws Instrument Serif; and `filter-bar.tsx`'s `Category ▾ / City ▾ / Payouts ▾` triggers render **no `▾` glyph at all** (`innerHTML` is bare text, zero children), which walks City 15px and Payouts 25.6px left of their frame positions. **Not in scope:** frame `13`'s table pane clipping its own fifteenth row by 4px — that is **#385**'s to rule on, and the app reproduces it within a pixel or two |
 | **393** | **Admin tables have no responsive strategy below 1024** | P1 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's browser pass.** `30-responsive.md:31` specifies Admin as `768 → Horizontal scroll` and `390 → Card list, not a table`. **Neither exists.** After #389 the layout is correct at every width and nothing overflows — but at 390 `/admin/reviews` resolves to `12.2px 31.73px 31.73px 21.97px 46.38px 21.97px 70px`, so headers render `R…`, `A…`, `W…` and body cells `4…`, `Ro…`, `T…`. **A 12px column cannot show more than an ellipsis**, so the tables are legible only at 1024 and above. This is #389's fix working, not failing: before it, the rows were mutually misaligned *and* the document scrolled sideways, so the contract's 768 row was never actually implemented either — the old horizontal scroll was incoherence, not a degradation. Ruling needed on whether 768 keeps the contract's scroll-inside-the-pane or follows 390 to cards |
 | **395** | **Frame `05 Checkout` fails parity on all six axes** | P1.5 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's parity pass — the first that could reach the screen.** Checkout was unrenderable for the E2E customer until #387 landed a real connected account, so the frame had never been measured. Measured at 1440x900 against `Orla - Screens.dc.html` lines 877–925: **Layout 5** — the full app-shell header renders above the checkout's own wordmark header (`layout.tsx:127`, giving 128px of chrome against the frame's 64px and a **nested `<main>`**, so `Skip to content` lands above the extra nav), the pay button and its reassurance sit in the left column with their bottom edge at 917px — below the 900px fold — where the frame draws them as the summary rail's fourth block, the rail mini-card is missing its `<package> · <duration>` second line, header padding is `0 40px` against `0 32px`. **Style 5** — card shadow `--shadow-md` for `--shadow-sm`, panel radius 14px for 12px, avatar 64px circle for a 54px 12px-radius square, logo at `LOGO_SIZES.authPanel` (19px circles) where the frame draws 15px. **Colour 2** — page ground `stone-100` for `stone-50`. **Font 5** — `h1` 30px for 26px (over `04-laws.md`'s 26px app ceiling), letter-spacing `normal` for `-.01em`, context line and `Total today` 12.5px for 14px. **Text 2** — the rail sub-line and the frame's `Name on card` field have no counterpart. **Access 1** — the nested `<main>` is two landmarks and a wrong skip target. Contrast passes at 4.83:1 worst case; the focus ring passes, sampled twice. **Two are contract gaps, not template omissions:** `checkoutIntentSchema` carries neither package name nor duration, so the rail sub-line needs the API widened. **Coordinate with #386**, which owns token substitutions on other surfaces. |
+| **398** | **Untrusted vendor text reaches a public page unescaped** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 2 verified findings. Two findings, one root: free text a vendor or customer typed is written to a
+rendered surface without the neutralisation that surface needs. The first is a
+script-injection hole on the most-visited public page in the product. |
+| **399** | **The money path's writes are read-then-write, so two callers can both win** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 7 verified findings. Seven places decide what to write by reading first and then writing without a
+predicate, a transaction, or an idempotency key. Two of them move money or sell
+a date twice. The sweep reproduced the double-accept against the real harness
+(two `/accept` calls fired with `Promise.all`; both answered 200 |
+| **400** | **Cancelling a booking leaves it half-cancelled everywhere** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 5 verified findings. Cancel flips `bookings.status` and frees the date, and stops. The parent
+request stays `accepted`, so the next transition on that date re-locks it
+permanently; every read that asks "is there a booking for this request" gets a
+row back and reports it as paid. The customer sees a booking they cancelle |
+| **401** | **A request can be accepted into a state that can never be paid** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 4 verified findings. Accept does not check that the thing being accepted is payable. A custom
+request with no price, or one whose event date has already passed, becomes a
+terminal `accepted` row; the customer's checkout for it renders the 500 page.
+Reproduced end to end by the browser sweep. |
+| **402** | **Messages: the thread pane shows the wrong conversation, and only its oldest 50** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 17 verified findings. The messaging screen is the surface with the most confirmed defects in the
+sweep. Its thread loader has no cancellation and no owner check, its draft is
+one string for the whole screen, and the API pages from the oldest message —
+so a thread with more than 50 messages hides everything newer behind a |
+| **403** | **Search: the price filter means something other than its label, and bad params answer inconsistently** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 9 verified findings. Nine findings on one surface. The most serious is semantic: the filter is
+labelled `STARTING RATE` and matches any package in range, so a vendor whose
+cheapest package is $400 appears under a $4,000 floor. The rest are the URL's
+handling of values it cannot use — some announced, some silent, one sen |
+| **404** | **A restored draft overwrites the choice the customer just made** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 3 verified findings. `useSavedDraft` replaces the whole form object once it reads storage after
+mount, so the date and guest count chosen on the vendor profile rail — or given
+in the URL — are silently replaced by whatever was saved earlier. A URL-only
+guest count is itself persisted as a 'draft'. |
+| **405** | **The storefront editor keeps unsaved work it did not save, and loses work it should have** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 8 verified findings. The vendor editor's save is two writes with no rollback, its post-save
+snapshot is taken from the live form rather than what was sent, and its publish
+switch reads unsaved state while toggling the saved row. Around it, the package
+form and the portfolio manager both discard edits when their parent r |
+| **406** | **Development defaults can reach a deployed build** | INFRA | M-OPS | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `storage` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 6 verified findings. Five variables carry a development default that a production build silently
+accepts: the API boots on localhost and MinIO, the web bundle bakes
+`http://localhost:4000` as its API origin, every stored-key image resolves to
+nothing, checkout loads Stripe.js with an empty publishable key, and the Clerk |
+| **407** | **Reads hand back more than the caller is entitled to** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` `storage` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 3 verified findings. Three reads return fields their audience should not have: a public endpoint
+serves the vendor's private per-date note, a customer-facing booking read
+carries the platform fee, the vendor payout split and the Stripe transfer id,
+and any authenticated user can pin another vendor's storage object by na |
+| **408** | **A legal request body 500s, and four reads have no ceiling** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` `email` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 10 verified findings. Two classes with the same shape: a value the schema accepts is wider than the
+column that stores it, so an ordinary input answers 500 after the state has
+already moved; and several reads have no limit, one of which fans out an
+unbounded `Promise.all` that ends in an email send. |
+| **409** | **The server's UTC day stands in for the viewer's day** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 2 verified findings. `todayDateString()` says in its own contract that it is only meaningful on the
+client, and three server components call it. West of UTC a vendor's current day
+renders as already past on the availability calendar and the dashboard's 'This
+week'; east of UTC yesterday stays pickable on the booking req |
+| **410** | **Signing in through returnTo lands on a blank page** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 3 verified findings. Three reproductions of one defect: a `returnTo` pointing at a route the
+signed-in role may not see leaves the browser on a blank page with signed-out
+chrome, rather than redirecting to somewhere that role can be. A vendor signing
+in from a booking request form, a vendor sent to `/customer/profile`,  |
+| **411** | **Accessibility: dialogs, calendars and composite controls are unreachable or unannounced** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 1 verified finding. The static accessibility hunt found, beyond the focus-ring work #383 owns and
+the silent-submit work #388 closed:
+
+- **Portfolio lightbox** (`portfolio-pane.tsx:108-160`) is `role="dialog"
+  aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
+  restores focus — a keyboard user t |
+| **412** | **Customer profile and storefront CTAs report things that are not so** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 7 verified findings. Seven small correctness and copy defects on the customer profile and the public
+storefront, each of which tells the reader something untrue. |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **382 rows as of 2026-09-03: 198 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-03, after the autonomous QA run's Phase 0 reconciliation moved six `Done` rows to the archive: 14 rows — 12 Backlog, 0 In Progress, 2 Deferred — needs a human, and 0 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-03, after the autonomous QA run's Phase 0 reconciliation moved six `Done` rows to the archive: 29 rows — 27 Backlog, 0 In Progress, 2 Deferred — needs a human, and 0 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1941,5 +2000,632 @@ lane its two checkout swaps; keep the two tickets off each other's files.
 3. Driven by `parity-checker` on all six axes, with the frame lines cited.
 4. The screen is reachable for this: it needs an `accepted`, unpaid booking, so
    `pnpm db:seed:e2e` then accept as the vendor — do not complete the payment.
+
+---
+
+## Filed 2026-09-04 — the autonomous QA run's application sweep
+
+`/hunt-bugs` fanned eleven read-only hunters across the codebase and drove seven
+flows in a real browser, producing 131 candidates. Each went to three skeptics
+prompted to refute it; **92 survived**. They are grouped here into fifteen
+tickets by the file set a single lane would open, not one row per finding —
+`ticket-granularity-feature-sized` is the rule, and the sweep's own output is
+kept in the run report rather than the board.
+
+### #398: Untrusted vendor text reaches a public page unescaped
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Two findings, one root: free text a vendor or customer typed is written to a
+rendered surface without the neutralisation that surface needs. The first is a
+script-injection hole on the most-visited public page in the product.
+
+#### The findings this groups
+
+- **Stored XSS: vendor bio/business name serialised raw into the public page's JSON-LD <script>** — `apps/web/src/app/vendors/[slug]/page.tsx:226`. The HTML parser closes the `application/ld+json` block at the vendor's `</script>` and executes the injected script in the visitor's origin on every page view. JSON.stringify does not escape `<`, `</script>` or `<!--`, and dangerouslySetInnerHTML emits it verbatim (Next escapes its own __next_f payloads for exactly this reason; this hand-rolled block does not). A signed-in visitor's Clerk session is usable from that 
+- **Unicode bidi override characters in the venue field are stored and rendered unneutralised** — `http://localhost:3000/bookings/ac475f65-526a-4856-9cbe-dd8979691a74`. The RLO/PDF control characters survive into the database and into the detail-page summary line (and therefore the vendor's inbox), so a customer-supplied string can visually reorder the surrounding text on both sides' screens. Script and img payloads in the same fields were rendered inert, so this is the only hostile-text case that reached the page unchanged.
+
+#### Acceptance
+
+1. The JSON-LD block escapes `<`, `>`, `&`, U+2028 and U+2029 before it reaches `dangerouslySetInnerHTML` — or is emitted through a serialiser that does, rather than bare `JSON.stringify`.
+2. A test renders the vendor page for a profile whose `businessName` and `bio` contain `</script><script>alert(1)</script>` and asserts the rendered HTML contains no executable `<script>` beyond the JSON-LD element itself.
+3. Unicode bidi override characters (U+202A–U+202E, U+2066–U+2069) in vendor and customer free text are stripped or neutralised at the write boundary, so a venue name cannot reorder the sentence around it.
+4. The neutralisation lives in one place (`packages/shared`), not per call site, and every free-text write path routes through it.
+
+#### Tests (required)
+
+- [ ] A web test that a hostile `businessName`/`bio` cannot break out of the JSON-LD script element
+- [ ] A shared-package test for the bidi stripper, asserting the exact characters removed and that ordinary non-Latin text is untouched
+
+---
+
+### #399: The money path's writes are read-then-write, so two callers can both win
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Seven places decide what to write by reading first and then writing without a
+predicate, a transaction, or an idempotency key. Two of them move money or sell
+a date twice. The sweep reproduced the double-accept against the real harness
+(two `/accept` calls fired with `Promise.all`; both answered 200 and both rows
+ended `accepted` on the same date).
+
+#### The findings this groups
+
+- **Customer booking cancel refunds without an idempotency key, so two concurrent cancels refund twice** — `apps/api/src/modules/payments/payments.service.ts:551`. Stripe receives two independent 50% refunds against the same payment intent (their sum does not exceed the charge, so Stripe accepts both) — the customer is refunded 100% of a booking the policy refunds at 50%, and the vendor's payout is reversed in full. The second request then gets a 409 and only an error log line records that money moved twice. The ban path already carries `idempotencyKey: ban-refund:<bookingId>` 
+- **Two accepts on the same vendor date are only guarded by a read, so both can win and both become payable** — `apps/api/src/modules/booking-requests/booking-requests.service.ts:790`. Both requests end up `accepted` and both customers are told the date is held. Each can open checkout (requirePayableByCustomer only checks the row's own status) and confirmBooking inserts a booking per request — `bookings_request_id_key` is per request, and no constraint exists on (vendor_id, event_date). Two customers pay in full for one vendor on one day.
+- **Request transition and calendar sync are two statements outside a transaction; a failure between them leaves an accepted request on an unheld date** — `apps/api/src/modules/booking-requests/booking-requests.service.ts:641`. The date has no `booked` row. A second request for that date can be created and, because prepareTransition's check at 790 reads the calendar rather than the request table, accepted as well — two accepted requests for one date without any concurrency needed. The cell only self-heals when some other transition happens on that exact date. Also violates the repository rule that multi-statement mutations run in one transa
+- **Vendor availability edit is check-then-write with no status predicate, so it can overwrite a `booked` cell written by a racing accept or payment webhook** — `apps/api/src/modules/availability/availability.service.ts:162`. applyAvailability deletes the row (if the vendor chose 'available') or upserts it to 'blocked' with no `status <> 'booked'` guard. A paid or accepted date now reads free/blocked: search shows the vendor as available, createBookingRequest accepts a new request for it (`blocked` is not a hard stop), and the vendor's calendar no longer shows the sale.
+- **Review duplicate-key guard sniffs error.message, which Drizzle 0.45 no longer carries — concurrent double review 500s instead of 409** — `apps/api/src/modules/reviews/reviews.service.ts:222`. drizzle-orm 0.45.2 wraps every driver error in DrizzleQueryError whose message is `Failed query: <sql>\nparams: <params>` (node_modules/drizzle-orm/errors.js:10-19, thrown from pg-core/session.js:41 which both postgres-js and pglite sessions route through). The constraint name lives only on `cause`, so `/reviews_booking_reviewer_key/.test(error.message)` is never true, the catch rethrows, and the client gets 500 INTE
+- **Tag suggestion dedupe is read-then-insert with no unique index, so concurrent submissions create duplicate pending rows** — `apps/api/src/modules/tags/tags.service.ts:105`. The admin queue at /admin/tags shows N identical pending suggestions. Approving the first creates the tag; approving the second falls into the merge branch, so no data corruption — but the `already_suggested` contract the service promises is not upheld and each duplicate is an operator action.
+- **insertMessage writes the message and bumps conversations.last_message_at as two statements outside a transaction** — `apps/api/src/modules/messaging/messaging.dao.ts:223`. The message exists and is delivered on the next thread read, but the conversation keeps its old `last_message_at`, so it does not surface at the top of either party's /messages list and the recipient's list-level preview lags until another message lands. Violates the repository rule that multi-statement mutations run in one transaction.
+
+#### Acceptance
+
+1. `createRefund` carries an idempotency key derived from the booking, so a repeated or concurrent cancel refunds once.
+2. Accepting a request takes the date under a predicate or a lock, so exactly one of two concurrent accepts on the same vendor date wins and the loser gets a 409.
+3. A request transition and its calendar sync commit in one transaction; a failure leaves neither applied.
+4. The availability upsert carries a status predicate so it cannot overwrite a `booked` cell.
+5. The review duplicate guard reads the constraint name off the driver error's `cause`, not `error.message`, and answers 409.
+6. `tag_suggestions` gets a unique index on its dedupe key and the insert is `onConflictDoNothing`.
+7. `insertMessage` and the `last_message_at` bump commit together.
+
+#### Tests (required)
+
+- [ ] A concurrency test per write: two calls fired with `Promise.all` against the real harness, asserting exactly one succeeds and the database holds one row
+- [ ] A refund test asserting the idempotency key is passed and is stable for the same booking
+
+---
+
+### #400: Cancelling a booking leaves it half-cancelled everywhere
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Cancel flips `bookings.status` and frees the date, and stops. The parent
+request stays `accepted`, so the next transition on that date re-locks it
+permanently; every read that asks "is there a booking for this request" gets a
+row back and reports it as paid. The customer sees a booking they cancelled
+described as booked, on a screen they cannot reach by navigation.
+
+#### The findings this groups
+
+- **Cancelling a paid booking frees the date while its request stays `accepted`, so the next transition on that date re-locks it permanently** — `apps/api/src/modules/booking-requests/booking-requests.service.ts:691`. syncHeldDate reads statusesOnDate → ['accepted', 'declined'] and calls setHeldDate('booked'): the date is marked sold again although the only booking on it is cancelled. Nothing can undo it: setOwnAvailability 409s on any `booked` date (availability.service.ts:165), setHeldDate(null) refuses to delete when *any* bookings row exists on the date regardless of status (booking-requests.dao.ts:385-389, no status filter), 
+- **A cancelled booking is still read as paid: checkout redirects to the confirmation, the detail page says "is booked" and offers "Cancel booking" again** — `apps/api/src/modules/payments/payments.dao.ts:96-110 (findBookingByRequest has no status filter)`. The page re-renders from getBookingForRequest, which returns the cancelled row because neither reconcileBooking (`existing` is returned whatever its status) nor findBookingByRequest checks status. AcceptedRequest branches only on `booking ? … : …`, so the customer who just cancelled sees "<Vendor> is booked", "Paid $X", a refund sentence, "View confirmation" and a live "Cancel booking" button; pressing it again answe
+- **Vendor bookings page counts a cancelled booking as "coming up" and pins a "Booked" pill beside its "Cancelled" pill** — `apps/web/src/components/vendor/booking-card.tsx:55-56`. The heading reads "You have N bookings coming up" including the cancelled one, and the card shows `<StatusPill tone="confirmed">Booked</StatusPill>` (chosen only on `booking` being non-null) next to CompleteBooking's `<StatusPill tone="failed">Cancelled</StatusPill>` — two contradictory pills on one row, and the customer's contact details still printed under a date the vendor no longer holds.
+- **Ban unwind swallows a failed refund and reports success, leaving a confirmed booking on a suspended account with nobody told** — `apps/api/src/modules/admin/admin.service.ts:283`. The catch logs and `continue`s before cancelBookingAndFreeDate and before the notification loop, so that booking stays `confirmed`, its date stays `booked`, neither customer nor vendor receives booking_cancelled, and the route still answers 200. AdminBanResult has no field for refunds that failed, so the operator's table shows the account suspended and has no signal that money did not move; only a log line records it
+- **Paid bookings on the customer hub link nowhere, so the only surface with "Cancel booking" and "View confirmation" is unreachable by navigation** — `apps/web/src/components/bookings/bookings-hub.tsx:109-127`. `href` is `null` for `kind === 'booking'`, justified by a stale comment ("has no detail route of its own yet"). The detail route exists at /bookings/<requestId> (AcceptedRequest with the cancel and confirmation controls) and `booking.requestId` is already on the wire object (it is what `paidRequestIds` is built from). The customer's confirmed booking is a dead card: after checkout there is no in-product path back to 
+
+#### Acceptance
+
+1. Cancelling moves the parent `booking_requests` row out of `accepted` in the same transaction as the booking and the calendar.
+2. `findBookingByRequest` (and every read built on it) filters on status, so a cancelled booking is not read as paid: checkout does not redirect to the confirmation, the detail page does not say the date is booked, and it does not offer `Cancel booking` a second time.
+3. The vendor bookings page does not count a cancelled booking as coming up, and does not pin a `Booked` pill beside its `Cancelled` pill.
+4. A paid booking on the customer hub links to its detail page, so `Cancel booking` and `View confirmation` are reachable.
+5. A ban that cannot refund a confirmed booking fails loudly rather than reporting success.
+
+#### Tests (required)
+
+- [ ] An API test that cancel leaves the request out of `accepted` and the date re-bookable
+- [ ] A test that every booking read filters cancelled rows
+- [ ] A web test for the hub link and the vendor pill
+
+---
+
+### #401: A request can be accepted into a state that can never be paid
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Accept does not check that the thing being accepted is payable. A custom
+request with no price, or one whose event date has already passed, becomes a
+terminal `accepted` row; the customer's checkout for it renders the 500 page.
+Reproduced end to end by the browser sweep.
+
+#### The findings this groups
+
+- **A vendor can accept a custom request with no price, producing a terminal `accepted` row that can never be paid** — `apps/api/src/modules/booking-requests/booking-requests.service.ts:772-808`. The row becomes `status='accepted'`, `finalPriceCents=null`, `quotedPriceCents=null`, `acceptedAt` set; `syncHeldDate` writes the date `booked`; the customer is notified "Payment confirms the booking". Checkout then fails: `payableAmount` (`payments.service.ts:65-77`) throws 500 `INTERNAL_ERROR` "has no locked price"; the web shows "No price yet" / "Pay now" (`accepted-request.tsx:103-105,168-171`). `BOOKING_REQUEST_
+- **Vendor can accept a custom request that has no quote and whose date has already passed; the customer's checkout for it then renders the 500 page** — `http://localhost:4000/booking-requests/:id/accept (POST) -> http://localhost:3000/bookings/d5c7de88-463e-4a3c-bae4-e5cb0b992421/checkout`. Accept returned 200. DB afterwards: booking_requests.status='accepted', final_price_cents NULL, accepted_at set; a new availability row 2026-09-03 status='booked' was written. The vendor calendar now shows '2026-09-03 — Completed, in the past' and 'Completed 1 event' for an event that was never paid or worked; /vendor/bookings lists it under 'Past events' as 'AWAITING PAYMENT … —' with no amount. The customer's check
+- **A request can be sent for today, and its 7-day reply window outlives the event; past-dated requests stay 'awaiting reply'** — `http://localhost:3000/vendors/e2e-test-studio/request and http://localhost:3000/bookings?tab=history`. The request is created with expires_at eight days after the event date. The hub says 'Next up is E2E Test Studio today.' and History shows an older Kessler & Co. request dated Mon, Aug 31 still 'Pending ... awaiting reply · expires in 4d' four days after the event. Meanwhile the vendor dashboard's 'This week' starts on 'Friday, September 4', so the two sides disagree about what today is. Vendors are offered accept/qu
+- **Booking request page admits admins but the API refuses them, so an admin completes the two-step form and gets a 403 on send** — `apps/web/src/app/vendors/[slug]/request/page.tsx:62`. The page only bounces role==='vendor' (line 62-63); an admin renders the form, and POST /booking-requests is `requireRole('customer')` (booking-requests.routes.ts:60), so the submit answers 403 FORBIDDEN with the generic message. The role gate is applied on the client surface for one non-customer role and on the API for both, and they disagree; every other customer-only surface (/bookings/*, /customer/*) uses require
+
+#### Acceptance
+
+1. Accepting a request with no locked price is refused with a message naming what is missing.
+2. Accepting a request whose event date has passed is refused.
+3. A request cannot be created for a date that has already passed, and its reply window never outlives the event date.
+4. The booking request page does not admit a role the API refuses — an admin sees the same answer before filling the form, not a 403 on send.
+
+#### Tests (required)
+
+- [ ] API tests for each refusal, asserting status and body shape
+- [ ] A test that a request's reply deadline is `min(created + 7 days, event date)`
+
+---
+
+### #402: Messages: the thread pane shows the wrong conversation, and only its oldest 50
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+The messaging screen is the surface with the most confirmed defects in the
+sweep. Its thread loader has no cancellation and no owner check, its draft is
+one string for the whole screen, and the API pages from the oldest message —
+so a thread with more than 50 messages hides everything newer behind a reload.
+
+#### The findings this groups
+
+- **Message threads are truncated to the oldest 50 messages; everything newer is invisible after a reload** — `apps/api/src/modules/messaging/messaging.dao.ts:205-211`. findMessages orders `asc(createdAt)` with LIMIT 50 OFFSET 0, and loadThread requests `/conversations/<id>/messages` with no page parameter and does `setMessages(page.items)` — there is no "load older" control and no request for any later page. The thread renders messages 1–50 and hides the newest ones, including the reader's own last replies and the other party's latest answer. During a live session SSE appends new m
+- **Failed thread read in the messages screen is unhandled and leaves the previous thread's messages under the new thread's header** — `apps/web/src/components/messaging/messages-screen.tsx:99`. loadThread awaits the GET with no try/catch; the effect fires it with `void`, so the rejection is unhandled (console error, Next dev overlay). `messages` is never reset when `activeId` changes and is only set on success, so thread A's bubbles stay rendered under B's avatar/name and booking line, and Send posts the draft to B. On first load the failure leaves `messages=[]` and the pane shows 'Start the conversation — 
+- **Thread load effect has no cancellation or pending state: stale response can leave conversation A's messages under conversation B, and an existing thread shows 'Start the conversation' while loading** — `apps/web/src/components/messaging/messages-screen.tsx:128`. loadThread(A) resolves last and calls setMessages(A.items) unconditionally, so B's header sits over A's bubbles until another event happens; during the switch, A's bubbles remain under B's header because messages is never cleared; and on first open the pane renders the empty-thread copy 'Start the conversation — say what you need and when…' (line 319-322) over a thread that has messages, because messages starts [] an
+- **Thread pane has no owner check: a slower GET for the previous thread, or a send that resolves after switching threads, writes the wrong conversation's messages into the visible one** — `apps/web/src/components/messaging/messages-screen.tsx:98-132,165-193`. The header names B while the bubbles are A's, or A's just-sent message appears at the bottom of B's thread; the reader can reply to the wrong person. State self-corrects only on a later thread switch.
+- **Notification click to /messages?conversation=<id> while already on /messages does not switch threads — MessagesScreen reads the param only at mount** — `apps/web/src/components/messaging/messages-screen.tsx:63-65`. URL says conversation B, the pane still shows A, and the notification that pointed at B is already struck through — the reader has to find B by hand in the list. Same for a bell click from the `?conversation=` URL of any other thread.
+- **/messages?conversation=<id not in the list> shows "No conversations yet" over a populated inbox, hides the list below md with no way back, and fires an unhandled rejection** — `apps/web/src/app/messages/page.tsx:37-47`. The raw param is never validated and is used as `activeId`, so `active` is null while `activeId` is not. The right pane renders the EmptyState "No conversations yet" even though the aside is listing threads; `listOwnsSmallScreen` is false, so below md the list is `max-md:hidden` and the back button lives inside the `active !== null` branch — the user is stranded on an empty pane with no control. Meanwhile `useEffect`
+- **Foreign, missing or malformed ?conversation= id renders 'No conversations yet' beside a populated list and throws an uncaught ApiClientError** — `apps/web/src/components/messaging/messages-screen.tsx:98-132`. The API correctly refuses (403/404/400), but the right pane shows the empty-state heading 'No conversations yet' and copy 'A thread opens the moment you send a booking request…' while the left list shows the user's 5 real conversations. No user-facing explanation, and the rejected promise from loadThread escapes as an uncaught page error.
+- **An unrecognised ?conversation= id selects a thread that is not in the list: the pane claims 'No conversations yet' over a populated inbox, hides the list below md, and fires an unhandled rejection** — `apps/web/src/app/messages/page.tsx:47`. activeId is seeded with the foreign id, `active` resolves to null, so the right pane renders EmptyState 'No conversations yet' even though `conversations` has rows; `listOwnsSmallScreen` is false (activeId !== null), so below md the list is `max-md:hidden` and the empty state is also hidden's sibling — the user has an inbox and no way to reach it without editing the URL. The effect still calls loadThread(foreignId); 
+- **Clicking a thread in the list does not write ?conversation=, so refresh and Back lose the selected thread** — `apps/web/src/app/messages/page.tsx:22-25`. URL stays http://localhost:3000/messages after both clicks, contradicting the page comment that 'the thread id lives in ?conversation= so a thread is linkable'. A reload returns to the top thread, and Back leaves /messages entirely instead of returning to the previously viewed thread.
+- **The composer draft is one string for the whole screen, so text typed for one conversation is sent to whichever thread is active when Send is pressed** — `apps/web/src/components/messaging/messages-screen.tsx:67`. `draft` is not keyed by conversation and is not cleared on `setActiveId`, so the textarea still holds A's text under B's header and `submit()` POSTs it to `/conversations/${activeId}/messages` — B's thread. A vendor negotiating with two customers can send one customer's price to the other.
+- **A message arriving in the open thread is displayed but never marked read, so the list and header count it as unread while it is on screen** — `apps/web/src/components/messaging/messages-screen.tsx:142-155`. The row for A goes bold with a clay dot and the header shows 'Unread (1)' for a message the reader is looking at; it clears only after switching away and back (or an SSE reconnect).
+- **Double-clicking Send creates the same message twice** — `apps/web/src/components/messaging/messages-screen.tsx:419`. Two POST /conversations/:id/messages requests both return 201, two identical bubbles appear in the thread, and the database holds two rows. Expected one message.
+- **Send-failure message is not in a live region** — `apps/web/src/components/messaging/messages-screen.tsx:189`. The red 'That message did not send. Your text is still here — try again.' text appears visually only; it has no role and no aria-live ancestor, so assistive technology is not told the send failed. Colour is correct per 40-states (red for failed send).
+- **Event-stream connect() awaits getToken() outside try/catch; a rejection kills live updates for the tab with no retry and no resume** — `apps/web/src/lib/use-event-stream.ts:121`. The rejection escapes `void connect()` (:235, :216) as an unhandled rejection; scheduleRetry is never called, so `exhausted` stays false and both `online` and `visibilitychange` handlers return early at resume() (:220). The tab never reconnects for its lifetime: no notification pushes, and /messages shows the 'Reconnecting' informational banner permanently while nothing is reconnecting. Coming back online does not re
+- **Conversation list loads every message in every thread to pick one preview per conversation** — `apps/api/src/modules/messaging/messaging.dao.ts:128`. The query is `SELECT * FROM messages WHERE conversation_id IN (...) ORDER BY created_at DESC` with no `DISTINCT ON`, no `LIMIT`, and no per-conversation bound, so the full message history of every thread the user has ever had is pulled through the pool and into Node on every page load, then all but N rows are discarded in the `for` loop. Cost scales with total messages sent, not thread count: a vendor with 200 thread
+- **Conversation list's OR across two tables defeats both conversations indexes — every list render is a full scan of conversations** — `apps/api/src/modules/messaging/messaging.dao.ts:65`. `WHERE conversations.customer_id = $1 OR vendor_profiles.user_id = $1` references two different tables, so Postgres cannot use `conversations_customer_idx` or `conversations_vendor_idx` (`packages/db/src/schema/messaging.ts:449-450`) as an access path; it must read every `conversations` row, join each to `vendor_profiles`, and filter. The per-request cost scales with the platform's total thread count rather than the 
+- **POST /conversations is requireAuth while its sibling POST /booking-requests is customer-only, so vendors and admins can open threads with any published vendor** — `apps/api/src/modules/messaging/messaging.routes.ts:91`. openConversation (messaging.service.ts:228-251) only refuses the vendor's own listing; a vendor becomes `conversations.customer_id` on a thread with a competitor and can message every vendor on the marketplace (spam/poaching vector with no rate limit beyond the global one). The receiving vendor sees the sender as a first-name customer, and clicking through to GET /customers/:id/profile answers 404 because customers.s
+
+#### Acceptance
+
+1. A thread's newest messages are what load; paging goes backwards from the newest.
+2. A thread read that fails renders an error rather than leaving the previous thread's messages under the new header.
+3. The thread loader cancels or ignores a stale response, and a send that resolves after a switch cannot write into the wrong thread.
+4. `?conversation=` is honoured on every change, not only at mount; an id that is not in the list renders a not-found state rather than 'No conversations yet' over a populated inbox, and never throws.
+5. Selecting a thread writes `?conversation=`, so refresh and Back keep it.
+6. The composer draft is per conversation.
+7. A message arriving in the open thread is marked read.
+8. Send is idempotent against a double click.
+9. The send-failure message is announced.
+10. The event stream survives a `getToken()` rejection and resumes.
+11. The conversation list stops loading every message in every thread, and its query uses an index rather than a full scan.
+12. `POST /conversations` is customer-only, matching its sibling.
+
+#### Tests (required)
+
+- [ ] A test per behaviour above; the thread-ownership and stale-response cases need an ordered pair of resolutions, not a single await
+
+---
+
+### #403: Search: the price filter means something other than its label, and bad params answer inconsistently
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Nine findings on one surface. The most serious is semantic: the filter is
+labelled `STARTING RATE` and matches any package in range, so a vendor whose
+cheapest package is $400 appears under a $4,000 floor. The rest are the URL's
+handling of values it cannot use — some announced, some silent, one sent to the
+API anyway.
+
+#### The findings this groups
+
+- **Price filter matches any package in range, not the 'STARTING RATE' it is labelled as** — `http://localhost:3000/search?minPriceCents=400000`. '$4k+' shows '5 vendors' whose cards read 'From $1,750 / $1,680 / $1,640 / $2,100 / $1,580'; '$2–4k' shows 16 vendors. Read-only query against the local DB: vendors whose cheapest active package is in band = 4 / 12 / 1 / 0 (<=1k, 1–2k, 2–4k, 4k+), vendors with ANY active package in band = 4 / 16 / 16 / 5 — the screen matches the latter. The label, the card price and the result set contradict each other.
+- **Price inputs drop the decimal point, turning '999.99' into a $99,999 floor** — `http://localhost:3000/search`. Min field re-renders as '$99,999'; URL becomes ?minPriceCents=9999900&maxPriceCents=10000100; zero results with chip '$99,999 – $10,000+'. '9.99'–'19.99' becomes '$999 – $1,999' (minPriceCents=99900&maxPriceCents=199900, 16 vendors). A customer typing cents gets a filter 100x what they typed with no message.
+- **Half-rejected price range is announced as 'cleared' while the surviving bound still filters and its chip stays** — `http://localhost:3000/search?minPriceCents=0&maxPriceCents=9999999999900`. Page shows 'That price range isn't one we can use, so it was cleared — the rest of your search still applies' but the chip '$0 – $10,000+' remains and the API is still called with minPriceCents=0. In the decimal case the notice says the range was cleared, yet minPriceCents=9999900 is still sent, 0 cards render, chip '$99,999 – $10,000+' remains, and 'No vendors match that filter / The price range is the narrowest fil
+- **Past date in the URL is sent to the API before the client strips it, producing a 400 and a console error** — `http://localhost:3000/search?date=2020-01-01`. A GET to :4000/vendors?date=2020-01-01 goes out and is refused 400 ('Event date has already passed'); the console logs 'Failed to load resource: 400 (Bad Request)'. The page then clears the date and shows 'Wed, Jan 1 has already passed, so the date was cleared' with 17 vendors, so the user recovers, but every shared stale link costs a failed request and a console error.
+- **Unknown-but-well-formed category slug renders the marketplace-empty copy 'No vendors listed yet'** — `http://localhost:3000/search?category=does-not-exist`. Screen says 'No vendors listed yet / Try a different vendor type or city.' — a false statement about the platform. The malformed variant is instead cleared with 'That vendor type isn't one we can use, so it was cleared' and shows 17 vendors, so the two bad inputs get opposite treatments.
+- **Copy: 'No photographers match all two filters'** — `http://localhost:3000/search?category=photography&city=Oakland&minRating=4.9`. Empty-state headline reads 'No photographers match all two filters' followed by 'The rating floor is the narrowest filter here.' — 'all two' is ungrammatical; the count template is being applied at n=2.
+- **Non-numeric page and unknown sort fall back silently while other bad params announce they were cleared** — `http://localhost:3000/search?page=abc`. page=abc and sort=evil render 17 vendors with no notice, while page=2147483648 shows 'That page isn't one we can use, so it was cleared' and the combined bad URL lists 'date, rating, tags, page and price range' but omits the sort that was also replaced. Inconsistent with the screen's own rule of naming every dropped param.
+- **Sub-lg SearchBar draft is reset by a new `value` object on every SearchScreen render, discarding a selection made while results are loading** — `apps/web/src/components/search/search-bar.tsx:131-134`. The bar reverts to the URL's values and the past-date alert (if shown) disappears without the customer doing anything; the change they made has to be redone.
+- **Refine dropdown drafts are re-seeded from an unstable `value` object on every parent render, wiping a half-typed price range or tag selection when search results land** — `apps/web/src/components/ui/dropdown-range.tsx:99`. RefineBar passes `value={{ min: state.minPriceCents, max: state.maxPriceCents }}` (refine-bar.tsx:363) and `value={chosen.map((tag) => tag.id)}` (line 288) — a new object/array each render. The re-seed effect depends on `[open, value]`, so when SearchShell re-renders on `setResult`/`setIsLoading`/`setSearching(false)`, the effect runs again and `setDraft(value)` discards what the customer typed or ticked, without clo
+
+#### Acceptance
+
+1. The price filter matches what its label says, or the label says what it matches. One control, one contract.
+2. A typed bound keeps its decimal: `999.99` is $999.99, not $99,999.
+3. A half-rejected range says which bound survived, rather than announcing the whole range as cleared while the surviving bound still filters.
+4. A past date in the URL is stripped before the request, not after — no 400, no console error.
+5. An unknown but well-formed category slug renders the no-results state for that query, not the marketplace-empty copy.
+6. Count copy reads `all two filters` correctly (`both filters`, or the number spelled the way `31-content-voice.md` sets).
+7. A non-numeric page and an unknown sort are announced like every other cleared param.
+8. A draft in the search bar or a refine dropdown survives results landing — the re-seed keys on value, not object identity.
+
+#### Tests (required)
+
+- [ ] A test per param class asserting both the request that goes out and the sentence that renders
+- [ ] A price-semantics test at the DAO level
+
+---
+
+### #404: A restored draft overwrites the choice the customer just made
+
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+`useSavedDraft` replaces the whole form object once it reads storage after
+mount, so the date and guest count chosen on the vendor profile rail — or given
+in the URL — are silently replaced by whatever was saved earlier. A URL-only
+guest count is itself persisted as a 'draft'.
+
+#### The findings this groups
+
+- **Restored localStorage draft overwrites the date and guest count the customer just chose in the booking rail; a URL-only guest count is itself persisted as a 'draft'** — `apps/web/src/components/booking/booking-request-screen.tsx:142`. The page seeds form.eventDate/guestCount from the URL, then the restore effect runs `setForm(draft.restored.form)` and replaces the whole form — including eventDate and guestCount — with the stale draft. The request the customer reviews and sends carries the old date, not the one they just selected in the rail. Separately, isEmptyDraft excludes only eventDate, so arriving with `?guests=120` and typing nothing writes 
+- **Restored draft overwrites the date and guest count the customer just chose on the vendor profile rail** — `apps/web/src/components/booking/booking-request-screen.tsx:142-149`. The form silently shows D1 and the old guest count instead of D2; the steel banner only says 'We kept what you had written.' A customer who does not re-check the date sends the request for the wrong day.
+- **Restoring a saved booking-request draft overwrites the date and guest count the customer just chose in the URL** — `apps/web/src/components/booking/booking-request-screen.tsx:143-149`. `setForm(draft.restored.form)` replaces the whole form state, including `eventDate` and `guestCount` that were seeded from the URL, so the form silently shows date A. The restore banner says only "We kept what you had written"; nothing says the date changed. isEmptyDraft deliberately excludes the date from the emptiness test, but the restore path does not exclude it from the overwrite, so a customer who trusts the ra
+
+#### Acceptance
+
+1. A restored draft merges rather than replaces: a field the customer set on this navigation wins over the stored one.
+2. Values that arrived only from the URL are not written back as a draft.
+3. The 'we kept what you had written' line is accurate about what was kept.
+
+#### Tests (required)
+
+- [ ] A test that a rail-chosen date survives a stored draft with a different date
+
+---
+
+### #405: The storefront editor keeps unsaved work it did not save, and loses work it should have
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+The vendor editor's save is two writes with no rollback, its post-save
+snapshot is taken from the live form rather than what was sent, and its publish
+switch reads unsaved state while toggling the saved row. Around it, the package
+form and the portfolio manager both discard edits when their parent replaces a
+list.
+
+#### The findings this groups
+
+- **Profile save runs two writes; when the tag write fails the profile write is silently kept and the form stays 'unsaved' forever (deterministic for any vendor holding an admin-hidden tag; 409-locks first-time creation)** — `apps/web/src/components/vendor-profile-form.tsx:557-602`. In (a) the vendor can never get a clean save: the profile row is updated on each attempt but `savedSnapshot`/`lastSavedAt`/`publishBlockers` are never updated, the bar keeps saying 'Unsaved changes', the leave-guard dialog claims 'Leaving now discards them' (false), and a red 'Tags' issue points at a control with nothing to change. In (b) the created profile exists server-side but the screen stays in creation mode an
+- **'Visible to customers' switch is offered from unsaved form state but toggles the saved row — publish fails with a message contradicting the screen** — `apps/web/src/components/vendor-profile-form.tsx:443-446,618-636,1115-1148`. A red toast says the profile is incomplete while the form shows zero blockers and no field highlighted; nothing tells the vendor to Save first. Mirror case: clearing the bio in the form (unsaved) on a published storefront hides the switch and shows '1 thing left before you can publish' although the profile is live.
+- **Post-save snapshot is taken from the live form, so text typed while 'Saving…' is marked as saved and the leave guard is disarmed** — `apps/web/src/components/vendor-profile-form.tsx:577-585`. `isDirty` is false, the bar reads 'Saved', `useUnsavedChangesGuard(false)` installs no beforeunload/click interception, and navigating away drops the extra text with no dialog; the stored row lacks it.
+- **Profile form fields stay editable during save, and the saved snapshot is taken from the post-save form, so edits typed while the PUT is in flight are marked 'saved' and the unsaved-changes guard is disarmed** — `apps/web/src/components/vendor-profile-form.tsx:575`. send() posted `toPayload(form)` captured at click time, but on success `setForm(previous => { const next = {...previous, slug, tagIds}; setSavedSnapshot(JSON.stringify(next)); return next; })` snapshots the *current* form including the mid-flight keystrokes. `isDirty` becomes false, the status line reads the saved timestamp, and `useUnsavedChangesGuard(isDirty)` installs no beforeunload/click interception — so a link
+- **PackageForm's reset effect fires whenever the manager replaces list objects, wiping unsaved edits on reorder or toggle** — `apps/web/src/components/packages/package-form.tsx:129-132`. The vendor's typed name/description/price/inclusions vanish with no prompt; the editor shows the last saved values under 'Edit package'.
+- **Portfolio reorder is allowed while an upload is in flight; the reorder response replaces the client list and erases the photo the upload just appended (or the server 400s the reorder)** — `apps/web/src/components/portfolio/portfolio-manager.tsx:146`. Two orderings, both wrong. (a) POST /vendor/portfolio commits before PUT /vendor/portfolio/reorder is handled: the API's assertCompleteOrder rejects the id list as incomplete, the order snaps back and the vendor sees 'Could not save the new order.' for a reorder they did correctly. (b) The reorder is handled first but its response arrives after persist() appended the new row: `setItems(saved)` overwrites the list wit
+- **Suggesting an existing tag at the per-category limit shows 'we've selected X for you' while the selection was refused** — `apps/web/src/components/tags/tag-suggestion-form.tsx:63-70,81-83`. Two contradictory toasts; the tag is not selected and the vendor is told it was.
+- **Four mutation forms render ApiClientError.message verbatim, leaking 5xx and generic upstream shapes the project's userFacingError exists to suppress** — `apps/web/src/components/bookings/accepted-request.tsx:69`. The role="alert" shows 'Request failed' / 'Internal server error' / a client-internal schema message — all in UPSTREAM_ERROR_SHAPES that user-facing-error.ts pins as never-shown, and confirm-action.tsx:51-63 documents why (money paths are the ones most likely to 500). In the schema-drift case the refund has already been issued and the row cancelled, but router.refresh() is skipped, so the customer keeps seeing 'Cance
+
+#### Acceptance
+
+1. A profile save is one unit: if the tag write fails, the profile write does not silently stand and the form does not stay 'unsaved' forever.
+2. The saved snapshot is what was sent, so text typed during the PUT is still unsaved afterwards and the leave guard stays armed.
+3. Fields are not editable while the save is in flight, or the editor accounts for edits made during it.
+4. `Visible to customers` reads the same state it writes: it is disabled while there are unsaved changes, or it saves first.
+5. The package form does not reset on a parent list replacement that is not a different package.
+6. Portfolio reorder is refused, or queued, while an upload is in flight.
+7. Suggesting a tag at the per-category limit says the selection was refused rather than claiming it was made.
+8. No mutation form renders `ApiClientError.message` verbatim — `web-route-boundaries.md` forbids it and four forms do it.
+
+#### Tests (required)
+
+- [ ] A test per behaviour; the two-write rollback needs a failing tag write with a succeeding profile write
+
+---
+
+### #406: Development defaults can reach a deployed build
+
+**Milestone:** M-OPS | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `storage` `stripe`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Five variables carry a development default that a production build silently
+accepts: the API boots on localhost and MinIO, the web bundle bakes
+`http://localhost:4000` as its API origin, every stored-key image resolves to
+nothing, checkout loads Stripe.js with an empty publishable key, and the Clerk
+webhook guard is a no-op off Railway. This is the law in `CLAUDE.md` — *a
+development default must never be able to reach production* — and it is
+violated in every consumer.
+
+#### The findings this groups
+
+- **API boots in production on the localhost/MinIO development defaults for every per-environment variable that carries one** — `apps/api/src/config/env.ts:64`. The process starts, `/health` is 200 and nothing logs a warning, but: CORS `origin` is `['http://localhost:3000']` (server.ts:127-131) so every browser call from the real web origin fails preflight; `canonicalWebOrigin` hands Stripe `http://localhost:3000/vendor/payments/return` as the Connect return/refresh URL and every notification email links to localhost; uploads and the reap path go to `http://localhost:9000` w
+- **Web build on Vercel silently bakes http://localhost:4000 as the API origin when NEXT_PUBLIC_API_URL is unset** — `apps/web/src/lib/api-client.ts:8`. Every browser call — search results, notifications, SSE ticket, messages, upload XHR, Stripe confirm — is sent to the visitor's own machine on port 4000 and fails; every server-side loader in the Vercel function dials its own localhost:4000 and hits ECONNREFUSED, so `requireCurrentUser`, `/`, `/search` and `/vendors/[slug]` land on the error boundary. The CSP `connect-src` names `http://localhost:4000` (next.config.t
+- **Every stored-key image resolves to nothing when NEXT_PUBLIC_S3_PUBLIC_URL is missing from a production build, with no error** — `apps/web/src/lib/wire-schemas.ts:55`. `resolveImageUrl(undefined, key)` returns `null` by design (packages/shared/src/utils/index.ts:419-423), so every uploaded photo on /search cards, /vendors/[slug], the vendor's own portfolio manager and the header avatar renders as the empty-image state. Uploads still succeed (the API's `S3_PUBLIC_URL` is separate), so a vendor uploads a photo, gets a 201, and never sees it — indistinguishable from 'no photos yet'. N
+- **Checkout loads Stripe.js with an empty publishable key and the build gate does not require it** — `apps/web/src/components/checkout/checkout-screen.tsx:25`. The server page opens a real PaymentIntent (openCheckout succeeds, money-side state is created) and renders `CheckoutScreen`; Stripe.js rejects the `''` key, `Elements` receives a rejected promise and the checkout client crashes to the error boundary. The customer cannot pay, the build that shipped this was green, and `env.test.ts:76-79` asserts the key is *not* required ('does not require a capability the web app ha
+- **Checkout falls back to an empty Stripe publishable key; the web build never validates the Stripe capability, so a misconfigured deploy ships a checkout with no card field and a Pay button that does nothing** — `apps/web/src/components/checkout/checkout-screen.tsx:25`. `loadStripe('')` rejects (Stripe.js refuses an empty key), `useStripe()` stays null, PaymentElement never mounts, and the submit button — disabled only by `paying` (line 280) — is enabled; `pay` returns early at line 141 on `!stripe`, so clicking does nothing, with no on-screen error. The customer sees 'Confirm and pay', a blank card area and a dead 'Pay $X — confirm <date>' button; the request stays accepted/unpaid.
+- **Clerk webhook endpoint guard is a no-op on every platform except Railway, so the localhost default passes a deployment boot** — `apps/api/src/modules/webhooks/clerk.endpoint-guard.ts:100`. The boot-time check that exists because 'a webhook pointed elsewhere fails silently' (registry.ts:414-415) does not run on the two platforms this repository actually deploys to today — memory records the Railway service as removed. A relay or stale endpoint on the production Clerk app goes undetected: `user.updated` / `user.deleted` never arrive, deleted Clerk accounts keep a live `users` row and a working session, a
+
+#### Acceptance
+
+1. A production target refuses to boot, or refuses to build, when a per-environment variable is still on its development default. The registry already knows which those are.
+2. The web build fails rather than baking `localhost` into a bundle.
+3. The Stripe capability is validated by the web build, so a deploy cannot ship a checkout with no card field.
+4. The Clerk webhook endpoint guard runs on every platform, not only where `RAILWAY_PUBLIC_DOMAIN` happens to be set.
+5. Each of these is asserted by a test that sets `NODE_ENV=production` and expects the throw.
+
+#### Tests (required)
+
+- [ ] One test per variable class, asserting the production branch throws — a default is exactly the code no test covers
+
+---
+
+### #407: Reads hand back more than the caller is entitled to
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Three reads return fields their audience should not have: a public endpoint
+serves the vendor's private per-date note, a customer-facing booking read
+carries the platform fee, the vendor payout split and the Stripe transfer id,
+and any authenticated user can pin another vendor's storage object by naming
+its key, which turns the owner's delete into a no-op.
+
+#### The findings this groups
+
+- **Public availability endpoint serves the vendor's private per-date note to anyone** — `apps/api/src/modules/vendors/vendors.routes.ts:118`. The note is returned verbatim on a public, unguarded route. getPublicVendorAvailability (vendor-profile.service.ts:82-91) only trims *past* rows and its own comment says the reason is that 'every past row returned here would carry the vendor's private note ... over a public endpoint' — but findAvailabilityInRange (availability.dao.ts:70) is a bare select() over every column and the response schema availabilitySchema 
+- **Customer-facing booking reads return the platform fee, vendor payout split and Stripe transfer id** — `apps/api/src/modules/booking-requests/booking-requests.routes.ts:165`. listBookings (booking-requests.service.ts:937-943) and reconcileBooking (payments.service.ts:394,416) spread the full bookings row through bookingWithContextSchema (schemas/index.ts:765-796), which carries platformFeeCents, vendorPayoutCents, stripePaymentIntentId and stripeTransferId. payments.service.ts:193-196 states the platform's commission 'is none of the customer's business', yet the customer can read exactly 
+- **Any authenticated user can pin another vendor's storage object by referencing its key, making the owner's delete a no-op** — `apps/api/src/modules/portfolio/portfolio.dao.ts:216`. removePortfolioItem -> reapObjects passes ownsObjectKey for B, but findUnreferencedKeys (portfolio.dao.ts:216-258) counts A's users.avatar_url / portfolio_items row as a live reference and skips storage.remove. B's photo stays served indefinitely at its public URL and, in the vendor-A variant, is displayed on A's public storefront as A's own work. B has no way to remove it; the DAO comment even notes that 'any authen
+
+#### Acceptance
+
+1. The public availability response is projected through a schema without `note`.
+2. Customer-facing booking reads carry no platform fee, payout split or Stripe transfer id.
+3. An object key can only be referenced by the account that owns its prefix; a write naming someone else's key is refused.
+4. Each is pinned by a test asserting the field is absent rather than that the route answers 200.
+
+#### Tests (required)
+
+- [ ] A public-route test asserting `note` is absent
+- [ ] A customer read test asserting the three money fields are absent
+- [ ] An ownership test for `imageUrl`/`avatarUrl` writes naming a foreign key
+
+---
+
+### #408: A legal request body 500s, and four reads have no ceiling
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `email`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Two classes with the same shape: a value the schema accepts is wider than the
+column that stores it, so an ordinary input answers 500 after the state has
+already moved; and several reads have no limit, one of which fans out an
+unbounded `Promise.all` that ends in an email send.
+
+#### The findings this groups
+
+- **Notification title built from a 200-char business name overflows notifications.title varchar(200), 500-ing quote/decline after the status has already moved and silently dropping the booking-confirmed notification** — `apps/api/src/modules/booking-requests/booking-requests.service.ts:846`. transitionRequest runs applyTransition (line 641) and syncHeldDate (648) first, then announce (650) → notifyParty → recordNotification → insertNotification with no try/catch and no truncation; Postgres rejects the row (`value too long for type character varying(200)`), the error is not an AppError, and the vendor gets an opaque 500 while the request is already `quoted`/`declined` — no in-app row, no email to the cust
+- **Notification `title` is `varchar(200)` but three titles interpolate a 200-char business name, so the write fails after the state transition has already committed** — `apps/api/src/modules/booking-requests/booking-requests.service.ts:846`. Quote/decline: `applyTransition` (:641) and `syncHeldDate` (:648) are separate statements already committed when `announce` throws, so the request is `quoted`/`declined` but the vendor gets an opaque 500, the customer gets no notification or email, and a retry answers 409 `INVALID_STATE_TRANSITION`. Payment: `confirmBooking` has committed the booking and the `booked` date when `announceBooking` throws; the webhook an
+- **Category-prefixed tag slug can exceed tags.slug varchar(100) for a legal 100-char suggestion, so approve and rename 500 instead of 400** — `apps/api/src/modules/admin/admin.service.ts:563`. tagSlug returns `${category}-${generateSlug(name)}` — up to 8 + 1 + 100 = 109 characters — and insertTag (inside the transaction at admin.service.ts:729) or updateTagRow throws `value too long for type character varying(100)`. The transaction rolls back and the admin gets an opaque INTERNAL_ERROR; the suggestion stays `pending` in the queue with no way to approve it, and nothing tells the operator why.
+- **Vendor slug collision suffix pushes a 200-char slug past vendor_profiles.slug varchar(200)** — `apps/api/src/modules/vendors/vendors.service.ts:125`. The candidate is 201–202 characters; slugExists compares fine, then insertVendorProfile throws `value too long for type character varying(200)` — an opaque 500 rather than the 409 `That business name is already taken` the loop is written to produce. Even if the column accepted it, the response would fail `slugSchema.max(MAX_SLUG_LENGTH)` serialization.
+- **displayOrder accepted up to 2^53 but stored in int4 — a legal body yields a 500 on package/portfolio/tag writes** — `packages/shared/src/schemas/index.ts:519`. packages.service.ts:63/109 and portfolio.service.ts:49 pass the value straight to the insert/update; Postgres raises `value "2147483648" is out of range for type integer`, which is not an AppError, so the caller gets an opaque 500 INTERNAL_ERROR instead of the 400 every other bounded field returns. Every other integer input in the schema file (guestCount, priceCents, yearsInBusiness, serviceRadiusKm, page) carries a 
+- **Four list endpoints return every row the caller has ever had with no limit or pagination** — `apps/api/src/modules/booking-requests/booking-requests.dao.ts:456`. Unlike `/notifications`, `/conversations/:id/messages`, `/vendors/:slug/reviews` and every admin list — all of which page through `paginationQuerySchema` — these four accept no `page`/`pageSize` and apply no `LIMIT`, so the response body, the `bookings ⋈ booking_requests` join (`findBookings`) and the three-way `reviews ⋈ bookings ⋈ vendor_profiles` join (`findCustomerReviews`) all grow without bound over an account'
+- **GET /booking-requests reads the actor's entire request history with no limit and ages every expired row in an unbounded Promise.all, each chain ending in an email send** — `apps/api/src/modules/booking-requests/booking-requests.service.ts:565`. `findRequests` (`booking-requests.dao.ts:109-113`) has no `LIMIT`, so every row the actor ever had is loaded and serialised on each load; the payload grows forever. Worse, `rows.map(ageIfExpired)` under `Promise.all` starts all N expiry chains at once with no concurrency cap; each chain (`:187-234`) runs `applyTransition` UPDATE, `statusesOnDate` SELECT, `setHeldDate` DELETE, `insertNotification`, `findUserEmail` SEL
+- **Resend fetch has no timeout and is awaited inline on every notification-bearing request, so an email stall hangs booking actions and starves request reads** — `apps/api/src/lib/email.ts:63`. `fetch(RESEND_API, …)` carries no AbortSignal/timeout, so the await inside sendNotificationEmail blocks until undici's default ~300s headers timeout. Browser calls deliberately have no deadline (api-client.ts:179), so the customer's 'Sending…' / vendor's Accept button sits busy for minutes with no error. Server-side reads do have the 8s deadline: a vendor dashboard whose list read expires a request waits on that requ
+- **Post-commit notification writes are unguarded, so a failure after the state change returns 5xx for work that succeeded and (for the webhook) permanently loses the booking_confirmed notifications** — `apps/api/src/modules/payments/payments.service.ts:287`. Webhook: 500 to Stripe, Stripe retries, the retry short-circuits at `existing` (:232-236) → 'already-booked', so neither party ever receives the booking_confirmed row or email and no retry can repair it. Reconcile path: the /confirmed page throws to the error boundary although the booking exists (reload works). Messages: the row is inserted, the route 500s, messages-screen shows 'That message did not send. Your text 
+- **`users.total/completed/cancelled_bookings_count` are documented as derived but have no writer anywhere, so every customer is permanently a 0-booking "New member"** — `packages/db/src/schema/users.ts:47-51`. `GET /customers/:customerId/profile` tells every vendor the customer has 0 total / 0 completed / 0 cancelled bookings and `completionRate: null` regardless of history; `/customer/profile` (`apps/web/src/app/customer/profile/page.tsx:62-64,93`) shows the "New member" badge and "0 bookings" to a customer with ten completed events; `/admin/customers` lists `totalBookingsCount` 0 for everyone. A column the schema comment
+
+#### Acceptance
+
+1. Every schema bound agrees with its column: notification title against a 200-char business name, tag slug against its prefix, vendor slug against its collision suffix, `displayOrder` against int4.
+2. A value that would overflow answers 400 before the transition commits, not 500 after it.
+3. The four unbounded list endpoints paginate, and the expiry sweep is bounded and does not send email inline.
+4. The Resend call carries a timeout and is not awaited on the request path.
+5. A post-commit notification failure does not turn a succeeded write into a 5xx, and is not silently lost.
+6. `users.total/completed/cancelled_bookings_count` either get a writer or are removed and derived at read time — every customer currently reads as a 0-booking 'New member'.
+
+#### Tests (required)
+
+- [ ] A test per bound, using the longest legal value
+- [ ] A test that the expiry sweep is bounded
+- [ ] A test that a failed notification write does not fail the request
+
+---
+
+### #409: The server's UTC day stands in for the viewer's day
+
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+`todayDateString()` says in its own contract that it is only meaningful on the
+client, and three server components call it. West of UTC a vendor's current day
+renders as already past on the availability calendar and the dashboard's 'This
+week'; east of UTC yesterday stays pickable on the booking request form. #391
+fixed the dashboard's earnings month the same way and its approach is the
+precedent.
+
+#### The findings this groups
+
+- **Calendar 'today' and dashboard 'This week' use the UTC day, so a vendor in the evening (west of UTC) sees their current day rendered as already past** — `http://localhost:3000/vendor/availability and http://localhost:3000/vendor/dashboard (today from toDateString(new Date()) = UTC date)`. The calendar cell for 2026-09-03 is labelled '… in the past' and the sidebar 'Today' outline sits on Sep 4; the dashboard 'This week' rail starts at 'Friday, September 4'. A PUT blocking 2026-09-03 returned 200 but wrote nothing (treated as past). For any US vendor after ~19:00–20:00 local, the day they are still living in is uneditable and shown as history — the date effectively moves a day. Expected: 'today' anchor
+- **Booking-request date floor is the server's day, so the customer's own current day is greyed out (west of UTC) or yesterday stays pickable (east of UTC)** — `apps/web/src/app/vendors/[slug]/request/page.tsx:66 (also apps/web/src/app/vendors/[slug]/page.tsx:176)`. West of UTC the DateDropdown treats 09-03 as past and blocks it with 'missing/past date' although `isPastDate`'s contract (utils:311-318) is that 'an event happening today is still bookable' and the API would accept it (`isUniversallyPastDate`, booking-requests.service.ts:394). East of UTC the form offers 09-03 — already yesterday for the customer — and the API accepts the request (09-03 is not universally past at 22
+
+#### Acceptance
+
+1. Every 'today' a viewer sees is the viewer's today, anchored the way #391 anchors the earnings month.
+2. The availability calendar, the dashboard week strip and the booking-request date floor all agree with each other and with the browser.
+3. A test pins the behaviour under a western and an eastern `TZ`.
+
+#### Tests (required)
+
+- [ ] Tests run under two timezones, asserting the same rendered day
+
+---
+
+### #410: Signing in through returnTo lands on a blank page
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Three reproductions of one defect: a `returnTo` pointing at a route the
+signed-in role may not see leaves the browser on a blank page with signed-out
+chrome, rather than redirecting to somewhere that role can be. A vendor signing
+in from a booking request form, a vendor sent to `/customer/profile`, and a
+customer sent to `/vendor/dashboard` all hit it.
+
+#### The findings this groups
+
+- **Vendor signing in through the request form's returnTo lands on a blank page instead of the dashboard** — `http://localhost:3000/vendors/e2e-test-studio/request (after /sign-in?returnTo=%2Fvendors%2Fe2e-test-studio%2Frequest)`. The vendor is signed in (window.Clerk.user is the vendor) but sees an empty page at the request URL: #main has 0 children, no h1, and the header still shows 'Sign in' / 'Sign up'. Nothing on screen tells them what happened or where to go. A fresh navigation to the same URL afterwards redirects to /vendor/dashboard correctly, so the server-side redirect() in the page is not being honoured on the post-sign-in client re
+- **Vendor signing in through returnTo=/customer/profile is left on a blank /customer/profile page** — `http://localhost:3000/sign-in?returnTo=%2Fcustomer%2Fprofile`. The vendor lands on /customer/profile with the header rendered and an empty <main> (innerHTML 17 chars, no text, no skeleton, no aria-busy) and stays there; sampled once per second for 8 s, then again at 6 s on a second run, URL never changed. Title is 'Your profile · Orla'. A manual reload sends them to /vendor/dashboard, and a direct visit to /customer/profile as vendor redirects to /vendor/dashboard immediately, s
+- **Signing in as a non-vendor through /sign-in?returnTo=/vendor/dashboard leaves a blank page with a signed-out header** — `http://localhost:3000/sign-in?returnTo=%2Fvendor%2Fdashboard -> http://localhost:3000/vendor/dashboard`. After sign-in the URL is /vendor/dashboard, document.title is 'Your business · Orla', <main> is empty (innerHTML length 17), and the header shows 'Sign in' / 'Sign up' links even though window.Clerk.user is set with role 'customer' (resp. 'admin'). Still blank after 3–5 s. A subsequent manual navigation to /vendor/dashboard redirects correctly (customer -> /bookings, admin -> /admin), so only the post-sign-in landing
+
+#### Acceptance
+
+1. A `returnTo` the authenticated role cannot use redirects to that role's home, not to a blank render.
+2. The header renders its signed-in variant on that first navigation.
+3. The redirect target is computed from the role the session actually has, in one place.
+
+#### Tests (required)
+
+- [ ] A test per role/target pair asserting the landing route and that the page renders
+
+---
+
+### #411: Accessibility: dialogs, calendars and composite controls are unreachable or unannounced
+
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+The static accessibility hunt found, beyond the focus-ring work #383 owns and
+the silent-submit work #388 closed:
+
+- **Portfolio lightbox** (`portfolio-pane.tsx:108-160`) is `role="dialog"
+  aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
+  restores focus — a keyboard user tabs the page underneath the scrim.
+- **Read-only availability calendar** (`availability-pane.tsx:60-75`) states
+  free/booked by colour alone, on `text-stone-400` (~1.7:1) with the status
+  only in `title=`.
+- **Date picker** (`ui/dropdown-date.tsx:213-259`) claims `role="grid"` with
+  `gridcell` buttons and no rows, no arrow keys and no roving tabindex, so
+  every day is a tab stop while the role promises otherwise; day names are raw
+  ISO strings.
+- **Vendor availability grid** (`availability-calendar.tsx:485-492`) has empty
+  `<th>` names and ISO cell labels.
+- **Nested `<main>` landmarks** on the request detail, checkout and confirmed
+  pages, inside the layout's own `main#main` — which is also why frame `06`'s
+  gradient stops short of the viewport.
+- **Image upload** (`image-upload.tsx:315-323`) paints the focus ring on a
+  transparent input, so it is invisible on all three photo fields.
+- **Unnamed inputs**: three `CommandInput`s in the tag pickers, the admin
+  filter search, the message composer (placeholder only).
+- **Announcements**: the messages send failure, the search skeleton, the
+  thread's incoming messages.
+- **Avatar** repeats the adjacent name at seven call sites; `aria-pressed` on
+  links in two admin pages; heading order skips h2 on the vendor profile,
+  search results and availability.
+
+#### The findings this groups
+
+- **Two nested <main> landmarks on the request detail and checkout pages** — `http://localhost:3000/bookings/ac475f65-526a-4856-9cbe-dd8979691a74 and http://localhost:3000/bookings/ac475f65-526a-4856-9cbe-dd8979691a74/checkout`. Invalid landmark structure: a <main> inside #main. Screen-reader landmark navigation announces two main regions, and any role=main locator is ambiguous (Playwright's 'main' locator threw a strict-mode violation). The hub (/bookings) and the request form have exactly one.
+
+#### Acceptance
+
+1. Every item above is fixed or explicitly ruled out in the ticket's notes with the reason.
+2. The lightbox focuses, traps and restores; the date picker either drops the grid role or implements the grid keyboard model; every control has an accessible name; every status message is in a live region.
+3. No page renders a second `<main>`.
+4. Colour is never the only carrier of state.
+5. A source-level guard covers what a guard can reach (nested landmarks, missing `aria-label` on icon-only buttons), and the rest is verified in the browser.
+
+#### Tests (required)
+
+- [ ] A landmark guard test
+- [ ] RTL tests for the lightbox focus contract and the date picker's keyboard model
+
+---
+
+### #412: Customer profile and storefront CTAs report things that are not so
+
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
+below was reproduced or traced by a read-only hunter or a browser pass, then put
+through three adversarial skeptics with distinct lenses; only findings a majority
+upheld are here.
+
+Seven small correctness and copy defects on the customer profile and the public
+storefront, each of which tells the reader something untrue.
+
+#### The findings this groups
+
+- **Guest-count decimals and exponent notation are silently truncated and saved under a 'Profile saved' toast** — `http://localhost:3000/customer/profile (Guests, from / Guests, up to)`. No validation message. PUT /users/me is sent with typicalGuestCountMin: 2 (for 2.7) and typicalGuestCountMax: 1 (for 1e21), the toast says 'Profile saved', and the inputs keep showing 2.7 / 1e21 — what the user sees and what is stored disagree. 1e21 becoming 1 collapses the range to 1–1. By contrast 0, -5 and 100001 are refused client-side (no PUT).
+- **Sidebar 'My bookings' badge shows 9 on /customer/profile but 7 on /bookings for the same account** — `http://localhost:3000/customer/profile and http://localhost:3000/bookings (BookingsSidebar)`. The same navigation element contradicts itself between the two pages it is shared by. /bookings shows 7 (Upcoming 3 + History 4) and the DB has 7 booking_requests and 2 bookings for this customer; the profile page shows 9, i.e. requests plus bookings summed so accepted requests are counted twice.
+- **Validation failure surfaces the bare Zod default 'Invalid input' with no field named** — `http://localhost:3000/customer/profile (Save changes error line)`. The request is correctly not sent, but the only text shown is 'Invalid input'; the offending field is not named and is not marked aria-invalid (the bio counter does read 301 / 300, the guest field has no such cue). Guest range inversion, by contrast, gets a proper message ('The smaller number goes first — swap them and this will save.') and a disabled button.
+- **Unsaved profile edits are discarded without a prompt on navigation** — `http://localhost:3000/customer/profile`. No confirm dialog and no beforeunload prompt in either case; pressing Back returns to the last saved value and the draft is gone.
+- **Single 'Profile photo' field carries multi-file hint copy** — `http://localhost:3000/customer/profile (Profile photo help text)`. Hint reads 'JPG or PNG · 12 MB each · min 1200px wide · 20 files per upload' for a field that stores exactly one image (the chooser and the rejection copy both treat it as one file: 'JPG or PNG · under 12 MB · at least 1200px wide').
+- **Vendor account can open a conversation from a storefront while the same account is refused 'Request booking'; CTAs also shown on the vendor's own storefront** — `http://localhost:3000/vendors/kessler-co`. 'Send a message' navigates to /messages?conversation=5f01314a-cf56-4948-9ede-52358a522c2a and inserts a conversations row with the vendor-role user as customer_id. 'Request booking' for the same account silently redirects to /vendor/dashboard with no explanation. The vendor's own storefront still renders 'Request booking' and 'Send a message' against themselves. The role gate is applied to one CTA and not the other, 
+- **Request detail page prints the event date as raw ISO text** — `http://localhost:3000/bookings/ac475f65-526a-4856-9cbe-dd8979691a74`. The summary line reads 'Wedding · 2026-10-20 · <venue>' while the form, the review step and the hub render the same date as 'October 20, 2026' / 'Tue, Oct 20'. Inconsistent copy on the one page the customer lands on from the hub.
+
+#### Acceptance
+
+1. A decimal or exponent guest count is refused rather than truncated under a 'Profile saved' toast.
+2. The `My bookings` badge is one number, computed once.
+3. A validation failure names the field rather than rendering Zod's `Invalid input`.
+4. Navigating away from unsaved profile edits prompts, as the editor does.
+5. The single-photo field does not carry multi-file hint copy.
+6. A vendor account sees the same answer for `Send a message` as for `Request booking`, and neither CTA is offered on the vendor's own storefront.
+7. The request detail page formats the event date rather than printing the ISO string.
+
+#### Tests (required)
+
+- [ ] A test per item
 
 ---

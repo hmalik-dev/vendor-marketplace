@@ -488,6 +488,21 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   395: ['stripe'], // frame `05 Checkout` parity — the screen only renders with a live intent
   396: ['stripe'], // the CSP that blocks Stripe; verifying it means driving the payment path
   397: ['stripe'], // the webhook's answer to a succeeded intent it cannot apply — proven with `stripe trigger`
+  398: [], // escaping and neutralisation in the app's own render path
+  399: ['stripe'], // concurrency on the money path — the refund key is Stripe's
+  400: ['stripe'], // cancel unwinds a real refund, so the sweep needs Stripe
+  401: ['stripe'], // the checkout it leads to is the proof
+  402: [], // messaging is entirely first-party
+  403: [], // search is entirely first-party
+  404: [], // draft restore is client state
+  405: [], // the editor's writes are first-party
+  406: ['auth', 'storage', 'stripe'], // the point is the defaults every provider variable carries
+  407: ['storage'], // one of the three leaks is an object key
+  408: ['email'], // the unbounded sweep ends in an email send
+  409: [], // a timezone boundary, no external service
+  410: ['auth'], // the redirect is decided from the Clerk session
+  411: [], // accessibility is markup and behaviour
+  412: [], // copy and validation, no external service
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
