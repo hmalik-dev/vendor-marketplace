@@ -208,10 +208,9 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **383** | **Focus indicators — one ring per control, and one idiom for the whole app** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 on the user's report**, verbatim: *"ensure theres a ticket there to fix the issue of multiple (including an outdated focus) on the inputs.. and verify it across the app that that issue doesnt persist. I am seeing it in multiple places right now."* **Root cause located, not guessed.** `globals.css:152-154` applies `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none` to **every** `:focus-visible` node in the app. Tailwind's `ring` and `inset-ring` write **different** custom properties (`--tw-ring-shadow` / `--tw-inset-ring-shadow`), and `outline` is a different CSS property again — so a component that adds an inset ring or an outline paints **its own indicator and the global one at the same time**. Three components already found this and turned the global ring off by hand (`profile-tabs.tsx:141`, `vendor-card.tsx:164`, `command.tsx:78`); seven more did not. **The "outdated" half is literal:** that global rule is the *superseded* law. `03-components.md:120-124` replaced "the offset ring for everything" with **three treatments by element type** and says so in as many words; the global rule is the old one, still shipping, and at `/30` where even `04-laws.md:135` says `/40`. Full site table in the detail section |
 | **384** | **Search rework — `City` becomes a place search over every US city, not the inventory list** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 on the user's explicit instruction**, verbatim: *"i currently want the city dropdown to function the way airbnb's 'where' input functions. Do not preload and indicate how many vendors are in each city.. users should be able to search for any city and see the results."* **The third user override of the design contract, after #364 and #375 — record it as one.** It overrides #375's own closing invariant (*"A free-text city that reaches the API as a filter is a regression, not this ticket"*) and D6's rule that the field may only ask questions the platform can answer. Three things go: the preloaded `GET /vendors/cities` payload, `vendorCount` as a ranking **and** display signal, and the rule that a city with nobody in it is unpickable. **The `(city, state)` pair survives** — `state` has been the closed `us_state` enum since #332 and "Springfield" still names a place in thirty-odd states — so a suggestion still names its state; what changes is *which* places may be suggested. Detail section carries the scope, the suggestion source and the empty-state contract |
 | **385** | **[DESIGN] Ruling round — the four questions blocking #371 and #313** | P1 | M3 | **P1 High** | **Backlog** | — | **A design pass: it edits `design/` and answers product rulings, which `web-design-parity.md` reserves for one** | `core` | **Filed 2026-08-31 by the fourth backlog consolidation. Merges #377, #378 and #380**, and takes the contrast question out of **#313**'s blocked half. One person, one sitting, one design bundle open. Split, they stall four separate times for one reason — and three of the four block the same ticket, so answering them one at a time re-opens #371 three times. **Same shape as #335**, the 2026-08-29 ruling round that unblocked eleven rows at once. The merged rows carry the measurements and are the checklist. **Order: rule first, re-cut second, and only then do #371, #313 and #386 become ordinary code work** |
-| **386** | **Visual corrections read off the frames — four undefined ramp steps and the search skeleton** | P2 | M3 | **P2 Medium** | **Backlog** | `worktree-386` | **None** | `core` | **Filed 2026-08-31 by the fourth backlog consolidation. Merges #376 and #379.** Both are single-pass corrections whose value is read off a frame and then guarded; both are unblocked; and neither fills a lane on its own, while each would otherwise cost a worktree, a preflight, a PR and a merge. One browser session covers all three frames — `05 Checkout`, `06 Booking confirmed`, `17 Search loading`. The merged rows carry the measurements and are not restated **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-386 (checkpointed `4877d7a`); resume from that branch rather than rebuilding. |
 | **392** | **Frame `13 Admin` parity debt — four class-level misses and the missing chevrons** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's `parity-checker` pass.** Frame `13` matched on all six axes for #389's own change, and the pass surfaced five pre-existing misses it did not own. **#372 does not cover these** — it closes frames `08`, `04`/`07`/`19`, `16`, `18` and the site chrome, not `13`. **All five are class- or token-level, so no viewport can change them** — re-derived from source after a peer challenged whether the readings were taken at 1440: the pane uses `rounded-xl` → `--radius-xl: 14px` (`theme.css:221`) where the frame draws 12px, which is `--radius-panel` on the line above; `admin-nav.tsx:66` is `min-h-11` in a `gap-1` list, a 48px pitch by construction against the frame's 34px, ending the rail 93px low; `status-pill.tsx:40` is `px-2.5 py-1.5 text-xs font-bold` against the frame's `10px/700` with `padding 5px 10px` (47.36×26 vs 44.88×23), and that size comes from `03-components.md`'s vocabulary, so **the plan is what needs correcting, not only the component**; the avatar initial renders `font-sans` where the frame draws Instrument Serif; and `filter-bar.tsx`'s `Category ▾ / City ▾ / Payouts ▾` triggers render **no `▾` glyph at all** (`innerHTML` is bare text, zero children), which walks City 15px and Payouts 25.6px left of their frame positions. **Not in scope:** frame `13`'s table pane clipping its own fifteenth row by 4px — that is **#385**'s to rule on, and the app reproduces it within a pixel or two |
 | **393** | **Admin tables have no responsive strategy below 1024** | P1 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's browser pass.** `30-responsive.md:31` specifies Admin as `768 → Horizontal scroll` and `390 → Card list, not a table`. **Neither exists.** After #389 the layout is correct at every width and nothing overflows — but at 390 `/admin/reviews` resolves to `12.2px 31.73px 31.73px 21.97px 46.38px 21.97px 70px`, so headers render `R…`, `A…`, `W…` and body cells `4…`, `Ro…`, `T…`. **A 12px column cannot show more than an ellipsis**, so the tables are legible only at 1024 and above. This is #389's fix working, not failing: before it, the rows were mutually misaligned *and* the document scrolled sideways, so the contract's 768 row was never actually implemented either — the old horizontal scroll was incoherence, not a degradation. Ruling needed on whether 768 keeps the contract's scroll-inside-the-pane or follows 390 to cards |
-| **395** | **Frame `05 Checkout` fails parity on all six axes** | P1.5 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's parity pass — the first that could reach the screen.** Checkout was unrenderable for the E2E customer until #387 landed a real connected account, so the frame had never been measured. Measured at 1440x900 against `Orla - Screens.dc.html` lines 877–925: **Layout 5** — the full app-shell header renders above the checkout's own wordmark header (`layout.tsx:127`, giving 128px of chrome against the frame's 64px and a **nested `<main>`**, so `Skip to content` lands above the extra nav), the pay button and its reassurance sit in the left column with their bottom edge at 917px — below the 900px fold — where the frame draws them as the summary rail's fourth block, the rail mini-card is missing its `<package> · <duration>` second line, header padding is `0 40px` against `0 32px`. **Style 5** — card shadow `--shadow-md` for `--shadow-sm`, panel radius 14px for 12px, avatar 64px circle for a 54px 12px-radius square, logo at `LOGO_SIZES.authPanel` (19px circles) where the frame draws 15px. **Colour 2** — page ground `stone-100` for `stone-50`. **Font 5** — `h1` 30px for 26px (over `04-laws.md`'s 26px app ceiling), letter-spacing `normal` for `-.01em`, context line and `Total today` 12.5px for 14px. **Text 2** — the rail sub-line and the frame's `Name on card` field have no counterpart. **Access 1** — the nested `<main>` is two landmarks and a wrong skip target. Contrast passes at 4.83:1 worst case; the focus ring passes, sampled twice. **Two are contract gaps, not template omissions:** `checkoutIntentSchema` carries neither package name nor duration, so the rail sub-line needs the API widened. **Coordinate with #386**, which owns token substitutions on other surfaces. |
+| **395** | **Frame `05 Checkout` fails parity on all six axes** | P1.5 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's parity pass — the first that could reach the screen.** Checkout was unrenderable for the E2E customer until #387 landed a real connected account, so the frame had never been measured. Measured at 1440x900 against `Orla - Screens.dc.html` lines 877–925: **Layout 5** — the full app-shell header renders above the checkout's own wordmark header (`layout.tsx:127`, giving 128px of chrome against the frame's 64px and a **nested `<main>`**, so `Skip to content` lands above the extra nav), the pay button and its reassurance sit in the left column with their bottom edge at 917px — below the 900px fold — where the frame draws them as the summary rail's fourth block, the rail mini-card is missing its `<package> · <duration>` second line, header padding is `0 40px` against `0 32px`. **Style 5** — card shadow `--shadow-md` for `--shadow-sm`, panel radius 14px for 12px, avatar 64px circle for a 54px 12px-radius square, logo at `LOGO_SIZES.authPanel` (19px circles) where the frame draws 15px. **Colour 2** — page ground `stone-100` for `stone-50`. **Font 5** — `h1` 30px for 26px (over `04-laws.md`'s 26px app ceiling), letter-spacing `normal` for `-.01em`, context line and `Total today` 12.5px for 14px. **Text 2** — the rail sub-line and the frame's `Name on card` field have no counterpart. **Access 1** — the nested `<main>` is two landmarks and a wrong skip target. Contrast passes at 4.83:1 worst case; the focus ring passes, sampled twice. **Two are contract gaps, not template omissions:** `checkoutIntentSchema` carries neither package name nor duration, so the rail sub-line needs the API widened. **Coordinate with #386**, which owns token substitutions on other surfaces. **Blocked in practice as of 2026-09-04, though not by another ticket:** #386's parity pass could not measure this frame at all. The only `accepted` booking request without a booking that the E2E customer can reach has an event date of 2026-09-03 — yesterday — and `/bookings/<id>/checkout` answers the 500 page for it. That is #401's defect (a request accepted for a past date). Either #401 lands first, or `pnpm db:seed:e2e` has to leave a future-dated accepted request behind; the pass deliberately did not manufacture one. |
 | **398** | **Untrusted vendor text reaches a public page unescaped** | P1.5 | M4.5 | **P0 Critical** | **In Progress** | `main` | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 2 verified findings. Two findings, one root: free text a vendor or customer typed is written to a **In Progress 2026-09-04 (autonomous QA run, on `main` per operator instruction).** The XSS half is closed and audited: `serialiseJsonLd` escapes `<`, `>`, `&` and the two JS line separators into `\uXXXX` forms, both JSON-LD sites route through it, and a source guard asserts the exact set of `dangerouslySetInnerHTML` call sites and that every `application/ld+json` block uses the serialiser. security-auditor **PASS-WITH-NOTES**: the escape set closes every route out of a script element, the payload round-trips including `<`-bearing keys, and nothing else in it is attacker-controlled. The bidi half is **partly** closed: `stripBidiControls` runs inside the shared `trimmedString` helper (24 fields) and on the two hand-written fields the finding named — `createVendorProfileSchema.businessName` and the booking request's `eventLocation`. **What remains before Done:** the other hand-written free-text fields route through neither, nothing guards that they must, and the vendor page still has no test file, so acceptance 2's render of a hostile `businessName`/`bio` is unwritten. |
 rendered surface without the neutralisation that surface needs. The first is a
 script-injection hole on the most-visited public page in the product. |
@@ -270,8 +269,9 @@ the silent-submit work #388 closed:
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
 | **412** | **Customer profile and storefront CTAs report things that are not so** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 7 verified findings. Seven small correctness and copy defects on the customer profile and the public
+| **413** | **Frame `06 Booking confirmed` fails parity on five axes** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by #386's parity pass**, the first to measure this frame — #386 changed one colour on it and the pass around that change found the rest. Nine measured misses, all in `booking-confirmed.tsx`, and the first three are one fix: the component renders a **second `<main>`** inside the layout's, whose `flex-1` resolves against a non-flex parent, so the sage gradient is `[0,64,1440,515]` and stops 321px short of the viewport the frame draws full-bleed — which also clips all four cross-sell chips' focus outlines by 4px. |
 storefront, each of which tells the reader something untrue. |
-**This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **383 rows as of 2026-09-03: 199 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
+**This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **384 rows as of 2026-09-03: 200 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-03, after the autonomous QA run's Phase 0 reconciliation moved six `Done` rows to the archive: 28 rows — 25 Backlog, 1 In Progress, 2 Deferred — needs a human, and 0 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -1651,74 +1651,6 @@ enforce its rulings belong to **#371**, **#313** and **#386**, which consume the
 
 ---
 
-### #386: Visual corrections read off the frames — four undefined ramp steps and the search skeleton
-
-**Milestone:** M3 | **Priority:** P2 Medium | **Status:** In Progress | **Capabilities:** `core`
-**Blocked by:** None. **#385** improves the search-loading half — if the 1024 search
-frames are being re-cut, take the skeleton's row count from the re-cut frame rather than
-the stale one. The four ramp steps do not wait on anything.
-
-Merges **#376** and **#379**.
-
-**Why one ticket.** Both are single-pass corrections whose value is read off a frame and
-then guarded; both are unblocked; and neither fills a lane on its own, while each would
-otherwise cost a worktree, a preflight, a browser session, a PR and a merge. One browser
-session covers all three frames.
-
-**The merged rows carry the measurements.** They are the checklist and are not restated.
-
-#### Half one — four colour classes name ramp steps the theme never defines (#376)
-
-Found by `apps/web/src/app/design-tokens.test.ts` on its first run, not by eye. Each class
-names a step no ramp declares, so Tailwind falls through to **its own cool default
-palette** — a rendered colour belonging to no palette in this product, on screens that
-carry frames.
-
-| Site | Class | Ramp holds | Likely correction |
-| --- | --- | --- | --- |
-| `app/bookings/[requestId]/checkout/page.tsx` | `bg-sage-500` | 50, 100, 150, 200, 300, 400, 600 | `sage-400` |
-| `components/checkout/checkout-screen.tsx` | `bg-sage-500` | as above | `sage-400` |
-| `components/bookings/booking-confirmed.tsx` | `text-sage-700` | as above | `sage-600` |
-| `components/portfolio/portfolio-manager.tsx` | `text-steel-700` | 50, 200, 600 | `steel-600` |
-
-**Those corrections are a reading of the ramp comments, not a ruling.** Two of the three
-surfaces carry frames (`05 Checkout`, `06 Booking confirmed`) — **measure before
-substituting.**
-
-#### Half two — the search skeleton does not mirror the card it becomes (#379)
-
-Width-invariant, which is why #371 left it. The loading skeleton renders **three generic
-bars** (`h-5 w-2/3`, `h-3 w-1/2`, `h-6 w-3/4 rounded-full`) where the frames draw a
-skeleton shaped like the card it resolves into: a 62% title bar, a 44% meta bar, a
-**two-chip row**, a 1px `#EFE9E0` divider, then a **From/price row**. Its radius is
-`rounded-2xl` (18px) against the loaded card's **16px**, so the card visibly changes shape
-as it loads. The pane renders **8** skeletons where the frame draws 6, and the shimmer is a
-whole-surface `background-color` pulse where the frames sweep a `linear-gradient`.
-**Verify the count against the real page size before changing it** — 8 may be right and
-the frame's 6 merely illustrative.
-
-#### Acceptance
-
-- [ ] Each of the four classes resolves to a token this theme declares, read off the frame
-      where the surface has one
-- [ ] The four exemptions are **deleted** from `design-tokens.test.ts`, not amended — the
-      list only shrinks
-- [ ] The skeleton mirrors the loaded card's block structure, and its radius matches the
-      card's 16px so nothing changes shape on resolve
-- [ ] The skeleton count is either corrected to the frame's or **recorded** as a
-      deliberate deviation with the page size that justifies it
-- [ ] `parity-checker` MATCH on `05 Checkout`, `06 Booking confirmed` and
-      `17 Search loading`
-- [ ] `40-states.md`'s one-idiom-per-screen loading rule still holds after the change
-
-#### Tests (required)
-
-- [ ] `pnpm --filter @vendor-marketplace/web test` green with **no exemptions left** in
-      `design-tokens.test.ts`
-- [ ] A test asserting the skeleton and the loaded card share a radius token, so the two
-      cannot drift apart again
-
-
 ### #392: Frame `13 Admin` parity debt — four class-level misses and the missing chevrons
 
 **Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
@@ -2566,5 +2498,100 @@ storefront, each of which tells the reader something untrue.
 #### Tests (required)
 
 - [ ] A test per item
+
+---
+
+### #413: Frame `06 Booking confirmed` fails parity on five axes
+
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 by #386's parity pass**, measured at 1440x900 signed in as
+the E2E customer on a real confirmed booking. #386 changed one colour on this
+screen; the pass around that change measured the whole frame for the first
+time. Everything below is in
+`apps/web/src/components/bookings/booking-confirmed.tsx`.
+
+**Not in scope, do not re-file:** the `sage-600` label colour is a *recorded*
+deviation from the frame's `#3A4D33` (`01-foundations.md:94-104`), verified
+correct at 7.38:1. The occasion sub-line's shape is #394's, already closed.
+
+#### One fix, three symptoms — the nested `<main>`
+
+`booking-confirmed.tsx:79` renders `<main aria-label="Booking confirmed"
+class="relative flex flex-1 flex-col …">` **inside** the layout's
+`<main id="main" class="flex-1">`. `flex-1` resolves against a parent that is
+not a flex container, so the element sizes to content:
+
+1. The sage gradient measures `[0, 64, 1440, 514.875]`. Sampled off the
+   rendered PNG, the band runs y 64 → 578 and **321px of bare `stone-50`**
+   sits below it. The frame draws the gradient full-bleed with **no header at
+   all**; `15-confirmed.md` says "Full-bleed".
+2. All four cross-sell chips' focus outlines are **clipped 4px**: the chip
+   bottom is 578.875, the outline's outer bottom is 582.875, and the nearest
+   `overflow:hidden` ancestor ends at 578.875. The ring renders as an open "U".
+3. `justify-center` has no slack, so the check circle sits flush at y=64 where
+   the frame gives ~160px of air.
+
+There are also **two `<main>` landmarks**, so `Skip to content` lands on the
+layout wrapper rather than the celebration. That instance belongs here; the
+other two (request detail, checkout) are #411's and #395's.
+
+#### Contrast over the gradient — four failures, and there is no scrim
+
+Measured by decoding the rendered PNG, sampling the composited backdrop pixel
+under each text box, and compositing the alpha foreground over it.
+
+| Text | Ratio | |
+| --- | --- | --- |
+| Sub-line, `stone-0/88` at 13.5px/400 | **3.58:1** | fails — normal-size body text |
+| `Still need someone for …`, `stone-0/75` 12.5px/400 | **3.40:1** | fails |
+| Four cross-sell chips, `stone-0` 12.5px/600 over `white/14` | **3.72–3.98:1** | fails — 12.5px is not large text at any weight |
+| `<h1>` 48px/400 | 4.04:1 | fails the plan's flat 4.5:1; passes WCAG large-text 3:1 |
+
+The `✓` glyph at 3.06:1 is `aria-hidden` and decorative — exempt, do not
+"fix" it. Everything inside the white card passes (15.96:1, 5.75:1).
+
+**This needs the same ruling #385 is holding for the sign-up panel**: the plan
+states a flat 4.5:1 with no large-text carve-out, and this screen is white text
+on a mid-sage field by design. Either the plan grows a carve-out, or the
+gradient darkens, or the type sizes go up. Do not invent one.
+
+#### Type and copy
+
+| | Frame | Live |
+| --- | --- | --- |
+| Sub-line | 16px (`text-lg`) | **13.5px** (`text-base`) |
+| Both buttons | 14px | **12.5px** (`text-sm`) |
+| Card sub-line | 12px | 11px (`text-xs`) |
+| `PAID` / `BOOKING` | 600, `.05em`, uppercase | **400, normal, sentence case** — `text-label` is a size-only token; the three companion utilities are absent |
+| Sub-line tail | `…two weeks out to plan the timeline.` | `…before the day to plan the details.` — **reworded**; the words are the design |
+| Booking id | `ORL-4821`, 66px wide | a raw UUID, **281px wide**, pushing the card to 730.63px against ~600 |
+
+#### Style
+
+The avatar is a **64px circle** (`Avatar size="lg"`); the frame draws a **50px
+square at `11px` radius**. Correct and not to be touched: card radius 18px,
+padding `18px 22px`, the two decorative circles, chip shape, gradient stops
+(`#7A9468 / #5E7A4E / #49613D`, exact).
+
+#### Acceptance
+
+1. The gradient fills the viewport as the frame draws it, and no page renders
+   two `<main>` landmarks.
+2. No focus ring on this screen is clipped.
+3. Every text node over the gradient meets whatever ratio the contrast ruling
+   settles, with the decorative glyph exempt.
+4. The four type sizes and the micro-label treatment match the frame.
+5. The sub-line reads the frame's words.
+6. The avatar is the frame's shape and size.
+7. `parity-checker` returns MATCH on all six axes, and the ruling in 3 is
+   recorded in the plan rather than assumed.
+
+#### Tests (required)
+
+- [ ] A landmark test asserting one `<main>` per page, covering this route
+- [ ] A test pinning the four type sizes and the micro-label utilities
+- [ ] The sub-line's exact string
 
 ---

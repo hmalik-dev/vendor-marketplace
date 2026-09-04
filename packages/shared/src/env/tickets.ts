@@ -503,6 +503,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   410: ['auth'], // the redirect is decided from the Clerk session
   411: [], // accessibility is markup and behaviour
   412: [], // copy and validation, no external service
+  413: [], // frame `06` parity — markup, type and a contrast ruling
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
