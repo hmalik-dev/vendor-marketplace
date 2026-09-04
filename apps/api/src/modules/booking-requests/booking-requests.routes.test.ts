@@ -445,10 +445,26 @@ describe('/booking-requests', () => {
       });
       const requestId = created.json<{ id: string }>().id;
 
+      /*
+       * An accept needs a price to accept: #401 refuses accepting a custom
+       * request straight from `pending`, because the row it produced was
+       * terminal and could never be paid. So the quote comes first here, and
+       * the customer is the one who accepts it — which is the real shape of
+       * that transition anyway.
+       */
+      if (action === 'accept') {
+        const quoted = await post(VENDOR, `/booking-requests/${requestId}/quote`, {
+          quotedPriceCents: 250_000,
+        });
+        expect(quoted.statusCode).toBe(200);
+      }
+
       harness.email.sent.length = 0;
       harness.email.deliveredKeys.clear();
 
-      const actor = action === 'cancel' ? CUSTOMER : VENDOR;
+      // `decline` is the vendor's answer to a pending request; `accept` is the
+      // customer's to a quote; `cancel` is the customer withdrawing.
+      const actor = action === 'quote' || action === 'decline' ? VENDOR : CUSTOMER;
       const response =
         action === 'quote'
           ? await post(actor, `/booking-requests/${requestId}/quote`, {
@@ -801,6 +817,50 @@ describe('/booking-requests', () => {
         .select({ status: bookingRequests.status })
         .from(bookingRequests);
       expect(rows.filter((row) => row.status === 'accepted')).toHaveLength(1);
+    });
+
+    /*
+     * #401. An accept has to produce something payable, and two shapes did
+     * not: a custom request accepted straight from `pending` carries no price,
+     * so checkout 404s on it and the terminal `accepted` row can never go back
+     * to be quoted; and a request whose event date has already passed produces
+     * a booking whose checkout renders the 500 page — which is the state the
+     * frame `05` parity pass ran into, on the only payable request it could
+     * reach.
+     */
+    it('refuses to accept a custom request that carries no price', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+
+      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().message).toContain('Send a quote before accepting');
+
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests);
+      expect(row?.status).toBe('pending');
+    });
+
+    it('refuses to accept a request whose date has already passed', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+
+      // The request was legal when it was made; the seven-day reply window
+      // outlives a short-notice event, which is how this state is reached.
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ eventDate: toDateString(addDays(new Date(), -2)) })
+        .where(eq(bookingRequests.id, requestId));
+
+      const response = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('has passed');
     });
 
     it('pending -> quoted -> accepted locks the quoted price', async () => {

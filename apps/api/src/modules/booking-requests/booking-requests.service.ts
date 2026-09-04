@@ -818,6 +818,42 @@ async function prepareTransition({
   }
 
   /*
+   * An accept has to produce something payable, and two shapes did not (#401).
+   *
+   * **No price.** A custom request carries none until it is quoted, and
+   * accepting one straight from `pending` wrote a terminal `accepted` row that
+   * checkout could never open — it 404s on a request with no locked price, and
+   * the row cannot go back to `pending` to be quoted. The vendor's own path
+   * out of a custom request is `quote`, which this leaves untouched.
+   *
+   * **A date that has already passed.** The request's seven-day reply window
+   * outlives short-notice events, so a request for tomorrow is still
+   * answerable a week later. Accepting one produced a booking for a date in
+   * the past whose checkout renders the 500 page — the state the parity pass
+   * on frame `05` ran into, with the only payable request an automated pass
+   * could reach.
+   *
+   * `isUniversallyPastDate` rather than the server's own day: a date is only
+   * refused once it has passed everywhere on earth, so nobody is stopped from
+   * accepting a booking that is still today where they are.
+   */
+  if (row.finalPriceCents === null && row.quotedPriceCents === null) {
+    throw validationFailed(
+      party === 'vendor'
+        ? 'Send a quote before accepting — there is no price on this request yet'
+        : 'That request has no price yet',
+    );
+  }
+
+  if (isUniversallyPastDate(row.eventDate, options.now ?? new Date())) {
+    throw conflict(
+      party === 'vendor'
+        ? 'That event date has passed, so the request can no longer be accepted'
+        : 'That date has passed, so this quote can no longer be accepted',
+    );
+  }
+
+  /*
    * Accepting a quote is the second and last time a price is written. A
    * package request already locked its price at creation, so this leaves it
    * exactly as it was.
