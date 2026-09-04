@@ -209,7 +209,6 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **384** | **Search rework — `City` becomes a place search over every US city, not the inventory list** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 on the user's explicit instruction**, verbatim: *"i currently want the city dropdown to function the way airbnb's 'where' input functions. Do not preload and indicate how many vendors are in each city.. users should be able to search for any city and see the results."* **The third user override of the design contract, after #364 and #375 — record it as one.** It overrides #375's own closing invariant (*"A free-text city that reaches the API as a filter is a regression, not this ticket"*) and D6's rule that the field may only ask questions the platform can answer. Three things go: the preloaded `GET /vendors/cities` payload, `vendorCount` as a ranking **and** display signal, and the rule that a city with nobody in it is unpickable. **The `(city, state)` pair survives** — `state` has been the closed `us_state` enum since #332 and "Springfield" still names a place in thirty-odd states — so a suggestion still names its state; what changes is *which* places may be suggested. Detail section carries the scope, the suggestion source and the empty-state contract |
 | **385** | **[DESIGN] Ruling round — the four questions blocking #371 and #313** | P1 | M3 | **P1 High** | **Backlog** | — | **A design pass: it edits `design/` and answers product rulings, which `web-design-parity.md` reserves for one** | `core` | **Filed 2026-08-31 by the fourth backlog consolidation. Merges #377, #378 and #380**, and takes the contrast question out of **#313**'s blocked half. One person, one sitting, one design bundle open. Split, they stall four separate times for one reason — and three of the four block the same ticket, so answering them one at a time re-opens #371 three times. **Same shape as #335**, the 2026-08-29 ruling round that unblocked eleven rows at once. The merged rows carry the measurements and are the checklist. **Order: rule first, re-cut second, and only then do #371, #313 and #386 become ordinary code work** |
 | **386** | **Visual corrections read off the frames — four undefined ramp steps and the search skeleton** | P2 | M3 | **P2 Medium** | **Backlog** | `worktree-386` | **None** | `core` | **Filed 2026-08-31 by the fourth backlog consolidation. Merges #376 and #379.** Both are single-pass corrections whose value is read off a frame and then guarded; both are unblocked; and neither fills a lane on its own, while each would otherwise cost a worktree, a preflight, a PR and a merge. One browser session covers all three frames — `05 Checkout`, `06 Booking confirmed`, `17 Search loading`. The merged rows carry the measurements and are not restated **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-386 (checkpointed `4877d7a`); resume from that branch rather than rebuilding. |
-| **388** | **Forms reject the first submit in silence** | P1 | M3 | **P1 High** | **Backlog** | `worktree-388` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** Two of the three form surfaces a vendor must clear reject a pristine submit with **no POST, no `aria-invalid`, no `role=alert`, no message anywhere on the page** — the button appears inert. Confirmed on **Add package** (`/vendor/packages`) and **Create profile** (`/vendor/profile/edit`, the screen every new vendor is funnelled to). Focus moves to the offending control, which is the only signal, and it is silent for a screen reader. A **second** submit does render the summary, so the machinery exists and the first pass does not reach it. The booking-request form validates correctly but never announces it either. Includes the Price filter, which discards non-numeric input with no message **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-388 (checkpointed `32b00b3`); resume from that branch rather than rebuilding. |
 | **392** | **Frame `13 Admin` parity debt — four class-level misses and the missing chevrons** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's `parity-checker` pass.** Frame `13` matched on all six axes for #389's own change, and the pass surfaced five pre-existing misses it did not own. **#372 does not cover these** — it closes frames `08`, `04`/`07`/`19`, `16`, `18` and the site chrome, not `13`. **All five are class- or token-level, so no viewport can change them** — re-derived from source after a peer challenged whether the readings were taken at 1440: the pane uses `rounded-xl` → `--radius-xl: 14px` (`theme.css:221`) where the frame draws 12px, which is `--radius-panel` on the line above; `admin-nav.tsx:66` is `min-h-11` in a `gap-1` list, a 48px pitch by construction against the frame's 34px, ending the rail 93px low; `status-pill.tsx:40` is `px-2.5 py-1.5 text-xs font-bold` against the frame's `10px/700` with `padding 5px 10px` (47.36×26 vs 44.88×23), and that size comes from `03-components.md`'s vocabulary, so **the plan is what needs correcting, not only the component**; the avatar initial renders `font-sans` where the frame draws Instrument Serif; and `filter-bar.tsx`'s `Category ▾ / City ▾ / Payouts ▾` triggers render **no `▾` glyph at all** (`innerHTML` is bare text, zero children), which walks City 15px and Payouts 25.6px left of their frame positions. **Not in scope:** frame `13`'s table pane clipping its own fifteenth row by 4px — that is **#385**'s to rule on, and the app reproduces it within a pixel or two |
 | **393** | **Admin tables have no responsive strategy below 1024** | P1 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's browser pass.** `30-responsive.md:31` specifies Admin as `768 → Horizontal scroll` and `390 → Card list, not a table`. **Neither exists.** After #389 the layout is correct at every width and nothing overflows — but at 390 `/admin/reviews` resolves to `12.2px 31.73px 31.73px 21.97px 46.38px 21.97px 70px`, so headers render `R…`, `A…`, `W…` and body cells `4…`, `Ro…`, `T…`. **A 12px column cannot show more than an ellipsis**, so the tables are legible only at 1024 and above. This is #389's fix working, not failing: before it, the rows were mutually misaligned *and* the document scrolled sideways, so the contract's 768 row was never actually implemented either — the old horizontal scroll was incoherence, not a degradation. Ruling needed on whether 768 keeps the contract's scroll-inside-the-pane or follows 390 to cards |
 | **395** | **Frame `05 Checkout` fails parity on all six axes** | P1.5 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's parity pass — the first that could reach the screen.** Checkout was unrenderable for the E2E customer until #387 landed a real connected account, so the frame had never been measured. Measured at 1440x900 against `Orla - Screens.dc.html` lines 877–925: **Layout 5** — the full app-shell header renders above the checkout's own wordmark header (`layout.tsx:127`, giving 128px of chrome against the frame's 64px and a **nested `<main>`**, so `Skip to content` lands above the extra nav), the pay button and its reassurance sit in the left column with their bottom edge at 917px — below the 900px fold — where the frame draws them as the summary rail's fourth block, the rail mini-card is missing its `<package> · <duration>` second line, header padding is `0 40px` against `0 32px`. **Style 5** — card shadow `--shadow-md` for `--shadow-sm`, panel radius 14px for 12px, avatar 64px circle for a 54px 12px-radius square, logo at `LOGO_SIZES.authPanel` (19px circles) where the frame draws 15px. **Colour 2** — page ground `stone-100` for `stone-50`. **Font 5** — `h1` 30px for 26px (over `04-laws.md`'s 26px app ceiling), letter-spacing `normal` for `-.01em`, context line and `Total today` 12.5px for 14px. **Text 2** — the rail sub-line and the frame's `Name on card` field have no counterpart. **Access 1** — the nested `<main>` is two landmarks and a wrong skip target. Contrast passes at 4.83:1 worst case; the focus ring passes, sampled twice. **Two are contract gaps, not template omissions:** `checkoutIntentSchema` carries neither package name nor duration, so the rail sub-line needs the API widened. **Coordinate with #386**, which owns token substitutions on other surfaces. |
@@ -272,9 +271,9 @@ the silent-submit work #388 closed:
   restores focus — a keyboard user t |
 | **412** | **Customer profile and storefront CTAs report things that are not so** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 7 verified findings. Seven small correctness and copy defects on the customer profile and the public
 storefront, each of which tells the reader something untrue. |
-**This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **382 rows as of 2026-09-03: 198 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
+**This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **383 rows as of 2026-09-03: 199 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-03, after the autonomous QA run's Phase 0 reconciliation moved six `Done` rows to the archive: 29 rows — 26 Backlog, 1 In Progress, 2 Deferred — needs a human, and 0 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-03, after the autonomous QA run's Phase 0 reconciliation moved six `Done` rows to the archive: 28 rows — 25 Backlog, 1 In Progress, 2 Deferred — needs a human, and 0 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1719,66 +1718,6 @@ the frame's 6 merely illustrative.
 - [ ] A test asserting the skeleton and the loaded card share a radius token, so the two
       cannot drift apart again
 
-
-### #388: Forms reject the first submit in silence
-
-**Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
-**Blocked by:** None
-
-**Filed 2026-08-31 by the pre-launch QA passthrough.**
-
-#### The defect
-
-Submitting a pristine form produces **no observable response at all**:
-
-| Surface | Trigger | POST | `aria-invalid` | `role=alert` | Visible message |
-| --- | --- | --- | --- | --- | --- |
-| `/vendor/packages` → Add package | `Add package`, all blank | none | 0 | none | none |
-| `/vendor/packages` → Add package | name + price, description blank | none | 0 | none | none |
-| `/vendor/profile/edit` → Create profile | `Create profile`, all blank | none | 0 | none | none |
-
-Focus moves to the first offending control — the textarea, then `businessName` — and that
-is the **only** signal. It is silent for assistive technology and easy to miss with a
-mouse, so the button reads as broken. `/vendor/profile/edit` is the screen **every new
-vendor is funnelled to**: with no profile row, all seven `/vendor/*` routes redirect here.
-
-**The machinery exists and the first pass does not reach it.** A *second* submit renders
-*"One field needs fixing before this can go out"* and names the field, and the required
-description is not marked required anywhere before it blocks.
-
-#### The same gap, one level milder, on the booking request form
-
-`/vendors/<slug>/request` sets `aria-invalid` and wires a well-written message through
-`aria-describedby` — genuinely good — but the message container carries **no `role="alert"`
-and no `aria-live`**, and focus stays on `Continue to review`. Nothing is announced.
-
-#### And the Price filter discards input without saying so
-
-`/search` → Price → Min = `abc` → Apply: the popover closes, the URL and results are
-unchanged, and nothing is said. The **inverted** range on the same control explains itself
-well — *"That price range isn't one we can use, so it was cleared — the rest of your
-search still applies."* One control, two contracts.
-
-#### Acceptance
-
-1. A blank submit on **Add package** and on **Create profile** renders the same error
-   summary the second submit renders today, on the **first** press.
-2. Every field that blocks submission carries `aria-invalid="true"` and an
-   `aria-describedby` message placed next to that field.
-3. The error summary is announced: `role="alert"` (or an `aria-live="assertive"` region),
-   on all three forms including the booking request.
-4. Focus moves to the first invalid control **and** that control's message is what a
-   screen reader reads on arrival.
-5. Required fields are marked required before they block — the package description
-   included.
-6. The Price filter tells the user when it discards a value, in the register the inverted
-   range already uses.
-7. Driven in a real browser at 1440x900 for each surface, with a screen reader
-   announcement check or an equivalent assertion on the live region, and screenshots.
-8. Tests: one per surface asserting a blank submit produces a visible, announced message
-   and no network call.
-
----
 
 ### #392: Frame `13 Admin` parity debt — four class-level misses and the missing chevrons
 

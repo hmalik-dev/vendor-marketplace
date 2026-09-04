@@ -418,6 +418,7 @@ Active tracker: `.claude/plans/vendor-marketplace-tickets.md`
 | **397** | **The Stripe webhook answers 4xx to a succeeded intent it can never apply** | P1.5 | M4.5 | **P2 Medium** | **Done** | `main` | **None** | `core` `stripe` | **Filed and closed 2026-09-03 by the autonomous QA run**, found in Phase 0 while proving webhook delivery: `stripe trigger payment_intent.succeeded` answered **422** because the intent carries no `metadata.requestId` (`recordSuccessfulPayment`, `payments.service.ts`). A non-2xx makes Stripe retry for three days and counts toward disabling the endpoint, for an event that could never be applied — a Dashboard test payment or another product on the same account produces the same shape. The route now acknowledges such an intent as `ignored` with a warning naming the intent id; `recordSuccessfulPayment` still refuses to book from one on the reconciliation path. Test: `payments.routes.test.ts` › *acknowledges and ignores a succeeded intent the platform never created* (422 before, 200 after). Proven live: four triggered events all 200. Landed in `1908064` alongside #394 and #396. |
 | **394** | **The booking confirmation screen answers 500 for every customer** | P1 | M4.5 | **P0 Critical** | **Done** | `main` | **None** — #387 landed, so the file-holding conflict is gone | `core` | **Filed 2026-08-31 from #363's browser pass**, which could not verify its own change because the screen never renders. `GET /customer/booking-requests/:id/booking` (`payments.routes.ts:70`) serialises with **`bookingSchema`**, which declares neither `eventType` nor `venue`, so Fastify's serialiser strips both from a 200. The web parses the same body with `wireBookingSchema` = `bookingWithContextSchema`, where both are **`.nullable()` — nullable, not optional** — so the parse throws, `getBookingForRequest` raises, and the RSC 500s. The list route is correct (`booking-requests.routes.ts:167` uses `z.array(bookingWithContextSchema)`), which is why `/bookings` renders and only the single read fails. **Also carries the frame `06` label fix, lifted out of #363** so both land in one browser pass: `booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds the slug, so the occasion renders `wedding · Barr Mansion · Austin, TX` in lower case. The component fix and its two tests were written and shown failing-before under #363; they were reverted from that lane because the 500 makes them unverifiable and the route fix belongs to a file lane #387 is live in **The 500 is fixed by #387 (squash `cd33f70`).** The route now serialises `bookingWithContextSchema`, `reconcileBooking` supplies `eventType` and `venue`, and an API test asserts the serialised 200 carries both — acceptance 1, 3 and 5, plus the required API test. **Still open here:** acceptance 2 (the occasion still prints verbatim at `booking-confirmed.tsx:107`, with no `EVENT_TYPE_LABELS` lookup — verified on `main` after `cd33f70`), acceptance 6 (the `.nullable()` vs `.optional()` ruling — #387 made the server always send both, which makes the two sides agree, but did not write the ruling), and the two `booking-confirmed.test.tsx` cases still to be recovered from `worktree-363`. One thing to re-measure rather than trust: #387's browser pass transcribed the sub-line as `Wedding · Barr Mansion, Austin TX` capitalised, which the code path cannot produce — read it off the DOM before assuming the defect is or is not present. **In Progress 2026-09-03 (autonomous QA run, on `main` directly per operator instruction).** The occasion now reads `EVENT_TYPE_LABELS` through `Object.hasOwn` with the stored value as fallback, three tests added; the route half was already fixed by #387 and the `.nullable()`-not-`.optional()` ruling is written on `bookingWithContextSchema`. Code landed in `1908064`; the browser pass of frame `06` (acceptance 1, 3, 4) is pending on the shared browser and gates Done. **Done 2026-09-04** — landed on `main` in `1908064` (occasion label through `EVENT_TYPE_LABELS` + `Object.hasOwn`, ruling written on `bookingWithContextSchema`; the route half was #387's). Browser-verified at 1440x900 signed in as the E2E customer on two confirmed bookings: h1 `October 15 is yours.` / `October 20 is yours.`, sub-line `Wedding · Barr Mansion, Austin TX` (label, not slug), zero console errors, and signed-out the URL lands on `/sign-in?returnTo=%2Fbookings%2F<id>%2Fconfirmed`. Recorded deviation: the confirmed page passes `city: null`, so the sub-line is two segments (`Occasion · venue`) rather than the ticket's three; frame `06` draws a different sub-line altogether (`Full day · Barr Mansion · 120 guests`) and the frame `06` parity pass under #386 owns that composition. |
 | **396** | **Production CSP blocks Stripe entirely — checkout cannot load on the deployed origin** | P1.5 | M4.5 | **P0 Critical** | **Done** | `main` | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's browser pass, confirmed independently by two lanes.** `apps/web/src/config/security-headers.ts` names Stripe **exactly once in the whole file** — in a comment explaining why it is not needed. No Stripe host appears in any directive, so the deployed origin blocks the payment path **three** ways: `script-src` (`:96`) omits `js.stripe.com`, so `loadStripe` cannot inject; `frame-src` (`:115`) is `'self' ${CLERK_HOSTS}`, so the Elements iframe is refused; `connect-src` (`:114`) omits `api.stripe.com`/`r.stripe.com`. **A fourth, in the same file:** `Permissions-Policy: payment=()` (`:154`) is justified by a comment reading *"Stripe Checkout is a redirect, not an embedded Payment Request"* — false since the screen moved to embedded Elements (`checkout-screen.tsx:8-9`, `loadStripe` at `:25`, `confirmPayment` at `:147`), so Apple Pay and Google Pay stay dead **after** the three directives are fixed. Anyone who fixes only the CSP gets a working card form and wallets that silently never appear. **Invisible in dev by construction:** `next.config.ts:76` enforces only when `isProduction`, so locally the header is report-only and the violations read as console noise — #387's three passing payment runs went straight through 16 of them. **Reproducible locally with `CSP_ENFORCE=1`**, which flips it to enforcing on a dev server; that flag appears nowhere in `packages/shared/src/env` or `.env.example` and should be documented here too. **Guard:** `security-headers.test.ts` passes today with zero Stripe hosts because it asserts directives are *present*, not what they *permit* — the fix needs a test enumerating every origin the app loads from and asserting each appears in the enforced policy. Standalone rather than folded into #370, which is blocked on #362 for credentials this needs none of. **In Progress 2026-09-03 (autonomous QA run, on `main` directly per operator instruction).** Stripe's hosts added per Stripe's published CSP guidance for Stripe.js, the Payment Element and Link — including `*.js.stripe.com`, `*.stripe.com` (img) and `*.link.com`, which the ticket's "no wildcards" line is deliberately not followed on because Stripe documents them; `payment=(self "https://js.stripe.com" "https://*.js.stripe.com")`; `CSP_ENFORCE` registered and moved to turbo `globalEnv` (as a pass-through key the build hash was identical for 0 and 1); `shouldEnforceCsp` extracted and its production branch pinned. Code landed in `1908064`, reviewed by diff-reviewer and security-auditor. Acceptance 3 (checkout driven with `CSP_ENFORCE=1`, zero violations, screenshots) is pending on the shared browser and gates Done. **Done 2026-09-04** — landed on `main` in `1908064` (Stripe hosts per Stripe's CSP guidance, `payment=(self "https://js.stripe.com" "https://*.js.stripe.com")`, `CSP_ENFORCE` registered and moved to turbo `globalEnv`, `shouldEnforceCsp` pinned), plus `58722a2` (Clerk telemetry off — the one violation the enforced policy still produced). Browser-verified with `CSP_ENFORCE=1` on the dev server: the enforced header confirmed by curl; checkout rendered eight `js.stripe.com` frames; `js/api/m/r.stripe.com`, `m.stripe.network`, `b.stripecdn.com` all 200; `featurePolicy.allowsFeature('payment','https://js.stripe.com') === true`; card 4242 paid $1,450 (booking `8fd7842b…`, request `ac475f65…`) and landed on `/confirmed`; **zero** CSP violations on checkout and confirmed. Deviation recorded in the file: `*.js.stripe.com`, `*.stripe.com` (img) and `*.link.com` are kept because Stripe documents them. Not verified against a deployed origin (#370 blocks one). |
+| **388** | **Forms reject the first submit in silence** | P1 | M3 | **P1 High** | **Done** | `worktree-388` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** Two of the three form surfaces a vendor must clear reject a pristine submit with **no POST, no `aria-invalid`, no `role=alert`, no message anywhere on the page** — the button appears inert. Confirmed on **Add package** (`/vendor/packages`) and **Create profile** (`/vendor/profile/edit`, the screen every new vendor is funnelled to). Focus moves to the offending control, which is the only signal, and it is silent for a screen reader. A **second** submit does render the summary, so the machinery exists and the first pass does not reach it. The booking-request form validates correctly but never announces it either. Includes the Price filter, which discards non-numeric input with no message **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-388 (checkpointed `32b00b3`); resume from that branch rather than rebuilding. **Done 2026-09-04** — squash-merged from `worktree-388` as `7fc4469`, with the diff-reviewer's four findings applied (group targets take `tabIndex={-1}` so the focus move is not a no-op on the ordinary forgot-a-category path; a preset chosen after unreadable text clears the discard verdict it replaces; the form guard's opening-tag scan is brace-aware, since `=>` contains a `>`), then `4558485` for the one defect the browser pass itself found: the summary rail's brief carried `aria-invalid` with no `aria-describedby` and no message anywhere in the document. **Browser-verified at 1440x900** across both auth states: Add package (blank, then description-only) and Create profile both answer the first press with a counted `role="alert"`, per-field `aria-invalid` + resolving `aria-describedby`, focus on the first blocker (`#categories`, a `role="group"` with `tabindex="-1"`, identity-checked) and **no network call**; the booking request form announces and moves focus off the button; the Price filter says a bound it could not read was cleared, and says nothing when a preset supplies one. No CSP or telemetry lines, no horizontal overflow on any of seven pages, no database rows created. Recorded, not fixed: the booking request screen still has two message idioms (the shared card and a local `Field`), both correct — consolidation is not this ticket's. |
 
 ## Closed ticket details
 
@@ -16239,6 +16240,66 @@ an undocumented escape hatch that exists only in `next.config.ts`.
 #370 is blocked on #362 for production credentials. This needs none: it is a
 header change, a comment rewrite and a test, all runnable today. Filing it
 behind #370 would park a launch blocker behind an external-account dependency.
+
+---
+
+### #388: Forms reject the first submit in silence
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-08-31 by the pre-launch QA passthrough.**
+
+#### The defect
+
+Submitting a pristine form produces **no observable response at all**:
+
+| Surface | Trigger | POST | `aria-invalid` | `role=alert` | Visible message |
+| --- | --- | --- | --- | --- | --- |
+| `/vendor/packages` → Add package | `Add package`, all blank | none | 0 | none | none |
+| `/vendor/packages` → Add package | name + price, description blank | none | 0 | none | none |
+| `/vendor/profile/edit` → Create profile | `Create profile`, all blank | none | 0 | none | none |
+
+Focus moves to the first offending control — the textarea, then `businessName` — and that
+is the **only** signal. It is silent for assistive technology and easy to miss with a
+mouse, so the button reads as broken. `/vendor/profile/edit` is the screen **every new
+vendor is funnelled to**: with no profile row, all seven `/vendor/*` routes redirect here.
+
+**The machinery exists and the first pass does not reach it.** A *second* submit renders
+*"One field needs fixing before this can go out"* and names the field, and the required
+description is not marked required anywhere before it blocks.
+
+#### The same gap, one level milder, on the booking request form
+
+`/vendors/<slug>/request` sets `aria-invalid` and wires a well-written message through
+`aria-describedby` — genuinely good — but the message container carries **no `role="alert"`
+and no `aria-live`**, and focus stays on `Continue to review`. Nothing is announced.
+
+#### And the Price filter discards input without saying so
+
+`/search` → Price → Min = `abc` → Apply: the popover closes, the URL and results are
+unchanged, and nothing is said. The **inverted** range on the same control explains itself
+well — *"That price range isn't one we can use, so it was cleared — the rest of your
+search still applies."* One control, two contracts.
+
+#### Acceptance
+
+1. A blank submit on **Add package** and on **Create profile** renders the same error
+   summary the second submit renders today, on the **first** press.
+2. Every field that blocks submission carries `aria-invalid="true"` and an
+   `aria-describedby` message placed next to that field.
+3. The error summary is announced: `role="alert"` (or an `aria-live="assertive"` region),
+   on all three forms including the booking request.
+4. Focus moves to the first invalid control **and** that control's message is what a
+   screen reader reads on arrival.
+5. Required fields are marked required before they block — the package description
+   included.
+6. The Price filter tells the user when it discards a value, in the register the inverted
+   range already uses.
+7. Driven in a real browser at 1440x900 for each surface, with a screen reader
+   announcement check or an equivalent assertion on the live region, and screenshots.
+8. Tests: one per surface asserting a blank submit produces a visible, announced message
+   and no network call.
 
 ---
 
