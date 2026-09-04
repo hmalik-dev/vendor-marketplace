@@ -34,11 +34,11 @@ Red is never used for `pending`. Gold is never used for a failure.
 
 ## Loading — one idiom per screen, never two
 
-| Scope   | Treatment                                                                                        | Rule                                                                                                     |
-| ------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Element | 16px spinner, 2px `clay-400` ring, transparent quarter; label dims to 60%                        | inside buttons and single controls only                                                                  |
-| Content | Skeletons mirroring real geometry; `stone-200` shimmer `stone-200 → stone-150 → stone-200`, 1.5s | min 200ms display so fast loads don't flash; chrome the user already filled in **never** skeletons       |
-| Page    | The mark’s two rings converging and parting, 1.9s                                                | first paint and auth redirects only; geometry only, no wordmark (it renders before fonts are guaranteed) |
+| Scope   | Treatment                                                                                               | Rule                                                                                                                                                                           |
+| ------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Element | 16px spinner, 2px `clay-400` ring, transparent quarter; label dims to 60%                               | inside buttons and single controls only                                                                                                                                        |
+| Content | Skeletons mirroring real geometry; `stone-200` shimmer `stone-200 → stone-100 → stone-200`, 1.5s linear | min 200ms display so fast loads don't flash; chrome the user already filled in **never** skeletons; "real geometry" is the **component's**, not the loading frame's — see #386 |
+| Page    | The mark’s two rings converging and parting, 1.9s                                                       | first paint and auth redirects only; geometry only, no wordmark (it renders before fonts are guaranteed)                                                                       |
 
 Skeleton variants: vendor card, list row, table row, message bubble. One per
 content type; a generic grey box is a bug.

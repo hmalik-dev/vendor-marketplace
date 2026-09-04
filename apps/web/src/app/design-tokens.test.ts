@@ -69,6 +69,26 @@ const COLOUR_UTILITIES = [
   'via',
 ];
 
+/**
+ * Comments stripped, so the scan reads code and not prose.
+ *
+ * The scanner cannot otherwise tell the two apart, and the consequence is
+ * backwards: a comment explaining that a class **was** removed reads as the
+ * class still being there. #386 hit exactly that — documenting the fix
+ * re-triggered the guard on the file it had just fixed, and the workaround was
+ * to write the class name in prose, which is a worse comment written to please
+ * a test.
+ *
+ * A guard that fires on correct code is one somebody eventually deletes, so the
+ * fix belongs here rather than in every comment that has to name a class.
+ * Deliberately crude — it removes block comments and line comments and nothing
+ * else, which is enough, because a class name inside a string that merely
+ * *looks* like a comment is still a class name and should still be flagged.
+ */
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
 /** Every source file a class can be written in — `.css` included. */
 function sourceFiles(): [string, string][] {
   const root = join(process.cwd(), 'src');
@@ -76,7 +96,7 @@ function sourceFiles(): [string, string][] {
   return readdirSync(root, { recursive: true, encoding: 'utf8' })
     .filter((entry) => /\.(tsx?|css)$/.test(entry) && !/\.test\.tsx?$/.test(entry))
     .sort()
-    .map((entry) => [join('src', entry), readFileSync(join(root, entry), 'utf8')]);
+    .map((entry) => [join('src', entry), withoutComments(readFileSync(join(root, entry), 'utf8'))]);
 }
 
 describe('every colour class names a step the theme defines', () => {
@@ -87,6 +107,29 @@ describe('every colour class names a step the theme defines', () => {
     expect(ramps.size).toBeGreaterThanOrEqual(5);
     expect(ramps.get('stone')?.has('900')).toBe(true);
     expect(ramps.get('clay')?.has('400')).toBe(true);
+  });
+
+  /*
+   * The stripper's own guard, in both directions. Without the second half it
+   * could be made to pass by stripping everything.
+   */
+  it('reads code and not prose, so documenting a fix cannot re-trigger it', () => {
+    const pattern = new RegExp(
+      `(?:${COLOUR_UTILITIES.join('|')})-(${[...ramps.keys()].join('|')})-(\\d+)`,
+      'g',
+    );
+    const hits = (source: string): string[] =>
+      [...withoutComments(source).matchAll(pattern)].map(([match]) => match);
+
+    // A comment explaining that the class was removed is not the class.
+    expect(hits('/* was text-sage-950, now sage-600 */')).toEqual([]);
+    expect(hits('// hovered to text-steel-950 once')).toEqual([]);
+    // The class itself is still found, comment or no comment.
+    expect(hits('className="text-sage-950"')).toEqual(['text-sage-950']);
+    expect(hits('/* removed */ className="text-sage-950"')).toEqual(['text-sage-950']);
+    // A URL is not a comment: `//` after a colon must survive.
+    expect(hits('const url = "https://x.test"; // text-sage-950')).toEqual([]);
+    expect(hits('a("https://x.test/text-sage-950")')).toEqual(['text-sage-950']);
   });
 
   it('flags a step the theme does not define', () => {
@@ -104,22 +147,24 @@ describe('every colour class names a step the theme defines', () => {
   });
 
   /**
-   * What is left of the four this guard found on its first run, each owned by
-   * **#376**.
+   * Empty, and that is the point: the ratchet reached zero.
    *
-   * A ratchet, not an allowlist: the list only ever shrinks, and #376's
-   * acceptance is that these are deleted rather than amended. The two checkout
-   * `bg-sage-500` entries were deleted by **#387**, which made frame
-   * `05 Checkout` reachable for the end-to-end customer and so could finally
-   * *measure* the dot against the frame rather than guessing at a ramp step:
-   * both frame occurrences draw `#5E6B4F`, which is `sage-400`.
+   * The guard found four undefined steps on its first run. **#387** deleted the
+   * two checkout `bg-sage-500` sites once it made frame `05 Checkout` reachable
+   * for the end-to-end customer and could measure the dot rather than guess at
+   * a ramp step — both frame occurrences draw `#5E6B4F`, which is `sage-400`.
+   * **#386** deleted the other two after measuring them the same way:
+   * `booking-confirmed.tsx`'s `text-sage-700` became `sage-600`, and
+   * `portfolio-manager.tsx`'s `hover:text-steel-700` was dropped outright,
+   * because `steel` has nothing below 600 and no frame draws one.
+   *
+   * A ratchet, not an allowlist: entries are deleted rather than amended, and
+   * the list only ever shrinks. It is now empty, so the next undefined step is
+   * a failure rather than a line added here.
    */
-  const KNOWN_UNDEFINED_STEPS = [
-    'src/components/bookings/booking-confirmed.tsx — text-sage-700 (sage has no 700)',
-    'src/components/portfolio/portfolio-manager.tsx — text-steel-700 (steel has no 700)',
-  ] as const;
+  const KNOWN_UNDEFINED_STEPS: readonly string[] = [];
 
-  it('finds none in the app’s own source beyond the two #376 still owns', () => {
+  it('finds none at all in the app’s own source', () => {
     const pattern = new RegExp(
       `(?:${COLOUR_UTILITIES.join('|')})-(${[...ramps.keys()].join('|')})-(\\d+)`,
       'g',
@@ -137,6 +182,30 @@ describe('every colour class names a step the theme defines', () => {
       .filter((entry, index, all) => all.indexOf(entry) === index);
 
     expect(undefinedSteps).toEqual([...KNOWN_UNDEFINED_STEPS]);
+  });
+
+  /*
+   * The corpus floor, and with the ratchet at zero it is the only thing left
+   * holding this guard to reality: `toEqual([])` cannot tell "scanned twelve
+   * hundred classes, every one defined" from "scanned nothing". The theme read
+   * is already guarded twice this way; the source read was not, and the
+   * comment stripper is exactly the code that can shrink it silently — making
+   * its quantifier greedy takes the scan from ~1220 matches to ~308 while
+   * every assertion in this file still passes.
+   */
+  it('reads a real corpus, so an empty result cannot come from an empty scan', () => {
+    const pattern = new RegExp(
+      `(?:${COLOUR_UTILITIES.join('|')})-(${[...ramps.keys()].join('|')})-(\\d+)`,
+      'g',
+    );
+    const files = sourceFiles();
+    const matches = files.flatMap(([, contents]) => [...contents.matchAll(pattern)]);
+
+    expect(files.length).toBeGreaterThan(150);
+    expect(matches.length).toBeGreaterThan(1000);
+    // A class that is definitely there, so the scan is reading source and not
+    // an accidentally-empty string.
+    expect(matches.some(([match]) => match === 'text-stone-900')).toBe(true);
   });
 
   /*

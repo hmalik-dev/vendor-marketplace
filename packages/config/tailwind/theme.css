@@ -286,7 +286,7 @@
   --z-toast: 70; /* toasts, above everything */
 
   /*
-   * Loading. The shimmer sweeps stone-200 -> stone-150 -> stone-200 for
+   * Loading. The shimmer sweeps stone-200 -> stone-100 -> stone-200 for
    * content, and the mark's two rings converging and parting are the
    * page-level state.
    *
@@ -298,13 +298,27 @@
   --animate-mark-converge-left: mark-converge-left 1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   --animate-mark-converge-right: mark-converge-right 1.9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 
+  /*
+   * A sweep, not a pulse — `#386`.
+   *
+   * This faded the whole surface between `stone-200` and `stone-150` at once,
+   * so a grid of skeletons breathed in unison and read as a page-level state
+   * rather than as content arriving. Every frame draws `.sk` as a highlight
+   * travelling across the block: `linear-gradient(90deg,#EFE9E0,#F4F0E8,#EFE9E0)`
+   * at `background-size:200% 100%`, animating `background-position` from
+   * `200% 0` to `-200% 0` over 1.5s linear. Those three stops are
+   * `stone-200`, `stone-100`, `stone-200`.
+   *
+   * `linear` rather than the `ease-in-out` the pulse used: a sweep that slows
+   * at each end reads as hesitating, and the frame's own timing function is
+   * linear.
+   */
   @keyframes shimmer {
-    0%,
-    100% {
-      background-color: var(--color-stone-200);
+    0% {
+      background-position: 200% 0;
     }
-    50% {
-      background-color: var(--color-stone-150);
+    100% {
+      background-position: -200% 0;
     }
   }
 
@@ -515,12 +529,31 @@
  * response reads as instant rather than as a flash of grey.
  */
 @utility skeleton-surface {
+  /*
+   * The flat fill stays underneath the gradient on purpose: it is what a
+   * reduced-motion reader sees, and what paints if the image is still
+   * decoding. A skeleton that resolves to transparent is worse than one that
+   * does not move.
+   */
   background-color: var(--color-stone-200);
+  background-image: linear-gradient(
+    90deg,
+    var(--color-stone-200) 0%,
+    var(--color-stone-100) 50%,
+    var(--color-stone-200) 100%
+  );
+  background-size: 200% 100%;
   animation:
     skeleton-in 1ms linear 200ms both,
-    shimmer 1.5s ease-in-out 200ms infinite;
+    shimmer 1.5s linear 200ms infinite;
 
+  /*
+   * Reduced motion drops the sweep **and** the gradient. Leaving a static
+   * gradient would paint a highlight frozen mid-block — a light stripe with no
+   * meaning, which is worse than the flat fill it replaces.
+   */
   @media (prefers-reduced-motion: reduce) {
+    background-image: none;
     animation: skeleton-in 1ms linear 200ms both;
   }
 }

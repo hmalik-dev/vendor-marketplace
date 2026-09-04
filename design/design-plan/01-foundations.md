@@ -91,6 +91,18 @@ was found at 4.27:1. Minting a second dark gold to gain headroom nobody needs
 would put two near-identical tokens in the ramp. **Recorded as an accepted
 deviation**, so a parity pass reads it as correct rather than as drift.
 
+**`#3A4D33` — do not adopt; `sage-600` stands.** Frame `06 Booking confirmed`
+draws its `Message <vendor>` button in it, on `#FFFDF9`. It appears **once** in
+the whole design file, against **72** uses of `#4B5940` — the value this table
+declares as `sage-600`, "sage as text" — for the same job. Contrast is 9.03:1
+against 7.38:1, so both clear AA and nothing is lost by taking the system value.
+A colour used once, a shade off the colour used seventy-two times for the same
+purpose, is the frame's arithmetic drifting rather than a step the ramp is
+missing: `#385` records that the frames are trustworthy as composition, not as
+arithmetic. Same call, and the same reasoning, as `#5C4A18` above. **Recorded as
+an accepted deviation** so a parity pass on frame `06` reads `text-sage-600` as
+correct rather than as drift. Implemented by `#386`.
+
 **A third, found while ruling these:** frame `12 Sign up` draws its disabled
 `Create my account` button as `#9A9184` on `#EFE9E0` — a value the table above
 bans by name. The frame is not edited (`Orla - Screens.dc.html` stays byte-identical

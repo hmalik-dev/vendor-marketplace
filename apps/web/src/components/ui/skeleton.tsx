@@ -18,22 +18,82 @@ export function Skeleton({ className }: { className?: string }): React.ReactElem
 }
 
 /**
- * A vendor card's shape: 3:2 cover, name, meta row, chips, price row.
+ * The search grid's card while its data is in flight: 3:2 cover, name, meta
+ * line, the (empty) chip row, then the ruled From/price row.
  *
- * The cover ratio has to be the card's own, or the grid reflows the moment the
- * data lands — which is the one thing a skeleton exists to prevent.
+ * **Every measurement here is `VendorCard`'s at `density="compact"`, not a
+ * frame's.** That distinction is the whole point of this component and it was
+ * got wrong twice. Three generic bars left the body 60px short of the card;
+ * rebuilding it from frame `17 Search loading` left it 14px short, because
+ * frame `17` is a 1440 frame drawn in the **1024 composition** — three columns,
+ * 450px cards, a fixed 152px cover — while the loaded state at that width
+ * (`02 Search`) is four columns at 335px on a 3:2 ratio. The two frames
+ * disagree with each other by 25px of card body, so neither can be copied
+ * blind. A skeleton's contract is with the component it becomes, and only the
+ * component can settle it.
+ *
+ * Measured in the browser at 1440x900, both states held on screen (the search
+ * request was intercepted and never resolved, because a skeleton that resolves
+ * before it paints proves nothing):
+ *
+ * ```
+ * loaded card 350.328  body 127 = 12 + 11 + 25 + 2 + 15 + 8 + 0 + 10 + 30 + 14
+ * skeleton    350.328  body 127   same terms, same order
+ * ```
+ *
+ * **The chip row is deliberately empty**, and that is the surprise. `VendorCard`
+ * renders *no* category chip in compact — the search grid is already filtered to
+ * one vendor type, so a chip would restate the query — and the availability chip
+ * is never passed here either. The row is a zero-height flex container that
+ * still costs its 8px `margin-top`, so it is reproduced rather than folded into
+ * a magic number: if the card ever gains a chip, this is where the skeleton
+ * gains one too. Frame `17` draws two chips because it draws the 1024 card,
+ * which does render them.
+ *
+ * The bar heights are the card's own line boxes (25 / 15 / 15 / 20), which are
+ * font-metric-derived rather than round because every one of those steps is
+ * `line-height: normal`. The widths are placeholders and are the median of
+ * frame `17`'s six cards — it varies them so a column does not read as
+ * identical boxes, and a single component cannot vary.
+ *
+ * `rounded-[16px]`, not `rounded-2xl`: this was 18px against the card's own 16,
+ * so the corner changed shape as the data landed.
  */
 export function VendorCardSkeleton({ className }: { className?: string }): React.ReactElement {
   return (
     <div
       data-slot="skeleton-vendor-card"
-      className={cn('overflow-hidden rounded-2xl bg-stone-0 shadow-sm', className)}
+      className={cn('overflow-hidden rounded-[16px] bg-stone-0 shadow-sm', className)}
     >
       <Skeleton className="aspect-[3/2] w-full rounded-none" />
-      <div className="flex flex-col gap-2.5 p-4">
-        <Skeleton className="h-5 w-2/3" />
-        <Skeleton className="h-3 w-1/2" />
-        <Skeleton className="h-6 w-3/4 rounded-full" />
+
+      {/* `px-3.5 pt-3 pb-3.5` — the compact card's own asymmetric padding. */}
+      <div className="px-3.5 pt-3 pb-3.5">
+        {/* The `<h3>`: 19px Instrument Serif, whose line box measures 25. */}
+        <Skeleton className="mt-2.75 h-[25px] w-[61%]" />
+        {/* The rating · location line: `text-meta`, 12px, line box 15. */}
+        <Skeleton className="mt-0.5 h-[15px] w-[47%]" />
+
+        {/*
+          The chip row, empty exactly as the loaded card's is. It contributes no
+          height and its `margin-top` is part of the body's rhythm.
+        */}
+        <div aria-hidden="true" className="mt-2 flex flex-wrap gap-1.25" />
+
+        {/*
+          The price row carries the rule as its own `border-t`, the way the card
+          does — not a separate divider element with symmetric margins, which is
+          what put 4px of the old drift here.
+
+          `items-center`, where the card uses `items-baseline`: these are bars
+          with no text, so they have no baseline to align and the flex container
+          would resolve one from their bottom edges. Centring keeps the row's
+          height at its tallest child, which is the 20px price.
+        */}
+        <div className="mt-2.5 flex items-center justify-between border-t border-stone-200 pt-2.25">
+          <Skeleton className="h-[15px] w-9" />
+          <Skeleton className="h-[20px] w-[61px]" />
+        </div>
       </div>
     </div>
   );

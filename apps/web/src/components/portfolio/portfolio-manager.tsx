@@ -246,7 +246,32 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
             <button
               type="button"
               onClick={queue.cancel}
-              className="shrink-0 text-sm font-semibold text-steel-600 underline underline-offset-2 hover:text-steel-700"
+              /*
+                This hovered to a steel 700, a step `steel` does not declare —
+                it has 50, 200 and 600 only. Tailwind v4 emits a utility only
+                for a step the theme defines, so that class produced **no CSS**:
+                verified against the served stylesheet, where `steel-700`
+                matches zero rules. The control therefore had no hover response
+                at all, and had not had one since it was written. This does not
+                remove a hover; it replaces one that never rendered.
+
+                The app's idiom for a coloured text link is one step darker in
+                the same ramp (`text-clay-500 hover:text-clay-600`), and `steel`
+                has nothing below 600 to step to. Nor do the frames: `#3D6A8C`
+                is the only steel-family text colour in the design file — 5 of
+                its 9 occurrences are `color:`, the rest are backgrounds and
+                borders — and frame `24` draws this control at exactly that,
+                underlined, with no hover state drawn at all.
+
+                So the destination is `stone-900`, which is a declared token and
+                is already where every neutral text control in the app hovers
+                to (`dropdown.tsx`, `profile-tabs.tsx`, `bookings-hub.tsx`,
+                `availability-calendar.tsx`). Minting a darker steel to satisfy
+                a hover would put a second near-identical token in a three-step
+                ramp — the trade `01-foundations.md` already declined once for
+                gold.
+              */
+              className="shrink-0 text-sm font-semibold text-steel-600 underline underline-offset-2 transition-colors duration-(--duration-fast) hover:text-stone-900"
             >
               Cancel
             </button>

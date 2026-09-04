@@ -200,7 +200,7 @@ primary CTA. Never a blank pane.
 ## Loading
 
 - **Element**: 16px spinner, 2px `clay-400` ring with a transparent quarter. Button text dims to 60%.
-- **Content**: skeletons, always. `bg-stone-200`, shimmer sweep `stone-200 → stone-150 → stone-200`, 1.5s. One variant per content type, mirroring real dimensions. Minimum 200ms so fast loads don't flash.
+- **Content**: skeletons, always. `bg-stone-200`, shimmer sweep `stone-200 → stone-100 → stone-200`, 1.5s linear. One variant per content type, mirroring real dimensions — **the component's, not a frame's**, since a loading frame and its loaded sibling can disagree (see #386). Minimum 200ms so fast loads don't flash.
 - **Page**: wordmark in Instrument Serif `clay-500`, opacity pulse 0.4→1→0.4 over 2s. First load and auth redirects only.
 
 Never a spinner and a skeleton on the same screen.

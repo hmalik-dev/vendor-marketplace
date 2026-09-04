@@ -35,8 +35,14 @@ import {
 } from './search-state';
 
 /**
- * How many skeletons stand in for a loading grid — two full rows of four, the
- * same number of cards the frame shows above the fold.
+ * How many skeletons stand in for a loading grid: two full rows of the *loaded*
+ * grid at the reference width, which is four across — so eight.
+ *
+ * Not what the loading frames draw. `17` and `27 Search — loading · 1024` both
+ * draw six in three columns, and `SKELETONS_BEYOND_TWO_ROWS_AT_1024` below
+ * records why that is the frame's discrepancy rather than this component's.
+ * Above 1728px the grid goes to five columns, where eight is a row and a bit;
+ * that is the widest step and no frame draws it.
  */
 const SKELETON_COUNT = 8;
 
@@ -52,10 +58,20 @@ const GRID_COLUMNS =
   'grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 min-[90rem]:grid-cols-4 min-[90rem]:gap-4 min-[108rem]:grid-cols-5';
 
 /**
- * Two full rows of skeletons, which is `columns × 2` — 8 at 1440 and 6 at 1024,
- * as the two loading frames draw them. The count is fixed and the surplus is
- * hidden in CSS, because the column count is a media query and this component
- * renders on the server where there is no viewport to read.
+ * Two full rows of skeletons at the widths the frames draw — 8 above 1440 and 6
+ * at or below it. (At the 1728 step the grid takes five columns and eight is no
+ * longer two whole rows; no frame draws that width.) The count is fixed and the surplus is hidden in CSS, because the
+ * column count is a media query and this component renders on the server where
+ * there is no viewport to read.
+ *
+ * **Corrected by #386: it is `columns × 2`, not what the loading frames draw.**
+ * This said "as the two loading frames draw them", and they do not — both `17`
+ * and `27 Search — loading · 1024` draw **six**, in a three-column grid. Frame
+ * `17` is a 1440 frame carrying the 1024 composition, which is the same
+ * discrepancy that made `VendorCardSkeleton` 14px too short when its geometry
+ * was read off it. The rule that survives is the *loaded* grid's: `02 Search`
+ * is four across at 1440, so two rows is eight. The recorded deviation is
+ * therefore against frame `17`'s six, and it is deliberate.
  */
 const SKELETONS_BEYOND_TWO_ROWS_AT_1024 = 'max-[90rem]:hidden';
 

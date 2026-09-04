@@ -104,6 +104,24 @@ describe('PortfolioManager upload cancel', () => {
    * a keyboard, and `04-laws.md` does not bend for a visual — so the treatment
    * is the frame's and the element is the accessible one.
    */
+  /*
+   * #386. The hover was `text-steel-700`, which `steel` does not define — so
+   * the control had no hover state at all and nothing said so. `steel` stops
+   * at 600, and the ruling was to cross to `stone-900` rather than mint a
+   * fourth step in a three-step ramp. Pinned because a deleted hover is
+   * invisible to every other test in this file.
+   */
+  it('keeps a visible hover destination the ramp actually defines', () => {
+    tasks = [uploading('a.jpg')];
+    render(<PortfolioManager initialItems={[]} />);
+
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+
+    expect(cancel.className).toContain('text-steel-600');
+    expect(cancel.className).toContain('hover:text-stone-900');
+    expect(cancel.className).not.toContain('steel-700');
+  });
+
   it('is a real button, so a keyboard can reach it', async () => {
     tasks = [uploading('a.jpg')];
     render(<PortfolioManager initialItems={[]} />);

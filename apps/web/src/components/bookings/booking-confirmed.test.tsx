@@ -93,6 +93,24 @@ describe('BookingConfirmed', () => {
     );
   });
 
+  /*
+   * #386. The label was `text-sage-700`, a step the theme does not define, so
+   * Tailwind resolved it to its own built-in green and the button read in a
+   * colour from outside the palette. `sage-600` is the darkest step the ramp
+   * has and the one `01-foundations.md` records as the deviation from the
+   * frame's `#3A4D33`. Pinned here because the ratchet in `design-tokens.test`
+   * only proves the step exists — it passes on any defined step, including a
+   * wrong one.
+   */
+  it('paints the primary action in the darkest sage the ramp defines', () => {
+    render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
+
+    const message = screen.getByRole('link', { name: 'Message Kessler & Co.' });
+
+    expect(message.className).toContain('text-sage-600');
+    expect(message.className).not.toContain('text-sage-700');
+  });
+
   /* No thread yet is not a dead control — it goes to the list. */
   it('falls back to the message list when no thread exists yet', () => {
     render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId={null} />);

@@ -149,7 +149,29 @@ export function BookingConfirmed({
       <div className="mt-6 flex gap-3">
         <Link
           href={conversationId ? `/messages?conversation=${conversationId}` : '/messages'}
-          className="rounded-[10px] bg-stone-0 px-6 py-3.25 text-sm font-semibold text-sage-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
+          /*
+            `sage-600`, and the frame is the reason it is not an exact match.
+
+            This read a sage 700, which `sage` does not declare — 50, 100, 150,
+            200, 300, 400, 600. Tailwind v4 generates a utility only for a step
+            the theme defines, so the class emitted **no CSS at all**: verified
+            against the served stylesheet, where `sage-700` matches zero rules
+            and `text-sage-600` matches one. The label therefore had no colour
+            of its own and inherited the body ink — near-black on the cream
+            button, where the frame draws deep green.
+
+            Frame `06` draws this button `color:#3A4D33` on `background:#FFFDF9`,
+            and `#3A4D33` is **not** a token either. It appears exactly **once**
+            in the whole design file, against **72** uses of `#4B5940` — which
+            `01-foundations.md:26` declares as `--color-sage-600`, commented
+            "sage as text". A value used once, a shade off the value used
+            seventy-two times for the same job, is the frame's arithmetic
+            drifting rather than a step the system is missing: `#385` records
+            that the frames are trustworthy as composition, not as arithmetic.
+            So this takes the system's sage-as-text and the deviation is
+            recorded here rather than resolved by inventing a `sage-700`.
+          */
+          className="rounded-[10px] bg-stone-0 px-6 py-3.25 text-sm font-semibold text-sage-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
         >
           Message {vendor.businessName}
         </Link>
