@@ -416,6 +416,8 @@ Active tracker: `.claude/plans/vendor-marketplace-tickets.md`
 | **390** | **Server-rendered pages have no upstream timeout** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-390` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** With the API reachable but not answering, `/` and `/vendors/<slug>` send **zero bytes and never respond** — measured at 30s against a 0.10s baseline, so the visitor holds a blank tab until the platform 504s. `/search` returns its skeleton in 0.14s under the identical fault, so the correct pattern is already in the repo. No fetch in the web app sets a deadline, so a slow dependency is indistinguishable from a hung one |
 | **391** | **The vendor dashboard's earnings month is a local month with UTC edges** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-391` | **None** | `core` | **Filed 2026-08-31 from #381's verification pass**, which found it because the API suite went red locally and green in CI — the tell. `getVendorDashboard` derives `today` as a **local** calendar date, `monthBounds` turns it into `YYYY-MM-DD` strings, and those are then pinned to **UTC** midnight before being compared against `bookings.paid_at`, a `timestamptz`. The window is therefore a local month with UTC edges, and a vendor west of UTC loses the last hours of every month from `earningsThisMonthCents` — CDT loses 19:00–23:59 on the final day. East of UTC it is the mirror image. **Correction, made on landing:** this row originally claimed `bookingsThisMonth` and `earningsThisMonthCents` could disagree about which month a booking belongs to. They are not the same measure and are not expected to agree — `countBookingsBetween` filters `event_date`, `sumPayoutsBetween` filters `paid_at`, and that DAO's contract is that money which has arrived is this month's earnings **even when the event is next year**. The claim came from reading adjacent lines rather than the DAO, and the test caught it. What they share is a boundary, and both bounds were derived from the wrong clock. Same class as the law in `.claude/rules/shared-contracts.md` — *never round-trip a date through a `Date` in local time* — inverted: a date string round-tripped into an instant **LANDED 2026-08-31 — squash `ac0b21b`, PR #91, required CI green, browser-verified at 1440x900 as the E2E vendor and signed out.** The anchor moves from `todayDateString` to `toDateString` in `dashboard.service.ts`. **`todayDateString`'s own docstring forbade the use**: it is the day on the caller's wall, "only ever meaningful on the client", and says in terms that nothing server-side compares against it — so this was a documented invariant being violated, not an unruled design question. **diff-reviewer found the half that mattered most:** the card's *label* was on the same wrong clock one layer up. `vendor/dashboard/page.tsx` is a server component, so its `todayDateString()` read the Next.js process's day and `DashboardStats` split that to name the comparison month. Fixing only the API would have produced a screen that was internally consistent and still wrong — September's bookings labelled `vs July` — which is worse than the original defect, because a wrong number under a plausible label survives review. Both ends now derive from UTC. `/vendor/dashboard` also reads `app.clock()` rather than the service's `new Date()` default, which is what lets a test stand on a month boundary. **The suite had been matched to the defect rather than catching it:** `dayFrom` anchored on the local day with a comment calling that deliberate, because anchoring on UTC "would fail for a few hours a day and pass for the rest". That flake was the bug reporting itself once a day. **Class closed, not just the instance:** `dao-clock-guard.test.ts` already policed this exact collapse in the DAOs and could not see this one, because the call was in a service. It now scans every non-test file under `apps/api/src` for the helper, the hand-rolled `getFullYear`/`getMonth`/`getDate` forms, `toLocale*`, and an `Intl.DateTimeFormat` with no `timeZone` — that last judged over the whole constructor call, because both existing formatters pin `timeZone: 'UTC'` inside a multi-line options object and a line-scoped pattern flagged both. Verified it flags the pre-fix source. **Two review findings changed the tests.** The boundary fixture was dated 2026, close enough to the real calendar that all three assertions passed with the `app.clock()` wiring reverted — a refactor could have dropped it and landed green; it is dated 2031 now and re-checked by reverting. And the `TZ` restore was unreachable when `beforeAll` threw, leaving `TZ` set and burying the guard's own diagnostic. `dashboard-month-window.test.ts` pins `TZ` **and** injects a fixed clock, so the boundary is permanently under test rather than only on the days the calendar exposes it. Checks: typecheck, lint, `build --force`, `format:check`, and `test --force` green both in `America/Chicago` on the last day of a month — the condition that was red on main — and under `TZ=UTC` (741 api, 138 web, 18 db, 19 preflight, 8 shared). **The browser pass landed inside the one window a month where it could discriminate:** UTC `2026-09-01T03:10:57Z` against a local clock of `2026-08-31 23:10 EDT`; the card rendered `+0 vs August`, correct for a September dashboard, where the pre-fix code would have rendered `+0 vs July`. Recorded honestly: the E2E seed has no paid bookings, so `Earnings this month` reads `$0` either way and the money figure discriminates nothing — the label is the browser-side evidence, the API window is covered by the unit test. |
 | **397** | **The Stripe webhook answers 4xx to a succeeded intent it can never apply** | P1.5 | M4.5 | **P2 Medium** | **Done** | `main` | **None** | `core` `stripe` | **Filed and closed 2026-09-03 by the autonomous QA run**, found in Phase 0 while proving webhook delivery: `stripe trigger payment_intent.succeeded` answered **422** because the intent carries no `metadata.requestId` (`recordSuccessfulPayment`, `payments.service.ts`). A non-2xx makes Stripe retry for three days and counts toward disabling the endpoint, for an event that could never be applied — a Dashboard test payment or another product on the same account produces the same shape. The route now acknowledges such an intent as `ignored` with a warning naming the intent id; `recordSuccessfulPayment` still refuses to book from one on the reconciliation path. Test: `payments.routes.test.ts` › *acknowledges and ignores a succeeded intent the platform never created* (422 before, 200 after). Proven live: four triggered events all 200. Landed in `1908064` alongside #394 and #396. |
+| **394** | **The booking confirmation screen answers 500 for every customer** | P1 | M4.5 | **P0 Critical** | **Done** | `main` | **None** — #387 landed, so the file-holding conflict is gone | `core` | **Filed 2026-08-31 from #363's browser pass**, which could not verify its own change because the screen never renders. `GET /customer/booking-requests/:id/booking` (`payments.routes.ts:70`) serialises with **`bookingSchema`**, which declares neither `eventType` nor `venue`, so Fastify's serialiser strips both from a 200. The web parses the same body with `wireBookingSchema` = `bookingWithContextSchema`, where both are **`.nullable()` — nullable, not optional** — so the parse throws, `getBookingForRequest` raises, and the RSC 500s. The list route is correct (`booking-requests.routes.ts:167` uses `z.array(bookingWithContextSchema)`), which is why `/bookings` renders and only the single read fails. **Also carries the frame `06` label fix, lifted out of #363** so both land in one browser pass: `booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds the slug, so the occasion renders `wedding · Barr Mansion · Austin, TX` in lower case. The component fix and its two tests were written and shown failing-before under #363; they were reverted from that lane because the 500 makes them unverifiable and the route fix belongs to a file lane #387 is live in **The 500 is fixed by #387 (squash `cd33f70`).** The route now serialises `bookingWithContextSchema`, `reconcileBooking` supplies `eventType` and `venue`, and an API test asserts the serialised 200 carries both — acceptance 1, 3 and 5, plus the required API test. **Still open here:** acceptance 2 (the occasion still prints verbatim at `booking-confirmed.tsx:107`, with no `EVENT_TYPE_LABELS` lookup — verified on `main` after `cd33f70`), acceptance 6 (the `.nullable()` vs `.optional()` ruling — #387 made the server always send both, which makes the two sides agree, but did not write the ruling), and the two `booking-confirmed.test.tsx` cases still to be recovered from `worktree-363`. One thing to re-measure rather than trust: #387's browser pass transcribed the sub-line as `Wedding · Barr Mansion, Austin TX` capitalised, which the code path cannot produce — read it off the DOM before assuming the defect is or is not present. **In Progress 2026-09-03 (autonomous QA run, on `main` directly per operator instruction).** The occasion now reads `EVENT_TYPE_LABELS` through `Object.hasOwn` with the stored value as fallback, three tests added; the route half was already fixed by #387 and the `.nullable()`-not-`.optional()` ruling is written on `bookingWithContextSchema`. Code landed in `1908064`; the browser pass of frame `06` (acceptance 1, 3, 4) is pending on the shared browser and gates Done. **Done 2026-09-04** — landed on `main` in `1908064` (occasion label through `EVENT_TYPE_LABELS` + `Object.hasOwn`, ruling written on `bookingWithContextSchema`; the route half was #387's). Browser-verified at 1440x900 signed in as the E2E customer on two confirmed bookings: h1 `October 15 is yours.` / `October 20 is yours.`, sub-line `Wedding · Barr Mansion, Austin TX` (label, not slug), zero console errors, and signed-out the URL lands on `/sign-in?returnTo=%2Fbookings%2F<id>%2Fconfirmed`. Recorded deviation: the confirmed page passes `city: null`, so the sub-line is two segments (`Occasion · venue`) rather than the ticket's three; frame `06` draws a different sub-line altogether (`Full day · Barr Mansion · 120 guests`) and the frame `06` parity pass under #386 owns that composition. |
+| **396** | **Production CSP blocks Stripe entirely — checkout cannot load on the deployed origin** | P1.5 | M4.5 | **P0 Critical** | **Done** | `main` | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's browser pass, confirmed independently by two lanes.** `apps/web/src/config/security-headers.ts` names Stripe **exactly once in the whole file** — in a comment explaining why it is not needed. No Stripe host appears in any directive, so the deployed origin blocks the payment path **three** ways: `script-src` (`:96`) omits `js.stripe.com`, so `loadStripe` cannot inject; `frame-src` (`:115`) is `'self' ${CLERK_HOSTS}`, so the Elements iframe is refused; `connect-src` (`:114`) omits `api.stripe.com`/`r.stripe.com`. **A fourth, in the same file:** `Permissions-Policy: payment=()` (`:154`) is justified by a comment reading *"Stripe Checkout is a redirect, not an embedded Payment Request"* — false since the screen moved to embedded Elements (`checkout-screen.tsx:8-9`, `loadStripe` at `:25`, `confirmPayment` at `:147`), so Apple Pay and Google Pay stay dead **after** the three directives are fixed. Anyone who fixes only the CSP gets a working card form and wallets that silently never appear. **Invisible in dev by construction:** `next.config.ts:76` enforces only when `isProduction`, so locally the header is report-only and the violations read as console noise — #387's three passing payment runs went straight through 16 of them. **Reproducible locally with `CSP_ENFORCE=1`**, which flips it to enforcing on a dev server; that flag appears nowhere in `packages/shared/src/env` or `.env.example` and should be documented here too. **Guard:** `security-headers.test.ts` passes today with zero Stripe hosts because it asserts directives are *present*, not what they *permit* — the fix needs a test enumerating every origin the app loads from and asserting each appears in the enforced policy. Standalone rather than folded into #370, which is blocked on #362 for credentials this needs none of. **In Progress 2026-09-03 (autonomous QA run, on `main` directly per operator instruction).** Stripe's hosts added per Stripe's published CSP guidance for Stripe.js, the Payment Element and Link — including `*.js.stripe.com`, `*.stripe.com` (img) and `*.link.com`, which the ticket's "no wildcards" line is deliberately not followed on because Stripe documents them; `payment=(self "https://js.stripe.com" "https://*.js.stripe.com")`; `CSP_ENFORCE` registered and moved to turbo `globalEnv` (as a pass-through key the build hash was identical for 0 and 1); `shouldEnforceCsp` extracted and its production branch pinned. Code landed in `1908064`, reviewed by diff-reviewer and security-auditor. Acceptance 3 (checkout driven with `CSP_ENFORCE=1`, zero violations, screenshots) is pending on the shared browser and gates Done. **Done 2026-09-04** — landed on `main` in `1908064` (Stripe hosts per Stripe's CSP guidance, `payment=(self "https://js.stripe.com" "https://*.js.stripe.com")`, `CSP_ENFORCE` registered and moved to turbo `globalEnv`, `shouldEnforceCsp` pinned), plus `58722a2` (Clerk telemetry off — the one violation the enforced policy still produced). Browser-verified with `CSP_ENFORCE=1` on the dev server: the enforced header confirmed by curl; checkout rendered eight `js.stripe.com` frames; `js/api/m/r.stripe.com`, `m.stripe.network`, `b.stripecdn.com` all 200; `featurePolicy.allowsFeature('payment','https://js.stripe.com') === true`; card 4242 paid $1,450 (booking `8fd7842b…`, request `ac475f65…`) and landed on `/confirmed`; **zero** CSP violations on checkout and confirmed. Deviation recorded in the file: `*.js.stripe.com`, `*.stripe.com` (img) and `*.link.com` are kept because Stripe documents them. Not verified against a deployed origin (#370 blocks one). |
 
 ## Closed ticket details
 
@@ -16072,4 +16074,171 @@ unchanged.
   `[200]` deliveries and the API logged the new warning once.
 
 Landed in `1908064`.
+
+### #394: The booking confirmation screen answers 500 for every customer
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None. **Touches `apps/api/src/modules/payments/payments.routes.ts`, which lane #387 is live in — do not run the two concurrently.**
+
+**Filed 2026-08-31 by #363's browser pass**, which set out to verify a one-line
+change on this screen and found the screen does not render at all.
+
+#### What happens
+
+Signed in as the E2E customer, with a `confirmed` booking for request
+`80c8ec6d…`, at 1440x900:
+
+`/bookings/80c8ec6d…/confirmed` returns **HTTP 500** and renders the server-error
+page — *"Something broke on our end … No payment was taken and no booking was
+changed."* It does not redirect to `/checkout` and does not 404. The heading is
+`Something broke on our end`; there is no date sentence and no
+`<main aria-label="Booking confirmed">`.
+
+The copy is wrong in the way that matters most: a payment **was** taken. This is
+the screen a customer lands on immediately after paying.
+
+#### Why
+
+`GET /customer/booking-requests/:requestId/booking`
+(`apps/api/src/modules/payments/payments.routes.ts:70`) declares:
+
+```ts
+schema: { params: requestParamsSchema, response: { 200: bookingSchema } },
+```
+
+`bookingSchema` (`packages/shared/src/schemas/index.ts:765`) declares neither
+`eventType` nor `venue`, so Fastify's response serialiser **strips both**. The
+observed 200 body carries 18 keys and neither of those two.
+
+The web parses that body with `wireBookingSchema` — `bookingWithContextSchema`
+(`:792`) plus date coercions — where `eventType` and `venue` are `.nullable()`,
+**not `.optional()`**. A missing key is not a null, so the parse throws:
+
+```
+ApiClientError: API response for /customer/booking-requests/80c8ec6d…/booking
+  did not match its schema
+    at apiRequest (src/lib/api-client.ts:88:15)
+    at getBookingForRequest (src/lib/customer-data.ts:150:16)
+    at BookingConfirmedPage
+```
+
+The list route gets it right — `booking-requests.routes.ts:167` serialises with
+`z.array(bookingWithContextSchema)` — which is why `/bookings` renders and only
+the single-booking read fails.
+
+#### The second half — the occasion renders as a slug
+
+Lifted out of **#363** so both defects on this screen land in one browser pass.
+
+`booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds
+the slug, so the line reads `wedding · Barr Mansion · Austin, TX` — lower-case,
+in the middle of the confirmation screen. Every other read site already routes
+through `EVENT_TYPE_LABELS` with a fallback (`request-row.tsx:81`,
+`accepted-request.tsx:43`, `quote-review.tsx:96`, `reviews-pane.tsx:66`,
+`customer-history.tsx:76`, `booking-entries.ts:87`); this one does not.
+
+The fix and its two tests were **written and shown failing-before** under #363 —
+reverting the line made the occasion test fail — then reverted from that lane,
+because the 500 makes them unverifiable in a browser and the route fix belongs to
+a file another lane is holding. Recover them from that branch rather than
+rewriting them.
+
+#### Acceptance
+
+1. `/bookings/<id>/confirmed` renders frame `06` for a customer with a paid
+   booking — driven in a real browser at 1440x900, signed in, screenshotted.
+2. The occasion line reads `Wedding · <venue> · <city>`, capitalised through
+   `EVENT_TYPE_LABELS`, with the stored value as the fallback for a legacy row.
+3. No console errors on that page.
+4. The signed-out URL still redirects to sign-in carrying `returnTo`.
+5. A test asserts the single-booking route's 200 body **includes** `eventType`
+   and `venue` — the schema mismatch is invisible to a route test that only
+   checks the status.
+6. Rule on `.nullable()` vs `.optional()` for these two fields and make the two
+   sides agree; a client that requires a key the server may omit is the class,
+   not the instance.
+
+#### Tests (required)
+
+- [ ] An API test that the serialised 200 carries `eventType` and `venue`
+- [ ] A web test that the confirmed page renders rather than throwing, for a
+      booking whose `eventType` is a slug
+- [ ] The two `booking-confirmed.test.tsx` cases recovered from `worktree-363`
+
+---
+
+### #396: Production CSP blocks Stripe entirely — checkout cannot load on the deployed origin
+
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Done | **Capabilities:** `core` `stripe`
+**Blocked by:** None
+
+**Filed 2026-08-31 from #387's browser pass, confirmed independently by two
+lanes.** #387 made the money path work locally. This makes that same screen
+non-functional in production, and it is invisible in development by
+construction.
+
+`apps/web/src/config/security-headers.ts` mentions Stripe **exactly once in the
+entire file** — in a comment explaining why it is not needed.
+
+#### Four blocks, not one
+
+1. `script-src` (`:96–101`) is `'self' 'unsafe-inline' [dev 'unsafe-eval']
+   ...CLERK_HOSTS`. No `js.stripe.com`, so `loadStripe` cannot inject its tag.
+2. `frame-src` (`:115`) is the literal `'self' ${CLERK_HOSTS.join(' ')}`. The
+   Elements iframe is refused.
+3. `connect-src` (`:114`) omits `api.stripe.com` and `r.stripe.com`.
+4. **`Permissions-Policy: payment=()`** (`:154`), justified by a comment reading
+   *"Payment is denied too — Stripe Checkout is a redirect, not an embedded
+   Payment Request, so #10 does not need it back."* **That premise is false in
+   the current code.** `checkout-screen.tsx:8-9` imports `Elements`,
+   `PaymentElement`, `useStripe` and `useElements`, calls `loadStripe` at module
+   scope (`:25`) and `stripe.confirmPayment` at `:147`. It is embedded Elements.
+   `payment=()` blocks the Payment Request API that Apple Pay and Google Pay go
+   through — exactly what `PaymentElement` surfaces.
+
+**The failure mode that makes this worth care:** fix the three directives and
+stop, and you get a working card form with Apple Pay that silently never
+appears. That is worse than the current total failure, because nothing is red.
+
+#### Why it escaped
+
+`next.config.ts:76` reads `enforceCsp: process.env.CSP_ENFORCE === '1' ||
+isProduction`. Locally the header is `Content-Security-Policy-Report-Only`, so
+the element loads and the violations go to the console, where a browser pass
+reads them as noise. **#387's three passing end-to-end payment runs each went
+straight through 16 of them.** A browser pass under report-only *cannot* fail on
+this; a pass under `CSP_ENFORCE=1` cannot miss it.
+
+`CSP_ENFORCE` appears nowhere in `packages/shared/src/env` or `.env.example` —
+an undocumented escape hatch that exists only in `next.config.ts`.
+
+#### Acceptance
+
+1. The enforced policy permits every origin the app actually loads from —
+   `js.stripe.com` on `script-src`, the Elements frame on `frame-src`,
+   `api.stripe.com` and `r.stripe.com` on `connect-src` — scoped to exact hosts,
+   not wildcards.
+2. `payment=()` is corrected for embedded Elements, and the stale comment is
+   **rewritten to record the reversal**, not deleted — the way this repo handles
+   its other overrides.
+3. Driven end to end with `CSP_ENFORCE=1` on a lane dev server: the payment path
+   completes and the console carries **zero** CSP violations. Screenshot before
+   and after.
+4. `CSP_ENFORCE` is documented — the env registry, `.env.example`, or the
+   checkout ticket's verification recipe, wherever a future reader will look.
+5. **The guard, which is the half that closes the class:**
+   `security-headers.test.ts` passes today with zero Stripe hosts because it
+   asserts directives are *present*, not what they *permit*. Replace it with a
+   test that enumerates the origins the app loads from and asserts each appears
+   in the enforced policy.
+6. Verified against the deployed origin once #370 makes one available; until
+   then `CSP_ENFORCE=1` is the gate.
+
+#### Not #370
+
+#370 is blocked on #362 for production credentials. This needs none: it is a
+header change, a comment rewrite and a test, all runnable today. Filing it
+behind #370 would park a launch blocker behind an external-account dependency.
+
+---
 

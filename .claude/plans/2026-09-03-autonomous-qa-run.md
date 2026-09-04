@@ -117,3 +117,27 @@ An `Explore` triage of `worktree-371` against main, confirmed with a per-file
 already on `main` byte-identical and its seed changes superseded by #387. The
 lane database, worktree and branch were removed. #371 stays in Backlog with
 only its #385-blocked remainder.
+
+### #394 and #396 verified and closed (2026-09-04)
+
+`browser-verifier` drove checkout with `CSP_ENFORCE=1`: enforced header
+confirmed, eight `js.stripe.com` frames, every Stripe host 200, Payment
+Request allowed for Stripe's origin, card 4242 paid $1,450 and landed on
+`/confirmed` with zero CSP violations. The one violation it found elsewhere —
+Clerk's telemetry POST to `clerk-telemetry.com` on every signed-in page — is
+fixed in `58722a2` by switching the SDK's telemetry off (a source guard pins
+it). The confirmation screen reads `Wedding · Barr Mansion, Austin TX`, no
+console errors, signed-out redirect carries `returnTo`. Both rows moved to the
+archive. Out-of-scope observations from that pass are held for filing:
+checkout renders two headers (#395 owns it), frame `06` does not fill the
+viewport because `BookingConfirmed` nests a second `<main>` (goes with the
+accessibility nested-landmark finding), and the pass consumed the E2E
+vendor's only pending request (re-seed before the next money-path pass).
+
+### Sweep status
+
+The first `/hunt-bugs` pass (`wf_fe833cfc-171`) ran 417 agents and produced
+131 candidate findings with 219 skeptic verdicts before the account's session
+limit stopped it at 07:10 local; the report stage never ran. It was resumed at
+10:29 with the cache warm so only the missing verdicts and the report re-run.
+The journal summary is in the run scratchpad (`hunt-summary.md`).

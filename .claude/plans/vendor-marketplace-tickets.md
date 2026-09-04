@@ -212,12 +212,10 @@ claim: customer creates a request -> vendor accepts -> customer sees the change.
 | **388** | **Forms reject the first submit in silence** | P1 | M3 | **P1 High** | **Backlog** | `worktree-388` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** Two of the three form surfaces a vendor must clear reject a pristine submit with **no POST, no `aria-invalid`, no `role=alert`, no message anywhere on the page** — the button appears inert. Confirmed on **Add package** (`/vendor/packages`) and **Create profile** (`/vendor/profile/edit`, the screen every new vendor is funnelled to). Focus moves to the offending control, which is the only signal, and it is silent for a screen reader. A **second** submit does render the summary, so the machinery exists and the first pass does not reach it. The booking-request form validates correctly but never announces it either. Includes the Price filter, which discards non-numeric input with no message **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-388 (checkpointed `32b00b3`); resume from that branch rather than rebuilding. |
 | **392** | **Frame `13 Admin` parity debt — four class-level misses and the missing chevrons** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's `parity-checker` pass.** Frame `13` matched on all six axes for #389's own change, and the pass surfaced five pre-existing misses it did not own. **#372 does not cover these** — it closes frames `08`, `04`/`07`/`19`, `16`, `18` and the site chrome, not `13`. **All five are class- or token-level, so no viewport can change them** — re-derived from source after a peer challenged whether the readings were taken at 1440: the pane uses `rounded-xl` → `--radius-xl: 14px` (`theme.css:221`) where the frame draws 12px, which is `--radius-panel` on the line above; `admin-nav.tsx:66` is `min-h-11` in a `gap-1` list, a 48px pitch by construction against the frame's 34px, ending the rail 93px low; `status-pill.tsx:40` is `px-2.5 py-1.5 text-xs font-bold` against the frame's `10px/700` with `padding 5px 10px` (47.36×26 vs 44.88×23), and that size comes from `03-components.md`'s vocabulary, so **the plan is what needs correcting, not only the component**; the avatar initial renders `font-sans` where the frame draws Instrument Serif; and `filter-bar.tsx`'s `Category ▾ / City ▾ / Payouts ▾` triggers render **no `▾` glyph at all** (`innerHTML` is bare text, zero children), which walks City 15px and Payouts 25.6px left of their frame positions. **Not in scope:** frame `13`'s table pane clipping its own fifteenth row by 4px — that is **#385**'s to rule on, and the app reproduces it within a pixel or two |
 | **393** | **Admin tables have no responsive strategy below 1024** | P1 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-08-31 by #389's browser pass.** `30-responsive.md:31` specifies Admin as `768 → Horizontal scroll` and `390 → Card list, not a table`. **Neither exists.** After #389 the layout is correct at every width and nothing overflows — but at 390 `/admin/reviews` resolves to `12.2px 31.73px 31.73px 21.97px 46.38px 21.97px 70px`, so headers render `R…`, `A…`, `W…` and body cells `4…`, `Ro…`, `T…`. **A 12px column cannot show more than an ellipsis**, so the tables are legible only at 1024 and above. This is #389's fix working, not failing: before it, the rows were mutually misaligned *and* the document scrolled sideways, so the contract's 768 row was never actually implemented either — the old horizontal scroll was incoherence, not a degradation. Ruling needed on whether 768 keeps the contract's scroll-inside-the-pane or follows 390 to cards |
-| **394** | **The booking confirmation screen answers 500 for every customer** | P1 | M4.5 | **P0 Critical** | **In Progress** | `main` | **None** — #387 landed, so the file-holding conflict is gone | `core` | **Filed 2026-08-31 from #363's browser pass**, which could not verify its own change because the screen never renders. `GET /customer/booking-requests/:id/booking` (`payments.routes.ts:70`) serialises with **`bookingSchema`**, which declares neither `eventType` nor `venue`, so Fastify's serialiser strips both from a 200. The web parses the same body with `wireBookingSchema` = `bookingWithContextSchema`, where both are **`.nullable()` — nullable, not optional** — so the parse throws, `getBookingForRequest` raises, and the RSC 500s. The list route is correct (`booking-requests.routes.ts:167` uses `z.array(bookingWithContextSchema)`), which is why `/bookings` renders and only the single read fails. **Also carries the frame `06` label fix, lifted out of #363** so both land in one browser pass: `booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds the slug, so the occasion renders `wedding · Barr Mansion · Austin, TX` in lower case. The component fix and its two tests were written and shown failing-before under #363; they were reverted from that lane because the 500 makes them unverifiable and the route fix belongs to a file lane #387 is live in **The 500 is fixed by #387 (squash `cd33f70`).** The route now serialises `bookingWithContextSchema`, `reconcileBooking` supplies `eventType` and `venue`, and an API test asserts the serialised 200 carries both — acceptance 1, 3 and 5, plus the required API test. **Still open here:** acceptance 2 (the occasion still prints verbatim at `booking-confirmed.tsx:107`, with no `EVENT_TYPE_LABELS` lookup — verified on `main` after `cd33f70`), acceptance 6 (the `.nullable()` vs `.optional()` ruling — #387 made the server always send both, which makes the two sides agree, but did not write the ruling), and the two `booking-confirmed.test.tsx` cases still to be recovered from `worktree-363`. One thing to re-measure rather than trust: #387's browser pass transcribed the sub-line as `Wedding · Barr Mansion, Austin TX` capitalised, which the code path cannot produce — read it off the DOM before assuming the defect is or is not present. **In Progress 2026-09-03 (autonomous QA run, on `main` directly per operator instruction).** The occasion now reads `EVENT_TYPE_LABELS` through `Object.hasOwn` with the stored value as fallback, three tests added; the route half was already fixed by #387 and the `.nullable()`-not-`.optional()` ruling is written on `bookingWithContextSchema`. Code landed in `1908064`; the browser pass of frame `06` (acceptance 1, 3, 4) is pending on the shared browser and gates Done. |
 | **395** | **Frame `05 Checkout` fails parity on all six axes** | P1.5 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's parity pass — the first that could reach the screen.** Checkout was unrenderable for the E2E customer until #387 landed a real connected account, so the frame had never been measured. Measured at 1440x900 against `Orla - Screens.dc.html` lines 877–925: **Layout 5** — the full app-shell header renders above the checkout's own wordmark header (`layout.tsx:127`, giving 128px of chrome against the frame's 64px and a **nested `<main>`**, so `Skip to content` lands above the extra nav), the pay button and its reassurance sit in the left column with their bottom edge at 917px — below the 900px fold — where the frame draws them as the summary rail's fourth block, the rail mini-card is missing its `<package> · <duration>` second line, header padding is `0 40px` against `0 32px`. **Style 5** — card shadow `--shadow-md` for `--shadow-sm`, panel radius 14px for 12px, avatar 64px circle for a 54px 12px-radius square, logo at `LOGO_SIZES.authPanel` (19px circles) where the frame draws 15px. **Colour 2** — page ground `stone-100` for `stone-50`. **Font 5** — `h1` 30px for 26px (over `04-laws.md`'s 26px app ceiling), letter-spacing `normal` for `-.01em`, context line and `Total today` 12.5px for 14px. **Text 2** — the rail sub-line and the frame's `Name on card` field have no counterpart. **Access 1** — the nested `<main>` is two landmarks and a wrong skip target. Contrast passes at 4.83:1 worst case; the focus ring passes, sampled twice. **Two are contract gaps, not template omissions:** `checkoutIntentSchema` carries neither package name nor duration, so the rail sub-line needs the API widened. **Coordinate with #386**, which owns token substitutions on other surfaces. |
-| **396** | **Production CSP blocks Stripe entirely — checkout cannot load on the deployed origin** | P1.5 | M4.5 | **P0 Critical** | **In Progress** | `main` | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's browser pass, confirmed independently by two lanes.** `apps/web/src/config/security-headers.ts` names Stripe **exactly once in the whole file** — in a comment explaining why it is not needed. No Stripe host appears in any directive, so the deployed origin blocks the payment path **three** ways: `script-src` (`:96`) omits `js.stripe.com`, so `loadStripe` cannot inject; `frame-src` (`:115`) is `'self' ${CLERK_HOSTS}`, so the Elements iframe is refused; `connect-src` (`:114`) omits `api.stripe.com`/`r.stripe.com`. **A fourth, in the same file:** `Permissions-Policy: payment=()` (`:154`) is justified by a comment reading *"Stripe Checkout is a redirect, not an embedded Payment Request"* — false since the screen moved to embedded Elements (`checkout-screen.tsx:8-9`, `loadStripe` at `:25`, `confirmPayment` at `:147`), so Apple Pay and Google Pay stay dead **after** the three directives are fixed. Anyone who fixes only the CSP gets a working card form and wallets that silently never appear. **Invisible in dev by construction:** `next.config.ts:76` enforces only when `isProduction`, so locally the header is report-only and the violations read as console noise — #387's three passing payment runs went straight through 16 of them. **Reproducible locally with `CSP_ENFORCE=1`**, which flips it to enforcing on a dev server; that flag appears nowhere in `packages/shared/src/env` or `.env.example` and should be documented here too. **Guard:** `security-headers.test.ts` passes today with zero Stripe hosts because it asserts directives are *present*, not what they *permit* — the fix needs a test enumerating every origin the app loads from and asserting each appears in the enforced policy. Standalone rather than folded into #370, which is blocked on #362 for credentials this needs none of. **In Progress 2026-09-03 (autonomous QA run, on `main` directly per operator instruction).** Stripe's hosts added per Stripe's published CSP guidance for Stripe.js, the Payment Element and Link — including `*.js.stripe.com`, `*.stripe.com` (img) and `*.link.com`, which the ticket's "no wildcards" line is deliberately not followed on because Stripe documents them; `payment=(self "https://js.stripe.com" "https://*.js.stripe.com")`; `CSP_ENFORCE` registered and moved to turbo `globalEnv` (as a pass-through key the build hash was identical for 0 and 1); `shouldEnforceCsp` extracted and its production branch pinned. Code landed in `1908064`, reviewed by diff-reviewer and security-auditor. Acceptance 3 (checkout driven with `CSP_ENFORCE=1`, zero violations, screenshots) is pending on the shared browser and gates Done. |
-**This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **380 rows as of 2026-09-03: 196 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
+**This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **382 rows as of 2026-09-03: 198 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-03, after the autonomous QA run's Phase 0 reconciliation moved six `Done` rows to the archive: 16 rows — 12 Backlog, 2 In Progress, 2 Deferred — needs a human, and 0 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-03, after the autonomous QA run's Phase 0 reconciliation moved six `Done` rows to the archive: 14 rows — 12 Backlog, 0 In Progress, 2 Deferred — needs a human, and 0 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1663,98 +1661,6 @@ the frame's 6 merely illustrative.
       cannot drift apart again
 
 
-### #394: The booking confirmation screen answers 500 for every customer
-
-**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** None. **Touches `apps/api/src/modules/payments/payments.routes.ts`, which lane #387 is live in — do not run the two concurrently.**
-
-**Filed 2026-08-31 by #363's browser pass**, which set out to verify a one-line
-change on this screen and found the screen does not render at all.
-
-#### What happens
-
-Signed in as the E2E customer, with a `confirmed` booking for request
-`80c8ec6d…`, at 1440x900:
-
-`/bookings/80c8ec6d…/confirmed` returns **HTTP 500** and renders the server-error
-page — *"Something broke on our end … No payment was taken and no booking was
-changed."* It does not redirect to `/checkout` and does not 404. The heading is
-`Something broke on our end`; there is no date sentence and no
-`<main aria-label="Booking confirmed">`.
-
-The copy is wrong in the way that matters most: a payment **was** taken. This is
-the screen a customer lands on immediately after paying.
-
-#### Why
-
-`GET /customer/booking-requests/:requestId/booking`
-(`apps/api/src/modules/payments/payments.routes.ts:70`) declares:
-
-```ts
-schema: { params: requestParamsSchema, response: { 200: bookingSchema } },
-```
-
-`bookingSchema` (`packages/shared/src/schemas/index.ts:765`) declares neither
-`eventType` nor `venue`, so Fastify's response serialiser **strips both**. The
-observed 200 body carries 18 keys and neither of those two.
-
-The web parses that body with `wireBookingSchema` — `bookingWithContextSchema`
-(`:792`) plus date coercions — where `eventType` and `venue` are `.nullable()`,
-**not `.optional()`**. A missing key is not a null, so the parse throws:
-
-```
-ApiClientError: API response for /customer/booking-requests/80c8ec6d…/booking
-  did not match its schema
-    at apiRequest (src/lib/api-client.ts:88:15)
-    at getBookingForRequest (src/lib/customer-data.ts:150:16)
-    at BookingConfirmedPage
-```
-
-The list route gets it right — `booking-requests.routes.ts:167` serialises with
-`z.array(bookingWithContextSchema)` — which is why `/bookings` renders and only
-the single-booking read fails.
-
-#### The second half — the occasion renders as a slug
-
-Lifted out of **#363** so both defects on this screen land in one browser pass.
-
-`booking-confirmed.tsx` prints `booking.eventType` verbatim, and the column holds
-the slug, so the line reads `wedding · Barr Mansion · Austin, TX` — lower-case,
-in the middle of the confirmation screen. Every other read site already routes
-through `EVENT_TYPE_LABELS` with a fallback (`request-row.tsx:81`,
-`accepted-request.tsx:43`, `quote-review.tsx:96`, `reviews-pane.tsx:66`,
-`customer-history.tsx:76`, `booking-entries.ts:87`); this one does not.
-
-The fix and its two tests were **written and shown failing-before** under #363 —
-reverting the line made the occasion test fail — then reverted from that lane,
-because the 500 makes them unverifiable in a browser and the route fix belongs to
-a file another lane is holding. Recover them from that branch rather than
-rewriting them.
-
-#### Acceptance
-
-1. `/bookings/<id>/confirmed` renders frame `06` for a customer with a paid
-   booking — driven in a real browser at 1440x900, signed in, screenshotted.
-2. The occasion line reads `Wedding · <venue> · <city>`, capitalised through
-   `EVENT_TYPE_LABELS`, with the stored value as the fallback for a legacy row.
-3. No console errors on that page.
-4. The signed-out URL still redirects to sign-in carrying `returnTo`.
-5. A test asserts the single-booking route's 200 body **includes** `eventType`
-   and `venue` — the schema mismatch is invisible to a route test that only
-   checks the status.
-6. Rule on `.nullable()` vs `.optional()` for these two fields and make the two
-   sides agree; a client that requires a key the server may omit is the class,
-   not the instance.
-
-#### Tests (required)
-
-- [ ] An API test that the serialised 200 carries `eventType` and `venue`
-- [ ] A web test that the confirmed page renders rather than throwing, for a
-      booking whose `eventType` is a slug
-- [ ] The two `booking-confirmed.test.tsx` cases recovered from `worktree-363`
-
----
-
 ### #388: Forms reject the first submit in silence
 
 **Milestone:** M3 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
@@ -2035,80 +1941,5 @@ lane its two checkout swaps; keep the two tickets off each other's files.
 3. Driven by `parity-checker` on all six axes, with the frame lines cited.
 4. The screen is reachable for this: it needs an `accepted`, unpaid booking, so
    `pnpm db:seed:e2e` then accept as the vendor — do not complete the payment.
-
----
-
-### #396: Production CSP blocks Stripe entirely — checkout cannot load on the deployed origin
-
-**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `stripe`
-**Blocked by:** None
-
-**Filed 2026-08-31 from #387's browser pass, confirmed independently by two
-lanes.** #387 made the money path work locally. This makes that same screen
-non-functional in production, and it is invisible in development by
-construction.
-
-`apps/web/src/config/security-headers.ts` mentions Stripe **exactly once in the
-entire file** — in a comment explaining why it is not needed.
-
-#### Four blocks, not one
-
-1. `script-src` (`:96–101`) is `'self' 'unsafe-inline' [dev 'unsafe-eval']
-   ...CLERK_HOSTS`. No `js.stripe.com`, so `loadStripe` cannot inject its tag.
-2. `frame-src` (`:115`) is the literal `'self' ${CLERK_HOSTS.join(' ')}`. The
-   Elements iframe is refused.
-3. `connect-src` (`:114`) omits `api.stripe.com` and `r.stripe.com`.
-4. **`Permissions-Policy: payment=()`** (`:154`), justified by a comment reading
-   *"Payment is denied too — Stripe Checkout is a redirect, not an embedded
-   Payment Request, so #10 does not need it back."* **That premise is false in
-   the current code.** `checkout-screen.tsx:8-9` imports `Elements`,
-   `PaymentElement`, `useStripe` and `useElements`, calls `loadStripe` at module
-   scope (`:25`) and `stripe.confirmPayment` at `:147`. It is embedded Elements.
-   `payment=()` blocks the Payment Request API that Apple Pay and Google Pay go
-   through — exactly what `PaymentElement` surfaces.
-
-**The failure mode that makes this worth care:** fix the three directives and
-stop, and you get a working card form with Apple Pay that silently never
-appears. That is worse than the current total failure, because nothing is red.
-
-#### Why it escaped
-
-`next.config.ts:76` reads `enforceCsp: process.env.CSP_ENFORCE === '1' ||
-isProduction`. Locally the header is `Content-Security-Policy-Report-Only`, so
-the element loads and the violations go to the console, where a browser pass
-reads them as noise. **#387's three passing end-to-end payment runs each went
-straight through 16 of them.** A browser pass under report-only *cannot* fail on
-this; a pass under `CSP_ENFORCE=1` cannot miss it.
-
-`CSP_ENFORCE` appears nowhere in `packages/shared/src/env` or `.env.example` —
-an undocumented escape hatch that exists only in `next.config.ts`.
-
-#### Acceptance
-
-1. The enforced policy permits every origin the app actually loads from —
-   `js.stripe.com` on `script-src`, the Elements frame on `frame-src`,
-   `api.stripe.com` and `r.stripe.com` on `connect-src` — scoped to exact hosts,
-   not wildcards.
-2. `payment=()` is corrected for embedded Elements, and the stale comment is
-   **rewritten to record the reversal**, not deleted — the way this repo handles
-   its other overrides.
-3. Driven end to end with `CSP_ENFORCE=1` on a lane dev server: the payment path
-   completes and the console carries **zero** CSP violations. Screenshot before
-   and after.
-4. `CSP_ENFORCE` is documented — the env registry, `.env.example`, or the
-   checkout ticket's verification recipe, wherever a future reader will look.
-5. **The guard, which is the half that closes the class:**
-   `security-headers.test.ts` passes today with zero Stripe hosts because it
-   asserts directives are *present*, not what they *permit*. Replace it with a
-   test that enumerates the origins the app loads from and asserts each appears
-   in the enforced policy.
-6. Verified against the deployed origin once #370 makes one available; until
-   then `CSP_ENFORCE=1` is the gate.
-
-#### Not #370
-
-#370 is blocked on #362 for production credentials. This needs none: it is a
-header change, a comment rewrite and a test, all runnable today. Filing it
-behind #370 would park a launch blocker behind an external-account dependency.
 
 ---
