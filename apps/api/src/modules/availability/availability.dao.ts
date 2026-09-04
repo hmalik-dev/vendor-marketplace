@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -111,11 +111,22 @@ export async function applyAvailability(
 
   await db.transaction(async (tx) => {
     if (clearedDates.length > 0) {
-      await tx
-        .delete(availability)
-        .where(
-          and(eq(availability.vendorId, vendorId), inArray(availability.date, [...clearedDates])),
-        );
+      await tx.delete(availability).where(
+        and(
+          eq(availability.vendorId, vendorId),
+          inArray(availability.date, [...clearedDates]),
+          /*
+           * Never a `booked` cell. The service reads the dates first and
+           * refuses the whole write when one of them is booked, but that
+           * read and this delete are two statements: an accept or a payment
+           * webhook landing between them would have its date freed by a
+           * vendor who was told nothing (#399). The predicate makes the
+           * check and the write agree by construction — a date booked in
+           * that window is simply not cleared.
+           */
+          ne(availability.status, 'booked'),
+        ),
+      );
     }
 
     if (blocked.length > 0) {
@@ -125,6 +136,9 @@ export async function applyAvailability(
         .onConflictDoUpdate({
           target: [availability.vendorId, availability.date],
           set: { status: sql`excluded.status`, note: sql`excluded.note` },
+          // Same reasoning as the delete: an upsert with no predicate would
+          // overwrite a `booked` cell written since the service's read.
+          where: ne(availability.status, 'booked'),
         });
     }
   });

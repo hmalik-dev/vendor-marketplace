@@ -9,6 +9,7 @@ import { addDays, toDateString } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { applyAvailability } from './availability.dao.js';
 
 const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
@@ -567,5 +568,62 @@ describe('/vendor/availability', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual([]);
     });
+  });
+});
+
+/*
+ * #399. The service reads the dates first and refuses the whole write when one
+ * of them is booked — but that read and the write are two statements, so an
+ * accept or a payment webhook landing between them had its date freed by a
+ * vendor who was told nothing. The write now carries the predicate itself, so
+ * a date booked in that window is left alone whatever the read saw. Driven at
+ * the DAO, because the window it closes cannot be opened through the route.
+ */
+describe('applyAvailability never touches a booked date', () => {
+  let harness: TestHarness;
+  const VENDOR_ID = '33333333-3333-4333-8333-333333333333';
+  const DATE = '2027-06-14';
+
+  beforeAll(async () => {
+    harness = await createTestHarness();
+    await harness.database.db.insert(users).values({
+      id: '44444444-4444-4444-8444-444444444444',
+      clerkUserId: 'user_dao_probe',
+      email: 'dao-probe@example.com',
+      firstName: 'Dao',
+      lastName: 'Probe',
+      role: 'vendor',
+    });
+    await harness.database.db.insert(vendorProfiles).values({
+      id: VENDOR_ID,
+      userId: '44444444-4444-4444-8444-444444444444',
+      businessName: 'Probe Studio',
+      slug: 'probe-studio',
+    });
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  it('neither clears it nor overwrites it', async () => {
+    await harness.database.db
+      .insert(availability)
+      .values({ vendorId: VENDOR_ID, date: DATE, status: 'booked' });
+
+    await applyAvailability(harness.database.db, VENDOR_ID, [DATE], []);
+    await applyAvailability(
+      harness.database.db,
+      VENDOR_ID,
+      [],
+      [{ vendorId: VENDOR_ID, date: DATE, status: 'blocked', note: 'mine now' }],
+    );
+
+    const rows = await harness.database.db
+      .select({ status: availability.status, note: availability.note })
+      .from(availability)
+      .where(eq(availability.vendorId, VENDOR_ID));
+
+    expect(rows).toEqual([{ status: 'booked', note: null }]);
   });
 });
