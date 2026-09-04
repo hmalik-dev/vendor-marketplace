@@ -33,6 +33,8 @@ const cfg = Object.assign(
     votes: 3, // skeptics per candidate finding
     flows: null, // null = every flow below
     dimensions: null, // null = every dimension below
+    webOrigin: null, // null = WEB_URL / WEB_PORT from the environment, else 3000
+    apiOrigin: null, // null = NEXT_PUBLIC_API_URL / PORT from the environment, else 4000
   },
   args && typeof args === 'object' && !Array.isArray(args) ? args : {},
 );
@@ -269,16 +271,26 @@ phase('Preflight');
  * lane whose servers were correctly on their own ports — and a not-ready
  * verdict silently skips the entire browser phase, so seven flows went undriven
  * while the sweep still reported as having run.
+ *
+ * The workflow sandbox exposes no `process` at all (verified 2026-09-03: the
+ * run died at `process.env` before spawning a single agent), so the
+ * environment is consulted only where it exists, and a lane that cannot rely
+ * on it passes `{"webOrigin": "...", "apiOrigin": "..."}` as args instead.
  */
 // `WEB_URL` doubles as the API's CORS allow-list and so is comma-separated;
 // only its first origin is a URL anything can curl.
 const firstOrigin = (value) => value.split(',')[0].trim();
-const webOrigin = process.env.WEB_URL
-  ? firstOrigin(process.env.WEB_URL)
-  : `http://localhost:${process.env.WEB_PORT || 3000}`;
-const apiOrigin = process.env.NEXT_PUBLIC_API_URL
-  ? firstOrigin(process.env.NEXT_PUBLIC_API_URL)
-  : `http://localhost:${process.env.PORT || 4000}`;
+const env = typeof process !== 'undefined' && process.env ? process.env : {};
+const webOrigin = cfg.webOrigin
+  ? firstOrigin(cfg.webOrigin)
+  : env.WEB_URL
+    ? firstOrigin(env.WEB_URL)
+    : `http://localhost:${env.WEB_PORT || 3000}`;
+const apiOrigin = cfg.apiOrigin
+  ? firstOrigin(cfg.apiOrigin)
+  : env.NEXT_PUBLIC_API_URL
+    ? firstOrigin(env.NEXT_PUBLIC_API_URL)
+    : `http://localhost:${env.PORT || 4000}`;
 
 const ready = await agent(
   `Check whether this repository's development stack is ready for a browser sweep.

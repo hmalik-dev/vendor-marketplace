@@ -258,5 +258,35 @@ const check = (name, cond, detail = '') => {
   );
 }
 
+// --- Case 8: origins arrive through args when the sandbox has no process ----
+// The Workflow runtime exposes no `process`; on 2026-09-03 the sweep died at
+// `process.env` before its first agent. Args are the channel that always exists.
+{
+  let readinessPrompt = '';
+  await run({
+    argsValue: {
+      drive: false,
+      dimensions: ['authorization'],
+      webOrigin: 'http://localhost:3057,http://127.0.0.1:3057',
+      apiOrigin: 'http://localhost:4057',
+    },
+    agentImpl: async (p, o) => {
+      if (o.schema && o.schema.properties.ready) {
+        readinessPrompt = p;
+        return { ready: true, blockers: [] };
+      }
+      if (o.schema === undefined && o.label && o.label.startsWith('map:')) return 'map';
+      if (o.agentType === 'bug-hunter') return { findings: [] };
+      return 'report';
+    },
+  });
+  check('args origins: readiness prompt names the web origin', readinessPrompt.includes('3057'));
+  check('args origins: readiness prompt names the API origin', readinessPrompt.includes('4057'));
+  check(
+    'args origins: only the first comma-separated web origin is probed',
+    !readinessPrompt.includes('127.0.0.1'),
+  );
+}
+
 console.log(fails === 0 ? '\nAll control-flow checks pass.' : `\n${fails} FAILING`);
 process.exit(fails ? 1 : 0);
