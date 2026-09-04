@@ -177,3 +177,38 @@ into the index and **not yet committed**: its one conflict (`design-tokens.test.
 resolved to an empty `KNOWN_UNDEFINED_STEPS`, because #387 fixed the two
 `bg-sage-500` sites and #386 fixes the other two, so the ratchet reaches zero.
 It waits on its `diff-reviewer` verdict.
+
+## Phase 2 — drain (2026-09-04)
+
+Worked on `main` directly, per the operator's instruction. Every change below
+went through the full local gate (`format:check`, `typecheck`, `lint`,
+`test --force`), a failing test written first, and a fresh-context reviewer.
+
+| Commit | Ticket | What landed | Review |
+| --- | --- | --- | --- |
+| `7fc4469` | #388 | Every form answers its first submit: counted `role="alert"` summary, per-field `aria-invalid` + `aria-describedby`, focus on the first blocker, Price filter announces a bound it could not read | diff-reviewer REQUEST-CHANGES, 4 applied |
+| `4558485` | #388 | The booking brief's missing message — found by the browser pass itself | browser re-verified |
+| `9f3b990` | #388 | Closed on the board with the browser evidence | — |
+| `23e4cc2` | #386 | Search skeleton rebuilt from the loaded card; the last two undefined ramp steps deleted, so the ratchet reaches zero; corpus floor added so an empty ratchet cannot become a vacuous scan | diff-reviewer APPROVE-WITH-NITS, both applied |
+| `aaa7189` | #398, #399 | JSON-LD escaped through `serialiseJsonLd` with a source guard on the sink; bidi controls stripped at the free-text schema boundary; the cancellation refund keyed | security-auditor PASS-WITH-NOTES, all applied |
+| `9d9ad6b` | #399 | Two accepts on one date serialise on the calendar row, and the transition commits with its calendar sync | diff-reviewer APPROVE-WITH-NITS, both applied |
+| `c19bde2` | #399 | `violatesConstraint` reads the constraint off the error chain, not `error.message`, which Drizzle 0.45 stopped populating | — |
+| `29ae20b` | #399 | An availability edit cannot clear or overwrite a `booked` date | — |
+| `1d333ed` | #401 | An accept is refused when the request carries no price or its date has passed | — |
+| `48d1ea4` | #386, #413, #395 | #386 closed after parity; frame `06`'s own debt filed as #413; #395's practical blocker recorded | — |
+
+### Two limitations found while testing, both recorded rather than papered over
+
+**PGlite serialises transactions.** It holds one connection and runs each
+`db.transaction` callback to completion, so no two transactions in this
+repository's suite ever overlap. A `Promise.all` route test therefore proves an
+in-transaction re-read and *not* a lock — deleting the lock leaves it green.
+Measured by a reviewer against the Docker Postgres, the accept sequence without
+the lock produces two accepted requests. `date-lock.test.ts` pins the lock's
+shape instead, and #399 records that a two-connection contention test is owed.
+
+**An empty ratchet can become a vacuous scan.** With `KNOWN_UNDEFINED_STEPS`
+at zero, `toEqual([])` could no longer tell "scanned 1220 classes, all defined"
+from "scanned nothing" — and a greedy comment stripper silently takes the scan
+from ~1220 matches to ~308 with every assertion still passing. The colour scan
+now asserts a corpus floor.
