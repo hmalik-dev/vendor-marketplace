@@ -10,7 +10,7 @@
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths; slugSchema and 404s close the gap
 - [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `DASHBOARD_PATH_BY_ROLE.admin` is `/admin` now; the check-every-destination invariant still stands
 - [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema without the read schemas on the same column and a user's data 500s someone else's page
-- [The image-ref LEADING-whitespace bypass is FIXED](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `" javascript:…"` is rejected; do not re-report. Still live and filed as #414: an interior tab or newline, and `/\evil.com` stepping around the protocol-relative guard
+- [Every image-ref bypass is FIXED; the host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — #414 closed the whitespace, backslash and control-char holes; `https://evil.example/x.png` was never closed and is the same attack
 - [Customer PII has two disclosure gates](customer-pii-has-two-disclosure-gates.md) — the profile relationship gate is permanent and customer-wide; the request-status gate is per-request, and they share no code
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — `GET /events/stream` has no `requireAuth`; adding one breaks it, removing the inline ban check is the real regression
 - [Log redaction covers the query, not the path](log-redaction-covers-query-not-path.md) — every query value goes and cannot be name-bypassed, but a credential in a path segment is still logged whole
