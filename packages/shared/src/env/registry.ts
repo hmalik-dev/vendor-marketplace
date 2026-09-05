@@ -679,7 +679,8 @@ export function requiresExplicitValue(variable: EnvVariable, target: ShapeTarget
 
   return (
     variable.defaultValue === undefined ||
-    (target === 'production' && variable.environments === 'per-environment')
+    ((target === 'production' || target === 'deployed') &&
+      variable.environments === 'per-environment')
   );
 }
 
@@ -697,12 +698,18 @@ export function exampleValue(variable: EnvVariable): string {
  * laptop or a release; holding them to `local` would reject the live keys that
  * are correct in production. Only `pnpm preflight` is told which environment it
  * is checking, so only it applies a mode restriction.
+ *
+ * `deployed` is the set the apps themselves apply once they *can* tell — the
+ * API at boot, the web app when a platform is building it. It refuses every
+ * per-environment default, which is the whole of the law, but it deliberately
+ * does **not** tighten shapes: staging is a deployment too, and holding it to
+ * `productionShape` would demand a live Stripe key for a test-mode branch.
  */
-export type ShapeTarget = 'baseline' | 'local' | 'production';
+export type ShapeTarget = 'baseline' | 'local' | 'production' | 'deployed';
 
 /** The syntax a value must match under the given value set. */
 export function shapeFor(variable: EnvVariable, target: ShapeTarget): RegExp | undefined {
-  if (target === 'baseline') {
+  if (target === 'baseline' || target === 'deployed') {
     return variable.shape;
   }
 

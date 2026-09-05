@@ -1,4 +1,5 @@
 export * from './capabilities.js';
+export * from './deployment.js';
 export * from './registry.js';
 export * from './tickets.js';
 export * from './generate.js';

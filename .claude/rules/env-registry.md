@@ -33,3 +33,12 @@ stub key — is silently wrong once deployed, and nothing fails loudly to say so
 When you add or touch one, make the deployed environment either supply the real
 value or fail: derive it from something the platform sets, or throw. Assert the
 production branch in a test; a default is exactly the code no test covers.
+
+The mechanism is already built, so use it rather than a new conditional
+(**#406**). `packages/shared/src/env/deployment.ts` answers "am I deployed?" —
+`isDeployedBuild` for a build, `isDeployedRuntime` for a booting server, plus a
+`DEPLOYMENT_PLATFORM` declaration for a host it does not name. The `'deployed'`
+`ShapeTarget` is what both apps validate against there: it refuses every
+per-environment default and every loopback URL, and applies no live-key
+restriction, because staging is a deployment too. A new platform is one entry in
+that file's table, not a second `RAILWAY_PUBLIC_DOMAIN`-style read somewhere.

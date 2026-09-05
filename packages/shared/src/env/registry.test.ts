@@ -14,6 +14,7 @@ import {
   type EnvVariable,
   exampleValue,
   findVariable,
+  requiresExplicitValue,
   shapeFor,
 } from './registry.js';
 import {
@@ -469,5 +470,55 @@ describe('registrySchemaShape', () => {
       'CSP_ENFORCE',
       'NEXT_PUBLIC_API_URL',
     ]);
+  });
+
+  /*
+   * `deployed` is the value set the apps apply once they can tell they are one.
+   * It refuses per-environment defaults — the whole of *a development default
+   * must never be able to reach production* — and deliberately stops there:
+   * staging is a deployment too, and `productionShape` would demand a live
+   * Stripe key for a branch that must never move real money.
+   */
+  describe("the 'deployed' target", () => {
+    const shape = registrySchemaShape({
+      consumer: 'api',
+      capabilities: ['core', 'storage', 'stripe'],
+      target: 'deployed',
+    });
+
+    it('refuses a per-environment row that would fall back to its default', () => {
+      expect(() => shape.S3_ENDPOINT.parse(undefined)).toThrow(
+        /S3_ENDPOINT is required on a deployment/,
+      );
+    });
+
+    it('names the default in the message, so the fix is the value to replace', () => {
+      expect(() => shape.WEB_URL.parse(undefined)).toThrow(/http:\/\/localhost:3000/);
+    });
+
+    it('keeps a shared row on its default, which is identical everywhere', () => {
+      expect(shape.LOG_LEVEL.parse(undefined)).toBe('info');
+      expect(shape.STRIPE_PLATFORM_FEE_RATE.parse(undefined)).toBe('0.12');
+    });
+
+    it('applies no mode restriction, because staging is a deployment too', () => {
+      const key = findVariable('STRIPE_SECRET_KEY')!;
+      const testMode = key.placeholder!.replace('...', '51ABCdefGHIjklMNO');
+
+      expect(shape.STRIPE_SECRET_KEY.parse(testMode)).toBe(testMode);
+    });
+
+    it('still enforces the row shape', () => {
+      expect(() => shape.S3_ENDPOINT.parse('not-a-url')).toThrow(/S3_ENDPOINT/);
+    });
+
+    it('requires exactly the per-environment rows, and every one of them', () => {
+      for (const variable of ENV_REGISTRY) {
+        const expected =
+          variable.environments === 'per-environment' || variable.defaultValue === undefined;
+
+        expect(requiresExplicitValue(variable, 'deployed'), variable.key).toBe(expected);
+      }
+    });
   });
 });

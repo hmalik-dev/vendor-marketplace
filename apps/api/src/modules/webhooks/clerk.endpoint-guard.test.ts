@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-  assertWebhookEndpoint,
-  checkWebhookEndpoint,
-  deploymentOrigin,
-} from './clerk.endpoint-guard.js';
+import { assertWebhookEndpoint, checkWebhookEndpoint } from './clerk.endpoint-guard.js';
 
-const ORIGIN = 'https://vendor-marketplace-production.up.railway.app';
+const HOST = 'vendor-marketplace-production.up.railway.app';
+const ORIGIN = `https://${HOST}`;
 const GOOD = `${ORIGIN}/webhooks/clerk`;
 /** The exact value that was configured on the Clerk app for weeks. */
 const RELAY = 'https://webhooks.clerk.com/in/c_2BrebQnWkQ/';
@@ -77,18 +74,6 @@ describe('checkWebhookEndpoint', () => {
   });
 });
 
-describe('deploymentOrigin', () => {
-  it("builds an origin from Railway's domain, which carries no scheme", () => {
-    expect(deploymentOrigin({ RAILWAY_PUBLIC_DOMAIN: 'app.up.railway.app' })).toBe(
-      'https://app.up.railway.app',
-    );
-  });
-
-  it.each([{}, { RAILWAY_PUBLIC_DOMAIN: '' }])('has no origin off a platform (%p)', (source) => {
-    expect(deploymentOrigin(source)).toBeNull();
-  });
-});
-
 describe('assertWebhookEndpoint', () => {
   const deployed = { RAILWAY_PUBLIC_DOMAIN: 'vendor-marketplace-production.up.railway.app' };
 
@@ -110,5 +95,64 @@ describe('assertWebhookEndpoint', () => {
 
   it('names the variable to fix in the failure', () => {
     expect(() => assertWebhookEndpoint(RELAY, deployed)).toThrow(/CLERK_WEBHOOK_ENDPOINT/);
+  });
+
+  /*
+   * The defect this closes: the guard keyed off `RAILWAY_PUBLIC_DOMAIN`, so on
+   * Vercel, on Render and in the API's own container it returned before
+   * checking anything. A stale endpoint on the production Clerk app then went
+   * undetected — `user.deleted` never arrives, and a deleted Clerk account
+   * keeps a live `users` row and a working session.
+   */
+  it.each([
+    ['Vercel', { VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: HOST }],
+    ['Render', { RENDER: 'true', RENDER_EXTERNAL_URL: ORIGIN }],
+    [
+      'a host that only declares itself',
+      { DEPLOYMENT_PLATFORM: 'Netlify', DEPLOYMENT_ORIGIN: HOST },
+    ],
+    ['a container that only sets NODE_ENV', { NODE_ENV: 'production', DEPLOYMENT_ORIGIN: HOST }],
+  ])('runs on %s, not only on Railway', (_platform, source) => {
+    expect(() => assertWebhookEndpoint(RELAY, source)).toThrow(/relay/);
+  });
+
+  /*
+   * The origin comparison is the strongest check the guard has — a tunnel, a
+   * stale domain and a colleague's preview are all endpoints that *work* and
+   * are still the wrong one. Widening the guard to every deployment must not
+   * quietly turn it into an optional check on a host that announces no origin.
+   */
+  it('refuses to boot a deployment that announces no origin and declares none', () => {
+    expect(() => assertWebhookEndpoint(GOOD, { NODE_ENV: 'production' })).toThrow(
+      /DEPLOYMENT_ORIGIN/,
+    );
+  });
+
+  /*
+   * `checkWebhookEndpoint` exempts a loopback host from its HTTPS rule, because
+   * a local relay target is legitimately plain http. On a deployment it is not
+   * — and the check is on the parsed hostname, so every spelling is caught.
+   */
+  it.each([
+    'http://localhost:4000/webhooks/clerk',
+    'http://LOCALHOST:4000/webhooks/clerk',
+    'https://127.0.0.1/webhooks/clerk',
+    'https://[::1]/webhooks/clerk',
+  ])('refuses %s on a deployment', (endpoint) => {
+    expect(() =>
+      assertWebhookEndpoint(endpoint, { NODE_ENV: 'production', DEPLOYMENT_ORIGIN: HOST }),
+    ).toThrow(/no deployment can reach/);
+  });
+
+  it('does not mistake a query string mentioning localhost for a loopback endpoint', () => {
+    expect(() =>
+      assertWebhookEndpoint(`${GOOD}?note=//localhost`, { RAILWAY_PUBLIC_DOMAIN: HOST }),
+    ).not.toThrow();
+  });
+
+  it('refuses a deployment with no endpoint configured at all', () => {
+    expect(() =>
+      assertWebhookEndpoint(undefined, { NODE_ENV: 'production', DEPLOYMENT_ORIGIN: HOST }),
+    ).toThrow(/No Clerk webhook endpoint/);
   });
 });

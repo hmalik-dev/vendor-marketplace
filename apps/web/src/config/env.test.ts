@@ -1,6 +1,12 @@
-import { registryKeys } from '@vendor-marketplace/shared/env';
+import { findVariable, registryKeys } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
-import { assertWebEnv, publicEnvKeys, requirePublicValue, siteOrigin } from './env';
+import { assertWebEnv, siteOrigin } from './env';
+import {
+  LOCAL_API_ORIGIN,
+  LOCAL_WEB_ORIGIN,
+  publicEnvKeys,
+  requirePublicValue,
+} from './public-env';
 
 const VALID: NodeJS.ProcessEnv = {
   NODE_ENV: 'development',
@@ -11,6 +17,7 @@ const VALID: NodeJS.ProcessEnv = {
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: '/sign-up',
   NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: '/after-sign-in',
   NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: '/after-sign-in',
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_51QabcdefghijklmnopQR',
 };
 
 /** `VALID` with the one defaulted key removed. */
@@ -67,15 +74,67 @@ describe('assertWebEnv', () => {
 
   it('does not treat a local `next build` as a production deployment', () => {
     // next build sets NODE_ENV=production for every build, so the localhost
-    // defaults must still apply; `preflight --env production` is the release gate.
+    // defaults must still apply; only a platform marker says otherwise.
     expect(assertWebEnv({ ...withoutApiUrl(), NODE_ENV: 'production' }).NEXT_PUBLIC_API_URL).toBe(
       'http://localhost:4000',
     );
   });
 
-  it('does not require a capability the web app has not wired up yet', () => {
-    expect(() => assertWebEnv(VALID)).not.toThrow();
-    expect(Object.keys(assertWebEnv(VALID))).not.toContain('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY');
+  it('refuses to bake a localhost API origin into a deployed bundle', () => {
+    /*
+     * The defect this closes: a Vercel build with `NEXT_PUBLIC_API_URL` unset
+     * inlined `http://localhost:4000`, so every browser call went to the
+     * visitor's own machine and every server-side loader to its own container.
+     */
+    expect(() => assertWebEnv({ ...withoutApiUrl(), VERCEL: '1' })).toThrow(
+      /NEXT_PUBLIC_API_URL is required on a deployment/,
+    );
+  });
+
+  it('refuses every per-environment development default on a deployment', () => {
+    const bare: NodeJS.ProcessEnv = {
+      NODE_ENV: 'production',
+      VERCEL: '1',
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: VALID.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: VALID.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    };
+
+    let message = '';
+    try {
+      assertWebEnv(bare);
+      expect.unreachable('assertWebEnv should have thrown');
+    } catch (error) {
+      message = (error as Error).message;
+    }
+
+    for (const key of ['NEXT_PUBLIC_API_URL', 'WEB_URL', 'NEXT_PUBLIC_S3_PUBLIC_URL']) {
+      expect(message).toContain(key);
+    }
+  });
+
+  it('keeps the shared defaults on a deployment, which are not per-environment', () => {
+    expect(
+      assertWebEnv({
+        ...VALID,
+        VERCEL: '1',
+        WEB_URL: 'https://orla.test',
+        API_URL: 'https://api.orla.test',
+        NEXT_PUBLIC_API_URL: 'https://api.orla.test',
+        NEXT_PUBLIC_S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+      }).NEXT_PUBLIC_CLERK_SIGN_IN_URL,
+    ).toBe('/sign-in');
+  });
+
+  it('requires the Stripe key, so no deploy ships a checkout with no card field', () => {
+    /*
+     * `loadStripe('')` is rejected by Stripe.js: the card field never mounts
+     * and the Pay button does nothing, after the server has already opened a
+     * real PaymentIntent. The build is the only place that can stop it.
+     */
+    const source = { ...VALID };
+    delete source.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+
+    expect(() => assertWebEnv(source)).toThrow(/NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/);
   });
 });
 
@@ -83,11 +142,26 @@ describe('publicEnv', () => {
   it('covers every browser-facing key the registry declares for the web', () => {
     // The literal `process.env.X` map cannot be generated, so this is the drift
     // gate that keeps it in step with the registry.
-    const declared = registryKeys({ consumer: 'web', capabilities: ['core', 'auth'] }).filter(
-      (key) => key.startsWith('NEXT_PUBLIC_'),
-    );
+    const declared = registryKeys({
+      consumer: 'web',
+      capabilities: ['core', 'auth', 'storage', 'stripe'],
+    }).filter((key) => key.startsWith('NEXT_PUBLIC_'));
 
     expect(publicEnvKeys().sort()).toEqual([...declared].sort());
+  });
+
+  /*
+   * `public-env.ts` restates the two development fallbacks rather than reading
+   * them from the registry, because importing the registry would pull the whole
+   * validation table into the browser bundle. This is the drift guarantee that
+   * buys back: the copies are asserted against their rows here, where the test
+   * runner may import anything.
+   */
+  it.each([
+    ['NEXT_PUBLIC_API_URL', LOCAL_API_ORIGIN],
+    ['WEB_URL', LOCAL_WEB_ORIGIN],
+  ])('keeps its %s fallback equal to the registry default', (key, fallback) => {
+    expect(findVariable(key)?.defaultValue).toBe(fallback);
   });
 
   it('returns a value that is present', () => {

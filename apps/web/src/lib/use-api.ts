@@ -8,6 +8,7 @@ import {
   type UploadedImage,
 } from '@vendor-marketplace/shared';
 import { useCallback } from 'react';
+import { apiOrigin } from '@/config/public-env';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
 
 export type BrowserRequestOptions<T> = Omit<ApiRequestOptions<T>, 'token'>;
@@ -15,7 +16,7 @@ export type BrowserRequestOptions<T> = Omit<ApiRequestOptions<T>, 'token'>;
 export type BrowserRequest = <T>(path: string, options: BrowserRequestOptions<T>) => Promise<T>;
 
 /** Browser calls need the absolute origin; server-only vars are unavailable here. */
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const BASE_URL = apiOrigin();
 
 /**
  * The browser-side counterpart to `getCurrentUser`. Client components cannot

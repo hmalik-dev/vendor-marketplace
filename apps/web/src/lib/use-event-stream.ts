@@ -2,10 +2,11 @@
 
 import { useAuth } from '@clerk/nextjs';
 import { useEffect, useRef, useState } from 'react';
+import { apiOrigin } from '@/config/public-env';
 import { ApiClientError, apiRequest } from '@/lib/api-client';
 import { wireStreamTicketSchema } from '@/lib/wire-schemas';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const BASE_URL = apiOrigin();
 
 /**
  * Trades the session for one stream ticket.
