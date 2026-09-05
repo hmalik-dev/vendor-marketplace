@@ -166,13 +166,22 @@ export function ownsObjectKey(key: string, ownerId: string): boolean {
  * restated — a private copy of half these rules is what let one backslash
  * through, `\` being a path separator to the parser and not to a `split('/')` —
  * and this adds what only an ownership question needs: the scheme and authority
- * go, `%2f` folds because object storage decodes it when deriving the key, and
- * empty, `.` and `..` segments resolve away. A real key contains none of them,
- * so nothing legitimate changes shape.
+ * go, the query and fragment go, `%2f` folds because object storage decodes it
+ * when deriving the key, and empty, `.` and `..` segments resolve away. A real
+ * key contains none of them, so nothing legitimate changes shape.
+ *
+ * The query and fragment are cut for the same reason as everything else here.
+ * A parser drops them before it resolves the path and object storage never sees
+ * them, but a `split('/')` counts the slashes inside them — so
+ * `portfolio/<victim>/1111.webp?a/b` reads as four segments, pushes the prefix
+ * out of the window the owner is read from, and fetches the victim's object
+ * anyway. Two characters appended to the string `GET /vendors/:slug` already
+ * publishes.
  */
 function referencedPathSegments(ref: string): string[] {
   const path = normalizeImageRefPath(ref)
     .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '')
+    .replace(/[?#][\s\S]*$/, '')
     .replace(/%2f/gi, '/');
   const resolved: string[] = [];
 

@@ -116,6 +116,9 @@ describe('assertOwnedImageRefs', () => {
     ['with an encoded separator', 'portfolio/owner-2%2Fabc.webp'],
     ['wrapped in the bucket URL', `${BUCKET_BASE}/portfolio/owner-2/abc.webp`],
     ['wrapped in the bucket URL with a dot segment', `${BUCKET_BASE}/portfolio/owner-2/./abc.webp`],
+    ['hidden behind a query string', 'portfolio/owner-2/abc.webp?a/b'],
+    ['hidden behind a fragment', 'portfolio/owner-2/abc.webp#/a/b'],
+    ['wrapped and behind a query string', `${BUCKET_BASE}/portfolio/owner-2/abc.webp?a/b`],
   ])('refuses a foreign key %s', (_label, ref) => {
     expect(() => assertOwnedImageRefs([ref], 'owner-1')).toThrow(
       'That image belongs to another account',
@@ -131,7 +134,13 @@ describe('assertOwnedImageRefs', () => {
    */
   it('refuses every spelling that resolves onto another account’s object', () => {
     const victim = 'portfolio/owner-2/abc.webp';
-    const target = new URL(`${CDN_BASE}/${victim}`).href;
+    /*
+     * The **pathname**, not the href. Object storage derives the key from the
+     * path and ignores the query, so `…/abc.webp?a/b` and `…/abc.webp` are one
+     * object — and comparing hrefs is precisely how a query-string spelling
+     * looked like a different object while fetching the same bytes.
+     */
+    const target = new URL(`${CDN_BASE}/${victim}`).pathname;
 
     const spellings = [
       victim,
@@ -143,6 +152,8 @@ describe('assertOwnedImageRefs', () => {
       'portfolio/owner-2/nested/../abc.webp',
       'portfolio\\owner-2\\abc.webp',
       'portfolio/owner-2\\abc.webp',
+      'portfolio/owner-2/abc.webp?a/b',
+      'portfolio/owner-2/abc.webp#/a/b',
     ];
 
     for (const ref of spellings) {
@@ -151,7 +162,7 @@ describe('assertOwnedImageRefs', () => {
        * fetch the victim's object once `resolveImageUrl` has joined it to the
        * base and a URL parser has normalised the result.
        */
-      expect(new URL(resolveImageUrl(CDN_BASE, ref)!).href, ref).toBe(target);
+      expect(new URL(resolveImageUrl(CDN_BASE, ref)!).pathname, ref).toBe(target);
       expect(() => assertOwnedImageRefs([ref], 'owner-1'), ref).toThrow(
         'That image belongs to another account',
       );
@@ -165,6 +176,8 @@ describe('assertOwnedImageRefs', () => {
     `${BUCKET_BASE}/customer-profile/owner-1/abc.webp`,
     '/portfolio/owner-1/abc.webp',
     './portfolio/owner-1/abc.webp',
+    `${BUCKET_BASE}/portfolio/owner-1/abc.webp?v=2`,
+    `${BUCKET_BASE}/portfolio/owner-1/abc.webp#top`,
   ])('still accepts the caller’s own key spelled as %s', (ref) => {
     expect(() => assertOwnedImageRefs([ref], 'owner-1')).not.toThrow();
   });
@@ -204,6 +217,7 @@ describe('assertOwnedImageRefs', () => {
     ['a prefix segment with nothing after it', 'https://img.example/gallery/portfolio'],
     ['a prefix as a filename', 'https://img.example/albums/portfolio.webp'],
     ['a Clerk avatar with a multi-segment path', 'https://img.clerk.com/eyJ0eXAi/user/abc.png'],
+    ['a Gravatar carrying a query', 'https://www.gravatar.com/avatar/abc?d=mp'],
   ])('reads no owner from %s', (_label, ref) => {
     expect(() => assertOwnedImageRefs([ref], 'owner-1')).not.toThrow();
   });
