@@ -12,6 +12,7 @@ import {
   isPastDate,
   isUniversallyFutureDate,
   isUniversallyPastDate,
+  joinWithAnd,
   kmToMiles,
   milesToKm,
   parseDateString,
@@ -437,5 +438,14 @@ describe('isUniversallyFutureDate', () => {
   it('is false for a malformed date, which is invalid rather than future', () => {
     expect(isUniversallyFutureDate('2026-02-30')).toBe(false);
     expect(isUniversallyFutureDate('nope')).toBe(false);
+  });
+});
+
+describe('joinWithAnd', () => {
+  it('reads as prose at every length', () => {
+    expect(joinWithAnd([])).toBe('');
+    expect(joinWithAnd(['date'])).toBe('date');
+    expect(joinWithAnd(['date', 'guest count'])).toBe('date and guest count');
+    expect(joinWithAnd(['date', 'guest count', 'location'])).toBe('date, guest count and location');
   });
 });
