@@ -11,7 +11,7 @@ import {
   vendorSlugParamsSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
-import { availabilitySchema, vendorDashboardSchema } from '@vendor-marketplace/shared';
+import { publicAvailabilitySchema, vendorDashboardSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole } from '../../lib/guards.js';
 import { requireRole } from '../../lib/guards.js';
@@ -120,7 +120,7 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
     {
       schema: {
         params: vendorSlugParamsSchema,
-        response: { 200: z.array(availabilitySchema) },
+        response: { 200: z.array(publicAvailabilitySchema) },
       },
     },
     async (request) => getPublicVendorAvailability(app.db, request.params.slug),

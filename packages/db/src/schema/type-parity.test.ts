@@ -105,9 +105,22 @@ describe('Drizzle <-> Zod column parity', () => {
     expectTypeOf<BookingRow['totalAmountCents']>().toEqualTypeOf<
       BookingModel['totalAmountCents']
     >();
-    expectTypeOf<BookingRow['stripeTransferId']>().toEqualTypeOf<
-      BookingModel['stripeTransferId']
+    expectTypeOf<BookingRow['cancellationReason']>().toEqualTypeOf<
+      BookingModel['cancellationReason']
     >();
+
+    /*
+     * The money internals are on the row and deliberately **not** on the read
+     * model (#407): the platform's commission, the vendor's payout split and
+     * the two Stripe identifiers are stored, and no booking read hands them to
+     * a caller. Asserted rather than omitted, so restoring one to
+     * `bookingSchema` fails here instead of quietly reappearing on the wire.
+     */
+    expectTypeOf<BookingModel>().not.toHaveProperty('platformFeeCents');
+    expectTypeOf<BookingModel>().not.toHaveProperty('vendorPayoutCents');
+    expectTypeOf<BookingModel>().not.toHaveProperty('stripePaymentIntentId');
+    expectTypeOf<BookingModel>().not.toHaveProperty('stripeTransferId');
+    expectTypeOf<BookingRow>().toHaveProperty('stripeTransferId');
 
     // `event_date` is a Postgres DATE and stays a `YYYY-MM-DD` string on both
     // sides — never a Date, which would reintroduce timezone drift.

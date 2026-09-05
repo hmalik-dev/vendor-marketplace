@@ -213,6 +213,16 @@ describe('/users/me', () => {
       expect(response.statusCode).toBe(200);
     }
 
+    /** The `users.id` the upload route writes into the owner segment of a key. */
+    async function userIdOf(clerkUserId: string): Promise<string> {
+      const [row] = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.clerkUserId, clerkUserId));
+
+      return row!.id;
+    }
+
     it('updates the fields a user owns', async () => {
       await signIn(CUSTOMER_CLERK_ID);
 
@@ -238,7 +248,9 @@ describe('/users/me', () => {
     it('stores the object key an upload returns, and reads it back', async () => {
       await signIn(CUSTOMER_CLERK_ID);
 
-      const avatarUrl = 'customer-profile/0f4a1c2e-1111-2222-3333-444455556666.webp';
+      // The owner segment is the caller's own `users.id`, exactly as the upload
+      // route mints it — anything else is now refused (#407).
+      const avatarUrl = `customer-profile/${await userIdOf(CUSTOMER_CLERK_ID)}/0f4a1c2e.webp`;
 
       const saved = await harness.app.inject({
         method: 'PUT',
@@ -259,6 +271,46 @@ describe('/users/me', () => {
 
       expect(reloaded.statusCode).toBe(200);
       expect(reloaded.json().avatarUrl).toBe(avatarUrl);
+    });
+
+    /* #407 — the write guard on `avatarUrl`. See `assertOwnedImageRefs`. */
+    it('refuses an avatar naming an object minted for another account', async () => {
+      await signIn(CUSTOMER_CLERK_ID);
+      // The other account has to exist for its key to have a real owner segment.
+      await signIn(VENDOR_CLERK_ID);
+      const theirs = await userIdOf(VENDOR_CLERK_ID);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_CLERK_ID),
+        payload: { firstName: 'Ada', avatarUrl: `customer-profile/${theirs}/stolen.webp` },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().message).toBe('That image belongs to another account');
+    });
+
+    /*
+     * The two references that carry no owner still pass: seeded marketing art
+     * is a site-relative path, and a Clerk avatar is an absolute URL on a host
+     * that is not ours. Refusing "not mine" rather than "someone else's" would
+     * have locked both out.
+     */
+    it('still accepts a reference that carries no owner at all', async () => {
+      await signIn(CUSTOMER_CLERK_ID);
+
+      for (const avatarUrl of ['/images/placeholder-avatar.webp', 'https://img.clerk.com/a.png']) {
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: '/users/me',
+          headers: bearer(CUSTOMER_CLERK_ID),
+          payload: { firstName: 'Ada', avatarUrl },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().avatarUrl).toBe(avatarUrl);
+      }
     });
 
     it('still refuses an avatar reference that would reach an img src', async () => {

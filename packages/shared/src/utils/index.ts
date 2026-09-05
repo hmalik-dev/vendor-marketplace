@@ -484,6 +484,29 @@ export function resolveImageUrl(
 }
 
 /**
+ * An image reference as a URL parser will read it, not as it was written.
+ *
+ * `\` is a path separator for an http(s) URL, and `%2e` decodes to `.` before
+ * the path is resolved — so the string a guard reads and the object a browser
+ * fetches are two different things unless this runs first.
+ *
+ * **Both readers of an image reference share it, because two copies is how they
+ * come to disagree.** `imageRefSchema` uses it to decide whether a value
+ * traverses or escapes to another host; the API's `assertOwnedImageRefs` uses it
+ * to decide whose object a reference names (#407). The guard was written with
+ * its own copy of half these rules and was bypassed by one backslash.
+ *
+ * Segment resolution is deliberately left to each caller: the schema asks only
+ * whether a `..` is present, and the guard resolves them away. So is `%2f`,
+ * which a parser leaves encoded — it cannot change whether a reference escapes
+ * to another host, so the schema has no use for it, while the guard folds it
+ * because object storage decodes it when deriving the key.
+ */
+export function normalizeImageRefPath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/%2e/gi, '.');
+}
+
+/**
  * The inverse, for migrating rows written before keys were stored: strips a
  * known base so an absolute URL becomes the key it was always describing.
  * Anything not under that base is left exactly as it is.

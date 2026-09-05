@@ -14,7 +14,7 @@ import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-mark
 import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
-import { thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
+import { assertOwnedImageRefs, thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
 import { reapObjects } from '../portfolio/portfolio.service.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import {
@@ -233,6 +233,8 @@ export async function createVendorProfile(
   userId: string,
   input: CreateVendorProfileInput,
 ): Promise<VendorProfileDetail> {
+  assertOwnedImageRefs([input.profileImageUrl, input.coverImageUrl], userId);
+
   const existing = await findVendorProfileByUserId(db, userId);
   if (existing) {
     throw conflict('You already have a vendor profile');
@@ -277,6 +279,8 @@ export async function updateVendorProfile(
   input: UpdateVendorProfileInput,
   log?: { warn: (details: unknown, message: string) => void },
 ): Promise<VendorProfileDetail> {
+  assertOwnedImageRefs([input.profileImageUrl, input.coverImageUrl], userId);
+
   const existing = await findVendorProfileByUserId(db, userId);
   if (!existing) {
     throw notFound('You have not created a vendor profile yet');
