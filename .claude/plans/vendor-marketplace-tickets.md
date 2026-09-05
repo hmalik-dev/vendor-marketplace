@@ -246,10 +246,10 @@ form and the portfolio manager both discard edits when their parent r |
 accepts: the API boots on localhost and MinIO, the web bundle bakes
 `http://localhost:4000` as its API origin, every stored-key image resolves to
 nothing, checkout loads Stripe.js with an empty publishable key, and the Clerk |
-| **407** | **Reads hand back more than the caller is entitled to** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` `storage` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 3 verified findings. Three reads return fields their audience should not have: a public endpoint
+| **407** | **Reads hand back more than the caller is entitled to** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-t407-rebased` | **None** | `core` `storage` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 3 verified findings. Three reads return fields their audience should not have: a public endpoint
 serves the vendor's private per-date note, a customer-facing booking read
 carries the platform fee, the vendor payout split and the Stripe transfer id,
-and any authenticated user can pin another vendor's storage object by na |
+and any authenticated user can pin another vendor's storage object by na **Landed 2026-09-05 as `ecf08fe` (PR #102, branch `worktree-t407-rebased`).** The public read is a DAO that never selects `note`, and `availabilitySchema` now *extends* `publicAvailabilitySchema` rather than omitting down to it. The four money fields are gone from `bookingSchema` itself, so every route answering it strips them; `booking-view.ts` is the one projection all three call sites use. **The write guard took five review passes and six spellings** — a host in front, a dot segment, a backslash, the bucket path the product itself stores and publishes, and a query string whose slashes a `split('/')` counts but a URL parser drops. It now decides on the object a reference *resolves to*, sharing `normalizeImageRefPath` with `imageRefSchema`; `ownsObjectKey` is deliberately unwidened, proven unchanged over 26,946 keys x 4 owners. A differential of ~132,400 owner-mismatching refs per seed found 0 violations, with the origin's key derivation measured against MinIO's `NoSuchKey` echo rather than assumed. `request-body-image-ref.test.ts` closes the class. **Two residuals, deliberately not done:** the guard is write-time only, so a row that borrowed a foreign key before this still pins its owner's delete (a data cleanup); and R2 is *assumed* to normalise as MinIO does — the same `NoSuchKey` echo makes that a five-minute check. |
 | **408** | **A legal request body 500s, and four reads have no ceiling** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` `email` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 10 verified findings. Two classes with the same shape: a value the schema accepts is wider than the
 column that stores it, so an ordinary input answers 500 after the state has
 already moved; and several reads have no limit, one of which fans out an
@@ -2445,7 +2445,7 @@ violated in every consumer.
 
 ### #407: Reads hand back more than the caller is entitled to
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core` `storage`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2474,9 +2474,37 @@ its key, which turns the owner's delete into a no-op.
 
 #### Tests (required)
 
-- [ ] A public-route test asserting `note` is absent
-- [ ] A customer read test asserting the three money fields are absent
-- [ ] An ownership test for `imageUrl`/`avatarUrl` writes naming a foreign key
+- [x] A public-route test asserting `note` is absent —
+      `vendor-profile.routes.test.ts` asserts the key set and that the note text
+      is absent from the payload, plus a companion asserting the vendor still
+      gets their own note back.
+- [x] A customer read test asserting the three money fields are absent —
+      `booking-requests.routes.test.ts` pins the exact key set of `GET /bookings`
+      for **both** parties and greps the payload for the Stripe ids;
+      `payments.routes.test.ts` does the same for the confirmed screen's read.
+      `type-parity.test.ts` asserts the fields are on the row and *not* on the
+      model, so restoring one fails at build time.
+- [x] An ownership test for `imageUrl`/`avatarUrl` writes naming a foreign key —
+      route-level 403s on all three write paths, and a property test asserting
+      that every spelling whose resolved **pathname** reaches another account's
+      object is refused. `request-body-image-ref.test.ts` fails when a new route
+      body carries an image reference with no guarded write path.
+
+#### What the reviews changed
+
+Filed as three findings; the third took five review passes and six spellings to
+close, because each fix looked complete at the time. The guard compared the
+string it was handed, and a URL parser does not: a host in front, a `.` or
+`%2e` segment, a `\`, the bucket path in `S3_PUBLIC_URL` (which the product
+itself stores and publishes on every storefront), and a query string whose
+slashes `split('/')` counts. It now decides on the object a reference resolves
+to. `ownsObjectKey` was deliberately **not** widened — refusing more on the way
+in costs a caller nothing, while reaping more on the way out deletes bytes an
+absolute URL still points at.
+
+Two residuals, stated rather than closed: the guard is write-time only, so rows
+that borrowed a foreign key before this still pin their owner's delete; and the
+origin's key derivation was measured against MinIO, with R2 assumed to match.
 
 ---
 
