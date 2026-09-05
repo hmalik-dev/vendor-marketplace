@@ -506,6 +506,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   413: [], // frame `06` parity — markup, type and a contrast ruling
   414: ['storage'], // image references are stored keys the uploader writes
   415: ['core'], // reading and rendering rows that already exist
+  416: ['stripe'], // the refund call itself, against a real connected account
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
