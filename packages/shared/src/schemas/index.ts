@@ -125,22 +125,35 @@ export const phoneSchema = z
   .max(MAX_PHONE_LENGTH)
   .regex(/^\+?[0-9 ()\-.]+$/, 'Must be a valid phone number');
 
-/** A non-empty string once surrounding whitespace is removed. */
 /**
- * Free text, as every write path accepts it.
+ * Free text, as every write path accepts it: bidi stripped, then trimmed, and
+ * nothing else decided. Bounds and messages belong to the call site.
+ *
+ * The strip is here, at the one boundary every free-text field crosses, rather
+ * than at each rendering site: a venue name carrying an override reorders the
+ * sentence around it on screen while the stored value says something else
+ * (#398). It runs **before** trimming, so a control cannot hide the whitespace
+ * behind it, and before the length checks, so a string padded out with
+ * invisible characters cannot buy itself room against a maximum.
  *
  * `overwrite` rather than `transform` so the result is still a `ZodString` and
- * the twenty-odd call sites can keep chaining `.nullable()`, `.optional()` and
- * the rest. It runs before the length checks, so a string padded out with
- * invisible controls cannot use them to pass a maximum either.
+ * the twenty-odd call sites can keep chaining `.min()`, `.max()`, `.nullable()`
+ * and `.optional()` — which is the whole reason this is split out from
+ * `trimmedString`. Half the free-text fields in this file carry their own error
+ * message or allow an empty value, so they could not use that helper; every one
+ * of them had been written out as `z.string().trim()…` by hand and had silently
+ * lost the strip.
  *
- * The bidi strip is here, at the one boundary every free-text field crosses,
- * rather than at each rendering site: a venue name carrying an override
- * reorders the sentence around it on screen while the stored value says
- * something else (#398).
+ * `apps/api/src/request-body-free-text.test.ts` parses a bidi control through
+ * every string field of every schema a route attaches as a request body, so a
+ * field that goes back to a bare `z.string()` fails on the day it is written.
+ * Write paths that are **not** request bodies — names mirrored from Clerk —
+ * cannot be seen from there and go through `mirroredClerkName` instead.
  */
-const trimmedString = (max: number, min = 1) =>
-  z.string().overwrite(stripBidiControls).trim().min(min).max(max);
+const freeText = () => z.string().overwrite(stripBidiControls).trim();
+
+/** Free text with the common bounds: non-empty by default, capped at `max`. */
+const trimmedString = (max: number, min = 1) => freeText().min(min).max(max);
 
 /**
  * Integer cents within the platform's $25–$100,000 price band.
@@ -259,9 +272,9 @@ export const updateUserSchema = z
      * minimum, "   " stored as an empty string and rendered as a bio that was
      * there but said nothing.
      */
-    bio: z.string().trim().min(1).max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
-    city: z.string().trim().min(1).max(MAX_NAME_LENGTH).nullable(),
-    state: z.string().trim().min(1).max(MAX_NAME_LENGTH).nullable(),
+    bio: trimmedString(MAX_CUSTOMER_BIO_LENGTH).nullable(),
+    city: trimmedString(MAX_NAME_LENGTH).nullable(),
+    state: trimmedString(MAX_NAME_LENGTH).nullable(),
     budgetTier: budgetTierSchema.nullable(),
     typicalGuestCountMin: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
     typicalGuestCountMax: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
@@ -430,27 +443,16 @@ export const createVendorProfileSchema = z.object({
    * can actually leave blank, and Zod's default "Invalid input" gives no clue
    * which field the form is complaining about.
    */
-  businessName: z
-    .string()
-    // Hand-written rather than `trimmedString` for the message, so the bidi
-    // strip has to be repeated here — see the helper for why it exists (#398).
-    .overwrite(stripBidiControls)
-    .trim()
-    .min(2, 'Enter your business name')
-    .max(MAX_BUSINESS_NAME_LENGTH),
+  businessName: freeText().min(2, 'Enter your business name').max(MAX_BUSINESS_NAME_LENGTH),
   /** Optional — the service generates one from the business name when omitted. */
   slug: slugSchema.optional(),
   categoryIds: z.array(uuidSchema).min(1, 'Select at least one category').max(5),
-  city: z.string().trim().min(1, 'Enter the city you serve').max(MAX_NAME_LENGTH),
+  city: freeText().min(1, 'Enter the city you serve').max(MAX_NAME_LENGTH),
   state: usStateCodeSchema,
-  bio: z
-    .string()
-    .trim()
+  bio: freeText()
     .max(MAX_VENDOR_BIO_LENGTH, `Keep your bio under ${MAX_VENDOR_BIO_LENGTH} characters`)
     .optional(),
-  tagline: z
-    .string()
-    .trim()
+  tagline: freeText()
     .max(MAX_TAGLINE_LENGTH, `Keep it to ${MAX_TAGLINE_LENGTH} characters — it is one line`)
     .optional(),
   yearsInBusiness: z
@@ -458,7 +460,7 @@ export const createVendorProfileSchema = z.object({
     .min(MIN_YEARS_IN_BUSINESS, 'Years in business cannot be negative')
     .max(MAX_YEARS_IN_BUSINESS, `Enter ${MAX_YEARS_IN_BUSINESS} or fewer years`)
     .optional(),
-  address: z.string().trim().max(MAX_ADDRESS_LENGTH).optional(),
+  address: freeText().max(MAX_ADDRESS_LENGTH).optional(),
   latitude: latitudeSchema.optional(),
   longitude: longitudeSchema.optional(),
   serviceRadiusKm: z.int().min(1).max(500).optional(),
@@ -582,7 +584,7 @@ export const createPortfolioItemSchema = z.object({
   imageUrl: imageRefSchema,
   // Nullish, not optional: an upload with no thumbnail sends an explicit null.
   thumbnailUrl: imageRefSchema.nullish(),
-  caption: z.string().trim().max(MAX_CAPTION_LENGTH).optional(),
+  caption: freeText().max(MAX_CAPTION_LENGTH).optional(),
   displayOrder: z.int().min(0).optional(),
 });
 export type CreatePortfolioItemInput = z.infer<typeof createPortfolioItemSchema>;
@@ -599,7 +601,7 @@ export type ReorderPortfolioInput = z.infer<typeof reorderPortfolioSchema>;
  * orphaned behind a row that now points somewhere else.
  */
 export const updatePortfolioItemSchema = z.object({
-  caption: z.string().trim().max(MAX_CAPTION_LENGTH).nullable(),
+  caption: freeText().max(MAX_CAPTION_LENGTH).nullable(),
 });
 export type UpdatePortfolioItemInput = z.infer<typeof updatePortfolioItemSchema>;
 
@@ -617,7 +619,7 @@ export type Availability = z.infer<typeof availabilitySchema>;
 export const availabilityEntrySchema = z.object({
   date: calendarDateSchema,
   status: vendorSettableAvailabilityStatusSchema,
-  note: z.string().trim().max(MAX_CAPTION_LENGTH).optional(),
+  note: freeText().max(MAX_CAPTION_LENGTH).optional(),
 });
 export type AvailabilityEntryInput = z.infer<typeof availabilityEntrySchema>;
 
@@ -742,14 +744,9 @@ export const createBookingRequestSchema = z
     }),
     eventStartTime: clockTimeSchema.optional(),
     eventType: eventTypeSchema.optional(),
-    eventLocation: z
-      .string()
-      .overwrite(stripBidiControls)
-      .trim()
-      .max(MAX_ADDRESS_LENGTH)
-      .optional(),
+    eventLocation: freeText().max(MAX_ADDRESS_LENGTH).optional(),
     guestCount: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
-    customDetails: z.string().trim().max(BOOKING_REQUEST_NOTES_MAX_LENGTH).optional(),
+    customDetails: freeText().max(BOOKING_REQUEST_NOTES_MAX_LENGTH).optional(),
   })
   /*
    * Without a package there is nothing to quote from, so the description stops
@@ -770,7 +767,7 @@ export type CreateBookingRequestInput = z.infer<typeof createBookingRequestSchem
 
 /** Why a vendor declined, or why a customer pulled the request. */
 export const bookingRequestReasonSchema = z.object({
-  reason: z.string().trim().max(1_000).optional(),
+  reason: freeText().max(1_000).optional(),
 });
 export type BookingRequestReasonInput = z.infer<typeof bookingRequestReasonSchema>;
 
@@ -782,12 +779,12 @@ export type BookingRequestListQuery = z.infer<typeof bookingRequestListQuerySche
 
 export const quoteBookingRequestSchema = z.object({
   quotedPriceCents: priceCentsSchema,
-  quoteNote: z.string().trim().max(5_000).optional(),
+  quoteNote: freeText().max(5_000).optional(),
 });
 export type QuoteBookingRequestInput = z.infer<typeof quoteBookingRequestSchema>;
 
 export const cancelBookingSchema = z.object({
-  reason: z.string().trim().max(1_000).optional(),
+  reason: freeText().max(1_000).optional(),
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
@@ -1048,7 +1045,7 @@ export type Review = z.infer<typeof reviewSchema>;
 
 export const createReviewSchema = z.object({
   rating: z.int().min(REVIEW_RATING_MIN).max(REVIEW_RATING_MAX),
-  title: z.string().trim().max(MAX_TITLE_LENGTH).optional(),
+  title: freeText().max(MAX_TITLE_LENGTH).optional(),
   content: trimmedString(REVIEW_CONTENT_MAX_LENGTH, REVIEW_CONTENT_MIN_LENGTH),
 });
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
@@ -1789,7 +1786,7 @@ export const adminTagSuggestionQuerySchema = z.object({
 export const resolveTagSuggestionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('approve'),
-    adminNote: z.string().trim().max(MAX_ADMIN_NOTE_LENGTH).optional(),
+    adminNote: freeText().max(MAX_ADMIN_NOTE_LENGTH).optional(),
   }),
   z.object({
     action: z.literal('reject'),
@@ -1798,7 +1795,7 @@ export const resolveTagSuggestionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('merge'),
     mergeTagId: uuidSchema,
-    adminNote: z.string().trim().max(MAX_ADMIN_NOTE_LENGTH).optional(),
+    adminNote: freeText().max(MAX_ADMIN_NOTE_LENGTH).optional(),
   }),
 ]);
 export type ResolveTagSuggestion = z.infer<typeof resolveTagSuggestionSchema>;

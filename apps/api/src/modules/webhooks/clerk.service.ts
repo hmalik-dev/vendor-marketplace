@@ -1,7 +1,7 @@
 import type { UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { softDeleteUserByClerkId, updateUserByClerkId } from '../users/users.dao.js';
-import { syncUserFromClerk } from '../users/users.service.js';
+import { mirroredClerkName, syncUserFromClerk } from '../users/users.service.js';
 import { primaryEmail, type ClerkWebhookEvent } from './clerk.schemas.js';
 
 export type ClerkWebhookOutcome = 'created' | 'updated' | 'deleted' | 'ignored';
@@ -39,14 +39,20 @@ export async function applyClerkUserEvent(
     case 'user.updated': {
       // Role is fixed at sign-up; only contact details are mirrored onward.
       const email = primaryEmail(event.data);
+      /*
+       * The names go through `mirroredClerkName` here as well as on the create
+       * path: this patch does not pass through `syncUserFromClerk`, so a bidi
+       * control stripped at sign-up would come straight back the next time the
+       * account holder edited their Clerk profile (#398).
+       */
       const patch = {
         ...(email === null ? {} : { email }),
         ...(event.data.first_name === undefined || event.data.first_name === null
           ? {}
-          : { firstName: event.data.first_name }),
+          : { firstName: mirroredClerkName(event.data.first_name) }),
         ...(event.data.last_name === undefined || event.data.last_name === null
           ? {}
-          : { lastName: event.data.last_name }),
+          : { lastName: mirroredClerkName(event.data.last_name) }),
         ...(event.data.image_url === undefined ? {} : { avatarUrl: event.data.image_url || null }),
       };
 

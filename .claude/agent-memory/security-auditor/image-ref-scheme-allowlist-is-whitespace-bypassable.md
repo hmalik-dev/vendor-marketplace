@@ -1,27 +1,44 @@
 ---
 name: image-ref-scheme-allowlist-is-whitespace-bypassable
-description: imageRefSchema's http(s)-only check is skipped by a leading space or newline, so " javascript:alert(1)" validates; only resolveImageUrl's trim-then-prefix keeps it out of an img src
+description: "The LEADING-whitespace bypass is fixed — .trim() runs before the refine, so \" javascript:…\" is rejected. What is still live is an INTERIOR tab/newline in the scheme, and `/\\evil.com` stepping around the protocol-relative guard. Filed as #414"
 metadata:
   type: project
 ---
 
-`packages/shared/src/schemas/index.ts` `imageRefSchema` decides "is this an
-absolute URL?" with `/^[a-z][a-z0-9+.-]*:/i`. A leading space, tab or newline
-makes that fail, so the value falls into the _relative path_ branch, which only
-rejects `//` and `..`. Verified accepted: `" javascript:alert(1)"`,
-`"\njavascript:alert(1)"`, `"jav\tascript:alert(1)"`, `"/\\evil.com/x.png"`.
+**Corrected 2026-09-04 by measurement against the built schema.** The headline
+this file used to carry — that a leading space or newline skips the http(s)
+check, so `" javascript:alert(1)"` validates — is **no longer true**.
+`imageRefSchema` runs `.trim()` before its `.refine()`, and Zod applies the
+transform first, so all of these are **rejected**:
 
-Not exploitable as written: the single consumer, `resolveImageUrl`, trims and
-then prefixes anything that is not `https?://` or `/`-leading with the CDN base,
-and avatars only ever reach `<img src>`, where `javascript:` does not execute.
-The exposure is one careless consumer away — an `<a href>`, an email template,
-or a server-side fetch of a stored ref.
+    " javascript:alert(1)"      "\njavascript:alert(1)"      "//evil.com/x.png"
+    "javascript:alert(1)"       "../secret.png"
 
-**Why:** this is the same validate-before-normalize shape as
-[[validate-before-normalize-return-path]]: the validator sees the untrimmed
-string, the consumer sees the trimmed one.
+Do not re-report it. It was reported from reading the regex without running it.
 
-**How to apply:** if a diff adds a consumer of a stored image ref, or edits
-`imageRefSchema`, require `.trim()` (and control-character rejection) _before_
-the refine rather than trusting the resolver. Related:
+**What is still live**, and is now **#414**:
+
+- `/\evil.com/x.png` is **accepted**. `startsWith('//')` does not see it, and
+  `resolveImageUrl` returns any `/`-leading value verbatim, so it reaches
+  `<img src>` as written and the URL parser normalises `\` to `/` — the browser
+  requests `//evil.com/x.png`. The enforced `img-src` blocks it in a browser;
+  an email template carries no CSP.
+- `jav\tascript:alert(1)` and `jav\nascript:alert(1)` are **accepted**: the
+  anchored scheme regex fails on the interior control character, so the value
+  falls into the relative-path branch that never checks a scheme. Browsers strip
+  tabs and newlines before parsing a scheme.
+- Bidi controls are accepted, and that one is **inert** — the value is
+  percent-encoded into a URL and no surface renders it as text. It is why
+  `apps/api/src/request-body-free-text.test.ts` excludes image references from
+  the free-text boundary rather than folding them in.
+
+**Why:** the fixed half and the live half share a file, a validator and a shape,
+so "the image-ref scheme check is bypassable" is true and useless — it sends the
+next reader to re-report the half that was fixed. The two halves differ in where
+the whitespace sits, and only measurement tells them apart.
+
+**How to apply:** before reporting anything about this schema, parse the case
+against `packages/shared/dist`. Related:
+[[validate-before-normalize-return-path]], which is the same
+validate-before-normalize shape and is also already fixed, and
 [[response-schemas-are-a-second-write-boundary]].

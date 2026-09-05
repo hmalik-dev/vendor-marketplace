@@ -141,6 +141,51 @@ describe('POST /webhooks/clerk', () => {
     });
   });
 
+  /*
+   * #398. Clerk owns the name and the account holder types it, so it is
+   * untrusted free text on a path that never meets a request-body schema —
+   * which is how it survived that ticket's first pass. It reaches the public
+   * vendor page through `reviewerName` and both inboxes through
+   * `otherPartyName`, so a bidi override in a first name reorders the sentence
+   * around it for strangers.
+   */
+  it('strips bidi controls from a name Clerk hands it, on create', async () => {
+    await post(harness, userCreated({ first_name: 'Kat\u202Eherine', last_name: 'John\u202Dson' }));
+
+    const rows = await harness.database.db.select().from(users);
+
+    expect(rows[0]?.firstName).toBe('Katherine');
+    expect(rows[0]?.lastName).toBe('Johnson');
+  });
+
+  /*
+   * And on update, which does not pass through `syncUserFromClerk`: a control
+   * stripped at sign-up would otherwise come straight back the next time the
+   * account holder edited their Clerk profile.
+   */
+  it('strips bidi controls from a name Clerk hands it, on update', async () => {
+    await post(harness, userCreated());
+
+    await post(
+      harness,
+      JSON.stringify({
+        type: 'user.updated',
+        data: {
+          id: CLERK_ID,
+          email_addresses: [{ id: 'idn_primary', email_address: 'kj@example.com' }],
+          primary_email_address_id: 'idn_primary',
+          first_name: '\u202EtaK',
+          last_name: 'John\u2066son',
+        },
+      }),
+    );
+
+    const rows = await harness.database.db.select().from(users);
+
+    expect(rows[0]?.firstName).toBe('taK');
+    expect(rows[0]?.lastName).toBe('Johnson');
+  });
+
   it('retires the row on user.deleted instead of removing it', async () => {
     await post(harness, userCreated());
 

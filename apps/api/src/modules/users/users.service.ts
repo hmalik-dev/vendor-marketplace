@@ -1,5 +1,6 @@
 import {
   USER_ROLES,
+  stripBidiControls,
   type UpdateUserInput,
   type User,
   type UserRole,
@@ -52,6 +53,24 @@ export function normalizeRole(value: unknown): UserRole {
 }
 
 /**
+ * A name as Clerk holds it, made safe to render.
+ *
+ * Clerk owns this field and the account holder types it, so it is untrusted
+ * free text arriving on a path that never sees a request-body schema — which is
+ * how it escaped #398's first pass. It reaches the **public** vendor page
+ * through `reviewerName`, and both parties' inboxes through `otherPartyName`,
+ * so a `RIGHT-TO-LEFT OVERRIDE` in a first name reorders the sentence around it
+ * for strangers, which is the exact effect that ticket exists to stop.
+ *
+ * Normalised here for the same reason `normalizeRole` is: the value is
+ * persisted through this module, and doing it at the point of persistence
+ * cannot be forgotten by a caller the way doing it per read can.
+ */
+export function mirroredClerkName(value: string): string {
+  return stripBidiControls(value).trim();
+}
+
+/**
  * Creates the local row for a Clerk identity if it is not there yet. Both the
  * `user.created` webhook and the user's own first authenticated request land
  * here, so the insert tolerates the loser of that race.
@@ -64,8 +83,8 @@ export async function syncUserFromClerk(
     clerkUserId: snapshot.clerkUserId,
     email: snapshot.email,
     role: normalizeRole(snapshot.roleHint),
-    firstName: snapshot.firstName,
-    lastName: snapshot.lastName,
+    firstName: mirroredClerkName(snapshot.firstName),
+    lastName: mirroredClerkName(snapshot.lastName),
     avatarUrl: snapshot.avatarUrl,
   };
 
