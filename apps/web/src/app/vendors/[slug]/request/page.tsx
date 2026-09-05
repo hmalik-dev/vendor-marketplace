@@ -1,6 +1,12 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { pageTitle, todayDateString, type AvailabilityStatus } from '@vendor-marketplace/shared';
+import {
+  isUniversallyPastDate,
+  pageTitle,
+  parseDateString,
+  toDateString,
+  type AvailabilityStatus,
+} from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
 import { requireRole } from '@/lib/current-user';
 import { parseGuestCountParam } from '@/lib/guest-count';
@@ -68,7 +74,12 @@ export default async function BookingRequestPage({
     `/vendors/${slug}/request${returnSuffix ? `?${returnSuffix}` : ''}`,
   );
 
-  const today = todayDateString();
+  /*
+   * The server's UTC day. It is only a seed: `BookingRequestScreen` re-anchors
+   * the picker's floor on the customer's own day after mount, because this
+   * component has no way to know it. #409.
+   */
+  const serverToday = toDateString(new Date());
   const availability = await getPublicVendorAvailability(slug);
 
   const calendar: Record<string, AvailabilityStatus> = {};
@@ -79,7 +90,25 @@ export default async function BookingRequestPage({
   const selected =
     vendor.packages.find((servicePackage) => servicePackage.id === query.package) ?? null;
 
-  const initialDate = query.date && query.date >= today ? query.date : '';
+  /*
+   * A date carried in from search or the profile rail.
+   *
+   * **Shape first, then meaning** — `web-route-boundaries.md`. The floor used
+   * to be `query.date >= today`, a string compare that dropped a malformed
+   * value by accident; `isUniversallyPastDate` answers `false` for anything it
+   * cannot parse, so on its own it would seed the form from a crafted link with
+   * whatever the URL carried. `parseDateString` is the boundary guard and the
+   * semantic one runs behind it.
+   *
+   * Past for **everyone**, not past for this server — the same rule the API
+   * applies — because a customer west of UTC picking their own today would
+   * otherwise have it silently dropped on the way to the form they picked it
+   * for. #409.
+   */
+  const initialDate =
+    query.date && parseDateString(query.date) !== null && !isUniversallyPastDate(query.date)
+      ? query.date
+      : '';
 
   /*
    * `?guests=` arrives from the profile rail and is attacker-controlled like
@@ -117,7 +146,7 @@ export default async function BookingRequestPage({
       calendar={calendar}
       initialDate={initialDate}
       initialGuestCount={initialGuestCount}
-      today={today}
+      serverToday={serverToday}
     />
   );
 }

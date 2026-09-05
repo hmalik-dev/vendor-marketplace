@@ -4,6 +4,8 @@ import type { WireVendorDashboard } from '@/lib/wire-schemas';
 
 export interface PublishedRailProps {
   dashboard: WireVendorDashboard;
+  /** The server's UTC day, seeding `WeekStrip` before the viewer's is known. */
+  serverToday: string;
 }
 
 /**
@@ -21,13 +23,13 @@ export interface PublishedRailProps {
  * 300px at 1024, 340px at 1440, matching the ladder the outer rail follows.
  * Below 1024 the whole dashboard stacks and this column goes with it.
  */
-export function PublishedRail({ dashboard }: PublishedRailProps): React.ReactElement {
+export function PublishedRail({ dashboard, serverToday }: PublishedRailProps): React.ReactElement {
   return (
     <aside
       aria-label="Your week"
       className="hidden w-[300px] shrink-0 flex-col gap-3 overflow-y-auto lg:flex min-[90rem]:w-[340px]"
     >
-      <WeekStrip week={dashboard.bookingWeek} />
+      <WeekStrip days={dashboard.bookingWindow} serverToday={serverToday} />
       <NextPayout payout={dashboard.nextPayout} />
     </aside>
   );

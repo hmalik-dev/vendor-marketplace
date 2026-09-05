@@ -31,11 +31,15 @@ export interface BookingCardProps {
    * not be told the date is settled, and only a paid booking can be completed.
    */
   booking: WireBooking | null;
-  /** Today as `YYYY-MM-DD`, resolved once on the server for the whole list. */
-  today: string;
+  /** Passed through to `CompleteBooking`, which re-anchors it on the vendor's day. */
+  serverToday: string;
 }
 
-export function BookingCard({ request, booking, today }: BookingCardProps): React.ReactElement {
+export function BookingCard({
+  request,
+  booking,
+  serverToday,
+}: BookingCardProps): React.ReactElement {
   const { customer } = request;
   const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
   const displayName = fullName || customer.firstName || 'A customer';
@@ -108,7 +112,7 @@ export function BookingCard({ request, booking, today }: BookingCardProps): Reac
           <p className="font-display text-[20px] text-stone-900">
             {request.finalPriceCents === null ? '—' : formatPrice(request.finalPriceCents)}
           </p>
-          {booking ? <CompleteBooking booking={booking} today={today} /> : null}
+          {booking ? <CompleteBooking booking={booking} serverToday={serverToday} /> : null}
         </div>
       </div>
     </li>

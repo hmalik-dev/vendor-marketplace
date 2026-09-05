@@ -4,7 +4,6 @@ import {
   cancelBookingSchema,
   cancelledBookingSchema,
   checkoutIntentSchema,
-  toDateString,
   uuidSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
@@ -97,7 +96,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
         contextFor(request.log),
         authenticated(request.auth),
         request.params.bookingId,
-        toDateString(app.clock()),
+        app.clock(),
       ),
   );
 

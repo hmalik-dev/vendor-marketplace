@@ -1,4 +1,4 @@
-import { pageTitle, todayDateString } from '@vendor-marketplace/shared';
+import { pageTitle, toDateString } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { requireRole } from '@/lib/current-user';
 import { getOwnBookingRequests } from '@/lib/vendor-requests';
 import { getOwnBookings } from '@/lib/customer-data';
+import { splitByEventDate } from '@/lib/booking-split';
 import { getOwnVendorProfile } from '@/lib/vendor-data';
 
 export const metadata: Metadata = {
@@ -53,7 +54,17 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
    */
   const bookings = await getOwnBookings();
   const bookingByRequest = new Map(bookings.map((booking) => [booking.requestId, booking]));
-  const today = todayDateString();
+  /*
+   * The UTC day, not this process's local one (#409, #391). `todayDateString`
+   * reads the *caller's* wall clock and its own contract says it is only ever
+   * meaningful on the client, so on the server it returned whatever day the web
+   * host happened to be on — neither the vendor's nor the API's.
+   *
+   * It is a seed here, nothing more: `CompleteBooking` re-anchors it on the
+   * vendor's own day, and `splitByEventDate` carries the reasoning behind the
+   * `Upcoming` / `Past events` boundary.
+   */
+  const serverToday = toDateString(new Date());
 
   /*
    * `accepted` is terminal, so a booking stays accepted after the event has
@@ -62,13 +73,7 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
    * a year in, an undivided list leads with last spring.
    */
   const accepted = requests.filter((request) => request.status === 'accepted');
-  const upcoming = accepted
-    .filter((request) => request.eventDate >= today)
-    .sort((left, right) => left.eventDate.localeCompare(right.eventDate));
-  const past = accepted
-    .filter((request) => request.eventDate < today)
-    // Most recent first: the further back it is, the less it is wanted.
-    .sort((left, right) => right.eventDate.localeCompare(left.eventDate));
+  const { upcoming, past } = splitByEventDate(accepted);
 
   return (
     <div data-app-shell className="w-full px-4 pt-5.5 sm:px-6 lg:px-0 lg:pl-6">
@@ -94,7 +99,7 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
               key={request.id}
               request={request}
               booking={bookingByRequest.get(request.id) ?? null}
-              today={today}
+              serverToday={serverToday}
             />
           ))}
         </ul>
@@ -109,7 +114,7 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
                 key={request.id}
                 request={request}
                 booking={bookingByRequest.get(request.id) ?? null}
-                today={today}
+                serverToday={serverToday}
               />
             ))}
           </ul>

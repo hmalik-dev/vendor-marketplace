@@ -76,7 +76,7 @@ export interface DateDropdownProps {
   /** The chosen day as `YYYY-MM-DD`, or `null`. */
   value: string | null;
   onChange: (value: string | null) => void;
-  /** Today, as a `YYYY-MM-DD` UTC date resolved on the server. */
+  /** Today, as `YYYY-MM-DD` — the viewer's own day, from `useViewerToday`. */
   today: string;
   /**
    * The vendor's calendar, keyed by date. Empty on surfaces with no vendor in
@@ -147,8 +147,12 @@ export function DateDropdown({
    */
   const hasMarks = Object.keys(calendar).length > 0;
 
-  // `today` is resolved on the server and should always parse; guarded anyway,
-  // because a picker is not the place to discover that it did not.
+  /*
+   * The month the arrows may not step behind. The fallback is load-bearing, not
+   * defensive: the search bar deliberately passes `''` until the viewer's day
+   * resolves after mount (#409), so for the first paint there is no floor to
+   * read and the current UTC month is the honest stand-in.
+   */
   const floor = monthOf(today) ?? currentMonth();
   const month = buildMonth(cursor.year, cursor.month);
   const firstOfMonth = toDateString(new Date(Date.UTC(cursor.year, cursor.month, 1)));

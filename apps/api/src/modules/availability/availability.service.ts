@@ -1,6 +1,7 @@
 import {
+  addDays,
   AVAILABILITY_MONTHS_AHEAD,
-  isPastDate,
+  isUniversallyPastDate,
   toDateString,
   type Availability,
   type AvailabilityBulkUpdateInput,
@@ -22,8 +23,8 @@ export function toAvailability(row: AvailabilityRow): Availability {
 }
 
 /**
- * The window the calendar covers: the **first of the current month** through
- * `AVAILABILITY_MONTHS_AHEAD` months out. Built by month arithmetic on the UTC
+ * The window the calendar covers: the **first of the month yesterday falls in**
+ * through `AVAILABILITY_MONTHS_AHEAD` months out. Built by month arithmetic on the UTC
  * components rather than by adding days, so it lands on the same day-of-month
  * regardless of month length.
  *
@@ -34,13 +35,31 @@ export function toAvailability(row: AvailabilityRow): Availability {
  * put those cells outside the read, so `completed` could never appear and its
  * counter could only ever read zero.
  *
- * Only the read widens. `setOwnAvailability` still refuses to write a past
- * date, and that guard is `isPastDate` against today, not this floor.
+ * **A day of slack at each end, because the viewer is not on this clock** (#409).
+ * The near edge is the first of **yesterday's** month: a viewer west of UTC is a
+ * day behind this process, so on the 1st their own today is the previous month's
+ * last day, which anchoring on the server's month left outside the read
+ * entirely. The far edge counts from **tomorrow**: the calendar renders
+ * `AVAILABILITY_MONTHS_AHEAD + 1` months from the *viewer's* day, so a viewer
+ * east of UTC on the last day of a month reached a final month that began after
+ * this bound and drew every cell in it as available. Both edges land on the same
+ * day as before on every day but those two.
+ *
+ * Only the read widens. `setOwnAvailability` still refuses to write a date that
+ * is past everywhere, and that guard is `isUniversallyPastDate`, not this floor.
  */
 export function availabilityWindow(now: Date = new Date()): { from: string; to: string } {
-  const from = toDateString(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+  const yesterday = addDays(now, -1);
+  const tomorrow = addDays(now, 1);
+  const from = toDateString(
+    new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), 1)),
+  );
   const end = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + AVAILABILITY_MONTHS_AHEAD, now.getUTCDate()),
+    Date.UTC(
+      tomorrow.getUTCFullYear(),
+      tomorrow.getUTCMonth() + AVAILABILITY_MONTHS_AHEAD,
+      tomorrow.getUTCDate(),
+    ),
   );
 
   return { from, to: toDateString(end) };
@@ -91,7 +110,7 @@ async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promi
       note: null,
     }));
 
-  return [...rows.map(toCalendarRow(toDateString(now))), ...pending].sort((left, right) =>
+  return [...rows.map(toCalendarRow(now)), ...pending].sort((left, right) =>
     left.date.localeCompare(right.date),
   );
 }
@@ -107,10 +126,15 @@ async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promi
  * Derived here rather than in the component so the `Completed` counter is a
  * query result and not a number the UI invented. Only `booked` becomes
  * `completed`: a past date the vendor merely blocked was never work.
+ *
+ * The boundary is `isUniversallyPastDate`, not the server's UTC day (#409).
+ * `completed` is a locked status, so calling it a day early told a vendor at
+ * UTC-5 that this evening's booking was already delivered and took the cell
+ * out of their hands. A day is only over once it is over everywhere.
  */
-function toCalendarRow(today: string): (row: AvailabilityRow) => Availability {
+function toCalendarRow(now: Date): (row: AvailabilityRow) => Availability {
   return (row) =>
-    row.status === 'booked' && row.date < today
+    row.status === 'booked' && isUniversallyPastDate(row.date, now)
       ? { ...toAvailability(row), status: 'completed' as const }
       : toAvailability(row);
 }
@@ -139,9 +163,15 @@ export async function listOwnAvailability(
  * rather than tomorrow. What lies behind that floor is history — the status a
  * date actually had — and is never rewritten from here.
  *
- * The floor is the server's UTC day, which is the same day the calendar page
- * builds its window and its "today" ring from, so this guard and the client
- * agree by construction and the client never sends a date this drops.
+ * **Whose today, though.** The floor used to be the server's UTC day, on the
+ * reasoning that the calendar page built its "today" ring from the same clock
+ * so the two agreed by construction. They agreed on the wrong day: a vendor at
+ * UTC-5 blocking off their own evening sent a date the UTC clock had already
+ * passed, and this filter dropped it — the request answered 200 and wrote
+ * nothing (#409). The client now anchors on the viewer's day, and a server
+ * cannot know it, so the floor here is the widest honest one:
+ * `isUniversallyPastDate`, the same rule `POST /booking-requests` already
+ * applies. A date is refused only once it is behind *every* visitor on Earth.
  */
 export async function setOwnAvailability(
   db: AppDatabase,
@@ -154,7 +184,7 @@ export async function setOwnAvailability(
   // Last entry wins, so a range drag that overlaps itself is not ambiguous.
   const byDate = new Map(
     input.entries
-      .filter((entry) => !isPastDate(entry.date, toDateString(now)))
+      .filter((entry) => !isUniversallyPastDate(entry.date, now))
       .map((entry) => [entry.date, entry]),
   );
 

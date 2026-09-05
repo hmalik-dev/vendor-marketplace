@@ -27,7 +27,7 @@ interface DashboardBody {
   earningsThisMonthCents: number;
   isPublished: boolean;
   publishBlockers: string[];
-  bookingWeek: { date: string; status: string }[];
+  bookingWindow: { date: string; status: string }[];
   nextPayout: {
     bookingId: string;
     eventDate: string;
@@ -201,13 +201,17 @@ describe('/vendor/dashboard', () => {
     // Not 0 — nobody has asked, so there is no rate to report.
     expect(body.responseRate).toBeNull();
     expect(body.nextPayout).toBeNull();
-    // Seven days from today, every one of them open — the calendar is sparse,
-    // so a vendor with no rows still gets a full week rather than a short one.
-    expect(body.bookingWeek).toHaveLength(7);
-    expect(body.bookingWeek.map((day) => day.date)).toEqual(
-      Array.from({ length: 7 }, (_, offset) => dayFrom(offset)),
+    /*
+     * Nine days from *yesterday*, every one of them open — the calendar is
+     * sparse, so a vendor with no rows still gets a full window rather than a
+     * short one. Nine and not seven because the strip's seven start on the
+     * viewer's own day, which this process cannot know (#409).
+     */
+    expect(body.bookingWindow).toHaveLength(9);
+    expect(body.bookingWindow.map((day) => day.date)).toEqual(
+      Array.from({ length: 9 }, (_, offset) => dayFrom(offset - 1)),
     );
-    expect([...new Set(body.bookingWeek.map((day) => day.status))]).toEqual(['available']);
+    expect([...new Set(body.bookingWindow.map((day) => day.status))]).toEqual(['available']);
   });
 
   it('counts the requests still waiting on this vendor', async () => {
@@ -322,10 +326,10 @@ describe('/vendor/dashboard', () => {
       const held = await mark(vendorId, 3, 'pending');
       const blocked = await mark(vendorId, 4, 'blocked');
 
-      const week = ((await read()).json() as DashboardBody).bookingWeek;
-      const byDate = new Map(week.map((day) => [day.date, day.status]));
+      const days = ((await read()).json() as DashboardBody).bookingWindow;
+      const byDate = new Map(days.map((day) => [day.date, day.status]));
 
-      expect(week).toHaveLength(7);
+      expect(days).toHaveLength(9);
       expect(byDate.get(booked)).toBe('booked');
       expect(byDate.get(held)).toBe('pending');
       expect(byDate.get(blocked)).toBe('blocked');
@@ -333,17 +337,24 @@ describe('/vendor/dashboard', () => {
       expect(byDate.get(dayFrom(1))).toBe('available');
     });
 
-    it('starts at today and stops before the eighth day', async () => {
+    /*
+     * #409. The window starts a day before the server's own, because the seven
+     * days the strip draws start on the *viewer's* day and west of UTC that is
+     * yesterday here. It ends a day after the week for the same reason in the
+     * other direction. A vendor at UTC-5 in the evening used to get a "This
+     * week" that began tomorrow and did not contain the day they were in.
+     */
+    it('starts a day before today and stops before the tenth day', async () => {
       const vendorId = await createProfile();
       // One day either side of the window, both of which must be invisible.
-      await mark(vendorId, -1, 'booked');
-      await mark(vendorId, 7, 'booked');
+      await mark(vendorId, -2, 'booked');
+      await mark(vendorId, 8, 'booked');
 
-      const week = ((await read()).json() as DashboardBody).bookingWeek;
+      const days = ((await read()).json() as DashboardBody).bookingWindow;
 
-      expect(week[0]?.date).toBe(dayFrom(0));
-      expect(week[6]?.date).toBe(dayFrom(6));
-      expect(week.every((day) => day.status === 'available')).toBe(true);
+      expect(days[0]?.date).toBe(dayFrom(-1));
+      expect(days[8]?.date).toBe(dayFrom(7));
+      expect(days.every((day) => day.status === 'available')).toBe(true);
     });
   });
 

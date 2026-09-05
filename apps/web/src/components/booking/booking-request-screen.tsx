@@ -30,6 +30,7 @@ import { wireBookingRequestSchema } from '@/lib/wire-schemas';
 import { useApi } from '@/lib/use-api';
 import { useSavedDraft } from '@/lib/use-saved-draft';
 import { useSubmitValidation, type FieldIssue } from '@/lib/use-submit-validation';
+import { useViewerToday } from '@/lib/use-viewer-today';
 import { cn } from '@/lib/utils';
 
 export interface BookingRequestScreenProps {
@@ -45,8 +46,8 @@ export interface BookingRequestScreenProps {
   initialDate: string;
   /** A guest count carried in from the profile rail, already validated. */
   initialGuestCount: string;
-  /** `todayDateString()` resolved on the server, so the two agree. */
-  today: string;
+  /** Seeds the first paint; `useViewerToday` re-anchors the picker's floor. */
+  serverToday: string;
 }
 
 interface FormState {
@@ -108,8 +109,9 @@ export function BookingRequestScreen({
   calendar,
   initialDate,
   initialGuestCount,
-  today,
+  serverToday,
 }: BookingRequestScreenProps): React.ReactElement {
+  const today = useViewerToday(serverToday);
   const fieldId = useId();
   const request = useApi();
 

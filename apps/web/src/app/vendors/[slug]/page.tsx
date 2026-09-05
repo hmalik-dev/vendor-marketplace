@@ -7,7 +7,6 @@ import {
   parseDateString,
   serialiseJsonLd,
   toDateString,
-  todayDateString,
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
 import { AboutPane } from '@/components/vendors/profile/about-pane';
@@ -174,7 +173,18 @@ export default async function VendorProfilePage({
   if (!vendor) {
     notFound();
   }
-  const today = todayDateString();
+  /*
+   * The server's UTC day. Both client panes below take it as a seed only and
+   * re-anchor on the visitor's own day after mount (#409); nothing on this
+   * page compares against it except `nearestFreeDate`, and that one stays here
+   * deliberately. It is a ninety-day forward scan, so the server's day is a
+   * floor rather than an answer: west of UTC it can skip a visitor's own today,
+   * but starting a day earlier to catch that would name a day already behind a
+   * visitor east of UTC — and a chip promising a date that has passed is the
+   * worse of the two. Naming the visitor's today needs the visitor's clock, and
+   * the chip is rendered by `ProfileHeader` on the server.
+   */
+  const serverToday = toDateString(new Date());
 
   /* The same keyed view of availability the request form takes, so the rail's
      free-date line and that form read one source. */
@@ -240,7 +250,7 @@ export default async function VendorProfilePage({
         reviewCount={vendor.reviewCount}
         city={vendor.city}
         state={vendor.state}
-        freeOn={nearestFreeDate(calendar, today)}
+        freeOn={nearestFreeDate(calendar, serverToday)}
         categories={vendor.categories}
         tags={vendor.tags}
         rail={
@@ -250,7 +260,7 @@ export default async function VendorProfilePage({
             startingPriceCents={vendor.startingPriceCents}
             packages={vendor.packages}
             reviewCount={vendor.reviewCount}
-            today={today}
+            serverToday={serverToday}
             calendar={calendar}
           />
         }
@@ -285,8 +295,14 @@ export default async function VendorProfilePage({
             ),
             availability: (
               <AvailabilityPane
-                entries={availability}
-                today={today}
+                /*
+                  The keyed projection, never the rows. The pane is a client
+                  component, so its props are serialized into this public page's
+                  flight payload — and an `Availability` row carries the
+                  vendor's private per-date `note`.
+                */
+                calendar={calendar}
+                serverToday={serverToday}
                 businessName={vendor.businessName}
               />
             ),
