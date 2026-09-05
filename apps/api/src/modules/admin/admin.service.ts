@@ -271,16 +271,30 @@ export async function setUserBanned(
   for (const booking of affected) {
     if (booking.stripePaymentIntentId) {
       try {
-        await context.stripe.createRefund({
-          paymentIntentId: booking.stripePaymentIntentId,
-          amountCents: booking.totalAmountCents,
-          /*
-           * One refund per booking, however many times a ban is issued. The
-           * `isBanned` check above is a read and not a lock, so two concurrent
-           * bans both reach this loop; without a key they would both refund.
-           */
-          idempotencyKey: `ban-refund:${booking.id}`,
-        });
+        /*
+         * Asked before told, for the same reason the customer's cancellation
+         * asks: a key Stripe has forgotten is no guard at all, and a ban
+         * re-issued a day after one that failed to cancel its bookings would
+         * otherwise refund every one of them twice (D31).
+         */
+        const alreadyRefunded = await context.stripe.findRefund(booking.stripePaymentIntentId);
+
+        if (!alreadyRefunded) {
+          await context.stripe.createRefund({
+            paymentIntentId: booking.stripePaymentIntentId,
+            amountCents: booking.totalAmountCents,
+            /*
+             * One refund per booking, however many times a ban is issued. The
+             * `isBanned` check above is a read and not a lock, so two concurrent
+             * bans both reach this loop; without a key they would both refund.
+             *
+             * Versioned with the unwind policy: Stripe refuses a key replayed
+             * with different parameters, and D31 changed them.
+             */
+            idempotencyKey: `ban-refund:unwind:${booking.id}`,
+          });
+        }
+
         refundsIssued += 1;
       } catch (error) {
         /*
@@ -328,6 +342,10 @@ export async function setUserBanned(
      * full" — to the vendor, who did not pay but was about to be paid, and on
      * an unpaid booking, where no refund happened at all. Both are the product
      * telling somebody something untrue about their money.
+     *
+     * The vendor's line says *reversed*, not "no payout will follow" (D31). A
+     * transfer already paid out is clawed back rather than withheld, and a
+     * vendor whose balance is about to go negative learns it here.
      */
     const refunded = booking.stripePaymentIntentId !== null;
 
@@ -338,7 +356,7 @@ export async function setUserBanned(
             ? 'The other party’s account was suspended. Your payment has been refunded in full.'
             : 'The other party’s account was suspended. Nothing was charged for this booking.'
           : refunded
-            ? 'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, so no payout will follow.'
+            ? 'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.'
             : 'The customer’s account was suspended and the booking was cancelled. Nothing had been charged for it.';
 
       const stored = await insertNotification(context.db, {

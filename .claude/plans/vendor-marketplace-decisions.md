@@ -1308,3 +1308,120 @@ white-on-sage at 3.40–4.04:1 — was filed with "the plan grows a large-text c
 first option. §4 refuses a carve-out outright and blanket, so that option is gone and #413
 is a choice between moving the colour and moving the ground. Recorded here rather than left
 for #413 to rediscover.
+
+---
+
+### D31: A Cancellation Is a Full Unwind — the Vendor Gives Their Share Back — *2026-09-05*
+
+**The ruling, given by the account holder on 2026-09-05 for #416.** A refund sends
+`reverse_transfer: true` **together with** `refund_application_fee: true`. All three parties
+go back where they started: the customer is made whole, the vendor gives back their share,
+and Orla gives back its commission.
+
+**Why it had to be ruled rather than fixed.** The two flags each carried a written rationale
+in `apps/api/src/lib/stripe.ts`, and Stripe's charge shape makes them mutually exclusive. On
+a **destination charge** the application fee is taken *on the transfer*, so there is no fee
+left to give back unless the transfer is reversed too — Stripe answers 400 for that pair, by
+name:
+
+> The application fee for charge `ch_…` was taken on the associated transfer, so to refund
+> the application fee you must also set `reverse_transfer=true`.
+
+The shipped combination was exactly that pair, from `230c8d1` (#10) onward, so **no refund
+this product ever offered had succeeded**. `bookings` held `confirmed 3, completed 920` and
+zero `cancelled` rows in a database driven for weeks. The choice is not a preference between
+three styles; it is a choice of who pays, and the code cannot make it.
+
+| Flags | Customer | Vendor | Platform |
+| --- | --- | --- | --- |
+| **`reverse_transfer: true` + `refund_application_fee: true`** — **ruled** | refunded in full | gives back their share; may go negative | gives back its commission |
+| `false` + `false` | refunded in full | keeps the transfer | funds the refund *and* the vendor's share |
+| `true` + `false` | refunded in full | gives back their share | keeps its commission on a booking that did not happen |
+
+**The rationale, accepted as the ticket wrote it.** A booking that will not happen should put
+all three parties back where they started; it is Stripe's standard unwind for a destination
+charge; and it is the only combination that honours the *100% refund* the cancellation policy
+(D3) states on customer-facing copy. A refund that keeps the commission is an 88% one being
+called a full one.
+
+**The known consequence is accepted, not mitigated.** A vendor already paid out is taken to a
+**negative Stripe balance they have to fund**. That is the normal Stripe outcome for a
+destination charge, and the alternative — the platform absorbing the vendor's share on every
+cancellation — does not survive volume. What the ruling *does* require is that the product
+say so rather than hide it, so both `booking_cancelled` notification paths now name the
+reversal:
+
+- **Customer cancellation** (`payments.service.ts`) told the vendor only that *the date is
+  free again on your calendar*. It now adds that the refund takes back the same share of
+  their payout, out of their Stripe balance, and that this can leave it negative.
+- **The admin ban unwind** (`admin.service.ts`) told the vendor *no payout will follow* —
+  true only while the transfer was never reversed. It now says their share **has been
+  reversed out of their Stripe balance**, which is what actually happens to a payout already
+  made.
+
+Both tiers are covered by one policy: Stripe reverses the transfer and the fee *proportionally*
+to the amount refunded, so D3's 100% and 50% tiers split the same three ways and there is no
+second code path.
+
+**The deeper defect, and the guard that closes the class.** The suite was green for two
+months on a call the gateway rejects on every attempt, because `test-server.ts`'s fake
+`createRefund` recorded its input and never judged it — a double **more permissive than the
+thing it stands in for, on the one path that moves money**. The flags were also invisible to
+it: they were literals inside the adapter, so no test could see them at all.
+
+The fix is structural rather than a rule asking someone to remember:
+
+- `refundParams()` builds the exact request the adapter sends, so the flag pair is assertable
+  without a network call.
+- `refusedRefundParams()` states Stripe's own refusal for a destination charge.
+- The **fake calls both**. It builds the real params and throws Stripe's message when they
+  are refused.
+
+So the policy is no longer a comment anyone can contradict: setting `REFUND_UNWIND` to a
+combination Stripe cannot perform turns **14 route tests and 2 unit tests red**, verified by
+flipping it and independently reproduced by the reviewer. A double that judges the request
+instead of recording it is the general form, and it is the one worth repeating at the other
+paid boundaries.
+
+**Three things the ruling made reachable, fixed in the same pass.** None was a defect the old
+code could exhibit, because no refund had ever succeeded and no paid booking could reach
+`cancelled`. All three were right by accident and stopped being so the moment refunds worked:
+
+1. **The vendor dashboard counted cancelled bookings as earnings.** `sumPayoutsBetween` and
+   `countBookingsBetween` (`dashboard.dao.ts`) filtered on the vendor and the month and
+   nothing else, so a booking whose transfer had been reversed still showed up in
+   `earningsThisMonthCents` — the one screen a vendor checks to see what they are owed,
+   naming money that has been taken back out of their balance. `admin.dao.ts`'s
+   `PAID_AND_KEPT` and `findNextPayout` already held the operator's and the payout card's
+   figures to the opposite standard; the vendor's own two numbers were the pair left
+   unguarded. Both now exclude `cancelled`.
+2. **A retry could refund twice.** The refund is sent *before* the row moves, so an update
+   that throws leaves the money returned on a booking still reading `confirmed` — and Stripe
+   forgets an idempotency key after **24 hours**, so the customer's retry the next day was a
+   second refund, which Stripe accepts while the running total stays inside the charge. Under
+   this ruling that reverses the vendor's transfer twice. Both refund paths now ask
+   `findRefund` first, which turns that state from unrecoverable into self-healing: the retry
+   finds the money already sent and finishes the cancellation instead of paying it again.
+3. **The idempotency keys were not versioned when the parameters under them changed.** Stripe
+   refuses a key replayed with a different body, so a booking whose cancel 400'd in the 24
+   hours before this ships would have had its retry refused with an `idempotency_error`
+   rather than refunded — the ruling neutralised for a day on exactly the bookings that hit
+   the bug. `cancel_<id>` became `cancel_<id>_unwind` and `ban-refund:<id>` became
+   `ban-refund:unwind:<id>`.
+
+**Where this lands.** It unblocks #400, whose settlement logic was reviewed and unit-tested
+but could not be driven end to end — every cancellation stopped at the 400. #415 remains
+open and is *not* absorbed here: naming the reversal in a notification is the honest minimum
+this ruling demands, while the customer's and vendor's cancelled-booking **screens** are that
+ticket's work.
+
+**Left open, and deliberately not decided here.** The design contract promises *"payment held
+until the event"* on the landing page, the vendor profile trust lines, the sign-up panel and
+the confirmation screen, and the two `booking_confirmed` notifications repeat it. The
+implementation does not hold it: a destination charge moves the vendor's share at charge
+time, and `createRecipientAccount` sets no payout schedule, so Stripe's automatic payouts
+apply. That gap is why a vendor *can* already have been paid out when a cancellation lands —
+the conditional this ruling's copy is careful to state rather than assume. Closing it is a
+Stripe account-configuration and product decision (manual payout schedule plus a
+release-after-event job), not a refund-flag one, and it is recorded here rather than guessed
+at.

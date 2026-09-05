@@ -73,6 +73,25 @@ export interface StripeConnectGateway {
    * refund two different code paths.
    */
   createRefund(input: CreateRefundInput): Promise<{ refundId: string; amountCents: number }>;
+
+  /**
+   * The refund already made against an intent, or `null` if there is none.
+   *
+   * The idempotency key on `createRefund` is the guard for concurrent and
+   * near-simultaneous retries, and it is the right one — but Stripe only
+   * remembers a key for **24 hours**. The refund is deliberately sent before
+   * the row moves, so a booking whose update then *throws* is left paid back
+   * but still `confirmed`, and the customer can press Cancel again. Past the
+   * 24-hour window that second attempt is a second refund: Stripe accepts it
+   * while the running total stays inside the charge, so two 50%-tier refunds
+   * both succeed and add up to 100% — and under D31 they reverse the vendor's
+   * transfer twice, taking a third party's account negative.
+   *
+   * Asking Stripe first turns that state from unrecoverable into self-healing:
+   * the retry finds the money already sent and finishes the cancellation
+   * instead of paying it out again.
+   */
+  findRefund(paymentIntentId: string): Promise<{ refundId: string; amountCents: number } | null>;
 }
 
 export interface CreatePaymentIntentInput {
@@ -111,6 +130,81 @@ export interface CreateRefundInput {
    * one refund per booking per ban, whatever the request timing.
    */
   idempotencyKey?: string;
+}
+
+/** The two flags that decide who bears the cost of a cancellation. */
+export interface RefundUnwind {
+  /** Claw the vendor's share back out of their connected account. */
+  reverseTransfer: boolean;
+  /** Give back Orla's commission too. */
+  refundApplicationFee: boolean;
+}
+
+/**
+ * How a refund unwinds a destination charge — who gives back what.
+ *
+ * This is one platform-wide policy, not a per-call choice, which is why it is
+ * a constant here rather than a field on `CreateRefundInput`: a cancellation
+ * cancelled by a customer and one unwound by an operator must not split the
+ * money differently.
+ *
+ * **D31: the full unwind.** A booking that will not happen puts all three
+ * parties back where they started — the customer is made whole, the vendor
+ * gives back their share, and Orla gives back its commission. Stripe applies
+ * both proportionally, so the split survives the 50% tier as well as the 100%
+ * one.
+ *
+ * The known cost is accepted rather than hidden: a vendor already paid out is
+ * taken to a negative balance they have to fund. The product says so — the
+ * `booking_cancelled` notifications on both cancellation paths name the
+ * reversal instead of promising the vendor keeps anything.
+ */
+export const REFUND_UNWIND: RefundUnwind = {
+  reverseTransfer: true,
+  refundApplicationFee: true,
+};
+
+/**
+ * The exact request `createRefund` sends, built where a test can read it.
+ *
+ * Extracted from the gateway so the flag pair is assertable without a network
+ * call, and so the in-process double can validate the very params the real
+ * adapter would have sent rather than a paraphrase of them.
+ */
+export function refundParams(
+  input: CreateRefundInput,
+  unwind: RefundUnwind = REFUND_UNWIND,
+): Stripe.RefundCreateParams {
+  return {
+    payment_intent: input.paymentIntentId,
+    amount: input.amountCents,
+    reason: input.reason,
+    refund_application_fee: unwind.refundApplicationFee,
+    reverse_transfer: unwind.reverseTransfer,
+  };
+}
+
+/**
+ * Stripe's own refusal for an unwind it cannot perform on a destination
+ * charge, or `null` when it would accept the request.
+ *
+ * On a destination charge the application fee is taken *on the transfer*, so
+ * there is no fee left to refund unless the transfer is reversed too. Stripe
+ * answers 400 for that pair, and for two months every cancellation this
+ * product offered hit it (#416) — the suite stayed green because the double
+ * recorded the call instead of judging it. The double now calls this, so the
+ * combination cannot be green here and 400 in production again.
+ */
+export function refusedRefundParams(params: Stripe.RefundCreateParams): string | null {
+  if (params.refund_application_fee && !params.reverse_transfer) {
+    return (
+      `The application fee for charge ${String(params.payment_intent)} was taken on the ` +
+      'associated transfer, so to refund the application fee you must also set ' +
+      'reverse_transfer=true'
+    );
+  }
+
+  return null;
 }
 
 /**
@@ -379,30 +473,18 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
 
     async createRefund(input) {
       const refund = await stripe.refunds.create(
-        {
-          payment_intent: input.paymentIntentId,
-          amount: input.amountCents,
-          reason: input.reason,
-          /*
-           * The platform gives back its own fee too. Orla took a commission for
-           * arranging a booking that is not happening, and keeping it out of a
-           * refund the customer is owed in full would make the "100% refund" the
-           * cancellation policy promises a 88% one.
-           */
-          refund_application_fee: true,
-          /*
-           * And it carries the loss rather than clawing it back from the vendor's
-           * balance, which is what `losses_collector: 'application'` on the
-           * account already says. Reversing the transfer would take money out of a
-           * vendor who may have already been paid out and turn a cancellation into
-           * a negative balance they have to fund.
-           */
-          reverse_transfer: false,
-        },
+        refundParams(input),
         input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
       );
 
       return { refundId: refund.id, amountCents: refund.amount };
+    },
+
+    async findRefund(paymentIntentId) {
+      const { data } = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 1 });
+      const [refund] = data;
+
+      return refund ? { refundId: refund.id, amountCents: refund.amount } : null;
     },
   };
 }

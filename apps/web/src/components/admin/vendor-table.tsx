@@ -39,12 +39,19 @@ const STATUS_PILLS: Record<AdminVendorStatus, { tone: StatusTone; label: string 
  * dialog that describes the same action two different ways is how an operator
  * learns not to read them. `subject` is the only word that legitimately differs
  * — one dialog is about several accounts, the other about one.
+ *
+ * The refund's second half is named as well (D31). A full refund reverses the
+ * vendor's transfer out of their connected account, which can take a vendor
+ * already paid out negative — the operator is the one party who can weigh that
+ * before pressing the button, and a dialog that says only "refunded in full"
+ * hides the half of the unwind that lands on somebody else.
  */
-function SuspensionConsequence({ subject }: { subject: string }): React.ReactElement {
+export function SuspensionConsequence({ subject }: { subject: string }): React.ReactElement {
   return (
     <>
       Their open requests are declined and every confirmed booking in the future is cancelled and{' '}
-      <strong className="font-semibold">refunded in full</strong>. {subject} comes down. Suspension
+      <strong className="font-semibold">refunded in full</strong>, which reverses the vendor&rsquo;s
+      share out of their Stripe balance and can leave it negative. {subject} comes down. Suspension
       can be lifted, but the bookings are not restored.
     </>
   );

@@ -550,6 +550,10 @@ describe('admin routes', () => {
           amountCents: 120_000,
           reason: undefined,
           idempotencyKey: expect.stringMatching(/^ban-refund:/) as unknown as string,
+          // The ban unwind refunds through the same gateway call as a customer
+          // cancellation, so it takes D31's full unwind too (#416).
+          reverseTransfer: true,
+          refundApplicationFee: true,
         },
       ]);
 
@@ -1447,8 +1451,13 @@ describe('admin routes', () => {
         .from(notifications);
       const toVendor = sent.find((row) => row.userId === vendor.userId);
 
+      /*
+       * "No payout will follow" was only true while the transfer was never
+       * reversed. Under D31 a payout already made is clawed back, so the line
+       * names the reversal instead of implying the vendor is merely not paid.
+       */
       expect(toVendor?.body).toBe(
-        'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, so no payout will follow.',
+        'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.',
       );
       expect(toVendor?.body).not.toContain('Your payment');
     });
@@ -1494,7 +1503,7 @@ describe('admin routes', () => {
       });
 
       expect(harness.stripe.refunds).toHaveLength(1);
-      expect(harness.stripe.refunds[0]?.idempotencyKey).toBe(`ban-refund:${bookingId}`);
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toBe(`ban-refund:unwind:${bookingId}`);
     });
   });
 

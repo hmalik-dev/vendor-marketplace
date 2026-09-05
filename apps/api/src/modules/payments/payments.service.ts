@@ -578,21 +578,43 @@ export async function cancelBooking(
     );
   }
 
-  const refund = await context.stripe.createRefund({
-    paymentIntentId: booking.stripePaymentIntentId,
-    amountCents: quote.refundCents,
-    reason: 'requested_by_customer',
-    /*
-     * Keyed on the booking, because the refund is sent *before* the guarded
-     * update that decides who won. The update's `status = 'confirmed'`
-     * predicate means only one of two concurrent cancels writes the row — but
-     * both reached this line first, and without a key Stripe would have paid
-     * the customer twice for one cancellation. The key makes the second call
-     * return the first refund instead of creating another. One booking, one
-     * cancellation, one refund. (#399)
-     */
-    idempotencyKey: `cancel_${bookingId}`,
-  });
+  /*
+   * Stripe is asked what it already did before being told to do it again.
+   *
+   * The idempotency key below covers concurrent and near-simultaneous retries,
+   * but Stripe forgets a key after 24 hours — and the refund is sent *before*
+   * the row moves, so an update that throws leaves the customer paid back on a
+   * booking still reading `confirmed`, which they can cancel again tomorrow.
+   * Without this read that second attempt is a second refund, and under D31 it
+   * reverses the vendor's transfer twice. With it, the retry finishes the
+   * cancellation the first attempt could not.
+   */
+  const alreadyRefunded = await context.stripe.findRefund(booking.stripePaymentIntentId);
+
+  const refund =
+    alreadyRefunded ??
+    (await context.stripe.createRefund({
+      paymentIntentId: booking.stripePaymentIntentId,
+      amountCents: quote.refundCents,
+      reason: 'requested_by_customer',
+      /*
+       * Keyed on the booking, because the refund is sent *before* the guarded
+       * update that decides who won. The update's `status = 'confirmed'`
+       * predicate means only one of two concurrent cancels writes the row — but
+       * both reached this line first, and without a key Stripe would have paid
+       * the customer twice for one cancellation. The key makes the second call
+       * return the first refund instead of creating another. One booking, one
+       * cancellation, one refund. (#399)
+       *
+       * `_unwind` is the policy's version, not decoration. Stripe refuses a key
+       * replayed with *different parameters*, and D31 changed the parameters —
+       * so a booking whose cancel was attempted under the old flags in the
+       * previous 24 hours would have had its retry refused with an
+       * `idempotency_error` rather than refunded. The key changes when the
+       * request under it does.
+       */
+      idempotencyKey: `cancel_${bookingId}_unwind`,
+    }));
 
   const cancelled = await cancelBookingAndFreeDate(context.db, bookingId, {
     cancelledAt: now,
@@ -621,7 +643,17 @@ export async function cancelBooking(
       'booking_cancelled',
       {
         title: 'A booking was cancelled',
-        body: 'The date is free again on your calendar.',
+        /*
+         * The reversal is named rather than left to be discovered on a Stripe
+         * statement (D31). The full unwind takes the vendor's share back out of
+         * their connected account, proportionally at either refund tier, and a
+         * vendor already paid out is carried negative by it — so the one
+         * message the product sends about this cancellation has to say so.
+         */
+        body:
+          'The date is free again on your calendar. Their refund takes back the same share of ' +
+          'your payout, out of your Stripe balance — which can leave it negative if this ' +
+          'booking had already been paid out.',
         bookingId: cancelled.id,
       },
       'vendor',
@@ -631,6 +663,13 @@ export async function cancelBooking(
   return {
     booking: cancelled,
     refundCents: refund.amountCents,
-    isFullRefund: quote.isFullRefund,
+    /*
+     * Read off the money that actually moved, not off the tier the quote would
+     * have chosen. They agree on every first attempt. They part company on a
+     * retry that finds an existing refund: a booking refunded in full yesterday
+     * and cancelled again today past the cutoff would otherwise be announced as
+     * a half refund while the customer has all of it back.
+     */
+    isFullRefund: refund.amountCents === booking.totalAmountCents,
   };
 }

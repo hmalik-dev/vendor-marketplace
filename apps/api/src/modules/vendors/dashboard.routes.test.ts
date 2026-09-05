@@ -302,6 +302,56 @@ describe('/vendor/dashboard', () => {
   });
 
   /*
+   * #416. A cancellation now really unwinds — D31 reverses the vendor's
+   * transfer back out of their connected account — so a cancelled booking is
+   * money the vendor no longer has. Both figures counted it, and were only
+   * ever right because no refund had succeeded and no paid booking could reach
+   * `cancelled`.
+   */
+  it('leaves a cancelled booking out of the earnings and the count', async () => {
+    const vendorId = await createProfile();
+    const packageId = await addPackage();
+    await publish(vendorId);
+    const kept = await request(vendorId, packageId, 30);
+    const cancelled = await request(vendorId, packageId, 31);
+
+    const customer = await harness.database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.clerkUserId, CUSTOMER));
+
+    await harness.database.db.insert(bookings).values([
+      {
+        requestId: kept,
+        customerId: customer[0]!.id,
+        vendorId,
+        eventDate: dayFrom(0),
+        totalAmountCents: 145_000,
+        platformFeeCents: 17_400,
+        vendorPayoutCents: 127_600,
+        paidAt: new Date(),
+      },
+      {
+        requestId: cancelled,
+        customerId: customer[0]!.id,
+        vendorId,
+        eventDate: dayFrom(1),
+        totalAmountCents: 100_000,
+        platformFeeCents: 12_000,
+        vendorPayoutCents: 88_000,
+        paidAt: new Date(),
+        status: 'cancelled',
+      },
+    ]);
+
+    const body = (await read()).json() as DashboardBody;
+
+    // The kept booking's share alone — not 215,600, and not two bookings.
+    expect(body.earningsThisMonthCents).toBe(127_600);
+    expect(body.bookingsThisMonth).toBe(1);
+  });
+
+  /*
    * The `This week` strip. It reads the availability calendar rather than
    * re-deriving from `bookings`, so these tests write calendar rows: that is
    * where the booking lifecycle puts `booked` and `pending`, and where the
