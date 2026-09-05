@@ -27,7 +27,7 @@
 - [Filing a ticket is a four-file change](filing-a-ticket-is-a-three-file-change.md) — contiguous ids race between lanes: allocate last, check a peer hasn't filed it already; `pnpm test` caches a green over tracker edits, use --force
 - [Dev and build contend over .next](dev-and-build-contend-over-next.md) — a stray `pnpm build` silently kills the web dev server; start the two apps separately
 - [Lane manifests drift from reality](lane-manifest-branch-drifts.md) — `lane:pr` fixes `prUrl` but **not `branch`**; after a rebase rename the manifest lies and `/land-lanes` reads the lane as abandoned
-- [Diverged lane branch needs a new name](diverged-lane-branch-needs-a-new-name.md) — force-push is hooked and `update-branch` can't reconcile a rewritten history; push a new name and fix the manifest
+- [Diverged lane branch needs a new name](diverged-lane-branch-needs-a-new-name.md) — rename only when history was **rewritten**; merely BEHIND is cleared by auto-merge, and renaming it drifts the manifest for nothing
 - [Lead, do not narrate](lead-dont-narrate.md) — short answers, state the call, no option surveys
 - [Detached lane ticket ids collide silently](detached-lane-ticket-ids-collide-silently.md) — merging a stopped lane duplicates board rows and drops registry rows with no conflict
 - [Check for an existing branch before starting](check-for-an-existing-branch-before-starting-a-ticket.md) — a ticket's Branch column may already name pushed work; read it before rebuilding
