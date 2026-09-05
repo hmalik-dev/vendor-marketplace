@@ -105,7 +105,16 @@ function TagName({ tag }: { tag: WireAdminTagRow }): React.ReactElement {
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="truncate text-left hover:underline"
+        /*
+          `md:truncate`, not `truncate`. `DataTable`'s card list drops the
+          truncation from the cell wrapper below 768 because a card has nothing
+          to widen and no pane to scroll — but a `white-space: nowrap` set
+          *inside* the cell is out of that wrapper's reach. A tag name may be
+          100 characters (`updateTagSchema`), and at 390 a 66-character one
+          measured `clientWidth 186 / scrollWidth 425`: 44% of the value shown,
+          elided, with no way to read the rest.
+        */
+        className="text-left hover:underline md:truncate"
       >
         {tag.name}
       </button>

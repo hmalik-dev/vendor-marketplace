@@ -158,7 +158,110 @@ describe('the table', () => {
     // `22-admin.md`'s first acceptance line. `sticky` inside the scrolling pane
     // rather than `fixed`, which would leave the grid it has to stay aligned to.
     expect(dataTable).toContain('sticky top-0');
-    expect(dataTable).toContain('overflow-y-auto');
+    /*
+     * `overflow-auto`, both axes. It was `overflow-y-auto` until #393 gave the
+     * grid a min-width floor so `30-responsive.md`'s `768 → Horizontal scroll`
+     * had something to scroll; the horizontal overflow that floor creates has
+     * to land in this pane, because the surface above it is `overflow-hidden`
+     * and the document must not scroll sideways at any width (#389).
+     */
+    // Anchored on the pane's own class string, not the bare word: `overflow-auto`
+    // also appears in this file's prose, so `toContain('overflow-auto')` stays
+    // green against a revert to `overflow-y-auto`.
+    expect(dataTable).toContain("'min-h-0 flex-1 overflow-auto'");
+    /*
+     * And the frame is the `md`-and-up branch. Frame `13` draws a table at
+     * 1440; below 768 the same rows render as the card list the degradation
+     * table asks for, so a parity read of this file is reading the branch the
+     * frame describes.
+     */
+    expect(dataTable).toContain('hidden min-w-full md:block');
+  });
+
+  /*
+   * `TABLE_MIN_WIDTH_PX` is a hand-computed product of five facts that live in
+   * three other files, and nothing else ties them together — move the rail or
+   * the surface's gutters and the constant is silently wrong in one of two
+   * directions: a scrollbar at 1024, which the contract draws without one, or
+   * the collapse #393 closed reopening at 768. So the derivation is recomputed
+   * here from those files rather than restated, and this test is the thing that
+   * fails when one of them moves.
+   */
+  it('floors the grid at the width the shell actually leaves it at 1024', () => {
+    const railContent = Number(
+      /--sidebar-admin-width: ([\d.]+)rem/.exec(themeCss)?.[1] ?? Number.NaN,
+    );
+    expect(railContent).toBeGreaterThan(0);
+
+    /*
+     * Anchored on the exact class strings, because `toContain('px-3')` is
+     * satisfied by `px-3.5` and `toContain('lg:border-r')` by `lg:border-r-2` —
+     * both of which move the rail's footprint and neither of which would have
+     * failed. The arithmetic below still names 12 and 1 by hand; these anchors
+     * are what force whoever changes them to come here and change those too.
+     */
+    expect(nav).toContain('bg-stone-0 px-3 py-2 lg:box-content');
+    expect(nav).toContain('lg:border-r lg:border-b-0');
+    const rail = railContent * 16 + 12 * 2 + 1;
+
+    // `AdminSurface`'s pane gutters, and the table's own hairline either side.
+    expect(surface).toContain('overflow-hidden px-6 pb-5');
+    expect(dataTable).toContain('rounded-xl border border-stone-300 bg-stone-0');
+    const smallLaptop = 1024;
+    const expected = smallLaptop - rail - 24 * 2 - 1 * 2;
+
+    const declared = Number(/TABLE_MIN_WIDTH_PX = (\d+)/.exec(dataTable)?.[1] ?? Number.NaN);
+    expect(declared).toBe(expected);
+    // Corroborated in the browser on 2026-09-05: all six admin tables render
+    // 739px wide at 1024, and 739 against a 718px pane at 768.
+    expect(declared).toBe(739);
+  });
+
+  /*
+   * `CardList` drops the truncation from the cell **wrapper** below 768,
+   * because a card has nothing to widen and no pane to scroll. A cell that sets
+   * `white-space: nowrap` on a child of its own is out of that wrapper's reach,
+   * and the card silently elides again with no way to read the rest — which is
+   * exactly what `tag-table.tsx`'s rename button did: at 390 a 100-character
+   * tag name (`updateTagSchema`'s ceiling) measured `clientWidth 186 /
+   * scrollWidth 425`.
+   *
+   * So a table's own cells may truncate from `md` up and not below it. Every
+   * such class in the six tables must carry a breakpoint.
+   */
+  it('lets no table cell truncate below the card breakpoint', () => {
+    // Numbered rather than named groups: this package targets below ES2018.
+    const truncating = /([\w-]+:)?(truncate|text-ellipsis|whitespace-nowrap|line-clamp-\d+)/g;
+
+    // Every file that declares columns for `DataTable`. Not the primitive
+    // itself: its truncation lives on the grid branch, which `md:` already
+    // gates as a whole.
+    const columnSources = [
+      'src/components/admin/review-table.tsx',
+      'src/components/admin/tag-table.tsx',
+      'src/components/admin/vendor-table.tsx',
+      'src/app/admin/bookings/page.tsx',
+      'src/app/admin/customers/page.tsx',
+      'src/app/admin/payments/page.tsx',
+    ];
+    expect(columnSources).toHaveLength(6);
+
+    for (const path of columnSources) {
+      // Comments discuss these classes by name; only the code declares them.
+      const code = read(path)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*/g, '');
+
+      for (const match of code.matchAll(truncating)) {
+        expect(
+          match[1],
+          `${path}: \`${match[0]}\` truncates at every width, so the card list elides it`,
+        ).toBe('md:');
+      }
+    }
+  });
+
+  it('fixes the header row and scrolls the body, not the page (continued)', () => {
     /*
      * The pane that scrolls, owned by the shell rather than copied into each
      * screen — and nothing shares it. The pager sat in this box for one commit
