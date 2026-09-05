@@ -10,8 +10,11 @@ import {
 import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { violatesConstraint } from '../../lib/constraint-violation.js';
+import { insertTagSuggestion } from './tags.dao.js';
 
 const VENDOR = 'user_vendor';
+const OTHER_VENDOR = 'user_vendor_two';
 const CUSTOMER = 'user_customer';
 
 describe('tag routes', () => {
@@ -41,7 +44,7 @@ describe('tag routes', () => {
     return row!.id;
   }
 
-  async function createVendorProfile(): Promise<void> {
+  async function createVendorProfile(): Promise<{ vendorId: string }> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
@@ -54,6 +57,27 @@ describe('tag routes', () => {
       },
     });
     expect(response.statusCode).toBe(201);
+
+    // `tag_suggestions.vendor_id` references `users`, not `vendor_profiles`.
+    const rows = await harness.database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.clerkUserId, VENDOR))
+      .limit(1);
+
+    return { vendorId: rows[0]!.id };
+  }
+
+  function suggest(
+    actor: string,
+    suggestedName: string,
+  ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
+    return harness.app.inject({
+      method: 'POST',
+      url: '/tags/suggest',
+      headers: bearer(actor),
+      payload: { suggestedName, category: 'language' },
+    });
   }
 
   beforeAll(async () => {
@@ -61,6 +85,7 @@ describe('tag routes', () => {
 
     for (const [clerkUserId, role] of [
       [VENDOR, 'vendor'],
+      [OTHER_VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
       harness.clerkUsers.set(clerkUserId, {
@@ -453,6 +478,118 @@ describe('tag routes', () => {
         headers: bearer(VENDOR),
         payload: { suggestedName: '  AMHARIC  ', category: 'language' },
       });
+
+      expect(response.json().status).toBe('already_suggested');
+      expect(await harness.database.db.select().from(tagSuggestions)).toHaveLength(1);
+    });
+
+    /*
+     * #399: the dedupe was a read followed by an insert with nothing behind
+     * it, so two submissions that interleave both find no pending row and both
+     * write one. The admin queue then shows N identical suggestions, and
+     * approving the second falls into the merge branch — no corruption, but
+     * the `already_suggested` contract the service promises is not kept, and
+     * every duplicate is an operator action.
+     *
+     * **PGlite serialises transactions, so no test in this repository can
+     * produce that race.** Firing two requests with `Promise.all` here passes
+     * against the old code too: the second read simply sees the first commit.
+     * What *is* testable, and is what survives concurrency, is that the
+     * database refuses the second row rather than the read doing it — so these
+     * two go around the service's read instead of trying to outrace it.
+     */
+    it('refuses a second pending row for the same idea, at the database', async () => {
+      const { vendorId } = await createVendorProfile();
+      await suggest(VENDOR, 'Tigrinya');
+
+      /*
+       * Named, not just "throws". A bare `rejects.toThrow()` here passes on any
+       * rejection — a bad `vendor_id` would satisfy it on the foreign key, and
+       * a NOT NULL column added later would satisfy it on that — so it would
+       * stop testing the index the moment the fixture broke for another reason.
+       */
+      const refusal = await harness.database.db
+        .insert(tagSuggestions)
+        .values({ vendorId, suggestedName: 'tigrinya', category: 'language' })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+
+      /*
+       * Through `violatesConstraint`, not a message regex: Drizzle 0.45 puts
+       * the constraint name on `cause` and leaves `error.message` as
+       * `Failed query: …`, which is the whole reason that helper exists.
+       */
+      expect(violatesConstraint(refusal, 'tag_suggestions_pending_key')).toBe(true);
+    });
+
+    /*
+     * And the loser of that race gets the contract, not a 500: the insert is
+     * `onConflictDoNothing`, so it returns nothing rather than raising, and the
+     * service reads that as "somebody else just filed this".
+     */
+    it('hands the losing insert back as nothing rather than an error', async () => {
+      const { vendorId } = await createVendorProfile();
+      await suggest(VENDOR, 'Tigrinya');
+
+      const second = await insertTagSuggestion(harness.database.db, {
+        vendorId,
+        suggestedName: 'TIGRINYA',
+        category: 'language',
+      });
+
+      expect(second).toBeNull();
+      expect(await harness.database.db.select().from(tagSuggestions)).toHaveLength(1);
+    });
+
+    /*
+     * The branch where the database catches what the read missed, reached
+     * without a second connection.
+     *
+     * JS `toLowerCase()` and Postgres `lower()` disagree on a dotted capital:
+     * `normalizeTagName('İstanbullu')` produces `i̇stanbullu` (U+0069 U+0307),
+     * while `lower()` in the index produces `istanbullu`. So the read finds
+     * nothing, the insert is refused by the index, and the service has to
+     * answer with the contract rather than a 500.
+     *
+     * The divergence fails **safe** — the read misses, the database catches,
+     * the caller gets the right answer — which is the argument for keying the
+     * index the way the read compares rather than more thoroughly.
+     */
+    it('answers the contract when the read misses and the index catches', async () => {
+      await createVendorProfile();
+      expect((await suggest(VENDOR, 'İstanbullu')).json().status).toBe('submitted');
+
+      const second = await suggest(VENDOR, 'İstanbullu');
+
+      expect(second.json().status).toBe('already_suggested');
+      expect(second.statusCode).toBe(200);
+      expect(await harness.database.db.select().from(tagSuggestions)).toHaveLength(1);
+    });
+
+    /* A settled row is not the queue's business, so it must not block a refile. */
+    it('lets the same idea be suggested again once the pending one is settled', async () => {
+      const { vendorId } = await createVendorProfile();
+      await suggest(VENDOR, 'Tigrinya');
+      await harness.database.db.update(tagSuggestions).set({ status: 'rejected' });
+
+      const again = await insertTagSuggestion(harness.database.db, {
+        vendorId,
+        suggestedName: 'Tigrinya',
+        category: 'language',
+      });
+
+      expect(again).not.toBeNull();
+      expect(await harness.database.db.select().from(tagSuggestions)).toHaveLength(2);
+    });
+
+    /* The queue is per idea, not per vendor: one row for the admin to act on. */
+    it('tells a second vendor the same thing rather than opening a duplicate', async () => {
+      await createVendorProfile();
+      await suggest(VENDOR, 'Tigrinya');
+
+      const response = await suggest(OTHER_VENDOR, 'TIGRINYA');
 
       expect(response.json().status).toBe('already_suggested');
       expect(await harness.database.db.select().from(tagSuggestions)).toHaveLength(1);

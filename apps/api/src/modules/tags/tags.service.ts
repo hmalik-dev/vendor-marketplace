@@ -117,5 +117,14 @@ export async function suggestTag(
     category: input.category,
   });
 
+  /*
+   * The read above lost the race, and the database caught what it missed. The
+   * answer is the same one that read would have given — this idea is already in
+   * front of an admin — rather than a 500 for a request that did nothing wrong.
+   */
+  if (!suggestion) {
+    return { status: 'already_suggested' };
+  }
+
   return { status: 'submitted', suggestionId: suggestion.id };
 }

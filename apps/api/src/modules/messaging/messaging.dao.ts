@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import {
   bookingRequests,
   conversations,
@@ -220,20 +220,48 @@ export async function countMessages(db: AppDatabase, conversationId: string): Pr
   return rows?.[0]?.total ?? 0;
 }
 
+/**
+ * Stores a message and moves its thread to the top of both parties' lists, in
+ * one transaction.
+ *
+ * The two statements used to run separately (#399). A failure between them left
+ * the message stored and `last_message_at` stale, so the thread did not surface
+ * on either `/messages` list and the recipient's preview lagged until some
+ * later message happened to update the same row — a message delivered to a
+ * screen nobody would look at. It also broke the rule that a multi-statement
+ * mutation runs in one transaction.
+ *
+ * The timestamp is the message's own `created_at` rather than a second `now()`,
+ * so the ordering key names a message that exists.
+ *
+ * The predicate makes the bump monotonic. Two sends serialise on the
+ * conversation row, and without it the later-starting transaction writes
+ * whichever `created_at` it happens to hold — so a thread's ordering key can
+ * walk backwards and the thread drops down both parties' lists on the message
+ * that should have raised it. `is null` is kept as its own arm because a
+ * conversation that has never carried a message has no timestamp to compare.
+ */
 export async function insertMessage(db: AppDatabase, values: NewMessageRow): Promise<MessageRow> {
-  const inserted = await db.insert(messages).values(values).returning();
-  const row = inserted?.[0];
+  return db.transaction(async (tx) => {
+    const inserted = await tx.insert(messages).values(values).returning();
+    const row = inserted?.[0];
 
-  if (!row) {
-    throw new Error('Message insert returned no row');
-  }
+    if (!row) {
+      throw new Error('Message insert returned no row');
+    }
 
-  await db
-    .update(conversations)
-    .set({ lastMessageAt: row.createdAt })
-    .where(eq(conversations.id, row.conversationId));
+    await tx
+      .update(conversations)
+      .set({ lastMessageAt: row.createdAt })
+      .where(
+        and(
+          eq(conversations.id, row.conversationId),
+          or(isNull(conversations.lastMessageAt), lt(conversations.lastMessageAt, row.createdAt)),
+        ),
+      );
 
-  return row;
+    return row;
+  });
 }
 
 /** Marks everything the *other* party sent as read. */

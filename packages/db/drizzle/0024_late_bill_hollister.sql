@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "tag_suggestions_pending_key" ON "tag_suggestions" USING btree ("category",lower("suggested_name")) WHERE "tag_suggestions"."status" = 'pending';

@@ -86,18 +86,32 @@ export async function findPendingSuggestion(
   return rows?.[0] ?? null;
 }
 
+/**
+ * Files a suggestion, or `null` when an identical pending one already exists.
+ *
+ * `null` rather than a throw, because losing this race is not an error: it
+ * means somebody asked for the same tag a moment earlier, and the caller's
+ * answer is the `already_suggested` it would have given had its own read seen
+ * the row. `tag_suggestions_pending_key` is what decides, so the read above the
+ * caller is a courtesy — it produces a friendlier path in the common case and
+ * is not what keeps the queue clean (#399).
+ *
+ * `onConflictDoNothing` carries no target: the index is a partial one over an
+ * expression (`lower(suggested_name)` where the row is pending), which cannot
+ * be named as a column list. That is safe **for every caller that exists**,
+ * which all let the id default to a generated uuid — but the untargeted form
+ * absorbs a primary-key collision too, so a future seed or backfill that
+ * supplies its own `id` would read an id clash as `already_suggested`. It does
+ * not absorb a foreign-key violation: a bad `vendor_id` or `resolved_tag_id`
+ * still raises.
+ */
 export async function insertTagSuggestion(
   db: AppDatabase,
   values: NewTagSuggestionRow,
-): Promise<TagSuggestionRow> {
-  const inserted = await db.insert(tagSuggestions).values(values).returning();
-  const row = inserted?.[0];
+): Promise<TagSuggestionRow | null> {
+  const inserted = await db.insert(tagSuggestions).values(values).onConflictDoNothing().returning();
 
-  if (!row) {
-    throw new Error('Tag suggestion insert returned no row');
-  }
-
-  return row;
+  return inserted?.[0] ?? null;
 }
 
 /**

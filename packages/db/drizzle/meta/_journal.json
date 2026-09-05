@@ -162,6 +162,20 @@
       "when": 1788227320601,
       "tag": "0022_cap_reply_window_at_event",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788227380601,
+      "tag": "0023_dedupe_pending_tag_suggestions",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788568283264,
+      "tag": "0024_late_bill_hollister",
+      "breakpoints": true
     }
   ]
 }

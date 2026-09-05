@@ -100,6 +100,32 @@ export const tagSuggestions = pgTable(
     // Admin review queue: oldest pending suggestions first (ticket #15).
     index('tag_suggestions_status_created_at_idx').on(table.status, table.createdAt),
     index('tag_suggestions_vendor_id_idx').on(table.vendorId),
+    /*
+     * One pending row per idea, enforced by the database rather than by a read
+     * (#399).
+     *
+     * `createTagSuggestion` looked for a pending row and inserted when it found
+     * none, with nothing between the two statements — so two vendors suggesting
+     * the same tag at once both looked, both found nothing, and both wrote. The
+     * admin queue then carried N identical suggestions; approving the first
+     * creates the tag and approving the rest falls into the merge branch, so
+     * nothing corrupts, but the `already_suggested` contract is not kept and
+     * every duplicate costs an operator an action.
+     *
+     * On `lower(suggested_name)` because that is exactly what
+     * `findPendingSuggestion` compares, and the writer already collapses
+     * internal whitespace, so the stored value and the comparison key agree.
+     * Scoped to `pending` because a settled suggestion is history: rejecting an
+     * idea must not stop anyone raising it again later.
+     *
+     * Not scoped to the vendor, deliberately. The queue is per idea, not per
+     * submitter — a second vendor asking for the same tag should be told it is
+     * already in front of an admin, not open a second row for the same
+     * decision.
+     */
+    uniqueIndex('tag_suggestions_pending_key')
+      .on(table.category, sql`lower(${table.suggestedName})`)
+      .where(sql`${table.status} = 'pending'`),
   ],
 );
 
