@@ -1,5 +1,5 @@
 import {
-  BOOKING_WEEK_DAYS,
+  BOOKING_WEEK_WINDOW_DAYS,
   addDays,
   parseDateString,
   toDateString,
@@ -43,23 +43,32 @@ function monthBounds(date: string): { start: string; next: string; previous: str
 }
 
 /**
- * The dates the `This week` strip covers, and the exclusive bound to read to.
+ * The dates the `This week` strip can cover, and the exclusive bound to read to.
+ *
+ * **Nine days from yesterday, not seven from today.** The strip shows seven, but
+ * which seven depends on the viewer's own day, and a server cannot know it: west
+ * of UTC the vendor is a day behind this process, east of UTC a day ahead. So it
+ * sends the union — the day before the UTC day through the day after the week —
+ * and `WeekStrip` slices its seven from whichever day the browser is on. Before
+ * this the rail's "This week" simply began tomorrow for any vendor in a US
+ * evening, and did not contain the day they were living in. #409.
  *
  * Stepped with the shared `addDays`/`toDateString` pair rather than by adding to
- * the day-of-month, so a week crossing a month or year boundary is the
+ * the day-of-month, so a window crossing a month or year boundary is the
  * calendar's problem and not this function's, and no date round-trips through a
  * local-time `Date`.
  */
-function weekFrom(today: string): { days: string[]; end: string } {
+function windowFrom(today: string): { days: string[]; end: string } {
   // `today` reaches here from `toDateString`, so it always parses; the
   // fallback exists because `parseDateString` is honest about malformed input
   // rather than because this caller can produce any.
-  const start = parseDateString(today) ?? new Date(`${today}T00:00:00.000Z`);
-  const days = Array.from({ length: BOOKING_WEEK_DAYS }, (_, offset) =>
+  const utcDay = parseDateString(today) ?? new Date(`${today}T00:00:00.000Z`);
+  const start = addDays(utcDay, -1);
+  const days = Array.from({ length: BOOKING_WEEK_WINDOW_DAYS }, (_, offset) =>
     toDateString(addDays(start, offset)),
   );
 
-  return { days, end: toDateString(addDays(start, BOOKING_WEEK_DAYS)) };
+  return { days, end: toDateString(addDays(start, BOOKING_WEEK_WINDOW_DAYS)) };
 }
 
 /**
@@ -102,8 +111,10 @@ export async function getVendorDashboard(
   const { start, next, previous } = monthBounds(today);
 
   const since = new Date(now.getTime() - RESPONSE_WINDOW_DAYS * 86_400_000);
-  // `[today, today + 7)` — `end` is exclusive, so the eighth day never leaks in.
-  const { days: week, end: weekEnd } = weekFrom(today);
+  // `[today - 1, today + 8)` — `end` is exclusive, so the tenth day never
+  // leaks in. Nine days, because the seven the strip draws start on the
+  // viewer's day and not on this one.
+  const { days: windowDays, end: windowEnd } = windowFrom(today);
 
   const [
     newRequestCount,
@@ -126,7 +137,7 @@ export async function getVendorDashboard(
       new Date(`${start}T00:00:00.000Z`),
       new Date(`${next}T00:00:00.000Z`),
     ),
-    findCalendarBetween(db, vendor.id, today, weekEnd),
+    findCalendarBetween(db, vendor.id, windowDays[0] ?? today, windowEnd),
     findNextPayout(db, vendor.id, today),
     findCategoryIds(db, vendor.id),
     countActivePackages(db, vendor.id),
@@ -153,7 +164,7 @@ export async function getVendorDashboard(
      * has to be filled in here rather than left as a hole the strip would have
      * to guess at.
      */
-    bookingWeek: week.map((date) => ({
+    bookingWindow: windowDays.map((date) => ({
       date,
       status: byDate.get(date) ?? ('available' as AvailabilityStatus),
     })),

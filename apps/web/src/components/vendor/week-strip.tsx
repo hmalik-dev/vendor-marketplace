@@ -1,4 +1,7 @@
-import type { AvailabilityStatus } from '@vendor-marketplace/shared';
+'use client';
+
+import { BOOKING_WEEK_DAYS, type AvailabilityStatus } from '@vendor-marketplace/shared';
+import { useViewerToday } from '@/lib/use-viewer-today';
 import type { WireVendorDashboard } from '@/lib/wire-schemas';
 
 const CELL_DAY = new Intl.DateTimeFormat('en-US', { day: 'numeric', timeZone: 'UTC' });
@@ -55,8 +58,9 @@ const TONES: Record<AvailabilityStatus, DayTone> = {
     caption: 'text-stone-600',
   },
   /*
-   * Unreachable forward: the calendar only derives `completed` for a `booked`
-   * date already in the past, and every day here is today or later. Present
+   * Unreachable forward: the calendar derives `completed` only for a `booked`
+   * date that is behind every visitor on Earth, and the earliest day the window
+   * carries is the day before the server's — still somebody's today. Present
    * because the status is in the union, and a map that silently lacked a key
    * would render an unstyled cell rather than fail.
    */
@@ -69,7 +73,14 @@ const TONES: Record<AvailabilityStatus, DayTone> = {
 };
 
 export interface WeekStripProps {
-  week: WireVendorDashboard['bookingWeek'];
+  /**
+   * Nine consecutive days: the day before the server's UTC day through the day
+   * after its week. The strip draws seven of them, starting on the viewer's own
+   * day — see `BOOKING_WEEK_WINDOW_DAYS`.
+   */
+  days: WireVendorDashboard['bookingWindow'];
+  /** The server's UTC day, seeding the first paint before the viewer's is known. */
+  serverToday: string;
 }
 
 /**
@@ -79,7 +90,26 @@ export interface WeekStripProps {
  * booking week, not the month grid", and frame `27 Vendor dashboard — 1024`
  * draws it: seven equal cells, the day number over the state.
  */
-export function WeekStrip({ week }: WeekStripProps): React.ReactElement {
+export function WeekStrip({ days, serverToday }: WeekStripProps): React.ReactElement {
+  const today = useViewerToday(serverToday);
+  /*
+   * Seven days from the viewer's own day. #409: anchoring on the server's meant
+   * a vendor at UTC-5 in the evening got a "This week" that began tomorrow and
+   * did not contain the day they were living in.
+   *
+   * Found in the dates the server actually sent rather than derived a second
+   * time, so the two cannot drift. The widest wall-clock spread in use is
+   * UTC-12 to UTC+14, which puts the viewer's day at index 0, 1 or 2 — always
+   * far enough from the end for seven to follow. `Math.max` is not for a day
+   * outside the window but for the value `findIndex` returns when it finds
+   * nothing, which would otherwise slice from the end and draw one cell.
+   */
+  const start = Math.max(
+    0,
+    days.findIndex((day) => day.date === today),
+  );
+  const week = days.slice(start, start + BOOKING_WEEK_DAYS);
+
   return (
     /* 13px, not `rounded-xl` (14px) — frame `27` overrides `.card`'s radius on
        both rail cards, and the scale has no 13px step. */
@@ -95,7 +125,12 @@ export function WeekStrip({ week }: WeekStripProps): React.ReactElement {
           return (
             <li
               key={day.date}
-              className={`flex h-11 flex-col items-center justify-center rounded-lg border ${tone.cell}`}
+              /*
+                `rounded-md` (8px), not `rounded-lg` (10px): frame `27` draws
+                the strip's cells at 8px, and the design contract is the
+                acceptance criterion. Caught by `parity-checker` on #409.
+              */
+              className={`flex h-11 flex-col items-center justify-center rounded-md border ${tone.cell}`}
             >
               {/*
                 The cell's whole meaning in one accessible name. The visible

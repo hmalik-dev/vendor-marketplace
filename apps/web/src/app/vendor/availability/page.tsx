@@ -28,7 +28,7 @@ export default async function VendorAvailabilityPage(): Promise<React.ReactEleme
     // frame `11 Availability`. `data-app-shell` is what globals.css keys the
     // footer suppression off: this surface owns the viewport.
     <div data-app-shell className="w-full px-4 pt-5.5 sm:px-6 lg:app-shell lg:px-0 lg:pl-6">
-      <AvailabilityCalendar initialEntries={entries} today={toDateString(new Date())} />
+      <AvailabilityCalendar initialEntries={entries} serverToday={toDateString(new Date())} />
     </div>
   );
 }

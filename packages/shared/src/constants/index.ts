@@ -804,6 +804,19 @@ export const LATE_CANCELLATION_REFUND_RATE = 0.5;
  */
 export const BOOKING_WEEK_DAYS = 7;
 
+/**
+ * How many days the dashboard sends so the strip can start on the **viewer's**
+ * today rather than the server's.
+ *
+ * A server cannot know a visitor's day, and the widest wall-clock spread in use
+ * puts it one day either side of the UTC day — the same reasoning
+ * `isUniversallyPastDate` is built on. So the window runs from the day before
+ * the UTC day, and the strip slices its seven from whichever day the browser
+ * turns out to be on. Before this it slid: a vendor at UTC-5 in the evening got
+ * a "This week" that began tomorrow and did not contain today. #409.
+ */
+export const BOOKING_WEEK_WINDOW_DAYS = BOOKING_WEEK_DAYS + 2;
+
 /** How far forward the vendor availability calendar runs. */
 export const AVAILABILITY_MONTHS_AHEAD = 12;
 

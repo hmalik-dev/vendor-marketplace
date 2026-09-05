@@ -4,6 +4,7 @@ import { BRAND_NAME, ERROR_CODES, type ServicePackage } from '@vendor-marketplac
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { viewerOn } from '@/testing/viewer-clock';
 import { BookingRail } from './booking-rail';
 
 /**
@@ -33,6 +34,11 @@ beforeEach(() => {
   requestMock.mockReset();
   requestMock.mockResolvedValue({ id: 'conv-1' });
   pushMock.mockReset();
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function servicePackage(overrides: Partial<ServicePackage> = {}): ServicePackage {
@@ -92,7 +98,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -122,7 +128,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={127}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -138,7 +144,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -171,7 +177,7 @@ describe('BookingRail', () => {
           startingPriceCents={175_000}
           packages={[servicePackage()]}
           reviewCount={0}
-          today="2026-01-01"
+          serverToday={viewerOn('2026-01-01')}
           calendar={{}}
         />,
       );
@@ -267,7 +273,7 @@ describe('BookingRail', () => {
         startingPriceCents={null}
         packages={[]}
         reviewCount={0}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -285,7 +291,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -302,7 +308,7 @@ describe('BookingRail', () => {
         startingPriceCents={null}
         packages={[]}
         reviewCount={0}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -322,7 +328,7 @@ describe('BookingRail', () => {
           servicePackage({ id: 'pkg-2', name: 'Full day', priceCents: 320_000 }),
         ]}
         reviewCount={0}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -340,7 +346,7 @@ describe('BookingRail', () => {
         startingPriceCents={175_000}
         packages={[servicePackage()]}
         reviewCount={0}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -362,7 +368,7 @@ describe('BookingRail', () => {
           startingPriceCents={145_000}
           packages={[servicePackage()]}
           reviewCount={127}
-          today="2026-08-10"
+          serverToday={viewerOn('2026-08-10')}
           calendar={calendar}
         />,
       );
@@ -426,7 +432,7 @@ describe('BookingRail', () => {
           startingPriceCents={145_000}
           packages={[servicePackage()]}
           reviewCount={127}
-          today="2026-08-29"
+          serverToday={viewerOn('2026-08-29')}
           calendar={{}}
         />,
       );
@@ -462,7 +468,7 @@ describe('the From qualifier', () => {
         startingPriceCents={145_000}
         packages={packages}
         reviewCount={127}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );
@@ -493,7 +499,7 @@ describe('the From qualifier', () => {
           servicePackage({ id: 'pkg-1', name: 'Half day', priceCents: 145_000, displayOrder: 1 }),
         ]}
         reviewCount={127}
-        today="2026-01-01"
+        serverToday={viewerOn('2026-01-01')}
         calendar={{}}
       />,
     );

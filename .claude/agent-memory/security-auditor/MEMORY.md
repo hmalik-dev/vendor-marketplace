@@ -28,5 +28,7 @@
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — adding hosts to script-src is never the escalation; CSP_ENFORCE can only turn enforcement on
 - [The review profanity filter is a hard-reject floor](review-profanity-filter-is-a-hard-reject-floor.md) — the failure mode and the easy bypasses are settled until #15; the `\w*` over-match on "spicy" is not
 - [JSON-LD is the only raw-HTML sink in web](json-ld-is-the-only-raw-html-sink.md) — `serialiseJsonLd` is mandatory; the source-scan guard misses `next/script` + a non-literal type
+- [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — the availability `note` reaches the public page's inlined RSC payload; the JSON-endpoint half is filed as #407
+- [Availability floors are one day wider than UTC](availability-date-floors-are-universally-past.md) — since #409; the `booked` predicates in the DAO, not the floor, are what protect history
 - [The reply-window cap lives in four places](reply-deadline-cap-must-match-accept-guard.md) — `event_date + 2` UTC days is in a predicate, a helper, an expiry compare and raw SQL; drift makes rows live-but-unacceptable
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased

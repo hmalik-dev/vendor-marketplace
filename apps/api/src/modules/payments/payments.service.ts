@@ -3,6 +3,7 @@ import {
   MIN_BOOKING_AMOUNT_CENTS,
   calculateFees,
   calculateRefund,
+  isUniversallyFutureDate,
   type BookingWithContext,
   type CancelledBooking,
   type CheckoutIntent,
@@ -486,7 +487,7 @@ export async function completeBooking(
   context: PaymentContext,
   user: AuthenticatedUser,
   bookingId: string,
-  today: string,
+  now: Date,
 ): Promise<BookingRow> {
   const { booking, side } = await participantIn(context, user, bookingId);
 
@@ -503,11 +504,18 @@ export async function completeBooking(
   }
 
   /*
-   * String comparison on two `YYYY-MM-DD` values, deliberately: both are
-   * calendar dates and neither has a time, so any comparison through `Date`
-   * would introduce a timezone that is not in either of them.
+   * Refused only while the event is still ahead **everywhere** (#409).
+   *
+   * This used to compare against the server's own UTC day, and the client's
+   * guard — the one that decides whether the vendor is offered the button at
+   * all — now reads the *browser's* day. East of UTC those are different days,
+   * so a vendor who had just finished the event was shown `Mark complete` and
+   * told "That event has not happened yet" on pressing it. A server cannot know
+   * the vendor's day, so it refuses only what no vendor anywhere could have
+   * reached yet; the widest honest reading, and the same one
+   * `isUniversallyPastDate` gives at the other end.
    */
-  if (booking.eventDate > today) {
+  if (isUniversallyFutureDate(booking.eventDate, now)) {
     throw conflict('That event has not happened yet');
   }
 

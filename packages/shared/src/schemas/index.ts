@@ -9,7 +9,7 @@ import {
   ADMIN_PAGE_SIZE,
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
-  BOOKING_WEEK_DAYS,
+  BOOKING_WEEK_WINDOW_DAYS,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
@@ -1020,17 +1020,23 @@ export const vendorDashboardSchema = z.object({
    * to — not a second derivation over `bookings`. A strip that disagreed with
    * the availability screen would be the `publishBlockers` mistake again.
    *
-   * `completed` cannot appear: every date here is today or later, and the
-   * calendar only derives it for a `booked` date already in the past.
+   * `completed` cannot appear: every date here is still somebody's today or
+   * later, and the calendar only derives it for a `booked` date that is behind
+   * every visitor on Earth.
+   *
+   * `BOOKING_WEEK_WINDOW_DAYS`, not `BOOKING_WEEK_DAYS`: the strip renders
+   * seven, but a server cannot know which seven — it sends the day before the
+   * UTC day through the day after the week, and the client slices from the
+   * viewer's own today. #409.
    */
-  bookingWeek: z
+  bookingWindow: z
     .array(
       z.object({
         date: calendarDateSchema,
         status: availabilityStatusSchema,
       }),
     )
-    .length(BOOKING_WEEK_DAYS),
+    .length(BOOKING_WEEK_WINDOW_DAYS),
   /**
    * The soonest event this vendor is owed money for, for the rail's second card.
    *

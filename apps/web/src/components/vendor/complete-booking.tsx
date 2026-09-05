@@ -6,13 +6,19 @@ import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApiClientError } from '@/lib/api-client';
 import { useApi } from '@/lib/use-api';
+import { useViewerToday } from '@/lib/use-viewer-today';
 import { wireBookingSchema } from '@/lib/wire-schemas';
 import type { WireBooking } from '@/lib/wire-schemas';
 
 export interface CompleteBookingProps {
   booking: WireBooking;
-  /** Today as `YYYY-MM-DD`, resolved on the server so the two agree. */
-  today: string;
+  /**
+   * Seeds the first paint; whether the event has happened is decided against
+   * the vendor's own day (`useViewerToday`). On the server's day a vendor at
+   * UTC-5 could mark a booking complete the evening before the event, and one
+   * at UTC+9 could not mark one they had already delivered. #409.
+   */
+  serverToday: string;
 }
 
 /**
@@ -28,7 +34,11 @@ export interface CompleteBookingProps {
  * that matters, and this one is why the vendor is not offered a button that
  * only ever answers 409.
  */
-export function CompleteBooking({ booking, today }: CompleteBookingProps): React.ReactElement {
+export function CompleteBooking({
+  booking,
+  serverToday,
+}: CompleteBookingProps): React.ReactElement {
+  const today = useViewerToday(serverToday);
   const router = useRouter();
   const call = useApi();
   const [busy, setBusy] = useState(false);
@@ -46,6 +56,12 @@ export function CompleteBooking({ booking, today }: CompleteBookingProps): React
    * String comparison on two calendar dates, which is what they are. Reading
    * either through a `Date` would put a timezone into a comparison that has
    * none of its own.
+   *
+   * `today` is the vendor's own day (#409), and the server behind this refuses
+   * only what is still ahead for every vendor on Earth — a day wider. The two
+   * cannot contradict each other in that direction: everything this offers, the
+   * server accepts. It is only ever this side that hides a control, which is
+   * what it is for.
    */
   if (booking.eventDate > today) {
     return <></>;

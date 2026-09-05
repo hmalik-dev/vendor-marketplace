@@ -202,7 +202,9 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         */}
         <div className="flex min-h-0 flex-1 gap-4 overflow-hidden">
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-5">{requestsPane}</div>
-          {dashboard.isPublished ? <PublishedRail dashboard={dashboard} /> : null}
+          {dashboard.isPublished ? (
+            <PublishedRail dashboard={dashboard} serverToday={today} />
+          ) : null}
         </div>
       </div>
 

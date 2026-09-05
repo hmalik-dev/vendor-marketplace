@@ -10,6 +10,7 @@ import {
   generateSlug,
   isFutureDate,
   isPastDate,
+  isUniversallyFutureDate,
   isUniversallyPastDate,
   kmToMiles,
   milesToKm,
@@ -388,5 +389,53 @@ describe('shortTimeAgo', () => {
   /* A thread with no messages renders nothing, never the word "never". */
   it('is empty for a null date', () => {
     expect(shortTimeAgo(null, NOW)).toBe('');
+  });
+});
+
+/**
+ * The mirror of `isUniversallyPastDate`, and it earns its own suite because the
+ * two are easy to write as each other's negation, which they are not: between
+ * them sits a band where the date is somebody's yesterday, somebody's today and
+ * somebody's tomorrow at once, and both predicates answer `false` across it.
+ * That band is the point — it is the only honest answer a server has about a
+ * caller whose zone it does not know (#409).
+ */
+describe('isUniversallyFutureDate', () => {
+  const EVENT = '2026-07-04';
+
+  it('is true only while the date is ahead in every zone', () => {
+    // UTC+14 is the first zone to reach the 4th: it does so as the server's UTC
+    // clock passes into the 3rd, and until then nobody anywhere is on it.
+    expect(isUniversallyFutureDate(EVENT, new Date('2026-07-02T23:59:59.999Z'))).toBe(true);
+    expect(isUniversallyFutureDate(EVENT, new Date('2026-07-03T00:00:00.000Z'))).toBe(false);
+  });
+
+  it('is false on the day itself and after it', () => {
+    expect(isUniversallyFutureDate(EVENT, new Date('2026-07-04T12:00:00.000Z'))).toBe(false);
+    expect(isUniversallyFutureDate(EVENT, new Date('2026-07-05T12:00:00.000Z'))).toBe(false);
+    expect(isUniversallyFutureDate(EVENT, new Date('2027-01-01T00:00:00.000Z'))).toBe(false);
+  });
+
+  /*
+   * Not each other's negation. Both are false through the band where the date
+   * is live for somebody, which is exactly the window a server must refuse
+   * neither reading in.
+   */
+  it('leaves a band where the date is neither past nor future everywhere', () => {
+    for (const instant of [
+      '2026-07-03T00:00:00.000Z',
+      '2026-07-04T12:00:00.000Z',
+      '2026-07-05T23:59:59.999Z',
+    ]) {
+      const now = new Date(instant);
+
+      expect(isUniversallyFutureDate(EVENT, now), instant).toBe(false);
+      expect(isUniversallyPastDate(EVENT, now), instant).toBe(false);
+    }
+  });
+
+  it('is false for a malformed date, which is invalid rather than future', () => {
+    expect(isUniversallyFutureDate('2026-02-30')).toBe(false);
+    expect(isUniversallyFutureDate('nope')).toBe(false);
   });
 });
