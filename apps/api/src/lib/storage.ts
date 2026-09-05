@@ -5,8 +5,9 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import type { UserRole } from '@vendor-marketplace/shared';
+import { normalizeImageRefPath, type UserRole } from '@vendor-marketplace/shared';
 import type { ApiEnv } from '../config/env.js';
+import { forbidden } from './errors.js';
 
 /** Object namespaces the API writes into, kept to a closed set. */
 /**
@@ -104,22 +105,167 @@ export function thumbnailKeyFor(key: string): string {
 }
 
 /**
- * Whether `key` was minted for `ownerId`.
+ * The owner segment of `key`, or `null` when `key` is not an object key at all.
  *
- * Deliberately refuses anything that is not exactly `<prefix>/<owner>/<name>`.
- * Keys stored before the owner segment existed have two segments and are never
- * reaped — they stay as the orphans the old behaviour produced on purpose,
- * which is the safe side of the trade. So does an absolute URL, which some
- * seeded rows carry.
+ * The one place the key layout is parsed. Both the reap guard and the write
+ * guard ask a question about the owner, and a second copy of
+ * `<prefix>/<owner>/<name>` is how the two come to disagree — the failure mode
+ * being a write guard that accepts a key the reap guard then refuses to clean
+ * up. Deliberately refuses anything that is not exactly three segments under a
+ * known prefix: keys stored before the owner segment existed have two and are
+ * never reaped, and so are the absolute URLs some seeded rows carry.
  */
-export function ownsObjectKey(key: string, ownerId: string): boolean {
+function objectKeyOwner(key: string): string | null {
   const segments = key.split('/');
 
-  return (
-    segments.length === 3 &&
-    (STORAGE_PREFIXES as readonly string[]).includes(segments[0] ?? '') &&
-    segments[1] === ownerId
+  if (
+    segments.length !== 3 ||
+    !(STORAGE_PREFIXES as readonly string[]).includes(segments[0] ?? '')
+  ) {
+    return null;
+  }
+
+  return segments[1] ?? null;
+}
+
+/**
+ * Whether `key` was minted for `ownerId`.
+ *
+ * The safe side of the trade for deletion: a key this cannot vouch for — a
+ * legacy two-segment key, an absolute URL — is left in the bucket as an orphan
+ * rather than reaped.
+ */
+export function ownsObjectKey(key: string, ownerId: string): boolean {
+  return objectKeyOwner(key) === ownerId;
+}
+
+/**
+ * The object `ref` actually names, whatever spelling it arrives in.
+ *
+ * **The write guard has to decide on the object the reference resolves to, not
+ * on the string it is handed.** Comparing the raw spelling left the whole
+ * defect reachable through punctuation, in two different directions, and a
+ * review of #407 found both:
+ *
+ * - *A host in front.* `keys:from-urls` is a re-runnable normalizer over the
+ *   five columns this guard protects: it strips the configured public base, so
+ *   `https://<cdn>/portfolio/<victim>/1111.webp` — four segments while it is
+ *   stored, and therefore invisible to `objectKeyOwner` — becomes the bare
+ *   foreign key the next time it runs. `findUnreferencedKeys` compares exact
+ *   strings, so from that moment the row counts as a live reference and the
+ *   victim's own delete is permanently a no-op.
+ * - *A dot segment in the middle.* `resolveImageUrl` concatenates the ref onto
+ *   the public base and hands the result to a URL parser, which deletes `.`
+ *   and `%2e` segments before the request is made. So
+ *   `portfolio/<victim>/./1111.webp` is four segments here and fetches the
+ *   victim's object there — their photo published as this account's work, on
+ *   a storefront cover.
+ *
+ * This is that parser's own normalisation, applied before the question is
+ * asked. `normalizeImageRefPath` is shared with `imageRefSchema` rather than
+ * restated — a private copy of half these rules is what let one backslash
+ * through, `\` being a path separator to the parser and not to a `split('/')` —
+ * and this adds what only an ownership question needs: the scheme and authority
+ * go, `%2f` folds because object storage decodes it when deriving the key, and
+ * empty, `.` and `..` segments resolve away. A real key contains none of them,
+ * so nothing legitimate changes shape.
+ */
+function referencedPathSegments(ref: string): string[] {
+  const path = normalizeImageRefPath(ref)
+    .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '')
+    .replace(/%2f/gi, '/');
+  const resolved: string[] = [];
+
+  for (const segment of path.split('/')) {
+    if (segment === '' || segment === '.') {
+      continue;
+    }
+
+    if (segment === '..') {
+      resolved.pop();
+      continue;
+    }
+
+    resolved.push(segment);
+  }
+
+  return resolved;
+}
+
+/**
+ * The account a reference names an object of, found **wherever the key sits in
+ * the path** rather than only at its start.
+ *
+ * `S3_PUBLIC_URL` is an origin *and a path*: locally it is
+ * `http://localhost:9000/vendor-marketplace-uploads`, and R2 buckets are
+ * addressed the same way. So the absolute form of a key is
+ * `<origin>/<bucket>/<prefix>/<owner>/<name>` — the prefix is not the first
+ * segment, and a guard that assumed it was read no owner and allowed the write.
+ * A browser pass proved that end to end: a vendor stored the URL of a
+ * customer's uploaded object and the public storefront then served it as the
+ * vendor's own work.
+ *
+ * Scanning is what makes this independent of how the bucket is addressed, which
+ * matters because the deployed base is not the local one and a guard that only
+ * held for one of them is a guard that holds in tests and not in production.
+ * The shape is still exact — a known prefix with exactly two segments after it —
+ * so a path merely *containing* the word `portfolio` names no owner.
+ *
+ * Deliberately not `toObjectKey(env.S3_PUBLIC_URL, …)`: that strips only *the*
+ * configured base, so the same key wrapped in any other origin would sail past,
+ * and it would put an environment lookup inside a pure ownership predicate.
+ */
+function referencedObjectKeyOwner(ref: string): string | null {
+  const segments = referencedPathSegments(ref);
+  const prefixAt = segments.findIndex(
+    (segment, index) =>
+      (STORAGE_PREFIXES as readonly string[]).includes(segment) && segments.length - index === 3,
   );
+
+  return prefixAt === -1 ? null : (segments[prefixAt + 1] ?? null);
+}
+
+/**
+ * Whether `ref` is an object key minted for **someone else**.
+ *
+ * Not `!ownsObjectKey`, and the difference is the point. An image reference is
+ * legitimately one of three shapes — an object key, a site-relative path for
+ * seeded art, or an absolute URL for a Clerk avatar — and only the first
+ * carries an owner, so only the first can be refused. "Is this mine" would
+ * reject every seeded path and every Clerk avatar on the way in.
+ *
+ * The refusal is one-sided on purpose: `ownsObjectKey` keeps deciding on the
+ * raw spelling, because widening *it* would start reaping objects that absolute
+ * URLs still point at. Refusing more on the way in costs a caller nothing;
+ * deleting more on the way out is unrecoverable.
+ */
+function isForeignObjectKey(ref: string, ownerId: string): boolean {
+  const owner = referencedObjectKeyOwner(ref);
+
+  return owner !== null && owner !== ownerId;
+}
+
+/**
+ * Refuses a write that names an object key minted for another account (#407).
+ *
+ * Image references are written by the client — `imageRefSchema` accepts a bare
+ * object key — and every public vendor page hands out the keys it renders, so
+ * without this any signed-in caller could paste a rival's key onto a row of
+ * their own. That is not only theft of the image: `findUnreferencedKeys` counts
+ * the borrowed row as a live reference, so the *owner's* delete finds the object
+ * still referenced and leaves it in the bucket, served for ever, with no way for
+ * them to remove it. The reap guard cannot fix that — by the time it runs the
+ * second row exists — so the reference is refused at the point it is created.
+ */
+export function assertOwnedImageRefs(
+  refs: readonly (string | null | undefined)[],
+  ownerId: string,
+): void {
+  for (const ref of refs) {
+    if (typeof ref === 'string' && isForeignObjectKey(ref, ownerId)) {
+      throw forbidden('That image belongs to another account');
+    }
+  }
 }
 
 export function publicUrlFor(publicBaseUrl: string, key: string): string {

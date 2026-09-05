@@ -18,6 +18,15 @@ The route `GET /customer/booking-requests/:requestId/booking` carries only
 `bookingSchema` in full: `totalAmountCents`, `platformFeeCents`,
 `vendorPayoutCents`, `stripePaymentIntentId`, `stripeTransferId`.
 
+**Since #407 the blast radius is smaller, not the gate.** The money internals
+left `bookingSchema`, every booking read goes through the explicit projection in
+`apps/api/src/lib/booking-view.ts`, and the fee split now surfaces only through
+`adminPaymentRowSchema` (admin-only) and `vendorDashboardSchema.nextPayout`
+(vendor-only). A future ownership miss on these routes leaks the parties' ids,
+dates, venue and total — still a leak, so the ownership check is still the job.
+Never re-widen `bookingSchema`: `packages/db/src/schema/type-parity.test.ts`
+asserts the four fields are absent from the read model.
+
 **Why:** the short-circuit reads like a cache hit rather than an authorization
 decision, which is exactly why it was missed — the same shape appears in
 `openCheckout` (line ~154) and in `recordSuccessfulPayment` (line ~232). Those

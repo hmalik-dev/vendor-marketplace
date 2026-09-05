@@ -24,10 +24,12 @@ from a public route, list its props and ask what each one carries beyond what it
 renders. Narrow the prop to the projection the component uses, on the server.
 The same question applies to a client component whose prop type widens.
 
-Related, and **already filed as ticket #407 acceptance 1** — do not re-litigate
-it as a new finding: `GET /vendors/:slug/availability` returns
-`z.array(availabilitySchema)`, which includes `note`, for **every** row in its
-window, unauthenticated. `findAvailabilityInRange` is a bare `select()`. The
-route's own docstring claims the forward-only floor protects the note; it only
-ever protected the _past_ rows. See also [[customer-pii-has-two-disclosure-gates]]
+The endpoint half is **FIXED (#407, audited 2026-09-05)** — do not re-report it.
+`GET /vendors/:slug/availability` now answers `publicAvailabilitySchema` and
+reaches `findPublicAvailabilityInRange`, which never selects `note` at all;
+`availabilitySchema` is declared as that shape **extended** with the note, so a
+new private column is private until the public object names it. The vendor's own
+`GET /vendor/availability` still carries the note behind `requireRole('vendor')`
+and their own id, and no authorization decision anywhere reads the column
+(the double-booking guards use `findAvailabilityOnDates`). See also [[customer-pii-has-two-disclosure-gates]]
 and [[response-schemas-are-a-second-write-boundary]].

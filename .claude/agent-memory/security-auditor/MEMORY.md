@@ -25,12 +25,12 @@
 - [`stripe_onboarded` entails an account id](stripe-onboarded-entails-account-id.md) — a CHECK since #381; the `acct_` format check on top was refused as a product decision, do not re-open it
 - [The e2e fixture now calls Stripe for real](e2e-fixture-creates-real-stripe-accounts.md) — as of #387 it creates an account under a fabricated identity; one `sk_test_` prefix check is all that keeps a live key out
 - [Booking reads gate on two separate paths](booking-reads-gate-on-two-separate-paths.md) — `reconcileBooking`'s already-booked short-circuit leaked the fee split and intent id to any signed-in caller until #387
-- [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — no upload owns its key, and `GET /vendors/:slug` hands every key to anonymous callers
+- [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — the write guard decides on what a URL parser resolves to; every spelling bypass is closed, re-probe generatively
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes were left as low-severity on purpose
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — adding hosts to script-src is never the escalation; CSP_ENFORCE can only turn enforcement on
 - [The review profanity filter is a hard-reject floor](review-profanity-filter-is-a-hard-reject-floor.md) — the failure mode and the easy bypasses are settled until #15; the `\w*` over-match on "spicy" is not
 - [JSON-LD is the only raw-HTML sink in web](json-ld-is-the-only-raw-html-sink.md) — `serialiseJsonLd` is mandatory; the source-scan guard misses `next/script` + a non-literal type
-- [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — the availability `note` reaches the public page's inlined RSC payload; the JSON-endpoint half is filed as #407
+- [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — the RSC-payload lesson stands; the availability `note` endpoint half is FIXED in #407
 - [Availability floors are one day wider than UTC](availability-date-floors-are-universally-past.md) — since #409; the `booked` predicates in the DAO, not the floor, are what protect history
 - [The reply-window cap lives in four places](reply-deadline-cap-must-match-accept-guard.md) — `event_date + 2` UTC days is in a predicate, a helper, an expiry compare and raw SQL; drift makes rows live-but-unacceptable
 - [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the key is the booking id, the amount drifts by tier and the unwind flags changed; Stripe refuses the retry
