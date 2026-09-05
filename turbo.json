@@ -55,6 +55,10 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    "test:contention": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "generate": {
       "cache": false
     },

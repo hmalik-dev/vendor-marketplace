@@ -58,6 +58,7 @@ Run from the repository root; Turborepo fans each task out across packages.
 | Typecheck all   | `pnpm typecheck`                                                                             |
 | Lint all        | `pnpm lint`                                                                                  |
 | Test all        | `pnpm test`                                                                                  |
+| Contention test | `pnpm test:contention` — needs the Docker Postgres up; two connections, so PGlite cannot     |
 | Format          | `pnpm format` (check with `pnpm format:check`)                                               |
 | Preflight gate  | `pnpm preflight --ticket <n>`                                                                |
 | Regenerate env  | `pnpm env:example`                                                                           |
