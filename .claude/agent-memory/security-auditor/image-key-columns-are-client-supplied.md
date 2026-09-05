@@ -1,6 +1,6 @@
 ---
 name: image-key-columns-are-client-supplied
-description: Every image column holds a raw client-supplied string; the write guard must decide on the object a URL parser resolves to — and must be probed with the real S3_PUBLIC_URL, which carries a bucket path segment, not a bare origin
+description: Every image column holds a raw client-supplied string; the write guard must decide on the object the ORIGIN derives — probe with the bucket-path S3_PUBLIC_URL and differential the guard against a model of that derivation, not against a spelling list
 metadata:
   type: project
 ---
@@ -45,14 +45,33 @@ for a known prefix with exactly two segments after it — the scan is what survi
 `S3_PUBLIC_URL` having a bucket path. Same shape as
 [[validate-before-normalize-return-path]].
 
-**Still live at the time of writing: a query or fragment containing `/`.**
-`portfolio/<victim>/1111.webp?a/b` and `...#/a/b` are stored with 201/200 at all
-three routes; a URL parser drops everything from the first `?`/`#` before
-resolving, so the browser fetches the victim's object while the extra segments
-push the prefix out of the guard's three-from-the-end window. Fix is to end the
-path at the first `?`/`#`, as a parser does. It does **not** re-open the
-`keys:from-urls` chain (`toObjectKey` keeps the suffix, so the string never
-exact-matches the key), so the harm is the theft half only.
+The last class found was a **query or fragment containing `/`**
+(`portfolio/<victim>/x.webp?a/b`): a parser drops everything from the first
+`?`/`#`, but `split('/')` counted the slashes inside it and pushed the prefix out
+of the window. Closed in `39e9c0d` by cutting `[?#]` — verified 0 accepted across
+the whole corpus afterwards.
+
+**The check that replaced the spelling lists, and the one to re-run.** Model what
+the _origin_ derives (resolve the ref, parse the URL, decode the pathname once,
+strip the bucket prefix, require three non-empty segments) and assert: if that
+key names an account other than the caller, the guard must refuse. Recover the
+guard's answer by probing `assertOwnedImageRefs` with different caller ids, so
+the test is of behaviour rather than a copy of the implementation. Over 336k
+schema-valid mutations of real keys per seed, ~132k of which name another
+account, violations are **0** on four seeds. Generate by mutating a real key —
+free-form generation almost never lands on `<prefix>/<owner>/<name>` and looks
+clean for the wrong reason. A first model that allowed an **empty** name segment
+produced dozens of false violations (`portfolio/<victim>/` addresses no object);
+the model was wrong, not the guard.
+
+**The local MinIO answers how it derives a key, for free.** A GET of a missing
+object returns `NoSuchKey` with the derived `<Key>` echoed in the XML — no
+credentials, no writes, no listing. Measured 2026-09-05:
+`portfolio%2Fabc%2Fx.webp` → `portfolio/abc/x.webp` (so the `%2f` fold is
+load-bearing); `%252F` → `portfolio%2Fabc%2Fx.webp`, decoded exactly **once** (so
+accepting double-encoded spellings is safe); `…/x.webp?a/b` → `portfolio/abc/x.webp`
+(the query is ignored, which is why it was a bypass); a literal `%2e` segment is
+refused outright as a bad component.
 
 **Probe with the real base, which has a path.** `S3_PUBLIC_URL` is
 `http://localhost:9000/vendor-marketplace-uploads` locally and an R2 bucket URL
