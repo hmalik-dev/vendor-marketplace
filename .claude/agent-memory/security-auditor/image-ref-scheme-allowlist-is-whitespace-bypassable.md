@@ -1,44 +1,58 @@
 ---
 name: image-ref-scheme-allowlist-is-whitespace-bypassable
-description: "The LEADING-whitespace bypass is fixed — .trim() runs before the refine, so \" javascript:…\" is rejected. What is still live is an INTERIOR tab/newline in the scheme, and `/\\evil.com` stepping around the protocol-relative guard. Filed as #414"
+description: "imageRefSchema's whitespace, backslash and control-character bypasses are all FIXED (#414). What remains by design is that the absolute branch allows ANY https host — the ticket's own threat model survives its own fix. Do not re-report the bypasses."
 metadata:
   type: project
 ---
 
-**Corrected 2026-09-04 by measurement against the built schema.** The headline
-this file used to carry — that a leading space or newline skips the http(s)
-check, so `" javascript:alert(1)"` validates — is **no longer true**.
-`imageRefSchema` runs `.trim()` before its `.refine()`, and Zod applies the
-transform first, so all of these are **rejected**:
+**Corrected twice by measurement against `packages/shared/dist`, most recently
+2026-09-04 on the #414 worktree.** Everything this file used to call live is
+now rejected. Do not re-report any of it:
 
-    " javascript:alert(1)"      "\njavascript:alert(1)"      "//evil.com/x.png"
-    "javascript:alert(1)"       "../secret.png"
+    " javascript:…"  "\njavascript:…"  "//evil.com/x.png"  "///evil.com/x.png"
+    "/\evil.com/x.png"  "\\evil.com/x.png"  "jav<TAB>ascript:"  "jav<LF>ascript:"
+    "../x.png"  "a/./../../b.webp"  bidi U+200E/200F/202A-202E/2066-2069
+    C0 + DEL + C1  "portfolio:a/b.webp"  "JAVASCRIPT:alert(1)"  "https:/evil…"
 
-Do not re-report it. It was reported from reading the regex without running it.
+#414 added a control/bidi denylist and normalises `\` to `/` before the
+protocol-relative and traversal tests.
 
-**What is still live**, and is now **#414**:
+**What the fix does not touch, and is the actual exposure.** The absolute-URL
+branch is a _scheme_ allowlist with **no host allowlist**:
+`https://evil.example/x.png` is accepted, always has been, and produces exactly
+the harm #414 opens with — a vendor pointing their public storefront photo at a
+host they control. Every backslash trick was a longer way to reach something one
+line of plain https already reaches. Two consequences worth carrying:
 
-- `/\evil.com/x.png` is **accepted**. `startsWith('//')` does not see it, and
-  `resolveImageUrl` returns any `/`-leading value verbatim, so it reaches
-  `<img src>` as written and the URL parser normalises `\` to `/` — the browser
-  requests `//evil.com/x.png`. The enforced `img-src` blocks it in a browser;
-  an email template carries no CSP.
-- `jav\tascript:alert(1)` and `jav\nascript:alert(1)` are **accepted**: the
-  anchored scheme regex fails on the interior control character, so the value
-  falls into the relative-path branch that never checks a scheme. Browsers strip
-  tabs and newlines before parsing a scheme.
-- Bidi controls are accepted, and that one is **inert** — the value is
-  percent-encoded into a URL and no surface renders it as text. It is why
-  `apps/api/src/request-body-free-text.test.ts` excludes image references from
-  the free-text boundary rather than folding them in.
+- The mitigation is the enforced CSP `img-src`, which covers `<img src>` and
+  nothing else. `apps/web/src/app/vendors/[slug]/page.tsx` puts the same value
+  in **OpenGraph `images`** and **JSON-LD `image`**, which social scrapers and
+  crawlers fetch with no CSP. The `url` field three lines above carries a
+  comment forbidding exactly this for crawler-followed data.
+- Any test named "cannot produce a request to an origin the product did not
+  choose" is a fixture check, not a property. The property is false.
 
-**Why:** the fixed half and the live half share a file, a validator and a shape,
-so "the image-ref scheme check is bypassable" is true and useless — it sends the
-next reader to re-report the half that was fixed. The two halves differ in where
-the whitespace sits, and only measurement tells them apart.
+**Closed in the same worktree after this audit ran**, so do not re-report these
+either: U+061C (ARABIC LETTER MARK) is in the denylist; `a/%2e%2e/%2e%2e/b.webp`
+is rejected, because the branch now folds `%2e` back to `.` before it splits;
+and `https://cdn.example.com@evil.example/x.png` is rejected, because the
+absolute branch refuses credentials in the authority. The **host** itself is
+still unconstrained — that is the paragraph above, and it is the one thing here
+that is a decision rather than an oversight. Keys stay client-supplied —
+[[image-key-columns-are-client-supplied]].
 
-**How to apply:** before reporting anything about this schema, parse the case
-against `packages/shared/dist`. Related:
-[[validate-before-normalize-return-path]], which is the same
-validate-before-normalize shape and is also already fixed, and
-[[response-schemas-are-a-second-write-boundary]].
+**`avatarUrl` has a second write path that never sees this schema:**
+`apps/api/src/plugins/clerk-auth.ts` reads Clerk's `imageUrl` on every sign-in
+and `users.service.ts` stores it. So "the schema refuses it before storage" is
+true of the three vendor-written columns and not of that one.
+
+**Why:** the file has now been wrong in both directions — first reporting a
+fixed bypass as live, then chasing bypasses of a guard that never defended the
+stated threat. Measure, then ask what the guard is _for_.
+
+**How to apply:** before reporting anything here, parse the case against
+`packages/shared/dist`. Tightening this schema is also a read-path change —
+`conversationSummarySchema.otherPartyAvatarUrl` validates a _counterparty's_
+stored value on `GET /conversations`, so a row written under a looser version
+500s someone else's inbox. See [[response-schemas-are-a-second-write-boundary]]
+and [[validate-before-normalize-return-path]].

@@ -48,3 +48,25 @@ The button names both the amount and the outcome. Never bare "Pay".
 - Deposit + balance split payments
 - Saved payment methods
 - Instalment plans for larger bookings
+
+## `Total today`, not `Due today` — ruled 2026-09-04 (D30)
+
+#380 recorded the frames as splitting three-all. **They do not.** The tally
+counted a layout constraint's prose as a copy source:
+
+- **`Total today` is the string.** This file's content table specifies it, frame
+  `05 Checkout` draws it, `checkout-screen.tsx` renders it,
+  `checkout-screen.test.tsx` asserts it, and `accepted-request.tsx` echoes it.
+- **`Due today` was never specified anywhere.** It appears in `30-responsive.md`
+  and `CHANGE-ORDER-2026-08-28.md` only inside a sentence about the **fold** —
+  "Due today stays above the fold" — where the writer was naming the row
+  informally, not fixing its label. Frames `27 Checkout — 1024` and
+  `21 Checkout — payment declined` then copied that informal phrasing.
+
+Both frames now read `Total today`, and `30-responsive.md`'s two fold sentences
+are reworded so the phrase cannot be mistaken for a string again. The change
+order is left alone: it is a dated record of what was ordered, not a spec.
+
+**The layout question this was wearing the clothes of does not exist** — the row's
+bottom sits at 302 in a 640px frame, so nothing about the fold constrains the
+label's length.

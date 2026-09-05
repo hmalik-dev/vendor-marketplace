@@ -306,6 +306,53 @@ describe('useEventStream', () => {
     vi.useRealTimers();
   });
 
+  /*
+   * #402. `getToken` rejects on a network blip or a Clerk outage, and the
+   * rejection escaped `void connect()` with nothing scheduled behind it: the
+   * tab never reconnected for the rest of its life, showing "Reconnecting"
+   * permanently while nothing was reconnecting.
+   */
+  it('retries after the token itself fails, rather than giving up silently', async () => {
+    vi.useFakeTimers();
+    getTokenMock.mockRejectedValueOnce(new Error('network')).mockResolvedValue(SESSION_JWT);
+
+    render(<Subscriber />);
+
+    await vi.waitFor(() => expect(getTokenMock).toHaveBeenCalledTimes(1));
+    expect(opened).toHaveLength(0);
+    expect(fetch).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1_500);
+    await vi.waitFor(() => expect(opened).toHaveLength(1));
+
+    vi.useRealTimers();
+  });
+
+  /*
+   * And the retries are bounded the same way an exchange failure is, so the
+   * browser's own signals can wake it — `resume()` returns early unless the
+   * run was spent, which is what left the tab dead for ever.
+   */
+  it('wakes a token-failed stream when the browser comes back online', async () => {
+    vi.useFakeTimers();
+    getTokenMock.mockRejectedValue(new Error('network'));
+
+    render(<Subscriber />);
+    await vi.waitFor(() => expect(getTokenMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000 + 8_000 + 16_000 + 30_000);
+
+    const spent = getTokenMock.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(getTokenMock).toHaveBeenCalledTimes(spent);
+
+    getTokenMock.mockResolvedValue(SESSION_JWT);
+    window.dispatchEvent(new Event('online'));
+
+    await vi.waitFor(() => expect(opened).toHaveLength(1));
+
+    vi.useRealTimers();
+  });
+
   it('opens nothing when unmounted while the exchange is in flight', async () => {
     let release: (value: Response) => void = () => {};
     vi.mocked(fetch).mockImplementation(

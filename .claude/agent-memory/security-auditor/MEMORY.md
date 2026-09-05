@@ -10,7 +10,7 @@
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths; slugSchema and 404s close the gap
 - [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `DASHBOARD_PATH_BY_ROLE.admin` is `/admin` now; the check-every-destination invariant still stands
 - [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema without the read schemas on the same column and a user's data 500s someone else's page
-- [The image-ref LEADING-whitespace bypass is FIXED](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `" javascript:…"` is rejected; do not re-report. Still live and filed as #414: an interior tab or newline, and `/\evil.com` stepping around the protocol-relative guard
+- [Every image-ref bypass is FIXED; the host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — #414 closed the whitespace, backslash and control-char holes; `https://evil.example/x.png` was never closed and is the same attack
 - [Customer PII has two disclosure gates](customer-pii-has-two-disclosure-gates.md) — the profile relationship gate is permanent and customer-wide; the request-status gate is per-request, and they share no code
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — `GET /events/stream` has no `requireAuth`; adding one breaks it, removing the inline ban check is the real regression
 - [Log redaction covers the query, not the path](log-redaction-covers-query-not-path.md) — every query value goes and cannot be name-bypassed, but a credential in a path segment is still logged whole
@@ -31,3 +31,4 @@
 - [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — the availability `note` reaches the public page's inlined RSC payload; the JSON-endpoint half is filed as #407
 - [Availability floors are one day wider than UTC](availability-date-floors-are-universally-past.md) — since #409; the `booked` predicates in the DAO, not the floor, are what protect history
 - [The reply-window cap lives in four places](reply-deadline-cap-must-match-accept-guard.md) — `event_date + 2` UTC days is in a predicate, a helper, an expiry compare and raw SQL; drift makes rows live-but-unacceptable
+- [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
