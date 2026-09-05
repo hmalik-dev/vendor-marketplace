@@ -9,6 +9,8 @@ const OTHER_VENDOR = 'user_vendor_two';
 const CUSTOMER = 'user_customer';
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
+/** A `users.id` that is not the caller's — the owner segment of someone else's key. */
+const FOREIGN_OWNER = '11111111-1111-4111-8111-111111111111';
 const IMAGE_URL = 'http://cdn.test/portfolio/one.webp';
 const THUMBNAIL_URL = 'http://cdn.test/portfolio/one-thumb.webp';
 
@@ -315,29 +317,89 @@ describe('/vendor/portfolio', () => {
      * segment, the reap would take the rival's photo with it: permanent, and
      * leaving the victim's own row pointing at a dead key.
      */
-    it('never reaps an object minted for a different vendor', async () => {
+    /*
+     * The claim is now refused where it is made — see `assertOwnedImageRefs`
+     * for why the row itself was the damage, not just the delete it enabled
+     * (#407). The reap guards below remain the second line, for the rows that
+     * predate this one.
+     */
+    it('refuses a portfolio row naming an object minted for another account', async () => {
       await createProfile(VENDOR, 'Sunlit Studio');
 
-      // A key the attacker did not mint, in the shape the upload route writes.
-      harness.storedObjects.length = 0;
-      const victimKey = 'portfolio/some-other-user-id/1111.webp';
-      const item = await addItem(VENDOR, { imageUrl: victimKey, thumbnailUrl: null });
-
-      harness.storedObjects.push({
-        key: victimKey,
-        body: Buffer.alloc(0),
-        contentType: 'image/webp',
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/portfolio',
+        headers: bearer(VENDOR),
+        payload: { imageUrl: `portfolio/${FOREIGN_OWNER}/1111.webp` },
       });
 
-      const response = await harness.app.inject({
-        method: 'DELETE',
-        url: `/vendor/portfolio/${item.id}`,
+      expect(response.statusCode).toBe(403);
+      expect(response.json().message).toBe('That image belongs to another account');
+
+      const items = await harness.app.inject({
+        method: 'GET',
+        url: '/vendor/portfolio',
         headers: bearer(VENDOR),
       });
+      expect(items.json()).toEqual([]);
+    });
 
-      // The attacker's own row goes; the victim's object stays.
-      expect(response.statusCode).toBe(204);
-      expect(harness.storedObjects.map((object) => object.key)).toEqual([victimKey]);
+    /*
+     * The spellings a review of #407 found, driven through the real route.
+     * Each one resolves onto the victim's object once `resolveImageUrl` has
+     * joined it to the CDN base — a dot segment and an encoded dot segment are
+     * deleted by the URL parser, and a host in front is stripped by
+     * `keys:from-urls` — so each has to be refused here rather than stored.
+     */
+    it.each([
+      ['a dot segment', `portfolio/${FOREIGN_OWNER}/./1111.webp`],
+      ['an encoded dot segment', `portfolio/${FOREIGN_OWNER}/%2e/1111.webp`],
+      ['a CDN origin in front', `https://cdn.test/portfolio/${FOREIGN_OWNER}/1111.webp`],
+      ['a leading dot slash', `./portfolio/${FOREIGN_OWNER}/1111.webp`],
+      ['backslashes', `portfolio\\${FOREIGN_OWNER}\\1111.webp`],
+      ['one backslash', `portfolio/${FOREIGN_OWNER}\\1111.webp`],
+      ['an encoded separator', `portfolio/${FOREIGN_OWNER}%2F1111.webp`],
+      [
+        'the bucket URL the product itself stores',
+        `http://localhost:9000/vendor-marketplace-uploads/portfolio/${FOREIGN_OWNER}/1111.webp`,
+      ],
+      ['a query string carrying slashes', `portfolio/${FOREIGN_OWNER}/1111.webp?a/b`],
+      ['a fragment carrying slashes', `portfolio/${FOREIGN_OWNER}/1111.webp#/a/b`],
+    ])('refuses a foreign key disguised with %s', async (_label, imageUrl) => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/portfolio',
+        headers: bearer(VENDOR),
+        payload: { imageUrl },
+      });
+
+      expect(response.statusCode).toBe(403);
+
+      const items = await harness.app.inject({
+        method: 'GET',
+        url: '/vendor/portfolio',
+        headers: bearer(VENDOR),
+      });
+      expect(items.json()).toEqual([]);
+    });
+
+    /** The thumbnail is a second key on the same row, and carries the same owner. */
+    it('refuses a foreign key named only as the thumbnail', async () => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/portfolio',
+        headers: bearer(VENDOR),
+        payload: {
+          imageUrl: `portfolio/${await ownerIdOf(VENDOR)}/3333.webp`,
+          thumbnailUrl: `portfolio/${FOREIGN_OWNER}/3333-thumb.webp`,
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
     });
 
     /*

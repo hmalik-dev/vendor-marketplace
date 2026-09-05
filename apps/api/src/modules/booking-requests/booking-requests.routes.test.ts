@@ -1432,6 +1432,71 @@ describe('/booking-requests', () => {
       expect(booking?.venue).toBe('Barr Mansion, Austin, TX');
     });
 
+    /*
+     * #407. `listBookings` used to spread the whole row through
+     * `bookingWithContextSchema`, which carried the platform's commission, the
+     * vendor's payout split and both Stripe identifiers — to the customer, who
+     * `payments.service.ts` already records has no business seeing the
+     * commission. Nothing on either hub renders them, so they are gone from the
+     * read model rather than branched on the caller's role.
+     */
+    it('hands neither party the fee split or the Stripe identifiers', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const request = created.json() as RequestBody;
+
+      const customer = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.clerkUserId, CUSTOMER));
+
+      await harness.database.db.insert(bookings).values({
+        requestId: request.id,
+        customerId: customer[0]!.id,
+        vendorId,
+        eventDate: EVENT_DATE,
+        eventLocation: 'Barr Mansion, Austin, TX',
+        totalAmountCents: 145_000,
+        platformFeeCents: 17_400,
+        vendorPayoutCents: 127_600,
+        stripePaymentIntentId: 'pi_secret_407',
+        stripeTransferId: 'tr_secret_407',
+      });
+
+      for (const actor of [CUSTOMER, VENDOR]) {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: '/bookings',
+          headers: bearer(actor),
+        });
+
+        expect(response.statusCode).toBe(200);
+        const [booking] = response.json() as Record<string, unknown>[];
+        expect(Object.keys(booking!).sort()).toEqual([
+          'cancellationReason',
+          'cancelledAt',
+          'completedAt',
+          'createdAt',
+          'customerId',
+          'eventDate',
+          'eventLocation',
+          'eventType',
+          'id',
+          'paidAt',
+          'requestId',
+          'status',
+          'totalAmountCents',
+          'updatedAt',
+          'vendorId',
+          'venue',
+        ]);
+        expect(response.payload).not.toContain('pi_secret_407');
+        expect(response.payload).not.toContain('tr_secret_407');
+        // The total is still there: it is what the customer paid.
+        expect(booking!.totalAmountCents).toBe(145_000);
+      }
+    });
+
     it('is empty for someone with no bookings', async () => {
       const response = await harness.app.inject({
         method: 'GET',

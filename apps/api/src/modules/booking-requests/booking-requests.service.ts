@@ -23,6 +23,7 @@ import type {
   VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { toBookingWithContext } from '../../lib/booking-view.js';
 import {
   sendNotificationEmail,
   type NotificationEmailDeps,
@@ -1059,9 +1060,5 @@ export async function listBookings(
 
   const rows = await findBookings(db, vendorId ? { vendorId } : { customerId: user.id });
 
-  return rows.map(({ booking, eventType }) => ({
-    ...booking,
-    eventType,
-    venue: booking.eventLocation,
-  }));
+  return rows.map(({ booking, eventType }) => toBookingWithContext(booking, eventType));
 }

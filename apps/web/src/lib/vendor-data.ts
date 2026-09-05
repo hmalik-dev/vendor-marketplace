@@ -7,6 +7,7 @@ import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
 import {
   wireAvailabilityListSchema,
+  wirePublicAvailabilityListSchema,
   wireCategoryListSchema,
   wirePortfolioListSchema,
   wireServicePackageListSchema,
@@ -18,6 +19,7 @@ import {
   wireVendorSearchResultSchema,
   wireVendorProfileSchema,
   type WireAvailability,
+  type WirePublicAvailability,
   type WirePortfolioItem,
   type WireServicePackage,
   type WireTag,
@@ -348,7 +350,7 @@ export const getPublicVendorProfile = cache(
  * propagate, because without it there is no page.
  */
 export const getPublicVendorAvailability = cache(
-  async (slug: string): Promise<WireAvailability[]> => {
+  async (slug: string): Promise<WirePublicAvailability[]> => {
     /*
       The same guard the other two public reads carry, and for the same reason
       stated on `getPublicVendorProfile`: a path segment that cannot name a
@@ -363,7 +365,7 @@ export const getPublicVendorAvailability = cache(
 
     try {
       return await apiRequest(`/vendors/${encodeURIComponent(slug)}/availability`, {
-        schema: wireAvailabilityListSchema,
+        schema: wirePublicAvailabilityListSchema,
       });
     } catch (error) {
       // An upstream that never answered is the same to this tab as one that

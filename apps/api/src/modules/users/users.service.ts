@@ -8,6 +8,7 @@ import {
 import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { forbidden, notFound, unauthorized } from '../../lib/errors.js';
+import { assertOwnedImageRefs } from '../../lib/storage.js';
 import {
   findUserByClerkId,
   findUserById,
@@ -157,6 +158,8 @@ export async function updateUserProfile(
   userId: string,
   input: UpdateUserInput,
 ): Promise<User> {
+  assertOwnedImageRefs([input.avatarUrl], userId);
+
   const row = await updateUserById(db, userId, input);
   if (!row) {
     throw notFound('User not found');
