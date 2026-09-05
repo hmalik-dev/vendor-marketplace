@@ -169,7 +169,21 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
         with no bar between them.
       */}
       {selectedRows.length > 0 ? (
-        <div className="absolute inset-x-4 bottom-4 z-20 flex items-center gap-3 rounded-lg border border-stone-300 bg-stone-0 px-4 py-2.5 shadow-md">
+        /*
+          `max-md:fixed` — anchored to the viewport below 768, to the table pane
+          above it. `absolute` positions against `div.relative.h-full`, and the
+          admin shell is only `lg:h-dvh lg:overflow-hidden`, so below `lg` that
+          container grows to its content instead of to the screen. With the card
+          list it grows a long way: measured at 390x844, ticking a row put the
+          bar at `top=3225` in an 844px viewport — 2381px below the fold, with
+          no feedback on screen that anything had been selected. It was already
+          64px below the fold as a table; the cards turned a near miss into an
+          unreachable control. `30-responsive.md:88` names the idiom this should
+          have been all along: "a sticky bottom bar, not a button pushed below a
+          scroll". `pb-20` on the pane still clears it — 80px against the bar's
+          55 plus its 16px offset.
+        */
+        <div className="absolute inset-x-4 bottom-4 z-20 flex items-center gap-3 rounded-lg border border-stone-300 bg-stone-0 px-4 py-2.5 shadow-md max-md:fixed">
           <p className="text-meta font-semibold text-stone-900">{selectedRows.length} selected</p>
           <ConfirmAction
             destructive

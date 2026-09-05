@@ -1,5 +1,52 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+
+/**
+ * The narrowest the grid may resolve to, in pixels — **measured, not chosen**.
+ *
+ * `30-responsive.md:31` gives Admin `768 → Horizontal scroll`, and a scroll
+ * needs something to scroll: the tracks have to stop collapsing first. This is
+ * the width the table resolves to at **1024**, the narrowest viewport that row
+ * still draws as a table — `1024 − 235` for the rail (`--sidebar-admin-width`
+ * on `box-content` with a 12px gutter each side and a 1px border) `− 48` for
+ * `AdminSurface`'s `px-6` `− 2` for the table's own hairline. Measured on all
+ * six admin tables on 2026-09-05; every one of them read 739.
+ *
+ * So the floor says: **no track ever resolves narrower than it does at 1024**,
+ * the width the contract accepts. Above 1024 it never binds. Below, the rail
+ * folds away and the available width jumps, so it first binds at a viewport of
+ * ~789 and holds through 768 — which is precisely the band the contract asks to
+ * scroll. Below 768 there is no table to floor; there is a card list.
+ *
+ * Raising it would put a scrollbar on 1024, which the contract draws without
+ * one. Lowering it reopens the collapse. It is applied below `lg` only — see
+ * the class that reads it.
+ */
+const TABLE_MIN_WIDTH_PX = 739;
+
+/**
+ * The smallest a control's box may be in the card list — `04-laws.md`'s target.
+ *
+ * The card gives a control the width its column declares, floored here. Without
+ * a definite width the controls that fill their table cell with `w-full`
+ * resolve that percentage against their own content and collapse: the reviews
+ * delete button measured **4px wide** at 390. Without the floor, the 22px
+ * select track would carry straight over from a geometry the frame imposed on
+ * the desktop table and nothing imposes here.
+ */
+const CONTROL_TARGET_PX = 44;
+
+/** A control's box in the card list: its declared track, never under the law. */
+function controlWidth(width: TableTrack): string {
+  const fixed = /^(\d*\.?\d+)px$/.exec(width);
+
+  return fixed ? `max(${CONTROL_TARGET_PX}px, ${fixed[1]}px)` : `${CONTROL_TARGET_PX}px`;
+}
+
+/** A column with no header label is a control — a checkbox, a `···` trigger. */
+function isControl<T>(column: DataTableColumn<T>): boolean {
+  return column.header === '';
+}
 
 /**
  * A single grid track, as a column may declare it: flexible (`1.6fr`, `.9fr`)
@@ -29,6 +76,12 @@ export interface DataTableColumn<T> {
    * accepts every one of the 37 tracks the six admin tables declare.
    */
   width: TableTrack;
+  /**
+   * **Called twice per row** — once for the grid, once for the card list, since
+   * both branches are rendered and CSS picks one. Keep it cheap and free of
+   * side effects; hoist an `Intl` formatter to the module rather than building
+   * one per call, as the six tables already do.
+   */
   cell: (row: T) => ReactNode;
   /**
    * Overrides for one **body** cell — right alignment on the overflow column,
@@ -99,9 +152,17 @@ export interface DataTableProps<T> {
  * radius, clipped.
  *
  * **The header is fixed and the body scrolls, not the page.** `sticky` on the
- * header row inside an `overflow-y-auto` body is what does it — a second scroll
+ * header row inside an `overflow-auto` body is what does it — a second scroll
  * container would put a scrollbar inside a rounded corner, and `position:fixed`
  * would take the header out of the grid it has to stay aligned with.
+ *
+ * **Below 768 the same rows render as cards.** `30-responsive.md:31` — "Card
+ * list, not a table". Both branches are in the DOM and CSS picks one, because
+ * these tables render on the server and a width read in an effect would flash
+ * the wrong branch first. The card list is derived from the same `columns`, so
+ * a column added to a table arrives in both shapes at once and neither can be
+ * forgotten: each labelled column becomes one `dt`/`dd` pair, and the control
+ * columns keep their controls on a row of their own.
  */
 export function DataTable<T>({
   columns,
@@ -123,11 +184,29 @@ export function DataTable<T>({
         the bar, so the hit targets were 39px. Whoever changes the bar's height
         or offset changes this number with it.
       */}
-      <div className={cn('min-h-0 flex-1 overflow-y-auto', scrollPadding && 'pb-20')}>
+      <div className={cn('min-h-0 flex-1 overflow-auto', scrollPadding && 'pb-20')}>
         <div
           role="table"
-          className="min-w-full"
-          style={{ ['--admin-table-columns' as string]: template }}
+          /*
+            The floor applies **below `lg` only**, and that bound is not
+            cosmetic. At 1024 the floor equals the pane's width exactly — but
+            only where the vertical scrollbar is an overlay. A classic 15px
+            scrollbar, which is every Chrome on Windows and Linux, takes that
+            width out of the content box, and a full 15-row page always has one:
+            `100%` would resolve to 724 and the floor would pin the grid at 739,
+            putting a horizontal scrollbar on the width the frame draws without
+            one. Above `lg` the floor is unnecessary anyway — 739 *is* the
+            natural width there — so confining it costs nothing and makes the
+            desktop composition provably untouched.
+
+            Set as a custom property because a Tailwind class must be a literal
+            the scanner can see, and the value is derived from a constant.
+          */
+          className="hidden min-w-full md:block max-lg:min-w-(--admin-table-min-width)"
+          style={{
+            ['--admin-table-columns' as string]: template,
+            ['--admin-table-min-width' as string]: `max(100%, ${TABLE_MIN_WIDTH_PX}px)`,
+          }}
         >
           <div
             role="row"
@@ -162,58 +241,153 @@ export function DataTable<T>({
             ))}
           </div>
 
-          {rows.length === 0 ? (
-            <div className="px-4 py-10">{empty}</div>
-          ) : (
-            rows.map((row, index) => (
-              <div
-                role="row"
-                key={rowKey(row)}
-                className={cn(
+          {rows.map((row, index) => (
+            <div
+              role="row"
+              key={rowKey(row)}
+              className={cn(
+                /*
+                  `box-content`, and `text-action`. The frame's row is 44px of
+                  content **plus** its 1px separator — `.side`-style
+                  content-box, like every other measurement in that file — so a
+                  border-box `h-11` rendered the pitch a pixel short. The body
+                  step is 13px (`text-action`), not the 13.5px `text-base`
+                  default.
+                */
+                'grid box-content h-11 items-center gap-3 border-b border-stone-150 px-4 text-action text-stone-700 grid-cols-(--admin-table-columns)',
+                // Zebra on `stone-25`, the one surface between `stone-0` and `stone-50`.
+                index % 2 === 1 && 'bg-stone-25',
+              )}
+            >
+              {columns.map((column) => (
+                <span
+                  role="cell"
+                  key={column.key}
                   /*
-                    `box-content`, and `text-action`. The frame's row is 44px of
-                    content **plus** its 1px separator — `.side`-style
-                    content-box, like every other measurement in that file — so
-                    a border-box `h-11` rendered the pitch a pixel short. The
-                    body step is 13px (`text-action`), not the 13.5px
-                    `text-base` default.
-                  */
-                  'grid box-content h-11 items-center gap-3 border-b border-stone-150 px-4 text-action text-stone-700 grid-cols-(--admin-table-columns)',
-                  // Zebra on `stone-25`, the one surface between `stone-0` and `stone-50`.
-                  index % 2 === 1 && 'bg-stone-25',
-                )}
-              >
-                {columns.map((column) => (
-                  <span
-                    role="cell"
-                    key={column.key}
-                    /*
-                      `overflow-clip`, not `overflow-hidden`.
-                      `overflow-clip-margin` **only applies to `overflow: clip`**
-                      — on `hidden` it is silently ignored, which is why the
-                      first attempt at this changed nothing. The margin is what
-                      lets a focus ring out: a ring is drawn outside the
-                      element's box and each control fills its cell exactly, so
-                      under `hidden` three of four sides were cut and a focused
-                      row link rendered as a single clay hairline.
+                    `overflow-clip`, not `overflow-hidden`.
+                    `overflow-clip-margin` **only applies to `overflow: clip`**
+                    — on `hidden` it is silently ignored, which is why the first
+                    attempt at this changed nothing. The margin is what lets a
+                    focus ring out: a ring is drawn outside the element's box
+                    and each control fills its cell exactly, so under `hidden`
+                    three of four sides were cut and a focused row link rendered
+                    as a single clay hairline.
 
-                      A column may opt out entirely with `overflow-visible`,
-                      which the select column does — its track is 22px and its
-                      control needs a taller target than that box.
-                    */
-                    className={cn(
-                      'overflow-clip text-ellipsis whitespace-nowrap [overflow-clip-margin:6px]',
-                      column.className,
-                    )}
-                  >
-                    {column.cell(row)}
-                  </span>
-                ))}
-              </div>
-            ))
-          )}
+                    A column may opt out entirely with `overflow-visible`, which
+                    the select column does — its track is 22px and its control
+                    needs a taller target than that box.
+                  */
+                  className={cn(
+                    'overflow-clip text-ellipsis whitespace-nowrap [overflow-clip-margin:6px]',
+                    column.className,
+                  )}
+                >
+                  {column.cell(row)}
+                </span>
+              ))}
+            </div>
+          ))}
         </div>
+
+        {rows.length > 0 ? (
+          <CardList columns={columns} rows={rows} rowKey={rowKey} />
+        ) : (
+          /*
+            One empty state for both branches, below the table rather than
+            inside it: at `md` and up the fixed header stays visible above it,
+            which is what the screen did before the card list existed, and
+            below `md` it is the whole of what renders.
+          */
+          <div className="px-4 py-10">{empty}</div>
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The same rows below 768, as the card list `30-responsive.md:31` specifies.
+ *
+ * **Every column, none of them truncated.** A table cell elides because the
+ * reader can widen the window or scroll the pane to see the rest; a card has
+ * neither affordance, so a card that elides has simply lost the value. Each
+ * labelled column becomes a `dt`/`dd` pair on a two-track grid — the label
+ * column is capped rather than fixed, so a long label wraps instead of
+ * squeezing the value it describes — and the values wrap.
+ *
+ * `dl` rather than seven `role="row"`s: below the breakpoint these are not rows
+ * of a table any more, they are one record's fields, and a screen reader
+ * announcing "row 3 of 15, column 4" for a stack of cards describes a grid the
+ * reader cannot navigate.
+ */
+function CardList<T>({
+  columns,
+  rows,
+  rowKey,
+}: {
+  columns: readonly DataTableColumn<T>[];
+  rows: readonly T[];
+  rowKey: (row: T) => string;
+}): React.ReactElement {
+  // Partitioned here rather than by the caller: both halves are consumed three
+  // lines apart, and `columns` on this component means what it means everywhere
+  // else in the file.
+  const fields = columns.filter((column) => !isControl(column));
+  const controls = columns.filter(isControl);
+
+  return (
+    <ul className="md:hidden">
+      {rows.map((row) => (
+        <li
+          key={rowKey(row)}
+          className="border-b border-stone-150 px-4 py-3 text-action text-stone-700 last:border-b-0"
+        >
+          {controls.length > 0 ? (
+            /*
+              The controls take a row of their own, first at the start and last
+              at the end — where the table puts them. `ml-auto` on the last one
+              does both cases: a lone control (reviews, tags) goes to the end,
+              and a pair (vendors) splits to the two edges.
+
+              Each keeps its declared width rather than an equal share of the
+              row. An equal share made the reviews card's only control a 308px
+              button whose glyph sat at the right edge and whose hit area was
+              the whole top strip — a tap on what reads as padding opened
+              "Delete this review?".
+
+              `column.className` is deliberately **not** applied. It is the body
+              cell's override bucket and it carries table geometry as well as
+              typography — `flex justify-end overflow-visible` on a 70px track —
+              which means nothing in a card and fought the sizing above.
+            */
+            <div className="mb-2 flex items-center gap-3">
+              {controls.map((column, index) => (
+                <div
+                  key={column.key}
+                  className={cn(
+                    'flex shrink-0 items-center justify-end',
+                    index === controls.length - 1 && 'ml-auto',
+                  )}
+                  style={{ width: controlWidth(column.width) }}
+                >
+                  {column.cell(row)}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <dl className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+            {fields.map((column) => (
+              <Fragment key={column.key}>
+                <dt className="text-label font-semibold tracking-label text-stone-600 uppercase">
+                  {column.header}
+                </dt>
+                {/* The column's typography, without the table's truncation. */}
+                <dd className={cn('min-w-0 break-words', column.className)}>{column.cell(row)}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </li>
+      ))}
+    </ul>
   );
 }
