@@ -22,8 +22,25 @@ import { wireBookingRequestSchema, type WireBookingRequest } from '@/lib/wire-sc
  * — `cancel` is customer-only, so "you withdrew this" is a fact rather than a
  * guess, while `declined` can be either party and so stays impersonal.
  */
+/*
+ * `cancelled` says only that, and deliberately does not say who.
+ *
+ * It used to read "You withdrew this request." — true of the only route that
+ * reached this screen while a cancelled *booking* was unreachable by
+ * navigation. #400 made it reachable, and #400's own fix settles the parent
+ * request when a booking is cancelled, so this status now covers three
+ * different events: a customer withdrawing before acceptance, a customer
+ * cancelling a booking they paid for, and an admin unwinding a suspended
+ * account. Telling the last two that they withdrew something is false, and the
+ * middle one is a refund the sentence does not mention at all.
+ *
+ * The wire object carries nothing that tells them apart — `acceptedAt` is on
+ * the checkout read, not this one — so this is neutral wording rather than a
+ * guess. #415 owns giving a cancelled booking a surface that states the amount
+ * and the refund.
+ */
 const SETTLED_SENTENCE: Record<string, string> = {
-  cancelled: 'You withdrew this request.',
+  cancelled: 'This request was cancelled.',
   declined: 'This request was declined.',
   expired: 'This request expired before it was answered.',
 };

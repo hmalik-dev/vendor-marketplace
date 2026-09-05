@@ -30,6 +30,7 @@ import {
   cancelBookingAndFreeDate,
   confirmBooking,
   findBookingById,
+  findAnyBookingByRequest,
   findBookingByRequest,
   findPayableRequest,
   recordPaymentIntent,
@@ -229,7 +230,14 @@ export async function recordSuccessfulPayment(
     );
   }
 
-  const existing = await findBookingByRequest(context.db, requestId);
+  /*
+   * Unfiltered, deliberately. This asks "have I already recorded this event",
+   * not "is this request paid for" — and a booking that has since been
+   * cancelled still means yes. Using the customer-facing read here made a
+   * redelivery after a cancellation fall through and answer 409, which Stripe
+   * retries for three days (#400).
+   */
+  const existing = await findAnyBookingByRequest(context.db, requestId);
 
   if (existing) {
     return { booking: existing, created: false };
@@ -275,7 +283,7 @@ export async function recordSuccessfulPayment(
      * Its row is the answer; this is not a failure and must not be reported as
      * one, or Stripe would keep retrying a webhook that already succeeded.
      */
-    const settled = await findBookingByRequest(context.db, requestId);
+    const settled = await findAnyBookingByRequest(context.db, requestId);
 
     if (!settled) {
       throw conflict('That booking could not be recorded');
@@ -396,7 +404,21 @@ export async function reconcileBooking(
 
   const row = await findPayableRequest(context.db, requestId);
 
-  if (!row || row.customerId !== user.id || !row.stripePaymentIntentId) {
+  /*
+   * `accepted` as well as the rest, because #400 gave this path a row it must
+   * not act on. Cancelling now settles the parent request, so a cancelled
+   * booking no longer answers the read above — and without this guard the
+   * fall-through treated that as "paid, webhook never arrived", retrieved the
+   * still-succeeded intent, and tried to recreate the booking the customer had
+   * just cancelled. Reconciliation is for a request still waiting on its
+   * booking; a settled one has nothing to reconcile.
+   */
+  if (
+    !row ||
+    row.customerId !== user.id ||
+    !row.stripePaymentIntentId ||
+    row.status !== 'accepted'
+  ) {
     return null;
   }
 

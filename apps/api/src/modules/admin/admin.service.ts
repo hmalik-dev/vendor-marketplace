@@ -251,6 +251,7 @@ export async function setUserBanned(
       requestsDeclined: 0,
       bookingsCancelled: 0,
       refundsIssued: 0,
+      refundsFailed: 0,
       profileUnpublished,
     };
   }
@@ -265,6 +266,7 @@ export async function setUserBanned(
 
   let refundsIssued = 0;
   let bookingsCancelled = 0;
+  let refundsFailed = 0;
 
   for (const booking of affected) {
     if (booking.stripePaymentIntentId) {
@@ -291,6 +293,15 @@ export async function setUserBanned(
           { bookingId: booking.id, err: error },
           'Refund failed while banning an account',
         );
+        /*
+         * Counted, not only logged (#400). The `continue` is right — a booking
+         * whose money did not come back must not be cancelled underneath the
+         * customer, and one failure must not abandon the rest of the ban — but
+         * it leaves a **confirmed** booking on a suspended account with neither
+         * party told, and the result used to have no field to say so. The
+         * operator saw a clean success and a log line nobody was reading.
+         */
+        refundsFailed += 1;
         continue;
       }
     }
@@ -388,6 +399,7 @@ export async function setUserBanned(
     requestsDeclined,
     bookingsCancelled,
     refundsIssued,
+    refundsFailed,
     profileUnpublished,
   };
 }

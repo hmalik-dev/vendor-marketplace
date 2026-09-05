@@ -1854,6 +1854,17 @@ export const adminBanResultSchema = z.object({
   requestsDeclined: z.int(),
   bookingsCancelled: z.int(),
   refundsIssued: z.int(),
+  /**
+   * Bookings whose refund Stripe refused, and which are therefore **still
+   * confirmed** on a suspended account.
+   *
+   * The ban used to log those and carry on, and the result had no field to say
+   * so — so the operator's table showed the account suspended with no signal
+   * that money had not moved and a booking still stood (#400). A ban with a
+   * non-zero count here needs a human: the money is with Stripe, the customer
+   * has not been told, and the vendor's date is still held.
+   */
+  refundsFailed: z.int(),
   profileUnpublished: z.boolean(),
 });
 export type AdminBanResult = z.infer<typeof adminBanResultSchema>;

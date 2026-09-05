@@ -10,6 +10,7 @@ function entry(overrides: Partial<BookingEntry> = {}): BookingEntry {
   return {
     id: 'e1',
     kind: 'request',
+    requestId: 'e1',
     vendorSlug: 'casa-verde',
     vendorName: 'Casa Verde',
     vendorImageUrl: null,

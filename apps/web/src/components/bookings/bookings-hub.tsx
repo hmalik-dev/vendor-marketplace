@@ -104,25 +104,27 @@ function BookingCard({ entry }: BookingCardProps): React.ReactElement {
    *
    * A settled row still goes to its own detail: "what did I agree to, and what
    * happened to it" is exactly what a customer opens a finished booking for.
-   * Only a row whose detail route does not exist falls back to the storefront.
+   * **Every row has one now** — the fallback this used to describe is gone
+   * with the `null` below it (#400).
    */
-  const href = entry.kind === 'request' ? `/bookings/${entry.id}` : null;
+  /*
+   * **A booking links to its request's detail page** (#400).
+   *
+   * This used to be `null` for a booking, under a comment saying the row "has
+   * no detail route of its own yet". The route exists — `/bookings/<requestId>`
+   * renders the negotiation and its outcome, and is the only surface carrying
+   * `View confirmation` and `Cancel booking` — and `requestId` was already on
+   * the wire object, since `paidRequestIds` is built from it. So the customer's
+   * confirmed booking was a dead card: after checkout there was no route back
+   * to it by navigation at all.
+   */
+  const href = `/bookings/${entry.requestId}`;
 
   return (
     <li>
-      {href ? (
-        <Link href={href} className={className}>
-          {body}
-        </Link>
-      ) : (
-        /*
-         * A booking row, which has no detail route of its own yet — and no
-         * slug either: `bookingToEntry` writes `vendorSlug: null`, so there is
-         * nothing to link to. It renders as a card and not a link rather than
-         * as a link to somewhere unhelpful.
-         */
-        <div className={className}>{body}</div>
-      )}
+      <Link href={href} className={className}>
+        {body}
+      </Link>
     </li>
   );
 }

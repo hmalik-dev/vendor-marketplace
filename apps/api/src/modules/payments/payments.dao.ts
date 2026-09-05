@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -88,6 +88,14 @@ export interface BookingWithEventTypeRow extends BookingRow {
  * booking — the same join `findBookings` makes for the hub, and for the same
  * reason: frame `06` reads "Wedding · Barr Mansion", and a second round trip
  * per booking to say so is not worth it.
+ *
+ * **A cancelled booking is not the answer to this question** (#400). Without the
+ * filter, every read built on this one kept reporting a cancelled booking as
+ * the request's payment: checkout redirected to the confirmation, and the
+ * detail page told the customer who had just cancelled that the vendor "is
+ * booked", showed the amount paid, and offered `Cancel booking` a second time —
+ * which then answered 409. `completed` is deliberately still found: the event
+ * happened and was paid for, and the confirmation is the record of it.
  */
 export async function findBookingByRequest(
   db: AppDatabase,
@@ -97,12 +105,38 @@ export async function findBookingByRequest(
     .select({ booking: bookings, eventType: bookingRequests.eventType })
     .from(bookings)
     .innerJoin(bookingRequests, eq(bookings.requestId, bookingRequests.id))
-    .where(eq(bookings.requestId, requestId))
+    .where(and(eq(bookings.requestId, requestId), ne(bookings.status, 'cancelled')))
     .limit(1);
 
   const row = rows?.[0];
 
   return row ? { ...row.booking, eventType: row.eventType } : null;
+}
+
+/**
+ * The booking a request produced, **whatever became of it**.
+ *
+ * The filtered read above is for the customer's surfaces: it answers "is this
+ * request paid for", and a cancelled booking is not. This one answers "has a
+ * booking row ever been written for this request", which is a different
+ * question and the only correct one for idempotency.
+ *
+ * They were the same function until #400 narrowed it, and that broke the Stripe
+ * webhook: `recordSuccessfulPayment` uses this read twice — once to recognise a
+ * delivery it has already handled, once when two deliveries race and the other
+ * wins — and with the filter, a redelivery after a cancellation found nothing,
+ * fell through to `confirmBooking`, conflicted on `bookings_request_id_key`,
+ * and answered 409. Stripe retries a non-2xx for three days and disables an
+ * endpoint that keeps failing, so the customer-facing narrowing would have cost
+ * the webhook endpoint itself.
+ */
+export async function findAnyBookingByRequest(
+  db: AppDatabase,
+  requestId: string,
+): Promise<BookingRow | null> {
+  const rows = await db.select().from(bookings).where(eq(bookings.requestId, requestId)).limit(1);
+
+  return rows?.[0] ?? null;
 }
 
 export async function findBookingById(
@@ -243,6 +277,29 @@ export async function cancelBookingAndFreeDate(
         target: [availability.vendorId, availability.date],
         set: { status: 'available' },
       });
+
+    /*
+     * And the request the booking came from, in the same transaction (#400).
+     *
+     * Without this the row stayed `accepted`, and `syncHeldDate` derives a
+     * vendor's calendar cell from the statuses on that date — so the next
+     * transition touching the day found an accepted request and wrote `booked`
+     * again, for a booking that no longer exists. Nothing could undo it:
+     * `setOwnAvailability` refuses a booked cell, and `setHeldDate(null)`
+     * would not delete one while a `bookings` row sat on the date. The date was
+     * sold, refunded, and then permanently unsellable.
+     *
+     * Written here rather than through `BOOKING_REQUEST_TRANSITIONS` because
+     * this is not a party's move: opening `accepted -> cancelled` on that map
+     * would also let a customer withdraw an accepted request through the
+     * transition endpoint, with no refund and no booking cancelled. The
+     * predicate is what keeps it honest — only an `accepted` row settles, so a
+     * request already declined or expired is left as it is.
+     */
+    await tx
+      .update(bookingRequests)
+      .set({ status: 'cancelled', updatedAt: sql`now()` })
+      .where(and(eq(bookingRequests.id, row.requestId), eq(bookingRequests.status, 'accepted')));
 
     return row;
   });

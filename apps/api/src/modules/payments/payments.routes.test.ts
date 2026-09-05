@@ -110,6 +110,22 @@ describe('payments', () => {
   }
 
   /** Opens checkout and settles the charge, as confirming the card would. */
+  /** Delivers the succeeded event again, without asserting the answer. */
+  function redeliver(intentId: string): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
+    harness.stripe.nextEvent = {
+      type: 'payment_intent.succeeded',
+      accountId: null,
+      objectId: intentId,
+    };
+
+    return harness.app.inject({
+      method: 'POST',
+      url: '/webhooks/stripe',
+      headers: { 'stripe-signature': 'valid-signature', 'content-type': 'application/json' },
+      payload: { id: 'evt_test', type: 'payment_intent.succeeded' },
+    });
+  }
+
   async function payFor(requestId: string): Promise<string> {
     const checkout = await inject(
       'POST',
@@ -640,6 +656,123 @@ describe('payments', () => {
       const [booking] = await harness.database.db.select().from(bookings);
 
       await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      const [held] = await harness.database.db.select().from(availability);
+      expect(held?.status).toBe('available');
+    });
+
+    /*
+     * #400, the root of five findings: cancel flipped `bookings.status` and
+     * freed the date, and stopped. The parent request stayed `accepted`, so
+     * `syncHeldDate` — which derives the calendar cell from the statuses on the
+     * date — re-locked it as `booked` on the next transition touching that day,
+     * for a booking that no longer exists. Nothing could undo it:
+     * `setOwnAvailability` 409s on a booked date, and `setHeldDate(null)`
+     * refused to delete while any `bookings` row sat on the date, whatever its
+     * status.
+     */
+    it('settles the parent request rather than leaving it accepted', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      const [request] = await harness.database.db
+        .select()
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+
+      expect(request?.status).toBe('cancelled');
+    });
+
+    /*
+     * The permanent re-lock, which is what made this a P0 rather than a
+     * cosmetic inconsistency. Cancel freed the date, but the parent request
+     * stayed `accepted` — and `syncHeldDate` derives the cell from the
+     * statuses on that date, so the **next** transition touching the day found
+     * an accepted request and wrote `booked` again, for a booking that no
+     * longer exists. Nothing reachable could undo it.
+     */
+    it('does not let a later transition re-lock the freed date', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      // Any later transition on the same date re-derives the calendar cell.
+      const [vendorProfile] = await harness.database.db.select().from(vendorProfiles);
+      const second = await inject('POST', '/booking-requests', OUTSIDER, {
+        vendorId: vendorProfile!.id,
+        eventDate: EVENT_DATE,
+        customDetails: 'A second enquiry for the same day, after the first was cancelled.',
+      });
+      expect(second.statusCode).toBe(201);
+
+      const declined = await inject(
+        'POST',
+        `/booking-requests/${second.json().id}/decline`,
+        VENDOR,
+      );
+      expect(declined.statusCode).toBe(200);
+
+      const [held] = await harness.database.db
+        .select()
+        .from(availability)
+        .where(eq(availability.date, EVENT_DATE));
+
+      expect(held?.status ?? 'available').not.toBe('booked');
+    });
+
+    /*
+     * Every read built on `findBookingByRequest` reported a cancelled booking
+     * as paid, because that query had no status filter: checkout redirected to
+     * the confirmation, and the detail page told the customer who had just
+     * cancelled that the vendor "is booked", showed the amount paid, and
+     * offered `Cancel booking` a second time.
+     */
+    it('stops reading the cancelled booking as the request payment', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      const response = await inject(
+        'GET',
+        `/customer/booking-requests/${requestId}/booking`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    /*
+     * The read that answers "is this request paid for" and the read that
+     * answers "have I already recorded this event" are different questions,
+     * and #400 briefly made them the same function.
+     *
+     * Stripe redelivers for three days and disables an endpoint that keeps
+     * failing. With the cancelled-booking filter on the idempotency read, a
+     * redelivery after a cancellation found nothing, fell through to
+     * `confirmBooking`, conflicted on `bookings_request_id_key` and answered
+     * 409 — so the customer-facing narrowing would have cost the webhook
+     * endpoint itself, and the unique index was the only thing standing
+     * between that and a second confirmed booking re-locking the date.
+     */
+    it('acknowledges a webhook redelivered after the booking was cancelled', async () => {
+      const requestId = await acceptedRequest();
+      const intentId = await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+      const replay = await redeliver(intentId);
+
+      expect(replay.statusCode).toBe(200);
+
+      // And it recorded nothing new: one row, still cancelled, date still free.
+      const rows = await harness.database.db.select().from(bookings);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.status).toBe('cancelled');
 
       const [held] = await harness.database.db.select().from(availability);
       expect(held?.status).toBe('available');

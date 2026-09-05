@@ -60,6 +60,8 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
   const router = useRouter();
   const call = useApi();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  /** Set when a ban left money with Stripe. Never cleared by a later action. */
+  const [stuckRefunds, setStuckRefunds] = useState<string | null>(null);
 
   const selectedRows = rows.filter((row) => selected.has(row.userId));
   /*
@@ -82,15 +84,74 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
     });
   }
 
-  async function setBanned(userId: string, banned: boolean): Promise<void> {
-    await call(`/admin/users/${userId}/${banned ? 'ban' : 'unban'}`, {
+  /**
+   * Suspends or restores an account, and reports refunds that did not move.
+   *
+   * The dialog promises every future booking is "cancelled and refunded in
+   * full". When Stripe refuses one, the ban still removes the account and
+   * unwinds the rest — but that booking stays **confirmed**, neither party is
+   * told, and before #400 only a log line recorded it while the operator saw
+   * the same clean success they get when everything works.
+   *
+   * Reported as a warning above the table rather than thrown into
+   * `ConfirmAction`, for two reasons. The action **succeeded** — throwing would
+   * hold the dialog open under a comment that says an open dialog means the
+   * action did nothing. And `userFacingError` replaces any non-`ApiClientError`
+   * with the caller's fallback, so a thrown message would never reach the
+   * screen anyway.
+   */
+  async function setBanned(userId: string, banned: boolean): Promise<number> {
+    const result = await call(`/admin/users/${userId}/${banned ? 'ban' : 'unban'}`, {
       method: 'PUT',
       schema: adminBanResultSchema,
     });
+
+    return result.refundsFailed;
+  }
+
+  /**
+   * Raises the warning, and never lowers it.
+   *
+   * Clearing on a zero count meant any later action wiped it: an unban always
+   * reports `refundsFailed: 0`, so lifting a suspension on an unrelated row
+   * silently removed the notice about money still sitting at Stripe. Nothing
+   * else in `/admin` surfaces a confirmed booking on a banned vendor, so this
+   * is the only place it is said — it stays until the operator reloads, which
+   * is a deliberate floor rather than a full solution (#415 owns the durable
+   * surface).
+   */
+  function reportStuckRefunds(count: number, accounts: number): void {
+    if (count === 0) {
+      return;
+    }
+
+    setStuckRefunds(
+      `${accounts === 1 ? 'The account was suspended' : `${accounts} accounts were suspended`}, but ${count} ${
+        count === 1 ? 'refund' : 'refunds'
+      } could not be issued. ${
+        count === 1 ? 'That booking is' : 'Those bookings are'
+      } still confirmed and nobody has been told — finish ${
+        count === 1 ? 'it' : 'them'
+      } in Stripe.`,
+    );
   }
 
   return (
     <div className="relative h-full min-h-0">
+      {/*
+        A ban that could not refund is a success with money still at Stripe, so
+        it reads as a warning over the table rather than as a failed action
+        (#400). It survives the `router.refresh()` the action fires, because it
+        is the one thing on this screen a person still has to act on.
+      */}
+      {stuckRefunds ? (
+        <p
+          role="alert"
+          className="mb-3 rounded-lg border border-error-500 bg-stone-0 px-4 py-2.5 text-sm text-error-500"
+        >
+          {stuckRefunds}
+        </p>
+      ) : null}
       {/*
         Bulk actions appear only when rows are selected (`22-admin.md`). A bar
         that is always present, greyed out, teaches an operator to ignore it.
@@ -124,9 +185,11 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
                * the payment provider is how a bulk action becomes a rate-limit
                * failure halfway through with no record of where it stopped.
                */
+              let failed = 0;
               for (const row of suspendable) {
-                await setBanned(row.userId, true);
+                failed += await setBanned(row.userId, true);
               }
+              reportStuckRefunds(failed, suspendable.length);
               setSelected(new Set());
               router.refresh();
             }}
@@ -261,7 +324,7 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
                   }
                   confirmLabel={flagged ? 'Lift suspension' : 'Suspend account'}
                   onConfirm={async () => {
-                    await setBanned(row.userId, !flagged);
+                    reportStuckRefunds(await setBanned(row.userId, !flagged), 1);
                     router.refresh();
                   }}
                 />

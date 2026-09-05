@@ -152,6 +152,15 @@ export interface FakeStripe extends StripeConnectGateway {
    * reports the field — `parseEventNotification` below fills the default.
    */
   nextEvent: Omit<StripeEventNotification, 'objectId'> & { objectId?: string | null };
+  /**
+   * Payment intent ids whose refund the fake must refuse.
+   *
+   * Stripe declining a refund is not hypothetical — a disputed charge, a
+   * reversed source, a connected account with a negative balance — and it is
+   * the branch where a ban leaves a confirmed booking on a suspended account
+   * with nobody told (#400). There is no other way to reach it from a test.
+   */
+  refundsToRefuse: Set<string>;
   /** Every intent the fake has minted, keyed by id, in Stripe's own shape. */
   paymentIntents: Map<string, PaymentIntentSnapshot>;
   /**
@@ -181,6 +190,7 @@ function createFakeStripe(): FakeStripe {
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
   const intentsByKey = new Map<string, string>();
   const refunds: FakeStripe['refunds'] = [];
+  const refundsToRefuse = new Set<string>();
 
   const fake: FakeStripe = {
     createdAccounts,
@@ -190,6 +200,7 @@ function createFakeStripe(): FakeStripe {
     paymentIntents,
     intentsByKey,
     refunds,
+    refundsToRefuse,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
 
     succeed: (paymentIntentId) => {
@@ -279,6 +290,10 @@ function createFakeStripe(): FakeStripe {
     },
 
     createRefund: async (input) => {
+      if (refundsToRefuse.has(input.paymentIntentId)) {
+        throw new Error(`Fake Stripe refused a refund for ${input.paymentIntentId}`);
+      }
+
       refunds.push({
         paymentIntentId: input.paymentIntentId,
         amountCents: input.amountCents,

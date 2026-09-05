@@ -51,11 +51,24 @@ export function BookingCard({ request, booking, today }: BookingCardProps): Reac
             {/*
               Accepted is not paid. `40-states.md` reserves sage for settled, so
               an unpaid booking reads gold — it is still waiting on someone.
+
+              The pill reads the booking's **status**, not merely its presence
+              (#400). Chosen on `booking !== null`, a cancelled booking put a
+              sage `Booked` next to the red `Cancelled` that `CompleteBooking`
+              renders below — two contradictory pills on one row, over contact
+              details for a date the vendor no longer holds. Settling the parent
+              request now keeps such a row off this page entirely, so this is
+              the belt to that braces: the card cannot claim a date is held by a
+              booking that is not.
+
+              Only `cancelled` suppresses it. A `disputed` booking still holds
+              the date — the money is contested, not the commitment — so it
+              keeps the pill it had rather than losing its only label.
             */}
-            {booking ? (
-              <StatusPill tone="confirmed">Booked</StatusPill>
-            ) : (
+            {booking === null ? (
               <StatusPill tone="pending">Awaiting payment</StatusPill>
+            ) : booking.status === 'cancelled' ? null : (
+              <StatusPill tone="confirmed">Booked</StatusPill>
             )}
           </div>
 

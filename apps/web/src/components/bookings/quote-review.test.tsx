@@ -240,15 +240,19 @@ describe('QuoteReview', () => {
     });
 
     /*
-     * `cancel` is customer-only, so "you withdrew this" is a fact. `declined`
-     * can be either party, so it stays impersonal. The words are the hub's —
-     * a cancelled *request* is "Withdrawn" there, and a second vocabulary is
-     * how two screens come to disagree about one row.
+     * This said "You withdrew this request." while the customer's `cancel` was
+     * the only route to a `cancelled` request. #400 added two more — cancelling
+     * a paid booking now settles its request, and so does an admin unwinding a
+     * suspended account — and made the screen reachable from the hub, so the
+     * personal wording became false on two of the three paths. The status is
+     * the only thing the wire object carries about them, so the sentence says
+     * only what the status says.
      */
-    it('says who ended it where that is knowable', () => {
+    it('states that it was cancelled without claiming who did it', () => {
       render(<QuoteReview request={quotedRequest({ status: 'cancelled' })} />);
 
-      expect(screen.getByText('You withdrew this request.')).toBeDefined();
+      expect(screen.getByText('This request was cancelled.')).toBeDefined();
+      expect(screen.queryByText(/you withdrew/i)).toBeNull();
     });
 
     it('stays impersonal about a decline, which either party can make', () => {

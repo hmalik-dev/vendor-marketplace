@@ -218,7 +218,7 @@ script-injection hole on the most-visited public page in the product. |
 predicate, a transaction, or an idempotency key. Two of them move money or sell
 a date twice. The sweep reproduced the double-accept against the real harness
 (two `/accept` calls fired with `Promise.all`; both answered 200 |
-| **400** | **Cancelling a booking leaves it half-cancelled everywhere** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 5 verified findings. Cancel flips `bookings.status` and frees the date, and stops. The parent
+| **400** | **Cancelling a booking leaves it half-cancelled everywhere** | P1.5 | M4.5 | **P0 Critical** | **Done** | — | **None** | `core` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 5 verified findings. Cancel flips `bookings.status` and frees the date, and stops. The parent. **Closed 2026-09-04.** All five acceptances. **1:** `cancelBookingAndFreeDate` settles the parent request in the same transaction, under a `status = 'accepted'` predicate — written there rather than by opening `accepted -> cancelled` on `BOOKING_REQUEST_TRANSITIONS`, because that map is party-facing and the edge would also let a customer withdraw an accepted request with no refund and no booking cancelled. The permanent re-lock is reproduced by a test that goes red as `expected 'booked' not to be 'booked'`. **2:** `findBookingByRequest` filters `cancelled`; `completed` is still found. **3:** satisfied by 1 — the page filters `status === 'accepted'`, so the card stops rendering; the pill now reads the booking's status as well, which only guards rows predating this. **4:** every hub row links to `/bookings/<requestId>`; `BookingEntry` gained `requestId`, which was already on the wire. **5:** `AdminBanResult.refundsFailed`, surfaced as a `role="alert"` over the vendor table — not thrown, because `userFacingError` would swallow a non-`ApiClientError` and `ConfirmAction` holding its dialog open would misreport a ban that succeeded. **The review caught one thing I would have shipped:** `findBookingByRequest` also backs the Stripe webhook's idempotency check, so filtering `cancelled` made a redelivery after a cancellation fall through, conflict on `bookings_request_id_key` and answer **409** — which Stripe retries for three days and which disables an endpoint that keeps failing. Split into `findAnyBookingByRequest` for the two idempotency reads, with a test that delivers the webhook twice and goes red as `expected 409 to be 200`. Also fixed on review: the detail page this made reachable said `You withdrew this request.` for a booking an admin had unwound; the ban warning was cleared by an unrelated unban; and a test named for unwinding the rest of the bookings contained only one. **Not fixed, filed as #415:** neither side has a surface that says what a cancelled booking cost or refunded. **No backfill:** the local database holds zero rows in the broken state (request `accepted` + booking `cancelled`), so a migration would have nothing to repair. diff-reviewer: one blocking finding and six others, all applied |
 request stays `accepted`, so the next transition on that date re-locks it
 permanently; every read that asks "is there a booking for this request" gets a
 row back and reports it as paid. The customer sees a booking they cancelle |
@@ -271,10 +271,11 @@ the silent-submit work #388 closed:
 | **412** | **Customer profile and storefront CTAs report things that are not so** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 7 verified findings. Seven small correctness and copy defects on the customer profile and the public
 | **413** | **Frame `06 Booking confirmed` fails parity on five axes** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by #386's parity pass**, the first to measure this frame — #386 changed one colour on it and the pass around that change found the rest. Nine measured misses, all in `booking-confirmed.tsx`, and the first three are one fix: the component renders a **second `<main>`** inside the layout's, whose `flex-1` resolves against a non-flex parent, so the sage gradient is `[0,64,1440,515]` and stops 321px short of the viewport the frame draws full-bleed — which also clips all four cross-sell chips' focus outlines by 4px. |
 | **414** | **`imageRefSchema` accepts references that are not image references** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `storage` | **Filed 2026-09-04 from #398's boundary sweep, measured rather than reported.** The validator's own comment says a stored reference "may not traverse" and "may not be protocol-relative", and both guards are bypassable. `/\evil.com/x.png` is accepted — `startsWith('//')` does not see it — and `resolveImageUrl` returns a `/`-leading value **verbatim**, so it reaches `<img src>` as written and the URL parser normalises the backslash, loading the image from `evil.com`. A vendor can therefore point their public storefront's photo at a host they control and collect every visitor's IP. The enforced `img-src 'self' data: blob: https://img.clerk.com https://*.stripe.com https://*.link.com http://localhost:9000` blocks it in a browser today, which is why this is P2 and not P1 — but CSP is defence in depth and an email template carries no CSP at all. Separately, an interior tab or newline defeats the scheme test (`jav\tascript:alert(1)` and `jav\nascript:alert(1)` are both accepted) because the anchored regex fails and the value falls into the relative-path branch; browsers strip those characters before parsing a scheme, so it is live the moment any consumer puts a stored ref somewhere other than `<img src>`. Bidi controls are accepted too (`aaa‮bbb`), which is inert — it breaks resolution rather than reordering prose — and is why `request-body-free-text.test.ts` excludes image refs by reference rather than folding them into the free-text boundary. **Not the whole story: the leading-whitespace bypass this repository's security memory recorded is fixed** — `.trim()` runs before the `.refine()`, so `" javascript:alert(1)"`, `"\njavascript:…"` and `"//evil.com/x.png"` are all rejected; that memory has been corrected. Fix shape: reject control characters outright, and decide the relative-path branch after normalising `\` to `/` rather than before |
+| **415** | **A cancelled booking has no honest surface on either side** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 from #400's review.** #400 made the customer's booking row reachable and settled its parent request, and both changes landed on screens with nothing to say about a cancelled booking. **Customer:** `/bookings/<requestId>` routes any non-`accepted` request to `QuoteReview`, which now reads `This request was cancelled.` — neutral, and deliberately so, because the wire object carries nothing distinguishing a withdrawal from a refunded booking (`acceptedAt` is on the checkout read, not this one). It states no amount, no refund and no date, for a row where money moved. **Vendor:** the bookings page filters `status === 'accepted'`, so a cancelled booking now vanishes from it entirely — correct for the `coming up` count, but the vendor has no surface at all showing a date they lost. **Admin:** a ban that could not refund raises a `role="alert"` over the vendor table that survives no reload, and nothing else in `/admin` lists a `confirmed` booking on a banned account. Fix shape: put `acceptedAt` (or a cancellation summary) on the booking-request read so the customer's screen can state what happened and what was refunded; give the vendor a settled list; and give the operator a durable view of bookings whose refund failed |
 storefront, each of which tells the reader something untrue. |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **384 rows as of 2026-09-03: 200 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-04, after the resumed QA run closed #398 and #401 and filed #414: 29 rows — 25 Backlog, 2 Deferred — needs a human, and 2 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-04, after the resumed QA run closed #398, #400 and #401 and filed #414 and #415: 30 rows — 25 Backlog, 2 Deferred — needs a human, and 3 `Done` awaiting the next archive sweep.** **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1962,7 +1963,7 @@ ended `accepted` on the same date).
 
 ### #400: Cancelling a booking leaves it half-cancelled everywhere
 
-**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Milestone:** M4.5 | **Priority:** P0 Critical | **Status:** Done | **Capabilities:** `core` `stripe`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2692,5 +2693,62 @@ through the surfaces that exist.
       listed above and the three the memory recorded as fixed, so a regression
       in either direction is visible
 - [ ] A test that a stored reference cannot produce a request to another origin
+
+---
+
+### #415: A cancelled booking has no honest surface on either side
+
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-04 from #400's review.** Not a defect #400 introduced so much as
+one it uncovered: making the row reachable, and settling its parent request,
+put three screens in front of a state none of them had ever had to describe.
+
+#### The findings
+
+- **The customer's detail page states nothing about the money.**
+  `/bookings/<requestId>` routes any non-`accepted` request to `QuoteReview`.
+  Before #400 a cancelled *booking* could not be reached by navigation at all;
+  now the hub links to it, and the screen shows the vendor, the date and one
+  sentence. That sentence used to read `You withdrew this request.` — false for
+  a booking the customer paid for and cancelled, and flatly untrue for one an
+  admin unwound. It now reads `This request was cancelled.`, which is never
+  false but says nothing about the amount, the refund, or when it happened.
+  The wire object carries nothing that tells the three cases apart:
+  `acceptedAt` is on `checkoutIntentSchema`, not on the booking-request read.
+- **The vendor has no surface for a date they lost.** `/vendor/bookings`
+  filters `request.status === 'accepted'` for both Upcoming and Past, so once a
+  cancellation settles the request the card stops rendering. That is right for
+  the `coming up` count — the vendor no longer holds the date — but it means a
+  cancelled booking appears nowhere on the vendor side. They get a
+  `booking_cancelled` notification and a freed calendar cell, and that is all.
+- **The operator's warning does not survive a reload.** A ban that could not
+  refund raises a `role="alert"` above the vendor table saying the bookings are
+  still confirmed and nobody has been told. It is set in component state, so it
+  is gone on the next navigation — and nothing else in `/admin` lists a
+  `confirmed` booking on a banned account, so after that reload the only record
+  is a log line.
+
+#### Acceptance
+
+1. A cancelled booking's detail page states what was paid, what was refunded,
+   and when — sourced from the booking row rather than inferred from the
+   request's status.
+2. The three ways a request reaches `cancelled` are distinguishable on that
+   screen: withdrawn before acceptance, cancelled after payment, and unwound by
+   an admin.
+3. The vendor can see a booking they lost, with its date and what happened,
+   without it counting as work they still have.
+4. `/admin` lists bookings whose refund failed, so the operator can find them
+   after the banner is gone.
+
+#### Tests (required)
+
+- [ ] A web test that a cancelled booking's page names the refund amount, and
+      does not claim the customer withdrew anything
+- [ ] A test for each of the three cancellation origins rendering differently
+- [ ] An API test that the operator's list returns a confirmed booking on a
+      banned account
 
 ---

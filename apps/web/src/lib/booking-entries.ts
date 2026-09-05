@@ -19,6 +19,14 @@ import type { WireBooking, WireBookingRequest } from './wire-schemas';
 export interface BookingEntry {
   id: string;
   kind: 'request' | 'booking';
+  /**
+   * The request this row's detail page lives under — `/bookings/<requestId>`.
+   *
+   * Both kinds have one. A booking's detail route is its *request's*, because
+   * that page renders the whole negotiation and its outcome, so a paid booking
+   * is reachable rather than a dead card (#400).
+   */
+  requestId: string;
   vendorSlug: string | null;
   vendorName: string;
   vendorImageUrl: string | null;
@@ -148,6 +156,7 @@ export function requestToEntry(request: WireBookingRequest, now: Date = new Date
   return {
     id: request.id,
     kind: 'request',
+    requestId: request.id,
     vendorSlug: request.vendor.slug,
     vendorName: request.vendor.businessName,
     vendorImageUrl: request.vendor.avatarUrl,
@@ -173,6 +182,7 @@ export function bookingToEntry(
   return {
     id: booking.id,
     kind: 'booking',
+    requestId: booking.requestId,
     vendorSlug: null,
     vendorName,
     vendorImageUrl: null,

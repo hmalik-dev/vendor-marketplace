@@ -95,13 +95,26 @@ describe('admin routes', () => {
   }
 
   /** A confirmed, paid booking in the future — what a ban has to unwind. */
-  async function createFutureBooking(customerId: string, vendorProfileId: string): Promise<string> {
+  /**
+   * A confirmed booking on a future date.
+   *
+   * `overrides` exists so a suite can create a **second** one: the date is a
+   * unique key per vendor in practice, and the intent id is what a test names
+   * to make Stripe refuse that particular refund.
+   */
+  async function createFutureBooking(
+    customerId: string,
+    vendorProfileId: string,
+    overrides: { eventDate?: string; stripePaymentIntentId?: string } = {},
+  ): Promise<string> {
+    const eventDate = overrides.eventDate ?? '2099-06-01';
+
     const requestRows = await harness.database.db
       .insert(bookingRequests)
       .values({
         customerId,
         vendorId: vendorProfileId,
-        eventDate: '2099-06-01',
+        eventDate,
         status: 'accepted',
         finalPriceCents: 120_000,
       })
@@ -113,12 +126,12 @@ describe('admin routes', () => {
         requestId: requestRows[0]!.id,
         customerId,
         vendorId: vendorProfileId,
-        eventDate: '2099-06-01',
+        eventDate,
         totalAmountCents: 120_000,
         platformFeeCents: 14_400,
         vendorPayoutCents: 105_600,
         status: 'confirmed',
-        stripePaymentIntentId: 'pi_test_ban',
+        stripePaymentIntentId: overrides.stripePaymentIntentId ?? 'pi_test_ban',
       })
       .returning({ id: bookings.id });
 
@@ -172,6 +185,9 @@ describe('admin routes', () => {
     await harness.database.db.delete(vendorProfiles);
     await harness.database.db.delete(users);
     harness.stripe.refunds.length = 0;
+    // Shared across every test in this file, so a refusal one test installs
+    // would silently break the next one's refund.
+    harness.stripe.refundsToRefuse.clear();
   });
 
   afterAll(async () => {
@@ -521,6 +537,7 @@ describe('admin routes', () => {
         isBanned: true,
         bookingsCancelled: 1,
         refundsIssued: 1,
+        refundsFailed: 0,
         profileUnpublished: true,
       });
       expect(response.json().requestsDeclined).toBeGreaterThanOrEqual(1);
@@ -561,6 +578,87 @@ describe('admin routes', () => {
         .from(notifications);
       expect(notified).toHaveLength(1);
       expect(notified[0]).toMatchObject({ userId: customerId, type: 'booking_cancelled' });
+    });
+
+    /*
+     * #400: the ban swallowed a failed refund and reported success. The catch
+     * logged and continued — right, because a booking whose money did not come
+     * back must not be cancelled underneath the customer, and one failure must
+     * not abandon the rest of the ban — but `AdminBanResult` had no field for
+     * it, so the operator's table showed a clean suspension while a confirmed
+     * booking stood on the account with neither party told and the money still
+     * at Stripe.
+     */
+    it('reports a refund Stripe refused instead of counting the ban a clean success', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      await createFutureBooking(customerId, vendor.profileId);
+      harness.stripe.refundsToRefuse.add('pi_test_ban');
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        isBanned: true,
+        refundsFailed: 1,
+        refundsIssued: 0,
+        // Not cancelled: the money did not come back, so the booking stands
+        // and a person has to finish it.
+        bookingsCancelled: 0,
+      });
+
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(booking?.status).toBe('confirmed');
+    });
+
+    /*
+     * One failure must not abandon the rest of the unwind — which needs **two**
+     * bookings, one refusable and one not. A first version of this test refused
+     * `pi_test_ban`, which `createFutureBooking` writes on every row, so there
+     * was no second booking and the assertion never exercised the property its
+     * name claimed.
+     */
+    it('still unwinds the bookings it can refund', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const refusable = await createFutureBooking(customerId, vendor.profileId);
+      await createFutureBooking(customerId, vendor.profileId, {
+        eventDate: '2099-08-01',
+        stripePaymentIntentId: 'pi_test_ban_second',
+      });
+
+      const [refused] = await harness.database.db
+        .select({ intentId: bookings.stripePaymentIntentId })
+        .from(bookings)
+        .where(eq(bookings.id, refusable));
+      harness.stripe.refundsToRefuse.add(refused!.intentId!);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.json()).toMatchObject({
+        isBanned: true,
+        profileUnpublished: true,
+        refundsFailed: 1,
+        // The other one was refunded and cancelled: one failure did not stop it.
+        refundsIssued: 1,
+        bookingsCancelled: 1,
+      });
+
+      const rows = await harness.database.db
+        .select({ id: bookings.id, status: bookings.status })
+        .from(bookings);
+      expect(rows.find((row) => row.id === refusable)?.status).toBe('confirmed');
+      expect(rows.filter((row) => row.status === 'cancelled')).toHaveLength(1);
     });
 
     it('refuses a second ban on an account already banned', async () => {

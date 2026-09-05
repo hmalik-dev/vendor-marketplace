@@ -24,9 +24,14 @@ afterEach(() => {
 const TODAY = '2026-04-26';
 
 function entry(overrides: Partial<BookingEntry> = {}): BookingEntry {
+  // `requestId` follows `id` unless a case sets it, which is what a request
+  // row looks like; a booking row is the case that sets them apart.
+  const id = overrides.id ?? 'e1';
+
   return {
-    id: 'e1',
+    id,
     kind: 'request',
+    requestId: id,
     vendorSlug: 'kessler-co',
     vendorName: 'Kessler & Co.',
     vendorImageUrl: null,
@@ -282,20 +287,31 @@ describe('BookingsHub', () => {
     });
 
     /*
-     * A booking row has no detail route of its own yet, and no slug either —
-     * `bookingToEntry` writes `vendorSlug: null` unconditionally — so it is a
-     * card and not a link.
+     * **A booking row opens its request** (#400).
      *
-     * An earlier version of this asserted that a booking row kept a
-     * `/vendors/<slug>` link, which passed only because the fixture supplied a
-     * slug on a `kind: 'booking'` entry. `bookingToEntry` cannot emit that
-     * combination, so the assertion described a row the application does not
-     * produce — the same "impossible row" this file criticises two tests up.
+     * This asserted `null` — no link — under a comment saying a booking "has
+     * no detail route of its own yet". The route existed: `/bookings/<requestId>`
+     * is where `View confirmation` and `Cancel booking` live, and it was
+     * unreachable by navigation, so after checkout the customer's confirmed
+     * booking was a dead card. The row's own id is the **booking** id, which
+     * names no page; `requestId` is what the link needs, and it was already on
+     * the wire object.
+     *
+     * An earlier version asserted a booking row kept a `/vendors/<slug>` link,
+     * which passed only because the fixture supplied a slug on a
+     * `kind: 'booking'` entry — a row `bookingToEntry` cannot emit. Hence the
+     * explicit `vendorSlug: null` here.
      */
-    it('renders a booking row as a card, because it has nowhere of its own to go', () => {
-      expect(linkFor({ kind: 'booking', id: 'bk-9', status: 'confirmed', vendorSlug: null })).toBe(
-        null,
-      );
+    it('opens a booking row at the request it belongs to, not at its own id', () => {
+      expect(
+        linkFor({
+          kind: 'booking',
+          id: 'bk-9',
+          requestId: 'req-9',
+          status: 'confirmed',
+          vendorSlug: null,
+        }),
+      ).toBe('/bookings/req-9');
     });
   });
 });

@@ -197,3 +197,33 @@ describe('BookingCard', () => {
     expect(screen.getByText('A customer')).toBeDefined();
   });
 });
+
+/*
+ * #400: the pill was chosen on `booking !== null`, so a cancelled booking put a
+ * sage `Booked` beside the red `Cancelled` from `CompleteBooking` — two
+ * contradictory claims on one row, above contact details for a date the vendor
+ * no longer holds.
+ */
+describe('a booking that was cancelled', () => {
+  it('is not labelled Booked', () => {
+    render(
+      <BookingCard request={accepted()} booking={paid({ status: 'cancelled' })} today={TODAY} />,
+    );
+
+    expect(screen.queryByText('Booked')).toBeNull();
+  });
+
+  it('is not labelled Awaiting payment either, because it was paid', () => {
+    render(
+      <BookingCard request={accepted()} booking={paid({ status: 'cancelled' })} today={TODAY} />,
+    );
+
+    expect(screen.queryByText('Awaiting payment')).toBeNull();
+  });
+
+  it('still reads Booked while the booking stands', () => {
+    render(<BookingCard request={accepted()} booking={paid()} today={TODAY} />);
+
+    expect(screen.getByText('Booked')).toBeDefined();
+  });
+});

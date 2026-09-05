@@ -439,10 +439,17 @@ export async function setHeldDate(
         eq(availability.vendorId, vendorId),
         eq(availability.date, date),
         inArray(availability.status, ['booked', 'pending']),
+        /*
+         * A **live** booking, not any row that was ever one (#400). Without the
+         * status filter a cancelled booking kept holding the date: the guard
+         * exists so a paid day is never freed by a request-side recompute, and
+         * a cancelled booking is not a paid day.
+         */
         sql`not exists (
           select 1 from ${bookings}
           where ${bookings.vendorId} = ${vendorId}
             and ${bookings.eventDate} = ${date}
+            and ${bookings.status} <> 'cancelled'
         )`,
       ),
     );

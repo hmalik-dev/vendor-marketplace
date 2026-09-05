@@ -42,3 +42,4 @@
 - [A lane 429 renders as the 500 page](lane-429-renders-as-500.md) — raise RATE_LIMIT_MAX before any browser or E2E pass
 - [Lane .auth/ arrives expired](lane-auth-state-arrives-expired.md) — copied from the main checkout, minted on port 3000; regenerate in-lane first
 - [`git push -q` trips the force-push hook](git-push-q-flag-trips-force-push-hook.md) — push with no short flags, and keep commit and push as separate calls
+- [Board rows do not all end with `|`](board-rows-lack-a-trailing-pipe.md) — `parts[-2]` silently writes into Capabilities; the board guard reports it as a bogus capability name
