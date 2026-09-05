@@ -915,8 +915,12 @@ describe('/booking-requests', () => {
      * #399. Two pending requests from different customers for the same vendor
      * and date: both accepts read the calendar, saw nothing booked, and wrote
      * `accepted`. Two commitments and two payable requests for one evening,
-     * under a single `booked` cell that neither of them owned. Fired with
-     * `Promise.all`, so both are genuinely in flight rather than sequential.
+     * under a single `booked` cell that neither of them owned.
+     *
+     * What this covers is the in-transaction re-read, not the lock: PGlite is
+     * one connection, so the second accept starts after the first has
+     * committed however these are fired. The genuine race lives in
+     * `accept.contention.test.ts`, on a pooled Postgres.
      */
     it('lets only one of two accepts on the same date win', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');

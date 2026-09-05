@@ -19,6 +19,7 @@
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself because `/admin/layout.tsx` never runs for it
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body around the `redact` path
 - [Fabricating seeds share one declared-branch guard](fabricating-seeds-share-one-declared-branch-guard.md) — `assertSafeTarget` is mandatory in any `packages/db` seed; it trusts `.neon`/`NEON_BRANCH`, not the URL
+- [The contention harness issues server DDL](contention-harness-issues-server-ddl.md) — CREATE/DROP DATABASE on the `DATABASE_URL` server, accepted because the name is a fresh UUID; CI's `trust` Postgres accepted too
 - [`stripe_onboarded` entails an account id](stripe-onboarded-entails-account-id.md) — a CHECK since #381; the `acct_` format check on top was refused as a product decision, do not re-open it
 - [The e2e fixture now calls Stripe for real](e2e-fixture-creates-real-stripe-accounts.md) — as of #387 it creates an account under a fabricated identity; one `sk_test_` prefix check is all that keeps a live key out
 - [Booking reads gate on two separate paths](booking-reads-gate-on-two-separate-paths.md) — `reconcileBooking`'s already-booked short-circuit leaked the fee split and intent id to any signed-in caller until #387

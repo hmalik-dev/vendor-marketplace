@@ -28,4 +28,7 @@ so the target check has to run before Clerk is even asked.
 
 **How to apply:** on any diff adding or changing a `packages/db` seed script,
 check the `assertSafeTarget` call exists and is the first thing after `loadEnv()`.
+Since #399 there is also a caller outside `src/scripts/` that issues CREATE/DROP
+DATABASE rather than inserting rows — see
+[[contention-harness-issues-server-ddl]] for why that one is still bounded.
 Related: [[e2e-fixture-forges-stripe-onboarded]].
