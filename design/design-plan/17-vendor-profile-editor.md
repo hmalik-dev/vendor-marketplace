@@ -113,3 +113,34 @@ leave knowingly. Inline "Saved" fades after 2s.
 - Portfolio bulk upload with auto-crop
 - Package duplication across categories
 - Profile completeness scoring beyond the binary publish gate
+
+## The nav legend was false, and the save bar counted payouts — ruled 2026-09-04 (D30)
+
+Frames `09` and `27 Vendor profile editor — 768` draw gold dots on **Response
+time** and **Payouts** under a legend reading _"Gold dots block publishing"_.
+Payouts does not block publishing — it is not a `PUBLISH_BLOCKERS` key and #360
+ruled it must not become one — so the legend was false about one of its own two
+dots.
+
+**The dot stays; the legend changes.** #360 designed that dot deliberately:
+`vendor-profile-form.tsx` computes it as `profile !== null &&
+!profile.stripeOnboarded`, reading the real Connect state off the profile row
+rather than the publish gate, so it invents no status and clears the moment
+onboarding completes. Gold is right for it under `40-states.md` — payouts not set
+up yet is waiting on someone, not a failure. Deleting the dot would have removed
+a true signal to rescue a sentence.
+
+The legend now reads **"Gold dots mark what's unfinished"**, which is true of both
+dots and still says gold means _waiting on you_. Changed in frame `09` and in
+`form-section-nav.tsx`, which rendered the same false sentence — including the
+dot's accessible name, which announced "Needs attention before publishing" and now
+announces "Still to do". `27 Vendor profile editor — 768` has no legend to change:
+its nav is a horizontal chip row with no room for one.
+
+**The save bar is the part that was actually counting wrong.** `09` read
+_"2 things left before you can publish — response time and payouts"_. That
+sentence is built from `describeBlockers`, which joins `PUBLISH_BLOCKERS` shorts
+and can never contain payouts. Frame `09` now reads **"1 thing left before you can
+publish — response time"**; the 768 frame's bar states the count without naming
+the blockers, and reads **"1 thing left before you can publish"**. See `16-vendor-dashboard.md` for the full one-list
+ruling; this is the same list on a different surface.

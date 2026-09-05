@@ -110,6 +110,38 @@ with reworded copy has failed too. The words are the design.
 frames is out of parity and carries a redesign ticket. The eight unchanged frames
 (`04`, `05`, `06`, `08`, `09`, `10`, `11`, `13`) are untouched by that revision.
 
+### The frames are trustworthy as composition, not as arithmetic
+
+Ruled 2026-09-04 (D30), after a pass that re-cut five frames found every one of
+its disputed numbers on the frame's side of a disagreement it should have lost.
+
+**Corroborate any number against the widths either side before building it.** A
+frame's composition — what is on the screen, in what order, fixed or scrolling —
+is authored and reviewed. Its _numbers_ are transcribed, and transcription drifts:
+`27 Search results — 1024` alone carried a 14px gutter against 16px at both 1440
+and 768, a 14px card radius against 16, an 18px name against 19, a 16px price
+against 17 and an 11.5px `From` against 12, plus one price that had shipped as a
+mangled fragment of its own style attribute. Frame `13 Admin`'s table pane was 4px
+short of the fifteen rows its own plan file promises. Frame `12b`'s scrim was
+frame `12`'s stops on a 200px-shorter box, which cost six points of alpha under the
+headline and left eleven of the panels' twenty-nine line boxes below 4.5:1.
+
+**A real ladder step moves monotonically.** Two neighbours agreeing against the
+middle is not a tie to be broken by which frame you opened; it is the middle being
+wrong. This is the method that found the staleness and it is the method that has
+to fix it — measure all three, then build.
+
+**The corollary, which is what makes this cheap:** where the frames _do_ agree,
+they are right, and re-litigating them wastes a pass. `27 Search — no results ·
+1024` matched its 1440 sibling chip for chip and was left alone even though its
+filters are wrong, because that is a screen question rather than an arithmetic one
+(`99-open-questions.md`).
+
+**And where a ruling has already overruled a frame, the frame is the record of
+what was overruled, not a miss.** Three of these are live: D24's sub-16px
+monograms, D25's `▾` caret, and `01-foundations.md`'s two accepted colour
+deviations. Each was re-filed by a later parity pass; the caret four times.
+
 ### Evidence
 
 A ticket is not Done until the parity screenshots exist and the checklists below

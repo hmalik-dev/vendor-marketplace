@@ -18,3 +18,4 @@
 - [Skeleton geometry from the wrong frame](review-checklist-skeleton-geometry-from-the-wrong-frame.md) — read it off the component, not the loading frame; and an undefined ramp step compiles to nothing, it does not fall through
 - [PGlite serialises whole transactions](review-checklist-pglite-serialises-transactions.md) — a `Promise.all` lock test in the API suite passes with the lock deleted; prove the race on the Docker Postgres with two connections
 - [Status filter vs webhook idempotency](review-checklist-status-filter-vs-webhook-idempotency.md) — narrowing a shared finder blinds `recordSuccessfulPayment`'s "already recorded?" read; a redelivery then 409s for three days
+- [.dc.html tag balance](review-checklist-dc-html-tag-balance.md) — a re-cut block's surplus `</div>` evicts a frame from its `.sc`; string-sliced frame tests can't see it. Diff div counts, then diff `closest('.sc')` in Chromium

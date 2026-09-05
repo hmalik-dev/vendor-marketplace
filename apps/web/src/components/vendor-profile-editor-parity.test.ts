@@ -643,7 +643,7 @@ describe('the section rail matches frame 09’s nav (#360)', () => {
   /** The rail block, ending where the legend under it begins. */
   function railBlock(): string {
     const side = editorFrame.slice(editorFrame.indexOf('<div class="side"'));
-    const legend = side.indexOf('Gold dots block publishing');
+    const legend = side.indexOf('Gold dots mark what’s unfinished');
 
     return side.slice(0, legend === -1 ? undefined : legend);
   }
