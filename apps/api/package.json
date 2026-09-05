@@ -13,7 +13,8 @@
     "reconcile:clerk": "tsx src/modules/webhooks/clerk.reconcile.cli.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:contention": "vitest run --config vitest.contention.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1118.0",

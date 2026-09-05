@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  toImageSrc,
+  wireBookingRequestSchema,
   wireCategoryListSchema,
   wireTagListSchema,
   wireUserSchema,
@@ -158,5 +160,30 @@ describe('wireVendorProfileSchema', () => {
     delete withoutBlockers.publishBlockers;
 
     expect(wireVendorProfileSchema.safeParse(withoutBlockers).success).toBe(false);
+  });
+});
+
+/*
+ * Every image field on the wire is resolved at this boundary, and a **nested**
+ * one does not inherit that from its parent. The bookings hub renders the
+ * vendor's photo straight into `<img src>`, so an unresolved bare key made the
+ * browser ask the web origin for `/vendor-profile/…` — a 500 and a broken
+ * avatar for every vendor with a profile photo. Found while driving #414.
+ */
+describe('wireBookingRequestSchema resolves the nested vendor avatar', () => {
+  const KEY = 'vendor-profile/11111111-1111-4111-8111-111111111111/abc.webp';
+  const avatarUrl = wireBookingRequestSchema.shape.vendor.shape.avatarUrl;
+
+  it('applies the same resolution every other image field gets', () => {
+    expect(avatarUrl.parse(KEY)).toBe(toImageSrc(KEY));
+  });
+
+  /* The defect itself: the stored key must never reach a `src` as written. */
+  it('never passes a bare object key through unresolved', () => {
+    expect(avatarUrl.parse(KEY)).not.toBe(KEY);
+  });
+
+  it('leaves a vendor without a photo null', () => {
+    expect(avatarUrl.parse(null)).toBeNull();
   });
 });

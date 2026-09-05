@@ -1087,3 +1087,224 @@ why they read as one bug.
 
 The reasoning is carried in the schema beside the constraint, so the next reader does not
 re-derive the rejected answer.
+
+---
+
+### D30: The #385 Ruling Round — the Search Ladder, the Publish Gate, the Checkout Label and the Sign-up Panel — *2026-09-04*
+
+**What this is.** #385 put four questions that had been blocking #371, #313 and #386. All
+four are answered here, and **every one is written into `design-plan/` in the same pass**,
+per D16's rule that a ruling living only in this file is not landed. The consumers
+implement — with one exception, taken here because a ruling whose own consumer still
+contradicts it is not landed: `form-section-nav.tsx`'s legend, the dot's accessible name and
+the `blocks` prop's doc all asserted that gold dots block publishing, which §2 rules false.
+
+**The method, because it changed three of the four answers.** Every disputed number was
+re-derived from the artefacts rather than read out of the merged rows. That found the
+merged rows wrong in five places, in both directions — the ticket understated two findings
+and misattributed a third. Numbers below were measured in a browser against the frame
+markup, not estimated.
+
+---
+
+**1 — The three `27 … 1024` search frames are re-cut, and so is `17 Search loading`.**
+
+Corroborated against `02 Search` (1440) and `14 Search tablet` (768). Card radius
+**16/~~14~~/16**, name **19/~~18~~/19**, price **17/~~16~~/17**, gutter **16/~~14~~/16**,
+count band **drawn/~~absent~~/drawn**. The full table is in `11-search.md`.
+
+**Two corrections to #377's own measurements**, because these are the numbers a later pass
+copies. The **meta line was never the outlier** — 1024 and 1440 already agreed at 12px, and
+768 is the one that differs at 12.5px, which is the larger card behaving correctly. What
+actually measured 11.5px against 12px on both sides is the **`From` label**. And the
+**20px gutter was not a survivor**: it measured 14px against 16px on both sides.
+
+**The `Distance` chip was not D16's to remove, and the finding is bigger than one frame.**
+D16 says nothing about distance. `11-search.md` does: the Refine bar is "refinement only:
+price, rating, tag groups", and `refine-bar.test.tsx:612` asserts the chips after the first
+two are exactly `Languages ▾ Cultural ▾ Dietary ▾`. **There is no distance filter in this
+product**, and the date is a search input that D16 and `11-search.md:101` both keep out of
+the bar. So `Price / Rating / Distance / Free on Jun 14 ✕` was stale on **both** loading
+frames — the 1440 one included — and `18 free that day` existed nowhere else at all.
+
+That is why **`17 Search loading` was re-cut too**, though it is a fourth frame and 1440
+wide. It is the 1024 loading frame's only corroborating sibling, and it disagreed with the
+plan on three counts at once: six skeletons where `11-search.md` says eight, a 3-column
+18px grid against `02`'s 4-column 16px, and a fixed 152px cover against `02`'s 3:2. A
+loading state whose whole promise is "nothing shifts on arrival" was shifting the entire
+grid. Both states now measure **335 × 342.3 at y 175** at 1440 and **317.3 × 319.6 at
+y 153** at 1024 — identical, measured.
+
+Also cut from the 1024 results grid: a `Photography` pill that neither neighbour draws and
+that D6's category-first query makes a tautology on every card. And one card's price had
+shipped as `font-weight:700;color:#23201C">,150` — a mangled fragment of its own style
+attribute, rendering as `,150`. It reads `$1,150`.
+
+**`13 Admin`'s table pane gets the 4px it was short.** Measured at 1440×900: 705px of pane
+content, a 34px fixed header, 45px rows — `(705 − 34) / 45 = 14.9`, so the fifteenth row was
+clipped by exactly 4px. `22-admin.md` is spec and it says fifteen, emphatically ("a table
+that promises eighteen and clips three is a bug"), so the frame yielded rather than the
+blurb: the title block's bottom padding goes 14 → 12 and the pane's 20 → 16, giving 709px
+for `15 × 45 + 34 = 709`, with 4px of slack. Fifteen rows, measured.
+
+**D24 is reconciled in the plan, not in the frames.** Sub-16px monograms render Instrument
+Sans and the frames draw serif; D24 already decided the law wins, so the frames are the
+record of what was overruled. Written into `01-foundations.md` beside the ramp, because an
+override living only here gets re-found — which is exactly what happened to D25's caret, now
+re-filed four times (#228, #338, and again as #392's fifth row). That row is struck and the
+override is recorded in `42-dropdowns.md`.
+
+---
+
+**2 — Setup completeness and publishing are not two gates. There is one list.**
+
+#378 framed this as six-versus-seven. **The count was never the disagreement.** Three
+artefacts hold three different lists that agree on a number only by accident: the code's six
+keys; frames `08` and `14 mobile`, whose six rows include portfolio,
+availability, connect payouts and a `Publish profile` row; and frames `20` /
+`27 … empty 1024`, whose seven add a starting price.
+
+**The tally is two frames against two, not four against two.** Two artefacts that
+looked like corroboration on the way in are not: `27 Vendor dashboard — 1024`
+draws no checklist at all — it is the *published* dashboard, whose rail is the
+booking week — and `24 Image upload`'s `4 of 6` reads "4 of 6 images minimum".
+Caught by re-reading both frames rather than trusting the string match that found
+them. It does not move the ruling, because the ruling never rested on a frame
+headcount: it rests on the code being the authority and on every frame that does
+draw the list being wrong about its **rows**.
+
+**The code's list is the only one that cannot lie** — `publishBlockers` comes from the API
+that runs the gate, and `publish-checklist.tsx` says in its own comment that a checklist
+disagreeing with the gate is worse than none. Portfolio, availability and a starting price
+do not block publishing, and **#360 already ruled `payouts` is not a `PUBLISH_BLOCKERS` key
+and must not become one**. So every frame is wrong, and wrong about the *rows* — correcting
+the number alone would have left the contradiction standing.
+
+Rejected: keeping a separate setup list for the empty state. A vendor would watch the
+denominator change from 7 to 6 with no event to explain it, and three of its rows can be
+left undone while the profile publishes anyway — a checklist you can ignore and still
+succeed teaches you to ignore it.
+
+`20` and `27 … empty 1024` now draw `Publish checklist · 4 of 6` with the six blocker
+sentences the component renders, their gold banner names the two that are actually open
+rather than three that never gated anything, and payouts keeps its own line in the gold
+panel one element below, where frame `08` already puts it.
+
+**The editor's Payouts dot stays — deleting it was this pass's own first wrong answer.**
+Frames `09` and `27 Vendor profile editor — 768` draw gold dots on Response time **and
+Payouts** under a legend reading *"Gold dots block publishing"*, and the first move here was
+to delete the Payouts dot to make the legend true. That was wrong, and a failing assertion
+in `vendor-profile-editor-parity.test.ts` is what caught it: #360 built that dot
+deliberately, computing it as `profile !== null && !profile.stripeOnboarded` — the real
+Connect state, not the publish gate — so it invents no status and clears when onboarding
+completes. Gold is right for it under `40-states.md`. Deleting it would have removed a true
+signal to rescue a sentence.
+
+**The legend was the false thing, and it changed instead**, to *"Gold dots mark what's
+unfinished"* — true of both dots, still saying gold means waiting on you. Changed in frame
+`09` (the only frame with a legend; the 768 nav is a chip row with no room for one) and in
+`form-section-nav.tsx`, **including the dot's accessible name**, which announced "Needs
+attention before publishing" and now announces "Still to do". The `blocks` prop's own doc
+said the same false thing and is corrected too.
+
+What *was* counting wrong is the save bar. `09` read `2 things left before you can publish —
+response time and payouts`; that sentence is built by `describeBlockers`, which joins
+`PUBLISH_BLOCKERS` shorts and can never contain payouts. It now reads `1 thing left before
+you can publish — response time`, and the 768 bar — which states the count without naming
+the blockers — reads `1 thing left before you can publish`.
+
+**Frame `08`'s row labels are the same defect on a frame this ruling did not open** and
+belong to **#372**, which owns it.
+
+---
+
+**3 — `Total today`. The frames did not split three-all.**
+
+#380's tally counted a layout constraint's prose as a copy source. `Total today` is the
+**string**: `14-checkout.md`'s content table specifies it, frame `05 Checkout` draws it,
+`checkout-screen.tsx:343` renders it, `checkout-screen.test.tsx:72` asserts it and
+`accepted-request.tsx:99` echoes it. `Due today` was **never specified anywhere** — it
+occurs in `30-responsive.md:24,240` and `CHANGE-ORDER-2026-08-28.md:165` only inside
+"Due today stays above the fold", a sentence about the fold in which the writer named the
+row informally. Frames `27 Checkout — 1024` and `21 Checkout declined` copied that phrasing.
+
+Both frames now read `Total today`; `30-responsive.md`'s two fold sentences are reworded so
+the phrase cannot be mistaken for a string again. The change order is left alone — it is a
+dated record of what was ordered, not a spec. And the layout question this was wearing the
+clothes of does not exist: the row's bottom sits at 302 in a 640px frame.
+
+---
+
+**4 — The sign-up panel: the scrim stays, the law stays, and the panel's *height* was the
+defect.**
+
+#313's **3.81:1 is confirmed** — re-measured at 3.80 by compositing frame `12`'s own scrim
+over a white backdrop. It was right about exactly one node, and it was **half the problem**:
+frame `12b`, which nobody had measured, failed across both its panels — eleven of the three
+panels' twenty-nine line boxes were under 4.5:1, the worst of them **3.37** on `12b`'s
+customer accent.
+
+**Two causes, and neither is the photograph.** All three panels draw the same 200°
+three-stop scrim in **percentages**. `12` is 900px tall; `12b`'s two are 700px, so the same
+stop arrives later in pixels and the gradient delivers **α 0.613** under `12b`'s vendor
+headline where `12` delivers 0.672 — six points, and plain cream on the thinner scrim
+measures 3.97. A scrim specified in percentages guarantees a *shape*, never the ink under a
+given line of text.
+
+Frame `12` has no height problem and its accent failed anyway, at **α 0.706** — *more*
+coverage than the 0.672 under the headline two lines above it, which passes at 5.13. So the
+reason is not position, which was this pass's first explanation and was backwards: gold is
+simply a darker foreground than cream, and at that coverage the two straddle 4.5:1. The same
+`gold-200` clears at 5.34 as the `BOOKING` label lower down only because the scrim has
+reached 0.789 there.
+
+So the three-way disjunction resolves as none of the three:
+
+- **The law stands, blanket.** A large-text carve-out was refused: this contrast table
+  exists because a run of technically-fine values had to be undone, and a floor with an
+  exception in it is a floor every future reading has to litigate.
+- **The scrim stays as frame `12` draws it**, and `21-sign-up.md`'s guarantee-by-selection
+  stands. Darkening it would dim the photograph across the 300px where it is already
+  sufficient — the thing D16 rejected.
+- **What moves:** the italic accent takes a new **`gold-150 #F9E2BD`** (`gold-200` keeps
+  every other use); `12b`'s mid stop moves 55% → **45%**, which is where `12`'s 55% lands on
+  a 200px-shorter panel — the same scrim, transcribed for the shorter box, not a darker one;
+  `12b`'s vendor tint darkens `rgba(40,48,34)` → `rgba(28,34,24)`, because the sage cast is
+  lighter than the clay one at equal alpha and that was the last 0.3; and `12`'s `Both`
+  micro-label leaves cream-at-.55 for .82, since it names which promise belongs to both roles
+  and the table bans dimming anything that carries meaning.
+
+**Every node is now measured against a pure white backdrop** — the worst any photograph can
+present — so the guarantee is a property of the panel rather than a promise about one file.
+Worst line box across all three panels afterwards: **4.59**, up from 3.37, with eleven
+failures gone and none introduced. The table is in `01-foundations.md`.
+
+**D16 item 7's "no scrim" was factually wrong about the frame.** `12` has always drawn one,
+and `01-foundations.md`'s `#C4D6A8` ruling said so in its own first sentence. What D16
+actually decided — the asset is fixed, hand-picked and never dynamic — stands, and is now
+belt-and-braces rather than load-bearing.
+
+---
+
+**The general lesson, recorded where a parity pass will read it** (`04-laws.md` and
+`.claude/rules/web-design-parity.md`): **the frames are trustworthy as composition, not as
+arithmetic.** Composition is authored and reviewed; numbers are transcribed, and
+transcription drifts. Corroborate any number against the widths either side before building
+it — two neighbours agreeing against the middle is the middle being wrong, not a ladder
+step. The corollary is what makes it cheap: where the frames agree they are right, and
+re-litigating them wastes a pass.
+
+**Left open on purpose.** `18 Search no results` and `27 Search — no results · 1024` draw
+`Under $1,200 ✕ · Free on Jun 14 ✕ · Within 25 mi ✕`, and only the first is a filter this
+product has. The two frames **agree with each other**, so the corroboration method does not
+flag them — and correcting them is a product question about what a zero-result search
+relaxes, not an arithmetic one. Recorded in `99-open-questions.md` rather than ruled here.
+
+**What this unblocks.** #371, #313 and #386 lose their `Blocked By`. #392 loses its chevron
+row and gains frame `13`'s new pane padding. #372 inherits frame `08`'s checklist labels.
+
+**And it closes one of #413's three options without being asked to.** #413 — frame `06`'s
+white-on-sage at 3.40–4.04:1 — was filed with "the plan grows a large-text carve-out" as its
+first option. §4 refuses a carve-out outright and blanket, so that option is gone and #413
+is a choice between moving the colour and moving the ground. Recorded here rather than left
+for #413 to rediscover.

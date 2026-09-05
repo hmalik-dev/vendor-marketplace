@@ -89,4 +89,16 @@ describe('the local Postgres tracks the hosted major', () => {
     expect(compose).toContain('vendor-marketplace-pgdata:/var/lib/postgresql\n');
     expect(compose).not.toContain('vendor-marketplace-pgdata:/var/lib/postgresql/data');
   });
+
+  /*
+   * CI grew a Postgres of its own for the contention suites (#399), which makes
+   * it a third copy of this version — and the one nobody runs locally, so drift
+   * there would only ever be found by the failure it causes.
+   */
+  it('pins the CI service to the same major', () => {
+    const declared = /image: postgres:(\d+)-alpine/.exec(read('.github/workflows/ci.yml'))?.[1];
+
+    expect(declared).toBeDefined();
+    expect(Number.parseInt(declared ?? '', 10)).toBe(NEON_POSTGRES_MAJOR);
+  });
 });
