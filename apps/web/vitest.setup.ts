@@ -1,3 +1,16 @@
+/*
+ * Vitest replaces `next build`, and `next build` is what inlines every
+ * `NEXT_PUBLIC_*` value into the bundle a component reads. Checkout reads its
+ * Stripe key at import time — deliberately, so a build cannot ship an empty one
+ * — which without a stand-in fails that whole file on a machine whose shell
+ * happens not to carry `.env`.
+ *
+ * Only ever a stand-in: `??=` leaves a real value alone, and it is confined to
+ * the one key a module reads eagerly, so a test that stubs its own environment
+ * still sees its own value.
+ */
+process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ??= 'pk_test_vitest0000000000000000';
+
 /**
  * jsdom implements neither of these, and Radix and cmdk call both on mount —
  * without them every popover-backed component throws before it can render.

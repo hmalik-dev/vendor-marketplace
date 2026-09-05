@@ -52,6 +52,13 @@ import { z } from 'zod';
  *
  * `NEXT_PUBLIC_S3_PUBLIC_URL` is read as a literal property access because
  * Next inlines these only when it can see one statically.
+ *
+ * A bare read rather than `publicEnv`, deliberately: this module is imported by
+ * almost every screen, so a throw here would take the whole app down instead of
+ * one image. What used to make a missing value silent — every uploaded photo
+ * rendering as the empty state, indistinguishable from "no photos yet" — is
+ * closed at the build instead: `assertWebEnv` now validates the `storage`
+ * capability and refuses to ship a deployment without this row.
  */
 const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_S3_PUBLIC_URL;
 

@@ -342,6 +342,12 @@ describe('the request survives leaving the page', () => {
     await user.type(screen.getByLabelText('Venue or location'), value);
   }
 
+  /* The only way a date reaches a draft: the picker, not a URL parameter. */
+  async function pickDate(date: string): Promise<void> {
+    await userEvent.click(screen.getByLabelText('Event date'));
+    await userEvent.click(await screen.findByRole('gridcell', { name: `${date} — available` }));
+  }
+
   it('brings back what was typed, and says that it did', async () => {
     renderScreen();
     await typeVenue('The Marfa barn');
@@ -375,6 +381,116 @@ describe('the request survives leaving the page', () => {
   it('says nothing when there was no draft', () => {
     renderScreen();
 
+    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+  });
+
+  /*
+   * #404: the restore used to replace the whole form, so the day chosen on the
+   * vendor's rail one second ago lost to the day stored a week ago — silently,
+   * behind a banner that said only that something had been kept.
+   */
+  it('lets the date chosen on this navigation win over the stored one', async () => {
+    renderScreen({ initialDate: FREE_DATE });
+    await typeVenue('The Marfa barn');
+
+    cleanup();
+    renderScreen({ initialDate: BOOKED_DATE });
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(
+        'The Marfa barn',
+      ),
+    );
+    expect(screen.getByLabelText('Event date').textContent).toBe('September 14, 2026');
+  });
+
+  it('lets the guest count carried in from the rail win over the stored one', async () => {
+    renderScreen();
+    await typeVenue('The Marfa barn');
+    await userEvent.type(screen.getByLabelText('Guest count'), '50');
+
+    cleanup();
+    renderScreen({ initialGuestCount: '120' });
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(
+        'The Marfa barn',
+      ),
+    );
+    expect((screen.getByLabelText('Guest count') as HTMLInputElement).value).toBe('120');
+  });
+
+  it('names what this navigation kept, rather than claiming everything survived', async () => {
+    renderScreen({ initialDate: FREE_DATE });
+    await typeVenue('The Marfa barn');
+    await pickDate('2026-09-20');
+    await userEvent.type(screen.getByLabelText('Guest count'), '50');
+
+    cleanup();
+    renderScreen({ initialDate: BOOKED_DATE, initialGuestCount: '120' });
+
+    expect(
+      await screen.findByText(
+        'We kept what you had written, and the date and guest count you just set. Change anything before you send it.',
+      ),
+    ).toBeDefined();
+  });
+
+  /*
+   * The draft's whole content lost to this navigation, so nothing of it is on
+   * the screen. Saying it was kept describes work the customer can see is not
+   * there — the banner is gated on the merge, not on a draft being found.
+   */
+  it('says nothing when every field the draft held lost to this navigation', async () => {
+    renderScreen();
+    await userEvent.type(screen.getByLabelText('Guest count'), '50');
+
+    cleanup();
+    renderScreen({ initialGuestCount: '250' });
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Guest count') as HTMLInputElement).value).toBe('250'),
+    );
+    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+  });
+
+  /*
+   * The URL's own value is not a draft even when something else on the form
+   * is. Stripping it at the write is what makes that true for every draft and
+   * not only for the one nobody typed into.
+   */
+  it('does not save a URL-only guest count alongside something that was typed', async () => {
+    renderScreen({ initialGuestCount: '120' });
+    await typeVenue('The Marfa barn');
+
+    cleanup();
+    renderScreen();
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(
+        'The Marfa barn',
+      ),
+    );
+    expect((screen.getByLabelText('Guest count') as HTMLInputElement).value).toBe('');
+    expect(
+      screen.getByText('We kept what you had written. Change anything before you send it.'),
+    ).toBeDefined();
+  });
+
+  /* A value that only ever came from the URL is not something anybody wrote. */
+  it('does not save a guest count that arrived only in the URL', async () => {
+    renderScreen({ initialGuestCount: '120' });
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Guest count') as HTMLInputElement).value).toBe('120'),
+    );
+
+    cleanup();
+    renderScreen();
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Guest count') as HTMLInputElement).value).toBe(''),
+    );
     expect(screen.queryByText(/We kept what you had written/)).toBeNull();
   });
 

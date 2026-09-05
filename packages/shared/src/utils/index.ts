@@ -564,3 +564,24 @@ const BIDI_CONTROLS = /[\u202a-\u202e\u2066-\u2069]/g;
 export function stripBidiControls(value: string): string {
   return value.replace(BIDI_CONTROLS, '');
 }
+
+/**
+ * Joins a list the way a person would: `a`, `a and b`, `a, b and c`.
+ *
+ * The same sentence is spoken in four places — the publish bar's blockers, the
+ * admin list's dropped filters, search's cleared fields and the booking
+ * request's restore banner — and each of them reads as prose rather than as a
+ * list widget. It was written out inline in every one of them until #404 was
+ * about to make it five.
+ *
+ * `describeBlockers` in `../constants` cannot call it: this module already
+ * imports from that one, and reaching back the other way would close a cycle.
+ * The other two are in `apps/web` and can, whenever a ticket is in those files.
+ */
+export function joinWithAnd(items: readonly string[]): string {
+  if (items.length <= 1) {
+    return items[0] ?? '';
+  }
+
+  return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+}

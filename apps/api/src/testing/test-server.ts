@@ -5,6 +5,7 @@ import type { ApiEnv } from '../config/env.js';
 import type { AppDatabase } from '../lib/database.js';
 import type { EmailGateway, EmailMessage } from '../lib/email.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
+import { refundParams, refusedRefundParams } from '../lib/stripe.js';
 import type {
   PaymentIntentSnapshot,
   StripeAccountStatus,
@@ -206,6 +207,10 @@ export interface FakeStripe extends StripeConnectGateway {
     reason: string | undefined;
     /** Recorded so a suite can assert a replayed refund is deduped by Stripe. */
     idempotencyKey: string | undefined;
+    /** Reversed the vendor's share out of their connected account (D31). */
+    reverseTransfer: boolean;
+    /** Gave Orla's commission back as well (D31). */
+    refundApplicationFee: boolean;
   }[];
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
@@ -323,14 +328,38 @@ function createFakeStripe(): FakeStripe {
         throw new Error(`Fake Stripe refused a refund for ${input.paymentIntentId}`);
       }
 
+      /*
+       * The double judges the *real* request, not a paraphrase of it. Before
+       * #416 it recorded whatever it was handed, so the suite was green for two
+       * months on a flag pair Stripe answers 400 for on every single call. It
+       * builds the params the adapter would send and applies Stripe's own
+       * refusal, so a policy that cannot work fails here first.
+       */
+      const params = refundParams(input);
+      const refusal = refusedRefundParams(params);
+
+      if (refusal) {
+        throw new Error(refusal);
+      }
+
       refunds.push({
         paymentIntentId: input.paymentIntentId,
         amountCents: input.amountCents,
         reason: input.reason,
         idempotencyKey: input.idempotencyKey,
+        reverseTransfer: params.reverse_transfer === true,
+        refundApplicationFee: params.refund_application_fee === true,
       });
 
       return { refundId: `re_test_${refunds.length}`, amountCents: input.amountCents };
+    },
+
+    findRefund: async (paymentIntentId) => {
+      const index = refunds.findIndex((refund) => refund.paymentIntentId === paymentIntentId);
+
+      return index === -1
+        ? null
+        : { refundId: `re_test_${index + 1}`, amountCents: refunds[index]!.amountCents };
     },
   };
 

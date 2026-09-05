@@ -1,5 +1,67 @@
 import { describe, expect, it } from 'vitest';
-import { describeAccountEvent, isMissingPayoutsOnly, isOnboarded } from './stripe.js';
+import {
+  REFUND_UNWIND,
+  describeAccountEvent,
+  isMissingPayoutsOnly,
+  isOnboarded,
+  refundParams,
+  refusedRefundParams,
+} from './stripe.js';
+
+describe('refundParams', () => {
+  const INPUT = { paymentIntentId: 'pi_destination', amountCents: 72_500 } as const;
+
+  /*
+   * #416. The shipped pair was `refund_application_fee: true` with
+   * `reverse_transfer: false`, which Stripe answers 400 for on every
+   * destination charge — so no refund this product offered had ever succeeded.
+   * D31 rules the full unwind: all three parties back where they started.
+   */
+  it('sends the full unwind for a destination charge', () => {
+    expect(refundParams(INPUT)).toEqual({
+      payment_intent: 'pi_destination',
+      amount: 72_500,
+      reason: undefined,
+      refund_application_fee: true,
+      reverse_transfer: true,
+    });
+  });
+
+  /**
+   * The guard that keeps the double honest: the fake refuses whatever
+   * `refusedRefundParams` refuses, so a policy Stripe cannot perform turns
+   * every refund route test red rather than passing against a call that 400s.
+   */
+  it('ships a policy Stripe accepts', () => {
+    expect(refusedRefundParams(refundParams(INPUT, REFUND_UNWIND))).toBeNull();
+  });
+});
+
+describe('refusedRefundParams', () => {
+  const params = (unwind: { reverseTransfer: boolean; refundApplicationFee: boolean }) =>
+    refundParams({ paymentIntentId: 'pi_one', amountCents: 100 }, unwind);
+
+  it('refuses refunding the fee without reversing the transfer, as Stripe does', () => {
+    expect(
+      refusedRefundParams(params({ reverseTransfer: false, refundApplicationFee: true })),
+    ).toBe(
+      'The application fee for charge pi_one was taken on the associated transfer, so to ' +
+        'refund the application fee you must also set reverse_transfer=true',
+    );
+  });
+
+  it('accepts the other three combinations', () => {
+    expect(refusedRefundParams(params({ reverseTransfer: true, refundApplicationFee: true }))).toBe(
+      null,
+    );
+    expect(
+      refusedRefundParams(params({ reverseTransfer: true, refundApplicationFee: false })),
+    ).toBe(null);
+    expect(
+      refusedRefundParams(params({ reverseTransfer: false, refundApplicationFee: false })),
+    ).toBe(null);
+  });
+});
 
 describe('isOnboarded', () => {
   /*

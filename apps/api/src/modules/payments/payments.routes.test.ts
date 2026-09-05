@@ -661,12 +661,17 @@ describe('payments', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().refundCents).toBe(PRICE_CENTS);
       expect(response.json().isFullRefund).toBe(true);
+      // D31, the full unwind: the vendor gives their share back and Orla gives
+      // its commission back, which is the only pair Stripe accepts on a
+      // destination charge that carried an application fee (#416).
       expect(harness.stripe.refunds).toEqual([
         {
           paymentIntentId: booking!.stripePaymentIntentId,
           amountCents: PRICE_CENTS,
           reason: 'requested_by_customer',
-          idempotencyKey: `cancel_${booking!.id}`,
+          idempotencyKey: `cancel_${booking!.id}_unwind`,
+          reverseTransfer: true,
+          refundApplicationFee: true,
         },
       ]);
     });
@@ -715,6 +720,18 @@ describe('payments', () => {
 
       expect(response.json().refundCents).toBe(PRICE_CENTS / 2);
       expect(response.json().isFullRefund).toBe(false);
+      // The unwind is the same at both tiers — Stripe reverses the transfer and
+      // the fee proportionally, so the three-way split survives a 50% refund.
+      expect(harness.stripe.refunds).toEqual([
+        {
+          paymentIntentId: booking!.stripePaymentIntentId,
+          amountCents: PRICE_CENTS / 2,
+          reason: 'requested_by_customer',
+          idempotencyKey: `cancel_${booking!.id}_unwind`,
+          reverseTransfer: true,
+          refundApplicationFee: true,
+        },
+      ]);
     });
 
     it('frees the date again', async () => {
@@ -870,6 +887,48 @@ describe('payments', () => {
       expect(harness.stripe.refunds).toHaveLength(1);
     });
 
+    /*
+     * The refund goes out before the row moves, so an update that *throws*
+     * leaves the money returned on a booking still reading `confirmed` — and
+     * Stripe forgets the idempotency key after 24 hours, so the customer's
+     * retry the next day used to be a second refund. Under D31 that reverses
+     * the vendor's transfer twice and takes a third party's account negative.
+     */
+    it('completes a retry against an existing refund instead of paying it twice', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      // The state a throw leaves behind: refunded at Stripe, row untouched, and
+      // far enough in the past that no idempotency key survives.
+      harness.stripe.refunds.push({
+        paymentIntentId: booking!.stripePaymentIntentId!,
+        amountCents: PRICE_CENTS,
+        reason: 'requested_by_customer',
+        idempotencyKey: undefined,
+        reverseTransfer: true,
+        refundApplicationFee: true,
+      });
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().refundCents).toBe(PRICE_CENTS);
+      // Read off the money that moved: the event is months out, so the quote
+      // and the existing refund agree here — the point is that both are the
+      // full amount rather than a second payment.
+      expect(response.json().isFullRefund).toBe(true);
+      // Still the one refund the first attempt made — no second one.
+      expect(harness.stripe.refunds).toHaveLength(1);
+
+      const [row] = await harness.database.db.select().from(bookings);
+      expect(row?.status).toBe('cancelled');
+    });
+
     it('refuses the vendor cancelling on the customers behalf', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
@@ -881,7 +940,7 @@ describe('payments', () => {
       expect(harness.stripe.refunds).toEqual([]);
     });
 
-    it('tells the vendor their date is free again', async () => {
+    it('tells the vendor their date is free again, and that their payout is reversed', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
@@ -893,7 +952,17 @@ describe('payments', () => {
         .where(eq(notifications.type, 'booking_cancelled'));
 
       expect(rows).toHaveLength(1);
-      expect(rows[0]?.body).toBe('The date is free again on your calendar.');
+      /*
+       * D31 takes the vendor's share back out of their connected account, and a
+       * vendor already paid out is carried negative by it. This notification is
+       * the only message the product sends them about the cancellation, so it
+       * is where that has to be said rather than left to a Stripe statement.
+       */
+      expect(rows[0]?.body).toBe(
+        'The date is free again on your calendar. Their refund takes back the same share of ' +
+          'your payout, out of your Stripe balance — which can leave it negative if this ' +
+          'booking had already been paid out.',
+      );
     });
   });
 });

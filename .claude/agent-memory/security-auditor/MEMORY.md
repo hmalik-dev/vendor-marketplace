@@ -1,6 +1,8 @@
 # Security auditor memory — vendor-marketplace
 
 - [Env schema target is a live-key trap](env-target-live-key-trap.md) — apps must pass `baseline`; `local` bricks the Vercel build and no test covers the choice
+- [The deployment gate fails open on an unnamed host](deployment-gate-detects-by-marker-and-fails-open.md) — no marker and no `NODE_ENV=production` means the laptop value set, silently; the markers are unhashed pass-through env
+- [The Clerk endpoint guard string-matches localhost](webhook-endpoint-guard-string-matches-localhost.md) — `LOCALHOST`, `127.0.0.1` and `[::1]` pass wherever the platform announces no origin
 - [Credential fixtures assembled at runtime](credential-fixtures-assembled-at-runtime.md) — a PreToolUse hook blocks credential-shaped literals on any bash command line, probe scripts included
 - [Idempotency guards orphan their side effects](idempotency-guards-orphan-side-effects.md) — every ON CONFLICT DO NOTHING here fronts non-transactional follow-on writes; the retry absorbs the half-failed first attempt
 - [URL params are validated in the nuqs hook](url-params-validated-in-the-nuqs-hook.md) — nuqs types but never validates; the hook is the boundary, not the screen
@@ -31,4 +33,6 @@
 - [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — the RSC-payload lesson stands; the availability `note` endpoint half is FIXED in #407
 - [Availability floors are one day wider than UTC](availability-date-floors-are-universally-past.md) — since #409; the `booked` predicates in the DAO, not the floor, are what protect history
 - [The reply-window cap lives in four places](reply-deadline-cap-must-match-accept-guard.md) — `event_date + 2` UTC days is in a predicate, a helper, an expiry compare and raw SQL; drift makes rows live-but-unacceptable
+- [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the key is the booking id, the amount drifts by tier and the unwind flags changed; Stripe refuses the retry
+- [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — refund precedes the row move, no refund column, and past 24h a retry debits the vendor a second time
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
