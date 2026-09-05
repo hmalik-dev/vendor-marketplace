@@ -242,7 +242,7 @@ guest count is itself persisted as a 'draft'. |
 snapshot is taken from the live form rather than what was sent, and its publish
 switch reads unsaved state while toggling the saved row. Around it, the package
 form and the portfolio manager both discard edits when their parent r |
-| **406** | **Development defaults can reach a deployed build** | INFRA | M-OPS | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `storage` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 6 verified findings. Five variables carry a development default that a production build silently
+| **406** | **Development defaults can reach a deployed build** | INFRA | M-OPS | **P0 Critical** | **In Progress** | `worktree-t406` | **None** | `core` `auth` `storage` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 6 verified findings. Five variables carry a development default that a production build silently
 accepts: the API boots on localhost and MinIO, the web bundle bakes
 `http://localhost:4000` as its API origin, every stored-key image resolves to
 nothing, checkout loads Stripe.js with an empty publishable key, and the Clerk |
@@ -2249,7 +2249,7 @@ list.
 
 ### #406: Development defaults can reach a deployed build
 
-**Milestone:** M-OPS | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `storage` `stripe`
+**Milestone:** M-OPS | **Priority:** P0 Critical | **Status:** In Progress | **Capabilities:** `core` `auth` `storage` `stripe`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding

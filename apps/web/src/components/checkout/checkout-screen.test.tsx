@@ -8,6 +8,14 @@ const confirmPayment = vi.fn();
 const pushMock = vi.fn();
 
 /*
+ * Swapped per test. `useStripe` and `useElements` both answer `null` until
+ * Stripe.js has loaded and the Elements group has mounted — the window in which
+ * the pay button used to be enabled and do nothing when clicked.
+ */
+let stripe: { confirmPayment: typeof confirmPayment } | null = null;
+let elements: Record<string, never> | null = null;
+
+/*
  * Stripe's own components are stubbed, not its behaviour. `PaymentElement`
  * renders an iframe this environment has no way to fill, and the thing under
  * test is what the screen does with the answers `confirmPayment` gives — the
@@ -16,8 +24,8 @@ const pushMock = vi.fn();
 vi.mock('@stripe/react-stripe-js', () => ({
   Elements: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   PaymentElement: () => <div data-testid="payment-element" />,
-  useStripe: () => ({ confirmPayment }),
-  useElements: () => ({}),
+  useStripe: () => stripe,
+  useElements: () => elements,
 }));
 
 vi.mock('@stripe/stripe-js', () => ({ loadStripe: () => Promise.resolve(null) }));
@@ -40,6 +48,8 @@ function checkout(overrides: Partial<WireCheckoutIntent> = {}): WireCheckoutInte
 }
 
 beforeEach(() => {
+  stripe = { confirmPayment };
+  elements = {};
   confirmPayment.mockReset();
   confirmPayment.mockResolvedValue({});
   pushMock.mockReset();
@@ -48,6 +58,33 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('CheckoutScreen', () => {
+  /*
+   * The defect: the button was disabled only by `paying`, so it was live from
+   * first paint while `useStripe()` was still null — `pay` returned early, and
+   * the customer got no spinner, no error and no charge. The screen has already
+   * opened a real PaymentIntent by this point, which is what makes a silent
+   * dead button the wrong failure.
+   */
+  it('disables the pay button until Stripe.js has loaded', () => {
+    stripe = null;
+    elements = null;
+
+    render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+
+    const button = screen.getByRole('button', { name: /^Pay/ });
+
+    expect(button).toHaveProperty('disabled', true);
+    // `40-states.md`: a blocked primary takes the `clay-300` disabled fill and
+    // stays visible, rather than the primitive's opacity wash over `clay-400`.
+    expect(button.className).toContain('disabled:bg-clay-300');
+  });
+
+  it('enables it once Stripe.js and the Elements group are up', () => {
+    render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+
+    expect(screen.getByRole('button', { name: /^Pay/ })).toHaveProperty('disabled', false);
+  });
+
   it('names who accepted, when, and what paying secures', () => {
     render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
 

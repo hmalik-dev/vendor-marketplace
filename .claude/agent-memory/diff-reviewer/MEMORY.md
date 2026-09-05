@@ -18,3 +18,4 @@
 - [Skeleton geometry from the wrong frame](review-checklist-skeleton-geometry-from-the-wrong-frame.md) — read it off the component, not the loading frame; and an undefined ramp step compiles to nothing, it does not fall through
 - [PGlite serialises whole transactions](review-checklist-pglite-serialises-transactions.md) — a `Promise.all` lock test in the API suite passes with the lock deleted; prove the race on the Docker Postgres with two connections
 - [Status filter vs webhook idempotency](review-checklist-status-filter-vs-webhook-idempotency.md) — narrowing a shared finder blinds `recordSuccessfulPayment`'s "already recorded?" read; a redelivery then 409s for three days
+- [Single-URL validator vs list-shaped rows](review-checklist-single-url-validator-vs-list-shape.md) — `new URL(value)` once is blind to a comma-separated `WEB_URL`; read each row's shape regex, then feed a two-entry value
