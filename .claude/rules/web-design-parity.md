@@ -31,6 +31,23 @@ failed too — the words _are_ the design.
 
 Delegate the comparison to the `parity-checker` agent rather than eyeballing it.
 
+## Corroborate a number before you build it
+
+The frames are trustworthy as **composition**, not as **arithmetic**. Composition
+is authored; numbers are transcribed, and transcription drifts.
+
+**Before building any measurement off a frame, read it at the widths either
+side.** A value that disagrees with _both_ neighbours is the middle frame being
+wrong, not a ladder step — `27 Search results — 1024` held five such values at
+once, and one price that had shipped as a mangled fragment of its own style
+attribute. Ruled 2026-09-04 (D30); the worked example is in `04-laws.md`.
+
+**Where a ruling has already overruled a frame, the frame is the record of what
+was overruled.** Do not file it again. Live overrides: sub-16px avatar monograms
+render Instrument Sans though the frames draw serif (D24); no trigger draws the
+`▾` the frames draw (D25); and `01-foundations.md` records two colour values as
+accepted deviations. The caret has been re-filed four times.
+
 ## A one-shot read is a sample, not a measurement
 
 An animated property has no single computed value. Read it once, in the same

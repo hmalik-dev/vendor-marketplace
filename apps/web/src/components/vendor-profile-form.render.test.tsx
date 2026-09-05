@@ -571,7 +571,7 @@ describe('the Payouts rail entry (#360)', () => {
 
     expect(
       within(railLink('Payouts')).getByRole('img', {
-        name: 'Needs attention before publishing',
+        name: 'Still to do',
       }),
     ).toBeTruthy();
   });
@@ -581,7 +581,7 @@ describe('the Payouts rail entry (#360)', () => {
 
     expect(
       within(railLink('Payouts')).queryByRole('img', {
-        name: 'Needs attention before publishing',
+        name: 'Still to do',
       }),
     ).toBeNull();
   });
@@ -595,7 +595,7 @@ describe('the Payouts rail entry (#360)', () => {
     renderSaved({ stripeOnboarded: false });
 
     const dot = within(railLink('Payouts')).getByRole('img', {
-      name: 'Needs attention before publishing',
+      name: 'Still to do',
     });
 
     expect(dot.className).toContain('bg-gold-400');

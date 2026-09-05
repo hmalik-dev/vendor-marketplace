@@ -197,3 +197,27 @@ request (the one `Send a message` on a profile opens) shows no context line,
 which is honest rather than a gap. Ruled 2026-08-30 (#310 for #219/#229); see
 **A thread is scoped to one booking request** in
 `.claude/plans/vendor-marketplace-decisions.md`.
+
+## The no-results screen is built on two filters the product does not have
+
+Found 2026-09-04 while ruling D30, and **deliberately not ruled there**.
+
+`18 Search no results` and `27 Search — no results · 1024` draw a Refine bar of
+`Under $1,200 ✕ · Free on Jun 14 ✕ · Within 25 mi ✕`. The two frames agree with
+each other chip for chip, so nothing in the corroborate-against-both-neighbours
+method flags them — and that is why they survived a pass that re-cut everything
+around them.
+
+But **only the price chip is a filter**. `11-search.md` says the Refine bar is
+"refinement only: price, rating, tag groups"; there is no distance filter and no
+date chip (date is a search input, and D16 removed the availability chip).
+
+This is not an arithmetic correction, which is why D30 left it. The whole screen
+is built on those three: its headline counts "all three filters", its body names
+the distance limit as the usual culprit, `relaxations.ts:130` quotes that line
+back, and the one-tap relaxations are ordered by what they cost the user. Fixing
+it means deciding what a zero-result search is actually relaxing — which is a
+product question about the empty state, not a number.
+
+**Whoever takes it:** the frames are corroborated and internally consistent, so
+build to the ruling, not to the frames.

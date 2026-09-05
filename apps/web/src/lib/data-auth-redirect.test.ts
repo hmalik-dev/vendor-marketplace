@@ -38,7 +38,7 @@ vi.mock('./api-client', async (importOriginal) => ({
 const { getOwnVendorProfile, getOwnPackages, getOwnPortfolio, getOwnAvailability } =
   await import('./vendor-data');
 const { getOwnBookingRequests, getOwnBookings } = await import('./customer-data');
-const { getOwnConversations } = await import('./messaging-data');
+const { getOwnConversations, loadOwnConversations } = await import('./messaging-data');
 const vendorRequests = await import('./vendor-requests');
 
 /** Every protected read, with the surface it backs. */
@@ -181,5 +181,36 @@ describe('a read whose resource does not exist yet', () => {
     ['availability', getOwnAvailability],
   ])('returns an empty %s list rather than redirecting', async (_name, read) => {
     await expect(read()).resolves.toEqual([]);
+  });
+});
+
+/*
+ * #402 — the messages screen renders "No conversations yet" from an empty
+ * list, so an outage that returned one made a designed empty state speak for a
+ * database it never reached. The two are now distinguishable, and only the
+ * screen where the list *is* the content asks.
+ */
+describe('a conversation list that could not be read', () => {
+  beforeEach(() => {
+    token = 'session-token';
+  });
+
+  it('says the read failed rather than that there is nothing there', async () => {
+    apiRequest.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    await expect(loadOwnConversations()).resolves.toEqual({ conversations: [], failed: true });
+  });
+
+  it('says nothing failed when the inbox is genuinely empty', async () => {
+    apiRequest.mockResolvedValue([]);
+
+    await expect(loadOwnConversations()).resolves.toEqual({ conversations: [], failed: false });
+  });
+
+  /* The supplementary surfaces keep the shape they had. */
+  it('still hands the bare list to the bands that only need it', async () => {
+    apiRequest.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    await expect(getOwnConversations()).resolves.toEqual([]);
   });
 });

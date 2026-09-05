@@ -334,6 +334,30 @@ export function isUniversallyPastDate(value: string, now: Date = new Date()): bo
 }
 
 /**
+ * True when a calendar date is still ahead **for every visitor on Earth**, and
+ * so may be refused by a server asked to treat it as already happened.
+ *
+ * The mirror of `isUniversallyPastDate`, and here for the same reason: a server
+ * cannot know the caller's day, so the only honest claim it can make is the one
+ * that holds in every zone. UTC-12 to UTC+14 puts the caller's day within one
+ * of the server's, so the day *after* the server's UTC day is the earliest that
+ * is future everywhere.
+ *
+ * Added for `completeBooking` (#409). Refusing on the server's own day told a
+ * vendor east of UTC that the event they had just finished "has not happened
+ * yet", because their day was already the next one — and the client's own
+ * guard, reading the browser's clock, had correctly offered them the button.
+ */
+export function isUniversallyFutureDate(value: string, now: Date = new Date()): boolean {
+  const parsed = parseDateString(value);
+  if (parsed === null) {
+    return false;
+  }
+
+  return parsed.getTime() > addDays(now, 1).setUTCHours(0, 0, 0, 0);
+}
+
+/**
  * The first instant at which `isUniversallyPastDate(value)` becomes true — the
  * moment the date stops being anybody's today, anywhere.
  *

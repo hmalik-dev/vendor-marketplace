@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { ApiClientError } from '@/lib/api-client';
 import { signInPathReturningTo } from '@/lib/return-path';
 import { useApi } from '@/lib/use-api';
+import { useViewerToday } from '@/lib/use-viewer-today';
 import { cn } from '@/lib/utils';
 
 export interface BookingRailProps {
@@ -26,8 +27,8 @@ export interface BookingRailProps {
   startingPriceCents: number | null;
   packages: readonly ServicePackage[];
   reviewCount: number;
-  /** Today in the vendor's calendar, so a past date cannot be requested. */
-  today: string;
+  /** Seeds the first paint; `useViewerToday` re-anchors the picker's floor. */
+  serverToday: string;
   /** The vendor's published availability, keyed by `YYYY-MM-DD`. */
   calendar: Readonly<Record<string, AvailabilityStatus>>;
 }
@@ -48,9 +49,10 @@ export function BookingRail({
   startingPriceCents,
   packages,
   reviewCount,
-  today,
+  serverToday,
   calendar,
 }: BookingRailProps): React.ReactElement {
+  const today = useViewerToday(serverToday);
   const fieldId = useId();
   const errorId = `${fieldId}-message-error`;
   const router = useRouter();
@@ -113,6 +115,18 @@ export function BookingRail({
     } catch (error) {
       if (error instanceof ApiClientError && error.statusCode === 401) {
         router.push(signInPathReturningTo(`${window.location.pathname}${window.location.search}`));
+        return;
+      }
+
+      /*
+       * Opening a thread is customer-only, the way sending a request is
+       * (#402). A vendor reading a competitor's profile — or their own — can
+       * still press this, and "try again in a moment" would be a lie about a
+       * refusal that will never change.
+       */
+      if (error instanceof ApiClientError && error.statusCode === 403) {
+        setMessageError('Only a customer account can start a thread with a vendor.');
+        setOpening(false);
         return;
       }
 

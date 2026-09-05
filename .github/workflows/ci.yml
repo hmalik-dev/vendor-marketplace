@@ -12,8 +12,11 @@ concurrency:
 
 env:
   TURBO_TELEMETRY_DISABLED: 1
-  # The suites boot an in-process Postgres (PGlite); no service container is
-  # needed, but the db package still validates that a URL is configured.
+  # Most suites boot an in-process Postgres (PGlite) and need no server. The
+  # contention suites do — PGlite is one connection, so a row lock there cannot
+  # be told apart from its absence — and they run against the service container
+  # below, each creating and dropping a database of its own on it. The db
+  # package also validates that a URL is configured, which this satisfies.
   DATABASE_URL: postgresql://vendor_marketplace:vendor_marketplace_ci@localhost:5432/vendor_marketplace
   # `next build` instantiates ClerkProvider, which refuses to load without a
   # syntactically valid publishable key. These are placeholders, not secrets:
@@ -28,6 +31,29 @@ jobs:
     name: Typecheck, lint, build, test
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    services:
+      # The major must track the one Neon runs and the one docker-compose.yml
+      # pins; a drift test in `packages/preflight` fails if the three disagree.
+      #
+      # `trust` rather than a password: the container lives for one job, listens
+      # only on the runner's loopback and holds nothing but throwaway test
+      # databases, and a password written here would be a credential-shaped
+      # literal in version control for no gain. The password half of
+      # DATABASE_URL above is simply ignored.
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: vendor_marketplace
+          POSTGRES_DB: vendor_marketplace
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vendor_marketplace"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +89,11 @@ jobs:
       - run: pnpm build
 
       - run: pnpm test
+
+      # Two connections to one database, which PGlite cannot be. Kept out of
+      # `pnpm test` so that task stays runnable with nothing but Node; here a
+      # server is guaranteed, so failing to reach one is a real failure (#399).
+      - run: pnpm test:contention
 
       # The orchestration machinery under .claude/ (the hunt-bugs workflow, the
       # schema-migration guard) has its own tests. They are plain node scripts,

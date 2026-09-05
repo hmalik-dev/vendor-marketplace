@@ -19,6 +19,12 @@ const NOW = new Date();
 const TOMORROW = toDateString(addDays(NOW, 1));
 const NEXT_WEEK = toDateString(addDays(NOW, 7));
 const YESTERDAY = toDateString(addDays(NOW, -1));
+/**
+ * The most recent day that is behind **every** visitor on Earth, and so the
+ * first one the write floor may refuse. `YESTERDAY` is not one: it is still the
+ * current day west of UTC, which is the whole of #409.
+ */
+const PAST_EVERYWHERE = toDateString(addDays(NOW, -2));
 const TODAY = toDateString(NOW);
 /** Inside the twelve-month window, and far from every other date here. */
 const FAR_DATE = toDateString(addDays(NOW, 90));
@@ -318,7 +324,15 @@ describe('/vendor/availability', () => {
    */
   describe('a booked date that has passed', () => {
     const PINNED = new Date('2026-06-15T12:00:00.000Z');
-    const PINNED_YESTERDAY = '2026-06-14';
+    /*
+     * Two days back, not one. `completed` is derived with
+     * `isUniversallyPastDate` (#409), so a `booked` date is only delivered once
+     * it is behind every visitor on Earth — the day before the server's is
+     * still somebody's today, and locking it would take this evening's booking
+     * out of a vendor's hands at UTC-5.
+     */
+    const PINNED_PAST = '2026-06-13';
+    const PINNED_VIEWERS_TODAY = '2026-06-14';
     const PINNED_TOMORROW = '2026-06-16';
 
     let derived: TestHarness;
@@ -387,9 +401,9 @@ describe('/vendor/availability', () => {
       const vendorId = await profileFor();
       await derived.database.db
         .insert(availability)
-        .values({ vendorId, date: PINNED_YESTERDAY, status: 'booked' });
+        .values({ vendorId, date: PINNED_PAST, status: 'booked' });
 
-      expect(await read()).toEqual([{ date: PINNED_YESTERDAY, status: 'completed' }]);
+      expect(await read()).toEqual([{ date: PINNED_PAST, status: 'completed' }]);
 
       const stored = await derived.database.db
         .select({ status: availability.status })
@@ -406,14 +420,29 @@ describe('/vendor/availability', () => {
       expect(await read()).toEqual([{ date: PINNED_TOMORROW, status: 'booked' }]);
     });
 
+    /*
+     * #409. The day before the server's UTC day is still the current day for
+     * every viewer west of UTC, and `completed` is a locked status: deriving it
+     * here told a vendor at UTC-5 that the booking they are photographing this
+     * evening was already delivered, and took the cell out of their hands.
+     */
+    it('leaves the day before the server’s booked, because it is still somebody’s today', async () => {
+      const vendorId = await profileFor();
+      await derived.database.db
+        .insert(availability)
+        .values({ vendorId, date: PINNED_VIEWERS_TODAY, status: 'booked' });
+
+      expect(await read()).toEqual([{ date: PINNED_VIEWERS_TODAY, status: 'booked' }]);
+    });
+
     /* A past date the vendor merely blocked was never work, so it is not one. */
     it('does not turn a past blocked date into a completed one', async () => {
       const vendorId = await profileFor();
       await derived.database.db
         .insert(availability)
-        .values({ vendorId, date: PINNED_YESTERDAY, status: 'blocked' });
+        .values({ vendorId, date: PINNED_PAST, status: 'blocked' });
 
-      expect(await read()).toEqual([{ date: PINNED_YESTERDAY, status: 'blocked' }]);
+      expect(await read()).toEqual([{ date: PINNED_PAST, status: 'blocked' }]);
     });
   });
 
@@ -463,12 +492,28 @@ describe('/vendor/availability', () => {
       await createProfile(VENDOR, 'Sunlit Studio');
 
       const response = await put(VENDOR, [
-        { date: YESTERDAY, status: 'blocked' },
+        { date: PAST_EVERYWHERE, status: 'blocked' },
         { date: TOMORROW, status: 'blocked' },
       ]);
 
       expect(response.statusCode).toBe(200);
       expect(response.json().map((row: AvailabilityBody) => row.date)).toEqual([TOMORROW]);
+    });
+
+    /*
+     * #409. The client anchors "today" on the *viewer's* day, and west of UTC
+     * that is the day before the server's — so a vendor blocking off their own
+     * evening sent a date this filter dropped. The request answered 200 and
+     * wrote nothing: no error, no toast, the cell simply stayed open. The floor
+     * is now `isUniversallyPastDate`, the widest claim a server can make.
+     */
+    it('writes the day before the server’s, which is still somebody’s today', async () => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+
+      const response = await put(VENDOR, [{ date: YESTERDAY, status: 'blocked' }]);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().map((row: AvailabilityBody) => row.date)).toEqual([YESTERDAY]);
     });
 
     /*
@@ -490,13 +535,18 @@ describe('/vendor/availability', () => {
       await createProfile(VENDOR, 'Sunlit Studio');
 
       const response = await put(VENDOR, [
+        { date: PAST_EVERYWHERE, status: 'blocked' },
         { date: YESTERDAY, status: 'blocked' },
         { date: TODAY, status: 'blocked' },
         { date: TOMORROW, status: 'blocked' },
       ]);
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().map((row: AvailabilityBody) => row.date)).toEqual([TODAY, TOMORROW]);
+      expect(response.json().map((row: AvailabilityBody) => row.date)).toEqual([
+        YESTERDAY,
+        TODAY,
+        TOMORROW,
+      ]);
     });
 
     it('refuses to change a date held by a confirmed booking', async () => {

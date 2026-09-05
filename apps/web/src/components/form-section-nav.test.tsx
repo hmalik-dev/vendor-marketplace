@@ -33,7 +33,7 @@ describe('FormSectionNav', () => {
   it('marks only the blocking section with a dot', () => {
     render(<FormSectionNav sections={SECTIONS} />);
 
-    const dots = screen.getAllByLabelText('Needs attention before publishing');
+    const dots = screen.getAllByLabelText('Still to do');
     expect(dots).toHaveLength(1);
     expect(screen.getByRole('link', { name: /Business information/ }).textContent).toContain(
       'Business information',
@@ -48,16 +48,14 @@ describe('FormSectionNav', () => {
   it('explains what the gold dots mean while any are showing', () => {
     render(<FormSectionNav sections={SECTIONS} />);
 
-    expect(screen.getByText('Gold dots block publishing')).toBeDefined();
+    expect(screen.getByText('Gold dots mark what’s unfinished')).toBeDefined();
   });
 
   it('marks every blocking section and no others', () => {
     render(<FormSectionNav sections={SECTIONS} />);
 
     const blocking = SECTIONS.filter((section) => section.blocks);
-    expect(screen.getAllByLabelText('Needs attention before publishing')).toHaveLength(
-      blocking.length,
-    );
+    expect(screen.getAllByLabelText('Still to do')).toHaveLength(blocking.length);
   });
 
   it('says so when nothing is blocking', () => {
@@ -66,7 +64,7 @@ describe('FormSectionNav', () => {
     );
 
     expect(screen.getByText('Everything needed to publish is filled in.')).toBeDefined();
-    expect(screen.queryByLabelText('Needs attention before publishing')).toBeNull();
+    expect(screen.queryByLabelText('Still to do')).toBeNull();
   });
 
   it('disconnects its observer on unmount', () => {

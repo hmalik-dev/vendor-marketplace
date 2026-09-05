@@ -7,20 +7,19 @@ import { hasRivalAcceptanceOn, lockHeldDate } from './booking-requests.dao.js';
 /**
  * #399 — the two accepts that could both win.
  *
- * **What the suite can and cannot prove, stated plainly.** The route test
+ * **What this suite can and cannot prove, stated plainly.** The route test
  * fires two accepts with `Promise.all`, but PGlite holds a single connection
  * and runs each `db.transaction` callback to completion before the next
- * begins, so no two transactions in this repository's suite ever overlap. That
- * test therefore exercises the in-transaction re-read and *not* the lock:
- * deleting `lockHeldDate` from the service leaves it green. Measured against
- * the Docker Postgres during review, the same statement sequence without the
- * lock produces two accepted requests on one date.
+ * begins, so no two transactions in a PGlite suite ever overlap. That test
+ * therefore exercises the in-transaction re-read and *not* the lock: deleting
+ * `lockHeldDate` from the service leaves it green.
  *
  * So the lock is pinned here by what it does rather than by a race: it must be
  * an upsert on the unique key — the thing that takes the row — and it must
- * leave the stored status alone, because the caller decides that afterwards. A
- * true contention test needs two real connections, and #399 records it as
- * still owed.
+ * leave the stored status alone, because the caller decides that afterwards.
+ * The race itself is proven by `accept.contention.test.ts`, which runs the
+ * same routes against a pooled Postgres and goes red — two `accepted` rows —
+ * the moment `lockHeldDate` is removed.
  */
 describe('the date lock an accept takes', () => {
   let database: TestDatabase;

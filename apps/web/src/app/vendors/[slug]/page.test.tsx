@@ -218,3 +218,56 @@ describe('the vendor page with a hostile business name and bio', () => {
     expect(heading?.querySelector('script')).toBeNull();
   });
 });
+
+/**
+ * #409, and the hole the change to `AvailabilityPane` opened before it landed.
+ *
+ * The pane became a client component so it could re-anchor "today" on the
+ * visitor's clock. Props handed to a client component are serialized into the
+ * page's flight payload and inlined in the HTML — so passing it the
+ * `Availability` rows put the vendor's **private per-date `note`** ("Sarah &
+ * Tom, deposit paid") into the source of a public, unauthenticated page, for
+ * any visitor or crawler to read. It renders nothing, which is exactly why no
+ * assertion about the rendered output would have caught it.
+ *
+ * The pane now takes the keyed `date -> status` projection the booking rail
+ * already took. This walks the element tree the page returns — props, not
+ * markup, because props are what gets serialized — and asserts the note is not
+ * in it. The prop type is the first guard; this is the one that survives
+ * somebody widening the prop type.
+ */
+describe('a private availability note', () => {
+  const NOTE = 'Sarah and Tom, deposit paid';
+
+  /**
+   * Every string anywhere in the tree — keys as well as values, because a
+   * `Record<date, status>` carries its dates as keys and both halves are
+   * serialized alike.
+   */
+  function propStrings(node: unknown, seen = new Set<unknown>()): string[] {
+    if (typeof node === 'string') {
+      return [node];
+    }
+    if (node === null || typeof node !== 'object' || seen.has(node)) {
+      return [];
+    }
+    seen.add(node);
+
+    return Object.entries(node as Record<string, unknown>).flatMap(([key, value]) => [
+      key,
+      ...propStrings(value, seen),
+    ]);
+  }
+
+  it('never reaches the public page’s client props', async () => {
+    getPublicVendorAvailability.mockResolvedValue([
+      { id: 'av-1', vendorId: 'ven-1', date: '2099-06-20', status: 'blocked', note: NOTE },
+    ]);
+
+    const tree = await VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) });
+
+    // The projection did reach the page — otherwise this asserts nothing.
+    expect(propStrings(tree)).toContain('2099-06-20');
+    expect(propStrings(tree)).not.toContain(NOTE);
+  });
+});

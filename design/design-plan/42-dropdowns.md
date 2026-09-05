@@ -74,3 +74,23 @@ makes the results grid flicker and re-sort under the user's hand.
 - **Open state on the field:** open **adds to** the focused state rather than replacing it — same `stone-200` fill and clay label, plus the value turning clay and the caret flipping. (The earlier "open replaces focus" rule made an open segment look quieter than a focused one.) In the compact header bar the open segment is the only clay element. A segment inside a joined bar takes a fill and a clay label at every rung — **never a border, edge or outline**, which would fight the bar it sits inside.
 - **Scrim:** hero and mobile only, where the dropdown is the page's subject. **Never** in the compact header — results must stay readable behind it.
 - **Empty body** (a city with no vendors in that category): one row of `stone-600` copy saying so plus a single action, never a blank panel.
+
+## The `▾` in the frames is a recorded override, not a miss
+
+D25 (2026-08-31) removed the unicode caret from every trigger in the app, as a
+user override of this file and of the frames — the one place where code leads the
+contract. **The frames still draw `▾` and they are not going to stop**:
+`frame-13-parity.test.ts` asserts frame `13` contains `Category ▾`, `City ▾` and
+`Payouts ▾`, and inverts its own app-side assertion rather than deleting it,
+precisely so the override stays visible from both sides.
+
+A parity pass that files "the app draws no caret where the frame does" is
+re-finding a decision. It has now been filed **four** times — #228, #338, and
+again as the fifth row of **#392** — which is why it is written here, in the file
+a dropdown ticket actually opens, rather than only in the decision log. #392's
+chevron item is struck for this reason; its other four are real.
+
+The two **lucide** icons D25 deliberately left alone (`ui/select.tsx`,
+`tags/tag-category-section.tsx`) are still in scope for nobody: removing an icon
+from a shadcn primitive is a different decision on frames that ruling never
+opened.

@@ -21,6 +21,14 @@ Deterministic: no real clock, no real network, no unseeded random. The DB and AP
 suites use the in-process PGlite engine, so a database test is a real database
 test — do not mock a DAO to avoid it.
 
+**`pnpm test` is not the whole gate.** PGlite is a single connection, so it
+cannot tell a row lock from its absence: the `*.contention.test.ts` suites run
+on a real Postgres and are excluded from `pnpm test`. Run **`pnpm
+test:contention`** alongside it — CI does — whenever a change touches a booking
+request transition, the availability calendar, or any other write guarded by a
+lock, a predicate or a unique index. Deleting `lockHeldDate` leaves the rest of
+the local gate green.
+
 Forbidden in committed code: `.skip`, `.only`, `xit`, `xdescribe`, commented-out
 tests, and `console.*`.
 

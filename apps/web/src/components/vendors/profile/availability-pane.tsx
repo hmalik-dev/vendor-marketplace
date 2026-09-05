@@ -1,14 +1,27 @@
-import { isPastDate, type Availability } from '@vendor-marketplace/shared';
+'use client';
+
+import { isPastDate, type AvailabilityStatus } from '@vendor-marketplace/shared';
 import { buildMonth, monthsFrom, WEEKDAY_LABELS } from '@/lib/calendar';
+import { useViewerToday } from '@/lib/use-viewer-today';
 import { cn } from '@/lib/utils';
 
 /** Current and next month, side by side — frame `03`. */
 const MONTHS_SHOWN = 2;
 
 export interface AvailabilityPaneProps {
-  entries: readonly Availability[];
-  /** Today as `YYYY-MM-DD`, resolved on the server so the month is stable. */
-  today: string;
+  /**
+   * The vendor's calendar as `date -> status`, **not the rows themselves**.
+   *
+   * This is a client component, so whatever it is handed is serialized into the
+   * page's flight payload and shipped to the browser — and an `Availability`
+   * row carries the vendor's private `note` ("Sarah & Tom, deposit paid"), which
+   * would then sit in the HTML source of a public profile for any visitor or
+   * crawler to read. The pane only ever asks a date for its status, so a status
+   * is all it takes. `BookingRail` on the same page takes the same shape.
+   */
+  calendar: Readonly<Record<string, AvailabilityStatus>>;
+  /** Seeds the first paint; `useViewerToday` decides which days read as past. */
+  serverToday: string;
   businessName: string;
 }
 
@@ -21,11 +34,11 @@ export interface AvailabilityPaneProps {
  * so the two views cannot disagree — the vendor only ever records exceptions.
  */
 export function AvailabilityPane({
-  entries,
-  today,
+  calendar,
+  serverToday,
   businessName,
 }: AvailabilityPaneProps): React.ReactElement {
-  const byDate = new Map(entries.map((entry) => [entry.date, entry.status]));
+  const today = useViewerToday(serverToday);
   const months = monthsFrom(today, MONTHS_SHOWN).map(({ year, month }) => buildMonth(year, month));
 
   return (
@@ -53,7 +66,7 @@ export function AvailabilityPane({
                 }
 
                 const past = isPastDate(date, today);
-                const status = byDate.get(date);
+                const status = calendar[date];
                 const unavailable = status === 'blocked' || status === 'booked';
 
                 return (

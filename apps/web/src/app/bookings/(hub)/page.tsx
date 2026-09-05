@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { pageTitle, todayDateString } from '@vendor-marketplace/shared';
+import { pageTitle, toDateString } from '@vendor-marketplace/shared';
 import { BookingsHub, BOOKING_TABS } from '@/components/bookings/bookings-hub';
 import { BookingsRail } from '@/components/bookings/bookings-rail';
 import { BookingsSidebar } from '@/components/bookings/bookings-sidebar';
@@ -98,7 +98,19 @@ export default async function BookingsPage({
     getOwnConversations(),
   ]);
   const entries = toEntries(requests, bookings);
-  const today = todayDateString();
+  /*
+   * The UTC day, not this process's local one (#409, #391). `todayDateString`
+   * reads the *caller's* wall clock and says in its own contract that it is
+   * only ever meaningful on the client; called here it returned whatever day
+   * the web host was on, which is neither the customer's nor the API's.
+   *
+   * The upcoming/history split and the "next up in N days" line are a
+   * server-rendered grouping, so they take the clock a server can defend —
+   * #391's ruling. The surfaces where a viewer's own day is the answer are
+   * anchored on it: the availability calendar, the dashboard's week strip and
+   * every date picker's floor.
+   */
+  const today = toDateString(new Date());
 
   // Clay is reserved for the reader's own move, and a quote is exactly that.
   const needsYou = entries.filter((entry) => entry.status === 'quoted');

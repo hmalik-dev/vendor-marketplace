@@ -17,6 +17,10 @@
     "./testing": {
       "types": "./dist/testing/test-db.d.ts",
       "default": "./dist/testing/test-db.js"
+    },
+    "./testing/postgres": {
+      "types": "./dist/testing/postgres-test-db.d.ts",
+      "default": "./dist/testing/postgres-test-db.js"
     }
   },
   "files": [
@@ -29,6 +33,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:contention": "vitest run --config vitest.contention.config.ts",
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/scripts/migrate.ts",
     "seed": "tsx src/scripts/seed.ts",

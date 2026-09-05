@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { viewerOn } from '@/testing/viewer-clock';
 import { BookingCard } from './booking-card';
 import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
 
@@ -8,6 +9,20 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 /** Before the fixture's event date, so `Mark complete` is not yet offered. */
 const TODAY = '2027-01-01';
+
+beforeAll(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  viewerOn(TODAY);
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
+
+afterEach(() => {
+  cleanup();
+  viewerOn(TODAY);
+});
 
 /** The paid booking behind the fixture request. */
 function paid(overrides: Partial<WireBooking> = {}): WireBooking {
@@ -90,7 +105,7 @@ describe('BookingCard', () => {
    * can identify the customer and reach them outside the app.
    */
   it('names the customer in full and offers both contact routes', () => {
-    render(<BookingCard request={accepted()} booking={paid()} today={TODAY} />);
+    render(<BookingCard request={accepted()} booking={paid()} serverToday={viewerOn(TODAY)} />);
 
     expect(screen.getByText('Priya Nandakumar')).toBeDefined();
     expect(screen.getByRole('link', { name: 'priya@example.com' })).toHaveProperty(
@@ -104,13 +119,13 @@ describe('BookingCard', () => {
   });
 
   it('marks the booking settled rather than pending', () => {
-    render(<BookingCard request={accepted()} booking={paid()} today={TODAY} />);
+    render(<BookingCard request={accepted()} booking={paid()} serverToday={viewerOn(TODAY)} />);
 
     expect(screen.getByText('Booked')).toBeDefined();
   });
 
   it('writes the event facts in full, with the price', () => {
-    render(<BookingCard request={accepted()} booking={paid()} today={TODAY} />);
+    render(<BookingCard request={accepted()} booking={paid()} serverToday={viewerOn(TODAY)} />);
 
     expect(screen.getByText(/Wedding · Saturday, February 13, 2027/)).toBeDefined();
     expect(
@@ -128,7 +143,7 @@ describe('BookingCard', () => {
       <BookingCard
         request={accepted({ customer: { ...accepted().customer, phone: null } })}
         booking={paid()}
-        today={TODAY}
+        serverToday={viewerOn(TODAY)}
       />,
     );
 
@@ -142,12 +157,14 @@ describe('BookingCard', () => {
    * colour that means the money is in.
    */
   it('separates an accepted request from a paid booking', () => {
-    const { rerender } = render(<BookingCard request={accepted()} booking={null} today={TODAY} />);
+    const { rerender } = render(
+      <BookingCard request={accepted()} booking={null} serverToday={viewerOn(TODAY)} />,
+    );
 
     expect(screen.getByText('Awaiting payment')).toBeDefined();
     expect(screen.queryByText('Booked')).toBeNull();
 
-    rerender(<BookingCard request={accepted()} booking={paid()} today={TODAY} />);
+    rerender(<BookingCard request={accepted()} booking={paid()} serverToday={viewerOn(TODAY)} />);
 
     expect(screen.getByText('Booked')).toBeDefined();
     expect(screen.queryByText('Awaiting payment')).toBeNull();
@@ -159,13 +176,19 @@ describe('BookingCard', () => {
    * offered a button that only answers one.
    */
   it('offers Mark complete only after the event date', () => {
-    const { rerender } = render(
-      <BookingCard request={accepted()} booking={paid()} today={TODAY} />,
-    );
+    render(<BookingCard request={accepted()} booking={paid()} serverToday={viewerOn(TODAY)} />);
 
     expect(screen.queryByRole('button', { name: 'Mark complete' })).toBeNull();
 
-    rerender(<BookingCard request={accepted()} booking={paid()} today="2027-02-13" />);
+    /*
+     * A fresh mount rather than a rerender: the vendor's day is resolved once,
+     * after mount, so handing the same tree a later `serverToday` correctly
+     * changes nothing. Crossing the date is a new page, not a new prop.
+     */
+    cleanup();
+    render(
+      <BookingCard request={accepted()} booking={paid()} serverToday={viewerOn('2027-02-13')} />,
+    );
 
     expect(screen.getByRole('button', { name: 'Mark complete' })).toBeDefined();
   });
@@ -175,7 +198,7 @@ describe('BookingCard', () => {
       <BookingCard
         request={accepted()}
         booking={paid({ status: 'completed' })}
-        today="2027-03-01"
+        serverToday={viewerOn('2027-03-01')}
       />,
     );
 
@@ -190,7 +213,7 @@ describe('BookingCard', () => {
           customer: { firstName: '', lastInitial: '', lastName: null, email: null, phone: null },
         })}
         booking={paid()}
-        today={TODAY}
+        serverToday={viewerOn(TODAY)}
       />,
     );
 
@@ -207,7 +230,11 @@ describe('BookingCard', () => {
 describe('a booking that was cancelled', () => {
   it('is not labelled Booked', () => {
     render(
-      <BookingCard request={accepted()} booking={paid({ status: 'cancelled' })} today={TODAY} />,
+      <BookingCard
+        request={accepted()}
+        booking={paid({ status: 'cancelled' })}
+        serverToday={viewerOn(TODAY)}
+      />,
     );
 
     expect(screen.queryByText('Booked')).toBeNull();
@@ -215,14 +242,18 @@ describe('a booking that was cancelled', () => {
 
   it('is not labelled Awaiting payment either, because it was paid', () => {
     render(
-      <BookingCard request={accepted()} booking={paid({ status: 'cancelled' })} today={TODAY} />,
+      <BookingCard
+        request={accepted()}
+        booking={paid({ status: 'cancelled' })}
+        serverToday={viewerOn(TODAY)}
+      />,
     );
 
     expect(screen.queryByText('Awaiting payment')).toBeNull();
   });
 
   it('still reads Booked while the booking stands', () => {
-    render(<BookingCard request={accepted()} booking={paid()} today={TODAY} />);
+    render(<BookingCard request={accepted()} booking={paid()} serverToday={viewerOn(TODAY)} />);
 
     expect(screen.getByText('Booked')).toBeDefined();
   });

@@ -13,7 +13,7 @@ import {
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized } from '../../lib/errors.js';
-import { authenticated, requireAuth } from '../../lib/guards.js';
+import { authenticated, requireAuth, requireRole } from '../../lib/guards.js';
 import { resolveStreamSubject } from '../users/users.service.js';
 import {
   listConversations,
@@ -84,11 +84,19 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
    * or 200 on whether it did — the same distinction `POST /booking-requests`
    * draws, so a second click on `Send a message` is legible as "this is the
    * thread you already have" rather than as a duplicate.
+   *
+   * Customer-only, matching that sibling (#402). Under `requireAuth` the
+   * caller became `conversations.customer_id`, so a vendor or an admin could
+   * open a thread with any published vendor and write to them — the customer
+   * side of a thread whose other party sees a first-name customer whose
+   * `/customers/:id/profile` answers 404. There is no product surface that
+   * offers it: `Send a message` lives on a vendor's public profile, which is a
+   * customer's screen.
    */
   app.post(
     '/conversations',
     {
-      preHandler: requireAuth,
+      preHandler: requireRole('customer'),
       schema: {
         body: openConversationSchema,
         response: { 200: openedConversationSchema, 201: openedConversationSchema },

@@ -30,6 +30,16 @@ boundaries: Clerk token verification and svix signature verification.
 
 Fake nothing else. A test that mocks a DAO is testing the mock.
 
+**PGlite is one connection, so it cannot prove a lock.** Each `db.transaction`
+callback runs to completion before the next begins, so two writes fired with
+`Promise.all` never overlap and a `Promise.all` test passes with the lock
+deleted (#399). A guard that only a second connection can hold to account —
+`lockHeldDate`, a row predicate, a unique index under contention — belongs in a
+`*.contention.test.ts`. Those run on the real server `DATABASE_URL` names,
+through `@vendor-marketplace/db/testing/postgres`, which creates and drops a
+database of its own per suite. They are excluded from `pnpm test` and run by
+`pnpm test:contention`, which needs `docker compose up -d`.
+
 ## A corrected writer leaves a legacy — say what happens to it
 
 When a writer starts producing a **better row** — a column it used to leave null,

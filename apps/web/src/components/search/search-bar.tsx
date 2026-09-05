@@ -7,6 +7,7 @@ import {
   type VendorCity,
 } from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
+import { useViewerToday } from '@/lib/use-viewer-today';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
 import { DateDropdown } from '@/components/ui/dropdown-date';
@@ -111,20 +112,23 @@ export function SearchBar({
   const fieldId = useId();
 
   /*
-   * Today, for the date field's floor. Resolved after mount rather than during
-   * render because "today" is the viewer's local day: rendered on the server it
-   * would be the server's day, and across a date boundary the two disagree and
-   * React reports a hydration mismatch on the `min` attribute.
+   * Today, for the date field's floor — the viewer's own day, resolved after
+   * mount by the shared hook rather than by this component's own copy of the
+   * pattern (#409).
+   *
+   * The seed is deliberately empty rather than the server's day. There is no
+   * server day worth having here: the bar renders on the landing hero and in
+   * the search shell, neither of which passes one down, and `isPastDate`
+   * against `''` is false for every date — so the first paint offers the whole
+   * calendar and the floor appears a tick later, which is what it did before.
+   * Feeding `todayDateString()` in at render time instead is what produced a
+   * hydration mismatch on the picker's cell classes across a date boundary.
    *
    * It is only the picker's floor. Whether a *submitted* date is past is asked
    * again at submit time against a fresh clock, so a tab left open across
    * midnight cannot smuggle yesterday through.
    */
-  const [today, setToday] = useState('');
-
-  useEffect(() => {
-    setToday(todayDateString());
-  }, []);
+  const today = useViewerToday('');
 
   // The URL is the source of truth: a back-navigation has to be reflected here,
   // not overwritten by a stale draft.
@@ -334,7 +338,7 @@ export function SearchBar({
         onOpenChange={setDateOpen}
         label={isHero ? 'Event date' : 'Date'}
         value={draft.date === '' ? null : draft.date}
-        today={today || todayDateString()}
+        today={today}
         width={isHero ? 'hero' : 'compact'}
         scrim={isHero}
         onChange={(next) => {

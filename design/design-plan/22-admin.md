@@ -27,6 +27,19 @@ Row-select checkbox first column, overflow menu last.
 **Fifteen rows fit at 1440 × 900.** Count them against the real header height
 before claiming a number — a table that promises eighteen and clips three is a bug.
 
+**The frame did not, and got the 4px it was short — ruled 2026-09-04 (D30).**
+Measured at 1440×900: the pane wrapper resolved to 705px of content, the fixed
+header row takes 34 and each row 45, so `(705 − 34) / 45 = 14.9` — fourteen rows
+and 93% of a fifteenth, clipped by exactly 4px. The app reproduces it because the
+app matches the frame. The blurb was not the thing to correct: this file is spec
+and it says fifteen, so the frame yielded. The title block's bottom padding goes
+`14px → 12px` and the pane's `20px → 16px`; the table then measures 709px of
+content for 15 × 45 + 34 = 709, with 4px of slack. **Fifteen rows, measured.**
+
+`admin/data-table.tsx`'s pane is `px-6 pb-5`, which is the frame's old `0 24px
+20px`; matching the new number belongs to **#392**, which owns frame `13`'s
+geometry.
+
 Columns: Business · Category · City · Rating · Bookings · Status · actions.
 Status uses the standard pills: Live (sage), Review (gold), Flagged (clay),
 Paused (stone).

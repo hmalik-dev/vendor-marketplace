@@ -13,14 +13,15 @@ import { userFacingError } from '@/lib/user-facing-error';
 import { CELL_HELD, CELL_UNAVAILABLE } from '@/components/availability/cell-marks';
 import { buildMonth, datesBetween, monthsFrom, WEEKDAY_LABELS } from '@/lib/calendar';
 import { useApi } from '@/lib/use-api';
+import { useViewerToday } from '@/lib/use-viewer-today';
 import { cn } from '@/lib/utils';
 import { wireAvailabilityListSchema, type WireAvailability } from '@/lib/wire-schemas';
 import { Button } from '@/components/ui/button';
 
 export interface AvailabilityCalendarProps {
   initialEntries: readonly WireAvailability[];
-  /** Today, as a `YYYY-MM-DD` UTC date resolved on the server. */
-  today: string;
+  /** Seeds the first paint; `useViewerToday` re-anchors on the vendor's day. */
+  serverToday: string;
 }
 
 /** How many months sit side by side; the rest are reached with the arrows. */
@@ -232,8 +233,9 @@ export function formatRange(dates: readonly string[]): string {
  */
 export function AvailabilityCalendar({
   initialEntries,
-  today,
+  serverToday,
 }: AvailabilityCalendarProps): React.ReactElement {
+  const today = useViewerToday(serverToday);
   const request = useApi();
   const router = useRouter();
   const [entries, setEntries] = useState<readonly WireAvailability[]>(initialEntries);

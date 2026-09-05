@@ -2,6 +2,7 @@ import { seedReferenceData } from '@vendor-marketplace/db';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
+import type { AppDatabase } from '../lib/database.js';
 import type { EmailGateway, EmailMessage } from '../lib/email.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import type {
@@ -58,7 +59,18 @@ export const TEST_ENV: ApiEnv = {
   EMAIL_FROM: 'noreply@test.invalid',
 };
 
-export interface TestHarnessOptions {
+/**
+ * What the harness needs of a database: the handle its suites query, and a way
+ * to give it back. `createTestDatabase`'s in-process PGlite satisfies it, and
+ * so does the pooled real Postgres the `*.contention.test.ts` suites run on —
+ * which is why this is stated as a shape rather than named as one driver.
+ */
+export interface HarnessDatabase {
+  db: AppDatabase;
+  close: () => Promise<void>;
+}
+
+export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestDatabase> {
   env?: Partial<ApiEnv>;
   loggerStream?: NodeJS.WritableStream;
   /**
@@ -67,6 +79,23 @@ export interface TestHarnessOptions {
    * asserts the same thing at every hour and under every `TZ`.
    */
   clock?: Clock;
+  /**
+   * A migrated database to run against, instead of booting a fresh PGlite.
+   *
+   * The one caller is the contention suite: PGlite holds a single connection,
+   * so two requests fired at once never overlap there and a lock cannot be
+   * told apart from its absence (#399). Injecting a pooled Postgres puts the
+   * *real* routes under real contention.
+   */
+  database?: TDatabase;
+}
+
+/** A fresh in-process PGlite, migrated: the harness's default database. */
+async function bootTestDatabase(): Promise<TestDatabase> {
+  const database = await createTestDatabase();
+  await database.runMigrations();
+
+  return database;
 }
 
 /** Records what a route stored instead of reaching S3. */
@@ -308,9 +337,9 @@ function createFakeStripe(): FakeStripe {
   return fake;
 }
 
-export interface TestHarness {
+export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   app: FastifyInstance;
-  database: TestDatabase;
+  database: TDatabase;
   /** Objects written through `app.storage`, in the order they were stored. */
   storedObjects: RecordedObject[];
   /** Clerk identities the fake token verifier and lazy-sync loader resolve. */
@@ -336,9 +365,16 @@ export interface TestHarness {
  * it is supplied by the caller rather than built by the server, because
  * `buildServer` takes a `storage` port as a required option.
  */
-export async function createTestHarness(options: TestHarnessOptions = {}): Promise<TestHarness> {
-  const database = await createTestDatabase();
-  await database.runMigrations();
+export async function createTestHarness(
+  options?: Omit<TestHarnessOptions, 'database'>,
+): Promise<TestHarness<TestDatabase>>;
+export async function createTestHarness<TDatabase extends HarnessDatabase>(
+  options: TestHarnessOptions<TDatabase> & { database: TDatabase },
+): Promise<TestHarness<TDatabase>>;
+export async function createTestHarness(
+  options: TestHarnessOptions<HarnessDatabase> = {},
+): Promise<TestHarness<HarnessDatabase>> {
+  const database = options.database ?? (await bootTestDatabase());
   // Categories and tags are reference data every deployment starts with, so
   // the suites see the same rows the running application does.
   await seedReferenceData(database.db);

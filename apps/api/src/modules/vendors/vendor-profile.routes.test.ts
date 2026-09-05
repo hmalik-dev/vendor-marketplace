@@ -1,4 +1,4 @@
-import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { availability, categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -74,6 +74,8 @@ describe('GET /vendors/:slug', () => {
     'vendor-g',
     'vendor-h',
     'vendor-i',
+    'vendor-yesterday',
+    'vendor-old',
   ];
 
   /** A `YYYY-MM-DD` date `days` from today, inside the availability window. */
@@ -285,6 +287,68 @@ describe('GET /vendors/:slug', () => {
       expect(entries).toHaveLength(1);
       expect(entries[0].status).toBe('blocked');
       expect(entries[0].date).toBe(futureDate(30));
+    });
+
+    /*
+     * #409, and the one that got past unit tests entirely — found in a browser
+     * at 03:30Z with the visitor's browser in `America/Los_Angeles`.
+     *
+     * The floor here was the server's UTC day while every client surface moved
+     * to the *visitor's* day, which west of UTC is the day before. An absent
+     * row means available, so cutting that day out of the response did not
+     * leave a gap the customer could see — the profile pane painted it "free",
+     * the picker offered it, and the request form said the vendor was free on a
+     * date they had blocked.
+     *
+     * `futureDate(-1)` rather than a pinned clock: the defect is about the
+     * boundary between the server's day and the day before it, and that is the
+     * relationship the route has to keep whatever day the suite runs on.
+     */
+    it('returns the day before its own, because that is still somebody’s today', async () => {
+      const { slug } = await seedVendor({
+        user: 'vendor-yesterday',
+        businessName: 'West Coast Co',
+      });
+
+      const blocked = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/availability',
+        headers: bearer('vendor-yesterday'),
+        payload: { entries: [{ date: futureDate(-1), status: 'blocked' }] },
+      });
+      expect(blocked.statusCode).toBe(200);
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/vendors/${slug}/availability`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual([
+        expect.objectContaining({ date: futureDate(-1), status: 'blocked' }),
+      ]);
+    });
+
+    /* Still forward-only past that one day: what is over everywhere stays out. */
+    it('leaves out a day that is behind every visitor on Earth', async () => {
+      const { id, slug } = await seedVendor({ user: 'vendor-old', businessName: 'Long Ago Co' });
+
+      // Written directly: the route itself refuses a date this far back, which
+      // is exactly why a row like it can only have come from an earlier today.
+      await harness.database.db.insert(availability).values({
+        vendorId: id,
+        date: futureDate(-5),
+        status: 'blocked',
+        note: 'A private note nobody outside should read',
+      });
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/vendors/${slug}/availability`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual([]);
     });
 
     /*

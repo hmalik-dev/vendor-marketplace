@@ -18,6 +18,8 @@ import { bearer, createTestHarness, type TestHarness } from '../../testing/test-
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
 const OUTSIDER = 'user_customer_two';
+/** A vendor who is not the one being messaged — the #402 escalation shape. */
+const OTHER_VENDOR = 'user_vendor_two';
 
 const EVENT_DATE = toDateString(addDays(new Date(), 30));
 /** A second occasion with the same vendor, for the per-request thread checks. */
@@ -118,6 +120,24 @@ describe('messaging', () => {
     return opened!.id;
   }
 
+  /**
+   * A thread long enough to page: 60 messages a minute apart, numbered so an
+   * assertion can name which end of the history it is looking at.
+   */
+  async function fillThread(conversationId: string): Promise<void> {
+    const senderId = await idOf(CUSTOMER);
+    const start = new Date('2026-04-01T09:00:00Z').getTime();
+
+    await harness.database.db.insert(messages).values(
+      Array.from({ length: 60 }, (_, index) => ({
+        conversationId,
+        senderId,
+        content: `Message ${index + 1}`,
+        createdAt: new Date(start + index * 60_000),
+      })),
+    );
+  }
+
   async function send(
     actor: string,
     conversationId: string,
@@ -138,6 +158,7 @@ describe('messaging', () => {
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OUTSIDER, 'customer', 'edsger@example.com'],
+      [OTHER_VENDOR, 'vendor', 'barbara@example.com'],
     ] as const) {
       harness.clerkUsers.set(clerkUserId, {
         clerkUserId,
@@ -209,6 +230,49 @@ describe('messaging', () => {
       });
 
       expect(response.json()).toEqual([]);
+    });
+
+    /*
+     * The vendor arm specifically, and a vendor who *has* a profile (#402).
+     *
+     * The predicate is now two statements — the caller's own profile ids, then
+     * `conversations.vendor_id in (…)` — so the test above proves only the
+     * empty-ids branch. A future edit that widened the first statement would
+     * hand every thread on the marketplace to any vendor and keep this file
+     * green without this.
+     */
+    it('does not list another vendor thread to a vendor who has their own profile', async () => {
+      const conversationId = await openConversation();
+
+      const own = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(OTHER_VENDOR),
+        payload: {
+          businessName: 'Marlow Sound',
+          categoryIds: [photographyId],
+          city: 'Portland',
+          state: 'OR',
+          bio: 'Live sound and DJ sets for weddings that run late.',
+        },
+      });
+      expect(own.statusCode).toBe(201);
+
+      const theirs = await harness.app.inject({
+        method: 'GET',
+        url: '/conversations',
+        headers: bearer(OTHER_VENDOR),
+      });
+
+      expect(theirs.json()).toEqual([]);
+
+      // And the vendor the thread does belong to still sees it.
+      const mine = await harness.app.inject({
+        method: 'GET',
+        url: '/conversations',
+        headers: bearer(VENDOR),
+      });
+      expect(mine.json().map((row: { id: string }) => row.id)).toEqual([conversationId]);
     });
   });
 
@@ -517,6 +581,18 @@ describe('messaging', () => {
       ).toEqual(expect.arrayContaining([null, expect.stringMatching(/wedding$/)]));
     });
 
+    /*
+     * #402: under `requireAuth` any signed-in account could open a thread and
+     * become its `customer_id`. A vendor could therefore message every
+     * competitor on the marketplace, and the receiving vendor saw them as a
+     * first-name customer whose profile route answers 404.
+     */
+    it('refuses a vendor opening a thread with another vendor', async () => {
+      const slug = await publishedVendor();
+
+      expect((await open(OTHER_VENDOR, slug)).statusCode).toBe(403);
+    });
+
     it('refuses a vendor messaging their own listing', async () => {
       const slug = await publishedVendor();
 
@@ -561,6 +637,166 @@ describe('messaging', () => {
         'Second',
       ]);
       expect(response.json().total).toBe(2);
+    });
+
+    /*
+     * #402: the page used to be taken from the *oldest* message forwards, so a
+     * thread past 50 messages rendered its first 50 and hid everything newer —
+     * including the reader's own last reply — behind a reload that could never
+     * reach it.
+     */
+    it('opens a long thread at its newest messages, not its oldest', async () => {
+      const conversationId = await openConversation();
+      await fillThread(conversationId);
+
+      const first = await harness.app.inject({
+        method: 'GET',
+        url: `/conversations/${conversationId}/messages`,
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(first.statusCode).toBe(200);
+      const firstPage = first.json().items.map((row: { content: string }) => row.content);
+      expect(first.json().total).toBe(60);
+      expect(firstPage).toHaveLength(50);
+      // Oldest-first within the page, but the page is the newest 50.
+      expect(firstPage[0]).toBe('Message 11');
+      expect(firstPage.at(-1)).toBe('Message 60');
+    });
+
+    it('pages backwards from the newest, with no row on two pages', async () => {
+      const conversationId = await openConversation();
+      await fillThread(conversationId);
+
+      const second = await harness.app.inject({
+        method: 'GET',
+        url: `/conversations/${conversationId}/messages?page=2`,
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(second.statusCode).toBe(200);
+      const secondPage = second.json().items.map((row: { content: string }) => row.content);
+      expect(secondPage).toEqual([
+        'Message 1',
+        'Message 2',
+        'Message 3',
+        'Message 4',
+        'Message 5',
+        'Message 6',
+        'Message 7',
+        'Message 8',
+        'Message 9',
+        'Message 10',
+      ]);
+    });
+
+    /*
+     * #402: the preview used to be picked in Node from every message in every
+     * thread. A correlated top-1 picks it in the database now; the row it
+     * picks has to stay the newest one.
+     */
+    it('previews the newest message in the thread, not an older one', async () => {
+      const conversationId = await openConversation();
+      await send(CUSTOMER, conversationId, 'Are you free that weekend?');
+      await send(VENDOR, conversationId, 'I am — shall I hold the date?');
+      await send(CUSTOMER, conversationId, 'Please do.');
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/conversations',
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(response.json()[0].lastMessagePreview).toBe('Please do.');
+    });
+
+    /*
+     * The truncation moved into the query (#402), so the rest of a very long
+     * message is never fetched to be thrown away. It has to still be a
+     * truncation, and still at the same place.
+     */
+    it('previews only the opening of a very long message', async () => {
+      const conversationId = await openConversation();
+      const long = 'A'.repeat(400);
+      expect((await send(CUSTOMER, conversationId, long)).statusCode).toBe(201);
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/conversations',
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(response.json()[0].lastMessagePreview).toBe('A'.repeat(120));
+    });
+
+    /*
+     * Tied timestamps across the page boundary.
+     *
+     * This passes with the `id` tie-break removed — a small table comes back
+     * in the same order either way, and it is a plan change at volume that
+     * reorders tied keys. `message-ordering.test.ts` is what holds the
+     * tie-break itself; this holds the property for every *other* way the
+     * ordering could break, and is honest that it is not the tie-break's test.
+     */
+    it('puts every message on exactly one page when timestamps tie', async () => {
+      const conversationId = await openConversation();
+      const senderId = await idOf(CUSTOMER);
+      const tied = new Date('2026-04-01T09:00:00Z');
+
+      await harness.database.db.insert(messages).values(
+        Array.from({ length: 60 }, (_, index) => ({
+          conversationId,
+          senderId,
+          content: `Message ${index + 1}`,
+          createdAt: tied,
+        })),
+      );
+
+      const [first, second] = await Promise.all([
+        harness.app.inject({
+          method: 'GET',
+          url: `/conversations/${conversationId}/messages`,
+          headers: bearer(CUSTOMER),
+        }),
+        harness.app.inject({
+          method: 'GET',
+          url: `/conversations/${conversationId}/messages?page=2`,
+          headers: bearer(CUSTOMER),
+        }),
+      ]);
+
+      const seen = [...first.json().items, ...second.json().items].map(
+        (row: { id: string }) => row.id,
+      );
+
+      expect(seen).toHaveLength(60);
+      expect(new Set(seen).size).toBe(60);
+    });
+
+    /* The same tie in the preview's ordering, with the same caveat. */
+    it('picks one preview, stably, when the two newest messages tie', async () => {
+      const conversationId = await openConversation();
+      const senderId = await idOf(CUSTOMER);
+      const tied = new Date('2026-04-01T09:00:00Z');
+
+      await harness.database.db.insert(messages).values([
+        { conversationId, senderId, content: 'Tied one', createdAt: tied },
+        { conversationId, senderId, content: 'Tied two', createdAt: tied },
+      ]);
+
+      const previews = await Promise.all(
+        [1, 2, 3].map(async () => {
+          const response = await harness.app.inject({
+            method: 'GET',
+            url: '/conversations',
+            headers: bearer(CUSTOMER),
+          });
+          return response.json()[0].lastMessagePreview;
+        }),
+      );
+
+      expect(new Set(previews).size).toBe(1);
+      expect(['Tied one', 'Tied two']).toContain(previews[0]);
     });
 
     it('refuses a message past the length ceiling', async () => {

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { viewerOn } from '@/testing/viewer-clock';
 import type { WireAvailability } from '@/lib/wire-schemas';
 
 const requestMock = vi.fn();
@@ -24,13 +25,22 @@ const { AvailabilityCalendar, cellAppearance, formatRange } =
 const TODAY = '2026-06-01';
 
 /*
+ * The zone `vitest.config.mts` pins the whole suite to, named rather than
+ * captured: `process.env.TZ` reads `undefined` when nothing exported it, and
+ * assigning that back writes the literal string `"undefined"` — an invalid zone
+ * V8 then keeps. `process.env` is process-global and vitest reuses a worker
+ * across files, so leaving it wrong leaks into whatever runs next.
+ */
+const SUITE_TZ = 'UTC';
+
+/*
  * `isFutureDate` reads the real clock to decide what is editable, so the clock
  * is pinned to the same day the grid is built from. Without this the suite
  * passes in May and fails in July.
  */
 beforeAll(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
-  vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
+  viewerOn(TODAY);
 });
 
 afterAll(() => {
@@ -42,7 +52,7 @@ function entry(date: string, status: WireAvailability['status']): WireAvailabili
 }
 
 function renderCalendar(entries: readonly WireAvailability[] = []) {
-  return render(<AvailabilityCalendar initialEntries={entries} today={TODAY} />);
+  return render(<AvailabilityCalendar initialEntries={entries} serverToday={TODAY} />);
 }
 
 /** The value beside a "This quarter" row label. */
@@ -158,6 +168,10 @@ describe('AvailabilityCalendar', () => {
   afterEach(() => {
     cleanup();
     requestMock.mockReset();
+    // Undo any `viewerOn` or timezone move, so the suite's defaults are the
+    // defaults for the next test whatever the last one did.
+    viewerOn(TODAY);
+    process.env.TZ = SUITE_TZ;
   });
 
   it('shows three months side by side with no month navigation needed', () => {
@@ -210,7 +224,7 @@ describe('AvailabilityCalendar', () => {
     render(
       <AvailabilityCalendar
         initialEntries={[entry('2026-06-17', 'pending'), entry('2026-06-02', 'completed')]}
-        today="2026-06-15"
+        serverToday={viewerOn('2026-06-15')}
       />,
     );
 
@@ -245,15 +259,40 @@ describe('AvailabilityCalendar', () => {
   });
 
   /*
+   * #409. The server hands down its UTC day, and west of UTC that day has
+   * already rolled over while the vendor is still in the evening of the day
+   * before. The calendar has to draw *their* day as today and leave it
+   * editable — before this it was labelled "in the past", disabled, and a PUT
+   * blocking it answered 200 while writing nothing.
+   *
+   * Server day and viewer day are deliberately different here; that difference
+   * is the whole test. Reverting the component makes the viewer's day fail
+   * both assertions and puts the ring on the server's day instead.
+   */
+  it('anchors today on the viewer’s day, not the server’s', () => {
+    // 02:00Z on the 15th — still 21:00 on the 14th for a vendor at UTC-5.
+    process.env.TZ = 'America/Chicago';
+    vi.setSystemTime(new Date('2026-06-15T02:00:00Z'));
+
+    render(<AvailabilityCalendar initialEntries={[]} serverToday="2026-06-15" />);
+
+    const viewersToday = cell('2026-06-14');
+    expect(viewersToday).toHaveProperty('disabled', false);
+    expect(viewersToday.getAttribute('aria-label')).not.toContain('in the past');
+    // The ink "Today" ring moves with it — `CELL_TODAY`'s border token.
+    expect(viewersToday.className.split(/\s+/)).toContain('border-stone-900');
+  });
+
+  /*
    * What has already happened is a record, not a setting: a past cell keeps the
    * status it actually had and is read-only, rather than being blanked.
    */
   it('locks every date before today while keeping the status it had', () => {
-    const midMonth = '2026-06-15';
+    const midMonth = viewerOn('2026-06-15');
     render(
       <AvailabilityCalendar
         initialEntries={[entry('2026-06-10', 'booked'), entry('2026-06-11', 'blocked')]}
-        today={midMonth}
+        serverToday={midMonth}
       />,
     );
 
@@ -504,7 +543,7 @@ describe('AvailabilityCalendar', () => {
     render(
       <AvailabilityCalendar
         initialEntries={[entry('2026-06-02', 'blocked'), entry('2026-06-20', 'blocked')]}
-        today="2026-06-15"
+        serverToday={viewerOn('2026-06-15')}
       />,
     );
 

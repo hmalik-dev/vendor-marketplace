@@ -1,4 +1,5 @@
 import {
+  addDays,
   publicVendorProfileSchema,
   toDateString,
   type Availability,
@@ -80,13 +81,28 @@ export async function getPublicVendorAvailability(
   }
 
   /*
-   * Forward-only, deliberately. `availabilityWindow` starts at the first of
-   * the current month so the vendor's OWN calendar can show completed events;
-   * a customer has no use for the days already behind them, and every past row
-   * returned here would carry the vendor's private `note` — "Sarah & Tom,
-   * deposit paid" — over a public endpoint.
+   * Forward-only, deliberately. `availabilityWindow` starts at the first of a
+   * month so the vendor's OWN calendar can show completed events; a customer
+   * has no use for the days already behind them, and every past row returned
+   * here would carry the vendor's private `note` — "Sarah & Tom, deposit
+   * paid" — over a public endpoint.
+   *
+   * **The floor is the widest day, not the server's own** (#409). It used to be
+   * `toDateString(now)`, and the client is now anchored on the visitor's day:
+   * west of UTC that is the day before this one, so a date the vendor had
+   * blocked or booked was cut out of the response while the picker still
+   * offered it. An absent row *means available*, so the customer was not shown
+   * a gap — they were told the vendor was free, and the request then either
+   * 409'd on a booked date or landed silently on a closed one. Measured
+   * 2026-09-05 in `America/Los_Angeles`: this endpoint answered `[]` with a
+   * `blocked` row on disk for the visitor's own today.
+   *
+   * One day, not the window's own `from`. That one is the first of a month and
+   * exists for the vendor's private view; here the extra day is the last one
+   * that is still somebody's today, which is the opposite of the past rows the
+   * paragraph above keeps out.
    */
   const { to } = availabilityWindow(now);
 
-  return findAvailabilityInRange(db, vendor.id, toDateString(now), to);
+  return findAvailabilityInRange(db, vendor.id, toDateString(addDays(now, -1)), to);
 }

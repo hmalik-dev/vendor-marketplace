@@ -15,7 +15,7 @@ function dashboard(overrides: Partial<WireVendorDashboard> = {}): WireVendorDash
     avgRating: 4.9,
     reviewCount: 127,
     earningsThisMonthCents: 894000,
-    bookingWeek: [],
+    bookingWindow: [],
     nextPayout: null,
     ...overrides,
   } as WireVendorDashboard;

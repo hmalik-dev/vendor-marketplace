@@ -8,7 +8,12 @@ export interface FormSection {
   /** Matches the `id` on the section element, or the route for a link item. */
   id: string;
   label: string;
-  /** A gold dot marks a section holding something back from publishing. */
+  /**
+   * A gold dot marks a section with something still to do. **Not always a
+   * publish blocker** — Payouts carries one and does not gate publishing
+   * (#360, D30), which is why neither this doc nor the dot's accessible
+   * name may say it does.
+   */
   blocks: boolean;
   /**
    * Set when the section lives on its own surface rather than in this form.
@@ -83,7 +88,7 @@ export function FormSectionNav({ sections, className }: FormSectionNavProps): Re
             {section.label}
             {section.blocks ? (
               <span
-                aria-label="Needs attention before publishing"
+                aria-label="Still to do"
                 role="img"
                 className="ml-auto size-1.75 shrink-0 rounded-full bg-gold-400"
               />
@@ -118,7 +123,7 @@ export function FormSectionNav({ sections, className }: FormSectionNavProps): Re
         {hasBlockers ? (
           <>
             <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-gold-400" />
-            Gold dots block publishing
+            Gold dots mark what’s unfinished
           </>
         ) : (
           'Everything needed to publish is filled in.'

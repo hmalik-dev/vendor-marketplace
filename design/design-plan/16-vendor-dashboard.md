@@ -145,3 +145,46 @@ rather than built.
 - Earnings trend chart and payout history
 - Benchmark comparisons ("vendors like you reply in 3h") — needs a cohort to compare against
 - Calendar sync (Google / iCal)
+
+## There is one checklist, and it is the publish gate — ruled 2026-09-04 (D30)
+
+Frames `20 Vendor dashboard — empty & unpublished` and
+`27 Vendor dashboard — empty · 1024` drew **`Setup · 4 of 7 done`** where
+`08 Vendor dashboard` and `14 Vendor dashboard mobile` draw
+**`Publish checklist · 4 of 6`**. (`27 Vendor dashboard — 1024` draws no
+checklist at all — it is the _published_ dashboard, and the rail there is the
+booking week. `24 Image upload`'s `4 of 6` is an image minimum, not a checklist.
+Both were counted as agreeing on the way to this ruling and neither does; the
+tally is two frames against two, not four against two.) #378 framed this as six-versus-seven.
+**The count was never the disagreement.** Laid side by side, the three artefacts
+hold three different lists that agree on a number only by accident:
+
+| Source                          | Count | Rows                                                                                                                 |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------- |
+| `PUBLISH_BLOCKERS` (the code)   | 6     | business name · location · categories · bio · response time · packages                                               |
+| Frames `08` and `14 mobile`     | 6     | business details · packages · portfolio · availability · **connect payouts** · publish profile                       |
+| Frames `20` / `27 … empty 1024` | 7     | business name · category & city · about & services · availability · portfolio · starting price · **connect payouts** |
+
+**The code's list is the one that cannot lie**: `publishBlockers` comes back from
+the API that runs the gate, and `publish-checklist.tsx` says in its own comment
+that a checklist disagreeing with the gate is worse than none, because it tells a
+vendor they are ready and then the gate refuses them. Portfolio images,
+availability and a starting price do **not** block publishing, and #360 already
+ruled that `payouts` is not a `PUBLISH_BLOCKERS` key and must not become one. So
+the frames are wrong — all of them — and they are wrong about the **rows**, which
+is why correcting the number alone would have left the contradiction in place.
+
+**The rail draws the six blockers, labelled with the sentences the component
+renders.** Not short nouns: parity's Text axis is literal, and the field, the nav
+and the submit bar are meant to say the same thing without re-deriving each
+other's wording.
+
+**Payouts keeps its own line, one element lower.** Frame `08` already draws the
+payout obligation as a separate gold panel under the list — "You can't take
+payment until payouts are connected" — so the checklist row was a duplicate that
+made it look like a gate. Removing the row loses nothing.
+
+`20` and `27 … empty 1024` are re-cut. **Frame `08`'s row labels are the same
+defect on a frame this ruling did not open** — it draws Portfolio, Availability,
+Connect payouts and a `Publish profile` row that is the outcome rather than an
+item — and belong to **#372**, which owns frame `08`.

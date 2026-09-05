@@ -25,6 +25,7 @@ import {
   vendorProfileDetailSchema,
   vendorSearchQuerySchema,
 } from './index.js';
+import { resolveImageUrl } from '../utils/index.js';
 import {
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
   ERROR_CODES,
@@ -928,44 +929,117 @@ describe('the tagline and the experience figure', () => {
  * upload.
  */
 describe('imageRefSchema', () => {
-  it.each([
-    'portfolio/abc.webp',
-    '/marketing/covers/june-harlow.jpg',
-    'https://cdn.example.com/a.webp',
-    'https://img.clerk.com/abc',
-  ])('accepts %s', (value) => {
-    expect(imageRefSchema.safeParse(value).success).toBe(true);
-  });
+  const CDN_BASE = 'https://cdn.example.com';
 
-  /* An `img src` is a sink, so the non-http schemes are an allowlist, not a filter. */
-  it.each(['javascript:alert(1)', 'data:image/png;base64,AAA', 'file:///etc/passwd'])(
-    'rejects %s',
-    (value) => {
-      expect(imageRefSchema.safeParse(value).success).toBe(false);
-    },
-  );
+  /*
+   * One table, both directions (#414). Every form this validator has been
+   * wrong about lives here beside the forms it must keep accepting, so a fix
+   * that widens the schema is as visible as one that narrows it.
+   */
+  const CASES: ReadonlyArray<readonly [label: string, value: string, accepted: boolean]> = [
+    // The three shapes the product actually persists.
+    ['a stored object key', 'portfolio/abc.webp', true],
+    ['seeded marketing art', '/marketing/covers/june-harlow.jpg', true],
+    ['a CDN URL', `${CDN_BASE}/a.webp`, true],
+    ['a Clerk avatar', 'https://img.clerk.com/abc', true],
 
-  it('rejects a protocol-relative URL, which would follow the page onto any host', () => {
-    expect(imageRefSchema.safeParse('//evil.example/a.webp').success).toBe(false);
-  });
+    /* An `img src` is a sink, so the non-http schemes are an allowlist, not a filter. */
+    ['a javascript: URL', 'javascript:alert(1)', false],
+    ['a data: URL', 'data:image/png;base64,AAA', false],
+    ['a file: URL', 'file:///etc/passwd', false],
 
-  it.each(['../../etc/passwd', 'a/../../b.webp'])('rejects the traversal %s', (value) => {
-    expect(imageRefSchema.safeParse(value).success).toBe(false);
+    /*
+     * Protocol-relative, in every spelling a URL parser reads the same way: it
+     * normalises `\` to `/` before it decides, so `/\evil.example/x.png` is the
+     * request `//evil.example/x.png` and lands on a host the vendor chose.
+     */
+    ['a protocol-relative URL', '//evil.example/a.webp', false],
+    ['a backslash protocol-relative URL', '/\\evil.example/x.png', false],
+    ['a doubled-backslash protocol-relative URL', '\\\\evil.example/x.png', false],
+
+    // Traversal, before and after those backslashes are normalised.
+    ['a traversal', '../../etc/passwd', false],
+    ['an interior traversal', 'a/../../b.webp', false],
+    ['a backslash traversal', '/marketing\\..\\..\\etc/passwd', false],
+
+    /*
+     * The scheme test is anchored, so without a trim a leading space or newline
+     * reclassifies a dangerous value as a harmless relative path. Fixed, and
+     * kept here so it stays fixed.
+     */
+    ['a space-padded javascript: URL', ' javascript:alert(1)', false],
+    ['a newline-padded javascript: URL', '\njavascript:alert(1)', false],
+    ['a space-padded data: URL', '  data:image/png;base64,AAA', false],
+
+    /*
+     * A control character *inside* the scheme makes that same anchored test
+     * fail, so the value used to fall through to the relative-path branch that
+     * never checks a scheme — while a browser strips tabs and newlines before
+     * it parses the scheme, and so reads a live `javascript:`.
+     */
+    ['a tab inside the scheme', 'jav\tascript:alert(1)', false],
+    ['a newline inside the scheme', 'jav\nascript:alert(1)', false],
+    ['a carriage return inside the scheme', 'jav\rascript:alert(1)', false],
+    ['a NUL inside a key', 'portfolio/a\u0000b.webp', false],
+
+    // Inert at an `img src`, but nothing legitimate carries one.
+    ['a bidi override', 'aaa\u202ebbb.webp', false],
+    ['a bidi isolate', 'portfolio/\u2066abc.webp', false],
+    ['a left-to-right mark', 'portfolio/\u200eabc.webp', false],
+    ['an Arabic letter mark', 'portfolio/\u061cabc.webp', false],
+
+    /*
+     * The host of an absolute URL is not constrained — see the test below —
+     * but it may not be disguised. A reader stops at the first host they
+     * recognise; the parser reads the one after the `@`.
+     */
+    ['credentials disguising the host', 'https://cdn.example.com@evil.example/x.png', false],
+
+    // `%2e` decodes to `.` before the path resolves, so it traverses too.
+    ['a percent-encoded traversal', 'a/%2e%2e/%2e%2e/b.webp', false],
+  ];
+
+  it.each(CASES)('%s — %j', (_label, value, accepted) => {
+    expect(imageRefSchema.safeParse(value).success).toBe(accepted);
   });
 
   /*
-   * The scheme test is anchored, so without a trim a leading space or newline
-   * reclassifies a dangerous value as a harmless relative path. Not exploitable
-   * at today's only sink (an `img src`, where `javascript:` does not run), but
-   * one careless consumer — an `<a href>`, an email template, a server-side
-   * fetch — away from mattering. Validate before normalising.
+   * Acceptance 4: the schema, not `resolveImageUrl`, is what keeps a stored
+   * reference on an origin this product serves. Every accepted relative form
+   * is resolved the way a page resolves it, and the request it would actually
+   * produce is read off the result.
    */
-  it.each([' javascript:alert(1)', '\njavascript:alert(1)', '  data:image/png;base64,AAA'])(
-    'rejects %j rather than reading it as a relative path',
-    (value) => {
-      expect(imageRefSchema.safeParse(value).success).toBe(false);
-    },
-  );
+  it('keeps every accepted relative reference on an origin this product serves', () => {
+    const PAGE_ORIGIN = 'https://orla.test';
+    const OURS = [PAGE_ORIGIN, CDN_BASE];
+
+    const relative = CASES.filter(([, value, accepted]) => accepted && !/^https?:/i.test(value));
+
+    expect(relative).toHaveLength(2);
+
+    relative.forEach(([label, value]) => {
+      const resolved = resolveImageUrl(CDN_BASE, imageRefSchema.parse(value));
+
+      expect(OURS, label).toContain(new URL(resolved ?? '', PAGE_ORIGIN).origin);
+    });
+  });
+
+  /*
+   * The other half of that sentence, asserted rather than left out. An
+   * absolute `http(s)` URL is accepted on **any** host on purpose: a Clerk
+   * avatar is one, and so is a row written before #47 stored keys. So a
+   * vendor-supplied absolute URL does reach a host the product did not choose,
+   * and the enforced `img-src` CSP — not this schema — is what stops it at an
+   * `<img>`. Narrowing that host set is a product decision rather than a
+   * bypass fix, and #414 deliberately did not take it. Stated here so the
+   * guarantee above is never read wider than it is.
+   */
+  it('does not constrain the host of an absolute http(s) URL', () => {
+    const foreign = 'https://evil.example/x.png';
+
+    expect(imageRefSchema.safeParse(foreign).success).toBe(true);
+    expect(resolveImageUrl(CDN_BASE, foreign)).toBe(foreign);
+  });
 
   it('trims an otherwise valid reference rather than rejecting it', () => {
     expect(imageRefSchema.parse('  portfolio/abc.webp  ')).toBe('portfolio/abc.webp');
@@ -1001,7 +1075,7 @@ describe('imageRefSchema', () => {
 describe('free text drops the bidi controls that reorder it', () => {
   it('strips an override out of a business name', () => {
     const parsed = createVendorProfileSchema.parse({
-      businessName: 'Barr ‮Mansion',
+      businessName: 'Barr \u202eMansion',
       categoryIds: ['11111111-1111-4111-8111-111111111111'],
       city: 'Austin',
       state: 'TX',

@@ -65,13 +65,28 @@ specified it since it was written, and the live button reads Clerk's default
 string is what the button does at the moment of commitment, and it now also sits
 in `31-content-voice.md`.
 
-**The panel photograph is fixed and hand-picked, so contrast is guaranteed by
-selection rather than by a scrim.** Ruled 2026-08-30 (D16). The panel sets copy
-over a 600px full-bleed photograph with no automatic contrast guarantee, which is
-only safe while the image is a single committed asset chosen and checked for it.
-**It is not vendor content and is never rotated or made dynamic.** A ticket that
-swaps it, randomises it, or feeds it from uploads breaks this rule and must add a
-scrim in the same change.
+**The panel photograph is fixed and hand-picked, and there is a scrim.** Ruled
+2026-08-30 (D16), **corrected 2026-09-04 (D30)**. D16's own words were "no
+scrim", and that sentence was wrong about the frame: `12` has always drawn
+`linear-gradient(200deg, …)` over the photograph, and `01-foundations.md`'s
+`#C4D6A8` ruling says so in its first sentence. What D16 actually decided — the
+image is a single committed asset, **not vendor content and never rotated or made
+dynamic** — stands. A ticket that swaps it, randomises it or feeds it from uploads
+still breaks that rule.
+
+**Contrast is now a property of the panel rather than a promise about the file.**
+Every text node on `12` and both `12b` panels clears 4.5:1 measured against a
+**pure white** backdrop — the worst any photograph can present — so the guarantee
+holds whichever image is chosen. The node-by-node table is in
+`01-foundations.md`; the three changes that got it there were the accent moving to
+`gold-150 #F9E2BD`, `12b`'s scrim mid stop moving 55% → 45% (where `12`'s 55%
+lands on a 200px-shorter panel), and the `Both` label leaving the .55 dim.
+
+**The panel's scrim is specified in pixels from the bottom, not in percentages.**
+That is the lesson `12b` cost: the same percentage stops over a 700px panel put
+**α 0.613** under the headline where the 900px panel puts 0.672, and eleven of the
+three panels' twenty-nine line boxes failed on frames nobody had measured. Any new
+panel height re-derives the stop.
 
 **The role survives email verification; the picker is never shown twice.** Ruled
 2026-08-30 (D16) as a defect. The role is read from `?role=` server-side and

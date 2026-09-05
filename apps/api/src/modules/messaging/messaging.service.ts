@@ -19,7 +19,7 @@ import {
   countUnreadPerConversation,
   findConversationById,
   findConversationsFor,
-  findLastMessages,
+  findLastMessagePreviews,
   findMessages,
   findNotifications,
   findOpenableVendor,
@@ -33,7 +33,12 @@ import {
   type ConversationParties,
 } from './messaging.dao.js';
 
-/** How much of the last message the list shows before it would wrap. */
+/**
+ * How much of the last message the list shows before it would wrap.
+ *
+ * Passed to the DAO rather than applied here, so the rest of a 5000-character
+ * message is never fetched to be thrown away (#402).
+ */
 const PREVIEW_LENGTH = 120;
 
 const CONTEXT_DATE = new Intl.DateTimeFormat('en-US', {
@@ -183,10 +188,11 @@ export async function listConversations(
     return [];
   }
 
-  const [lastMessages, unread] = await Promise.all([
-    findLastMessages(
+  const [previews, unread] = await Promise.all([
+    findLastMessagePreviews(
       db,
       rows.map((row) => row.id),
+      PREVIEW_LENGTH,
     ),
     countUnreadPerConversation(
       db,
@@ -197,7 +203,6 @@ export async function listConversations(
 
   return rows.map((row) => {
     const side = sideOf(row, user.id);
-    const last = lastMessages.get(row.id);
 
     // Each party sees the other, named by `nameOfSide`.
     const otherPartyName = nameOfSide(row, side === 'customer' ? 'vendor' : 'customer');
@@ -206,7 +211,7 @@ export async function listConversations(
       id: row.id,
       otherPartyName,
       otherPartyAvatarUrl: side === 'customer' ? row.vendorAvatarUrl : row.customerAvatarUrl,
-      lastMessagePreview: last ? last.content.slice(0, PREVIEW_LENGTH) : null,
+      lastMessagePreview: previews.get(row.id) ?? null,
       lastMessageAt: row.lastMessageAt,
       unreadCount: unread.get(row.id) ?? 0,
       bookingContext: bookingContext(row),
@@ -236,8 +241,14 @@ export async function openConversation(
     throw notFound('That vendor is not taking messages');
   }
 
-  // The same refusal `createBookingRequest` makes, for the same reason: a
-  // vendor writing to themselves would be both sides of `sideOf`.
+  /*
+   * The same refusal `createBookingRequest` makes, for the same reason: a
+   * vendor writing to themselves would be both sides of `sideOf`.
+   *
+   * Unreachable through the route since #402 made it customer-only, and kept
+   * anyway: this is the rule, the guard is the policy, and a second caller —
+   * an admin tool, a seed — would arrive here without one.
+   */
   if (vendor.userId === user.id) {
     throw forbidden('You cannot message your own listing');
   }
@@ -267,6 +278,14 @@ async function requireParticipant(
   }
 }
 
+/**
+ * One page of a thread.
+ *
+ * Page 1 is the **newest** page and each page reads oldest-first, so a client
+ * renders page 1 and prepends page 2 above it to walk backwards through the
+ * history. See `findMessages` for why that direction, and #402 for what the
+ * other one hid.
+ */
 export async function listMessages(
   db: AppDatabase,
   user: AuthenticatedUser,

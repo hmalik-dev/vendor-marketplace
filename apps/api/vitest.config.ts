@@ -4,6 +4,13 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    /*
+     * The contention suites need a real Postgres server and two connections to
+     * it, which PGlite cannot be — they run under `vitest.contention.config.ts`
+     * and `pnpm test:contention`. Excluded here rather than skipped at runtime,
+     * so this config never depends on a service being up.
+     */
+    exclude: ['**/node_modules/**', '**/dist/**', 'src/**/*.contention.test.ts'],
     // Route suites boot an in-process Postgres (PGlite) and run migrations.
     testTimeout: 60_000,
     hookTimeout: 60_000,

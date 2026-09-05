@@ -554,6 +554,43 @@ describe('payments', () => {
       expect(response.json().message).toBe('That event has not happened yet');
     });
 
+    /*
+     * #409. The button that offers this is client-rendered and reads the
+     * *browser's* day; this guard used to read the server's UTC day. East of
+     * UTC those are different days at the end of a UTC one, so a vendor who had
+     * just worked the event was shown `Mark complete` and then told the event
+     * had not happened — the exact outcome the control exists to prevent.
+     *
+     * The server cannot know the vendor's day, so it refuses only what is still
+     * ahead for **everyone**. At 16:00Z on the day before, a vendor in Tokyo is
+     * already living the event day — and used to be told they were not.
+     */
+    it('lets a vendor east of UTC complete on the day the event ends there', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      // 16:00Z on the day before is already the event day in Tokyo.
+      clockNow = new Date(`${toDateString(addDays(START, 29))}T16:00:00Z`);
+
+      const response = await inject('PUT', `/vendor/bookings/${booking!.id}/complete`, VENDOR);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('completed');
+    });
+
+    /* Still refused while no vendor anywhere could have worked it yet. */
+    it('refuses on the day before, which is nobody’s event day yet', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      clockNow = new Date(`${toDateString(addDays(START, 28))}T12:00:00Z`);
+
+      const response = await inject('PUT', `/vendor/bookings/${booking!.id}/complete`, VENDOR);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe('That event has not happened yet');
+    });
+
     it('refuses the customer marking their own booking complete', async () => {
       const booking = await pastBooking();
 

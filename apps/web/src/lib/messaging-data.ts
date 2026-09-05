@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
+import { reportSwallowedError } from './report-error';
 import { signInPathReturningHere } from './requested-path';
 import {
   wireConversationListSchema,
@@ -42,20 +43,49 @@ async function redirectIfSignedOut(error: unknown): Promise<void> {
 }
 
 /**
- * The caller's conversations. A failure costs the list rather than the page:
- * the screen's own empty state is a designed surface, and the live stream
- * refills it as soon as the API answers again.
+ * The caller's conversations, and whether the read failed (#402).
+ *
+ * The two were indistinguishable: a failure returned `[]`, so `/messages`
+ * rendered "No conversations yet" — a statement about the reader's inbox — over
+ * an API that was simply down. A browser pass saw exactly that and it is the
+ * `#368` class in full, on the one screen where the list *is* the content.
+ *
+ * A failure still costs the list rather than the page, because the live stream
+ * refills it as soon as the API answers again. What changes is that the screen
+ * is told, and can say so instead of speaking for the database.
  */
-export async function getOwnConversations(): Promise<WireConversation[]> {
+export async function loadOwnConversations(): Promise<{
+  conversations: WireConversation[];
+  failed: boolean;
+}> {
   const token = await sessionToken();
 
   try {
-    return await apiRequest('/conversations', { schema: wireConversationListSchema, token });
+    const conversations = await apiRequest('/conversations', {
+      schema: wireConversationListSchema,
+      token,
+    });
+
+    return { conversations, failed: false };
   } catch (error) {
     await redirectIfSignedOut(error);
+    reportSwallowedError('messages: loading the conversation list failed', error);
 
-    return [];
+    return { conversations: [], failed: true };
   }
+}
+
+/**
+ * The same read for the surfaces where the list is a supplementary band.
+ *
+ * Frame `07`'s bookings rail draws three rows beside the booking it is about;
+ * an outage there costs the band, and the page it sits on still stands on its
+ * own. Only `/messages`, where the list is the whole screen, needs to know.
+ */
+export async function getOwnConversations(): Promise<WireConversation[]> {
+  const { conversations } = await loadOwnConversations();
+
+  return conversations;
 }
 
 /** The first page of notifications, for the bell's initial badge and panel. */
