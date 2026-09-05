@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { pageTitle } from '@vendor-marketplace/shared';
 import { MessagesScreen } from '@/components/messaging/messages-screen';
-import { getOwnConversations } from '@/lib/messaging-data';
+import { loadOwnConversations } from '@/lib/messaging-data';
 import { requireCurrentUser } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -38,13 +38,14 @@ export default async function MessagesPage({
   const user = await requireCurrentUser(
     conversation ? `/messages?${new URLSearchParams({ conversation }).toString()}` : '/messages',
   );
-  const conversations = await getOwnConversations();
+  const { conversations, failed } = await loadOwnConversations();
 
   return (
     <MessagesScreen
       initialConversations={conversations}
       viewerId={user.id}
       initialConversationId={conversation ?? null}
+      listFailed={failed}
     />
   );
 }

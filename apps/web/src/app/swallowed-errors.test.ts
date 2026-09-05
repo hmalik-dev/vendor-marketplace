@@ -81,6 +81,11 @@ describe('swallowed errors', () => {
       'src/components/messaging/notification-bell.tsx',
       'src/components/search/nearby-dates-band.tsx',
       'src/components/search/search-shell.tsx',
+      // #402: a failed conversation-list read is hidden from the two
+      // supplementary bands that draw it beside a booking, and *shown* on
+      // `/messages`, where the list is the whole screen — which is exactly the
+      // distinction this file exists to force. Both paths leave the trace.
+      'src/lib/messaging-data.ts',
     ];
 
     const reporting = sourceFiles(SOURCE_ROOT)
