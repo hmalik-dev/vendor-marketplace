@@ -27,6 +27,7 @@ Tailwind 4 is CSS-first; there is no palette in a JS config.
 
   /* Gold — waiting on someone */
   --color-gold-50: #f5eedc;
+  --color-gold-150: #f9e2bd; /* the italic accent over a scrimmed photograph — D30 */
   --color-gold-200: #f3c98b; /* pale gold — the italic accent on an ink ground */
   --color-gold-400: #c99a2e;
   --color-gold-600: #7a5a12; /* gold as text — do not use #8A6716, it fails AA */
@@ -68,6 +69,12 @@ Tailwind 4 is CSS-first; there is no palette in a JS config.
 
 Every text node must clear **4.5:1**. `stone-500` is the one exception and is
 reserved for genuinely inert content (out-of-month calendar days).
+
+**No large-text carve-out, ruled 2026-09-04 (D30).** WCAG would let 38px display
+type pass at 3:1 and the sign-up panel's italic accent asked for exactly that
+relief. Refused: this table exists because a run of "technically fine" values was
+shipped and had to be undone, and a floor with an exception in it is a floor
+every future reading has to litigate. The accent moved instead — see below.
 
 ### Two frame colours were never tokens — ruled 2026-08-30 (#199 via #306)
 
@@ -111,6 +118,108 @@ divergence is recorded against the source design project.
 
 **Minting `sage-175` is code and belongs to the ticket that fixes the sign-up
 panel**, not to the ruling. `#306` records; the consumer implements.
+
+### The sign-up panel, measured node by node — ruled 2026-09-04 (D30)
+
+`#313` reported the panel's gold italic accent at **3.81:1** and asked whether the
+scrim, the colour or the law should give. Re-measured here by compositing each
+frame's own scrim gradient over four backdrops: the reported figure is confirmed
+(**3.80** over a white photograph) and it was right about exactly one node on
+frame `12`. It was also **half the problem** — frame `12b`, which nobody had
+measured, failed on _every_ node.
+
+**Two causes, and neither of them is the photograph.**
+
+**One is the panel's height**, and it is what broke `12b`. All three panels draw
+the same 200° three-stop scrim in **percentages**. Frame `12` is 900px tall;
+`12b`'s two are 700px. A percentage stop on a shorter box arrives later in pixels,
+so the same gradient delivers **α 0.613** under `12b`'s vendor headline where `12`
+delivers **0.672** — six points — and plain cream on the thinner scrim measures
+3.97:1. A scrim specified in percentages guarantees a _shape_; it guarantees
+nothing about the ink under a given line of text.
+
+**The other is simply that gold is darker than cream**, and that is what broke
+`12`, which has no height problem at all. Its accent failed at **α 0.706** — more
+coverage than the **0.672** under the headline two lines above it, which passes at
+5.13. Position neither condemned nor saved it: `#F3C98B` is a darker foreground
+than `#FFFDF9`, and at this coverage the two straddle 4.5:1. The same colour clears
+comfortably as the `BOOKING` label lower down only because the scrim there has
+reached 0.789.
+
+**Twenty-nine line boxes across the three panels; eleven failed, and none does
+now.** The ones that moved, plus the `12` nodes that were already fine and are
+recorded so the next pass does not re-open them:
+
+| Line box                            | Scrim α       | Was    | Now  |
+| ----------------------------------- | ------------- | ------ | ---- |
+| `12` headline line 1 cream          | 0.672         | 5.13   | 5.13 |
+| `12` italic accent 38px             | 0.704         | 3.80 ✗ | 4.67 |
+| `12` body 15px cream .82            | 0.717         | 4.74   | 4.74 |
+| `12` `BOOKING` 9.5px/700 `gold-200` | 0.789         | 5.34   | 5.34 |
+| `12` `VENDING` 9.5px/700 `sage-175` | 0.804         | 5.68   | 5.68 |
+| `12` `BOTH` 9.5px/700 cream         | 0.822         | 4.10 ✗ | 6.91 |
+| `12b` customer headline line 1      | 0.618 → 0.663 | 4.36 ✗ | 5.06 |
+| `12b` customer accent               | 0.667 → 0.704 | 3.37 ✗ | 4.70 |
+| `12b` customer body line 1 .82      | 0.670 → 0.706 | 4.10 ✗ | 4.59 |
+| `12b` vendor headline line 1        | 0.613 → 0.660 | 3.97 ✗ | 5.20 |
+| `12b` vendor accent `sage-150`      | 0.671 → 0.706 | 3.72 ✗ | 4.60 |
+| `12b` vendor body line 1 .82        | 0.672 → 0.706 | 3.92 ✗ | 4.73 |
+
+**Worst before: 3.37 on `12b`'s customer accent. Worst after: 4.59.**
+
+**Method, because the first cut of this table was wrong in three ways and one of
+them mattered.** Positions now come from `Range.getClientRects()` on every text
+node in a browser, and the gradient is evaluated at each line box's own centre.
+The first cut sampled a few hand-picked y values, which put `12b`'s headline α at
+0.574 when it is 0.613, and — the real error — it computed `12b`'s _before_
+column using the **post-fix** accent colour, which reported that node at 4.15 when
+it is 3.37. So the recorded worst-before was 3.56 on the wrong node; it is 3.37 on
+the customer accent. The conclusion did not move: eleven failures before, zero
+after, both readings agreeing on the post-fix worst within 0.04.
+
+**Ratios are stated against a pure white backdrop**, which is the worst any
+photograph can present. That is deliberate: it turns "contrast is guaranteed by
+selection" from a promise about one file into a property of the panel, and it is
+why the accent could not simply be darkened — on a dark scrim, more contrast
+means _lighter_, not darker.
+
+Three changes, and no new scrim anywhere:
+
+1. **The accent takes `gold-150 #F9E2BD`**, two steps lighter than
+   `gold-200 #F3C98B`. `gold-200` keeps every other use, including the `BOOKING`
+   label 140px lower on the same panel, where the scrim has reached 0.787 and it
+   measures 5.34, at α 0.789. The accent did not fail for being high on the panel —
+   it sits at α 0.706, **more** covered than the headline above it — but because
+   gold is a darker foreground than cream and straddles 4.5:1 at that coverage.
+2. **`12b`'s scrim mid stop moves 55% → 45%.** That is where `12`'s 55% lands once
+   the panel is 200px shorter: 12's stop sits 472.9px from the end of a 1050.9px
+   gradient line, and on a 700px panel's 863px line the same distance is 45.2%.
+   The top stop takes `12`'s `.14` and the bottom its `.86`. **This is not a
+   darker scrim — it is the same scrim, transcribed for the shorter box.**
+3. **Two colours that were still short move.** `12b`'s vendor scrim tint
+   `rgba(40,48,34)` → `rgba(28,34,24)`: the sage cast is lighter than the clay
+   one at equal alpha (green carries 0.7152 of luminance), and that, not the stop
+   position, was the last 0.3. And `12`'s `Both` label goes from cream at **.55**
+   to **.82**, the body tone — it names which promise belongs to both roles, so it
+   carries meaning, and the table above bans dimming anything that does.
+
+Worst node across all three panels afterwards: **4.56:1**.
+
+**D16 item 7 said "no scrim", and that sentence was factually wrong about the
+frame.** Frame `12` has always drawn one, and the `#C4D6A8` ruling four
+paragraphs above says so in its own first sentence. What D16 actually ruled — the
+asset is fixed, hand-picked and never dynamic — stands untouched, and is now
+belt-and-braces rather than load-bearing, because the panel clears AA against
+white.
+
+### D24 and the frames disagree on purpose — do not file it again
+
+`avatar.tsx` sets monograms below the 16px serif floor in Instrument Sans; the
+frames draw them in Instrument Serif at 12px, 13px and 14px. **The law wins and
+the frames are the record of what was overruled**, exactly as D24 decided. A
+parity pass that reads a sub-16px monogram as a Font-axis miss is reading a
+recorded ruling. This is the same shape as D25's caret and it is written here for
+the same reason: an override that lives only in the decision log gets re-found.
 
 ## Type
 

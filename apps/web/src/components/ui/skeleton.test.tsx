@@ -187,17 +187,32 @@ describe('VendorCardSkeleton', () => {
 
     expect(ruled?.className).toContain('border-stone-200');
     expect(bars.some((bar) => bar.className.includes('border-t'))).toBe(false);
-    // `stone-200` is `#efe9e0` — the divider colour every frame draws.
-    expect(loadingFrame).toContain('height:1px;background:#EFE9E0');
+    /*
+     * `stone-200` is `#efe9e0`. Frame `17` used to draw this as a standalone
+     * `height:1px` element with symmetric margins — the 4px of drift this test's
+     * comment describes — and D30 re-cut it to the price row's own border, which
+     * is what the loaded card draws. Asserting the border form is what keeps the
+     * frame and the component from drifting apart again.
+     */
+    expect(loadingFrame).toContain('padding-top:9px;border-top:1px solid #EFE9E0');
+    expect(loadingFrame).not.toContain('height:1px;background:#EFE9E0');
   });
 
   /*
    * The placeholder widths are the only values still taken from the frame,
    * because they stand in for text of unknown length rather than for a
-   * measurement. They are the median of its six cards, which vary so a column
-   * does not read as identical boxes.
+   * measurement. They are the median of its cards, which vary so a column does
+   * not read as identical boxes.
+   *
+   * D30 re-cut frame `17` from six skeletons to **eight**, because
+   * `11-search.md` says eight and `02 Search` draws eight real cards in the same
+   * 4-column grid — a six-up skeleton handing over to an eight-up grid shifted
+   * every card on arrival. The bar heights moved with it, from the 17px/11px
+   * approximations to the real card's 25px name line and 15px meta. **Both
+   * medians survived the re-cut unchanged**, which is the check that the two
+   * extra cards were added to the distribution rather than to one end of it.
    */
-  it('takes its placeholder widths from the median of frame 17’s six cards', () => {
+  it('takes its placeholder widths from the median of frame 17’s eight cards', () => {
     const median = (values: readonly number[]): number => {
       const sorted = [...values].sort((a, b) => a - b);
       const middle = sorted.length / 2;
@@ -205,15 +220,15 @@ describe('VendorCardSkeleton', () => {
       return (sorted[middle - 1]! + sorted[middle]!) / 2;
     };
 
-    const titles = [...loadingFrame.matchAll(/class="sk" style="height:17px;width:(\d+)%/g)].map(
+    const titles = [...loadingFrame.matchAll(/class="sk" style="height:25px;width:(\d+)%/g)].map(
       (match) => Number(match[1]),
     );
-    const metas = [...loadingFrame.matchAll(/class="sk" style="height:11px;width:(\d+)%/g)].map(
+    const metas = [...loadingFrame.matchAll(/class="sk" style="height:15px;width:(\d+)%/g)].map(
       (match) => Number(match[1]),
     );
 
-    expect(titles).toHaveLength(6);
-    expect(metas).toHaveLength(6);
+    expect(titles).toHaveLength(8);
+    expect(metas).toHaveLength(8);
     expect(median(titles)).toBe(61);
     expect(median(metas)).toBe(47);
 

@@ -138,9 +138,40 @@ yields — a rail earns its width when its contents are referenced _while_ worki
 the main pane (the booking rail, the vendor checklist, the messaging context).
 Search filters aren't: you set them, then you read results.
 
-Grid: **3 columns at 1024–1439** (310px cards, 3:2 cover 207px tall — frame
+Grid: **3 columns at 1024–1439** (317.3px cards, 3:2 cover 211.5px tall — frame
 `27 Search results — 1024`), **4 at ≥1440**, 5 at ≥1728. Two columns belong to
 768, not to 1024.
+
+**The gutter is 16px at every width, and so is the card.** Ruled 2026-09-04
+(D30). The 1024 frame used to draw a 14px gutter, a 14px card radius, an 18px
+name, a 16px price and an 11.5px `From`, and every one of those disagreed with
+**both** neighbours — `02 Search` at 1440 and `14 Search tablet` at 768 — which
+is not how a ladder step behaves. The corroborated values, measured on all three
+frames rather than read off one:
+
+| Value         | `02` (1440)      | `27 … 1024` | `14` (768) | Ruled |
+| ------------- | ---------------- | ----------- | ---------- | ----- |
+| Card radius   | 16px             | ~~14px~~    | 16px       | 16px  |
+| Grid gutter   | 16px             | ~~14px~~    | 16px       | 16px  |
+| Business name | 19px             | ~~18px~~    | 19px       | 19px  |
+| Price         | 17px             | ~~16px~~    | 17px       | 17px  |
+| `From` label  | 12px             | ~~11.5px~~  | 12px       | 12px  |
+| Meta line     | 12px             | 12px        | 12.5px     | 12px  |
+| Count band    | drawn            | ~~absent~~  | drawn      | drawn |
+| Card monogram | 32px, overlapped | none        | none       | none  |
+
+Two things the merged finding got wrong, corrected here because the numbers are
+what a later pass will copy. The **meta line was never the outlier** — 1024 and
+1440 already agreed at 12px and 768 is the one that differs, at 12.5px, which is
+the larger card doing what a larger card should. What actually measured 11.5px at
+1024 against 12px on both sides was the **`From` label**. And the **gutter was
+never a survivor**: it read 14px against 16px on both sides, so it moved with
+everything else. The card monogram is a genuine ladder step — 1440 has the width
+for it, 768 drops it, and 1024 drops it too.
+
+Measured on the re-cut frame: **317.3px cards, 211.5px covers, 152.4px of the
+second row visible** inside the 640 fold — the second row starts at y 488.6, and the
+fold is the frame's 640px of content, not the 642 its border box reads.
 
 ## Refine bar
 
@@ -153,6 +184,26 @@ reads as secondary to the query above it. Each chip is a dropdown trigger:
 | `4★ & up ✕`                            | Active state — `clay-100` fill, `clay-600` text, `✕` clears |
 | `Languages ▾` `Cultural ▾` `Dietary ▾` | Multi-select popovers, options in seed `displayOrder`       |
 | `Clear`                                | Ghost link, only when a filter is set                       |
+
+**There is no `Distance` chip and no availability chip, in any state.** Ruled
+2026-09-04 (D30). Frames `17 Search loading` and `27 Search — loading · 1024`
+both drew a `Price / Rating / Distance / Free on Jun 14 ✕` bar, and
+`27 Search results — 1024` drew that plus an `18 free that day` count. None of
+those is a filter this product has: this table is the whole vocabulary, the
+Refine bar is "refinement only: price, rating, tag groups", `refine-bar.test.tsx`
+asserts the chips after the first two are exactly `Languages ▾ Cultural ▾
+Dietary ▾`, D16 removed the availability chip, and **date never appears in the
+Refine bar** — it is a search input. Both loading frames now draw the same bar
+the results frames draw, which is also what "the chrome the user already filled
+in never skeletons" requires.
+
+`18 Search no results` and `27 Search — no results · 1024` still draw
+`Under $1,200 ✕ · Free on Jun 14 ✕ · Within 25 mi ✕`, and those two frames
+**agree with each other**, so they were not touched by this ruling. Two of those
+three chips are not filters either, but the whole screen is built on them — its
+headline counts "all three filters" and its body names the distance limit as the
+culprit, which `relaxations.ts` quotes. Correcting it is a screen question, not
+an arithmetic one; it is recorded in `99-open-questions.md`.
 
 Sort sits at the far right of the same row. **An active filter is shown by its own
 chip** (filled state + value in the label), so there's no separate active-pill row —
@@ -182,7 +233,13 @@ one 5★ review outranks forty. Revisit against real review volume. **Do not
 
 ## States
 
-- **Loading:** 8 `VendorCardSkeleton` in the live grid; bar and Refine row stay put.
+- **Loading:** 8 `VendorCardSkeleton` in the live grid; bar and Refine row stay
+  put. **The skeleton is the real card's geometry, not an approximation of it** —
+  frame `17` used to draw six skeletons in a 3-column, 18px grid with a fixed
+  152px cover against `02`'s eight in a 4-column, 16px grid with a 3:2 cover, so
+  the layout it promised not to shift shifted on every arrival. Re-cut and
+  measured 2026-09-04 (D30): both states put card one at **335 × 342.3 at y 175**
+  at 1440, and **317.3 × 319.6 at y 153** at 1024.
 - **Empty:** `SearchX` glyph, "No vendors match your search", the two filters most worth loosening named explicitly, then a fallback row from the same category with the date dropped — an empty result on a date is usually a date problem.
 - **No market:** "We're not in Tulsa yet" plus email capture.
 
