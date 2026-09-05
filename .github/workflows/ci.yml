@@ -25,6 +25,17 @@ env:
   CLERK_SECRET_KEY: sk_test_ci_placeholder
   CLERK_WEBHOOK_SECRET: whsec_ci_placeholder
   NEXT_PUBLIC_API_URL: http://localhost:4000
+  # Same category, and required for the same reason since #406 made the web
+  # build validate the `stripe` capability: the registry gives this row a
+  # placeholder rather than a default, so — like the Clerk key above — it must
+  # be stated on every build, not only a deployed one.
+  #
+  # Inline rather than a repository secret, deliberately. A Stripe
+  # **publishable** key is public by construction: the build inlines it into the
+  # browser bundle, where every visitor reads it. This one is fabricated and
+  # reaches nothing. The value that must never appear in a tracked file is the
+  # *secret* key, which is absent here and stays absent.
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci000000000000000000
 
 jobs:
   verify:

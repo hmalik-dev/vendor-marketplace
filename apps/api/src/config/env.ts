@@ -1,5 +1,9 @@
 import { DEFAULT_PLATFORM_FEE_RATE } from '@vendor-marketplace/shared';
-import { type ShapeTarget, registrySchemaShape } from '@vendor-marketplace/shared/env';
+import {
+  isDeployedRuntime,
+  type ShapeTarget,
+  registrySchemaShape,
+} from '@vendor-marketplace/shared/env';
 import { z } from 'zod';
 
 /**
@@ -20,8 +24,10 @@ const API_CAPABILITIES = ['core', 'auth', 'storage', 'stripe', 'email'] as const
  * `env.test.ts`.
  */
 function buildSchema(target: ShapeTarget) {
+  const rows = registrySchemaShape({ consumer: 'api', capabilities: API_CAPABILITIES, target });
+
   return z.object({
-    ...registrySchemaShape({ consumer: 'api', capabilities: API_CAPABILITIES, target }),
+    ...rows,
 
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
@@ -30,11 +36,21 @@ function buildSchema(target: ShapeTarget) {
       .default('info'),
     /** Requests per minute, per IP, before the limiter replies 429. */
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(120),
-    /** Public base URL objects are served from, with no trailing slash. */
-    S3_PUBLIC_URL: z
-      .string()
-      .min(1)
-      .transform((value) => value.replace(/\/+$/, '')),
+    /**
+     * Public base URL objects are served from, with no trailing slash.
+     *
+     * Chained onto the registry's own field rather than restated as
+     * `z.string()`: restating it dropped the row's default *and* its
+     * per-environment requirement, so this one key was the single hole in the
+     * deployment gate — the one variable a deployment could still leave unset.
+     *
+     * The trade is deliberate and runs the other way off a deployment: the
+     * restatement made this required on every boot, and inheriting the registry
+     * row means a development process now falls back to the MinIO default
+     * instead of refusing to start. That is the registry's declared answer for
+     * this row, and `pnpm preflight` is what checks a laptop.
+     */
+    S3_PUBLIC_URL: rows.S3_PUBLIC_URL.transform((value) => value.replace(/\/+$/, '')),
     /** R2 and MinIO both address buckets by path rather than by subdomain. */
     S3_FORCE_PATH_STYLE: z
       .enum(['true', 'false'])
@@ -52,18 +68,29 @@ function buildSchema(target: ShapeTarget) {
 }
 
 /**
- * Boot-time validation always uses the baseline value set. `NODE_ENV` is not a
- * reliable signal for "this is a production deployment" — `next build` and
- * `tsc` set it too — so the stricter production value set is checked by
- * `pnpm preflight --env production` before a release instead.
+ * Two value sets, chosen per boot.
  *
- * `baseline` rather than `local` because the two stopped being the same thing:
- * the local set now rejects a live-mode credential, which is exactly the value
- * this schema must accept when it really is running in production.
+ * `baseline` is the laptop: every per-environment row falls back to its
+ * localhost default, and no mode restriction applies, because the local set
+ * rejects a live-mode credential that is exactly right in production.
+ *
+ * `deployed` is a running deployment, and there it refuses those defaults
+ * outright. `NODE_ENV=production` is a sound signal *here* in a way it never is
+ * at build time: `next build` and `tsc` set it on a laptop too, but neither
+ * ever executes this file — only a booting server does. Before this, the API
+ * started happily on `http://localhost:3000` as its CORS allow-list and
+ * `http://localhost:9000` as its object store, answered 200 on `/health`, and
+ * failed every real request.
+ *
+ * The stricter *production* set — live keys, https-only — stays with
+ * `pnpm preflight --env production`, because staging is a deployment too.
  */
-const envSchema = buildSchema('baseline');
+const SCHEMAS = {
+  baseline: buildSchema('baseline'),
+  deployed: buildSchema('deployed'),
+} as const;
 
-export type ApiEnv = z.infer<typeof envSchema>;
+export type ApiEnv = z.infer<(typeof SCHEMAS)['baseline']>;
 
 /** Keys the schema overrides after spreading the registry shape. */
 export const OVERRIDDEN_KEYS = [
@@ -77,7 +104,9 @@ export const OVERRIDDEN_KEYS = [
 ] as const;
 
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): ApiEnv {
-  const result = envSchema.safeParse(source);
+  const result = (isDeployedRuntime(source) ? SCHEMAS.deployed : SCHEMAS.baseline).safeParse(
+    source,
+  );
 
   if (!result.success) {
     const missing = result.error.issues
@@ -119,10 +148,10 @@ export function allowedOrigins(env: Pick<ApiEnv, 'WEB_URL'>): string[] {
  *
  * Used wherever a single absolute URL has to be handed to a third party, such
  * as the return and refresh URLs Stripe sends an onboarding vendor back to.
- * There is deliberately no `https` assertion here: `NODE_ENV` cannot tell a
- * deployment from a `tsc` run (see above), and `WEB_URL` already carries a
- * `productionShape` of https-only that `pnpm preflight --env production`
- * enforces against the real environment.
+ * There is deliberately no `https` assertion here. A deployment can no longer
+ * reach this on the localhost default — `parseEnv` refuses to boot on one —
+ * and staging is a deployment too, so the https-only `productionShape` stays
+ * where it belongs, with `pnpm preflight --env production`.
  */
 export function canonicalWebOrigin(env: Pick<ApiEnv, 'WEB_URL'>): string {
   const origin = allowedOrigins(env)[0];

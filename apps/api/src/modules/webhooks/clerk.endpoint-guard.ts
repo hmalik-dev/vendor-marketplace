@@ -13,6 +13,13 @@
  * must not depend on Clerk's API answering in order to start.
  */
 
+import {
+  EXPLICIT_ORIGIN,
+  deploymentOrigin,
+  isDeployedRuntime,
+  isLoopbackHost,
+} from '@vendor-marketplace/shared/env';
+
 export type EndpointVerdict = { ok: true } | { ok: false; reason: string };
 
 /** The CLI relay host. Anything under it is a forwarding token, never an API. */
@@ -30,6 +37,13 @@ const RELAY_HOST = 'webhooks.clerk.com';
 export function checkWebhookEndpoint(
   endpoint: string | undefined,
   expectedOrigin: string | undefined,
+  /**
+   * Whether a loopback endpoint is acceptable. True locally, where a
+   * `clerk webhooks listen` relay forwarding to `http://localhost:4000` is the
+   * correct setup; false on a deployment, which cannot reach any spelling of
+   * this machine.
+   */
+  allowLoopback = true,
 ): EndpointVerdict {
   const value = endpoint?.trim();
 
@@ -54,9 +68,22 @@ export function checkWebhookEndpoint(
     };
   }
 
-  // A relay reached over plain HTTP is still a relay, but this catches the
-  // separate mistake of signing secrets travelling in the clear.
-  if (url.protocol !== 'https:' && url.hostname !== 'localhost') {
+  /*
+   * Loopback, by parsed hostname rather than by looking for the word.
+   * A substring test on the raw value is walked past by `LOCALHOST`, by
+   * `127.0.0.1` and by `[::1]`, and it false-positives on a real endpoint
+   * carrying `//localhost` in a query string.
+   */
+  if (isLoopbackHost(url.hostname)) {
+    if (!allowLoopback) {
+      return {
+        ok: false,
+        reason: `"${value}" points at this machine, which no deployment can reach.`,
+      };
+    }
+  } else if (url.protocol !== 'https:') {
+    // A relay reached over plain HTTP is still a relay, but this catches the
+    // separate mistake of signing secrets travelling in the clear.
     return { ok: false, reason: `"${value}" is not served over HTTPS.` };
   }
 
@@ -91,19 +118,6 @@ export function checkWebhookEndpoint(
 }
 
 /**
- * The origin this process is actually reachable at, or `null` off a platform.
- *
- * Railway injects its public domain without a scheme. Off a platform there is
- * no deployment to compare against — and locally a relay is the *correct*
- * configuration — so the guard has nothing to say and stays silent.
- */
-export function deploymentOrigin(source: NodeJS.ProcessEnv = process.env): string | null {
-  const domain = source.RAILWAY_PUBLIC_DOMAIN?.trim();
-
-  return domain ? `https://${domain}` : null;
-}
-
-/**
  * Fails the boot when this deployment's Clerk webhooks are going somewhere
  * that is not this deployment.
  *
@@ -116,13 +130,34 @@ export function assertWebhookEndpoint(
   endpoint: string | undefined,
   source: NodeJS.ProcessEnv = process.env,
 ): void {
-  const origin = deploymentOrigin(source);
-
-  if (!origin) {
+  /*
+   * Whether this is a deployment, not which platform it is. Locally a
+   * `clerk webhooks listen` relay forwarding to localhost is the *correct*
+   * configuration, so the guard stays silent there; everywhere else it runs.
+   */
+  if (!isDeployedRuntime(source)) {
     return;
   }
 
-  const verdict = checkWebhookEndpoint(endpoint, origin);
+  /*
+   * The origin comparison is the strongest check here — "not a relay" is a far
+   * lower bar than "is this deployment", because a tunnel, a stale domain and a
+   * colleague's preview are all endpoints that work and are still the wrong
+   * one. The old guard only ran where `RAILWAY_PUBLIC_DOMAIN` was set, so it
+   * always had an origin by construction; widening it to every deployment must
+   * not quietly turn that check into an optional one.
+   */
+  const origin = deploymentOrigin(source);
+
+  if (!origin) {
+    throw new Error(
+      `This deployment does not announce its own origin, so ${EXPLICIT_ORIGIN} must state it.\n` +
+        'Without it the Clerk webhook endpoint can only be shape-checked, and an endpoint ' +
+        'pointing at something else that works is exactly the failure this guard exists to catch.',
+    );
+  }
+
+  const verdict = checkWebhookEndpoint(endpoint, origin, false);
 
   if (!verdict.ok) {
     throw new Error(

@@ -214,3 +214,159 @@ describe('parseEnv storage configuration', () => {
     expect(parseEnv({ ...REQUIRED, S3_FORCE_PATH_STYLE: 'false' }).S3_FORCE_PATH_STYLE).toBe(false);
   });
 });
+
+/*
+ * The law: *a development default must never be able to reach production*. The
+ * API used to boot on every one of them — localhost as its CORS allow-list,
+ * MinIO as its object store, a relay as its webhook endpoint — answer 200 on
+ * `/health`, log nothing, and fail every real request.
+ *
+ * `NODE_ENV=production` is the signal here in a way it never is at build time:
+ * `next build` and `tsc` set it too, but neither ever executes this file. Only
+ * a booting server does.
+ */
+describe('parseEnv on a deployment', () => {
+  /** Every per-environment row the API reads that carries a development default. */
+  const DEFAULTED = [
+    'WEB_URL',
+    'CLERK_WEBHOOK_ENDPOINT',
+    'S3_ENDPOINT',
+    'S3_ACCESS_KEY_ID',
+    'S3_SECRET_ACCESS_KEY',
+    'S3_BUCKET',
+    'S3_PUBLIC_URL',
+  ] as const;
+
+  /** A deployment that supplies a real value for every one of them. */
+  const DEPLOYED: NodeJS.ProcessEnv = {
+    ...REQUIRED,
+    NODE_ENV: 'production',
+    // The fixture's own database is the local Docker one; a deployment reaches
+    // Neon over the network, and `deployed` now refuses a loopback host.
+    DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
+    WEB_URL: 'https://orla.test',
+    CLERK_WEBHOOK_ENDPOINT: 'https://api.orla.test/webhooks/clerk',
+    S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+    S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+  };
+
+  /** `REQUIRED` with every defaulted per-environment row removed. */
+  function withoutDefaults(): NodeJS.ProcessEnv {
+    const source = { ...REQUIRED };
+    for (const key of DEFAULTED) {
+      delete source[key];
+    }
+    return source;
+  }
+
+  it.each(DEFAULTED)('refuses to boot on the development default for %s', (key) => {
+    const source = { ...DEPLOYED };
+    delete source[key];
+
+    expect(() => parseEnv(source)).toThrow(new RegExp(`${key} is required on a deployment`));
+  });
+
+  it('names every one of them at once, so a deploy is fixed in one pass', () => {
+    let message = '';
+    try {
+      parseEnv({ ...withoutDefaults(), NODE_ENV: 'production' });
+      expect.unreachable('parseEnv should have thrown');
+    } catch (error) {
+      message = (error as Error).message;
+    }
+
+    for (const key of DEFAULTED) {
+      expect(message).toContain(key);
+    }
+  });
+
+  it('catches a platform that sets no NODE_ENV, from its own marker', () => {
+    expect(() => parseEnv({ ...withoutDefaults(), VERCEL: '1' })).toThrow(
+      /WEB_URL is required on a deployment/,
+    );
+  });
+
+  it('accepts a deployment that states them all', () => {
+    const env = parseEnv(DEPLOYED);
+
+    expect(allowedOrigins(env)).toEqual(['https://orla.test']);
+    expect(canonicalWebOrigin(env)).toBe('https://orla.test');
+    expect(env.S3_PUBLIC_URL).toBe('https://cdn.orla.test/uploads');
+  });
+
+  it('still accepts a test-mode credential, because staging is a deployment too', () => {
+    // The live-key restriction belongs to `preflight --env production`, not to
+    // this schema: holding a staging branch to it would demand a live Stripe
+    // key for a branch that must never move real money.
+    expect(parseEnv(DEPLOYED).STRIPE_SECRET_KEY).toMatch(/^sk_test_/);
+  });
+
+  /*
+   * `buildSchema` spreads the registry rows and then overwrites some by key.
+   * `S3_PUBLIC_URL` was overwritten with a bare `z.string()`, which silently
+   * dropped both its default and its per-environment requirement — the one
+   * hole in this gate. This is the guard against the next such override, which
+   * `OVERRIDDEN_KEYS` alone cannot catch: it only asserts the key exists.
+   *
+   * `NODE_ENV` is the deliberate exception and stays defaulted: it is the very
+   * signal that selects this schema, so requiring it would be circular.
+   */
+  it.each(
+    OVERRIDDEN_KEYS.filter(
+      (key) => key !== 'NODE_ENV' && findVariable(key)?.environments === 'per-environment',
+    ),
+  )('keeps the deployment requirement for the overridden key %s', (key) => {
+    const source = { ...DEPLOYED };
+    delete source[key];
+
+    expect(() => parseEnv(source), key).toThrow(new RegExp(key));
+  });
+
+  /*
+   * Presence is not the whole law. A deployment that states the development
+   * value by hand satisfies every requirement above and is still localhost in
+   * production.
+   */
+  const LOCALHOST: Record<string, string> = {
+    WEB_URL: 'http://localhost:3000',
+    S3_ENDPOINT: 'http://localhost:9000',
+    CLERK_WEBHOOK_ENDPOINT: 'http://localhost:4000/webhooks/clerk',
+    // Composed from the fixture rather than written out: a connection string
+    // with an inline password is exactly what the credential hook stops.
+    DATABASE_URL: REQUIRED.DATABASE_URL!,
+  };
+
+  it.each(Object.keys(LOCALHOST))('refuses a hand-written localhost value for %s', (key) => {
+    expect(() => parseEnv({ ...DEPLOYED, [key]: LOCALHOST[key] })).toThrow(/localhost/);
+  });
+
+  /*
+   * `WEB_URL` is the row where this matters most and the one a whole-string
+   * check missed: it doubles as the CORS allow-list, so a comma-separated list
+   * is legal, and `http://localhost:3000,https://orla.test` parses as no URL at
+   * all. It booted — with localhost allow-listed and, because
+   * `canonicalWebOrigin` takes the first entry, handed to Stripe as the Connect
+   * return URL and printed into every notification email.
+   */
+  it.each([
+    'http://localhost:3000,https://orla.test',
+    'https://orla.test,http://localhost:3000',
+    'https://orla.test, http://127.0.0.1:3000',
+  ])('refuses %s, where only one entry of the allow-list is loopback', (webUrl) => {
+    expect(() => parseEnv({ ...DEPLOYED, WEB_URL: webUrl })).toThrow(/localhost/);
+  });
+
+  it('still accepts a multi-origin allow-list with no loopback entry', () => {
+    const env = parseEnv({ ...DEPLOYED, WEB_URL: 'https://orla.test, https://www.orla.test' });
+
+    expect(allowedOrigins(env)).toEqual(['https://orla.test', 'https://www.orla.test']);
+  });
+
+  it('keeps the shared defaults, which do not differ per environment', () => {
+    const env = parseEnv(DEPLOYED);
+
+    expect(env.PORT).toBe(4000);
+    expect(env.LOG_LEVEL).toBe('info');
+    expect(env.STRIPE_PLATFORM_FEE_RATE).toBe(0.12);
+  });
+});
