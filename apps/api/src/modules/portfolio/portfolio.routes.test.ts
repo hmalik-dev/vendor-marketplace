@@ -363,6 +363,8 @@ describe('/vendor/portfolio', () => {
         'the bucket URL the product itself stores',
         `http://localhost:9000/vendor-marketplace-uploads/portfolio/${FOREIGN_OWNER}/1111.webp`,
       ],
+      ['a query string carrying slashes', `portfolio/${FOREIGN_OWNER}/1111.webp?a/b`],
+      ['a fragment carrying slashes', `portfolio/${FOREIGN_OWNER}/1111.webp#/a/b`],
     ])('refuses a foreign key disguised with %s', async (_label, imageUrl) => {
       await createProfile(VENDOR, 'Sunlit Studio');
 

@@ -23,7 +23,7 @@
 - [`stripe_onboarded` entails an account id](stripe-onboarded-entails-account-id.md) — a CHECK since #381; the `acct_` format check on top was refused as a product decision, do not re-open it
 - [The e2e fixture now calls Stripe for real](e2e-fixture-creates-real-stripe-accounts.md) — as of #387 it creates an account under a fabricated identity; one `sk_test_` prefix check is all that keeps a live key out
 - [Booking reads gate on two separate paths](booking-reads-gate-on-two-separate-paths.md) — `reconcileBooking`'s already-booked short-circuit leaked the fee split and intent id to any signed-in caller until #387
-- [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — the write guard decides on what a URL parser resolves to; every spelling bypass is closed, re-probe generatively
+- [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — the write guard decides on what a URL parser resolves to; probe with the bucket-path base, not a bare origin
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes were left as low-severity on purpose
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — adding hosts to script-src is never the escalation; CSP_ENFORCE can only turn enforcement on
 - [The review profanity filter is a hard-reject floor](review-profanity-filter-is-a-hard-reject-floor.md) — the failure mode and the easy bypasses are settled until #15; the `\w*` over-match on "spicy" is not

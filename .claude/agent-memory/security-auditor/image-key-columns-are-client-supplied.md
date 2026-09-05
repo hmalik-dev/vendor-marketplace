@@ -1,6 +1,6 @@
 ---
 name: image-key-columns-are-client-supplied
-description: Every image column holds a raw client-supplied string; #407's assertOwnedImageRefs decides on the object a URL parser resolves to, not the stored spelling — all known bypasses (absolute wrap, dot segments, backslash, %2f) are CLOSED and verified at the route level
+description: Every image column holds a raw client-supplied string; the write guard must decide on the object a URL parser resolves to — and must be probed with the real S3_PUBLIC_URL, which carries a bucket path segment, not a bare origin
 metadata:
   type: project
 ---
@@ -34,17 +34,35 @@ foreign key; and the **WHATWG URL parser** — which `resolveImageUrl`'s output 
 handed to — deletes `.`/`%2e` segments **and treats `\` as `/` for http(s)
 URLs**.
 
-**All of it is CLOSED as of #407's third pass — do not re-report.** Verified
-2026-09-05 by driving the real Fastify app: 14 hostile spellings (exact key,
-absolute wrap incl. uppercase scheme and a port, `.`, `%2e`, `./`, `\`, mixed
-`\`, `%2F`, `%2f`, `\`+dot, `\`+`%2e`, whole-path `%2F`) answer **403 at all
-three write routes**, and a 58-spelling sweep found **zero** refs that both
-resolve onto another account's object and are accepted. The fix's shape is what
-matters: `normalizeImageRefPath` in `packages/shared/src/utils/index.ts` is now
-shared by `imageRefSchema` and by `referencedObjectKey`, which adds
-scheme/authority stripping, `%2f` folding and dot-segment resolution on top —
-i.e. the guard decides on the object the parser will fetch, not on the spelling.
-Same shape as [[validate-before-normalize-return-path]].
+Closed so far (route-verified 2026-09-05, 403 at all three write routes): the
+exact key, the absolute wrap in **any** origin including a bucket path
+(`http://localhost:9000/vendor-marketplace-uploads/...`, R2-style, uppercase
+scheme, explicit port), `.`, `%2e`, `./`, `\`, mixed `\`, `%2F`/`%2f`, and every
+combination of those. The shape that gets it right: `normalizeImageRefPath` in
+`packages/shared/src/utils/index.ts` shared with `imageRefSchema`, plus
+scheme/authority stripping, `%2f` folding, dot-segment resolution, and a **scan**
+for a known prefix with exactly two segments after it — the scan is what survives
+`S3_PUBLIC_URL` having a bucket path. Same shape as
+[[validate-before-normalize-return-path]].
+
+**Still live at the time of writing: a query or fragment containing `/`.**
+`portfolio/<victim>/1111.webp?a/b` and `...#/a/b` are stored with 201/200 at all
+three routes; a URL parser drops everything from the first `?`/`#` before
+resolving, so the browser fetches the victim's object while the extra segments
+push the prefix out of the guard's three-from-the-end window. Fix is to end the
+path at the first `?`/`#`, as a parser does. It does **not** re-open the
+`keys:from-urls` chain (`toObjectKey` keeps the suffix, so the string never
+exact-matches the key), so the harm is the theft half only.
+
+**Probe with the real base, which has a path.** `S3_PUBLIC_URL` is
+`http://localhost:9000/vendor-marketplace-uploads` locally and an R2 bucket URL
+in deployment — an origin **and** a bucket segment. Three audit passes used
+`http://cdn.test` (no path) and every one of them missed that the absolute form
+of a key is `<origin>/<bucket>/<prefix>/<owner>/<name>`, so the prefix is not
+first. A guard keyed on position passed every test and was bypassed in a browser
+by the very string `GET /vendors/:slug` publishes. **Any sweep here must use a
+base with a path segment, and must model the object key as the origin derives it
+(decode the pathname once, strip the bucket prefix) rather than comparing URLs.**
 
 **Enumerating spellings is the trap that produced the third pass.**
 `storage.test.ts`'s "refuses every spelling that resolves onto another account's
