@@ -78,6 +78,15 @@ export const emailSchema = z.email().max(MAX_EMAIL_LENGTH);
 
 export const urlSchema = z.url().max(MAX_URL_LENGTH);
 
+/*
+ * C0 controls and DEL, the C1 range, and the bidirectional formatting
+ * characters. Deliberately not the `g` flag: a global regex carries
+ * `lastIndex` between calls, so every other `.test()` would answer false.
+ */
+const FORBIDDEN_IN_IMAGE_REF =
+  // eslint-disable-next-line no-control-regex -- the control characters are the point (#414)
+  /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/;
+
 /**
  * A stored reference to an image, in any of the three shapes the product
  * actually persists.
@@ -101,18 +110,61 @@ export const imageRefSchema = z
   .refine(
     (value) => {
       /*
+       * Control and bidi characters are refused outright rather than stripped,
+       * because their only effect here is to disguise the value from the tests
+       * below (#414). A tab or newline inside a scheme — `jav\tascript:` —
+       * makes the anchored test fail, so the value fell through to the
+       * relative-path branch that never checks a scheme, while a browser
+       * removes those characters *before* it parses the scheme and so reads a
+       * live `javascript:`. No object key, site path or URL needs one.
+       */
+      if (FORBIDDEN_IN_IMAGE_REF.test(value)) {
+        return false;
+      }
+
+      /*
        * An absolute URL, but only over http(s): a `javascript:` or `data:`
        * value reaching an `img src` is the reason this is an allowlist. The
        * `.trim()` above is load-bearing — the scheme test is anchored, so
        * " javascript:alert(1)" would otherwise pass as a relative path.
        */
       if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
-        return /^https?:\/\//i.test(value);
+        if (!/^https?:\/\//i.test(value)) {
+          return false;
+        }
+
+        /*
+         * The host may be one that is not ours — a Clerk avatar is exactly
+         * that — but it may not be *disguised* as one. `https://cdn.ours@evil`
+         * reads as our CDN and is fetched from `evil`, which is the same
+         * stepping-around this ticket is about. Nothing legitimate puts
+         * credentials in an image URL.
+         */
+        try {
+          const parsed = new URL(value);
+
+          return parsed.username === '' && parsed.password === '';
+        } catch {
+          return false;
+        }
       }
 
-      // Otherwise a site-relative path or a bare object key. Neither may
-      // traverse, and neither may be protocol-relative.
-      return !value.startsWith('//') && !value.split('/').includes('..');
+      /*
+       * Otherwise a site-relative path or a bare object key. Neither may
+       * traverse, and neither may be protocol-relative — decided on the value
+       * a URL parser sees rather than the one stored, because it normalises
+       * `\` to `/` first. Without that, `/\evil.com/x.png` passes as a site
+       * path and is then fetched as `//evil.com/x.png`, which is a vendor
+       * pointing their public storefront photo at a host they control.
+       *
+       * `%2e` is folded back to `.` for the same reason: the parser decodes it
+       * before it resolves the path, so `a/%2e%2e/b.webp` traverses exactly as
+       * `a/../b.webp` does and a guard that reads the stored spelling misses
+       * it.
+       */
+      const path = value.replace(/\\/g, '/').replace(/%2e/gi, '.');
+
+      return !path.startsWith('//') && !path.split('/').includes('..');
     },
     { message: 'Must be an image URL, a site path, or a stored key' },
   );

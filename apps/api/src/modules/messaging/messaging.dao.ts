@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import {
   bookingRequests,
   conversations,
@@ -42,6 +42,32 @@ export async function findConversationsFor(
   db: AppDatabase,
   userId: string,
 ): Promise<ConversationListRow[]> {
+  /*
+   * Resolved first, and as literal values, deliberately (#402).
+   *
+   * The predicate used to read `conversations.customer_id = $1 OR
+   * vendor_profiles.user_id = $1`. An OR spanning two tables is an access path
+   * for neither `conversations_customer_idx` nor `conversations_vendor_idx`, so
+   * Postgres read every conversation on the platform, joined each to its
+   * vendor, and filtered — a per-request cost that scaled with the
+   * marketplace's total thread count rather than with this reader's.
+   *
+   * Naming the vendor's profiles in a *subquery* does not fix it: a sublink
+   * cannot be pulled out of an `OR`, so it plans as a hashed SubPlan under the
+   * same sequential scan and additionally hashes `users` and
+   * `booking_requests` — measured worse than what it replaced. Two statements
+   * is what buys the index: with the ids in hand both arms are literal
+   * predicates on `conversations`, which plans as a `BitmapOr` over the two
+   * indexes. The extra round trip is a sub-millisecond lookup on
+   * `vendor_profiles_user_idx`.
+   */
+  const owned = await db
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.userId, userId));
+
+  const ownedIds = owned.map((row) => row.id);
+
   return (
     db
       .select({
@@ -62,7 +88,12 @@ export async function findConversationsFor(
       .innerJoin(vendorProfiles, eq(conversations.vendorId, vendorProfiles.id))
       .innerJoin(users, eq(conversations.customerId, users.id))
       .leftJoin(bookingRequests, eq(conversations.bookingRequestId, bookingRequests.id))
-      .where(or(eq(conversations.customerId, userId), eq(vendorProfiles.userId, userId)))
+      // The join stays only to carry the columns the list renders.
+      .where(
+        ownedIds.length === 0
+          ? eq(conversations.customerId, userId)
+          : or(eq(conversations.customerId, userId), inArray(conversations.vendorId, ownedIds)),
+      )
       /*
        * `NULLS LAST` is load-bearing, not tidiness. `ensureConversation` opens a
        * thread with **every** booking request and leaves `last_message_at` null
@@ -116,29 +147,67 @@ export async function findConversationById(
   return rows?.[0] ?? null;
 }
 
-/** The newest message in each conversation, for the list preview. */
-export async function findLastMessages(
+/**
+ * The newest message's opening words in each conversation, for the list preview.
+ *
+ * A correlated top-1 per id, and not the whole table (#402). The query was
+ * `SELECT * FROM messages WHERE conversation_id IN (...) ORDER BY created_at
+ * DESC` with no bound at all: the full history of every thread the reader has
+ * ever had came through the pool and into Node on every list render, and all
+ * but one row per conversation was then thrown away in a `for` loop. The cost
+ * scaled with total messages sent rather than with thread count.
+ *
+ * `DISTINCT ON` fixes what crosses the wire but still reads and sorts every
+ * row; this turns each conversation into one `Index Scan Backward … LIMIT 1`
+ * on `messages_conversation_created_idx`, so the cost is flat in thread depth.
+ * Measured on a 3,010-message thread: 29 rows read against 3,290, and 116
+ * buffers against 471.
+ *
+ * `id` breaks a `created_at` tie, so two messages written in the same
+ * microsecond pick the same preview on every render. Only `previewLength`
+ * characters are fetched, because that is all the caller renders.
+ */
+export async function findLastMessagePreviews(
   db: AppDatabase,
   conversationIds: readonly string[],
-): Promise<Map<string, MessageRow>> {
+  previewLength: number,
+): Promise<Map<string, string>> {
   if (conversationIds.length === 0) {
     return new Map();
   }
 
   const rows = await db
-    .select()
-    .from(messages)
-    .where(inArray(messages.conversationId, [...conversationIds]))
-    .orderBy(desc(messages.createdAt));
+    .select({
+      conversationId: conversations.id,
+      /*
+       * Correlated rather than a lateral join, for the same plan without
+       * leaving the query builder: Postgres answers it with one index scan
+       * backwards per conversation, stopping at the first row.
+       *
+       * The inner table is **aliased and its columns written by hand**, and
+       * that is load-bearing. Drizzle renders an interpolated column inside a
+       * `sql` template unqualified, so the obvious spelling produces `where
+       * "conversation_id" = "id"` — both resolved against the subquery's own
+       * scope, comparing a message to its own id and answering `null` for
+       * every row. A silently empty preview on every conversation, with no
+       * error anywhere.
+       */
+      preview: sql<string | null>`(
+        select left(newest.content, ${previewLength})
+        from ${messages} as newest
+        where newest.conversation_id = conversations.id
+        order by newest.created_at desc, newest.id desc
+        limit 1
+      )`,
+    })
+    .from(conversations)
+    .where(inArray(conversations.id, [...conversationIds]));
 
-  const newest = new Map<string, MessageRow>();
-  for (const row of rows) {
-    if (!newest.has(row.conversationId)) {
-      newest.set(row.conversationId, row);
-    }
-  }
-
-  return newest;
+  return new Map(
+    rows
+      .filter((row): row is { conversationId: string; preview: string } => row.preview !== null)
+      .map((row) => [row.conversationId, row.preview]),
+  );
 }
 
 /**
@@ -195,20 +264,36 @@ export async function countUnreadInConversation(
   return rows?.[0]?.total ?? 0;
 }
 
-/** One page of a thread, oldest first — a thread is read downwards. */
+/**
+ * One page of a thread, **paged backwards from the newest** and returned
+ * oldest-first — a thread is read downwards but joined at its end.
+ *
+ * The page used to be taken from the oldest message forwards (#402), so page 1
+ * of a 60-message thread was messages 1-50 and the client, which asks for no
+ * other page, rendered a conversation that stopped ten messages before the
+ * present. The reader's own last reply and the answer to it were both hidden
+ * behind a reload that could never reach them.
+ *
+ * Page 1 is therefore the newest `limit` rows, page 2 the `limit` before those,
+ * and each page is reversed so the caller can concatenate pages downwards
+ * without re-sorting. `id` breaks a `created_at` tie, without which a row can
+ * appear on two pages and another on none.
+ */
 export async function findMessages(
   db: AppDatabase,
   conversationId: string,
   limit: number,
   offset: number,
 ): Promise<MessageRow[]> {
-  return db
+  const rows = await db
     .select()
     .from(messages)
     .where(eq(messages.conversationId, conversationId))
-    .orderBy(asc(messages.createdAt))
+    .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(limit)
     .offset(offset);
+
+  return rows.reverse();
 }
 
 export async function countMessages(db: AppDatabase, conversationId: string): Promise<number> {

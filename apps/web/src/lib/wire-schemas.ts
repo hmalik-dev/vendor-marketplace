@@ -181,6 +181,14 @@ export type WireVendorReviewsPage = z.infer<typeof wireVendorReviewsPageSchema>;
 export type WirePublicReview = WireVendorReviewsPage['items'][number];
 
 export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
+  /*
+   * The vendor's photo is nested, and a nested field does not inherit the
+   * resolution the top-level ones get. Without this the bookings hub rendered
+   * the bare object key straight into `<img src>`, so the browser asked the
+   * *web* origin for `/vendor-profile/…` — a 500 and a broken avatar for every
+   * vendor who has a profile photo. Found driving #414.
+   */
+  vendor: bookingRequestDetailSchema.shape.vendor.extend({ avatarUrl: imageUrl() }),
   expiresAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

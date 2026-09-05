@@ -74,11 +74,13 @@ function bodySchemaNames(): string[] {
  * automatically and a new field declared as a bare string is not.
  *
  * `imageRefSchema` is here because an image reference is a stored key that
- * `resolveImageUrl` turns into a URL, not text anybody reads. It does accept a
- * bidi control today — measured, not assumed — and that is deliberately **not**
- * filed as a defect: the value is percent-encoded into a URL and no surface
- * renders it as text, so it breaks image resolution rather than reordering
- * prose. Neutralising prose would be the wrong fix for it in any case.
+ * `resolveImageUrl` turns into a URL, not text anybody reads. Since #414 it
+ * **rejects** a bidi control outright rather than accepting one, which is the
+ * right shape for it: stripping the character would leave a reference that
+ * resolves to a different object than the one uploaded, where refusing the
+ * write says so. That is why it stays excluded from this boundary rather than
+ * being folded into it — the free-text rule is "strip and keep", and an image
+ * reference's rule is "refuse".
  */
 const CONSTRAINED_FORMATS: readonly unknown[] = [
   schemas.imageRefSchema,

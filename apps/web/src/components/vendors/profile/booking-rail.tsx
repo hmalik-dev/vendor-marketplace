@@ -118,6 +118,18 @@ export function BookingRail({
         return;
       }
 
+      /*
+       * Opening a thread is customer-only, the way sending a request is
+       * (#402). A vendor reading a competitor's profile — or their own — can
+       * still press this, and "try again in a moment" would be a lie about a
+       * refusal that will never change.
+       */
+      if (error instanceof ApiClientError && error.statusCode === 403) {
+        setMessageError('Only a customer account can start a thread with a vendor.');
+        setOpening(false);
+        return;
+      }
+
       setMessageError('That did not go through. Try again in a moment.');
       setOpening(false);
     }

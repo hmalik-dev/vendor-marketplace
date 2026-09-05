@@ -246,6 +246,23 @@ describe('BookingRail', () => {
       expect(message).toHaveProperty('disabled', false);
       expect(message.getAttribute('aria-describedby')).toBe(alert.id);
     });
+
+    /*
+     * #402 made opening a thread customer-only, the way sending a request
+     * already was. A vendor reading another vendor's profile can still press
+     * this, and "try again in a moment" would be a lie about a refusal that
+     * will never change.
+     */
+    it('says a refusal is about the account rather than offering a retry', async () => {
+      requestMock.mockRejectedValue(new ApiClientError(403, ERROR_CODES.FORBIDDEN, 'Forbidden'));
+      renderRail();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Send a message' }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toBe('Only a customer account can start a thread with a vendor.');
+      expect(pushMock).not.toHaveBeenCalled();
+    });
   });
 
   it('omits the package when the vendor has none to choose from', () => {

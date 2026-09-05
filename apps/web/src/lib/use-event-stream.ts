@@ -117,6 +117,32 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
     let hasConnectedBefore = false;
     const aborter = new AbortController();
 
+    /**
+     * Every attempt to connect, with the retry attached to the attempt itself.
+     *
+     * `void connect()` used to let any rejection escape as an unhandled one
+     * with nothing scheduled behind it (#402) — `getToken` rejects on a network
+     * blip, a Clerk outage, or a clock skew its refresh cannot ride out.
+     * `exhausted` then stayed false, so both `online` and `visibilitychange`
+     * returned early at `resume()` and the tab never reconnected for the rest
+     * of its life: no notifications, and `/messages` showing "Reconnecting"
+     * permanently while nothing was reconnecting.
+     *
+     * Catching here rather than at the one await known to throw is what closes
+     * the class: the next await added inside `connect` inherits the retry
+     * instead of inheriting the bug. A failure this catches is retryable for
+     * the same reason a dropped socket is — the session has not been refused,
+     * the exchange has not happened yet. The one deliberate exception, a
+     * *rejected* session, is decided inside `connect` by `isRetryable`.
+     */
+    function start(): void {
+      void connect().catch(() => {
+        if (!cancelled) {
+          scheduleRetry();
+        }
+      });
+    }
+
     async function connect(): Promise<void> {
       const token = await getToken();
 
@@ -213,7 +239,7 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
 
       const delay = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)] ?? 30_000;
       attempt += 1;
-      retry = setTimeout(() => void connect(), delay);
+      retry = setTimeout(start, delay);
     }
 
     function resume(): void {
@@ -226,13 +252,13 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
 
       exhausted = false;
       attempt = 0;
-      void connect();
+      start();
     }
 
     window.addEventListener('online', resume);
     document.addEventListener('visibilitychange', resume);
 
-    void connect();
+    start();
 
     return () => {
       cancelled = true;
