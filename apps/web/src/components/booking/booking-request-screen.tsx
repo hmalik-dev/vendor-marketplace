@@ -7,11 +7,12 @@ import {
   MAX_GUEST_COUNT,
   expiryCountdown,
   isUniversallyPastDate,
+  joinWithAnd,
   type AvailabilityStatus,
   type EventType,
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { RequestStepper } from '@/components/booking/request-stepper';
 import {
   RequestSummaryRail,
@@ -77,19 +78,150 @@ export interface SavedRequestDraft {
   customDetails: string;
 }
 
+/** Every field the customer can fill, including the one outside `FormState`. */
+const DRAFT_FIELDS = [
+  'eventDate',
+  'eventType',
+  'eventStartTime',
+  'guestCount',
+  'eventLocation',
+  'notes',
+  'customDetails',
+] as const;
+
+type DraftField = (typeof DRAFT_FIELDS)[number];
+
+/** How each field is named in the restore banner: a noun, mid-sentence. */
+const DRAFT_FIELD_NOUNS: Record<DraftField, string> = {
+  eventDate: 'date',
+  eventType: 'event type',
+  eventStartTime: 'start time',
+  guestCount: 'guest count',
+  eventLocation: 'location',
+  notes: 'notes',
+  customDetails: 'brief',
+};
+
+function fieldValue(draft: SavedRequestDraft, field: DraftField): string {
+  return field === 'customDetails' ? draft.customDetails : draft.form[field];
+}
+
+/**
+ * Copies one field across, keeping its own type.
+ *
+ * Generic in the key so `eventType` stays the `EventType` union rather than
+ * widening to `string` — reading a value out and writing it back through a
+ * union-typed key is what a plain assignment cannot express.
+ */
+function copyField<K extends keyof FormState>(
+  target: FormState,
+  source: FormState,
+  field: K,
+): void {
+  target[field] = source[field];
+}
+
+/**
+ * Drops the values this navigation supplied but the customer never changed.
+ *
+ * The date and the guest count arrive pre-filled from the vendor's rail or the
+ * URL. A value still sitting at what the URL handed it is the URL's, not the
+ * customer's, and storing it would hand a query parameter back to them on a
+ * later visit as though they had chosen it. Stripping at the write is what
+ * makes that true for every draft, not only for the one nobody typed into: a
+ * customer who arrives at `?guests=120` and writes a note is still saving a
+ * note, not a guest count.
+ */
+export function stripSeeded(value: SavedRequestDraft, seed: SavedRequestDraft): SavedRequestDraft {
+  const stripped: SavedRequestDraft = {
+    form: { ...value.form },
+    customDetails: value.customDetails,
+  };
+
+  for (const field of DRAFT_FIELDS) {
+    const seeded = fieldValue(seed, field);
+
+    if (seeded === '' || fieldValue(value, field) !== seeded) {
+      continue;
+    }
+
+    if (field === 'customDetails') {
+      stripped.customDetails = '';
+    } else {
+      stripped.form[field] = '';
+    }
+  }
+
+  return stripped;
+}
+
 /**
  * A draft is only worth keeping once the customer has actually said something.
  *
- * The date is deliberately excluded: it arrives pre-filled from the vendor's
- * calendar, so a form holding only that is a form nobody has typed into, and
- * restoring it would announce a draft the customer never wrote.
+ * Everything the URL supplied has already been taken out by `stripSeeded`, so
+ * what reaches this is only what was typed — and a draft of nothing is a draft
+ * the customer never wrote. Restoring it would announce one that never existed.
  */
 export function isEmptyDraft(draft: SavedRequestDraft): boolean {
-  const typed = Object.entries(draft.form)
-    .filter(([field]) => field !== 'eventDate')
-    .map(([, value]) => value);
+  return DRAFT_FIELDS.every((field) => fieldValue(draft, field).trim() === '');
+}
 
-  return draft.customDetails.trim() === '' && typed.every((value) => value.trim() === '');
+/**
+ * Merges a stored draft into the form this navigation is already holding.
+ *
+ * The customer's most recent act wins. A field they set on *this* navigation —
+ * the date and guest count carried in from the vendor's rail or the URL, and
+ * anything typed in the moment before storage was read — is theirs; every
+ * other field falls back to the draft. Replacing the whole form, as the
+ * restore used to, sent the request for the day chosen last week rather than
+ * the one just picked, behind a banner that said only that something was kept.
+ *
+ * `chosenNow` names the fields where this navigation's value displaced a
+ * different stored one, so the banner can say which they were. `keptFromDraft`
+ * says whether the draft contributed anything at all — a draft that loses every
+ * field it held was not "kept", and announcing it would be a claim about work
+ * the customer can see is not on the screen.
+ */
+export function mergeRestoredDraft(
+  current: SavedRequestDraft,
+  stored: SavedRequestDraft,
+  seed: SavedRequestDraft,
+): { merged: SavedRequestDraft; chosenNow: DraftField[]; keptFromDraft: boolean } {
+  const merged: SavedRequestDraft = {
+    form: { ...stored.form },
+    customDetails: stored.customDetails,
+  };
+  const chosenNow: DraftField[] = [];
+  let keptFromDraft = false;
+
+  for (const field of DRAFT_FIELDS) {
+    const now = fieldValue(current, field);
+    const wasStored = fieldValue(stored, field);
+
+    /*
+     * Empty here and unseeded: nothing on this navigation has anything to say
+     * about this field, so the draft keeps it. Anything else is a choice made
+     * after the draft was written — either typed here, or carried in from the
+     * rail or the URL — and it wins, including a seeded value cleared back to
+     * nothing.
+     */
+    if (now === '' && fieldValue(seed, field) === '') {
+      keptFromDraft = keptFromDraft || wasStored !== '';
+      continue;
+    }
+
+    if (field === 'customDetails') {
+      merged.customDetails = current.customDetails;
+    } else {
+      copyField(merged.form, current.form, field);
+    }
+
+    if (wasStored !== now && wasStored !== '') {
+      chosenNow.push(field);
+    }
+  }
+
+  return { merged, chosenNow, keptFromDraft };
 }
 
 /**
@@ -115,15 +247,30 @@ export function BookingRequestScreen({
   const fieldId = useId();
   const request = useApi();
 
-  const [form, setForm] = useState<FormState>({
-    eventDate: initialDate,
-    eventType: '',
-    eventStartTime: '',
-    guestCount: initialGuestCount,
-    eventLocation: '',
-    notes: '',
-  });
+  /*
+   * What this navigation arrived carrying. Both the draft's emptiness and the
+   * restore's merge are measured against it, so neither confuses a value the
+   * rail or the URL supplied a moment ago with one the customer wrote.
+   */
+  const seed = useMemo<SavedRequestDraft>(
+    () => ({
+      form: {
+        eventDate: initialDate,
+        eventType: '',
+        eventStartTime: '',
+        guestCount: initialGuestCount,
+        eventLocation: '',
+        notes: '',
+      },
+      customDetails: '',
+    }),
+    [initialDate, initialGuestCount],
+  );
+
+  const [form, setForm] = useState<FormState>(seed.form);
   const [customDetails, setCustomDetails] = useState('');
+  /* Null until a draft is restored *and* the merge kept something of it. */
+  const [restoreNote, setRestoreNote] = useState<readonly DraftField[] | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
   const [eventTypeOpen, setEventTypeOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
@@ -138,14 +285,33 @@ export function BookingRequestScreen({
    */
   const draft = useSavedDraft<SavedRequestDraft>(`${DRAFT_KEY_PREFIX}${vendorId}`, isEmptyDraft);
 
+  /*
+   * Read through refs so the merge sees the live form without the effect
+   * having to list it as a dependency — which would re-run, and re-merge, on
+   * every keystroke.
+   */
+  const formRef = useRef(form);
+  formRef.current = form;
+  const customDetailsRef = useRef(customDetails);
+  customDetailsRef.current = customDetails;
+
   useEffect(() => {
-    if (draft.restored === null) {
+    const restored = draft.restored;
+
+    if (restored === null) {
       return;
     }
 
-    setForm(draft.restored.form);
-    setCustomDetails(draft.restored.customDetails);
-  }, [draft.restored]);
+    const { merged, chosenNow, keptFromDraft } = mergeRestoredDraft(
+      { form: formRef.current, customDetails: customDetailsRef.current },
+      restored,
+      seed,
+    );
+
+    setForm(merged.form);
+    setCustomDetails(merged.customDetails);
+    setRestoreNote(keptFromDraft ? chosenNow : null);
+  }, [draft.restored, seed]);
 
   /*
    * Written on every change rather than on a timer: the events this protects
@@ -161,8 +327,8 @@ export function BookingRequestScreen({
       return;
     }
 
-    draft.save({ form, customDetails });
-  }, [draft, form, customDetails, sent]);
+    draft.save(stripSeeded({ form, customDetails }, seed));
+  }, [draft, form, customDetails, seed, sent]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]): void =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -326,15 +492,24 @@ export function BookingRequestScreen({
           A form that fills itself is unsettling, so the restore is stated
           rather than left to be noticed. Steel, because it is information
           that resolves itself — nothing is wrong and nothing is owed.
+
+          Gated on the merge having kept something, not on a draft having been
+          found: a stored draft whose every field lost to this navigation put
+          nothing on the screen, and saying it was kept would describe work the
+          customer can see is not there.
         */}
-        {draft.wasRestored && step === 1 ? (
+        {restoreNote !== null && step === 1 ? (
           <div className="mb-5 flex max-w-[640px] items-start gap-3 rounded-xl border border-steel-200 bg-steel-50 px-4 py-3.25">
             <span
               aria-hidden="true"
               className="mt-0.25 size-4.5 shrink-0 rounded-full bg-steel-600"
             />
             <p className="text-base text-stone-900">
-              We kept what you had written. Change anything before you send it.
+              {restoreNote.length === 0
+                ? 'We kept what you had written. Change anything before you send it.'
+                : `We kept what you had written, and the ${joinWithAnd(
+                    restoreNote.map((field) => DRAFT_FIELD_NOUNS[field]),
+                  )} you just set. Change anything before you send it.`}
             </p>
           </div>
         ) : null}
