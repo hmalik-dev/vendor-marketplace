@@ -9,7 +9,24 @@ import {
 import type { AvailabilityStatus } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
-/** Bookings whose event falls inside `[from, to)`, by status bucket. */
+/**
+ * A booking that was paid for and kept — the shape both dashboard figures
+ * count, and the reason they agree with each other.
+ *
+ * `cancelled` is excluded because a cancellation now actually unwinds: under
+ * D31 the refund reverses the vendor's transfer back out of their connected
+ * account, so a cancelled booking is money they no longer have. Before #416 no
+ * paid booking could reach `cancelled` at all — every refund 400'd at Stripe
+ * and the row never moved — so these two queries were right by accident. They
+ * are not any more.
+ *
+ * `admin.dao.ts`'s `PAID_AND_KEPT` says the same thing for the operator's
+ * revenue figure, and `findNextPayout` filters `confirmed` for the same reason.
+ * The vendor's own two numbers were the pair left unguarded.
+ */
+const NOT_CANCELLED = sql`${bookings.status} <> 'cancelled'`;
+
+/** Bookings whose event falls inside `[from, to)`, cancellations excluded. */
 export async function countBookingsBetween(
   db: AppDatabase,
   vendorId: string,
@@ -24,6 +41,7 @@ export async function countBookingsBetween(
         eq(bookings.vendorId, vendorId),
         gte(bookings.eventDate, from),
         lt(bookings.eventDate, to),
+        NOT_CANCELLED,
       ),
     );
 
@@ -36,6 +54,11 @@ export async function countBookingsBetween(
  *
  * Counted on `paid_at` rather than the event date: money that has arrived is
  * this month's earnings even when the event is next year.
+ *
+ * Net of cancellations. A booking the customer cancelled had its transfer
+ * reversed (D31), so leaving it in would tell the vendor they earned money
+ * that has been taken back out of their balance — on the one screen they check
+ * to see what they are owed.
  */
 export async function sumPayoutsBetween(
   db: AppDatabase,
@@ -47,7 +70,12 @@ export async function sumPayoutsBetween(
     .select({ total: sql<number>`coalesce(sum(${bookings.vendorPayoutCents}), 0)::int` })
     .from(bookings)
     .where(
-      and(eq(bookings.vendorId, vendorId), gte(bookings.paidAt, from), lt(bookings.paidAt, to)),
+      and(
+        eq(bookings.vendorId, vendorId),
+        gte(bookings.paidAt, from),
+        lt(bookings.paidAt, to),
+        NOT_CANCELLED,
+      ),
     );
 
   return rows?.[0]?.total ?? 0;
