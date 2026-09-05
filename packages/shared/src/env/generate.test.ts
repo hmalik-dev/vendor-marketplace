@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { PLATFORM_ENV_KEYS } from './deployment.js';
 import { ENV_REGISTRY } from './registry.js';
 import {
   passThroughKeys,
@@ -54,6 +55,22 @@ describe('passThroughKeys', () => {
     expect(keys).not.toContain('NODE_ENV');
     expect(keys).not.toContain('CSP_ENFORCE');
     expect(keys).toContain('DATABASE_URL_UNPOOLED');
+  });
+
+  /*
+   * The markers belong in `globalEnv`, not here. `globalPassThroughEnv` reaches
+   * a task without entering its cache key, so a laptop `web#build` and a Vercel
+   * one would hash identically — and remote caching could restore the laptop's
+   * artefact, localhost already inlined, without the deployed branch of
+   * `assertWebEnv` ever running.
+   */
+  it('hashes the platform markers rather than passing them through unhashed', () => {
+    const passed = passThroughKeys();
+
+    for (const marker of PLATFORM_ENV_KEYS) {
+      expect(TURBO_GLOBAL_ENV_KEYS, marker).toContain(marker);
+      expect(passed, marker).not.toContain(marker);
+    }
   });
 
   /*

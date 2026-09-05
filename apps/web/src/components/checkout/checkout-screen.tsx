@@ -10,6 +10,7 @@ import { loadStripe, type Appearance, type StripeElementsOptions } from '@stripe
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
+import { publicEnv } from '@/config/public-env';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import type { WireCheckoutIntent } from '@/lib/wire-schemas';
@@ -21,8 +22,14 @@ import type { WireCheckoutIntent } from '@/lib/wire-schemas';
  * the component would re-run on every render and hand `Elements` a new promise
  * each time, which remounts the iframe and loses whatever the customer had
  * typed into the card field.
+ *
+ * The key comes through `publicEnv`, not `?? ''`. Stripe.js rejects an empty
+ * key, so that fallback rendered a checkout with no card field and a Pay button
+ * that did nothing — the server had already opened a real PaymentIntent by
+ * then. The web build now validates the `stripe` capability, so a deploy cannot
+ * reach here without one.
  */
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '');
+const stripePromise = loadStripe(publicEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'));
 
 /** Frame `05`'s field styling, handed to Stripe's iframe as tokens. */
 const APPEARANCE: Appearance = {
@@ -219,7 +226,13 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
             </p>
           </div>
 
-          <SummaryActions checkout={checkout} paying={paying} event={event} decline={decline} />
+          <SummaryActions
+            checkout={checkout}
+            paying={paying}
+            ready={Boolean(stripe && elements)}
+            event={event}
+            decline={decline}
+          />
         </form>
       </div>
 
@@ -264,11 +277,14 @@ function DeclineBanner({ decline, event }: { decline: Decline; event: Date }): R
 function SummaryActions({
   checkout,
   paying,
+  ready,
   event,
   decline,
 }: {
   checkout: WireCheckoutIntent;
   paying: boolean;
+  /** Stripe.js has loaded and the Elements group has mounted. */
+  ready: boolean;
   event: Date;
   decline: Decline | null;
 }): React.ReactElement {
@@ -278,7 +294,24 @@ function SummaryActions({
         The button names the amount *and* the outcome. "Pay" alone tells the
         customer what the button does to them rather than what they get.
       */}
-      <Button type="submit" variant="primary" disabled={paying} className="justify-center py-3.5">
+      {/*
+        Disabled until Stripe.js is up, not only while a charge is in flight.
+        `pay` returns early on a null `stripe`, so an enabled button before then
+        is one the customer clicks and nothing happens — no spinner, no error,
+        no charge.
+
+        `40-states.md`: a primary blocked by something takes the `clay-300`
+        disabled fill and stays visible. The `Button` primitive's own
+        `disabled:opacity-50` is a wash over `clay-400` rather than that token,
+        and measured 2.10:1 against its label — overridden here rather than in
+        the primitive, which every other disabled control in the app shares.
+      */}
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={paying || !ready}
+        className="justify-center py-3.5 disabled:bg-clay-300 disabled:opacity-100"
+      >
         {paying ? (
           <>
             <Spinner />

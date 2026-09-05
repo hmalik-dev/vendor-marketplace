@@ -9,6 +9,7 @@ import {
   shapeFor,
 } from './registry.js';
 import { type Capability, variablesForAll } from './capabilities.js';
+import { pointsAtLoopback } from './deployment.js';
 
 export interface SchemaShapeOptions<
   TConsumer extends Consumer = Consumer,
@@ -40,18 +41,60 @@ export type RegistryShape<TConsumer extends Consumer, TCapability extends Capabi
   [TEntry in RegistryEntryFor<TConsumer, TCapability> as TEntry['key']]: FieldFor<TEntry>;
 };
 
+/**
+ * Keys whose value is a credential, and must not be echoed into a boot log.
+ *
+ * The "still on its development default" message names the value so the
+ * operator knows what to replace. That is right for a URL and wrong for a
+ * secret: nothing sensitive defaults today, but the first row that does would
+ * print itself into every failed deployment's log.
+ */
+const SECRET_KEY = /KEY|SECRET|TOKEN|PASSWORD/;
+
 function schemaFor(variable: EnvVariable, target: ShapeTarget): z.ZodTypeAny {
   const shape = shapeFor(variable, target);
+  const explicit = requiresExplicitValue(variable, target);
 
-  let field = z.string().min(1, `${variable.key} is required`);
+  /*
+   * A row that *has* a default and must be stated anyway is the failure this
+   * message exists for: on a deployment the development default is not a
+   * fallback, it is the defect. Saying so names the fix, where a bare
+   * "is required" sends the operator looking for a value that is right there
+   * in `.env.example`.
+   */
+  const fallback = SECRET_KEY.test(variable.key)
+    ? 'its development default'
+    : `its development default (${variable.defaultValue})`;
+  const missing =
+    explicit && variable.defaultValue !== undefined
+      ? `${variable.key} is required on a deployment: it differs per environment, and ${fallback} must never be served to real users`
+      : `${variable.key} is required`;
+
+  let field = z.string({ error: missing }).min(1, missing);
 
   if (shape) {
     field = field.regex(shape, `${variable.key} does not look like a real value`);
   }
 
-  return requiresExplicitValue(variable, target) || variable.defaultValue === undefined
-    ? field
-    : field.default(variable.defaultValue);
+  /*
+   * Requiring a value to be *stated* is not the whole law: a deployment that
+   * sets `S3_ENDPOINT=http://localhost:9000` by hand satisfies presence and is
+   * still the development default reaching production. A loopback host is
+   * never a public deployment's own — the app talks to Neon, R2 and Clerk over
+   * the network — so refusing one closes the half that absence does not. Per
+   * *entry*, because `WEB_URL` is a comma-separated allow-list and its first
+   * entry is the origin handed to Stripe.
+   */
+  const checked =
+    target === 'deployed'
+      ? field.refine((value) => !pointsAtLoopback(value), {
+          error: `${variable.key} points at localhost, which no deployment can reach`,
+        })
+      : field;
+
+  return explicit || variable.defaultValue === undefined
+    ? checked
+    : checked.default(variable.defaultValue);
 }
 
 function rowsFor<TConsumer extends Consumer, TCapability extends Capability>(

@@ -1,11 +1,16 @@
 import { apiErrorSchema, ERROR_CODES, type ErrorCode } from '@vendor-marketplace/shared';
 import type { z } from 'zod';
+import { apiOrigin } from '@/config/public-env';
 
 /**
  * Browser calls need an absolute origin at build time; server calls may use a
  * private origin that never reaches the client bundle.
+ *
+ * The origin itself comes from `apiOrigin()`, which owns the development
+ * fallback for all three callers — this module, `use-api` and
+ * `use-event-stream` each carried their own copy of the same literal.
  */
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? 'http://localhost:4000';
+const BASE_URL = apiOrigin(process.env.API_URL);
 
 /**
  * How long any one **server-side** call to the API may take before it is

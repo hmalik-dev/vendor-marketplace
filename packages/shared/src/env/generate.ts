@@ -1,4 +1,5 @@
 import { CAPABILITIES, CAPABILITY_LABELS, variablesFor } from './capabilities.js';
+import { PLATFORM_ENV_KEYS } from './deployment.js';
 import { ENV_REGISTRY, exampleValue } from './registry.js';
 
 const HEADER = `# ---------------------------------------------------------------------------
@@ -59,8 +60,32 @@ export function renderEnvExample(): string {
  * the hash identical for `0` and `1` — so `CSP_ENFORCE=1 pnpm build` replayed
  * a cached report-only build and a browser pass against it could not fail.
  */
-export const TURBO_GLOBAL_ENV_KEYS: readonly string[] = ['NODE_ENV', 'CSP_ENFORCE'];
+/**
+ * The platform markers are here, hashed, and **not** in the pass-through list.
+ *
+ * `globalPassThroughEnv` reaches a task without entering its cache key, so a
+ * `web#build` on a laptop and one on Vercel would hash identically — and with
+ * remote caching on, the platform could restore the laptop's artefact, with
+ * `http://localhost:4000` already inlined, without ever running the deployed
+ * branch of `assertWebEnv`. The gate has to be part of what the hash describes,
+ * because it changes what the build produces.
+ */
+export const TURBO_GLOBAL_ENV_KEYS: readonly string[] = [
+  'NODE_ENV',
+  'CSP_ENFORCE',
+  ...PLATFORM_ENV_KEYS,
+];
 
+/**
+ * Every registry key that is not already hashed in `globalEnv`.
+ *
+ * The platform markers `deployment.ts` reads are deliberately absent: they
+ * belong in `TURBO_GLOBAL_ENV_KEYS`, which both reaches the task under strict
+ * env mode *and* enters the cache key. A stripped `VERCEL` would leave
+ * `next build` believing it was on a laptop; an unhashed one would let a
+ * laptop's cached artefact be replayed on the platform. Both restore the
+ * localhost defaults this gate exists to refuse.
+ */
 export function passThroughKeys(): string[] {
   return ENV_REGISTRY.map((variable) => variable.key)
     .filter((key) => !TURBO_GLOBAL_ENV_KEYS.includes(key))

@@ -32,6 +32,14 @@ call sites are pinned by a behavioural live-key test:
 runs on Vercel too", and `apps/api/src/config/env.test.ts` "accepts a live-mode
 Clerk key, because this is how it boots in production". Each swaps `_test_` for
 `_live_` in the fixture and asserts the parse does not throw, so flipping either
-target to `local` fails that package's suite. Verify those two tests still exist
+target to `local` fails that package's suite.
+
+**Amended 2026-09-04.** Both call sites now choose between _two_ targets per
+boot/build — `baseline` or the new `deployed` — via `isDeployedRuntime` /
+`isDeployedBuild`. `deployed` is `baseline`'s shapes plus "every
+per-environment row must be stated", never `productionShape`, so the live-key
+trap above is unchanged: `local` is still the wrong answer and `production` is
+still preflight's alone. What to check instead is whether the _choice_ happens
+at all — see [[deployment-gate-detects-by-marker-and-fails-open]]. Verify those two tests still exist
 before treating this as an open gap; do not add a third. Related:
 [[credential-fixtures-assembled-at-runtime]].
