@@ -273,12 +273,14 @@ the silent-submit work #388 closed:
 | **414** | **`imageRefSchema` accepts references that are not image references** | P1.5 | M4.5 | **P2 Medium** | **Done** | `worktree-t414` | **None** | `storage` | **Filed 2026-09-04 from #398's boundary sweep, measured rather than reported.** The validator's own comment says a stored reference "may not traverse" and "may not be protocol-relative", and both guards are bypassable. `/\evil.com/x.png` is accepted — `startsWith('//')` does not see it — and `resolveImageUrl` returns a `/`-leading value **verbatim**, so it reaches `<img src>` as written and the URL parser normalises the backslash, loading the image from `evil.com`. A vendor can therefore point their public storefront's photo at a host they control and collect every visitor's IP. The enforced `img-src 'self' data: blob: https://img.clerk.com https://*.stripe.com https://*.link.com http://localhost:9000` blocks it in a browser today, which is why this is P2 and not P1 — but CSP is defence in depth and an email template carries no CSP at all. Separately, an interior tab or newline defeats the scheme test (`jav\tascript:alert(1)` and `jav\nascript:alert(1)` are both accepted) because the anchored regex fails and the value falls into the relative-path branch; browsers strip those characters before parsing a scheme, so it is live the moment any consumer puts a stored ref somewhere other than `<img src>`. Bidi controls are accepted too (`aaa‮bbb`), which is inert — it breaks resolution rather than reordering prose — and is why `request-body-free-text.test.ts` excludes image refs by reference rather than folding them into the free-text boundary. **Not the whole story: the leading-whitespace bypass this repository's security memory recorded is fixed** — `.trim()` runs before the `.refine()`, so `" javascript:alert(1)"`, `"\njavascript:…"` and `"//evil.com/x.png"` are all rejected; that memory has been corrected. Fix shape: reject control characters outright, and decide the relative-path branch after normalising `\` to `/` rather than before | **Closed 2026-09-05 in `d210d17` (PR #94).** All four acceptances landed, measured against the built `dist` as well as the source. Control characters (C0, DEL, C1) and the bidi formatting characters — U+061C included — are refused outright rather than stripped, because stripping leaves a reference resolving to a different object than the one uploaded while refusing the write says so. The relative branch now decides on the value a URL parser sees: `\` folded to `/` and `%2e` folded to `.` before the protocol-relative and traversal tests, so `/\evil.com/x.png`, `\\evil.com/x.png`, `/marketing\..\..\etc/passwd` and `a/%2e%2e/%2e%2e/b.webp` are all refused. The absolute branch additionally refuses credentials in the authority (`https://cdn.ours@evil.example/x.png`) — the same disguise, in the one branch backslashes never reached. **Deliberately not closed, and now stated in the test rather than hidden by it:** the absolute branch has no *host* allowlist, so `https://evil.example/x.png` is accepted. That is the schema's stated contract, not a bypass — a Clerk avatar depends on it, and the field is also a Fastify **response** schema, so narrowing it would 500 any row it newly refuses. Both reviewers flagged that the first draft of the "cannot produce a request to another origin" test named a guarantee the schema does not have; it now proves what is true (no relative form escapes our origins) and asserts the exception beside it. Narrowing the host set is a product decision, not this ticket. **Not a read-path regression:** 131 stored references across the e2e, demo and marketing seeders parsed through the new schema, zero refused. **Browser-verified twice at 1440x900.** Signed out, the storefront and search render every seeded reference; the vendor dashboard, profile edit and portfolio manager load; a real upload through the portfolio UI stored `portfolio/<owner>/<uuid>.webp` and rendered; the customer avatar upload works. Through the authenticated API, `PUT /vendor/profile` answered **400** to `/\evil.example/x.png`, a real TAB inside `javascript:`, and a bidi override, with the stored value unchanged each time. **Fixed here rather than filed:** driving it exposed a broken avatar on `/bookings` — a nested wire field does not inherit the image resolution its siblings get, so the vendor's bare object key reached `<img src>` unresolved and the browser asked the *web* origin for it, a 500 and a broken image for every vendor with a profile photo. `wireBookingRequestSchema` now resolves it; re-driven, the avatar loads from the image origin at `naturalWidth 1600` with no `localhost:3031/vendor-profile/…` request on the page. diff-reviewer and security-auditor both run, every blocking finding applied; the security-auditor project memory was corrected in the same commit
 | **415** | **A cancelled booking has no honest surface on either side** | P1.5 | M4.5 | **P2 Medium** | **Done** | `worktree-t415` | **None** | `core` `stripe` | **Filed 2026-09-04 from #400's review.** #400 made the customer's booking row reachable and settled its parent request, and both changes landed on screens with nothing to say about a cancelled booking. **Customer:** `/bookings/<requestId>` routes any non-`accepted` request to `QuoteReview`, which now reads `This request was cancelled.` — neutral, and deliberately so, because the wire object carries nothing distinguishing a withdrawal from a refunded booking (`acceptedAt` is on the checkout read, not this one). It states no amount, no refund and no date, for a row where money moved. **Vendor:** the bookings page filters `status === 'accepted'`, so a cancelled booking now vanishes from it entirely — correct for the `coming up` count, but the vendor has no surface at all showing a date they lost. **Admin:** a ban that could not refund raises a `role="alert"` over the vendor table that survives no reload, and nothing else in `/admin` lists a `confirmed` booking on a banned account. Fix shape: put `acceptedAt` (or a cancellation summary) on the booking-request read so the customer's screen can state what happened and what was refunded; give the vendor a settled list; and give the operator a durable view of bookings whose refund failed **Closed 2026-09-06 — squash `2fc69f6`, PR #113, required CI green, browser-driven at 1440x900 against a real Stripe test-mode connected account.** **Re-measured before building:** #400 and #416 had both landed, so the settlement *logic* was done and D31 says so explicitly — what stayed open is what this row was filed for, the **screens**. All four acceptances were genuinely unbuilt. **1 and 2:** two columns, because neither fact was recoverable afterwards — who acted was only distinguishable by string-matching `cancellation_reason` against the sentence `admin.service.ts` happens to write, and the refund figure existed nowhere but the response of the call that sent it (a retry that finds an existing refund settles for the amount already sent, not the tier `calculateRefund` would pick now). The three origins are told apart **structurally**: a withdrawal produced no `bookings` row, so its absence names it. `cancelBookingAndFreeDate` takes a required `CancellationRecord` so a third path cannot silently omit them. **3:** the vendor's lost date, in a list separate from Upcoming and Past — widening the `accepted` filter would have been the wrong fix — with the payout reversal named, as D31 requires. **4:** `/admin/bookings?flag=refund-stuck`, derived rather than stored and bounded by `event_date` exactly as its producer `findConfirmedBookingsToUnwind` is; the ban banner links to it. **Four defects the review passes caught, none of which the tests would have found:** (a) the ban path recorded the full charge as refunded when Stripe had sent half — a booking the customer had already partially refunded, whose row never moved, is found by `findRefund`; (b) a refund Stripe **failed** was written and displayed as money returned, because `refunds.list` returns `failed`/`canceled` with `amount` populated — and **the fake was more permissive than the gateway**, the same shape as D31's own finding, so `test-server.ts` now models refund status; (c) the stuck list had no date bound while its producer does, so it swept up every past-dated `confirmed` booking on a banned account — the common case, since `completed` is only reached by `Mark complete` — and one failed refund on a vendor with thirty un-completed past events would have shown thirty-one rows under a red money claim; (d) the customer's screen asserted **which** account was suspended from a column that records only who acted, which is false to a reinstated account. Plus the copy claiming "You paid $X" on bookings never charged, now gated on `paidAt`. **Driven end to end after those fixes, not before:** accept -> pay `$1,450` -> cancel gives `You cancelled this booking on September 6, 2026.` and `You paid $1,450, and all of it was refunded to your original payment method.`; the vendor card reads `They paid $1,450 and were refunded all of it. Your share was reversed out of your Stripe balance.` under a heading still saying `Nothing booked yet`; with a past-dated confirmed booking planted on the same banned vendor the stuck list shows **1**, not 2, and the unfiltered table marks only the future row; `?flag=refund-stuck&status=cancelled` says `No bookings match both filters`; a withdrawal reads `You withdrew this request before it was accepted.`; signed out, `/bookings/<id>` redirects to sign-in. Zero console errors, no horizontal overflow, every surface at 1440x900. **Neither `/bookings/[requestId]` nor `/vendor/bookings` carries an Orla frame** (`00-README.md` lists both as "Needs a frame"), so no parity gate applied; `/admin/bookings` is derived from frame `13 Admin` and keeps its table composition. **Merge conflict on the way in was `.claude/agent-memory/`'s index only** — #400 landed *before* this branch point and could not conflict; both sides' entries were kept and nothing of #400's copy was reverted. Gate re-run on the merged tree: shared 375, preflight 264, web 2278, db 247, api 921, lint 8/8, typecheck 7/7. |
 | **416** | **No refund has ever succeeded — every cancellation 400s at Stripe** | P1.5 | M4.5 | **P0 Critical** | **Done** | `worktree-t416` | **None** | `stripe` | **Filed 2026-09-04 by #400's browser pass, which could not complete because of it.** `createRefund` sends `refund_application_fee: true` with `reverse_transfer: false` (`apps/api/src/lib/stripe.ts:380`). Stripe refuses that pair on a destination charge: _"The application fee for charge ch_3UC8Lg… was taken on the associated transfer, so to refund the application fee you must also set reverse_transfer=true"_ — HTTP 400, `request-id: req_V0PQGYIKK6Y4vx`. So `PUT /customer/bookings/:id/cancel` answers `400 VALIDATION_ERROR` and **nothing moves**: the booking stays `confirmed`, the request stays `accepted`, the date stays `booked`. `select status, count(*) from bookings` returns `confirmed 3, completed 920` and **zero** `cancelled` rows, in a database that has been driven for weeks. `git log -S reverse_transfer` dates it to `230c8d1` (#10), so it has never worked. **The suite is green because the test double is not faithful:** `test-server.ts`'s fake `createRefund` records the call and never validates the combination, so `payments.routes.test.ts` exercises a path the real gateway rejects. **Blocks #400's verification** — that ticket's settlement logic is reviewed and unit-tested but unreachable — and breaks the admin ban unwind identically (`admin.service.ts:274` calls the same function), which is why #400's new `refundsFailed` counter would fire on every ban involving a paid booking. **Needs a ruling because it decides who bears the cost**, and the two flags each carry a written rationale in the code that this pair cannot both honour | **Fixed 2026-09-05 under D31, the account holder's ruling: the full unwind — `reverse_transfer: true` with `refund_application_fee: true`.** The flags left the adapter and became one named platform policy, `REFUND_UNWIND`, with `refundParams()` building the exact Stripe request and `refusedRefundParams()` stating Stripe's refusal for a destination charge. **The double now judges that request instead of recording it** — it builds the real params and throws Stripe's own message — which is the deeper defect the ticket named. Proof the guard bites: setting the constant back to the shipped-and-broken pair turns **14 route tests and 2 unit tests red**, reproduced independently by the reviewer. **Driven against Stripe test mode, not inferred:** browser-driven cancellations answered **200** at both tiers — 100% (`re_3UCSPMFAZlti5JuH0vaAHYg5`, transfer reversed 145000 of 145000, fee refunded 17400) and 50% (`re_3UCSOYFAZlti5JuH1aKx49Bw`, transfer reversed **72500 of 145000**, fee refunded **8700 of 17400**), which is the proportional split D31 asserts, measured rather than reasoned about. The ban unwind answered `refundsIssued: 1, refundsFailed: 0` with the transfer fully reversed. A separate probe re-sent the **old** pair on a live intent and Stripe still refused it with the ticket's verbatim message, so this is the gateway answering and not the double agreeing with itself. **Four things the ruling made reachable, all fixed here, none of which the old code could exhibit because no paid booking could ever reach `cancelled`:** (1) the vendor dashboard counted a cancelled booking's payout as earnings — `sumPayoutsBetween` and `countBookingsBetween` had no status predicate while `admin.dao.ts`'s `PAID_AND_KEPT` and `findNextPayout` already had one; browser-confirmed dropping $3,828 -> $2,552 -> $0 across three cancellations, each step exactly that booking's payout share. (2) The refund goes out before the row moves and Stripe forgets an idempotency key after 24h, so a next-day retry was a **second** refund — which under D31 reverses the vendor's transfer twice; both paths now ask `findRefund` first, which makes that state self-healing instead of unrecoverable. (3) The keys were not versioned when the parameters under them changed, so bookings that 400'd in the 24h before deploy would have had their retry refused with an `idempotency_error` — now `cancel_<id>_unwind` and `ban-refund:unwind:<id>`. (4) `isFullRefund` read the quote's tier rather than the money that moved. **The consequence is surfaced, not hidden**, as the ruling required: both `booking_cancelled` bodies name the reversal, and the operator's suspend dialog no longer stops at "refunded in full". **Not fixed, reported rather than widened:** `/admin/customers` has **no ban control at all** — the only one in the web app is the vendors table, so an operator cannot suspend a customer through the product (the unwind was driven at the endpoint instead); the admin Customers `Bookings` column is always 0 because `users.total_bookings_count` has **no writer anywhere in the tree**; and `/suspended` fires two 403 console errors because the header still polls notifications for a banned account. **Left open on purpose:** the design contract promises *payment held until the event* on the landing page, profile trust lines, sign-up panel and confirmation screen, and the implementation does not hold it — a destination charge moves the vendor's share at charge time and `createRecipientAccount` sets no payout schedule. That is why the new copy says *if* this booking had already been paid out rather than asserting it, and closing it is a Stripe account-configuration and product decision, recorded in D31 rather than guessed at. **Landed 2026-09-05 as `42a1d32` (PR #100)**, gate green
-storefront, each of which tells the reader something untrue. || **417** | **Search chrome: the empty-state mark, the `New` badge, and a picker that will not close** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 by the user's own review of a verified parity pass** (`parity-review/FINDINGS.md`, screenshots beside it). Four defects on one surface, grouped because they are one browser session and one component tree. **(1) The vendor-type picker does not close on selection** — a real mouse click sets the value but leaves `aria-expanded="true"` with all 12 options rendered; a programmatic `.click()` *does* close it, so it is a pointer-event race (refocus reopening the list) and not a missing handler, which is why no test caught it. **Must be fixed on both the landing page and `/search`** — the same picker is mounted in the header and in `#main`. **(2) The no-results mark is the wrong glyph, and the block sits high** — the account holder also instructed on 2026-09-06 that the empty state be **vertically centred in the results pane** so it stops reading as a misaligned page, and **updated frame `18` to match**, so re-read that frame rather than trusting the geometry recorded here — the app draws a 32x32 `lucide-search-x`; frame `18` draws the Orla twin-ring mark, 62x38, two 38x38 circles offset 24px, one `1.5px solid #D5CEC2` and one `1.5px dashed`. **(3) `New` is inline text and its logic is wrong** — the app prints `New · Austin, TX` as plain meta *replacing* the rating whenever `reviewCount` is 0, but frame `02` draws `New` as a pill (`10.5px/600`, `background #F0EAE1`, `color #4A443C`, `padding 3px 8px`, `radius 5px`) sitting *beside* a real rating. **The account holder ruled the trigger on 2026-09-06: `New` means a genuinely new vendor, not a review-less one** — an established vendor can have no reviews and must not be labelled new. Use recency of the vendor profile (30 days is the stated starting point; confirm the column exists before relying on it) |
+storefront, each of which tells the reader something untrue. |
+| **417** | **Search chrome: the empty-state mark, the `New` badge, and a picker that will not close** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 by the user's own review of a verified parity pass** (`parity-review/FINDINGS.md`, screenshots beside it). Four defects on one surface, grouped because they are one browser session and one component tree. **(1) The vendor-type picker does not close on selection** — a real mouse click sets the value but leaves `aria-expanded="true"` with all 12 options rendered; a programmatic `.click()` *does* close it, so it is a pointer-event race (refocus reopening the list) and not a missing handler, which is why no test caught it. **Must be fixed on both the landing page and `/search`** — the same picker is mounted in the header and in `#main`. **(2) The no-results mark is the wrong glyph, and the block sits high** — the account holder also instructed on 2026-09-06 that the empty state be **vertically centred in the results pane** so it stops reading as a misaligned page, and **updated frame `18` to match**, so re-read that frame rather than trusting the geometry recorded here — the app draws a 32x32 `lucide-search-x`; frame `18` draws the Orla twin-ring mark, 62x38, two 38x38 circles offset 24px, one `1.5px solid #D5CEC2` and one `1.5px dashed`. **(3) `New` is inline text and its logic is wrong** — the app prints `New · Austin, TX` as plain meta *replacing* the rating whenever `reviewCount` is 0, but frame `02` draws `New` as a pill (`10.5px/600`, `background #F0EAE1`, `color #4A443C`, `padding 3px 8px`, `radius 5px`) sitting *beside* a real rating. **The account holder ruled the trigger on 2026-09-06: `New` means a genuinely new vendor, not a review-less one** — an established vendor can have no reviews and must not be labelled new. Use recency of the vendor profile (30 days is the stated starting point; confirm the column exists before relying on it) |
 | **418** | **Refine offers filters that cannot apply to the category being searched** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the user's instruction**, verbatim: *"we need context aware filtering - Dietary shouldnt appear if the search type is photography for example"*. The Refine bar renders `Price`, `Rating`, `Languages`, `Cultural` and `Dietary` unconditionally. `dietary` is a `tag_category` with 4 tags and is meaningful only where food is served — catering and carts — so on a photography search it is a control that can only ever return zero. `01-foundations.md`'s own rule that a control which opens nothing is furniture applies to a filter that can only empty the grid. **The mapping from category to applicable tag groups does not exist yet and is the substance of this ticket** — decide where it lives (a column on `categories`, or a constant beside `TAG_CATEGORIES`), and make the bar read it rather than hardcoding a list in the component. `language` and `cultural` plausibly apply everywhere; `dietary` plausibly does not. **Do not silently drop an active filter** when the category changes — say what was dropped, per `40-states.md` |
-| **419** | **Fold Florals into Decor so the category list reflects one real market** | P2 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the user's instruction**, verbatim: *"i think we can probably couple florals into decor... currently they intertwine and the goal is to fill up our categories"*. There are 11 seeded categories and **only `photography` has any vendors**; `florals` and `decor` both have zero, and in this market the same vendor usually sells both. Folding them makes the surviving category real rather than aspirational. **This is a data migration, not a copy change** — it needs: the seed and any fixture that names `florals`; a migration that re-points `vendor_categories` rows and then removes the row (both are currently empty locally, so write it to be correct rather than assuming); a redirect or 410 for `/search?category=florals`, which is a shareable URL; and every design surface that draws the category list. **Confirm the surviving name and slug before writing the migration** — `Decor` alone, or something that names both. Do not implement any Post-MVP category work alongside it |
+| **419** | **Fold Florals into Decor so the category list reflects one real market** | P2 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the user's instruction**, verbatim: *"i think we can probably couple florals into decor... currently they intertwine and the goal is to fill up our categories"*. **Ruled 2026-09-06: `florals` is removed and `Decor` survives — 11 categories become 10.** There are 11 seeded categories and **only `photography` has any vendors**; `florals` and `decor` both have zero, and in this market the same vendor usually sells both. Folding them makes the surviving category real rather than aspirational. **This is a data migration, not a copy change** — it needs: the seed and any fixture that names `florals`; a migration that re-points `vendor_categories` rows and then removes the row (both are currently empty locally, so write it to be correct rather than assuming); a redirect or 410 for `/search?category=florals`, which is a shareable URL; and every design surface that draws the category list. **Confirm the surviving name and slug before writing the migration** — `Decor` alone, or something that names both. Do not implement any Post-MVP category work alongside it |
+| **420** | **Footer: a Contact support link, and nav links at parity with the page above them** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the user's instruction**, verbatim: *"we need a placeholder contact support in the footer area where other links are on main page. and update the footer main page links to be the first 4 that are on the main page as well for parity"*. Two changes to the landing footer. **(1) Add a `Contact support` link** beside the existing footer links. **It is explicitly a placeholder** — the account holder asked for the link, not for a working destination, because the real monitored address is **#374**, which is `Deferred — needs a human`. Point it somewhere honest and inert; **do not invent a support email address**, and do not let the placeholder read as a working channel to a customer. **(2) Footer links at page parity is ALREADY TRUE** — `site-footer.tsx` derives its Browse column from `LANDING_JUMP_CATEGORY_SLUGS`, the same constant the hero reads, and says so in a comment. Measured 2026-09-06. What is missing is a **test pinning them together**, so the remaining work is a regression guard rather than a change. **This ticket does NOT unblock #372** — that ticket's `Contact support` is on frame `16`, the error page, and still needs #374's real destination |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **384 rows as of 2026-09-03: 200 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06, after the 25-ticket run closed and #417-#419 were filed: 33 rows — 4 Backlog, 2 Deferred — needs a human, and 27 `Done` awaiting the next archive sweep.** Of the 4 Backlog rows, #370 and #372 are blocked behind the two `Deferred` ones, so **#417, #418 and #419 are the only rows a session can start.** Parallel lanes move these while they run, so the number is a reading rather than a promise. **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06, after the 25-ticket run closed and #417-#419 were filed: 35 rows — 6 Backlog, 2 Deferred — needs a human, and 27 `Done` awaiting the next archive sweep.** Of the 6 Backlog rows, #370 and #372 are blocked behind the two `Deferred` ones, so **#417, #418, #419 and #420 are the only rows a session can start.** Parallel lanes move these while they run, so the number is a reading rather than a promise. **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -3503,8 +3505,10 @@ re-reported six times by successive passes.
 **Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
 **Blocked by:** None
 
-Four defects on one surface, grouped because they share one browser session and
-one component tree.
+Six defects on one surface, grouped because they share one browser session and
+one component tree. **Items 1, 1b and 1c all live in `search-bar.tsx`, which
+`hero-search.tsx` also mounts — verified by import, so one fix serves the
+landing page and `/search` and both must be driven.**
 
 #### 1. The vendor-type picker does not close on selection
 
@@ -3517,6 +3521,45 @@ keep passing. **Drive it in a browser to prove the fix.**
 
 **Fix it in both places.** The picker is mounted twice: in the header search bar
 and in `#main` on `/search`. The landing page mounts the same component.
+
+#### 1b. The focus fill misses the start of `Vendor type`
+
+**Measured on `/search` at 1440x900, keyboard-focused so `:focus-visible` was
+genuinely live.** The indicator here is **not** a ring — #383 and
+`03-components.md` § Inputs deliberately make a segment inside a joined bar take
+**a `stone-200` fill and a clay label, no border, edge or outline**, because any
+ring around one segment of a pill either breaks past the pill's edge or draws a
+second concentric shape. The fill is painting (`rgb(239, 233, 224)`), so the
+mechanism is right and only the geometry is wrong:
+
+- segment is `rounded-full` — on a **27px** tall box that is a **13.5px**
+  effective corner radius on each cap;
+- segment `padding-left: 0`;
+- the glyphs of `Vendor type` begin at **inset 0.0px** from the segment's left
+  edge (measured with a `Range`, not from the element box).
+
+So the cap curves inward across exactly the space the first characters occupy,
+and the label's start sits outside the filled area. **Give the segment
+horizontal padding at least the corner radius, or reduce the radius** — but
+`segment` carries `max-sm:px-0` and the bar's flex weights are deliberate
+(`search-bar.tsx` says the weights live there on purpose), so re-measure the
+whole bar at every width in `30-responsive.md` rather than adding padding and
+assuming the rest holds.
+
+#### 1c. The picker's cursor does not match what the control is
+
+The `<input>` is a **genuine typeable combobox** — `readOnly: false`,
+`aria-autocomplete="list"` — and correctly carries `cursor: text`. But the
+segment wrapper around it carries `cursor: auto`, so hovering the `Vendor type`
+label or the segment's padding shows the default arrow while hovering the input
+itself shows a caret. One control, two cursors.
+
+**Recommended: `cursor: text` across the whole segment**, because clicking
+anywhere in it puts a caret in a field you can type into — `pointer` would
+promise a button, which this is not. **Confirm first that clicking the label
+area actually focuses the input**; if it does not, that is the bug to fix rather
+than the cursor. Apply the same answer to the `City` segment, which is the same
+shape.
 
 #### 2. The no-results mark is the wrong glyph
 
@@ -3560,6 +3603,10 @@ in the ticket what you used.
 
 1. Selecting a vendor type closes the picker, on the landing page and on
    `/search`, driven with a real pointer in a browser at 1440x900.
+1b. The focus fill covers the whole `Vendor type` label including its first
+   character, on both surfaces and at every width in `30-responsive.md`. Still
+   a fill — no ring, edge or outline is introduced, per `03-components.md`.
+1c. One cursor across the segment, matching what the control does.
 2. The no-results mark is the frame's twin-ring glyph at its measured geometry.
 3. The no-results block is vertically centred in the results pane, at 1440x900
    and at every width in `30-responsive.md`, and no longer reads as a page that
@@ -3645,19 +3692,109 @@ sells both, so the split makes two thin categories where there is one real one.
 - every design surface drawing the category list, and the vendor-type picker's
   option set, which `slugSchema` pins to the seeded categories.
 
-**Confirm the surviving name and slug with the account holder before writing the
-migration** — `Decor` alone, or a name carrying both. The slug is in shareable
-URLs, so changing it later costs another redirect.
+**The account holder ruled the outcome on 2026-09-06: `florals` is removed, not
+renamed — the list goes from 11 categories to 10, and `Decor` survives.** Every
+mention of Florals *as a standalone category* is swept in this ticket: the seed,
+fixtures and tests, the vendor-type picker's option set, the design surfaces that
+draw the list, and any copy that names it beside Decor. Confirm 10 categories
+remain seeded at the end, as a test rather than by eye.
+
+`decor`'s own slug does not change, so only `/search?category=florals` needs the
+redirect or 410.
+
+**`florals` is one of the four landing jump categories, so removing it changes
+two more surfaces than the ticket's title suggests.**
+`LANDING_JUMP_CATEGORY_SLUGS` is `['photography', 'florals', 'catering',
+'entertainment']` (`packages/shared/src/constants/index.ts`), and it feeds both
+the landing hero's category row (`app/page.tsx`) **and** the footer's Browse
+column, which derives from the same constant precisely so the two agree. Removing
+`florals` therefore leaves the hero and footer with three categories unless a
+fourth is chosen. **That choice is the account holder's, not the lane's** — ask
+which category takes the empty slot rather than picking one, and do not silently
+ship a row of three.
 
 #### Acceptance
 
-1. One category survives; `florals` is gone from the seed, the picker and the
-   design surfaces.
+1. Exactly **10** categories are seeded; `florals` is gone from the seed, the
+   picker, the design surfaces and every standalone mention in copy.
+   Asserted in a test, not read off a screen.
 2. Any vendor previously in `florals` is in the survivor, proven on seeded data.
 3. `/search?category=florals` redirects or 410s; it never renders an empty grid.
+3b. `LANDING_JUMP_CATEGORY_SLUGS` still names four categories, chosen by the
+   account holder, and the landing hero and footer Browse column both still
+   show four.
 4. No Post-MVP category work ships alongside it.
 
 #### Tests (required)
 
 - [ ] Migration applied against a seeded database, not only a compile. A
       re-point that type-checks and drops rows is the failure mode here.
+
+### #420: Footer — a Contact support link, and nav links at parity with the page above them
+
+**Milestone:** M3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed on the user's instruction**, verbatim: *"we need a placeholder contact
+support in the footer area where other links are on main page. and update the
+footer main page links to be the first 4 that are on the main page as well for
+parity"*.
+
+#### What exists today, measured 2026-09-06
+
+- **There is no support page design.** `Contact support` appears in exactly one
+  place in `design/Orla - Screens.dc.html`: the header of frame `16`, the error
+  screen. It is drawn as a link, and the frame does not draw what it opens.
+- **There is no `/support`, `/contact` or `/help` route**, and no `/terms` or
+  `/privacy` either — those belong to **#374**.
+- **There is no `SUPPORT_EMAIL` constant** anywhere in `packages/shared`.
+- **Outbound email already works.** `apps/api/src/lib/email.ts` posts to Resend
+  directly. So a support *form* is cheap to build; what is missing is a
+  destination, not a transport.
+
+#### 1. A `Contact support` link in the footer
+
+Add it beside the existing footer links.
+
+**It is deliberately a placeholder.** The account holder asked for the link, not
+for a working destination — the real monitored support address is **#374**,
+which is `Deferred — needs a human` precisely because a ticket must not invent
+one. So: **do not invent a support email address, and do not wire it to an
+inbox nobody reads.** Point it somewhere honest and inert, and make sure a
+customer cannot mistake it for a channel that will answer. `40-states.md`'s rule
+against a control that promises something it cannot do applies directly.
+
+#### 2. Footer links at parity with the page — ALREADY TRUE, verify rather than build
+
+**Measured 2026-09-06: this is already implemented.** `site-footer.tsx`'s
+`BROWSE_LINKS` derives from `LANDING_JUMP_CATEGORY_SLUGS`, the same constant the
+landing hero's category row reads in `app/page.tsx`, and the code carries the
+comment *"The same four categories the hero jumps to, so the two agree."*
+
+So there is **no drift to fix**. What this item is worth is a **test that pins
+the two together**, so a future edit to one cannot silently diverge from the
+other — there is currently no such test, which is why the question came up.
+
+If the rendered footer and hero disagree when you look, that is a *new* defect;
+measure it and report what you found rather than rewriting the constant.
+
+#### Acceptance
+
+1. The landing footer carries a `Contact support` link.
+2. That link invents no address and reads as a placeholder rather than a live
+   channel.
+3. A test pins the footer's Browse links to the same source as the landing
+   hero's categories, so they cannot diverge. (They already agree — this
+   acceptance is about preventing future drift, not fixing present drift.)
+4. Driven in a browser at 1440x900 and at every width in `30-responsive.md`.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing first, including one that ties
+      the footer set to the page's own links so they cannot drift apart again.
+
+#### This does not unblock #372
+
+**#372's `Contact support` is a different one** — it lives on frame `16`, the
+error page, and it still needs #374's real destination. Adding a placeholder to
+the footer does not answer that, and #372 stays blocked.

@@ -510,6 +510,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   417: [], // search chrome — picker close, empty-state mark, `New` pill and its trigger
   418: [], // Refine reads which tag groups apply to the searched category
   419: [], // folds the Florals category into Decor, seed and migration
+  420: [], // landing footer — placeholder support link and links at page parity
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
