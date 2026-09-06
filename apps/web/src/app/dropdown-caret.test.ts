@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withoutComments } from '@/testing/source-scan';
 
 /*
  * The disclosure caret is gone from every dropdown trigger — **D25**.
@@ -44,19 +45,6 @@ function sourceFiles(): [string, string][] {
     .filter((entry) => /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry))
     .sort()
     .map((entry) => [join('src', entry), readFileSync(join(root, entry), 'utf8')]);
-}
-
-/**
- * The source with every comment blanked out, positions preserved.
- *
- * Blanked rather than deleted so a reported line number still points at the
- * real line. A caret inside a `//` or `/* *\/` comment is documentation of what
- * the frame draws; a caret outside one is a rendered glyph.
- */
-function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (comment) =>
-    comment.replace(/[^\n]/g, ' '),
-  );
 }
 
 describe('no dropdown trigger draws the unicode disclosure caret (D25)', () => {

@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
  */
 export const FALLBACK_TONES = ['bg-clay-150 text-clay-600', 'bg-sage-100 text-sage-600'] as const;
 
-/** The six sizes the design calls for, in px. */
+/** The sizes the design calls for, in px. */
 export const AVATAR_SIZES = {
   xs: 30,
   /*
@@ -36,6 +36,11 @@ export const AVATAR_SIZES = {
    */
   sm: 36,
   md: 38,
+  /*
+   * Frame `05`'s checkout rail, whose `.ph` is 54px. Paired with `shape="panel"`
+   * there: the rail draws the thing being bought rather than a person.
+   */
+  thumb: 54,
   lg: 64,
   /*
    * The public vendor profile's identity row. Frame `03` drew this at 82 while
@@ -88,7 +93,7 @@ function glyphSize(size: AvatarSize): number {
 /**
  * The smallest size Instrument Serif may be set at, from `01-foundations.md`.
  *
- * Exported for `avatar.test.tsx`, which renders all six sizes and asserts the
+ * Exported for `avatar.test.tsx`, which renders every size and asserts the
  * face against this number rather than against one written down twice.
  *
  * `display-type.test.ts` declares its own `SERIF_FLOOR_PX` for the class-based
@@ -144,6 +149,25 @@ const AVATAR_RINGS = {
 
 export type AvatarRing = keyof typeof AVATAR_RINGS;
 
+/**
+ * Circle or rounded square, as a real axis rather than a `className` override.
+ *
+ * It has to be a prop: `cn` is tailwind-merge, and `rounded-panel` is a project
+ * token (`--radius-panel`) that tailwind-merge's radius group does not know —
+ * `cn('rounded-full', 'rounded-panel')` returns **both**, and which one paints
+ * is then decided by generated-CSS source order rather than by the caller.
+ * `rounded-xl` would have merged; the one the frames actually ask for does not.
+ *
+ * `panel` is frame `05`'s checkout rail (`.ph`, 12px): a thumbnail of the thing
+ * being bought, which is not a person and should not read as a face.
+ */
+const AVATAR_SHAPES = {
+  circle: 'rounded-full',
+  panel: 'rounded-panel',
+} as const;
+
+export type AvatarShape = keyof typeof AVATAR_SHAPES;
+
 export interface AvatarProps {
   /** The person or business the avatar stands for. Drives initials and tone. */
   name: string;
@@ -151,6 +175,8 @@ export interface AvatarProps {
   size?: AvatarSize;
   /** A ring matching the ground behind it, for an avatar overlapping imagery. */
   ring?: AvatarRing;
+  /** A circle unless a frame draws otherwise — see `AVATAR_SHAPES`. */
+  shape?: AvatarShape;
   /**
    * Whether this avatar is the **only** thing naming the person, and so has to
    * say the name itself.
@@ -173,6 +199,7 @@ export function Avatar({
   src,
   size = 'sm',
   ring,
+  shape = 'circle',
   labelled = false,
   className,
 }: AvatarProps): React.ReactElement {
@@ -193,7 +220,8 @@ export function Avatar({
   const shared = cn(
     // `box-border` keeps the ring inside the declared size, so an avatar
     // occupies its declared width whether or not it is ringed.
-    'box-border inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full',
+    'box-border inline-flex shrink-0 items-center justify-center overflow-hidden',
+    AVATAR_SHAPES[shape],
     ring && AVATAR_RINGS[ring],
   );
 

@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withoutComments } from '@/testing/source-scan';
 
 /*
  * The hatch is an editor primitive. The labelled `Placeholder` component is
@@ -34,20 +35,6 @@ function sourceFiles(): [string, string][] {
     .filter((entry) => /\.(tsx?|css)$/.test(entry) && !/\.test\.tsx?$/.test(entry))
     .sort()
     .map((entry) => [join('src', entry), readFileSync(join(root, entry), 'utf8')]);
-}
-
-/**
- * The source with every comment blanked out, positions preserved.
- *
- * A local copy of `dropdown-caret.test.ts`'s helper rather than a shared one:
- * six lines each, and a shared test util would make each guard depend on the
- * other staying correct. `image-upload.tsx` names the utility in a doc comment
- * as well as using it, and a comment is not a render.
- */
-function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (comment) =>
-    comment.replace(/[^\n]/g, ' '),
-  );
 }
 
 describe('the hatch is an editor primitive (D26)', () => {

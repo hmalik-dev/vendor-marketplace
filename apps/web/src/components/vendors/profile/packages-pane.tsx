@@ -1,4 +1,4 @@
-import { formatPrice, type ServicePackage } from '@vendor-marketplace/shared';
+import { formatDurationHours, formatPrice, type ServicePackage } from '@vendor-marketplace/shared';
 import { Check } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PRICE_TYPE_LABELS } from '@/lib/package-labels';
@@ -55,7 +55,9 @@ export function PackagesPane({ packages, businessName }: PackagesPaneProps): Rea
           <p className="mt-2 text-xs text-stone-600">
             {[
               PRICE_TYPE_LABELS[servicePackage.priceType],
-              servicePackage.durationHours ? `${servicePackage.durationHours} hours` : null,
+              servicePackage.durationHours === null
+                ? null
+                : formatDurationHours(servicePackage.durationHours),
               servicePackage.maxGuests ? `up to ${servicePackage.maxGuests} guests` : null,
             ]
               .filter(Boolean)

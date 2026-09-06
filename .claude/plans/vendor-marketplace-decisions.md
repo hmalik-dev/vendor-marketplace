@@ -1425,3 +1425,46 @@ the conditional this ruling's copy is careful to state rather than assume. Closi
 Stripe account-configuration and product decision (manual payout schedule plus a
 release-after-event job), not a refund-flag one, and it is recorded here rather than guessed
 at.
+
+---
+
+### D32: Frame `05`'s Card Form Is Stripe's, and the Frame Is the Overruled Party — *2026-09-05*
+
+**Ruled for #395**, whose parity pass took frame `05 Checkout` to 1:1 on everything the
+application draws. Two of the frame's items are inside the `PaymentElement` iframe, and this
+records why they stay unmatched rather than being re-filed at the next pass.
+
+Frame lines 886–898 draw a bare card form: **Card number**, **Expiry**, **CVC**, **Name on
+card**, **Country**, **ZIP** — six fields, one payment method, no chrome. The live element
+draws Card/Bank/Klarna tabs, a Link row, a "Save my information for faster checkout" block,
+and no name field.
+
+**What is ours and was fixed.** The appearance tokens. `.Input`, `.Input:focus`,
+`.Input--invalid` and `.Label` are handed to the iframe as an `Appearance` object, and
+`.Label` had been 11px at `.06em` where the frame's `.lbl` is **10.5px at `.05em`** — the
+same micro-label the rest of the app wears, restated as literals only because Stripe's iframe
+is a different document and cannot read this one's custom properties. That is fixed.
+
+**What is not ours.**
+
+- **"Name on card" cannot be added.** Whether the card form collects a name is Stripe's
+  decision from `billingDetails`, and its only settings are `auto` — already the default —
+  and `never`. There is no option that forces the field on. The frame draws a field the
+  integration has no way to render.
+- **The method set is a payments decision, not a layout one.** Bank and Klarna are tabs
+  because the connected account has them enabled. Removing them from the screen would be
+  deciding which payment methods Orla accepts, which is not a parity fix, and neither
+  `layout` value hides them: `tabs` puts them in a row, `accordion` stacks them. `tabs` is
+  kept because it is the shorter of the two, and on this screen height is what keeps the pay
+  button above the fold.
+
+**So the frame is the record of what was overruled**, in the sense
+`web-design-parity.md` already gives that phrase for D24 and D25. A later pass measuring
+frame `05` should score the six axes on the application's own markup and stop at the iframe
+boundary. Do not re-file the tabs, the Link row, the save-info block or the missing name
+field.
+
+One thing genuinely deferred rather than ruled: `04-laws.md:135` specifies `ring-clay-400/40`
+for an unbordered control and the shipped `Button` renders `/30`. The law file and the
+primitive disagree everywhere, not on checkout, so it belongs to whichever ticket owns the
+`Button` primitive — #395 deliberately did not settle it from one screen.

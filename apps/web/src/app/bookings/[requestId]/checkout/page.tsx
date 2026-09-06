@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { BRAND_NAME, pageTitle, uuidSchema } from '@vendor-marketplace/shared';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
-import { CheckoutScreen } from '@/components/checkout/checkout-screen';
+import { CheckoutScreen, SAGE_DOT } from '@/components/checkout/checkout-screen';
 import {
   CheckoutUnavailable,
   type CheckoutUnavailableReason,
@@ -68,12 +68,19 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-stone-100">
-      <header className="flex h-(--header-height) flex-none items-center justify-between border-b border-stone-300 bg-stone-0 px-10">
-        {/* No nav, and the wordmark is not a link — nothing leads away from here. */}
-        <Logo size={LOGO_SIZES.authPanel} />
-        <p className="flex items-center gap-2.25 text-[12.5px] text-stone-700">
-          <span aria-hidden="true" className="size-1.5 rounded-full bg-sage-400" />
+    <div className="flex min-h-dvh flex-col bg-stone-50">
+      <header className="flex h-(--header-height) flex-none items-center justify-between border-b border-stone-300 bg-stone-0 px-8">
+        {/*
+          No nav, and the wordmark is not a link — nothing leads away from here.
+
+          `desktopHeader`, not `authPanel`: frame `05` line 878 draws 15px
+          circles on this bar, the same mark the app shell wears. The 19px
+          panel size belongs to the sign-in card, where the wordmark is the
+          screen's own masthead rather than a corner mark.
+        */}
+        <Logo size={LOGO_SIZES.desktopHeader} />
+        <p className="flex items-center gap-2.25 text-sm text-stone-700">
+          <span aria-hidden="true" className={SAGE_DOT} />
           Secure checkout · encrypted by Stripe
         </p>
       </header>

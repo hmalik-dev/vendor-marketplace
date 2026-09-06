@@ -77,6 +77,7 @@ describe('payments', () => {
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: PRICE_CENTS,
       priceType: 'fixed',
+      durationHours: 6,
       inclusions: ['6 hours'],
     });
     expect(created.statusCode).toBe(201);
@@ -232,8 +233,52 @@ describe('payments', () => {
       expect(body.vendor.businessName).toBe('Sunlit Studio');
       expect(body.eventDate).toBe(EVENT_DATE);
       expect(body.guestCount).toBe(120);
+      // Frame `05`'s rail sub-line: `<package> · <duration>`, #395.
+      expect(body.servicePackage).toEqual({ name: 'Full day coverage', durationHours: 6 });
       // "…accepted your request on…" needs a real acceptance timestamp.
       expect(new Date(body.acceptedAt).toISOString()).toBe(START.toISOString());
+    });
+
+    /*
+     * A custom request has no package, and the left join hands back a row whose
+     * package columns are all null — the same shape as a package that exists.
+     * The rail must drop the sub-line rather than draw an empty one.
+     */
+    it('answers a null package for a custom request', async () => {
+      const { vendorId } = await createVendor();
+
+      const request = await inject('POST', '/booking-requests', CUSTOMER, {
+        vendorId,
+        eventDate: EVENT_DATE,
+        eventType: 'wedding',
+        eventLocation: 'Barr Mansion, Austin, TX',
+        guestCount: 120,
+        customDetails: 'Two hours of engagement portraits at Zilker, golden hour.',
+      });
+      expect(request.statusCode).toBe(201);
+      const requestId: string = request.json().id;
+
+      /*
+       * The quote comes first and the *customer* accepts it: #401 refuses
+       * accepting a custom request straight from `pending`, because the row
+       * that produced was terminal and could never be paid.
+       */
+      const quoted = await inject('POST', `/booking-requests/${requestId}/quote`, VENDOR, {
+        quotedPriceCents: PRICE_CENTS,
+      });
+      expect(quoted.statusCode).toBe(200);
+      expect(
+        (await inject('POST', `/booking-requests/${requestId}/accept`, CUSTOMER)).statusCode,
+      ).toBe(200);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().servicePackage).toBeNull();
     });
 
     /**

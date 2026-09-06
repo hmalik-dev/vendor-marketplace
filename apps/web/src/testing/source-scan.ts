@@ -52,14 +52,37 @@ async function walk(dir: string, extensions: readonly string[]): Promise<string[
 }
 
 /**
+ * A block comment, or a line comment that is not the `//` of a URL.
+ *
+ * The `(^|[^:])` guard is why this is one pattern rather than two chained
+ * replaces: without it `https://host/path` in a string literal loses everything
+ * from the slashes to the end of the line, and the guard reading that file
+ * quietly stops seeing the rest of it. The character before the slashes is
+ * captured so the replacer can put it back.
+ */
+const COMMENT = /\/\*[\s\S]*?\*\/|(^|[^:])\/\/[^\n]*/gm;
+
+/**
  * Prose explaining a trap is not an instance of it.
  *
  * Every guard here works by matching source text, and this repository's
  * comments quote the very patterns being forbidden — so without this the
  * paragraph explaining a defect reports itself as one.
+ *
+ * Comments are blanked in place rather than removed, so a guard that prints
+ * `file:line` — or `file:line:column` — names a position the reader can go to.
+ * Four guards had each grown their own copy of this and no two agreed: two
+ * preserved position and two guarded the URL case, none did both, and #395 was
+ * about to make a fifth. This is the union of them, and the only one left.
  */
 export function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  return source.replace(COMMENT, (match, before?: string) => {
+    const kept = before ?? '';
+
+    // Blanked, not deleted, so every line *and column* after a comment is still
+    // the one a reader finds at the `file:line` a guard prints.
+    return kept + match.slice(kept.length).replace(/[^\n]/g, ' ');
+  });
 }
 
 /**

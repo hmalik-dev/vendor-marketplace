@@ -585,3 +585,39 @@ export function joinWithAnd(items: readonly string[]): string {
 
   return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
+
+/**
+ * A duration as the frames say it, standing alone: `6 hours`, `1 hour`,
+ * `1.5 hours`.
+ *
+ * Written out per call site until frame `05`'s summary rail needed a fourth
+ * copy, and they disagreed — `packages-pane` rendered a one-hour package as
+ * "1 hours". The decimal is kept only when it is there: `durationHours` is a
+ * NUMERIC column, so a whole number arrives as `6` and must not print as `6.0`.
+ *
+ * One deliberate holdout, so the next reader does not take "every call site" on
+ * trust: `booking-rail.tsx` writes `· 6 hour coverage`, where the number is a
+ * compound adjective on `coverage` and stays singular in English however many
+ * hours it names. That is a different sentence, not a missed migration.
+ */
+export function formatDurationHours(hours: number): string {
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+}
+
+/**
+ * A duration read back out of the database, as a number.
+ *
+ * `duration_hours` is a NUMERIC column and the driver hands those back as
+ * strings, so every read of one has to parse. This is the other half of
+ * `formatDurationHours`: parse at the boundary, format at the display edge, and
+ * neither written out per call site — it had been, three times, in shapes that
+ * disagreed about what a non-numeric string should produce.
+ */
+export function parseDurationHours(value: string | null): number | null {
+  if (value === null) {
+    return null;
+  }
+
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
