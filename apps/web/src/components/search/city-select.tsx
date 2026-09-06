@@ -180,7 +180,15 @@ export function CitySelect({
       width={isHero ? 'hero' : 'compact'}
       density={isHero ? 'default' : 'compact'}
       scrim={isHero}
-      className={cn('flex min-w-0 flex-col rounded-full text-left', className)}
+      /*
+        No radius of its own: `search-bar.tsx`'s `segment` supplies it, and it is
+        two values now (`max-sm:rounded-sm sm:rounded-full` — see the comment
+        there). A local `rounded-full` beside them was a second, unqualified
+        declaration racing the first on source order, which is the shape of bug
+        `web-design-parity.md` calls a class-list claim the browser disagrees
+        with.
+      */
+      className={cn('flex min-w-0 flex-col text-left', className)}
       labelClassName={labelClassName}
       inputClassName={(open) =>
         cn(

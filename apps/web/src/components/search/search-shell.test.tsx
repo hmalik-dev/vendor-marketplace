@@ -354,10 +354,22 @@ describe('SearchShell no results — frame 18', () => {
    * page that failed to fill.
    *
    * The declared mechanism, because jsdom performs no layout and a geometric
-   * assertion here would pass on nothing: `min-h-full` against `app-pane`'s
-   * `height: 100%`, and an **auto margin** rather than `justify-center`, which
-   * would push the mark out of reach on a pane too short for the block. The
-   * rendered result was measured in the browser at 1440 and at 1024.
+   * assertion here would pass on nothing. Three parts, and the second and third
+   * are each a defect this shipped with before it was measured:
+   *
+   * 1. an **auto margin** rather than `justify-center`, which would push the
+   *    mark out of reach on a pane too short for the block;
+   * 2. `min-h-full` against `app-pane`'s `height: 100%` — which only resolves
+   *    at `lg` and up, because `app-shell` supplies that height and is itself
+   *    `lg:`-prefixed. Hence the shell's `max-lg:min-h-*` floor and this box's
+   *    `max-lg:flex-1`;
+   * 3. the pane is a **flex column**, because below `lg` its height comes from
+   *    `flex-1` and Chrome will not resolve a child's percentage against a
+   *    flex-derived height.
+   *
+   * Measured in the browser at all five widths in `30-responsive.md`, on the
+   * shortest empty state there is (a name search with no relaxations and no
+   * band): equal space above and below at every one of them.
    */
   it('centres the no-results block in the results pane', async () => {
     state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
@@ -367,8 +379,14 @@ describe('SearchShell no results — frame 18', () => {
     await screen.findByRole('heading', { name: 'No photographers match both filters' });
     const box = container.querySelector('[data-slot="search-no-results"]');
 
-    expect(box?.parentElement?.className).toContain('app-pane');
+    const pane = box?.parentElement;
+
+    expect(pane?.className).toContain('app-pane');
+    // The pane can only hand its height down as a flex line.
+    expect(pane?.className).toContain('flex-col');
+    expect(pane?.className).toContain('max-lg:flex-1');
     expect(box?.className).toContain('min-h-full');
+    expect(box?.className).toContain('max-lg:flex-1');
     expect(box?.firstElementChild?.className).toContain('m-auto');
     expect(box?.className).not.toContain('justify-center');
   });

@@ -431,7 +431,26 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   }`;
 
   return (
-    <div data-app-shell className="flex w-full min-w-0 flex-col lg:app-shell">
+    /*
+      **Below `lg` the shell needs a floor, or nothing under it can be centred.**
+
+      `app-shell` sets `height: calc(100dvh - var(--header-height))`, and it is
+      `lg:`-prefixed — so below `lg` this column is content-height, `app-pane`'s
+      own `height: 100%` resolves to auto, and the no-results block's
+      `min-h-full` resolves to nothing. The screen then ended wherever its
+      content ended: measured at 768, the pane finished at y≈486 in a 1024px
+      viewport, leaving 538px of page background under it. That is the misaligned
+      page #417 item 2b is about, one breakpoint below where it was reported.
+
+      A **`min-height`**, never a height: the box is free to grow past the
+      viewport, so a long result grid still scrolls the page rather than turning
+      `app-pane`'s `overflow-y: auto` into an inner scroll region — which on a
+      phone would take the URL bar's hide-on-scroll with it.
+    */
+    <div
+      data-app-shell
+      className="flex w-full min-w-0 flex-col max-lg:min-h-[calc(100dvh-var(--header-height))] lg:app-shell"
+    >
       {/*
         The tablet and mobile home for the query — frame `14`. From `lg` the
         bar lives in the header instead (frame `02`), so this row is hidden
@@ -656,7 +675,28 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         solving it structurally instead. Any `app-pane` whose first focusable
         child is flush against the content origin has this.
       */}
-      <div className="app-pane -mt-1 px-5 pt-1 pb-20 min-[90rem]:px-6.5 lg:pb-4">
+      {/*
+        `max-lg:flex-1` is the other half of the shell's floor above: the shell
+        can only hand its spare height to a child that asks for it, and every
+        row above this one is `shrink-0`. At `lg` and up the pane already fills
+        by shrinking against `app-shell`'s definite height, so this is scoped
+        below it rather than changing a layout that is correct.
+
+        **`flex flex-col` at every width**, because `min-height: 100%` on the
+        no-results box needs a parent whose height is *definite*, and below `lg`
+        this pane's height comes from `flex-1` — a used value Chrome will not
+        resolve a child's percentage against. Measured: with the floor in place
+        but the pane still a block, the block sat at the top of a full-height
+        pane at 768 and 390, with 538px under it. Making the pane a column and
+        letting the box grow answers it without a percentage.
+
+        Safe for the other states: each branch below is this pane's only child,
+        so `align-items: stretch` gives it the same full width it had as a
+        block, and nothing shrinks — at `lg` the box carries `min-h-full` rather
+        than `flex-1`, and below `lg` the pane's own height is a floor the
+        content is free to exceed.
+      */}
+      <div className="app-pane -mt-1 flex flex-col px-5 pt-1 pb-20 max-lg:flex-1 min-[90rem]:px-6.5 lg:pb-4">
         {hasFailed ? (
           /*
             `40-states.md`: red is "it failed". This branch previously drew the
@@ -705,7 +745,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
 
             The header and the Refine bar are outside this box and do not move.
           */
-          <div data-slot="search-no-results" className="flex min-h-full flex-col">
+          <div data-slot="search-no-results" className="flex min-h-full flex-col max-lg:flex-1">
             <div className="m-auto w-full">
               <EmptyState
                 icon={<SearchEmptyGlyph />}

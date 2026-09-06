@@ -123,7 +123,16 @@ export function CategorySelect({
       density={isHero ? 'default' : 'compact'}
       scrim={isHero}
       className={cn(
-        'flex min-w-0 flex-col rounded-full text-left',
+        /*
+          `max-sm:rounded-sm`, matching `search-bar.tsx`'s `segment` and for the
+          reason recorded there: below `sm` this segment is a stacked row with
+          no left padding, so a `rounded-full` cap on a 41px box curves 20.5px
+          across a label that starts at inset 0. `rounded-sm` is 6px and
+          `max-sm:py-1.5` puts the label at y=6, so the arc ends exactly where
+          the glyphs begin. Measured at 390 on both surfaces: intrusion 0.00px.
+        */
+        'flex min-w-0 flex-col max-sm:rounded-sm sm:rounded-full',
+        'text-left',
         /*
           The segment treatment, and the same one `search-bar.tsx`'s `segment`
           applies to City and Event date: a `stone-200` fill and a clay label,

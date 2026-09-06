@@ -80,6 +80,17 @@ const CAP_RADIUS_PX = {
   compact: { 'sm:': 13.5 },
 } as const;
 
+/**
+ * `--radius-sm`, which is what `max-sm:rounded-sm` resolves to.
+ *
+ * Below `sm` the bar stacks into a card and the segment loses its left padding,
+ * so the cap cannot be cleared horizontally — it is cleared **vertically**
+ * instead, by a radius no larger than the segment's own `padding-top`. That is
+ * the base step's rule, and it is a different rule from the one above rather
+ * than the same one with a smaller number.
+ */
+const BASE_RADIUS_PX = 6;
+
 const CATEGORIES: Category[] = [
   {
     id: '1',
@@ -103,19 +114,27 @@ const EMPTY = { category: '', city: '', state: '', date: '' };
  * deleted declaration pass by silently inheriting the step below it. Missing is
  * a failure here, and it reads as `0`.
  */
-function declaredLeftPadding(classNames: string, prefix: string): number {
-  const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}pl-([\\d.]+)$`);
+function declaredPadding(classNames: string, prefix: string, side: 'pl' | 'pt' | 'py'): number {
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // `py-*` sets the top too, and the base step writes it that way.
+  const sides = side === 'pt' ? ['pt', 'py'] : [side];
 
   for (const token of classNames.split(/\s+/)) {
-    const match = pattern.exec(token);
+    for (const name of sides) {
+      const match = new RegExp(`^${escaped}${name}-([\\d.]+)$`).exec(token);
 
-    if (match?.[1] !== undefined) {
-      return Number(match[1]) * SPACING_PX;
+      if (match?.[1] !== undefined) {
+        return Number(match[1]) * SPACING_PX;
+      }
     }
   }
 
   return 0;
 }
+
+/** The left padding declared at one breakpoint, in pixels. */
+const declaredLeftPadding = (classNames: string, prefix: string): number =>
+  declaredPadding(classNames, prefix, 'pl');
 
 function renderBar(size: 'compact' | 'hero'): { form: string; segment: string } {
   render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={() => {}} size={size} />);
@@ -150,9 +169,37 @@ describe('the search bar’s left inset', () => {
     // The indicator is a fill, not a ring — `03-components.md` § Inputs — so
     // the radius is the only thing that can hide the label, and the padding is
     // the only thing that answers it.
-    expect(segment).toContain('rounded-full');
+    expect(segment).toContain('sm:rounded-full');
     expect(declaredLeftPadding(segment, prefix)).toBeGreaterThanOrEqual(
       CAP_RADIUS_PX[size][prefix as keyof (typeof CAP_RADIUS_PX)[typeof size]],
     );
   });
+
+  /*
+   * **The base step, which is where this defect hid twice.**
+   *
+   * The fix for item 1b was written entirely in `sm:`-prefixed utilities, so
+   * the unprefixed value kept the original bug: at 390 the segment still had
+   * `padding-left: 0` under an unconditional `rounded-full`, on a box 39-41px
+   * tall — a 20px cap over a label starting at inset 0.00px, which is the
+   * ticket's own reproduction verbatim, one breakpoint down. The case table
+   * above is built from the frames' inset ladder and has no base step, so it
+   * could not have caught it.
+   *
+   * Below `sm` there is no left padding to give — the card's `px-4` is the
+   * inset every stacked row shares — so the rule is vertical instead: the
+   * radius must not exceed the segment's own `padding-top`, which puts the
+   * arc's end at or before the label's first glyph row. Measured at 390 on
+   * both surfaces: intrusion 0.00px.
+   */
+  it.each(['compact', 'hero'] as const)(
+    'clears the label with its radius rather than its padding below sm, on the %s bar',
+    (size) => {
+      const { segment } = renderBar(size);
+
+      expect(segment).toContain('max-sm:rounded-sm');
+      expect(segment).not.toMatch(/(?:^|\s)rounded-full(?:\s|$)/);
+      expect(BASE_RADIUS_PX).toBeLessThanOrEqual(declaredPadding(segment, 'max-sm:', 'pt'));
+    },
+  );
 });

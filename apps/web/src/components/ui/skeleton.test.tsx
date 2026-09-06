@@ -178,10 +178,16 @@ describe('VendorCardSkeleton', () => {
      *
      * **`isNew` is the one thing that can put the row back** (#417 item 3):
      * frame `02` draws the `New` pill on a search card, so a genuinely new
-     * vendor is 8px taller than its own skeleton. That is the frame's cost, not
-     * a defect to design around — it is bounded at 8px, the grid sizes a row to
-     * its tallest card so it cannot cascade, and the alternative is reserving
-     * the space on every card for a badge most of them will never carry.
+     * vendor's card is taller than its own skeleton. **Measured at 27px**, not
+     * the row's 8px `margin-top` — the pill itself is ~19px on top of that
+     * (10.5px line plus 3px of padding either side). A first reading of this
+     * quoted the margin alone and was 3.4x under.
+     *
+     * It ships anyway, because the frame draws it: the cost is bounded at one
+     * pill, the grid sizes a row to its tallest card so it cannot cascade down
+     * the page, and the alternative is reserving 27px on every card for a badge
+     * most of them will never carry. Recorded here with the real number so the
+     * trade is legible rather than understated.
      */
     expect(cardSource).toContain('categoryChips.length > 0 || freeDate || vendor.isNew ?');
     expect(cardSource).toContain(

@@ -10,12 +10,20 @@ import { addDays } from '@vendor-marketplace/shared';
  * not new, and telling a customer it is misdescribes it in the one place the
  * customer is comparing vendors side by side.
  *
- * **`vendor_profiles.created_at` is the timestamp used**, and it is the only
- * suitable one on the table: there is no `published_at`, so "when the vendor
- * joined" is when their profile row was written. It is close enough to the
- * ruling to be honest — a profile is created when someone signs up as a vendor
- * — and it needs no migration, which matters because it cannot then be wrong
- * for the rows that already exist.
+ * **`vendor_profiles.created_at` is the timestamp used, and it is not quite
+ * what the plan says.** `03-components.md` defines the chip as *"a vendor
+ * published within the last 30 days"*; the table has `is_published`,
+ * `created_at` and `updated_at` and **no `published_at`**, so the published
+ * date does not exist to read. Only published vendors are ever returned, so for
+ * every card this touches the two agree — except for a vendor who creates a
+ * draft, fills it in over six weeks and publishes today, who is not labelled
+ * new though both readings of the ruling say they are.
+ *
+ * Recorded rather than closed, because closing it is a migration plus a
+ * backfill rule for existing rows ("published when?"), which is a data decision
+ * this ticket was not given. #417's own instruction was to *"confirm a suitable
+ * timestamp column exists before relying on it, and say in the ticket what you
+ * used"* — this is that, and the ticket's Notes carry it too.
  *
  * The window is a **starting point stated by the ticket**, not a measured one.
  * It lives here rather than beside the query so both card producers read one
