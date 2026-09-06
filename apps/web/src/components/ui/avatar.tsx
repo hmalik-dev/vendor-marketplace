@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
  */
 export const FALLBACK_TONES = ['bg-clay-150 text-clay-600', 'bg-sage-100 text-sage-600'] as const;
 
-/** The six sizes the design calls for, in px. */
+/** The seven sizes the design calls for, in px. */
 export const AVATAR_SIZES = {
   xs: 30,
   /*
@@ -36,6 +36,14 @@ export const AVATAR_SIZES = {
    */
   sm: 36,
   md: 38,
+  /*
+   * The confirmed receipt card, frame `06`. Named for its one call site rather
+   * than given a t-shirt letter, like `row` above: 50 sits between `md` and
+   * `xl` and the scale has no step to spare there. The frame draws it as a
+   * square at an 11px radius, which the call site asks for through `className`
+   * — the shape is the caller's, the size is this.
+   */
+  receipt: 50,
   lg: 64,
   /*
    * The public vendor profile's identity row. Frame `03` drew this at 82 while
@@ -88,7 +96,7 @@ function glyphSize(size: AvatarSize): number {
 /**
  * The smallest size Instrument Serif may be set at, from `01-foundations.md`.
  *
- * Exported for `avatar.test.tsx`, which renders all six sizes and asserts the
+ * Exported for `avatar.test.tsx`, which renders every size and asserts the
  * face against this number rather than against one written down twice.
  *
  * `display-type.test.ts` declares its own `SERIF_FLOOR_PX` for the class-based
@@ -228,7 +236,7 @@ export function Avatar({
          * system, and `display-type.test.ts` enforces it across the whole tree
          * — except here, where the size comes from a numeric prop through
          * `style` and no class states it. That exemption was a readability
-         * limitation of the guard, never a licence: four of the six sizes
+         * limitation of the guard, never a licence: four of the sizes
          * (`xs` 13, `row` 13, `sm` 13, `md` 15.96) were setting Instrument
          * Serif below the floor.
          *
