@@ -11,6 +11,34 @@ import { StockPhoto } from '@/components/ui/stock-photo';
  */
 export type AuthPanelRole = 'both' | 'customer' | 'vendor';
 
+/**
+ * The scrim's mid stop, given as a distance from the *end* of the gradient line
+ * rather than as a percentage of it.
+ *
+ * `21-sign-up.md` is explicit after D30: the scrim is specified in pixels from
+ * the bottom, not in percentages, and any new panel height re-derives the stop.
+ * That is the lesson frame `12b` cost — the same 55% over a 700px panel puts
+ * α 0.613 under the headline where a 900px panel puts 0.672, and eleven of the
+ * three panels' twenty-nine line boxes failed AA. This panel is `min-h-dvh`, so
+ * a percentage would move the ink under the copy on every viewport height.
+ *
+ * Frame `12` draws the stop at 55% of a 600x900 panel. At 200deg the gradient
+ * line is `600·|sin 200°| + 900·|cos 200°|` = 1050.9px, so that stop sits
+ * 472.9px from its end. `calc(100% - 472.9px)` is the same stop at any height:
+ * 55.0% at 900px, and 45.2% at 700px — the value D30 re-cut `12b` to.
+ */
+export const SCRIM_MID_STOP_FROM_END_PX = 472.9;
+
+/**
+ * The one wash all three panels draw, differing only in the hue of its lower
+ * two stops. The top stop is shared: D30 gives every panel frame `12`'s `.14`
+ * and `.86`, so the coverage under a given line of copy is a property of the
+ * panel rather than of which role is selected.
+ */
+function scrim(mid: string, bottom: string): string {
+  return `linear-gradient(200deg, rgba(35,32,28,.14) 0%, ${mid} calc(100% - ${SCRIM_MID_STOP_FROM_END_PX}px), ${bottom} 100%)`;
+}
+
 interface AuthPanel {
   /** The photograph behind the wash — the product's own content. */
   photo: string;
@@ -34,6 +62,13 @@ interface AuthPanel {
   sideLabels?: readonly [string, string, string];
   /** Tailwind text colour per side label, paired with `sideLabels`. */
   sideLabelClasses?: readonly [string, string, string];
+  /**
+   * The marker a single-side panel leads each guarantee with, where the `both`
+   * panel writes the side's name instead. Frame `12b` draws the customer's in
+   * `sage-200` and the vendor's a step lighter, in `sage-175` — the vendor
+   * panel is the greener ground of the two, and the paler dot holds against it.
+   */
+  dotClass?: string;
   /**
    * Mechanism, not metrics: a new marketplace has no vendor count, no "events
    * booked" and no average rating worth publishing, and the last thing a
@@ -65,9 +100,9 @@ const PANELS: Record<AuthPanelRole, AuthPanel> = {
    */
   both: {
     photo: '/stock/auth.jpg',
-    wash: 'linear-gradient(200deg, rgba(35,32,28,.14) 0%, rgba(45,40,32,.62) 55%, rgba(30,28,24,.86) 100%)',
+    wash: scrim('rgba(45,40,32,.62)', 'rgba(30,28,24,.86)'),
     headline: ['Clear prices.', 'Open calendars.', 'No back-and-forth.'],
-    accentClass: 'text-gold-200',
+    accentClass: 'text-gold-150',
     body: 'Event vendors and the people who hire them — with the price and the date settled before anyone picks up the phone.',
     guarantees: [
       "See what a vendor charges and when they're free",
@@ -75,26 +110,27 @@ const PANELS: Record<AuthPanelRole, AuthPanel> = {
       'Payment held until the event is complete',
     ],
     sideLabels: ['Booking', 'Vending', 'Both'],
-    sideLabelClasses: ['text-gold-200', 'text-sage-200', 'text-stone-0/55'],
+    sideLabelClasses: ['text-gold-200', 'text-sage-175', 'text-stone-0/82'],
   },
   customer: {
     photo: '/stock/auth-customer.jpg',
-    wash: 'linear-gradient(200deg, rgba(35,32,28,.12) 0%, rgba(58,31,18,.62) 55%, rgba(35,32,28,.85) 100%)',
+    wash: scrim('rgba(58,31,18,.62)', 'rgba(35,32,28,.86)'),
     // The premise is published pricing *and* published availability — both
     // halves. The word "transparent" never appears; the two lines demonstrate
     // it and the italic third hands the decision back to the visitor.
     headline: ['See the price.', 'See the open dates.', 'Then decide.'],
-    accentClass: 'text-gold-200',
+    accentClass: 'text-gold-150',
     body: "Every vendor publishes what they charge and when they're free — before you talk to anyone, and without asking for a quote.",
     guarantees: [
       'Live calendars — if a date shows open, it is',
       'Payment held until the event is complete',
       'Published prices, and no service fee on top',
     ],
+    dotClass: 'bg-sage-200',
   },
   vendor: {
     photo: '/stock/auth-vendor.jpg',
-    wash: 'linear-gradient(200deg, rgba(35,32,28,.12) 0%, rgba(40,48,34,.62) 55%, rgba(28,32,24,.86) 100%)',
+    wash: scrim('rgba(28,34,24,.62)', 'rgba(28,32,24,.86)'),
     headline: ['Set your prices.', 'Set your dates.', 'Get booked.'],
     accentClass: 'text-sage-150',
     body: 'Inquiries arrive already knowing what you charge and that your date is free — so you spend your evenings working, not writing quotes.',
@@ -106,6 +142,7 @@ const PANELS: Record<AuthPanelRole, AuthPanel> = {
       "Your calendar decides which dates you're offered",
       'Paid out after the event — no chasing invoices',
     ],
+    dotClass: 'bg-sage-175',
   },
 };
 
@@ -145,6 +182,7 @@ export function AuthScreen({
     guarantees,
     sideLabels,
     sideLabelClasses,
+    dotClass,
   } = PANELS[panel];
 
   return (
@@ -190,7 +228,8 @@ export function AuthScreen({
           <h1 className="text-center font-display text-[32px] leading-[1.15] text-stone-900">
             {headline}
           </h1>
-          <p className="mt-1.5 mb-5.5 text-center text-md text-stone-700">{subhead}</p>
+          {/* Frame `12` draws this line at 14px — `text-cta`, not `text-md`. */}
+          <p className="mt-1.5 mb-5.5 text-center text-cta text-stone-700">{subhead}</p>
 
           {children}
         </div>
@@ -245,7 +284,7 @@ export function AuthScreen({
                 ) : (
                   <span
                     aria-hidden="true"
-                    className="mt-1.5 size-1.75 shrink-0 rounded-full bg-sage-200"
+                    className={`mt-1.5 size-1.75 shrink-0 rounded-full ${dotClass ?? 'bg-sage-200'}`}
                   />
                 )}
                 <span className="text-[13.5px] leading-normal text-stone-0/90">{guarantee}</span>

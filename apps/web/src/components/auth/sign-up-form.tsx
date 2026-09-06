@@ -231,7 +231,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
         {chosenRole === null ? (
           <p
             data-role-hint=""
-            className="mt-1.5 text-center text-xs text-stone-600"
+            className="mt-1.5 text-center text-helper text-stone-600"
             role={roleMissing ? 'alert' : undefined}
           >
             Pick one above to continue
