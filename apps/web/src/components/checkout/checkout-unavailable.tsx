@@ -89,7 +89,23 @@ function copyFor(
      * amount, never the customer's bank.
      */
     body: "Something on our side stopped the checkout from opening. It isn't your card — nothing was charged and nothing was entered.",
-    money: 'No payment was taken, and your date is still held.',
+    /*
+     * Not "…and your date is still held." — this screen cannot know that.
+     * `unavailableScreen` short-circuits to `failed` *without* reading the
+     * request, because the two things that produce it are a 400/422 and #390's
+     * 8s timeout, and adding a second deadlined read to a screen that has just
+     * timed out buys nothing. #400 made that gap reachable: a cancelled booking
+     * no longer redirects to the confirmation, so a stalled POST on one renders
+     * this screen and promised a refunded customer that a date they had already
+     * given up was still theirs.
+     *
+     * The replacement is the design contract's own sentence for this situation
+     * — frame `16`, whose composition this screen already follows, and which
+     * `error-screen.tsx` renders verbatim. It is true of every `failed`:
+     * `openCheckout` only opens an intent, so a failure there writes nothing
+     * and charges nothing.
+     */
+    money: 'No payment was taken and no booking was changed.',
     action: { label: 'Try this payment again', href: `${booking}/checkout` },
     secondary: { label: 'Back to this booking', href: booking },
   };
