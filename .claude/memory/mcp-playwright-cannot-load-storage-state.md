@@ -29,6 +29,16 @@ in this way on the first attempt, each returning role-appropriate data with zero
 console errors. It needs no scratch file, so nothing has to be deleted before
 staging. Use an **absolute** path — the MCP server's cwd is not the worktree.
 
+**Route 1 is not always available — find out in two calls, then move on.** On
+lane t419 (2026-09-06) the runner rejected every form of the snippet above: a
+top-level `const` returned `SyntaxError: Unexpected token 'const'`, an async
+IIFE returned `TypeError: __fn__ is not a function`, and a bare
+`await page.title()` returned `SyntaxError: Unexpected identifier 'page'` — so
+it was evaluating a single **expression** with no `page`, `context` or `browser`
+in scope at all. If it fails that way, stop rewriting the snippet and go
+straight to route 2; the signed-in half is still yours to drive, not something
+to report unverified.
+
 **2. A standalone `playwright` script** run with
 `pnpm lane:exec <n> -- node <script>.mjs`. Still the right tool when the pass
 needs the lane's *environment* (a `DATABASE_URL`, a seeded fixture) rather than
@@ -51,11 +61,17 @@ on lane 411 (2026-09-05), and the first two apply to route 1 as well:
   warm-up reload `.claude/rules/e2e-auth.md` prescribes — the Clerk handshake
   can outlast it. Loop the navigation until `new URL(page.url()).pathname` is
   the path you asked for; two of my three roles needed the third attempt.
-- **Put the script inside a workspace package** (`apps/web/`, `packages/db/`)
-  so its imports resolve — a scratch file outside the tree cannot find
-  `playwright` or `postgres`. Delete it before staging; the commit hook refuses
-  a dirty tree. (Route 1 avoids this entirely, which is most of why it is
-  cheaper.)
+- **Resolution, not location, is the real constraint.** The usual advice is to
+  put the script inside a workspace package (`apps/web/`, `packages/db/`) so its
+  bare imports resolve, then delete it before staging because the commit hook
+  refuses a dirty tree. Better: keep the script **outside the repo entirely**
+  (the job's tmp directory) and import by absolute URL —
+  `import { chromium } from 'file:///…/node_modules/.pnpm/playwright@<v>/node_modules/playwright/index.mjs'`,
+  the path `node --input-type=module -e "console.log(await import.meta.resolve('playwright'))"`
+  prints when run from the worktree. Node resolves bare specifiers from the
+  *script's* directory, which is why a scratch file in `/tmp` cannot find
+  `playwright`; an absolute specifier sidesteps that. Nothing ever enters the
+  tree, so there is nothing to delete and no way to leave the lane dirty.
 
 Related: [[lane-auth-state-arrives-expired]],
 [[playwright-browser-is-shared-across-sessions]],

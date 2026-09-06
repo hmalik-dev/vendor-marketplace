@@ -42,6 +42,7 @@
 - [A lane 429 renders as the 500 page](lane-429-renders-as-500.md) — raise RATE_LIMIT_MAX before any browser or E2E pass
 - [Lane .auth/ arrives expired](lane-auth-state-arrives-expired.md) — copied from the main checkout, minted on port 3000; regenerate in-lane first
 - [`git push -q` trips the force-push hook](git-push-q-flag-trips-force-push-hook.md) — push with no short flags, and keep commit and push as separate calls
+- [The worktree guard refuses inline heredocs](worktree-guard-refuses-inline-heredoc-bodies.md) — `gh pr create` bodies and scratch scripts go in a file outside the repo, passed by path
 - [Board rows do not all end with `|`](board-rows-lack-a-trailing-pipe.md) — `parts[-2]` silently writes into Capabilities; the board guard reports it as a bogus capability name
 - [Kill dev servers by lane port, never by name](kill-dev-servers-by-lane-port.md) — an unscoped pkill reaches every lane; it took down two mid-pass
 - [MCP Playwright and storage state](mcp-playwright-cannot-load-storage-state.md) — no MCP *tool* takes one, but `browser_run_code_unsafe` does; never `networkidle`
