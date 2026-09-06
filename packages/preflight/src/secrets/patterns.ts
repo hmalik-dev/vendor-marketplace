@@ -67,6 +67,20 @@ export const FORBIDDEN_PATHS: readonly ForbiddenPath[] = [
   },
   {
     /*
+     * Playwright storage state — live Clerk session cookies for the E2E
+     * accounts, one file per role. `.gitignore` covers `.auth/`, and this is
+     * the belt to that suspenders for the same reason `.env` has one: an ignore
+     * rule stops an accidental `git add`, not a deliberate `git add -f`. No
+     * content rule reaches these — the generic high-entropy rule keys on
+     * `SECRET|TOKEN|PASSWORD`-shaped key *names*, while storage state files the
+     * session JWT under `"value"`. Since #392 the set includes an `admin`
+     * session, which carries authority over the console.
+     */
+    label: 'Playwright storage state (live session cookies)',
+    test: (path) => /(^|\/)\.auth\/[^/]+\.json$/.test(path),
+  },
+  {
+    /*
      * `.npmrc` is deliberately absent: this repository commits one, and so do
      * most, to carry registry settings. It is dangerous only when it carries an
      * auth token, which the `npm-auth-token` content rule catches instead.

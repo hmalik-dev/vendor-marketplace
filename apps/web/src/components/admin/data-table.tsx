@@ -175,7 +175,7 @@ export function DataTable<T>({
   const template = columns.map((column) => resolveTrack(column.width)).join(' ');
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-stone-300 bg-stone-0">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-panel border border-stone-300 bg-stone-0">
       {/*
         `pb-20` is measured, not chosen: the floating bulk bar sits at `bottom-4`
         (16px) and is 55px tall, so a row needs 71px of clearance to scroll past

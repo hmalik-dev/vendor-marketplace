@@ -36,3 +36,5 @@
 - [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the key is the booking id, the amount drifts by tier and the unwind flags changed; Stripe refuses the retry
 - [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — refund precedes the row move, no refund column, and past 24h a retry debits the vendor a second time
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
+- [The deployed origin shares the dev Clerk instance](deployed-origin-shares-the-dev-clerk-instance.md) — one `E2E_BASE_URL` signs the E2E accounts, admin included, into production data
+- [`.auth/*.json` is outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live Clerk session JWTs; gitignore holds but `FORBIDDEN_PATHS` and the content rules do not cover it

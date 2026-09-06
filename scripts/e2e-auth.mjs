@@ -7,7 +7,7 @@
 // entirely — afterwards the browser is already authenticated and no credential
 // is ever handled again.
 //
-// Run:  pnpm e2e:auth            (both roles)
+// Run:  pnpm e2e:auth            (every role the seed provisions)
 //       pnpm e2e:auth customer   (one role)
 //
 // Output: .auth/<role>.json — gitignored. Load it with
@@ -22,6 +22,7 @@ import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveBaseUrl } from './e2e-base-url.mjs';
+import { resolveRoles } from './e2e-roles.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = resolveBaseUrl();
@@ -109,8 +110,13 @@ async function signIn(browser, role, email, password) {
 }
 
 const env = readEnvFile('.env.e2e.local');
-const roles = process.argv.slice(2).filter((a) => !a.startsWith('-'));
-const wanted = roles.length ? roles : ['customer', 'vendor'];
+const argvRoles = process.argv.slice(2).filter((a) => !a.startsWith('-'));
+const { roles: wanted, explicit, refusal } = resolveRoles(argvRoles, BASE);
+
+if (refusal) {
+  console.error(refusal);
+  process.exit(1);
+}
 
 const browser = await chromium.launch();
 let failed = 0;
@@ -119,10 +125,21 @@ try {
     const email = env[`E2E_${role.toUpperCase()}_EMAIL`];
     const password = env[`E2E_${role.toUpperCase()}_PASSWORD`];
     if (!email || !password) {
-      console.error(
-        `  ${role}: E2E_${role.toUpperCase()}_EMAIL/PASSWORD missing from .env.e2e.local`,
-      );
-      failed++;
+      /*
+       * A role nobody asked for individually is skipped, not failed. `admin` is
+       * optional in `seed-e2e.ts` — a checkout whose `.env.e2e.local` predates
+       * that key is a supported state — so failing the whole run for it would
+       * turn a drifted env copy into a script that looks broken while customer
+       * and vendor both signed in fine. Naming a role on argv is asking for it
+       * by name, and that still fails.
+       */
+      const missing = `E2E_${role.toUpperCase()}_EMAIL/PASSWORD missing from .env.e2e.local`;
+      if (explicit) {
+        console.error(`  ${role}: ${missing}`);
+        failed++;
+      } else {
+        console.log(`  ${role}: skipped — ${missing}`);
+      }
       continue;
     }
     try {
