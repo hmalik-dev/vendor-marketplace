@@ -25,3 +25,5 @@
 - [LIMIT added under a post-fetch filter](review-checklist-limit-added-under-a-post-fetch-filter.md) — paging a read whose service filters afterwards returns `[]` on page 1; probe with pageSize=2, not the default
 - [Source-guard regex truncation](review-checklist-source-guard-regex-truncation.md) — `<button\b([^>]*)>` is cut at an arrow fn's `=>`, and never matches `<Button`; mutation-test every guard
 - [Layout gate checked at its own route](review-checklist-layout-gate-checked-at-its-own-route.md) — a rule narrowed to `/^\/admin$/` passes both directions of the guard while every child falls through; mutate rules by narrowing, not only dropping
+- [Async options vs a controlled active index](review-checklist-async-options-vs-controlled-active-index.md) — dropping `filter` makes Enter commit row 0 of the _previous_ query; hang the second request and press Enter
+- [Relaxation clears half a paired filter](review-checklist-relaxation-clears-half-a-paired-filter.md) — `Anywhere` patches `city` only, leaves `state=IL`, then empties the escape list; apply the patch and re-run toSearchQuery

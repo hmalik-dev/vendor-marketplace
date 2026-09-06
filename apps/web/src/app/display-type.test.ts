@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withoutComments } from '@/testing/source-scan';
 
 const require = createRequire(import.meta.url);
 const themeCss = readFileSync(
@@ -145,14 +146,24 @@ function classNameUses(): ClassNameUse[] {
   return uses;
 }
 
-/** Every non-test source file under `src`, as `[repo-relative path, contents]`. */
+/**
+ * Every non-test source file under `src`, as `[repo-relative path, contents]`,
+ * with comments stripped.
+ *
+ * `STRING_LITERAL` matches a backticked run anywhere in the file, and this
+ * repository's comments quote the very class names being reasoned about — so
+ * the paragraph explaining why an element takes `display-heading` was read as
+ * an unsized serif element and reported as a violation of the rule it explains.
+ * `withoutComments` keeps each comment's newlines, so the `file:line` in a
+ * failure still names the line the reader will find.
+ */
 function sourceFiles(): [string, string][] {
   const root = join(process.cwd(), 'src');
 
   return readdirSync(root, { recursive: true, encoding: 'utf8' })
     .filter((entry) => /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry))
     .sort()
-    .map((entry) => [join('src', entry), readFileSync(join(root, entry), 'utf8')]);
+    .map((entry) => [join('src', entry), withoutComments(readFileSync(join(root, entry), 'utf8'))]);
 }
 
 /** Every font size a className states, in px, ignoring colour and other `text-*`. */
@@ -297,6 +308,17 @@ describe('Instrument Serif never renders below its floor', () => {
   it('still resolves the scale and the classNames it checks against it', () => {
     expect(serifUses.length).toBeGreaterThan(40);
     expect(SIZE_TOKENS.size).toBeGreaterThan(8);
+  });
+
+  /*
+   * The scan reads comments out first, and this is the case that made it
+   * necessary: a backticked class name in a comment is a string literal to
+   * `STRING_LITERAL`, so the paragraph explaining why an element takes the
+   * tracked heading role was reported as an unsized serif element. The strip
+   * itself is covered by `testing/source-scan.test.ts`.
+   */
+  it('does not read a class name out of a comment', () => {
+    expect(withoutComments('/* `font-display` with no size */')).not.toContain('font-display');
   });
 
   it('keeps the set of serif elements sized outside the class system fixed', () => {

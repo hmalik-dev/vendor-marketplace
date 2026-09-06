@@ -48,3 +48,4 @@
 - [Guard a delegated browser pass with a liveness watch](guard-a-delegated-browser-pass-with-a-liveness-watch.md) — a dev server that dies mid-pass makes the agent report nothing and look clean
 - [The Done row cannot ride in the code PR](the-done-row-cannot-ride-in-the-code-pr.md) — the row records the squash SHA, which does not exist until the queue merges; batch across lanes, not within one
 - [Clerk localization is scoped by route only](clerk-localization-is-scoped-by-route-only.md) — a nested `ClerkProvider` silently drops every prop; branch on `usePathname()` in `ClerkShell`
+- [Migration numbers collide between lanes](migration-numbers-collide-between-lanes.md) — two lanes both claim `0025`; regenerate against the landed snapshot, never rename your own

@@ -32,6 +32,9 @@ import { cn } from '@/lib/utils';
  * question the platform can answer — while the field accepts typing.
  */
 
+/** The default `filter`: a field handed pre-matched options narrows nothing. */
+const identity = (options: readonly DropdownOption[]): readonly DropdownOption[] => options;
+
 export interface ComboboxDropdownProps {
   /** Every option, unfiltered. Filtering is this component's job. */
   options: readonly DropdownOption[];
@@ -48,8 +51,59 @@ export interface ComboboxDropdownProps {
    * the customer asked for.
    */
   committedLabel: string;
-  /** Narrows `options` to what the typed text matches. */
-  filter: (options: readonly DropdownOption[], query: string) => readonly DropdownOption[];
+  /**
+   * Narrows `options` to what the typed text matches.
+   *
+   * Optional since #384: a field whose options **arrive** already matched has
+   * nothing left to filter, and `City` was passing an identity function purely
+   * to satisfy a required prop.
+   */
+  filter?: (options: readonly DropdownOption[], query: string) => readonly DropdownOption[];
+  /**
+   * Called with the typed text every time it changes, including the empty
+   * string when the field is cleared.
+   *
+   * This is what lets a field fetch its own options **as the customer types**
+   * rather than being handed them all up front — `City` since #384, whose
+   * instruction was that no city list may be preloaded. The invariant above is
+   * untouched by it: this reports what was typed, it does not commit it, and
+   * `onCommit` still only ever fires with an option's own value.
+   */
+  onQueryChange?: (query: string) => void;
+  /**
+   * Overrides `noMatchMessage` when the empty panel is **not** a no-match.
+   *
+   * An async field has two of those and neither is "nothing matched": a request
+   * still in flight, and a request that failed. `40-states.md` does not let
+   * either borrow the empty state's copy — the first accuses the customer of a
+   * typo on the first keystroke of every word, and the second tells them a real
+   * place does not exist because the API is down. One prop rather than a flag
+   * per state, because the panel shows one row of copy and the caller is the
+   * only thing that knows which sentence belongs there.
+   */
+  statusMessage?: string;
+  /**
+   * A single action under the empty panel's copy.
+   *
+   * `42-dropdowns.md`: "one row of `stone-600` copy saying so **plus a single
+   * action**, never a blank panel." Given as a label rather than a node, and
+   * wired to `commit('')`, so it goes through the same commit path as a row —
+   * it reverts the typed text, closes the panel and hands focus back, none of
+   * which a caller-supplied `onClick` would do. Only meaningful on a field
+   * where the empty value means something, which is why `City` has one and
+   * `Vendor type` — whose `Any vendor type` is a real row — does not.
+   */
+  emptyActionLabel?: string;
+  /**
+   * The input's own cap, where the typed text reaches a length-capped API
+   * field.
+   *
+   * `web-route-boundaries.md`: a field with no cap against a 100-character API
+   * limit turns a long paste into a user-visible error that validation should
+   * have prevented. `City` needs it since #384, because what is typed is now
+   * sent as `?q=`.
+   */
+  maxLength?: number;
   /**
    * Whether focusing the field opens the panel.
    *
@@ -121,7 +175,11 @@ export function ComboboxDropdown({
   value,
   onCommit,
   committedLabel,
-  filter,
+  filter = identity,
+  onQueryChange,
+  statusMessage,
+  emptyActionLabel,
+  maxLength,
   openOnFocus,
   label,
   id,
@@ -166,6 +224,7 @@ export function ComboboxDropdown({
   const [moved, setMoved] = useState<number | null>(null);
   const anchored = useAnchoredMount();
   const inputRef = useRef<HTMLInputElement>(null);
+  const emptyActionRef = useRef<HTMLButtonElement>(null);
   /*
    * IME composition. A multi-byte input fires `change` for each intermediate
    * state, and filtering on those empties the list on the first keystroke of a
@@ -190,7 +249,15 @@ export function ComboboxDropdown({
   const revert = useCallback(() => {
     setQuery(null);
     setMoved(null);
-  }, []);
+    /*
+     * The field is back to showing its committed value, so there is no typed
+     * text any more and the owner has to be told. Without it a field that
+     * fetches on `onQueryChange` is left holding the last word typed — it makes
+     * no further request, but it keeps a query nobody is asking, and the next
+     * reader has to work out which of the two states it is in.
+     */
+    onQueryChange?.('');
+  }, [onQueryChange]);
 
   const commit = useCallback(
     (next: string) => {
@@ -213,6 +280,29 @@ export function ComboboxDropdown({
   const close = useCallback(() => {
     revert();
     setOpen(false);
+    /*
+     * **If focus is inside the panel when it closes, bring it back to the
+     * field.** `42-dropdowns.md`: "Focus returns to the field on close."
+     *
+     * `commit` says the same thing for the row path. This covers every *other*
+     * way focus can be in a panel that is about to unmount — today that is the
+     * empty body's action, reached with ArrowDown. It has to live here rather
+     * than in a key handler on that button, because the close it has to survive
+     * is **Radix's**: `DismissableLayer` listens for `Escape` natively on the
+     * document, so a React `stopPropagation` never reaches it, and
+     * `onCloseAutoFocus` is suppressed in anchor mode so Radix hands focus back
+     * to nothing. Measured: without this, `Esc` from the action left
+     * `document.activeElement` on `<body>` and the next `Tab` restarted at the
+     * top of the document.
+     *
+     * Deferred, unlike `commit`'s synchronous call: the element holding focus
+     * is inside the panel being unmounted, so focusing in the same tick is
+     * undone by the unmount blurring it.
+     */
+    const focused = document.activeElement;
+    if (focused?.closest('[data-slot="dropdown"], [data-slot="dropdown-sheet"]')) {
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
   }, [revert]);
 
   /*
@@ -242,6 +332,21 @@ export function ComboboxDropdown({
         event.preventDefault();
         if (!open) {
           setOpen(true);
+          return;
+        }
+        /*
+         * With no rows there is nothing to move through, and the panel's action
+         * is the only thing in it — so ArrowDown reaches that instead. Without
+         * this the action is mouse-only: `Tab` closes the panel by design
+         * (`42-dropdowns.md`), so no key would ever land on it, and `04-laws.md`
+         * does not allow a control nobody can reach from the keyboard.
+         *
+         * Focus moving into the portalled panel does not close it — the input's
+         * `onBlur` spares anything inside `[data-slot="dropdown"]`, which is the
+         * same guard that lets a row be clicked.
+         */
+        if (shown.length === 0) {
+          emptyActionRef.current?.focus();
           return;
         }
         move(1);
@@ -291,12 +396,22 @@ export function ComboboxDropdown({
       type="text"
       role="combobox"
       /*
-        Both mounts put this field inside a segment that paints the focus fill
-        for it — see `search-bar.tsx`'s `segment`. Without this it also took the
-        base `:focus-visible` ring, which is the unbordered treatment and breaks
+        **Only on the anchored mount**, and the asymmetry is the whole point.
+
+        Anchored, this field *is* the segment's control: it sits inside
+        `[data-slot=combobox-field]`, which paints the focus fill for it (see
+        `search-bar.tsx`'s `segment`), so it must not also take the base
+        `:focus-visible` ring — that is the unbordered treatment and it breaks
         out past the pill's edge.
+
+        On the sheet mount the same element is rendered inside the portalled
+        panel below, at `<body>`, where no segment is an ancestor and nothing
+        else paints. Opting out there left the primary control of the mobile
+        search with **no keyboard indicator at all** — the characteristic
+        failure of this mechanism, and the reason `focus-indicator.spec.ts`
+        asserts a floor of one indicator as well as a ceiling.
       */
-      data-focus-own
+      {...(anchored ? { 'data-focus-own': '' } : {})}
       /*
         Named twice on purpose, with the same string. The visible
         `<label htmlFor>` is what `04-laws.md:141` requires and is what names it
@@ -307,6 +422,7 @@ export function ComboboxDropdown({
       */
       aria-label={label}
       autoComplete="off"
+      maxLength={maxLength}
       aria-expanded={open}
       aria-controls={listId}
       aria-autocomplete="list"
@@ -321,6 +437,7 @@ export function ComboboxDropdown({
         composing.current = false;
         setQuery(event.currentTarget.value);
         setMoved(null);
+        onQueryChange?.(event.currentTarget.value);
       }}
       onChange={(event) => {
         const next = event.target.value;
@@ -330,6 +447,14 @@ export function ComboboxDropdown({
         if (composing.current) {
           return;
         }
+
+        /*
+         * After the composition guard, deliberately: a Japanese or Korean word
+         * fires a `change` for every intermediate state, and a field that
+         * fetches on this would send a request per keystroke of a syllable
+         * nobody has finished typing yet.
+         */
+        onQueryChange?.(next);
 
         /*
          * Emptying the field is a commit, where the field asks for it. It has
@@ -383,6 +508,16 @@ export function ComboboxDropdown({
     />
   );
 
+  /*
+   * The panel's one row of copy when it has no rows, resolved here rather than
+   * inline: three states — waiting on an answer, an answer that matched
+   * nothing, and nothing asked yet — read top to bottom as three cases and not
+   * as a nested ternary in an attribute.
+   */
+  const emptyText =
+    statusMessage ??
+    (typed.trim() !== '' ? noMatchMessage(typed.trim()) : (promptMessage ?? emptyMessage));
+
   const list = (
     <DropdownList
       label={label}
@@ -390,8 +525,30 @@ export function ComboboxDropdown({
       selected={value === '' ? [] : [value]}
       visibleCount={visibleCount}
       controlled={{ activeIndex: active, listId }}
-      emptyMessage={
-        typed.trim() !== '' ? noMatchMessage(typed.trim()) : (promptMessage ?? emptyMessage)
+      emptyMessage={emptyText}
+      emptyAction={
+        emptyActionLabel === undefined ? undefined : (
+          <button
+            ref={emptyActionRef}
+            type="button"
+            /*
+              `preventDefault` on mousedown, commit on click. The two are a
+              pair: mousedown would otherwise move focus out of the field
+              before the click resolved, and `onClick` is what a keyboard
+              `Enter` or `Space` fires — putting the commit on mousedown would
+              have made this reachable by mouse alone.
+            */
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+            onClick={() => {
+              commit('');
+            }}
+            className="text-[12.5px] font-semibold text-clay-500 hover:text-clay-600 hover:underline"
+          >
+            {emptyActionLabel}
+          </button>
+        )
       }
       onSelect={commit}
     />
@@ -409,7 +566,15 @@ export function ComboboxDropdown({
           outside the panel, so without this every click into the input
           dismisses the list it is filtering.
         */
-        <div data-slot="combobox-field" className={className}>
+        /*
+          `data-focus-fill` marks an element whose focus indicator is a fill
+          rather than a ring — the segment treatment. Nothing styles off it;
+          `e2e/focus-indicator.spec.ts` reads it, so that a control which is
+          correctly indicated by a fill is not counted as having no indicator
+          at all. Unconditional because both consumers of this component are
+          search-bar segments.
+        */
+        <div data-slot="combobox-field" data-focus-fill className={className}>
           {/*
             A real `<label htmlFor>`, not a caption span — `04-laws.md:141`:
             "Every input has a visible `<label htmlFor>`; placeholder is not a
@@ -445,6 +610,12 @@ export function ComboboxDropdown({
               aria-label={label}
               aria-expanded={open}
               aria-haspopup="listbox"
+              /*
+                The sheet's trigger stands where the input stands anchored — a
+                child of the segment — so the fill above is its whole indicator,
+                exactly as it is for the date trigger in `search-bar.tsx`.
+              */
+              data-focus-own
               className={cn('truncate text-left', inputClassName?.(open))}
             >
               {committedLabel === '' ? placeholder : committedLabel}

@@ -1,8 +1,9 @@
-import type {
-  CreateServicePackageInput,
-  ReorderServicePackagesInput,
-  ServicePackage,
-  UpdateServicePackageInput,
+import {
+  parseDurationHours,
+  type CreateServicePackageInput,
+  type ReorderServicePackagesInput,
+  type ServicePackage,
+  type UpdateServicePackageInput,
 } from '@vendor-marketplace/shared';
 import type { NewServicePackageRow, ServicePackageRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
@@ -21,16 +22,6 @@ import {
   nextDisplayOrder,
   updatePackageById,
 } from './packages.dao.js';
-
-/** Postgres NUMERIC columns arrive as strings from the driver. */
-function parseDurationHours(value: string | null): number | null {
-  if (value === null) {
-    return null;
-  }
-
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 
 export function toServicePackage(row: ServicePackageRow): ServicePackage {
   return { ...row, durationHours: parseDurationHours(row.durationHours) };

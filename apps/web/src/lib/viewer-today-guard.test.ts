@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withoutComments } from '@/testing/source-scan';
 
 /**
  * **The viewer's day is only knowable in the viewer's browser.**
@@ -27,17 +28,6 @@ const WEB_SOURCE = join(import.meta.dirname, '..');
 
 /** `'use client'` or `"use client"`, as the very first statement in the file. */
 const USE_CLIENT = /^\s*(?:\/\*[\s\S]*?\*\/\s*|\/\/[^\n]*\n\s*)*['"]use client['"]/;
-
-/**
- * The file with its comments removed.
- *
- * Without this the guard reads its own explanations: three of these files carry
- * a comment saying why they *stopped* calling `todayDateString()`, and a check
- * that a prose mention can trip is a check nobody can write a comment near.
- */
-function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-}
 
 /**
  * `src/testing/` holds helpers that only tests import — they pull in `vitest`

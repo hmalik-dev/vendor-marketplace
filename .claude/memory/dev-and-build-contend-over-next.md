@@ -25,5 +25,15 @@ because a pass against a dead server reports nothing and looks like a clean run.
 200. Do not run builds while it works. If a verification result looks
 inexplicably broken, check the servers are alive before believing the finding.
 
+**The build that kills it is almost always the pre-commit gate's own.** That is
+the sequencing nobody sees coming: you finish implementing, delegate the parity
+pass, and then — correctly — start the gate, whose `pnpm build --force` lands in
+the middle of the agent's run. It happened again on lane t384 (2026-09-05, #384)
+to a session that had *read this file*, because "do not run builds while it
+works" does not read as "do not run the gate yet". Either hold the build until
+the agent reports, or arm the watch in
+[[guard-a-delegated-browser-pass-with-a-liveness-watch]] and treat its firing as
+your own doing rather than a peer's.
+
 Related: [[vendor-marketplace-playwright-verification]],
 [[ticket-worktree-merge-immediately]]

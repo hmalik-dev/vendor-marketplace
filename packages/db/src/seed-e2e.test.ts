@@ -389,9 +389,42 @@ describe('seedE2eFixtures', () => {
     });
 
     /*
+     * The blockers the frames draw open (#371).
+     *
+     * `Publish checklist . 6 of 6` on an unpublished profile is a real product
+     * state, but it is not the one frames `20` and
+     * `27 Vendor dashboard - empty . 1024` are of: their premise is that an
+     * empty dashboard has a cause and the gold banner names it. The account is
+     * long-lived, so a published run's response time and active package survive
+     * into the draft unless the draft retires them.
+     */
+    it('opens the two blockers the empty-dashboard frames draw', async () => {
+      published(await seedE2eFixtures(database.db, INPUT));
+
+      const drafted = await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
+
+      const [profile] = await database.db
+        .select()
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, drafted.vendorProfileId));
+      const active = (
+        await database.db
+          .select()
+          .from(servicePackages)
+          .where(eq(servicePackages.vendorId, drafted.vendorProfileId))
+      ).filter((row) => row.isActive);
+
+      expect(profile?.responseTimeHours).toBeNull();
+      expect(active).toHaveLength(0);
+    });
+
+    /*
      * The undo. `draft` has no separate restore script because re-running the
-     * default is the restore -- which is only true if it really republishes and
-     * really puts a request back.
+     * default is the restore -- which is only true if it really republishes,
+     * really puts a request back, and really closes the blockers it opened. It
+     * did not: `ensurePackage` returned an adopted row without re-activating it,
+     * so a published run after a draft one left a storefront the publish gate
+     * refuses (#371).
      */
     it('is undone by re-running the published seed', async () => {
       await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
@@ -402,8 +435,16 @@ describe('seedE2eFixtures', () => {
         .select()
         .from(vendorProfiles)
         .where(eq(vendorProfiles.id, restored.vendorProfileId));
+      const active = (
+        await database.db
+          .select()
+          .from(servicePackages)
+          .where(eq(servicePackages.vendorId, restored.vendorProfileId))
+      ).filter((row) => row.isActive);
 
       expect(profile?.isPublished).toBe(true);
+      expect(profile?.responseTimeHours).not.toBeNull();
+      expect(active.length).toBeGreaterThan(0);
       expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
     });
   });

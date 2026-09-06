@@ -6,6 +6,7 @@ import {
   calculateRefund,
   centsToDollars,
   dollarsToCents,
+  formatDurationHours,
   formatPrice,
   generateSlug,
   isFutureDate,
@@ -447,5 +448,17 @@ describe('joinWithAnd', () => {
     expect(joinWithAnd(['date'])).toBe('date');
     expect(joinWithAnd(['date', 'guest count'])).toBe('date and guest count');
     expect(joinWithAnd(['date', 'guest count', 'location'])).toBe('date, guest count and location');
+  });
+});
+
+describe('formatDurationHours', () => {
+  it('pluralises on the number rather than always', () => {
+    expect(formatDurationHours(1)).toBe('1 hour');
+    expect(formatDurationHours(6)).toBe('6 hours');
+  });
+
+  it('keeps a half hour and does not pad a whole one', () => {
+    expect(formatDurationHours(1.5)).toBe('1.5 hours');
+    expect(formatDurationHours(10)).toBe('10 hours');
   });
 });

@@ -26,8 +26,15 @@ import type { Page } from '@playwright/test';
  * scripted pass would measure nothing at all and report a clean run.
  */
 
-/** How many Tab presses to spend on one route before moving on. */
-const MAX_STOPS = 45;
+/**
+ * How many Tab presses to spend on one route before moving on.
+ *
+ * Generous on purpose: the vendor profile puts `review-form` and
+ * `availability-calendar` — both changed by #383 — below a header, a tab strip,
+ * a gallery and the packages pane, and a walk that stopped at 45 never reached
+ * either while `report` still passed.
+ */
+const MAX_STOPS = 90;
 
 /**
  * A ring shadow that paints nothing — unset, or declared at zero width.
@@ -126,6 +133,19 @@ async function readStop(page: Page): Promise<Stop | null> {
           `outline on ${describe(node)}: ${style.outlineWidth} ${style.outlineStyle} ${style.outlineColor}`,
         );
       }
+
+      /*
+       * The segment treatment is a fill, and a fill is an indicator. Without
+       * this the floor below would read every correctly-indicated search
+       * segment as a control with nothing on it.
+       */
+      if (
+        node.hasAttribute('data-focus-fill') &&
+        style.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
+        style.backgroundColor !== 'transparent'
+      ) {
+        indicators.push(`fill on ${describe(node)}: ${style.backgroundColor}`);
+      }
     }
 
     /*
@@ -203,8 +223,11 @@ async function readStop(page: Page): Promise<Stop | null> {
 /**
  * Tab through a page, gathering every stop.
  *
- * Stops at `MAX_STOPS` or when the focus returns to where it started, whichever
- * comes first — a route with a dialog trap on it would otherwise cycle forever.
+ * Bounded by `MAX_STOPS` alone. It used to claim it also stopped when focus
+ * returned to where it started, and it never did — the key it compared included
+ * the loop index, so the set could not match twice. The claim is gone rather
+ * than implemented: nothing here needs it, and a safety property that does not
+ * hold is worse than one that was never promised.
  */
 async function walk(page: Page, settled?: string): Promise<Stop[]> {
   /*
@@ -220,22 +243,27 @@ async function walk(page: Page, settled?: string): Promise<Stop[]> {
   await page.locator('body').click({ position: { x: 2, y: 2 } });
 
   const stops: Stop[] = [];
-  const seen = new Set<string>();
 
   for (let index = 0; index < MAX_STOPS; index += 1) {
     await page.keyboard.press('Tab');
 
-    const stop = await readStop(page);
+    let stop = await readStop(page);
 
     if (stop === null) {
       break;
     }
 
-    const key = `${stop.where}#${index}`;
-    if (seen.has(key)) {
-      break;
+    /*
+     * The segment fill is a `transition-colors` property, so a stop read in the
+     * same tick as the Tab can legitimately show none of it yet. Only the
+     * *empty* reading is re-taken, which costs one wait per genuinely
+     * unindicated stop rather than one per stop.
+     */
+    if (stop.indicators.length === 0) {
+      await page.waitForTimeout(300);
+      stop = (await readStop(page)) ?? stop;
     }
-    seen.add(key);
+
     stops.push(stop);
   }
 
@@ -282,6 +310,23 @@ function report(route: string, stops: Stop[]): void {
 
   expect(doubled, 'these keyboard stops paint more than one focus indicator').toEqual([]);
 
+  /*
+   * The floor, and it matters as much as the ceiling.
+   *
+   * The mechanism #383 introduces fails in **two** directions: paint two
+   * indicators, or opt out with `data-focus-own` and then paint none. The
+   * second is the quieter one — it looks correct in every class list and in
+   * review — and a gate that only counted downwards could not see it. It was
+   * real: the combobox's sheet mount renders its field in a portal where no
+   * segment is an ancestor, so opting out there left the primary control of the
+   * mobile search with no keyboard indicator at all.
+   */
+  const bare = stops
+    .filter((stop) => stop.indicators.length === 0)
+    .map((stop) => `${route} → ${stop.where}`);
+
+  expect(bare, 'these keyboard stops paint no focus indicator at all').toEqual([]);
+
   const invisible = stops
     .filter((stop) => stop.clipped !== null)
     .map((stop) => `${route} → ${stop.where}: ${stop.clipped ?? ''}`);
@@ -312,7 +357,13 @@ test.describe('one focus indicator per keyboard stop', () => {
     });
   }
 
-  for (const route of ['/vendor/dashboard', '/vendor/profile/edit', '/vendor/bookings']) {
+  for (const route of [
+    '/vendor/dashboard',
+    '/vendor/profile/edit',
+    '/vendor/bookings',
+    // `switch.tsx` changed here and appears on no other route in this list.
+    '/vendor/packages',
+  ]) {
     test(`as a vendor on ${route}`, async ({ vendorPage }) => {
       await vendorPage.goto(route);
       report(route, await walk(vendorPage));

@@ -6,6 +6,7 @@ import {
   EVENT_TYPE_LABELS,
   MAX_GUEST_COUNT,
   expiryCountdown,
+  formatDurationHours,
   isUniversallyPastDate,
   joinWithAnd,
   type AvailabilityStatus,
@@ -957,7 +958,7 @@ function SuccessPanel({
   const countdown = expiryCountdown(expiresAt);
 
   const nextStep = responseTimeHours
-    ? `${businessName} usually replies within ${responseTimeHours} ${responseTimeHours === 1 ? 'hour' : 'hours'}.`
+    ? `${businessName} usually replies within ${formatDurationHours(responseTimeHours)}.`
     : `${businessName} can ${isPackaged ? 'confirm the date or decline' : 'confirm or send a quote'}.`;
 
   const closing = countdown

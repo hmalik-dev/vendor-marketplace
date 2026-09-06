@@ -52,14 +52,46 @@ async function walk(dir: string, extensions: readonly string[]): Promise<string[
 }
 
 /**
+ * A URL's own slashes, a block comment, or a line comment — in that order,
+ * because the order is the whole guard.
+ *
+ * A URL is matched **first and kept**, so neither comment rule can start inside
+ * one. Anything less is a hole, and both halves have been one:
+ *
+ * - Without the URL alternative at all, `'https://host/path'` in a string reads
+ *   as a line comment and the rest of that line disappears — the guard scanning
+ *   the file quietly stops seeing it.
+ * - Guarding it as `(^|[^:])//` instead is worse, and it is the version #395
+ *   nearly shipped. The `:` stops the *line*-comment rule, then the scan
+ *   advances one character and the second slash of `://*` opens a **block**
+ *   comment that runs to the next `*​/` anywhere below. On `security-headers.ts`,
+ *   whose CSP lists `'https://*.clerk.accounts.dev'`, that swallowed 151 lines.
+ *
+ * So the URL is consumed rather than merely stepped over. `[^\s'"\`]*` ends it
+ * at whitespace or the closing quote, which is where a URL in source ends.
+ */
+const COMMENT = /(:\/\/[^\s'"`]*)|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
+
+/**
  * Prose explaining a trap is not an instance of it.
  *
  * Every guard here works by matching source text, and this repository's
  * comments quote the very patterns being forbidden — so without this the
  * paragraph explaining a defect reports itself as one.
+ *
+ * Comments are blanked in place rather than removed, so a guard that prints
+ * `file:line` — or `file:line:column` — names a position the reader can go to.
+ * Four guards had each grown their own copy of this and no two agreed: two
+ * preserved position and two guarded the URL case, none did both, and #395 was
+ * about to make a fifth. This is the union of them, and the only one left.
  */
 export function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  return source.replace(COMMENT, (match, url?: string) =>
+    // A URL is matched only to be handed back untouched — see `COMMENT`. A real
+    // comment is blanked rather than deleted, so every line *and column* after
+    // it is still the one a reader finds at the `file:line` a guard prints.
+    url === undefined ? match.replace(/[^\n]/g, ' ') : match,
+  );
 }
 
 /**

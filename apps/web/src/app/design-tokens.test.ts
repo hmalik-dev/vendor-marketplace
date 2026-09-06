@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withoutComments } from '@/testing/source-scan';
 
 /*
  * Every colour class in this app names a step the shared theme defines.
@@ -80,14 +81,12 @@ const COLOUR_UTILITIES = [
  * a test.
  *
  * A guard that fires on correct code is one somebody eventually deletes, so the
- * fix belongs here rather than in every comment that has to name a class.
- * Deliberately crude — it removes block comments and line comments and nothing
- * else, which is enough, because a class name inside a string that merely
- * *looks* like a comment is still a class name and should still be flagged.
+ * fix belongs in `withoutComments` rather than in every comment that has to
+ * name a class. That helper is deliberately crude — it blanks block comments
+ * and line comments and nothing else, which is enough, because a class name
+ * inside a string that merely *looks* like a comment is still a class name and
+ * should still be flagged.
  */
-function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-}
 
 /** Every source file a class can be written in — `.css` included. */
 function sourceFiles(): [string, string][] {

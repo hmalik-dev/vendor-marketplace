@@ -113,7 +113,7 @@ describe('Avatar', () => {
    * is the check that closes the gap, and it reads the component's own sizes
    * rather than a list written down twice.
    *
-   * Four of the six sizes are below the floor and the frames draw all four in
+   * Four of the sizes are below the floor and the frames draw all four in
    * Instrument Serif, so this is frame-versus-law. D24 rules for the law and
    * changes the face rather than the size: raising the glyph to 16px would
    * change the monogram's ratio in four frames and break their geometry.
@@ -144,8 +144,17 @@ describe('Avatar', () => {
       return Number.parseFloat(monogram().style.fontSize);
     });
 
-    expect(glyphs.filter((glyph) => glyph < SERIF_FLOOR_PX).length).toBe(4);
-    expect(glyphs.filter((glyph) => glyph >= SERIF_FLOOR_PX).length).toBe(2);
+    /*
+     * Counted, not pinned to a total. The exact split moves whenever the design
+     * gains a size — `receipt` (50) and `thumb` (54) each moved it — and pinning
+     * it turns "the check above is not vacuous" into a change-detector that
+     * fails on a size the check already covers. Both sides non-empty is the
+     * property this test is named for; the sum is what proves no size went
+     * unmeasured.
+     */
+    expect(glyphs.filter((glyph) => glyph < SERIF_FLOOR_PX).length).toBeGreaterThan(0);
+    expect(glyphs.filter((glyph) => glyph >= SERIF_FLOOR_PX).length).toBeGreaterThan(0);
+    expect(glyphs).toHaveLength(Object.keys(AVATAR_SIZES).length);
   });
 
   it('paints the fallback in clay or sage, never in one fixed colour', () => {
@@ -160,6 +169,26 @@ describe('Avatar', () => {
     const image = screen.getByRole('img', { name: 'Maya Fernandez' });
     expect(image.tagName).toBe('IMG');
     expect(image.getAttribute('src')).toBe('https://example.test/maya.jpg');
+  });
+
+  /*
+   * #395. The shape is a prop rather than a `className` the caller passes,
+   * because `cn` is tailwind-merge and `rounded-panel` is a project token its
+   * radius group does not know: `cn('rounded-full', 'rounded-panel')` returns
+   * **both**, and which one paints is then generated-CSS source order rather
+   * than the caller's choice. The class list is asserted directly for that
+   * reason — jsdom performs no layout, so a computed radius here would be a
+   * check that cannot fail.
+   */
+  it('carries exactly one radius, and it is the one the caller asked for', () => {
+    render(<Avatar name="Maya Fernandez" />);
+    expect(monogram().className).toContain('rounded-full');
+    expect(monogram().className).not.toContain('rounded-panel');
+
+    cleanup();
+    render(<Avatar name="Maya Fernandez" size="thumb" shape="panel" />);
+    expect(monogram().className).toContain('rounded-panel');
+    expect(monogram().className).not.toContain('rounded-full');
   });
 
   it.each(Object.entries(AVATAR_SIZES))('sizes %s to %ipx square', (size, pixels) => {

@@ -2,6 +2,7 @@
 
 import {
   FULL_REFUND_CUTOFF_HOURS,
+  formatDurationHours,
   formatPrice,
   LATE_CANCELLATION_REFUND_RATE,
 } from '@vendor-marketplace/shared';
@@ -56,15 +57,36 @@ const APPEARANCE: Appearance = {
       border: '1.5px solid #B23A30',
       boxShadow: '0 0 0 3px rgba(178,58,48,.18)',
     },
+    // Frame `05`'s `.lbl`: 10.5px at .05em, the same micro-label the rest of
+    // the app wears. `--text-label` and `--tracking-label` are the tokens; they
+    // are restated as literals because Stripe's iframe is a different document
+    // and cannot read this one's custom properties.
     '.Label': {
-      fontSize: '11px',
+      fontSize: '10.5px',
       fontWeight: '600',
-      letterSpacing: '.06em',
+      letterSpacing: '.05em',
       textTransform: 'uppercase',
       color: '#6B6459',
     },
   },
 };
+
+/**
+ * The card form's id, so the pay button can sit in the summary rail and still
+ * submit it. Module scope rather than `useId`: the button and the form are in
+ * one component tree with one form on the screen, and a generated id would have
+ * to be threaded through the rail to reach the button anyway.
+ */
+const PAY_FORM_ID = 'checkout-payment-form';
+
+/**
+ * Frame `05`'s `.dot`: 7px, not Tailwind's 6px `size-1.5`.
+ *
+ * Exported because this screen's header draws the same marker beside "Secure
+ * checkout · encrypted by Stripe", and it is one measurement off one frame
+ * line — a second literal there is a second thing to find when the frame moves.
+ */
+export const SAGE_DOT = 'size-[7px] rounded-full bg-sage-400';
 
 const ACCEPTED_ON = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -191,21 +213,32 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
   return (
     <div className="grid flex-1 gap-9.5 overflow-hidden px-10 pt-7 lg:grid-cols-[1fr_420px]">
       <div>
-        <h1 className="mb-1 font-display text-[30px] leading-tight text-stone-900">
-          Confirm and pay
-        </h1>
+        {/*
+          `display-heading`, not `font-display`: this is the frames' tracked
+          `.h2` role, and that class is where its `-.01em` lives — restating the
+          number locally is the workaround `display-type.test.ts` forbids. 26px
+          is the size frame `05` draws and the in-app ceiling `04-laws.md` sets;
+          `leading-tight` had been setting 37.5px on a 30px face, where the
+          frame sets no line-height at all.
+        */}
+        <h1 className="mb-1 display-heading text-display-md text-stone-900">Confirm and pay</h1>
         {/*
           The frame's context line, built from real facts rather than the
           frame's names: who accepted, when, and what paying now secures.
         */}
-        <p className="mb-5.5 text-sm text-stone-700">
+        <p className="mb-5.5 text-cta text-stone-700">
           {checkout.vendor.businessName} accepted your request
           {checkout.acceptedAt ? ` on ${ACCEPTED_ON.format(checkout.acceptedAt)}` : ''}. Paying now
           locks {SHORT_DAY.format(event)} in their calendar.
         </p>
 
         {/* This screen refuses in its own voice; the browser must not do it first. */}
-        <form onSubmit={pay} noValidate className="flex max-w-[620px] flex-col gap-4">
+        <form
+          id={PAY_FORM_ID}
+          onSubmit={pay}
+          noValidate
+          className="flex max-w-[620px] flex-col gap-4"
+        >
           {decline ? <DeclineBanner decline={decline} event={event} /> : null}
 
           <PaymentElement options={{ layout: 'tabs' }} />
@@ -220,9 +253,13 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
             The last real objection, answered above the fold and in sentences
             rather than behind a policy link — frame `05`.
           */}
-          <div className="mt-0.5 rounded-xl border border-stone-300 bg-stone-0 px-4 py-3.5">
-            <h2 className="mb-1.75 text-[13px] font-semibold text-stone-900">If plans change</h2>
-            <p className="text-[12.5px] leading-relaxed text-stone-700">
+          <div className="mt-0.5 rounded-panel border border-stone-300 bg-stone-0 px-4 py-3.5">
+            <h2 className="mb-1.75 text-action font-semibold text-stone-900">If plans change</h2>
+            {/*
+              `leading-prose` is 1.6, the ratio the frames set on body copy.
+              `01-foundations.md` names `relaxed` (1.625) as explicitly not it.
+            */}
+            <p className="text-sm leading-prose text-stone-700">
               Cancel more than {FULL_REFUND_CUTOFF_HOURS} hours before {SHORT_DAY.format(event)} and
               you&apos;re refunded in full. Inside {FULL_REFUND_CUTOFF_HOURS} hours,{' '}
               {LATE_CANCELLATION_REFUND_RATE === 0.5
@@ -231,7 +268,13 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
               is refunded and {checkout.vendor.businessName} keeps the rest for the held date.
             </p>
           </div>
+        </form>
+      </div>
 
+      <SummaryRail
+        checkout={checkout}
+        event={event}
+        actions={
           <SummaryActions
             checkout={checkout}
             paying={paying}
@@ -239,10 +282,8 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
             event={event}
             decline={decline}
           />
-        </form>
-      </div>
-
-      <SummaryRail checkout={checkout} event={event} />
+        }
+      />
     </div>
   );
 }
@@ -279,7 +320,16 @@ function DeclineBanner({ decline, event }: { decline: Decline; event: Date }): R
   );
 }
 
-/** The pay button and its reassurance, which live in the rail on the frame. */
+/**
+ * The pay block: the button and its reassurance, the summary card's fourth and
+ * last section (frame `05` lines 919–921).
+ *
+ * It is rendered in the rail and submits the form in the *other* column, which
+ * is what the `form` attribute is for — a submit button need only name its
+ * form, not be inside it. Keeping the button in the form meant the primary
+ * action landed at a bottom edge of 917px on a 900px viewport: below the fold,
+ * against `04-laws.md`'s requirement that it be visible without scrolling.
+ */
 function SummaryActions({
   checkout,
   paying,
@@ -295,7 +345,7 @@ function SummaryActions({
   decline: Decline | null;
 }): React.ReactElement {
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2.5 px-4.5 py-3.5">
       {/*
         The button names the amount *and* the outcome. "Pay" alone tells the
         customer what the button does to them rather than what they get.
@@ -314,9 +364,10 @@ function SummaryActions({
       */}
       <Button
         type="submit"
+        form={PAY_FORM_ID}
         variant="primary"
         disabled={paying || !ready}
-        className="justify-center py-3.5 disabled:bg-clay-300 disabled:opacity-100"
+        className="justify-center py-3.5 text-[14.5px] disabled:bg-clay-300 disabled:opacity-100"
       >
         {paying ? (
           <>
@@ -327,8 +378,8 @@ function SummaryActions({
           `${decline ? 'Try this payment again' : `Pay ${formatPrice(checkout.amountCents)}`} — confirm ${SHORT_DAY.format(event)}`
         )}
       </Button>
-      <p className="flex items-center justify-center gap-1.75 text-[11.5px] text-stone-600">
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-sage-400" />
+      <p className="flex items-center justify-center gap-1.75 text-helper text-stone-600">
+        <span aria-hidden="true" className={SAGE_DOT} />
         Held by Stripe until the event is complete
       </p>
     </div>
@@ -338,19 +389,46 @@ function SummaryActions({
 function SummaryRail({
   checkout,
   event,
+  actions,
 }: {
   checkout: WireCheckoutIntent;
   event: Date;
+  /** The pay block — the card's fourth section. See `SummaryActions`. */
+  actions: React.ReactNode;
 }): React.ReactElement {
+  const servicePackage = checkout.servicePackage;
+
   return (
     <aside aria-label="Your booking" className="pb-5">
-      <div className="overflow-hidden rounded-[18px] bg-stone-0 shadow-[0_4px_18px_rgba(35,32,28,.09)]">
+      <div className="overflow-hidden rounded-2xl bg-stone-0 shadow-sm">
         <div className="flex items-center gap-3 border-b border-stone-200 px-4.5 py-4">
-          <Avatar size="lg" name={checkout.vendor.businessName} src={checkout.vendor.avatarUrl} />
+          {/*
+            A 54px rounded square, not a circle: frame `05` line 906 draws the
+            thing being bought rather than a person.
+          */}
+          <Avatar
+            size="thumb"
+            shape="panel"
+            name={checkout.vendor.businessName}
+            src={checkout.vendor.avatarUrl}
+          />
           <div className="min-w-0">
             <p className="font-display text-[18px] text-stone-900">
               {checkout.vendor.businessName}
             </p>
+            {/*
+              Frame line 907: `<package> · <duration>`. A custom request has no
+              package to name and a package need not declare a duration, so
+              each half is dropped rather than rendered empty — the line itself
+              disappears only when there is no package at all.
+            */}
+            {servicePackage ? (
+              <p className="mt-0.5 truncate text-meta text-stone-600">
+                {servicePackage.durationHours === null
+                  ? servicePackage.name
+                  : `${servicePackage.name} · ${formatDurationHours(servicePackage.durationHours)}`}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -379,12 +457,14 @@ function SummaryRail({
             </span>
           </div>
           <div className="flex items-baseline justify-between border-t border-stone-200 pt-2.25">
-            <span className="text-sm font-semibold text-stone-900">Total today</span>
+            <span className="text-cta font-semibold text-stone-900">Total today</span>
             <span className="font-display text-[30px] text-stone-900">
               {formatPrice(checkout.amountCents + checkout.customerFeeCents)}
             </span>
           </div>
         </div>
+
+        {actions}
       </div>
     </aside>
   );

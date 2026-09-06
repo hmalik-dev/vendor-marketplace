@@ -91,7 +91,25 @@ export function relaxations(
     options.push({ label: 'Any tag', patch: { tags: [] } });
   }
   if (state.city !== '') {
-    options.push({ label: 'Anywhere', patch: { city: '' } });
+    /*
+     * **Both halves of the pair, and #384 is why it matters.** A patch is
+     * merged, so clearing `city` alone left `state=IL` in the URL — invisible,
+     * because the bar reads `Anywhere`, and fatal, because the next render then
+     * has `city === ''` and offers no relaxation at all while the grid is still
+     * filtered to Illinois.
+     *
+     * It was nearly unreachable before this ticket: the picker only offered
+     * cities that already had vendors, so the no-results state with a city
+     * filter was hard to arrive at. #384 makes `Springfield, IL` pickable and
+     * puts that dead end on the primary path — a customer clicks the only
+     * escape offered and lands on "No vendors listed yet" about the whole
+     * marketplace, with nothing left to click.
+     *
+     * The pair travels together everywhere else — `CitySelect` commits `('',
+     * '')` as one gesture, and a city with no state is the state that control
+     * exists to make unrepresentable. This is the same rule, one layer down.
+     */
+    options.push({ label: 'Anywhere', patch: { city: '', state: '' } });
   }
 
   return options;

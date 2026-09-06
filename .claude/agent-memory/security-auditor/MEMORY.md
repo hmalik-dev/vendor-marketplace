@@ -46,3 +46,4 @@
 - [Settlement is a fourth money projection](settlement-is-a-third-money-projection.md) — findSettlements carries no ownership predicate; it is safe only because both callers pass pre-authorized ids
 - [`cancelled_by` names the actor, not the suspended side](cancelled-by-does-not-say-which-side.md) — copy saying "the other account was suspended" is false to an unbanned customer
 - [ClerkProvider carries no auth guarantee](clerk-provider-carries-no-auth-guarantee.md) — its server variant only adds `initialState` (needs `dynamic`) and dev keyless; `assertWebEnv` is now the sole gate on the inlined key
+- [`/places` replaced an inventory oracle](places-endpoint-replaced-an-inventory-oracle.md) — `/vendors/cities` leaked per-city vendor counts into every page's RSC payload; the missing `ESCAPE` clause is correct on Postgres

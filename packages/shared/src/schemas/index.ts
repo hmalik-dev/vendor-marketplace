@@ -1064,6 +1064,21 @@ export const checkoutIntentSchema = z.object({
     businessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
     avatarUrl: imageRefSchema.nullable(),
   }),
+  /**
+   * The package being bought, for the rail's sub-line — frame `05` line 907
+   * draws `<package> · <duration>` under the vendor's name.
+   *
+   * `null` for a custom request, which was quoted rather than priced by a
+   * package and so has nothing to name. `durationHours` is separately nullable
+   * because a package need not declare one, and the sub-line degrades to the
+   * package name alone rather than printing an empty half.
+   */
+  servicePackage: z
+    .object({
+      name: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+      durationHours: z.number().nullable(),
+    })
+    .nullable(),
   /** The date the vendor accepted, for the "Maya accepted your request on…" line. */
   acceptedAt: z.date().nullable(),
 });
@@ -1717,22 +1732,41 @@ export const categoryFacetSchema = z.object({
 export type CategoryFacet = z.infer<typeof categoryFacetSchema>;
 
 /**
- * One place a customer can actually search, and how many vendors are in it.
+ * One place the `City` field may suggest — a **US place**, not an inventory row.
  *
  * City and state travel **together**, always. "Springfield" names a place in
  * thirty-odd states and "Portland" names two people would fly between; a city
  * field that took either on its own could not tell a customer which one they
  * had asked for. The pair is also the unit the vendor profile stores and the
  * search filters on, so nothing has to be re-joined to use it.
+ *
+ * **#384 removed `vendorCount` from this shape and it must not come back.** The
+ * user's instruction was verbatim: *"Do not preload and indicate how many
+ * vendors are in each city."* Suggestions now come from the seeded `us_cities`
+ * reference table, so a place with nobody in it is offered, committed, and
+ * answered with the honest no-results state rather than being unpickable.
  */
-export const vendorCitySchema = z.object({
+export const placeSuggestionSchema = z.object({
   city: z.string().max(MAX_NAME_LENGTH),
-  state: z.string().max(MAX_NAME_LENGTH),
-  /** Published vendors there — a query result, never a platform statistic. */
-  vendorCount: z.int().min(1),
+  state: usStateCodeSchema,
 });
-export type VendorCity = z.infer<typeof vendorCitySchema>;
-export const vendorCityListSchema = z.array(vendorCitySchema);
+export type PlaceSuggestion = z.infer<typeof placeSuggestionSchema>;
+export const placeSuggestionListSchema = z.array(placeSuggestionSchema);
+
+/** At most this many suggestions are returned, matching the panel's own cap. */
+export const PLACE_SUGGESTION_LIMIT = 8;
+
+/**
+ * `GET /places?q=` — the typeahead's only input.
+ *
+ * `q` is **required and non-empty**: there is no "everything" answer here by
+ * design. A request with nothing typed is the preload the ticket removed, so
+ * the contract refuses it rather than the caller remembering not to send it.
+ */
+export const placeSearchQuerySchema = z.object({
+  q: z.string().min(1).max(MAX_NAME_LENGTH),
+});
+export type PlaceSearchQuery = z.infer<typeof placeSearchQuerySchema>;
 
 export const vendorSearchResultSchema = z.object({
   items: z.array(vendorCardSchema),

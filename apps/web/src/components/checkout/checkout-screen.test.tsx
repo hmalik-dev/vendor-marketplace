@@ -42,6 +42,7 @@ function checkout(overrides: Partial<WireCheckoutIntent> = {}): WireCheckoutInte
     eventLocation: 'Barr Mansion',
     guestCount: 120,
     vendor: { slug: 'kessler-co', businessName: 'Kessler & Co.', avatarUrl: null },
+    servicePackage: { name: 'Full day coverage', durationHours: 6 },
     acceptedAt: new Date('2027-05-02T12:00:00Z'),
     ...overrides,
   } as WireCheckoutIntent;
@@ -108,6 +109,56 @@ describe('CheckoutScreen', () => {
     expect(screen.getByText('None')).toBeDefined();
     expect(screen.getByText('Total today')).toBeDefined();
     expect(screen.getAllByText('$1,450')).toHaveLength(2);
+  });
+
+  /*
+   * #395, frame `05` line 907. The sub-line says what is being bought; without
+   * it the rail names the vendor and then jumps to a date.
+   */
+  it('names the package and its duration under the vendor', () => {
+    render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+
+    expect(screen.getByText('Full day coverage · 6 hours')).toBeDefined();
+  });
+
+  it('drops the half it has no fact for, rather than drawing it empty', () => {
+    const { container } = render(
+      <CheckoutScreen
+        checkout={checkout({ servicePackage: { name: 'Full day coverage', durationHours: null } })}
+        requestId="req-1"
+      />,
+    );
+
+    expect(screen.getByText('Full day coverage')).toBeDefined();
+    expect(container.textContent).not.toContain('·');
+
+    cleanup();
+    render(<CheckoutScreen checkout={checkout({ servicePackage: null })} requestId="req-1" />);
+
+    expect(screen.queryByText(/Full day coverage/)).toBeNull();
+  });
+
+  /*
+   * #395: the pay button is the summary card's fourth block, in the *other*
+   * column from the card form. It reaches the form by `form=`, and a button
+   * that lost that attribute would render fine and submit nothing.
+   */
+  it('submits the card form from the summary rail', async () => {
+    const user = userEvent.setup();
+    render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+
+    const pay = screen.getByRole('button', { name: /^Pay/ });
+    const form = document.querySelector('form');
+
+    expect(form?.id).toBeTruthy();
+    expect(pay.getAttribute('form')).toBe(form?.id);
+    expect(form?.contains(pay)).toBe(false);
+
+    await user.click(pay);
+
+    await waitFor(() => {
+      expect(confirmPayment).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('names the amount and the outcome on the button, never a bare Pay', () => {

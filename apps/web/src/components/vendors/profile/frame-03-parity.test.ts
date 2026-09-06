@@ -530,8 +530,13 @@ describe('frame 03 — the rail controls carry the `.inp` token (#108)', () => {
      * `FIELD_BOX` rather than `FIELD`: the type step was split out so the bar
      * could take the frame's 13.5px without losing to `text-[13px]` on source
      * order. The box -- and with it the fill this asserts -- stayed put.
+     *
+     * The constant became a `cn(…)` call in #383, when the three rail controls
+     * took the bordered-field focus treatment through `FIELD_FOCUS`. Only the
+     * **first** literal is read: it is the box, and the focus classes that
+     * follow it are `app/focus-ring.test.ts`'s to own, not this frame's.
      */
-    const field = /const FIELD_BOX =\s*\n?\s*'([^']*)'/.exec(railSource)?.[1];
+    const field = /const FIELD_BOX = (?:cn\(\s*)?'([^']*)'/.exec(railSource)?.[1];
 
     expect(field).toBeDefined();
     expect(field).toContain(`bg-${fill}`);

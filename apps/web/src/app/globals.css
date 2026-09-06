@@ -235,8 +235,9 @@ body:has([data-auth-screen]) > footer {
  * Two corrections, both on the Access axis:
  *
  * 1. The product's focus ring. Clerk drew a single 4px clay at 50% alpha with
- *    no offset layer, where `04-laws.md` asks for 2px at 30% over a 2px
- *    stone-50 offset.
+ *    no offset layer, where `04-laws.md:167` asks for 2px at **40%** over a 2px
+ *    stone-50 offset. (It said 30% here until #383, quoting the superseded law
+ *    three lines above the rule that has to implement the current one.)
  * 2. A 44x44 hit area. Clerk renders the trigger at 28x28. Only the target
  *    grows — the avatar keeps the size Clerk gives it, so the control still
  *    looks the way the frames draw it.
@@ -360,7 +361,7 @@ body:has([data-auth-screen]) > footer {
  * base rule; only the ones it styles need this.
  *
  * Clerk draws a single 4px clay at 50% alpha with no offset layer, where
- * `04-laws.md` asks for 2px at 30% over a 2px stone-50 offset.
+ * `04-laws.md:167` asks for 2px at 40% over a 2px stone-50 offset.
  */
 [data-auth-screen] .cl-formButtonPrimary.cl-formButtonPrimary:focus-visible,
 [data-auth-screen]

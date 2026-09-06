@@ -4,7 +4,6 @@ import {
   isPastDate,
   vendorNounFor,
   type Category,
-  type VendorCity,
   type VendorSearchResult,
 } from '@vendor-marketplace/shared';
 import { wireVendorSearchResultSchema } from '@/lib/wire-schemas';
@@ -50,13 +49,19 @@ const SKELETON_COUNT = 8;
 /**
  * The grid gains columns, not margins.
  *
- * **Three across from `lg`**, which is the `25 Search results — 1024` frame:
+ * **Three across from `lg`**, which is the `27 Search results — 1024` frame:
  * 1024 is a 13" laptop, and it gets the desktop composition with a column
- * removed rather than the two-column tablet one. The gap follows the frames —
- * 14px at 1024, 16px at 1440.
+ * removed rather than the two-column tablet one.
+ *
+ * **The gutter is 16px at every width.** Ruled 2026-09-04 (D30,
+ * `11-search.md`): the 1024 frame drew 14px against 16px on *both* neighbours —
+ * `02 Search` at 1440 and `14 Search tablet` at 768 — which is a transcription
+ * slip, not a ladder step, so the frame moved rather than this grid staying
+ * split. Three 16px-guttered columns in the 984px pane measure 317.3px, which
+ * is the card width the re-cut frame draws.
  */
 const GRID_COLUMNS =
-  'grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 min-[90rem]:grid-cols-4 min-[90rem]:gap-4 min-[108rem]:grid-cols-5';
+  'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 min-[90rem]:grid-cols-4 min-[108rem]:grid-cols-5';
 
 /**
  * Two full rows of skeletons at the widths the frames draw — 8 above 1440 and 6
@@ -86,8 +91,6 @@ const AVAILABILITY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
 
 export interface SearchShellProps {
   categories: readonly Category[];
-  /** The cities that have vendors, so City can only ask a real question. */
-  cities: readonly VendorCity[];
   tags: readonly WireTag[];
 }
 
@@ -110,7 +113,7 @@ function searchingLine(state: SearchState): string {
   return `Searching ${noun === '' ? 'vendors' : noun}${where}…`;
 }
 
-function SearchScreen({ categories, cities, tags }: SearchShellProps): React.ReactElement {
+function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElement {
   const { state, dropped, setState, clearRefinements } = useSearchState();
   const [result, setResult] = useState<VendorSearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -352,7 +355,6 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-stone-200 px-5 py-3 min-[90rem]:px-6.5 lg:hidden">
         <SearchBar
           categories={categories}
-          cities={cities}
           value={{
             category: state.category,
             city: state.city,
@@ -473,7 +475,13 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
       </p>
 
       {countRowVisible || clearedLines.length > 0 ? (
-        <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 min-[90rem]:px-6.5">
+        /*
+          The count band steps with the bar above it: `27 Search results — 1024`
+          draws 13px over 9px where frame `02` draws 15 over 11, and the count
+          itself 20px where `02` draws 22. Those 6px are what put the second
+          row's top edge inside the 640 fold at 1024.
+        */
+        <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.25 pb-2.25 min-[90rem]:px-6.5 min-[90rem]:pt-3.75 min-[90rem]:pb-2.75">
           {countRowVisible ? (
             <>
               {/*
@@ -502,7 +510,7 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
             run of text — the frame's `<span class="h2">` is inline, and a block
             `<h1>` would put the clause on its own line inside this box.
           */}
-                <h1 className="inline display-heading text-[22px] break-words text-stone-900">
+                <h1 className="inline display-heading text-[20px] break-words text-stone-900 min-[90rem]:text-[22px]">
                   {isLoading ? searchingLine(state) : heading}
                 </h1>
                 {state.date ? (

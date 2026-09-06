@@ -34,6 +34,10 @@ export interface PayableRequestRow {
   finalPriceCents: number | null;
   quotedPriceCents: number | null;
   packagePriceCents: number | null;
+  /** What the rail names under the vendor — `null` for a custom request. */
+  packageName: string | null;
+  /** NUMERIC, so the driver hands it back as a string. */
+  packageDurationHours: string | null;
   acceptedAt: Date | null;
   /** The intent recorded when checkout was opened, for reconciliation. */
   stripePaymentIntentId: string | null;
@@ -61,6 +65,8 @@ export async function findPayableRequest(
       finalPriceCents: bookingRequests.finalPriceCents,
       quotedPriceCents: bookingRequests.quotedPriceCents,
       packagePriceCents: servicePackages.priceCents,
+      packageName: servicePackages.name,
+      packageDurationHours: servicePackages.durationHours,
       acceptedAt: bookingRequests.acceptedAt,
       stripePaymentIntentId: bookingRequests.stripePaymentIntentId,
       vendorSlug: vendorProfiles.slug,

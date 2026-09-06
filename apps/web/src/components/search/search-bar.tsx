@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  isPastDate,
-  todayDateString,
-  type Category,
-  type VendorCity,
-} from '@vendor-marketplace/shared';
+import { isPastDate, todayDateString, type Category } from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
 import { useStableValue } from '@/lib/use-stable-value';
 import { useViewerToday } from '@/lib/use-viewer-today';
@@ -65,8 +60,6 @@ export interface SearchBarValues {
 
 export interface SearchBarProps {
   categories: readonly Category[];
-  /** Every city with a published vendor, so City can only ask a real question. */
-  cities: readonly VendorCity[];
   value: SearchBarValues;
   onSubmit: (value: SearchBarValues) => void;
   /** `compact` is the header variant; `hero` is the landing one. */
@@ -87,7 +80,6 @@ export interface SearchBarProps {
 
 export function SearchBar({
   categories,
-  cities,
   value,
   onSubmit,
   size = 'compact',
@@ -329,13 +321,13 @@ export function SearchBar({
       <span aria-hidden="true" className={divider} />
 
       {/*
-        City is a select over the places that actually have vendors, and it
-        carries the state with it (#167). Typed, it could not distinguish the
-        two Portlands or the thirty Springfields, and a city nobody works in
-        produced an empty grid with nothing to say about why.
+        City is a place search over every US city, and it carries the state
+        with it (#167, #384). The state travels because a typed name cannot
+        distinguish the two Portlands or the thirty Springfields; what #384
+        changed is only *which* places may be suggested — any of them, not only
+        the ones we already have a vendor in.
       */}
       <CitySelect
-        cities={cities}
         city={draft.city}
         state={draft.state}
         onChange={(next) => setDraft((previous) => ({ ...previous, ...next }))}
@@ -388,8 +380,10 @@ export function SearchBar({
               ties it to the control it is about for anyone arriving later.
             */
             aria-describedby={pastDate ? `${fieldId}-date-error` : undefined}
-            // The segment fill above is this button's whole indicator.
+            // The segment fill above is this button's whole indicator, and
+            // `data-focus-fill` is how the rendered gate knows that.
             data-focus-own
+            data-focus-fill
             className={cn(
               segment,
               'text-left',
@@ -544,6 +538,13 @@ export function SearchBar({
             /*
               Inside a white pill the shared 2px cream offset reads as a gap in
               the bar, so this ring sits directly on the button's edge.
+
+              **The three ratios below were measured at `ring-clay-400/30`,
+              before #383 took the base rule to the law's `/40`.** They are kept
+              because the *argument* is about where the band sits, which the
+              alpha does not change, and raising the alpha can only raise the
+              clay-against-clay edge. They are not re-quoted as current: this
+              ticket did not re-run the pixel scan that produced them.
 
               **Do not "fix" this by restoring the offset.** #296 tried exactly
               that and it inverts the intent, because Tailwind's ring is an

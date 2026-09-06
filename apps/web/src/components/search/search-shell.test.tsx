@@ -5,12 +5,6 @@ import { ApiClientError } from '@/lib/api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearedParamsLine, type SearchPatch, type SearchState } from './search-state';
 
-/** The cities the City select offers — real places with published vendors. */
-const CITIES = [
-  { city: 'Austin', state: 'TX', vendorCount: 11 },
-  { city: 'Portland', state: 'OR', vendorCount: 3 },
-];
-
 const apiRequest = vi.fn();
 
 vi.mock('@/lib/api-client', async (importOriginal) => ({
@@ -90,7 +84,7 @@ describe('SearchShell loading state — frame 17', () => {
   it('says Searching… rather than a count while the answer is in flight', async () => {
     apiRequest.mockImplementation(neverResolves);
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Searching…');
   });
@@ -115,7 +109,7 @@ describe('SearchShell loading state — frame 17', () => {
   it('announces that a search is running', async () => {
     apiRequest.mockImplementation(neverResolves);
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     expect(announcer()?.textContent).toContain('Searching…');
   });
@@ -123,7 +117,7 @@ describe('SearchShell loading state — frame 17', () => {
   it('announces a count that found nothing, where the visible row is hidden', async () => {
     apiRequest.mockResolvedValue(emptyResult());
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(announcer()?.textContent).toBe('0 vendors'));
     // The visible count row is gone — the announcement is all there is.
@@ -134,7 +128,7 @@ describe('SearchShell loading state — frame 17', () => {
     apiRequest.mockImplementation(neverResolves);
     state = baseState({ category: 'photography', city: 'Austin' });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain(
       'Searching photographers in Austin…',
@@ -162,7 +156,7 @@ describe('SearchShell loading state — frame 17', () => {
     });
     state = baseState({ category: 'photography', city: 'Austin', date: '2026-06-14' });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     const heading = await screen.findByRole('heading', { level: 1 });
 
@@ -182,7 +176,7 @@ describe('SearchShell loading state — frame 17', () => {
   it('keeps the query bar real and skeletonises only the results grid', async () => {
     apiRequest.mockImplementation(neverResolves);
 
-    const { container } = render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    const { container } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     expect(screen.getAllByLabelText('Vendor type').length).toBeGreaterThan(0);
     // Two full rows of four, mirroring the live grid's geometry exactly —
@@ -209,14 +203,15 @@ describe('SearchShell loading state — frame 17', () => {
   it('goes three across from lg, four at the 1440 reference width', async () => {
     apiRequest.mockImplementation(neverResolves);
 
-    const { container } = render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    const { container } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
     const grid = container.querySelector('[data-slot="skeleton-vendor-card"]')?.parentElement;
 
     expect(grid?.className).toContain('lg:grid-cols-3');
     expect(grid?.className).toContain('min-[90rem]:grid-cols-4');
-    // The gap follows the frames: 14px at 1024, 16px at 1440.
-    expect(grid?.className).toContain('gap-3.5');
-    expect(grid?.className).toContain('min-[90rem]:gap-4');
+    // One gutter at every width — 16px, ruled 2026-09-04 (D30). The 1024 frame's
+    // 14px disagreed with both neighbours, so the frame moved, not the grid.
+    expect(grid?.className).toContain('gap-4');
+    expect(grid?.className).not.toContain('gap-3.5');
   });
 
   /*
@@ -233,14 +228,14 @@ describe('SearchShell loading state — frame 17', () => {
       facets: { categories: [] },
     });
 
-    const { rerender } = render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    const { rerender } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
     await waitFor(() =>
       expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('24'),
     );
 
     apiRequest.mockImplementation(neverResolves);
     state = baseState({ minRating: 4 });
-    rerender(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    rerender(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() =>
       expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Searching…'),
@@ -261,7 +256,7 @@ describe('SearchShell no results — frame 18', () => {
   it('counts the filters the customer set and names the narrowest', async () => {
     state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     // Frame 18 spells the count — "all three filters", not "all 3".
     await waitFor(() =>
@@ -284,7 +279,7 @@ describe('SearchShell no results — frame 18', () => {
   it('draws its empty state at the marketing scale frame 18 uses', async () => {
     state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     const headline = await screen.findByRole('heading', {
       name: 'No photographers match both filters',
@@ -304,7 +299,7 @@ describe('SearchShell no results — frame 18', () => {
   it('paints the relaxations in palette', async () => {
     state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     const primary = await screen.findByRole('button', { name: 'Any date' });
     const secondary = screen.getByRole('button', { name: 'Any rating' });
@@ -318,7 +313,7 @@ describe('SearchShell no results — frame 18', () => {
   it('offers a one-tap relaxation per filter, loosening exactly one thing', async () => {
     state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     const anyDate = await screen.findByRole('button', { name: 'Any date' });
     anyDate.click();
@@ -330,7 +325,7 @@ describe('SearchShell no results — frame 18', () => {
   it('diagnoses nothing, and offers nothing to loosen, on an unfiltered search', async () => {
     state = baseState({ category: 'photography' });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(screen.getByText('No photographers listed yet')).toBeDefined());
     expect(screen.getByText('Try a different vendor type or city.')).toBeDefined();
@@ -365,9 +360,7 @@ describe('SearchShell against a hostile URL', () => {
   ])('renders rather than throwing for ?date=%s', async (date) => {
     state = baseState({ category: 'photography', date });
 
-    expect(() =>
-      render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />),
-    ).not.toThrow();
+    expect(() => render(<SearchShell categories={CATEGORIES} tags={[]} />)).not.toThrow();
 
     const heading = await screen.findByRole('heading', { level: 1 });
     // No "free on …" clause, because there is no date the screen could honour.
@@ -378,7 +371,7 @@ describe('SearchShell against a hostile URL', () => {
   it('never sends a rejected value on to the API', async () => {
     state = baseState({ date: 'not-a-date', minPriceCents: 2_147_483_648 });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
     const [path] = apiRequest.mock.calls[0] as [string];
@@ -390,7 +383,7 @@ describe('SearchShell against a hostile URL', () => {
   it('tells the customer the value was cleared instead of silently ignoring it', async () => {
     state = baseState({ date: 'not-a-date' });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     // The sentence itself is asserted once, in `search-state.test.ts`; here
     // the claim is only that the screen renders it.
@@ -408,7 +401,7 @@ describe('SearchShell against a hostile URL', () => {
       new ApiClientError(400, ERROR_CODES.VALIDATION_ERROR, 'Request validation failed'),
     );
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(screen.getByText('Something went wrong')).toBeDefined());
     expect(screen.getByText('Could not load vendors just now.')).toBeDefined();
@@ -431,7 +424,7 @@ describe('SearchShell against a hostile URL', () => {
       new ApiClientError(429, ERROR_CODES.RATE_LIMITED, 'Too many requests.'),
     );
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(screen.getByText('Something went wrong')).toBeDefined());
     expect(screen.queryByText(/^No vendors/)).toBeNull();
@@ -442,7 +435,7 @@ describe('SearchShell against a hostile URL', () => {
   it('renders the empty-result heading and never the failure state', async () => {
     apiRequest.mockResolvedValue(emptyResult());
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(screen.getByText('No vendors listed yet')).toBeDefined());
     expect(screen.queryByText('Something went wrong')).toBeNull();
@@ -458,7 +451,7 @@ describe('SearchShell against a hostile URL', () => {
   it('tints the failure glyph red, which the empty state never is', async () => {
     apiRequest.mockRejectedValue(new ApiClientError(500, ERROR_CODES.INTERNAL_ERROR, 'Boom'));
 
-    const { container } = render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    const { container } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(screen.getByText('Something went wrong')).toBeDefined());
     expect(container.querySelector('.text-error-500')).not.toBeNull();
@@ -476,7 +469,7 @@ describe('SearchShell against a hostile URL', () => {
       new ApiClientError(429, ERROR_CODES.RATE_LIMITED, 'Too many requests.'),
     );
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(screen.getByText('Something went wrong')).toBeDefined());
     expect(spy).toHaveBeenCalledWith(
@@ -496,7 +489,7 @@ describe('SearchShell against a hostile URL', () => {
    */
   it('announces a price bound it could not read, in the register the URL uses', async () => {
     const user = userEvent.setup();
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await user.click(await screen.findByRole('button', { name: 'Price' }));
     await user.type(screen.getByLabelText('Min'), 'abc');
@@ -509,7 +502,7 @@ describe('SearchShell against a hostile URL', () => {
   /* A preset replaces the unreadable text, so it also replaces the verdict. */
   it('retracts the notice when a preset supplies the bound instead', async () => {
     const user = userEvent.setup();
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await user.click(await screen.findByRole('button', { name: 'Price' }));
     await user.type(screen.getByLabelText('Min'), 'abc');
@@ -522,7 +515,7 @@ describe('SearchShell against a hostile URL', () => {
   it('says nothing about cleared params when the URL was entirely usable', async () => {
     state = baseState({ date: '2099-06-14' });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     expect(screen.queryByText(/so it was cleared/)).toBeNull();
   });
@@ -535,7 +528,7 @@ describe('SearchShell against a hostile URL', () => {
   it('names the day when clearing a date that has already passed', async () => {
     state = baseState({ date: '2020-01-01' });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() =>
       expect(
@@ -557,7 +550,7 @@ describe('SearchShell against a hostile URL', () => {
   it('never sends a date that has already passed', async () => {
     state = baseState({ category: 'photography', date: '2020-01-01' });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
 
@@ -578,7 +571,7 @@ describe('SearchShell against a hostile URL', () => {
   it('names only the bound it dropped when half a price range survives', async () => {
     state = baseState({ minPriceCents: 0, maxPriceCents: 999_999_999_900 });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
 
@@ -597,7 +590,7 @@ describe('SearchShell against a hostile URL', () => {
   it('names the range once when both bounds are dropped', async () => {
     state = baseState({ minPriceCents: 900_000, maxPriceCents: 1_000 });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     const status = await screen.findByRole('status');
     expect(status.textContent).toContain(
@@ -624,7 +617,7 @@ describe('SearchShell unknown vendor type', () => {
   afterEach(() => cleanup());
 
   it('renders the no-results state for the query, not the marketplace-empty copy', async () => {
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     expect(await screen.findByText('No vendors match that filter')).toBeDefined();
     expect(screen.queryByText('No vendors listed yet')).toBeNull();
@@ -638,7 +631,7 @@ describe('SearchShell unknown vendor type', () => {
   /* And a way out of it, which the marketplace-empty copy never offered. */
   it('offers a one-tap escape from the vendor type', async () => {
     const user = userEvent.setup();
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await user.click(await screen.findByRole('button', { name: 'Any vendor type' }));
 
@@ -649,7 +642,7 @@ describe('SearchShell unknown vendor type', () => {
   it('still says a known vendor type is simply not listed yet', async () => {
     state = baseState({ category: 'photography' });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     expect(await screen.findByText('No photographers listed yet')).toBeDefined();
   });
@@ -687,7 +680,7 @@ describe('SearchShell out-of-range page', () => {
     state = baseState({ page: 2 });
     apiRequest.mockResolvedValue(pageBeyondTheEnd());
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(setState).toHaveBeenCalledWith({ page: 1 }));
   });
@@ -701,7 +694,7 @@ describe('SearchShell out-of-range page', () => {
     state = baseState({ page: 1 });
     apiRequest.mockResolvedValue(emptyResult());
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() =>
       expect(screen.getByText('Try a different vendor type or city.')).toBeDefined(),
@@ -720,7 +713,7 @@ describe('SearchShell out-of-range page', () => {
       facets: { categories: [] },
     });
 
-    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
     expect(setState).not.toHaveBeenCalledWith({ page: 1 });
