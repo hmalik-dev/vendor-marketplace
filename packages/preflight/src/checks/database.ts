@@ -189,7 +189,14 @@ export async function checkDemoData(sql: postgres.Sql): Promise<CheckResult> {
   }
 }
 
-async function checkSeed(sql: postgres.Sql): Promise<CheckResult> {
+/**
+ * A floor, not a count: the dataset is ~35,600 places and legitimately moves
+ * when the Census re-runs, so this asks whether the seed ran at all rather than
+ * pinning a number that a refresh would have to come back and edit.
+ */
+const MINIMUM_US_CITIES = 30_000;
+
+export async function checkSeed(sql: postgres.Sql): Promise<CheckResult> {
   const name = 'Reference data seeded';
 
   try {
@@ -197,19 +204,30 @@ async function checkSeed(sql: postgres.Sql): Promise<CheckResult> {
       { count: number }[]
     >`select count(*)::int as count from categories`;
     const [tags] = await sql<{ count: number }[]>`select count(*)::int as count from tags`;
+    /*
+     * The `City` field's suggestions since #384, and the only reference table
+     * whose absence is **silent**: an unseeded `us_cities` leaves a field that
+     * accepts typing, asks the API, and truthfully answers "No US city matches"
+     * to every word — indistinguishable from a customer's typo, on every
+     * keystroke, with nothing in the console. Categories fail loudly; this one
+     * has to be asked about.
+     */
+    const [cities] = await sql<{ count: number }[]>`select count(*)::int as count from us_cities`;
     const categoryCount = categories?.count ?? 0;
     const tagCount = tags?.count ?? 0;
+    const cityCount = cities?.count ?? 0;
 
-    if (categoryCount < CATEGORY_SEEDS.length || tagCount < TAG_SEEDS.length) {
-      return fail(
-        'core',
-        name,
-        `${categoryCount}/${CATEGORY_SEEDS.length} categories, ${tagCount}/${TAG_SEEDS.length} tags`,
-        'pnpm db:seed',
-      );
+    const summary = `${categoryCount} categories, ${tagCount} tags, ${cityCount.toLocaleString('en-US')} US cities`;
+
+    if (
+      categoryCount < CATEGORY_SEEDS.length ||
+      tagCount < TAG_SEEDS.length ||
+      cityCount < MINIMUM_US_CITIES
+    ) {
+      return fail('core', name, summary, 'pnpm db:seed');
     }
 
-    return pass('core', name, `${categoryCount} categories, ${tagCount} tags`);
+    return pass('core', name, summary);
   } catch (error: unknown) {
     return fail(
       'core',

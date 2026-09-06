@@ -1,45 +1,56 @@
 'use client';
 
-import type { VendorCity } from '@vendor-marketplace/shared';
+import { MAX_NAME_LENGTH, PLACE_SUGGESTION_LIMIT } from '@vendor-marketplace/shared';
+import { useState } from 'react';
 import { ComboboxDropdown } from '@/components/ui/dropdown-combobox';
 import type { DropdownOption } from '@/components/ui/dropdown';
-import { rankCityMatches } from '@/lib/option-filter';
+import { filterOptions } from '@/lib/option-filter';
+import { usePlaceSuggestions } from '@/lib/use-place-suggestions';
 import { cn } from '@/lib/utils';
 
 /**
- * The city picker: a **typeahead** over the places that actually have vendors,
- * and **city and state always travel together**.
+ * The city picker: **a place search over every US city**, and city and state
+ * always travel together.
  *
- * The reasoning that made this a select is unchanged and is what the typeahead
- * is built to preserve. "Springfield" names a place in thirty-odd states and
- * "Portland" names two people would fly between, so a *typed* city cannot tell
- * a customer which one they asked for — and a typed city matching nothing
- * produced an empty grid with nothing to say about why. Both problems are
- * answered by **selection, not typing, being what commits**: every suggestion
- * names its state, every suggestion has somebody in it, and a string that
- * matches nothing commits neither half of the pair.
+ * ## What #384 overruled, and what it did not
  *
- * **It does not open a list on focus, and that is the point (#375).** The
- * user's instruction was explicit: *"the city should literally be an input,
- * where the validated city appears as clickable for a user. Not a scrollable
- * dropdown for city since cities can vary drastically."* Suggestions appear
- * from the first character and not before. That is the one behavioural
- * difference from `Vendor type`, which opens on its full taxonomy.
+ * This field used to be a typeahead over *the places that already had
+ * vendors*, preloaded whole, each row labelled with how many were there. The
+ * user overruled all three of those in one instruction, verbatim:
  *
- * The old select could not produce a "we have nobody in that city" state at
- * all — it only offered places that existed. A typeahead can, so it must
- * answer it in copy rather than with a blank panel.
+ * > *"i currently want the city dropdown to function the way airbnb's 'where'
+ * > input functions. Do not preload and indicate how many vendors are in each
+ * > city.. users should be able to search for any city and see the results."*
+ *
+ * So: nothing is fetched until a character is typed, suggestions come from
+ * `GET /places` — US reference data that touches no vendor row — and no count
+ * appears on a row or in the ordering. `Springfield, IL` is offered and commits
+ * whether or not anybody has published there.
+ *
+ * **#375's closing invariant is half kept and half overruled**, and the halves
+ * matter. Overruled: *"a free-text city that reaches the API as a filter is a
+ * regression"* is now the requirement — but only for a city that **exists**.
+ * Kept, unchanged: **selection is what commits, typing never is.** A bare
+ * `Enter` on `Sprngfield` still commits nothing, because `lower(city) = $1`
+ * matches exactly and a typo would return an empty grid with nothing to say
+ * about why. Airbnb behaves the same way; typing is an affordance, picking is
+ * an answer.
+ *
+ * The reasoning the old design carried was not wrong — a picker offering
+ * somewhere with nobody in it *does* guarantee an empty result. What changed is
+ * the answer to that: an empty result is now a designed screen. Frame `18`'s
+ * no-results state names the city and offers relaxations, which is a better
+ * answer than making the place unpickable and telling the customer nothing.
+ *
+ * **It does not open a list on focus, and that is still the point (#375).** The
+ * user's earlier instruction was equally explicit: *"the city should literally
+ * be an input, where the validated city appears as clickable for a user. Not a
+ * scrollable dropdown for city since cities can vary drastically."* Suggestions
+ * appear from the first character and not before — which is now also what makes
+ * "do not preload" true, since the first character is what triggers the request.
  */
 
 const ANYWHERE_LABEL = 'Anywhere';
-
-/**
- * At most eight suggestions render; the rest are counted.
- *
- * A typeahead that scrolls is the scroll list the user rejected. Eight is what
- * fits the 360px cap at the default row height without one.
- */
-const MAX_SUGGESTIONS = 8;
 
 /** `Austin|TX` — the pair as one option value, since neither half stands alone. */
 function keyOf(city: string, state: string): string {
@@ -47,8 +58,6 @@ function keyOf(city: string, state: string): string {
 }
 
 export interface CitySelectProps {
-  /** Every city with a published vendor, from `GET /vendors/cities`. */
-  cities: readonly VendorCity[];
   city: string;
   state: string;
   onChange: (next: { city: string; state: string }) => void;
@@ -60,7 +69,6 @@ export interface CitySelectProps {
 }
 
 export function CitySelect({
-  cities,
   city,
   state,
   onChange,
@@ -71,22 +79,18 @@ export function CitySelect({
   valueClassName,
 }: CitySelectProps): React.ReactElement {
   const isHero = size === 'hero';
-
   /*
-   * The vendor count is a **row hint, not a suggestion**: it is a real query
-   * result — how many published vendors are in that place — rather than a
-   * platform statistic, which is what keeps it legal under the
-   * no-invented-numbers rule. It is also the ranking's third tier, so it is
-   * lifted into a map the ranker can read without re-deriving the pair key.
+   * The typed text, mirrored out of the combobox rather than owned here. The
+   * combobox still owns the field's own state — what is displayed, what is
+   * committed, what reverts on blur — and this is only what the request is
+   * keyed on.
    */
-  const counts = new Map(
-    cities.map((place) => [keyOf(place.city, place.state), place.vendorCount]),
-  );
+  const [typed, setTyped] = useState('');
+  const { suggestions, busy, failed } = usePlaceSuggestions(typed);
 
-  const options: DropdownOption[] = cities.map((place) => ({
+  const options: DropdownOption[] = suggestions.map((place) => ({
     value: keyOf(place.city, place.state),
     label: `${place.city}, ${place.state}`,
-    hint: `${place.vendorCount} ${place.vendorCount === 1 ? 'vendor' : 'vendors'}`,
   }));
 
   return (
@@ -103,34 +107,76 @@ export function CitySelect({
         onChange({ city: nextCity, state: nextState });
       }}
       committedLabel={city === '' ? '' : `${city}, ${state}`}
+      onQueryChange={setTyped}
       /*
-       * Ranked, not merely filtered: exact prefix matches first, then
-       * substrings, then by vendor count. That last tier is what puts
-       * `Portland, OR` above `Portland, ME` — both are real and neither is
-       * wrong, so the one more people can book leads.
+       * **Matching is checked here; ranking is not done here.** The two are
+       * different jobs and only one of them can live on the client.
+       *
+       * `GET /places` returns the eight best matches for the typed text —
+       * prefix before substring, more populous before less — and a client
+       * cannot re-rank what it was not sent, since `population` never crosses
+       * the wire. So the order that arrives is the order that renders.
+       *
+       * But the hook deliberately holds the **previous** query's rows while the
+       * next one loads, so the panel does not flash empty between two matching
+       * words — and without this filter those stale rows stayed committable.
+       * Typing `santa`, then ` fe` before the request landed, and pressing
+       * `Enter` committed **Santa Ana, CA**: a city the customer neither typed
+       * nor chose, inside the 180ms debounce that every normal typist crosses.
+       * Making the options async is what broke the combobox's own invariant
+       * that its rows are matches for what is typed; `filterOptions` restores
+       * it, and costs nothing when the answer is current, because every row the
+       * API returns contains the needle in its `City, ST` label by
+       * construction.
        */
-      filter={(all, query) => rankCityMatches(all, query, counts)}
+      filter={filterOptions}
       openOnFocus={false}
       /*
-       * "Anywhere" is not a row here — the list is places that *have* vendors,
-       * so there is nothing to pick. Clearing the text is the gesture, and it
-       * commits the empty pair.
+       * "Anywhere" is not a row here — the panel shows what was typed, and
+       * there is nothing to type that means everywhere. Clearing the text is
+       * the gesture, and it commits the empty pair.
        */
       commitOnEmpty
       label="City"
       id={id}
       placeholder={ANYWHERE_LABEL}
-      emptyMessage="No vendors have published a location yet."
       /*
-       * The sheet mount opens on a tap whether or not the field suggests on
-       * focus, so this state is reachable there with nothing typed. It must not
-       * borrow the API-degraded copy above — that would tell a customer nobody
-       * has published a location while the list holds a dozen.
+       * Reachable only if the panel opens with nothing typed, which the sheet
+       * mount does. It is a prompt, not a failure — `40-states.md` does not let
+       * one borrow the other's copy — and since #384 the prompt is honest about
+       * the field's new scope: any US city, not the ones we happen to serve.
        */
-      promptMessage="Start typing a city to see where we have vendors."
-
-      noMatchMessage={(query) => `No vendors in “${query}” yet. Try a nearby city.`}
-      limit={MAX_SUGGESTIONS}
+      emptyMessage="Start typing a city."
+      promptMessage="Start typing a city — anywhere in the US."
+      /*
+       * Three empty panels and only one of them is a no-match. A request in
+       * flight has not answered yet; a request that failed cannot answer at
+       * all, and saying `No US city matches “portl”` there would accuse the
+       * customer of a typo on a place with eight matches (`40-states.md`).
+       */
+      statusMessage={
+        busy
+          ? 'Searching…'
+          : failed
+            ? 'We can’t reach city search right now. Try again in a moment.'
+            : undefined
+      }
+      noMatchMessage={(query) => `No US city matches “${query}”.`}
+      /*
+       * The single action `42-dropdowns.md` requires under an empty panel, and
+       * the only one this field has to offer: drop the filter and search
+       * everywhere. It is what `Anywhere` means, and it is the escape from both
+       * a typo and an unreachable API. Suppressed while a request is in flight,
+       * where there is nothing yet to escape from.
+       */
+      emptyActionLabel={busy ? undefined : 'Search anywhere'}
+      limit={PLACE_SUGGESTION_LIMIT}
+      /*
+       * What is typed is sent as `?q=`, which `placeSearchQuerySchema` caps at
+       * the same constant. Capping the field is what stops a long paste
+       * becoming a 400 the customer has to read about.
+       */
+      maxLength={MAX_NAME_LENGTH}
       width={isHero ? 'hero' : 'compact'}
       density={isHero ? 'default' : 'compact'}
       scrim={isHero}
