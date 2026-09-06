@@ -214,9 +214,10 @@ describe('SearchShell loading state — frame 17', () => {
 
     expect(grid?.className).toContain('lg:grid-cols-3');
     expect(grid?.className).toContain('min-[90rem]:grid-cols-4');
-    // The gap follows the frames: 14px at 1024, 16px at 1440.
-    expect(grid?.className).toContain('gap-3.5');
-    expect(grid?.className).toContain('min-[90rem]:gap-4');
+    // One gutter at every width — 16px, ruled 2026-09-04 (D30). The 1024 frame's
+    // 14px disagreed with both neighbours, so the frame moved, not the grid.
+    expect(grid?.className).toContain('gap-4');
+    expect(grid?.className).not.toContain('gap-3.5');
   });
 
   /*

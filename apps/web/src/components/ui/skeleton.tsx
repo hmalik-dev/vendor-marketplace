@@ -69,17 +69,23 @@ export function VendorCardSkeleton({ className }: { className?: string }): React
 
       {/* `px-3.5 pt-3 pb-3.5` — the compact card's own asymmetric padding. */}
       <div className="px-3.5 pt-3 pb-3.5">
-        {/* The `<h3>`: 19px Instrument Serif, whose line box measures 25. */}
-        <Skeleton className="mt-2.75 h-[25px] w-[61%]" />
+        {/*
+          The `<h3>`: 19px Instrument Serif, whose line box measures 25. Its
+          clearance is the monogram's, so it steps with the monogram — the
+          compact card draws neither below 1440 (D30, `11-search.md`).
+        */}
+        <Skeleton className="h-[25px] w-[61%] min-[90rem]:mt-2.75" />
         {/* The rating · location line: `text-meta`, 12px, line box 15. */}
         <Skeleton className="mt-0.5 h-[15px] w-[47%]" />
 
         {/*
-          The chip row, empty exactly as the loaded card's is. It contributes no
-          height and its `margin-top` is part of the body's rhythm.
+          No chip row. The loaded compact card renders none — the search grid is
+          already filtered to one vendor type and passes no availability date —
+          and an empty flex box still contributes its own `margin-top`, so
+          drawing one here made the skeleton 8px taller than the card it stands
+          in for. The whole promise of this state is that nothing shifts on
+          arrival.
         */}
-        <div aria-hidden="true" className="mt-2 flex flex-wrap gap-1.25" />
-
         {/*
           The price row carries the rule as its own `border-t`, the way the card
           does — not a separate divider element with symmetric margins, which is

@@ -60,10 +60,23 @@ export interface BannerProps {
   title?: ReactNode;
   /** One sentence per job, per `40-states.md`. */
   children: ReactNode;
+  /**
+   * The one control that fixes what the banner reports, held right of the
+   * sentence — frames `20` and `27 Vendor dashboard — empty · 1024` draw the
+   * publish-blocker banner that way. Optional: most banners are context, and a
+   * banner with two jobs is two banners.
+   */
+  action?: ReactNode;
   className?: string;
 }
 
-export function Banner({ status, title, children, className }: BannerProps): React.ReactElement {
+export function Banner({
+  status,
+  title,
+  children,
+  action,
+  className,
+}: BannerProps): React.ReactElement {
   const tokens = STATUS_TOKENS[status];
 
   return (
@@ -82,12 +95,13 @@ export function Banner({ status, title, children, className }: BannerProps): Rea
       )}
     >
       <span aria-hidden="true" className={cn('mt-0.25 size-4 shrink-0 rounded-full', tokens.dot)} />
-      <div>
+      <div className="min-w-0 flex-1">
         {title ? <p className="text-[13px] font-semibold text-stone-900">{title}</p> : null}
         <p className={cn('text-[12.5px] leading-[1.55]', tokens.body, title && 'mt-0.75')}>
           {children}
         </p>
       </div>
+      {action ? <div className="shrink-0 self-center">{action}</div> : null}
     </div>
   );
 }

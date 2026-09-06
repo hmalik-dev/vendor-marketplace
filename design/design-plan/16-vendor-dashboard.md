@@ -91,10 +91,21 @@ frame `08`'s vendor is still on `4 of 6` of the checklist — and it draws the
 week, not the day. `30-responsive.md` says the same thing independently: "the
 calendar shows the booking week, not the month grid".
 
-**Published, the column also moves inside the content pane** at `width:300px;
-flex:none` and a 16px gap, carrying no border and no padding of its own. The
-bordered outer rail is the unpublished composition, which is the state frame
-`08` draws.
+**The column sits inside the content pane in both states** at `flex:none` and a
+16px gap — 300px at 1024, 340px at 1440, content-box, so the padding and the
+border sit outside those numbers.
+
+Ruled 2026-09-06 (#371), because the frames split three to one and the split
+follows the _data_, not the width. Measured on the frames rather than read off
+one: `20 Vendor dashboard empty` draws the checklist as a card inside the pane at
+340 / 18px padding / 18px radius, `27 Vendor dashboard — empty · 1024` at
+300 / 16 / 16, and `27 Vendor dashboard — 1024` puts the published week's column
+inside the pane too. Only `08 Vendor dashboard` draws the outer `border-left`
+rail, and it is also the only one of the four whose request list is populated —
+so the composition was changing with the row count, which is the same unrecorded
+one-shell drift #372 ruled against for the bookings hub. **One shell; the column
+swaps.** Frame `08` is the frame that yields, and correcting it belongs to #372,
+which owns it.
 
 ### The payout date is the event's — a recorded frame deviation
 
@@ -188,3 +199,40 @@ made it look like a gate. Removing the row loses nothing.
 defect on a frame this ruling did not open** — it draws Portfolio, Availability,
 Connect payouts and a `Publish profile` row that is the outcome rather than an
 item — and belong to **#372**, which owns frame `08`.
+
+## The unpublished pane says the cause, and the banner fixes it — #371, 2026-09-06
+
+Frames `20` and `27 Vendor dashboard — empty · 1024` draw a gold banner at the
+top of the pane that **names the open publish blockers** and carries the one
+control that clears them. The app had no counterpart: it opened the pane itself
+with "Nobody can find you yet", a sentence about the checklist, and a second
+`Finish your profile` button.
+
+Built to the frames. The banner reads `Your profile isn't live yet — N thing(s)
+left` over the open blockers joined by `·`, with `Finish profile` beside it, and
+it is built from `publishBlockers` — the gate itself, per D30 above — so it can
+never name a step the gate is not holding. It renders nothing at zero. The pane
+below it goes back to being a waiting state: `No requests yet`, `Nothing has come
+in because your listing is still a draft.`, and `Preview my profile`.
+
+Three recorded deviations, all deliberate:
+
+- **The count is a numeral.** The frames write "two things left"; the editor's
+  save bar one screen over writes `1 thing left before you can publish`, and two
+  spellings of the same count on two surfaces is worse than either.
+- **The 1440 frame's closing sentence does not ship.** "Published vendors in
+  Austin get their first request within a couple of weeks" is a platform
+  statistic on a screen that has none to read, which the MVP
+  no-invented-numbers law forbids outright. The 1024 frame stops at the cause and
+  that is the sentence. Same class as frame `18`'s market-size diagnosis, which
+  #372 also refuses.
+- **The banner does not repeat "Customers can't find you until both are done".**
+  It is only true at exactly two blockers, and the checklist's gold panel one
+  column over already says it.
+
+**The draft fixture had to move for any of this to be verifiable.** `pnpm
+db:seed:e2e:draft` unpublished the storefront but left the response time and the
+active package a previous published run had written, so it rendered
+`Publish checklist · 4 of 6`'s cheerful cousin — `6 of 6`, no banner, and none of
+the composition these frames are of. It now clears both, and the published seed
+restores both.

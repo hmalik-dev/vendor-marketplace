@@ -107,6 +107,8 @@ export function VendorCard({
   const location = [vendor.city, vendor.state].filter(Boolean).join(', ');
   const isReviewed = vendor.reviewCount > 0;
   const isCompact = density === 'compact';
+  /** Empty on the search grid; the featured card names one category. */
+  const categoryChips = isCompact ? [] : vendor.categories.slice(0, 1);
   /*
     D16 (#324): a result card carries no availability chip. Surviving a dated
     filter already *is* the answer — `vendor-search.dao.ts` hard-codes
@@ -235,11 +237,21 @@ export function VendorCard({
             Overlaps the seam by half its height, as the frame draws it — and
             returns to the flow where there is no seam to overlap, so a
             coverless card does not hang its avatar off its own top edge.
+
+            **The compact card's monogram is a genuine ladder step and stops at
+            1440.** Ruled 2026-09-04 (D30, `11-search.md`): `02 Search` draws a
+            32px overlapped monogram because 1440 has the width for it, and both
+            `27 Search results — 1024` and `14 Search tablet` draw the name
+            straight under the cover with no monogram and no gap above it. The
+            heading's clearance below goes with it — there is nothing left to
+            clear.
           */}
           <div
             className={cn(
               'absolute',
-              isCompact ? '-top-4 left-3.5' : '-top-[17px] left-4 sm:max-lg:static',
+              isCompact
+                ? 'hidden -top-4 left-3.5 min-[90rem]:block'
+                : '-top-[17px] left-4 sm:max-lg:static',
             )}
           >
             <Avatar name={vendor.businessName} src={vendor.profileImageUrl} size="sm" ring="card" />
@@ -248,7 +260,7 @@ export function VendorCard({
           <Heading
             className={cn(
               'font-display text-stone-900',
-              isCompact ? 'mt-2.75 text-[19px]' : 'mt-3 text-display-sm',
+              isCompact ? 'text-[19px] min-[90rem]:mt-2.75' : 'mt-3 text-display-sm',
             )}
           >
             {vendor.businessName}
@@ -280,37 +292,43 @@ export function VendorCard({
             )}
           </p>
 
-          <div className={cn('flex flex-wrap', isCompact ? 'mt-2 gap-1.25' : 'mt-2.5 gap-1.5')}>
-            {/*
-              The compact card carries the availability chip alone. The search
-              grid has already been filtered to one vendor type, so a category
-              chip on every card restates the query instead of telling the
-              customer something — see design/design-plan/03-components.md.
-            */}
-            {isCompact
-              ? null
-              : vendor.categories.slice(0, 1).map((category) => (
-                  <span
-                    key={category.id}
-                    className="rounded-md bg-stone-150 px-2.5 py-1 text-xs font-semibold text-stone-700"
-                  >
-                    {category.name}
-                  </span>
-                ))}
-            {freeDate ? (
-              <span
-                className={cn(
-                  'font-semibold bg-sage-50 text-sage-600',
-                  isCompact
-                    ? 'rounded-[5px] px-2 py-0.75 text-label'
-                    : 'rounded-md px-2.5 py-1 text-xs',
-                )}
-              >
-                {/* Parsed as UTC: a `DATE` must never shift by a local offset. */}
-                Free {DATE_CHIP_FORMATTERS[density].format(new Date(`${freeDate}T00:00:00Z`))}
-              </span>
-            ) : null}
-          </div>
+          {/*
+            The compact card carries the availability chip alone. The search
+            grid has already been filtered to one vendor type, so a category
+            chip on every card restates the query instead of telling the
+            customer something — see design/design-plan/03-components.md.
+
+            **The row is not rendered when it holds nothing.** An empty flex box
+            still contributes its own `margin-top`, and on the compact card that
+            is every card without a date filter — 8px between the meta line and
+            the price rule that no frame draws. It put the 1024 card at 327.6px
+            against the 319.6px `27 Search results — 1024` measures.
+          */}
+          {categoryChips.length > 0 || freeDate ? (
+            <div className={cn('flex flex-wrap', isCompact ? 'mt-2 gap-1.25' : 'mt-2.5 gap-1.5')}>
+              {categoryChips.map((category) => (
+                <span
+                  key={category.id}
+                  className="rounded-md bg-stone-150 px-2.5 py-1 text-xs font-semibold text-stone-700"
+                >
+                  {category.name}
+                </span>
+              ))}
+              {freeDate ? (
+                <span
+                  className={cn(
+                    'font-semibold bg-sage-50 text-sage-600',
+                    isCompact
+                      ? 'rounded-[5px] px-2 py-0.75 text-label'
+                      : 'rounded-md px-2.5 py-1 text-xs',
+                  )}
+                >
+                  {/* Parsed as UTC: a `DATE` must never shift by a local offset. */}
+                  Free {DATE_CHIP_FORMATTERS[density].format(new Date(`${freeDate}T00:00:00Z`))}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           <div
             className={cn(

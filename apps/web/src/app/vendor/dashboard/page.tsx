@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { VENDOR_PAYMENTS_PATH, pageTitle, toDateString } from '@vendor-marketplace/shared';
 import { DashboardStats } from '@/components/vendor/dashboard-stats';
+import { PublishBlockerBanner } from '@/components/vendor/publish-blocker-banner';
 import { PublishChecklist } from '@/components/vendor/publish-checklist';
 import { PublishedRail } from '@/components/vendor/published-rail';
 import { RequestRow } from '@/components/vendor/request-row';
@@ -92,16 +93,27 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         */
         panel
         icon={<EmptyStateGlyph />}
-        headline={dashboard.isPublished ? 'No requests right now' : 'Nobody can find you yet'}
+        headline={dashboard.isPublished ? 'No requests right now' : 'No requests yet'}
         /*
-          Frame `20`: an empty request list is almost always an unpublished
-          profile, so the state names that cause and the CTA fixes it — rather
-          than shrugging at the vendor.
+          Frames `20` and `27 Vendor dashboard — empty · 1024`: an empty request
+          list is almost always an unpublished profile, so the state names that
+          cause. **The words are the frame's** (#371) — this pane used to say
+          "Nobody can find you yet" over a sentence about the checklist, which is
+          now the gold banner's job one element above, and offer a second
+          `Finish your profile` beside the banner's own `Finish profile`.
+          Naming the cause and fixing it are the banner's; what is left here is
+          the waiting state and a way to look at the draft.
+
+          The 1440 frame closes with "Published vendors in Austin get their first
+          request within a couple of weeks" and that does not ship: it is a
+          platform statistic on a screen that has none to read, which
+          `.claude/rules/web-design-parity.md` forbids outright. The 1024 frame
+          this ticket owns stops at the cause, and that is the sentence.
         */
         description={
           dashboard.isPublished
             ? 'Requests land here the moment a customer sends one. Keeping your calendar current is what puts you in their search.'
-            : 'Your profile is not published, so it does not appear in search. Finish the checklist and requests can start arriving.'
+            : 'Nothing has come in because your listing is still a draft.'
         }
         action={
           dashboard.isPublished ? null : (
@@ -110,7 +122,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
               state, not the one action the screen exists for.
             */
             <Button asChild variant="secondary">
-              <Link href={PROFILE_EDIT_PATH}>Finish your profile</Link>
+              <Link href={`/vendors/${profile.slug}`}>Preview my profile</Link>
             </Button>
           )
         }
@@ -155,6 +167,16 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         </div>
 
         {/*
+          The publish gate, above the payout one — frames `20` and
+          `27 Vendor dashboard — empty · 1024` draw it at the top of the pane and
+          the app had nothing here. It names the blockers the gate is holding and
+          renders nothing once there are none, so a published vendor never sees
+          it. Payouts keep their own banner below, where frame `08` puts them and
+          where #360 ruled they belong — they are not a publish blocker.
+        */}
+        <PublishBlockerBanner blockers={dashboard.publishBlockers} />
+
+        {/*
           The payout gate. Gold rather than red because nothing has failed —
           `40-states.md` reserves red for a failure and gold for work waiting on
           the vendor — and the sentence is the approved one from
@@ -195,20 +217,22 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         </h2>
 
         {/*
-          The requests column and, once the profile is live, the right column
-          beside it. Frame `27` puts that column **inside** the pane at a 16px
-          gap; frame `08`'s bordered outer rail is the unpublished composition
-          and is rendered outside this pane instead.
+          The requests column and the right column beside it — the booking week
+          once the profile is live, the publish checklist until then. **One
+          shell, and the column swaps** (#371): frames `27 Vendor dashboard —
+          1024`, `20 Vendor dashboard empty` and `27 Vendor dashboard — empty ·
+          1024` all put that column inside the pane at a 16px gap, and only
+          frame `08` draws it as an outer bordered rail.
         */}
         <div className="flex min-h-0 flex-1 gap-4 overflow-hidden">
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-5">{requestsPane}</div>
           {dashboard.isPublished ? (
             <PublishedRail dashboard={dashboard} serverToday={today} />
-          ) : null}
+          ) : (
+            <PublishChecklist dashboard={dashboard} />
+          )}
         </div>
       </div>
-
-      {dashboard.isPublished ? null : <PublishChecklist dashboard={dashboard} />}
     </div>
   );
 }

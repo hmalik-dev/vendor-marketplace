@@ -19,13 +19,24 @@ const PROFILE_EDIT_PATH = '/vendor/profile/edit';
  * content is a bug" at 1024 and that this column is 300px there, so hiding it
  * was the one degradation the ladder forbids.
  *
- * 300px at 1024, 340px at 1440 (frame `08`), `box-content` so the 20px padding
- * and the 1px border sit outside the number the frame draws. Still stacked below
- * 1024: the vendor nav is a horizontal scroller there, not a sidebar, and no
- * frame draws a three-column dashboard narrower than a small laptop.
+ * **And it is a card inside the pane, not a full-height rail beside it** (#371).
+ * Measured on the frames rather than read off one: `20 Vendor dashboard empty`
+ * draws 340 content wide at 18px padding and an 18px radius, and
+ * `27 Vendor dashboard — empty · 1024` draws 300 at 16 and 16, both bordered on
+ * all four sides and both stopping where the pane stops. Frame `08` is the only
+ * one that draws the outer `border-left` rail, and it is also the only one whose
+ * requests list is populated — the same unrecorded one-shell drift #372 ruled
+ * against for the bookings hub, where the shell stays put and the pane swaps.
+ * `27 Vendor dashboard — 1024` puts the *published* rail inside the pane too, so
+ * three frames of four agree and the two states now share one composition.
+ *
+ * `box-content` because the frames are content-box: 300 and 340 are the numbers
+ * inside the padding, not the outer widths. Still stacked below 1024: the vendor
+ * nav is a horizontal scroller there, not a sidebar, and no frame draws a
+ * three-column dashboard narrower than a small laptop.
  */
 const RAIL_CLASS =
-  'hidden w-[300px] shrink-0 overflow-y-auto border-l border-stone-300 bg-stone-0 p-5 lg:box-content lg:block min-[90rem]:w-[340px]';
+  'hidden w-[300px] shrink-0 overflow-y-auto rounded-2xl border border-stone-300 bg-stone-0 p-4 lg:box-content lg:block min-[90rem]:w-[340px] min-[90rem]:rounded-[18px] min-[90rem]:p-4.5';
 
 export interface PublishChecklistProps {
   dashboard: WireVendorDashboard;

@@ -127,7 +127,7 @@ describe('the vendor chrome keeps the frames’ footprints', () => {
     expect(listClasses).toContain('lg:px-0');
   });
 
-  it('opts the unpublished dashboard rail out of border-box', () => {
+  it('opts the unpublished dashboard checklist card out of border-box', () => {
     const rail = read('src/components/vendor/publish-checklist.tsx');
     const railClass = rail.match(/const RAIL_CLASS =\s*\n?\s*'([^']+)'/)?.[1] ?? '';
 
@@ -137,8 +137,18 @@ describe('the vendor chrome keeps the frames’ footprints', () => {
     expect(rail.match(/className=\{RAIL_CLASS\}/g) ?? []).toHaveLength(1);
 
     expect(railClass).toContain('lg:box-content');
-    expect(railClass).toContain('p-5');
-    expect(railClass).toContain('border-l');
+    /*
+     * A card inside the pane, bordered on all four sides, at the padding each
+     * frame draws: 16px at 1024 (`27 Vendor dashboard — empty · 1024`) and 18px
+     * at 1440 (`20 Vendor dashboard empty`). It was frame `08`'s outer
+     * `border-left` rail at a flat 20px, which is the composition only the one
+     * frame with a populated request list draws — see `16-vendor-dashboard.md`,
+     * ruled under #371.
+     */
+    expect(railClass).toContain('p-4 ');
+    expect(railClass).toContain('min-[90rem]:p-4.5');
+    expect(railClass).toContain('rounded-2xl border border-stone-300');
+    expect(railClass, 'the in-pane card draws no rail border').not.toContain('border-l');
     /*
      * 300px at 1024 and 340px at 1440, per frames `27 Vendor dashboard — 1024`
      * and `08`. It was `hidden … xl:block` at a flat 340px, so the column two of

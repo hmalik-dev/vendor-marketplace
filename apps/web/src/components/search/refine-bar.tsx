@@ -109,7 +109,7 @@ const CHIP_TONES: Record<ChipTone, string> = {
  */
 function chipWrapper(tone: ChipTone, open: boolean): string {
   return cn(
-    'flex items-center rounded-md border text-[12.5px] font-semibold transition-colors duration-(--duration-fast)',
+    'flex items-center rounded-md border text-[12px] font-semibold transition-colors duration-(--duration-fast) min-[90rem]:text-[12.5px]',
     CHIP_TONES[tone],
     open && 'border-clay-400',
   );
@@ -122,7 +122,10 @@ function chipWrapper(tone: ChipTone, open: boolean): string {
  * belongs to the box that needs it, for the hit area below.
  */
 function chipTrigger(hasClear: boolean): string {
-  return cn('flex items-center gap-1.5 py-1.75 pl-3.25', hasClear ? 'pr-0' : 'pr-3.25');
+  return cn(
+    'flex items-center gap-1.5 py-1.5 pl-2.75 min-[90rem]:py-1.75 min-[90rem]:pl-3.25',
+    hasClear ? 'pr-0' : 'pr-2.75 min-[90rem]:pr-3.25',
+  );
 }
 
 /** The `✕` that clears an active chip. */
@@ -132,7 +135,7 @@ function ChipClear({ label, onClear }: { label: string; onClear: () => void }): 
       type="button"
       onClick={onClear}
       className={cn(
-        'relative py-1.75 pr-2.75 pl-2.5 hover:text-clay-500',
+        'relative py-1.5 pr-2.75 pl-2.5 hover:text-clay-500 min-[90rem]:py-1.75',
         /*
           `04-laws.md`: an icon-only control carries a 44x44 hit area. Its only
           visible content is the glyph — the name is `sr-only` — so the rule
@@ -398,17 +401,23 @@ export function RefineBar({
     */
     <div
       className={cn(
-        'flex shrink-0 flex-col gap-3 border-b border-stone-300 bg-stone-0 px-6.5 py-2.75 lg:flex-row lg:items-center lg:gap-4',
+        /*
+          **The bar steps down at 1024.** Frame `02` draws it 54px tall on 26px
+          of side padding; `27 Search results — 1024` draws 46px on 20px, with
+          the whole chip set one size smaller. Below `lg` the padding is
+          overridden by the filter sheet that holds the bar there.
+        */
+        'flex shrink-0 flex-col gap-3 border-b border-stone-300 bg-stone-0 px-5 py-2 lg:flex-row lg:items-center lg:gap-4 min-[90rem]:px-6.5 min-[90rem]:py-2.75',
         className,
       )}
     >
       <div className="flex flex-wrap items-center gap-2 lg:min-w-0 lg:flex-1">
         {/*
-          `text-xs`, not `text-label`: frame `02` draws this one inline at 11px
-          rather than through `.lbl`, and it is the 1440 parity target. The
-          `.lbl`-based `Refine` at 10px belongs to `27 Small laptop — 1024`.
+          Frame `02` draws this inline at 11px (`text-xs`) rather than through
+          `.lbl`; `27 Search results — 1024` draws the `.lbl` 10px. Both, at the
+          width each one is drawn at.
         */}
-        <span className="mr-0.5 text-xs font-semibold tracking-label text-stone-600 uppercase">
+        <span className="mr-0.5 text-label font-semibold tracking-label text-stone-600 uppercase min-[90rem]:text-xs">
           Refine
         </span>
 
@@ -501,7 +510,7 @@ export function RefineBar({
           <button
             type="button"
             onClick={clearRefinements}
-            className="px-1.5 py-1.75 text-[12.5px] font-semibold text-clay-500 hover:text-clay-600 hover:underline"
+            className="px-1.5 py-1.5 text-[12px] font-semibold text-clay-500 hover:text-clay-600 hover:underline min-[90rem]:py-1.75 min-[90rem]:text-[12.5px]"
           >
             Clear
           </button>
@@ -519,7 +528,7 @@ export function RefineBar({
         The name lives outside the chip, so the trigger is named explicitly
         rather than announcing a bare value.
       */}
-      <div className="flex shrink-0 items-center gap-2 text-[12.5px] text-stone-600">
+      <div className="flex shrink-0 items-center gap-2 text-[12px] text-stone-600 min-[90rem]:text-[12.5px]">
         Sort
         <span className={chipWrapper('resting', openChip === 'sort')}>
           <SingleSelectDropdown
