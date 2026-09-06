@@ -1131,7 +1131,27 @@ separately re-opens the other.
 **The merged rows carry the measurements.** They are the implementation checklist and are
 deliberately not restated. What this ticket adds is the order and the rulings.
 
-**Take the rulings first, before any code.** Each one is recorded in the plan, then coded:
+**Four of the seven rulings were given by the account holder on 2026-09-06 and
+are settled — do not re-ask them:**
+
+- **The notification bell (item 2): keep it, as built.** *"notification bell is
+  fine as is."* Frame `02` is stale here; the app's bell with real behaviour
+  stands. Record it as an accepted deviation, do not delete the bell.
+- **The `StatusPill` primitive (item 3): leave it, as built.** *"status pill is
+  fine as is."* No re-measure, no change.
+- **The pronoun deviation (item 7): leave it, as built.** *"Pronouns are fine as
+  is.. the frame is just literally design."* The app writes "they"; record the
+  deviation and move on.
+- **The Refine chip treatment (item 4): the app is already correct.** Measured
+  and settled 2026-09-06 in `parity-review/FINDINGS.md`. Frame `02` draws
+  `$500 – $3,200 ▾` for the price range and `4★ & up ✕` for rating — the caret
+  and the cross are a **deliberate distinction**, documented in
+  `refine-bar.tsx`: *"a range is a value you adjust, not a filter you tick
+  off."* Rating and the tag groups get the `✕`; price gets the caret. **Nothing
+  to change.** The account holder also confirmed `Clear` in the action row is
+  correct.
+
+**Three rulings remain, and they are yours to take before any code:**
 
 1. **The one-shell question (#359).** Frame `19` draws a different shell around the empty
    bookings pane than frame `07` does; the app renders `07`'s shell and swaps the pane.
