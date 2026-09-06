@@ -626,6 +626,27 @@ export const ENV_REGISTRY = [
     description: 'From address on every transactional email. Free-form; no shape is enforced.',
     setup: RESEND_SETUP,
   },
+  {
+    /*
+     * Where `/support` sends (#421). An env row rather than a literal for the
+     * reason the screen exists at all: the monitored address is #374's ruling,
+     * which has not landed, and this ships before it and changes without a
+     * deploy. It is also never scraped, which a published `mailto:` would be.
+     *
+     * `per-environment`, so the development value cannot reach production: a
+     * deployment must state its own destination or refuse to boot. The default
+     * below is a laptop's — it is derived from `BRAND_DOMAIN` and nothing reads
+     * it aloud to a visitor, because the screen never renders the destination.
+     */
+    key: 'SUPPORT_EMAIL_TO',
+    capability: 'email',
+    audience: 'server',
+    consumers: ['api'],
+    environments: 'per-environment',
+    defaultValue: `support@${BRAND_DOMAIN}`,
+    description: 'Where the /support form sends. A deployment must state the monitored address.',
+    setup: RESEND_SETUP,
+  },
 
   // --- sentry --------------------------------------------------------------
   {

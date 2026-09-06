@@ -4,6 +4,7 @@ import type { NotificationRow } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import type { EmailGateway } from '../../lib/email.js';
+import { escapeHtml } from '../../lib/html-escape.js';
 import type { BackgroundWork } from '../../lib/background.js';
 import { findUserEmail } from './notification-email.dao.js';
 
@@ -253,20 +254,4 @@ function renderText({ title, body, label, url }: Rendered): string {
   return [title, '', body ?? '', '', `${label}: ${url}`, '', BRAND_NAME]
     .filter((line, index, all) => !(line === '' && all[index - 1] === ''))
     .join('\n');
-}
-
-/**
- * A vendor's business name and a customer's note both reach these templates
- * verbatim, and both are user input.
- *
- * `31-content-voice.md` requires business names to render exactly as entered,
- * which means an apostrophe or an ampersand has to survive — and an unescaped
- * `<` in a note would be markup in somebody's inbox.
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

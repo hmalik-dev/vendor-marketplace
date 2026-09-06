@@ -4,6 +4,7 @@ import {
   BRAND_TAGLINE,
   LANDING_JUMP_CATEGORY_SLUGS,
   CATEGORY_SEEDS,
+  SUPPORT_PATH,
 } from '@vendor-marketplace/shared';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 
@@ -21,10 +22,19 @@ const BROWSE_LINKS = [
   { href: '/search', label: 'All vendors' },
 ];
 
-/** The vendor links carry `?role=vendor` — see design/design-plan/21-sign-up.md. */
+/**
+ * The vendor links carry `?role=vendor` — see design/design-plan/21-sign-up.md.
+ *
+ * `Contact support` sits here rather than in Account because it is true for
+ * everyone: it is the one row of this footer a signed-out visitor and a
+ * suspended vendor both need, and Account is the column that changes under
+ * them. The destination is frame `29` — a real screen, not a placeholder —
+ * so nothing here reads as a working channel that is not one.
+ */
 const COMPANY_LINKS = [
   { href: '/#how-it-works', label: 'How it works' },
   { href: '/sign-up?role=vendor', label: 'For vendors' },
+  { href: SUPPORT_PATH, label: 'Contact support' },
 ];
 
 /**

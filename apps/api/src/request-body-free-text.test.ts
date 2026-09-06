@@ -213,8 +213,9 @@ describe('free text on a request body', () => {
     const names = bodySchemaNames();
 
     // Pinned, not a floor: a change that halved discovery would pass a floor.
-    // 19 since #405 removed `PUT /vendor/tags` and its `setVendorTagsSchema`.
-    expect(names).toHaveLength(19);
+    // 19 since #405 removed `PUT /vendor/tags` and its `setVendorTagsSchema`;
+    // 20 since #421 added `supportMessageSchema`.
+    expect(names).toHaveLength(20);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 
@@ -251,10 +252,19 @@ describe('free text on a request body', () => {
    * a field that starts refusing the probe stops being checked, and would
    * otherwise leave no trace of having dropped out.
    */
-  it('leaves only the two date formats untested', () => {
+  it('leaves only the format-constrained fields untested', () => {
     expect(probeRequestBodies().skipped).toEqual([
       'createBookingRequestSchema.eventDate',
       'createBookingRequestSchema.eventStartTime',
+      /*
+       * #421's error context. Neither is prose: `route` is a same-origin path
+       * and `occurredAt` an ISO timestamp, and both are refused by their own
+       * format long before a bidi control could survive one. They are named
+       * here rather than tolerated for the reason the block above gives — a
+       * field that quietly stops being checked leaves no trace otherwise.
+       */
+      'supportMessageSchema.errorContext.route',
+      'supportMessageSchema.errorContext.occurredAt',
     ]);
   });
 

@@ -46,6 +46,16 @@ export interface EmailMessage {
    */
   text: string;
   /**
+   * Where a human hitting Reply should land, when that is not the `from`
+   * address.
+   *
+   * Only the support form sets it (#421): that message is written *by* a
+   * visitor and read by us, which inverts every other send in the product, and
+   * without this the reply goes to `EMAIL_FROM` — a `noreply` box — while the
+   * screen has just promised the visitor an answer.
+   */
+  replyTo?: string;
+  /**
    * Deduplicates a retried send at Resend, so a replayed operation cannot
    * deliver twice.
    *
@@ -96,6 +106,9 @@ export function createResendGateway({ apiKey, from }: ResendOptions): EmailGatew
           subject: message.subject,
           html: message.html,
           text: message.text,
+          // Omitted rather than sent as `undefined`: Resend rejects a null
+          // `reply_to`, and every send but the support form has none.
+          ...(message.replyTo === undefined ? {} : { reply_to: message.replyTo }),
         }),
       });
 

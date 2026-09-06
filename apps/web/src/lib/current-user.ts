@@ -197,6 +197,37 @@ async function readIdentityOnPublicRoute(): Promise<WireUser | null> {
 }
 
 /**
+ * Identity for `/support`, which must never redirect anybody away from itself.
+ *
+ * Every other read in this file sends a suspended account to `/suspended`, and
+ * that is right for every other surface. It is wrong for exactly this one:
+ * `/suspended` renders the marketing footer, the footer carries
+ * `Contact support`, and routing that click through a suspension redirect
+ * lands the visitor back on `/suspended`. A banned account arguing it was
+ * banned in error is the clearest case there is for a contact form, and the
+ * link would have been a loop for precisely them.
+ *
+ * So a suspended account is read the way a signed-out one is: the screen shows
+ * the email field and asks for an address, rather than naming an account it
+ * has just refused. An unreachable API degrades the same way, which matters
+ * here more than anywhere — this is the page a visitor reaches to report that
+ * the API is unreachable.
+ */
+export async function readIdentityForSupport(): Promise<WireUser | null> {
+  try {
+    return await getCurrentUser();
+  } catch {
+    /*
+     * No `isNavigationSignal` re-throw, unlike its neighbours: `getCurrentUser`
+     * never redirects — it swallows 401 and 404 and propagates the rest — so
+     * there is no navigation to preserve, and catching everything is the whole
+     * point rather than an oversight.
+     */
+    return null;
+  }
+}
+
+/**
  * Guards the root page. `/` is the customer-facing browse surface, and a vendor
  * has no use for a catalogue of other vendors — their home is their own
  * dashboard. Signed-out visitors and customers fall through and see the page.
