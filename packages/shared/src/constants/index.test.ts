@@ -163,13 +163,37 @@ describe('CATEGORY_SEEDS', () => {
     }
   });
 
+  it('never names a sibling category in a short description', () => {
+    /*
+     * `catering` read "Food, bar, carts" while `carts` is its own row with its
+     * own vendors, so the two categories read as overlapping and a visitor
+     * looking for a coffee cart was pointed at Catering. A short description
+     * describes its own category and no other.
+     */
+    const names = CATEGORY_SEEDS.map((category) => category.name.toLowerCase());
+
+    for (const category of CATEGORY_SEEDS) {
+      const words = category.shortDescription
+        .toLowerCase()
+        .split(/[^a-z]+/)
+        .filter(Boolean);
+      const siblings = names.filter((name) => name !== category.name.toLowerCase());
+
+      for (const sibling of siblings) {
+        expect(words, `${category.slug} names sibling category "${sibling}"`).not.toContain(
+          sibling,
+        );
+      }
+    }
+  });
+
   it('leads the six landing cards with the exact lines the frame carries', () => {
     const lines = CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT).map((c) => c.shortDescription);
 
     expect(lines).toEqual([
       'Photo & film',
       'DJs, bands, hosts',
-      'Food, bar, carts',
+      'Food, bar, buffet',
       'Halls & outdoor',
       'Flowers & styling',
       'Hair & makeup',

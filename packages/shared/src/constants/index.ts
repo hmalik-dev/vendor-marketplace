@@ -555,7 +555,13 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     name: 'Catering',
     slug: 'catering',
     description: 'Caterers, private chefs, bartenders, and buffet service.',
-    shortDescription: 'Food, bar, carts',
+    /*
+     * Not "Food, bar, carts". `carts` is its own category one row below, with
+     * its own vendors and its own short description, so naming it here sent a
+     * visitor looking for a coffee cart into Catering and made the two rows
+     * read as overlapping when the taxonomy treats them as distinct.
+     */
+    shortDescription: 'Food, bar, buffet',
     icon: 'utensils',
     displayOrder: 3,
     vendorNoun: { one: 'caterer', many: 'caterers' },
