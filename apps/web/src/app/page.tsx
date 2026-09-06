@@ -4,6 +4,7 @@ import { Show } from '@clerk/nextjs';
 import {
   BRAND_NAME,
   CATEGORY_SEEDS,
+  CATEGORY_SLUGS,
   LANDING_CATEGORY_COUNT,
   LANDING_JUMP_CATEGORY_SLUGS,
   serialiseJsonLd,
@@ -169,9 +170,27 @@ const STRUCTURED_DATA = {
   },
 } as const;
 
-/** "Browse by category" leads with the first six; the rest live on search. */
+/**
+ * "Browse by category" leads with the first six; the rest live on search.
+ *
+ * **A row the seeds no longer describe is dropped before the slice.** The
+ * taxonomy lives in `CATEGORY_SEEDS`, but this list comes from the database,
+ * and the two only agree once `pnpm db:seed` has run — a retired category
+ * stays live at its old `display_order` until then. That gap is what makes it
+ * a card rather than a footnote: the card's photograph is `/categories/
+ * <slug>.jpg` with no fallback, so a database still holding `florals` after
+ * #419 renamed that file would draw a broken image on the front door of the
+ * product, and link it to a category the vendor picker no longer offers.
+ *
+ * Filtering here rather than trusting the seed to have run is the difference
+ * between a deploy order that has to be remembered and one that cannot bite.
+ * `page.test.tsx` covers the stale row directly.
+ */
 function landingCategories(categories: readonly Category[]): Category[] {
+  const seeded = new Set<string>(CATEGORY_SLUGS);
+
   return [...categories]
+    .filter((category) => seeded.has(category.slug))
     .sort((a, b) => a.displayOrder - b.displayOrder)
     .slice(0, LANDING_CATEGORY_COUNT);
 }

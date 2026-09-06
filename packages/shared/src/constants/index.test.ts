@@ -5,6 +5,7 @@ import {
   describeBlockers,
   PUBLISH_BLOCKER_KEYS,
   PUBLISH_BLOCKERS,
+  retiredCategorySuccessor,
   vendorNounFor,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
@@ -77,21 +78,42 @@ describe('enum constants', () => {
 });
 
 describe('CATEGORY_SEEDS', () => {
-  it('covers all eleven launch categories, in display order', () => {
-    expect(CATEGORY_SEEDS).toHaveLength(11);
+  /*
+   * Ten, not eleven: #419 removed `Florals` on the account holder's ruling and
+   * folded it into `Decor`, which moves up into the fifth slot it vacated.
+   */
+  it('covers all ten launch categories, in display order', () => {
+    expect(CATEGORY_SEEDS).toHaveLength(10);
     expect(CATEGORY_SEEDS.map((c) => c.name)).toEqual([
       'Photography',
       'Entertainment',
       'Catering',
       'Venues',
-      'Florals',
+      'Decor',
       'Beauty',
       'Carts',
-      'Decor',
       'Videography',
       'Planning',
       'Rentals',
     ]);
+  });
+
+  it('no longer seeds Florals as a category of its own', () => {
+    expect(CATEGORY_SLUGS).not.toContain('florals');
+    expect(CATEGORY_SEEDS.map((c) => c.name)).not.toContain('Florals');
+  });
+
+  /*
+   * The survivor has to say it sells flowers, or the fold silently loses the
+   * thing the retired category described — a florist reading the taxonomy has
+   * to be able to see where they belong.
+   */
+  it('says the survivor now covers flowers too', () => {
+    const decor = CATEGORY_SEEDS.find((c) => c.slug === 'decor');
+
+    expect(decor).toBeDefined();
+    expect(decor!.description).toContain('Flowers');
+    expect(decor!.shortDescription).toContain('Flowers');
   });
 
   it('names every category in a single word, so the landing grid reads as nouns', () => {
@@ -113,7 +135,14 @@ describe('CATEGORY_SEEDS', () => {
     );
   });
 
-  it('features the six categories frame 01 draws, in the order it draws them', () => {
+  /*
+   * Frame `01` draws `Florals` fifth. It predates the #419 ruling, so the
+   * frame is what is out of date; `Decor` inherits the slot along with the
+   * vendors. The six featured slugs are also exactly the six files under
+   * `apps/web/public/categories/`, which is why the survivor is promoted
+   * rather than left eighth — see the note on `CATEGORY_SEEDS`.
+   */
+  it('features six categories, with the survivor in the slot Florals held', () => {
     const featured = CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT).map((c) => c.name);
 
     expect(featured).toEqual([
@@ -121,7 +150,7 @@ describe('CATEGORY_SEEDS', () => {
       'Entertainment',
       'Catering',
       'Venues',
-      'Florals',
+      'Decor',
       'Beauty',
     ]);
   });
@@ -142,7 +171,7 @@ describe('CATEGORY_SEEDS', () => {
       'DJs, bands, hosts',
       'Food, bar, carts',
       'Halls & outdoor',
-      'Bouquets & decor',
+      'Flowers & styling',
       'Hair & makeup',
     ]);
   });
@@ -154,6 +183,20 @@ describe('CATEGORY_SEEDS', () => {
     for (const slug of LANDING_JUMP_CATEGORY_SLUGS) {
       expect(slugs, slug).toContain(slug);
     }
+  });
+
+  /*
+   * The order is the account holder's, ruled with #419, and both the landing
+   * hero and the footer's Browse column render this array directly — so the
+   * order is the rendered order on two surfaces, not an implementation detail.
+   */
+  it('jumps to the four the account holder ruled, in their order', () => {
+    expect([...LANDING_JUMP_CATEGORY_SLUGS]).toEqual([
+      'photography',
+      'catering',
+      'entertainment',
+      'beauty',
+    ]);
   });
 
   it('features fewer categories than it seeds, so the landing grid stays a taste', () => {
@@ -339,6 +382,7 @@ describe('CATEGORY_SLUG_SUCCESSORS', () => {
       'decoration',
       'dj-music',
       'event-planning',
+      'florals',
       'floristry',
       'lighting',
       'makeup-beauty',
@@ -348,6 +392,57 @@ describe('CATEGORY_SLUG_SUCCESSORS', () => {
 
   it('folds lighting into decor rather than leaving it standalone', () => {
     expect(CATEGORY_SLUG_SUCCESSORS.lighting).toBe('decor');
+  });
+
+  /*
+   * #419. Without this entry, removing the seed would leave a live `florals`
+   * row with its vendors still attached — `seedCategories` only deactivates a
+   * category it no longer describes, precisely so a drop cannot take
+   * `vendor_categories` rows with it.
+   */
+  it('folds florals into decor rather than stranding its vendors', () => {
+    expect(CATEGORY_SLUG_SUCCESSORS.florals).toBe('decor');
+  });
+
+  /*
+   * `floristry` retired into `florals`, which #419 then retired in turn. The
+   * fold resolves each entry once, in object key order, so a two-hop chain
+   * would only land by luck.
+   */
+  it('never chains one retired slug through another', () => {
+    for (const [retired, successor] of Object.entries(CATEGORY_SLUG_SUCCESSORS)) {
+      expect(Object.keys(CATEGORY_SLUG_SUCCESSORS), retired).not.toContain(successor);
+    }
+  });
+});
+
+describe('retiredCategorySuccessor', () => {
+  it('names the survivor for a slug the taxonomy retired', () => {
+    expect(retiredCategorySuccessor('florals')).toBe('decor');
+    expect(retiredCategorySuccessor('dj-music')).toBe('entertainment');
+  });
+
+  it('returns null for a category that is still seeded', () => {
+    for (const slug of CATEGORY_SLUGS) {
+      expect(retiredCategorySuccessor(slug), slug).toBeNull();
+    }
+  });
+
+  it('returns null for a slug that never existed, and for no slug at all', () => {
+    expect(retiredCategorySuccessor('not-a-category')).toBeNull();
+    expect(retiredCategorySuccessor('')).toBeNull();
+    expect(retiredCategorySuccessor(undefined)).toBeNull();
+    expect(retiredCategorySuccessor(null)).toBeNull();
+  });
+
+  /*
+   * A plain `MAP[slug]` here would answer `?category=constructor` with a
+   * function and redirect the visitor to `/search?category=function%20Object`.
+   */
+  it('reads only the map’s own keys, never Object.prototype', () => {
+    expect(retiredCategorySuccessor('constructor')).toBeNull();
+    expect(retiredCategorySuccessor('toString')).toBeNull();
+    expect(retiredCategorySuccessor('__proto__')).toBeNull();
   });
 });
 
@@ -409,7 +504,7 @@ describe('vendorNounFor', () => {
     expect(vendorNounFor('photography', 24)).toBe('photographers');
     expect(vendorNounFor('photography', 1)).toBe('photographer');
     expect(vendorNounFor('catering', 3)).toBe('caterers');
-    expect(vendorNounFor('florals', 1)).toBe('florist');
+    expect(vendorNounFor('decor', 1)).toBe('decorator');
   });
 
   it('falls back to plain vendors when no category is selected', () => {

@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { CATEGORY_SEEDS, CATEGORY_SLUGS } from '@vendor-marketplace/shared';
 import { BookingConfirmed } from './booking-confirmed';
 import { AVATAR_SIZES } from '@/components/ui/avatar';
 import type { WireBooking } from '@/lib/wire-schemas';
@@ -132,11 +133,56 @@ describe('BookingConfirmed', () => {
 
     expect(screen.getByText('Still need someone for June 14?')).toBeDefined();
 
-    const florals = screen.getByRole('link', { name: 'Florals' });
-    expect(florals.getAttribute('href')).toBe('/search?category=florals&date=2027-06-14');
+    const decor = screen.getByRole('link', { name: 'Decor' });
+    expect(decor.getAttribute('href')).toBe('/search?category=decor&date=2027-06-14');
 
-    for (const chip of ['Florals', 'Live music', 'Catering', 'Cake']) {
+    for (const chip of ['Decor', 'Live music', 'Catering', 'Carts']) {
       expect(screen.getByRole('link', { name: chip }).textContent).toBe(chip);
+    }
+  });
+
+  /*
+   * The guard, not the illustration. Until #419 two of these four chips —
+   * `live-music` and `cake` — named slugs the taxonomy has never seeded, so
+   * they opened a search filtered on nothing and drew an empty grid on the one
+   * screen the product celebrates. A hand-written list beside a seeded
+   * taxonomy drifts silently; this is what makes it fail loudly instead.
+   */
+  it('points every cross-sell chip at a category the taxonomy actually seeds', () => {
+    const { container } = render(
+      <BookingConfirmed booking={booking()} vendor={VENDOR} conversationId={null} />,
+    );
+
+    const asked = [...container.querySelectorAll('a[href*="/search?category="]')].map((link) =>
+      new URLSearchParams(link.getAttribute('href')!.split('?')[1]).get('category')!,
+    );
+
+    expect(asked.length).toBe(4);
+    for (const slug of asked) {
+      expect(CATEGORY_SLUGS, slug).toContain(slug);
+    }
+  });
+
+  /*
+   * The other half of the same drift. A chip that points at a live category
+   * but calls it by a name the taxonomy has since changed is just as wrong,
+   * and nothing about a slug check would catch it — so the label is derived
+   * from the seed, and only `Live music` overrides it on purpose.
+   */
+  it('calls each category what the taxonomy calls it, bar the one deliberate word', () => {
+    const { container } = render(
+      <BookingConfirmed booking={booking()} vendor={VENDOR} conversationId={null} />,
+    );
+
+    const chips = [...container.querySelectorAll('a[href*="/search?category="]')].map((link) => ({
+      slug: new URLSearchParams(link.getAttribute('href')!.split('?')[1]).get('category')!,
+      label: link.textContent,
+    }));
+
+    for (const chip of chips) {
+      const seeded = CATEGORY_SEEDS.find((seed) => seed.slug === chip.slug)!.name;
+
+      expect(chip.label, chip.slug).toBe(chip.slug === 'entertainment' ? 'Live music' : seeded);
     }
   });
 
@@ -267,7 +313,7 @@ describe('BookingConfirmed', () => {
   it('washes the cross-sell chips darker, not lighter', () => {
     render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId={null} />);
 
-    for (const chip of ['Florals', 'Live music', 'Catering', 'Cake']) {
+    for (const chip of ['Decor', 'Live music', 'Catering', 'Carts']) {
       const link = screen.getByRole('link', { name: chip });
 
       expect(link.className).toContain('bg-stone-900/14');
@@ -323,7 +369,7 @@ describe('BookingConfirmed', () => {
     const controls = [
       screen.getByRole('link', { name: /^Message / }),
       screen.getByRole('link', { name: 'View booking' }),
-      screen.getByRole('link', { name: 'Florals' }),
+      screen.getByRole('link', { name: 'Decor' }),
     ];
 
     for (const control of controls) {

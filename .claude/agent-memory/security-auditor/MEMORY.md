@@ -50,4 +50,6 @@
 - [A public endpoint mails the caller's own text anywhere](public-mail-endpoint-echoes-to-any-address.md) — `/support/messages`; the echo to an unverified address was gated on `signedIn` in #421, and the signed-in half is settled
 - [Rate-limit keys are the proxy, not the caller](rate-limit-key-is-the-proxy-not-the-caller.md) — `keyGenerator` does see `request.auth` (verified); the missing `trustProxy` that gave every deployment one shared bucket was fixed in #421
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — `replaceVendorTags`/`replaceVendorCategories` stopped self-transacting in #405; `PUT /vendor/tags` is gone on purpose
+- [The `/search` retired-category 308 rests on three invariants](search-retired-category-redirect.md) — literal prefix, `Object.hasOwn`, and no successor value that is also a key
+- [The categories cascade is single-edged, for now](categories-cascade-is-single-edged.md) — the seed fold hard-deletes the row; a second cascading FK onto `categories.id` makes that silent data loss
 - [The public vendor card is the widest anonymous projection](public-vendor-card-is-the-widest-anonymous-projection.md) — the Zod serializer strips unmapped columns and 500s on a missing one; `isNew`'s recency disclosure is settled

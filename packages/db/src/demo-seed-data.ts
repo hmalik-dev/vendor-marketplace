@@ -7,7 +7,7 @@ import type { CATEGORY_SLUGS, EventType, PriceType, UsStateCode } from '@vendor-
  * Distinct from `marketing-seed-data.ts` on purpose. That set is sixteen
  * photographers, sized to fill one category's search grid for a screenshot.
  * This one is deliberately thin per category and wide across them: at least
- * one published vendor in every one of the eleven `CATEGORY_SEEDS`, so a
+ * one published vendor in every one of the ten `CATEGORY_SEEDS`, so a
  * category browse, a filter combination or an empty-state check never lands on
  * a category nobody trades in. The two seeds own disjoint rows and can be run
  * together.
@@ -33,7 +33,17 @@ export const DEMO_UUID_NAMESPACE = 'orla.demo';
  * `CREDITS.md` records that most of that imagery has unverified provenance and
  * calls it a launch blocker; a seed is no reason to widen that exposure.
  *
- * The five categories absent here have no licensed image, so their vendors get
+ * `decor.jpg` is the file that shipped as `florals.jpg` until #419 folded that
+ * category into this one — the photograph is unchanged, and it is renamed
+ * rather than dropped because the survivor inherited both the vendors and the
+ * fifth landing slot. The map is keyed by category, not by vendor, so the fold
+ * also hands that photograph to `hollow-and-pine-decor`, which had no image
+ * before and builds sets rather than bouquets. Kept deliberately: Decor now
+ * covers flowers, one image per category is the whole shape of this map, and
+ * the alternative — dropping the key — would take the picture away from the
+ * florist it actually depicts.
+ *
+ * The four categories absent here have no licensed image, so their vendors get
  * a null cover and no portfolio, and render the designed placeholder instead.
  * That is a deliberate half of the dataset: `design-plan/40-states.md`
  * distinguishes the illustrated card from the placeholder one, and a demo where
@@ -44,7 +54,7 @@ export const DEMO_CATEGORY_IMAGES: Readonly<Record<string, string>> = {
   entertainment: '/categories/entertainment.jpg',
   catering: '/categories/catering.jpg',
   venues: '/categories/venues.jpg',
-  florals: '/categories/florals.jpg',
+  decor: '/categories/decor.jpg',
   beauty: '/categories/beauty.jpg',
 };
 
@@ -161,10 +171,12 @@ function pkg(
 }
 
 /**
- * Thirteen vendors covering all eleven categories, with `photography` and
- * `catering` carrying two so the two busiest grids are not single-row. Prices
- * span the $500–$15,000 band the ticket asks for, and no two vendors share a
- * city-and-category pair, so a city filter always narrows rather than empties.
+ * Thirteen vendors covering all ten categories, with `photography`, `catering`
+ * and — since #419 folded Florals into it — `decor` carrying two, so the
+ * busiest grids are not single-row. Prices span the $500–$15,000 band the
+ * ticket asks for, and no two vendors share a city-and-category pair, so a city
+ * filter always narrows rather than empties. (The two `decor` vendors are New
+ * York and Chicago, so the fold did not create such a pair.)
  */
 export const DEMO_VENDORS: readonly DemoVendorSeed[] = [
   {
@@ -368,7 +380,9 @@ export const DEMO_VENDORS: readonly DemoVendorSeed[] = [
   },
   {
     key: 'thistle-and-fern',
-    categorySlug: 'florals',
+    // A florist, listed under the category that absorbed Florals in #419 —
+    // which is the fold the ruling describes, in the demo dataset.
+    categorySlug: 'decor',
     businessName: 'Thistle & Fern',
     slug: 'thistle-and-fern',
     firstName: 'Saoirse',

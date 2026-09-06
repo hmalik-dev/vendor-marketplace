@@ -121,17 +121,39 @@ describe('HomePage', () => {
     render(await HomePage());
 
     expect(screen.getByText('Or jump straight to')).toBeDefined();
+    // The four and their order were ruled with #419, when Florals left the
+    // taxonomy and Beauty took its slot.
     for (const [name, slug] of [
       ['Photography', 'photography'],
-      ['Florals', 'florals'],
       ['Catering', 'catering'],
       ['Entertainment', 'entertainment'],
+      ['Beauty', 'beauty'],
     ]) {
       expect(screen.getAllByRole('link', { name })[0]).toHaveProperty(
         'href',
         `http://localhost:3000/search?category=${slug}`,
       );
     }
+  });
+
+  /*
+   * The order is rendered, not incidental: the row is read left to right and
+   * the ruling named a sequence. Asserting each link separately above proves
+   * every one is present and points somewhere real; this proves the row.
+   */
+  it('renders the jump row in the ruled order, and no longer offers Florals', async () => {
+    const { container } = render(await HomePage());
+
+    const row = screen.getByText('Or jump straight to').parentElement;
+    expect(row).not.toBeNull();
+
+    expect([...row!.querySelectorAll('a')].map((link) => link.textContent)).toEqual([
+      'Photography',
+      'Catering',
+      'Entertainment',
+      'Beauty',
+    ]);
+    expect(container.querySelector('a[href="/search?category=florals"]')).toBeNull();
   });
 
   it('features the six categories the frame draws, in displayOrder', async () => {
@@ -190,6 +212,42 @@ describe('HomePage', () => {
    * gap rather than a styling one, and this is where it is caught: promoting a
    * seventh category, or renaming a slug, fails here and names the file to add.
    */
+  /*
+   * The guard above reads `CATEGORY_SEEDS`; this one reads what the API
+   * actually returns, which is the half that can disagree with it.
+   *
+   * A database seeded before #419 still holds a live `florals` row at
+   * `display_order` 5 until `pnpm db:seed` runs, and that row would take the
+   * fifth card — pointing at a category the picker no longer offers and asking
+   * for `/categories/florals.jpg`, which this ticket renamed. The card has no
+   * image fallback, so it renders broken on the front door.
+   */
+  it('drops a category the seeds no longer describe, however the API orders it', async () => {
+    getCategories.mockResolvedValue([
+      {
+        id: '00000000-0000-4000-8000-0000000000ff',
+        name: 'Florals',
+        slug: 'florals',
+        description: 'Retired by #419, still live in an unseeded database.',
+        icon: 'flower',
+        displayOrder: 5,
+        isActive: true,
+      },
+      ...apiCategories(),
+    ]);
+
+    const { container } = render(await HomePage());
+
+    const grid = screen.getByRole('list', { name: 'Browse by category' });
+    expect(within(grid).queryByRole('heading', { name: 'Florals' })).toBeNull();
+    expect(container.querySelector('img[src*="florals.jpg"][sizes*="15vw"]')).toBeNull();
+
+    // And the row is still six cards, not five with a hole where it was.
+    expect(within(grid).getAllByRole('presentation', { hidden: true })).toHaveLength(
+      LANDING_CATEGORY_COUNT,
+    );
+  });
+
   it('has a photograph on disk for every category the landing promotes', () => {
     const directory = join(process.cwd(), 'public', 'categories');
 
@@ -253,10 +311,10 @@ describe('HomePage', () => {
     expect(links[0]).toHaveProperty('href', 'http://localhost:3000/search?category=photography');
   });
 
-  it('holds the rest of the taxonomy back behind "All 11 categories"', async () => {
+  it('holds the rest of the taxonomy back behind "All 10 categories"', async () => {
     render(await HomePage());
 
-    expect(screen.getByRole('link', { name: 'All 11 categories →' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: 'All 10 categories →' })).toHaveProperty(
       'href',
       'http://localhost:3000/search',
     );
@@ -273,10 +331,10 @@ describe('HomePage', () => {
    * what this asserts; it keeps the focus ring in the same breath, because
    * dropping the `Button` is also what dropped the ring it used to supply.
    */
-  it('draws "All 11 categories" as a plain link, not a padded pill', async () => {
+  it('draws "All 10 categories" as a plain link, not a padded pill', async () => {
     render(await HomePage());
 
-    const link = screen.getByRole('link', { name: 'All 11 categories →' });
+    const link = screen.getByRole('link', { name: 'All 10 categories →' });
 
     for (const pill of ['px-3', 'py-1.5', 'rounded-md']) {
       expect(link.className).not.toContain(pill);
@@ -298,7 +356,7 @@ describe('HomePage', () => {
   it('sizes the categories link on the 13px step the frame draws it at', async () => {
     render(await HomePage());
 
-    const link = screen.getByRole('link', { name: 'All 11 categories →' });
+    const link = screen.getByRole('link', { name: 'All 10 categories →' });
 
     expect(link.className).toContain('text-action');
     expect(link.className).not.toContain('text-sm');

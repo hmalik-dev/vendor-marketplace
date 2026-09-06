@@ -42,7 +42,7 @@ const CATEGORIES: Category[] = [
   category('1', 'Photography', 1),
   category('2', 'Videography', 2),
   category('3', 'Catering', 3),
-  category('4', 'Florals', 4),
+  category('4', 'Decor', 4),
   /*
    * The reason matching is substring rather than prefix: "film" has to find
    * this, and a prefix match never would. Named to avoid colliding with the
@@ -302,17 +302,17 @@ describe('CategorySelect', () => {
    */
   it('opens with the committed row active, so the first Enter changes nothing', async () => {
     const user = userEvent.setup();
-    const { onChange } = renderSelect('florals');
+    const { onChange } = renderSelect('decor');
 
     await user.click(trigger());
     await screen.findByRole('listbox');
 
     const activeId = trigger().getAttribute('aria-activedescendant');
-    expect(document.getElementById(activeId as string)?.textContent).toContain('Florals');
+    expect(document.getElementById(activeId as string)?.textContent).toContain('Decor');
 
     await user.keyboard('{Enter}');
-    expect(onChange).toHaveBeenCalledWith('florals');
-    expect(trigger().value).toBe('Florals');
+    expect(onChange).toHaveBeenCalledWith('decor');
+    expect(trigger().value).toBe('Decor');
   });
 
   /*

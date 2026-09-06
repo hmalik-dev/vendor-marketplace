@@ -48,6 +48,29 @@ render Instrument Sans though the frames draw serif (D24); no trigger draws the
 `▾` the frames draw (D25); and `01-foundations.md` records two colour values as
 accepted deviations. The caret has been re-filed four times.
 
+**The Florals category no longer exists (#419, ruled 2026-09-06).** It was
+folded into `Decor`, so the taxonomy is ten categories and three frames now
+draw a category the product does not have. All three are overruled, not drift:
+
+- `01 Landing` — the jump row draws `Photography · Florals · Catering ·
+Entertainment` and renders `Photography · Catering · Entertainment · Beauty`,
+  the four and the order the account holder ruled; the fifth category card
+  draws `Florals / Bouquets & decor` and renders `Decor / Flowers & styling` on
+  the same photograph; `All 11 categories →` reads `All 10`, because the count
+  is read from the database.
+- `06 Booking confirmed` — the cross-sell chips draw `Florals · Live music ·
+Catering · Cake` and render `Decor · Live music · Catering · Carts`. Two of
+  the frame's four named slugs (`live-music`, `cake`) were **never** seeded
+  categories, so those chips opened a search filtered on nothing and drew an
+  empty grid. Every chip now points at a slug the taxonomy holds; restoring the
+  frame's words would restore the broken links.
+- `13 Admin — vendors` draws `Florals` in its table rows and in a filter pill.
+  That is sample data in a frame, not a claim about the taxonomy, but it will
+  read as a mismatch against a real admin table.
+
+A parity pass over any of the three reports these as expected deviations. The
+frames are corrected by a design pass, not by a ticket.
+
 ## A one-shot read is a sample, not a measurement
 
 An animated property has no single computed value. Read it once, in the same

@@ -57,6 +57,29 @@ describe('SiteFooter', () => {
     );
   });
 
+  /*
+   * The column derives from `LANDING_JUMP_CATEGORY_SLUGS` precisely so it can
+   * never disagree with the landing hero — which is only worth anything if
+   * something checks that both really render the ruled four (#419). Asserted
+   * against the literal list rather than the constant, so a wrong edit to the
+   * constant fails here instead of being mirrored into the expectation.
+   */
+  it('browses the four categories the hero jumps to, in their order', () => {
+    render(<SiteFooter />);
+
+    const browse = screen.getByText('Browse').parentElement;
+    expect(browse).not.toBeNull();
+
+    expect([...browse!.querySelectorAll('a')].map((link) => link.textContent)).toEqual([
+      'Photography',
+      'Catering',
+      'Entertainment',
+      'Beauty',
+      'All vendors',
+    ]);
+    expect(screen.queryByRole('link', { name: 'Florals' })).toBeNull();
+  });
+
   it('offers the authentication routes to signed-out visitors', () => {
     render(<SiteFooter />);
 
