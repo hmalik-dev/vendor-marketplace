@@ -3,6 +3,7 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Dropdown, DropdownFooter, type DropdownWidth } from './dropdown';
 import { cn } from '@/lib/utils';
+import { useStableValue } from '@/lib/use-stable-value';
 
 /**
  * Body 3 of `42-dropdowns.md`: a range, drawn for price.
@@ -28,6 +29,22 @@ export interface RangeValue {
   max: number | null;
 }
 
+/**
+ * Which bounds held text `parse` could make nothing of.
+ *
+ * Named because it is the contract between three files — the panel that
+ * decides it, the bar that forwards it, and the screen that turns it into a
+ * sentence — and a structural `{ min: boolean; max: boolean }` declared in
+ * each is three places to keep in step.
+ */
+export interface RangeDiscarded {
+  min: boolean;
+  max: boolean;
+}
+
+/** No bound was unreadable: the resting verdict, and what a clean Apply restores. */
+export const NO_DISCARD: RangeDiscarded = { min: false, max: false };
+
 export interface RangeDropdownProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,13 +54,17 @@ export interface RangeDropdownProps {
   caption: string;
   value: RangeValue;
   /**
-   * `discarded` is true when a bound held text the reader typed and `parse`
+   * `discarded` names the bounds that held text the reader typed and `parse`
    * could make nothing of — `abc`, or a lone `$`. It is not the same as an
    * empty bound, which legitimately means "no limit": the value is dropped
    * either way, but only one of the two is a surprise, and #388 is what it
    * cost to treat them identically and say nothing.
+   *
+   * Per bound, not one flag for the pair: a notice that says "the price range
+   * was cleared" over a surviving floor is the same untruth #403 fixed on the
+   * URL side, and the caller cannot name what it is not told.
    */
-  onApply: (value: RangeValue, meta: { discarded: boolean }) => void;
+  onApply: (value: RangeValue, meta: { discarded: RangeDiscarded }) => void;
   presets: readonly RangePreset[];
   /** The slider's span, so the readout knows what "full" means. */
   bounds: { min: number; max: number };
@@ -102,18 +123,25 @@ export function RangeDropdown({
   const fieldId = useId();
   const [draft, setDraft] = useState<RangeValue>(value);
   /** Which bounds currently hold text `parse` could make nothing of. */
-  const [unusable, setUnusable] = useState<{ min: boolean; max: boolean }>({
-    min: false,
-    max: false,
-  });
+  const [unusable, setUnusable] = useState<RangeDiscarded>(NO_DISCARD);
 
-  // Re-seeded on open, so a panel dismissed without Apply discards its edits.
+  /*
+   * Re-seeded on open, so a panel dismissed without Apply discards its edits.
+   *
+   * Seeded from the bounds' contents, never from the object: `RefineBar` passes
+   * `value={{ min: …, max: … }}`, a new object on every parent render, so
+   * `[open, value]` re-ran this while the panel was **open** — every time the
+   * search results landed under it — and wiped a half-typed price range back to
+   * the URL's. The re-seed belongs to opening, and only opening (#403).
+   */
+  const seed = useStableValue(value);
+
   useEffect(() => {
     if (open) {
-      setDraft(value);
-      setUnusable({ min: false, max: false });
+      setDraft(seed);
+      setUnusable(NO_DISCARD);
     }
-  }, [open, value]);
+  }, [open, seed]);
 
   const activePreset = presets.findIndex(
     (preset) => preset.min === draft.min && preset.max === draft.max,
@@ -204,7 +232,7 @@ export function RangeDropdown({
                * applied the preset and still announced the range as discarded
                * — a notice that contradicted the chip beside it.
                */
-              setUnusable({ min: false, max: false });
+              setUnusable(NO_DISCARD);
             }}
             className={cn(
               'rounded-full border px-2.5 py-[5px] text-[11.5px]',
@@ -221,12 +249,12 @@ export function RangeDropdown({
       <DropdownFooter
         applyLabel="Apply"
         onApply={() => {
-          onApply(draft, { discarded: unusable.min || unusable.max });
+          onApply(draft, { discarded: unusable });
           onOpenChange(false);
         }}
         onClear={() => {
           setDraft(EMPTY);
-          setUnusable({ min: false, max: false });
+          setUnusable(NO_DISCARD);
         }}
       />
     </Dropdown>
@@ -269,7 +297,13 @@ function AmountField({
       <input
         id={id}
         type="text"
-        inputMode="numeric"
+        /*
+         * `decimal`, not `numeric`: iOS renders `numeric` as a digits-only
+         * keypad with no decimal key, so `999.99` would be untypeable on an
+         * iPhone — exactly the whole-dollars-only behaviour #403 removed from
+         * the parser. No frame pins the hint.
+         */
+        inputMode="decimal"
         value={editing ? raw : value === null ? '' : format(value)}
         placeholder="Any"
         onFocus={() => {

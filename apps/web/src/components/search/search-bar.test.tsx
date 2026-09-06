@@ -829,3 +829,59 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
     ).not.toThrow();
   });
 });
+
+/*
+ * #403 acceptance 8. `SearchScreen` builds a fresh `value` object on every
+ * render and the re-seed keyed on that object, so each of `setResult`,
+ * `setIsLoading` and `setSearching(false)` reset the bar to the URL's values
+ * while the results were still landing: a vendor type or city chosen mid-search
+ * was silently undone, and the past-date alert vanished with it. The customer
+ * had to make the choice again with nothing on screen to say why.
+ */
+describe('a draft made while the search is in flight', () => {
+  afterEach(() => cleanup());
+
+  const bar = (value: SearchBarValues): React.ReactElement => (
+    <SearchBar
+      categories={CATEGORIES}
+      cities={CITIES}
+      value={value}
+      onSubmit={vi.fn()}
+      size="hero"
+    />
+  );
+
+  const typeField = (): HTMLInputElement =>
+    screen.getByRole('combobox', { name: 'Vendor type' }) as HTMLInputElement;
+
+  it('survives a parent render that rebuilds the value object', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(bar({ category: '', city: '', state: '', date: '' }));
+
+    await user.type(typeField(), 'phot');
+    await user.click(await screen.findByRole('option', { name: /Photography/ }));
+    expect(typeField().value).toBe('Photography');
+
+    // The same four values in a different object — exactly what a re-render of
+    // `SearchScreen` hands it when the results land.
+    rerender(bar({ category: '', city: '', state: '', date: '' }));
+
+    expect(typeField().value).toBe('Photography');
+  });
+
+  /*
+   * The other half of the same contract, and the reason the effect exists at
+   * all: a back-navigation really does change the URL, and the bar follows it.
+   * Without this, keying the re-seed on the values could have been written as
+   * dropping the effect and passed the test above.
+   */
+  it('still follows the URL when the values themselves change', () => {
+    const { rerender } = render(bar({ category: 'photography', city: '', state: '', date: '' }));
+
+    expect(typeField().value).toBe('Photography');
+
+    rerender(bar({ category: '', city: '', state: '', date: '' }));
+
+    expect(typeField().value).toBe('');
+  });
+});

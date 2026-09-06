@@ -20,6 +20,18 @@ is the written form.
 value` — a 500 from a URL anyone can paste — and `?minPriceCents=2147483648`
 reached Postgres and overflowed `int4`.
 
+Since #403 the hook has a **second** reader beside `parseSearchState`:
+`unusableSearchParams(useSearchParams())` re-reads the raw `URLSearchParams`
+so a param `nuqs` silently swallowed (`?page=abc`, `?sort=evil`) is announced
+too. It returns **field names only** — every element of `dropped` is a key of
+`searchParsers`, and `clearedParamsLine` renders through the fixed
+`DROPPED_FIELD_LABELS` record. That is the invariant that keeps the notice
+free of attacker text: no URL _value_ may ever enter `dropped`, and no label
+may ever be derived from one. The same release stopped sending a stale `date`
+at all — the shell withholds the request until the viewer's clock lands — so
+the API's `isUniversallyPastDate` 400 is now a backstop rather than a routine
+answer to a shared link.
+
 **How to apply:** any new `useQueryState`/`useQueryStates` call site is a
 finding unless its value passes a schema before it can reach a formatter, a
 query string sent to the API, or the DOM. `apps/web/src/components/vendors/
