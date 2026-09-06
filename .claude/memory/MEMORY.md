@@ -47,3 +47,4 @@
 - [MCP Playwright and storage state](mcp-playwright-cannot-load-storage-state.md) — no MCP *tool* takes one, but `browser_run_code_unsafe` does; never `networkidle`
 - [Guard a delegated browser pass with a liveness watch](guard-a-delegated-browser-pass-with-a-liveness-watch.md) — a dev server that dies mid-pass makes the agent report nothing and look clean
 - [The Done row cannot ride in the code PR](the-done-row-cannot-ride-in-the-code-pr.md) — the row records the squash SHA, which does not exist until the queue merges; batch across lanes, not within one
+- [Clerk localization is scoped by route only](clerk-localization-is-scoped-by-route-only.md) — a nested `ClerkProvider` silently drops every prop; branch on `usePathname()` in `ClerkShell`
