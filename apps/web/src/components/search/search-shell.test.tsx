@@ -95,6 +95,41 @@ describe('SearchShell loading state — frame 17', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Searching…');
   });
 
+  /*
+   * The announcer is a node of its own, always mounted, whose text changes.
+   *
+   * The first attempt put `aria-live` on the visible count row, which is
+   * hidden when `total` is 0 (frame `18` opens straight into the empty state)
+   * — so the region *unmounted* on the one transition that most needs
+   * speaking, and a reader who searched for nothing heard silence. A live
+   * region added to the DOM alongside its first content is unreliably
+   * announced too, which is why it is not conditional on anything.
+   */
+  function announcer(): HTMLElement | null {
+    // By slot, not by shape: the query bar's two comboboxes each render a
+    // `p[aria-live=polite][aria-atomic].sr-only` of their own, so the shape
+    // selector found one of theirs — empty — and called this one silent.
+    return document.querySelector('[data-slot="search-announcer"]');
+  }
+
+  it('announces that a search is running', async () => {
+    apiRequest.mockImplementation(neverResolves);
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    expect(announcer()?.textContent).toContain('Searching…');
+  });
+
+  it('announces a count that found nothing, where the visible row is hidden', async () => {
+    apiRequest.mockResolvedValue(emptyResult());
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(announcer()?.textContent).toBe('0 vendors'));
+    // The visible count row is gone — the announcement is all there is.
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+  });
+
   it('names the query in the searching line when the customer gave one', async () => {
     apiRequest.mockImplementation(neverResolves);
     state = baseState({ category: 'photography', city: 'Austin' });

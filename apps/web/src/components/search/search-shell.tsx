@@ -443,6 +443,35 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
         common reason for it. So the row survives on its own when it has
         something to announce, and takes its padding with it when it does not.
       */}
+      {/*
+        The search's outcome, announced — and the only element on this screen
+        that announces it.
+
+        The skeleton grid swapping in for eight cards is a purely visual event:
+        a reader who pressed Search heard nothing, and could not tell "still
+        looking" from "found nothing". Making the visible count row polite does
+        not fix that, and the zero-result case is exactly where it fails: the
+        row is hidden when `total` is 0 (frame `18` opens straight into the
+        empty state), so the live region would *unmount* on the one transition
+        that most needs speaking.
+
+        So the announcer is its own always-mounted node whose text changes.
+        A live region added to the DOM together with its first content is
+        unreliably announced; one that is already there when its text changes
+        is not. `aria-atomic` keeps the count and its city as one utterance.
+      */}
+      <p
+        // Named, because the query bar's two comboboxes each render a live
+        // region of exactly this shape — an unscoped selector finds one of
+        // theirs, empty, and reports this one as silent.
+        data-slot="search-announcer"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {isLoading ? searchingLine(state) : heading}
+      </p>
+
       {countRowVisible || clearedLines.length > 0 ? (
         <div className="flex shrink-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 pt-3.75 pb-2.75 min-[90rem]:px-6.5">
           {countRowVisible ? (

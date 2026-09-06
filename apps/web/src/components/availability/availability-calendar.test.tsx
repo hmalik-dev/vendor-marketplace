@@ -4,6 +4,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { viewerOn } from '@/testing/viewer-clock';
+import { formatAccessibleDate } from '@/lib/calendar';
 import type { WireAvailability } from '@/lib/wire-schemas';
 
 const requestMock = vi.fn();
@@ -62,9 +63,16 @@ function quarterCount(label: string): string {
   return term.nextElementSibling?.textContent?.trim() ?? '';
 }
 
-/** The day cell for a `YYYY-MM-DD`, found by the date in its accessible name. */
+/**
+ * The day cell for a `YYYY-MM-DD`, found by the date in its accessible name.
+ *
+ * The name is the spoken date, not the ISO string — a run of digits and dashes
+ * is not how a screen reader should read the only content a day cell has
+ * (#411). `formatAccessibleDate` is the component's own formatter, so this
+ * cannot drift from it.
+ */
 function cell(date: string): HTMLElement {
-  return screen.getByRole('button', { name: new RegExp(`^${date} —`) });
+  return screen.getByRole('button', { name: new RegExp(`^${formatAccessibleDate(date)} —`) });
 }
 
 describe('formatRange', () => {
@@ -172,6 +180,34 @@ describe('AvailabilityCalendar', () => {
     // defaults for the next test whatever the last one did.
     viewerOn(TODAY);
     process.env.TZ = SUITE_TZ;
+  });
+
+  /*
+   * The column headers had no accessible name at all (#411): a `<th>` whose
+   * only content was an `aria-hidden` initial, so `scope="col"` associated
+   * every day cell with nothing. Three of the seven initials are ambiguous by
+   * ear anyway — `S`, `T`, `S` name two different pairs of days.
+   */
+  it('names its seven columns, in words, while drawing the initials', () => {
+    renderCalendar();
+
+    const columns = screen.getAllByRole('columnheader');
+    // Three months of seven columns.
+    expect(columns.length).toBe(21);
+
+    const firstWeek = columns.slice(0, 7);
+    expect(firstWeek.map((column) => column.getAttribute('aria-hidden'))).toEqual(
+      Array.from({ length: 7 }, () => null),
+    );
+    expect(firstWeek.map((column) => column.textContent)).toEqual([
+      'SSunday',
+      'MMonday',
+      'TTuesday',
+      'WWednesday',
+      'TThursday',
+      'FFriday',
+      'SSaturday',
+    ]);
   });
 
   it('shows three months side by side with no month navigation needed', () => {
@@ -460,7 +496,9 @@ describe('AvailabilityCalendar', () => {
       },
     ] as unknown as WireAvailability[]);
 
-    expect(cell('2026-06-15').getAttribute('aria-label')).toBe('2026-06-15 — Booked — locked');
+    expect(cell('2026-06-15').getAttribute('aria-label')).toBe(
+      'Monday, June 15, 2026 — Booked — locked',
+    );
     expect(cell('2026-06-15')).toHaveProperty('disabled', true);
     expect(quarterCount('Booked ahead')).toBe('1 dates');
 
@@ -470,7 +508,9 @@ describe('AvailabilityCalendar', () => {
      * reachable are different things, and conflating them is what put its
      * accessible name out of reach of a screen reader.
      */
-    expect(cell('2026-06-16').getAttribute('aria-label')).toBe('2026-06-16 — Pending request');
+    expect(cell('2026-06-16').getAttribute('aria-label')).toBe(
+      'Tuesday, June 16, 2026 — Pending request',
+    );
     expect(cell('2026-06-16').getAttribute('aria-pressed')).toBeNull();
   });
 

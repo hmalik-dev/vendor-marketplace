@@ -73,6 +73,22 @@ function card(): HTMLElement {
   return article;
 }
 
+/*
+ * The monogram, by slot rather than by role: since #411 a card's avatar is
+ * decorative — the business name is written beside it in the heading — so it
+ * has no accessible name to be found by, and the checks below are about its
+ * geometry anyway.
+ */
+function avatar(): HTMLElement {
+  const found = document.querySelector<HTMLElement>('[data-slot="avatar-fallback"]');
+
+  if (found === null) {
+    throw new Error('No avatar monogram rendered');
+  }
+
+  return found;
+}
+
 describe('VendorCard parity with frame 02 Search', () => {
   afterEach(() => {
     cleanup();
@@ -92,12 +108,30 @@ describe('VendorCard parity with frame 02 Search', () => {
    * footprint is written as one number with the ring taken out of it — which
    * is why the comparison is against the frame's fill *plus* its two edges.
    */
+  /*
+   * The heading level, which differs by where the card is rendered (#411).
+   *
+   * `/search` puts the card directly under the page's `h1` — the result count —
+   * so `h3` there skipped a level. The three surfaces that nest the card inside
+   * a section of their own pass `h3`, and the storefront editor's rail is why
+   * the prop exists at all: it renders *before* the editor's `h1` in document
+   * order, so a hardcoded `h2` opened that page one level above its own title.
+   */
+  it('heads the card at h2 by default, and at the level a nesting caller asks for', () => {
+    render(<VendorCard vendor={vendor()} density="compact" />);
+    expect(screen.getByRole('heading', { name: 'Kessler & Co.' }).tagName).toBe('H2');
+
+    cleanup();
+    render(<VendorCard vendor={vendor()} density="compact" headingLevel="h3" />);
+    expect(screen.getByRole('heading', { name: 'Kessler & Co.' }).tagName).toBe('H3');
+  });
+
   it('gives the monogram the footprint the frame draws', () => {
     render(<VendorCard vendor={vendor()} density="compact" />);
 
     const frameFill = Number.parseFloat(styleValue(frameAvatar, 'width'));
     const frameEdge = Number.parseFloat(styleValue(frameAvatar, 'border'));
-    const monogram = screen.getByRole('img', { name: 'Kessler & Co.' });
+    const monogram = avatar();
 
     expect(monogram.style.width).toBe(`${frameFill + frameEdge * 2}px`);
     expect(monogram.style.height).toBe(`${frameFill + frameEdge * 2}px`);
@@ -107,9 +141,7 @@ describe('VendorCard parity with frame 02 Search', () => {
   it('sets the monogram glyph at the size the frame draws', () => {
     render(<VendorCard vendor={vendor()} density="compact" />);
 
-    expect(screen.getByRole('img', { name: 'Kessler & Co.' }).style.fontSize).toBe(
-      styleValue(frameAvatar, 'font-size'),
-    );
+    expect(avatar().style.fontSize).toBe(styleValue(frameAvatar, 'font-size'));
   });
 
   it('draws the meta line in one weight and one colour, as the frame does', () => {
