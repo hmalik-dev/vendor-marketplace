@@ -250,7 +250,7 @@ nothing, checkout loads Stripe.js with an empty publishable key, and the Clerk |
 serves the vendor's private per-date note, a customer-facing booking read
 carries the platform fee, the vendor payout split and the Stripe transfer id,
 and any authenticated user can pin another vendor's storage object by na **Landed 2026-09-05 as `ecf08fe` (PR #102, branch `worktree-t407-rebased`).** The public read is a DAO that never selects `note`, and `availabilitySchema` now *extends* `publicAvailabilitySchema` rather than omitting down to it. The four money fields are gone from `bookingSchema` itself, so every route answering it strips them; `booking-view.ts` is the one projection all three call sites use. **The write guard took five review passes and six spellings** — a host in front, a dot segment, a backslash, the bucket path the product itself stores and publishes, and a query string whose slashes a `split('/')` counts but a URL parser drops. It now decides on the object a reference *resolves to*, sharing `normalizeImageRefPath` with `imageRefSchema`; `ownsObjectKey` is deliberately unwidened, proven unchanged over 26,946 keys x 4 owners. A differential of ~132,400 owner-mismatching refs per seed found 0 violations, with the origin's key derivation measured against MinIO's `NoSuchKey` echo rather than assumed. `request-body-image-ref.test.ts` closes the class. **Two residuals, deliberately not done:** the guard is write-time only, so a row that borrowed a foreign key before this still pins its owner's delete (a data cleanup); and R2 is *assumed* to normalise as MinIO does — the same `NoSuchKey` echo makes that a five-minute check. |
-| **408** | **A legal request body 500s, and four reads have no ceiling** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` `email` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 10 verified findings. Two classes with the same shape: a value the schema accepts is wider than the
+| **408** | **A legal request body 500s, and four reads have no ceiling** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-t408` | **None** | `core` `email` | **Done 2026-09-05** — squash `832c031`, PR #110. Every schema bound now agrees with its column: `notifications.title` and `tags.slug` widen (both derived from legal input), the vendor-slug collision suffix takes its room out of the base, and `displayOrder` answers 400 at the schema boundary. All four unbounded reads take a page window; the requests read also caps its expiry sweep at four concurrent chains. Resend gained a 10s deadline and moved off the request path into a drained background queue. Post-commit notification failures no longer 5xx a committed write in booking-requests, payments, messaging or admin. `users.total/completed/cancelled_bookings_count` get a writer in `seed-support.ts` (shared with the seeds, locked with `FOR NO KEY UPDATE`) plus a backfill in migration `0026`. Reviewed by `diff-reviewer` (six findings, all fixed — including a regression this change introduced, where `?status=` filtered after the new page window) and `security-auditor` (pass). Browser-verified at 1440x900 across signed-out, customer, vendor and admin, both denial directions; a live vendor accept showed the Resend failure raised inside the background queue and swallowed while the accept returned 200. 
 column that stores it, so an ordinary input answers 500 after the state has
 already moved; and several reads have no limit, one of which fans out an
 unbounded `Promise.all` that ends in an email send. |
@@ -2603,7 +2603,7 @@ origin's key derivation was measured against MinIO, with R2 assumed to match.
 
 ### #408: A legal request body 500s, and four reads have no ceiling
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `email`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core` `email`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2640,9 +2640,23 @@ unbounded `Promise.all` that ends in an email send.
 
 #### Tests (required)
 
-- [ ] A test per bound, using the longest legal value
-- [ ] A test that the expiry sweep is bounded
-- [ ] A test that a failed notification write does not fail the request
+- [x] A test per bound, using the longest legal value —
+      `apps/api/src/lib/wire-bounds.routes.test.ts` drives a 200-character
+      business name through quote, a second vendor onto the same name for the
+      collision suffix, a 100-character tag suggestion through approve, and
+      `MAX_DISPLAY_ORDER + 1` through both the package and portfolio writes.
+- [x] A test that the expiry sweep is bounded — `apps/api/src/lib/concurrency.test.ts`
+      counts what is actually in flight rather than timing it, and the same
+      wire-bounds suite pins the page window that decides how many rows can
+      arrive at all (plus the status predicate, which regressed when the window
+      landed under a post-fetch filter).
+- [x] A test that a failed notification write does not fail the request —
+      `apps/api/src/modules/booking-requests/notification-failure.routes.test.ts`
+      makes `insertNotification` reject and asserts the quote still answers 200
+      with the transition committed, the message still sends, and the email is
+      dispatched off the request path (a gated send proves the response arrives
+      while it is still in flight). `apps/api/src/lib/email.test.ts` covers the
+      Resend deadline, which every suite was green without.
 
 ---
 
