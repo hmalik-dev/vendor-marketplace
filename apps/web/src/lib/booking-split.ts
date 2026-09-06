@@ -1,4 +1,4 @@
-import { isUniversallyPastDate } from '@vendor-marketplace/shared';
+import { isUniversallyPastDate, type BookingRequestDetail } from '@vendor-marketplace/shared';
 
 /** Anything carrying the calendar date a booking is for. */
 interface Dated {
@@ -43,4 +43,27 @@ export function splitByEventDate<T extends Dated>(
     .toSorted((left, right) => right.eventDate.localeCompare(left.eventDate));
 
   return { upcoming, past };
+}
+
+/** The two fields that say whether a request lost a booking. */
+type Settled = Pick<BookingRequestDetail, 'status' | 'settlement'>;
+
+/**
+ * The bookings a vendor lost (#415).
+ *
+ * `/vendor/bookings` filters `status === 'accepted'` for both its lists, which
+ * is right for the "coming up" count — a settled request is not a date the
+ * vendor still holds — and meant a cancelled booking appeared nowhere on the
+ * vendor side at all. They got a notification and a freed calendar cell, and
+ * that was the whole record of a date they had committed to and lost.
+ *
+ * A **cancelled request that produced a booking**, which is the distinction
+ * that keeps this list honest: a customer withdrawing before acceptance never
+ * cost the vendor a date, and listing it here as something lost would be the
+ * mirror of the defect this fixes.
+ */
+export function lostBookings<T extends Settled>(requests: readonly T[]): readonly T[] {
+  return requests.filter(
+    (request) => request.status === 'cancelled' && request.settlement !== null,
+  );
 }

@@ -10,6 +10,7 @@ import {
   toDateString,
   type BookingRequestDetail,
   type BookingRequestStatus,
+  type BookingSettlement,
   type BookingWithContext,
   type CreateBookingRequestInput,
   type NotificationType,
@@ -39,6 +40,7 @@ import {
   findActivePackage,
   findAvailabilityOn,
   findBookings,
+  findSettlements,
   findLiveRequest,
   findPackagesByIds,
   findRequestById,
@@ -179,6 +181,14 @@ function toDetail(
   vendor: VendorSummaryRow,
   servicePackage: ServicePackageRow | null,
   customer: CustomerIdentityRow,
+  /**
+   * The booking this request produced, or `null` because it produced none
+   * (#415). Passed in rather than looked up here so the list read fetches them
+   * in one query, and required rather than defaulted so a caller has to decide
+   * — a wrong `null` reads on the screen as "you withdrew this", which is the
+   * exact sentence this field exists to stop.
+   */
+  settlement: BookingSettlement | null,
 ): BookingRequestDetail {
   /*
    * The one place the privacy line is drawn, so the three layers that enforce
@@ -205,6 +215,7 @@ function toDetail(
       phone: disclosed ? customer.phone : null,
     },
     package: servicePackage ? toPackageSummary(servicePackage) : null,
+    settlement,
   };
 }
 
@@ -546,7 +557,18 @@ export async function createBookingRequest(
     }
 
     return {
-      request: toDetail(existing, vendor, servicePackage, await nameOf(db, existing.customerId)),
+      /*
+       * `null`, and provably so: this branch returns a request the unique index
+       * says is still `pending` or `quoted`, and a booking exists only past
+       * `accepted`.
+       */
+      request: toDetail(
+        existing,
+        vendor,
+        servicePackage,
+        await nameOf(db, existing.customerId),
+        null,
+      ),
       created: false,
     };
   }
@@ -562,11 +584,13 @@ export async function createBookingRequest(
   }
 
   return {
+    /* A request created one line ago has no booking. */
     request: toDetail(
       created.row,
       vendor,
       servicePackage,
       await nameOf(db, created.row.customerId),
+      null,
     ),
     created: true,
   };
@@ -594,11 +618,20 @@ export async function getBookingRequest(
     throw notFound('That request does not exist');
   }
 
-  const servicePackage = current.packageId
-    ? ((await findPackagesByIds(db, [current.packageId]))[0] ?? null)
-    : null;
+  /* Independent of each other, and of the vendor read above. */
+  const [packages, customer, settlements] = await Promise.all([
+    current.packageId ? findPackagesByIds(db, [current.packageId]) : Promise.resolve([]),
+    nameOf(db, current.customerId),
+    findSettlements(db, [current.id]),
+  ]);
 
-  return toDetail(current, vendor, servicePackage, await nameOf(db, current.customerId));
+  return toDetail(
+    current,
+    vendor,
+    packages[0] ?? null,
+    customer,
+    settlements.get(current.id) ?? null,
+  );
 }
 
 export async function listBookingRequests(
@@ -634,12 +667,21 @@ export async function listBookingRequests(
     return [];
   }
 
-  const vendors = await findVendorsByIds(db, [...new Set(visible.map((row) => row.vendorId))]);
-  const packages = await findPackagesByIds(db, [
-    ...new Set(visible.map((row) => row.packageId).filter((id) => id !== null)),
+  /*
+   * Four reads, none of which depends on another — they are all keyed off
+   * `visible` — so the queue pays one round trip rather than four.
+   */
+  const [vendors, packages, names, settlements] = await Promise.all([
+    findVendorsByIds(db, [...new Set(visible.map((row) => row.vendorId))]),
+    findPackagesByIds(db, [
+      ...new Set(visible.map((row) => row.packageId).filter((id) => id !== null)),
+    ]),
+    findCustomerNames(db, [...new Set(visible.map((row) => row.customerId))]),
+    findSettlements(
+      db,
+      visible.map((row) => row.id),
+    ),
   ]);
-
-  const names = await findCustomerNames(db, [...new Set(visible.map((row) => row.customerId))]);
 
   const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
   const packageById = new Map(packages.map((row) => [row.id, row]));
@@ -657,6 +699,7 @@ export async function listBookingRequests(
         vendor,
         row.packageId ? (packageById.get(row.packageId) ?? null) : null,
         nameById.get(row.customerId) ?? NO_CUSTOMER,
+        settlements.get(row.id) ?? null,
       ),
     ];
   });
@@ -750,7 +793,14 @@ export async function transitionRequest(
     ? ((await findPackagesByIds(db, [updated.packageId]))[0] ?? null)
     : null;
 
-  return toDetail(updated, vendor, servicePackage, await nameOf(db, updated.customerId));
+  /*
+   * `null`. Every edge on `BOOKING_REQUEST_TRANSITIONS` starts from a live
+   * status, and a booking exists only on an accepted request — the one
+   * transition that settles an accepted request is the cancellation, and that
+   * is written by `cancelBookingAndFreeDate` rather than walked through here
+   * (#400).
+   */
+  return toDetail(updated, vendor, servicePackage, await nameOf(db, updated.customerId), null);
 }
 
 /**

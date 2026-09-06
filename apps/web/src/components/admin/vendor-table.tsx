@@ -13,6 +13,9 @@ import { displayRating } from '@/lib/admin-params';
 import { useApi } from '@/lib/use-api';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 
+/** The durable list of bookings a ban could not unwind (#415). */
+const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
+
 /**
  * The four statuses frame `13` draws, mapped onto the shared pill vocabulary in
  * `03-components.md` rather than onto four new colours. Every value here is a
@@ -121,11 +124,11 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
    *
    * Clearing on a zero count meant any later action wiped it: an unban always
    * reports `refundsFailed: 0`, so lifting a suspension on an unrelated row
-   * silently removed the notice about money still sitting at Stripe. Nothing
-   * else in `/admin` surfaces a confirmed booking on a banned vendor, so this
-   * is the only place it is said — it stays until the operator reloads, which
-   * is a deliberate floor rather than a full solution (#415 owns the durable
-   * surface).
+   * silently removed the notice about money still sitting at Stripe.
+   *
+   * It still does not survive a reload, and no longer needs to: the bookings
+   * it names are now a list the operator can go back to (#415), and this
+   * points at it. The banner is the moment's notice; the list is the record.
    */
   function reportStuckRefunds(count: number, accounts: number): void {
     if (count === 0) {
@@ -156,7 +159,16 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
           role="alert"
           className="mb-3 rounded-lg border border-error-500 bg-stone-0 px-4 py-2.5 text-sm text-error-500"
         >
-          {stuckRefunds}
+          {stuckRefunds}{' '}
+          {/*
+            The way back to them once this line is gone. Without it the banner
+            was the whole record: it lives in component state, so the next
+            navigation took it, and nothing else in the console listed a
+            confirmed booking on a suspended account.
+          */}
+          <Link href={STUCK_REFUNDS_PATH} className="font-semibold underline">
+            See the bookings
+          </Link>
         </p>
       ) : null}
       {/*
