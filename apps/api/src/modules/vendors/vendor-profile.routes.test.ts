@@ -290,6 +290,65 @@ describe('GET /vendors/:slug', () => {
     });
 
     /*
+     * #407. The route is unauthenticated, and `findAvailabilityInRange` is a
+     * bare `select()` over every column — so the vendor's private reminder
+     * against a date ("Sarah & Tom, deposit paid") was served verbatim to
+     * anyone who asked. Absent, not null: the visitor is told whether the date
+     * is free, and nothing about why.
+     */
+    it('never serves the vendor’s private note to a visitor', async () => {
+      const { id, slug } = await seedVendor({ user: 'vendor-a', businessName: 'Calendar Co' });
+
+      await harness.database.db.insert(availability).values({
+        vendorId: id,
+        date: futureDate(30),
+        status: 'booked',
+        note: 'Sarah & Tom, deposit paid',
+      });
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/vendors/${slug}/availability`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const [entry] = response.json();
+      expect(entry).toEqual({
+        id: expect.any(String),
+        vendorId: id,
+        date: futureDate(30),
+        status: 'booked',
+      });
+      expect(Object.keys(entry)).not.toContain('note');
+      expect(response.payload).not.toContain('Sarah & Tom');
+    });
+
+    /* The vendor's own calendar still carries it — it is their note. */
+    it('still gives the vendor their own note back', async () => {
+      await seedVendor({ user: 'vendor-c', businessName: 'Note Keeper Co' });
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/availability',
+        headers: bearer('vendor-c'),
+        payload: {
+          entries: [{ date: futureDate(31), status: 'blocked', note: 'Sarah & Tom, deposit paid' }],
+        },
+      });
+
+      const own = await harness.app.inject({
+        method: 'GET',
+        url: '/vendor/availability',
+        headers: bearer('vendor-c'),
+      });
+
+      expect(own.statusCode).toBe(200);
+      expect(own.json()).toContainEqual(
+        expect.objectContaining({ date: futureDate(31), note: 'Sarah & Tom, deposit paid' }),
+      );
+    });
+
+    /*
      * #409, and the one that got past unit tests entirely — found in a browser
      * at 03:30Z with the visitor's browser in `America/Los_Angeles`.
      *

@@ -51,6 +51,19 @@ describe('QuoteReview', () => {
     expect(screen.getByText('Includes travel to Barr Mansion and a second shooter.')).toBeDefined();
   });
 
+  /**
+   * #412's seventh finding: the summary line printed `request.eventDate`
+   * verbatim, so the one page a customer lands on from the hub read
+   * `Wedding · 2026-06-14 · Barr Mansion` while the form, the review step and
+   * the hub all wrote the same date out.
+   */
+  it('writes the event date out rather than printing the ISO string', () => {
+    render(<QuoteReview request={quotedRequest()} />);
+
+    expect(screen.getByText('Wedding · June 14, 2026 · Barr Mansion, Austin, TX')).toBeDefined();
+    expect(screen.queryByText(/2026-06-14/)).toBeNull();
+  });
+
   it('accepts the quote through the API and re-reads from the server', async () => {
     render(<QuoteReview request={quotedRequest()} />);
 

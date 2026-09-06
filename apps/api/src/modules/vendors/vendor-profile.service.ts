@@ -2,12 +2,12 @@ import {
   addDays,
   publicVendorProfileSchema,
   toDateString,
-  type Availability,
+  type PublicAvailability,
   type PublicVendorProfile,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
-import { findAvailabilityInRange } from '../availability/availability.dao.js';
+import { findPublicAvailabilityInRange } from '../availability/availability.dao.js';
 import { availabilityWindow } from '../availability/availability.service.js';
 import {
   findActivePackages,
@@ -73,7 +73,7 @@ export async function getPublicVendorAvailability(
   db: AppDatabase,
   slug: string,
   now: Date = new Date(),
-): Promise<Availability[]> {
+): Promise<PublicAvailability[]> {
   const vendor = await findPublicVendorBySlug(db, slug);
 
   if (!vendor) {
@@ -104,5 +104,13 @@ export async function getPublicVendorAvailability(
    */
   const { to } = availabilityWindow(now);
 
-  return findAvailabilityInRange(db, vendor.id, toDateString(addDays(now, -1)), to);
+  /*
+   * The **public** read, which never selects `note` (#407). This endpoint is
+   * unauthenticated and `findAvailabilityInRange` is a bare `select()` over
+   * every column, so the vendor's private reminder against a date — "Sarah &
+   * Tom, deposit paid" — was returned verbatim to anyone who asked. Leaving
+   * the column out of the query rather than dropping it afterwards means no
+   * later widening of the response schema can start publishing it again.
+   */
+  return findPublicAvailabilityInRange(db, vendor.id, toDateString(addDays(now, -1)), to);
 }

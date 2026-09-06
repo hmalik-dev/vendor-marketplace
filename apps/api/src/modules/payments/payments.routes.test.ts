@@ -513,6 +513,36 @@ describe('payments', () => {
     });
 
     /*
+     * #407. The confirmed screen's own read carried the platform's commission,
+     * the vendor's payout split and the Stripe payment-intent id straight to
+     * the customer — the same customer `payments.service.ts` records the
+     * commission "is none of the business of". The projection lives in
+     * `toBookingWithContext`, so this read and `GET /bookings` cannot drift.
+     */
+    it('keeps the fee split and the Stripe ids off the confirmed screens read', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+
+      const response = await inject(
+        'GET',
+        `/customer/booking-requests/${requestId}/booking`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      const keys = Object.keys(response.json() as Record<string, unknown>);
+      for (const field of [
+        'platformFeeCents',
+        'vendorPayoutCents',
+        'stripePaymentIntentId',
+        'stripeTransferId',
+      ]) {
+        expect(keys).not.toContain(field);
+      }
+      expect(response.payload).not.toContain('pi_');
+    });
+
+    /*
      * The already-booked branch returned whatever booking the request id named
      * to any signed-in caller — amounts, payout split and Stripe intent id — so
      * a stranger walking ids read other people's bookings. 404, not 403, so a

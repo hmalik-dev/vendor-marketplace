@@ -14,13 +14,19 @@ describe('CheckoutUnavailable', () => {
    * was old and the vendor may have gone. The money position is the thing a
    * failed checkout has to say and the 404 shell could not — `40-states.md` §1
    * question 2.
+   *
+   * It states the money and stops there. It used to add "and your date is still
+   * held", which `unavailableScreen` has no way of knowing: it returns `failed`
+   * without reading the request, and #400 made a cancelled booking reach this
+   * screen.
    */
-  it('states the money position and that the date survives a failure', () => {
+  it('states the money position without claiming a date it cannot know is held', () => {
     render(<CheckoutUnavailable reason="failed" requestId={REQUEST_ID} vendorName={null} />);
 
     const banner = screen.getByRole('status');
 
-    expect(banner.textContent).toBe('No payment was taken, and your date is still held.');
+    expect(banner.textContent).toBe('No payment was taken and no booking was changed.');
+    expect(banner.textContent).not.toContain('still held');
     // Settled, not failed: sage is the colour of a resolved money position.
     expect(banner.getAttribute('data-status')).toBe('settled');
   });
@@ -55,11 +61,37 @@ describe('CheckoutUnavailable', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       "This booking isn't open any more",
     );
-    expect(screen.getByRole('status').textContent).toBe('No payment was taken.');
+    expect(screen.getByRole('status').textContent).toBe('Nothing is owed on this booking.');
     expect(screen.queryByRole('link', { name: 'Try this payment again' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Back to this booking' }).getAttribute('href')).toBe(
       `/bookings/${REQUEST_ID}`,
     );
+  });
+
+  /*
+   * #400 made two of these three reasons reachable by a customer who *had*
+   * paid: cancelling now settles the parent request, so a refunded booking
+   * lands on `closed` instead of redirecting to the confirmation, and a stalled
+   * POST on the same request lands on `failed`.
+   *
+   * Asserted across all three at once, which is what gives it a failure mode of
+   * its own. Pinning the negative inside each reason's own test would be
+   * redundant — those tests already fix the exact string, so they redden first —
+   * and this defect returns precisely by someone updating one of those strings
+   * to match new copy. `not-accepted` is the control: it keeps the sentence,
+   * because payment needs `accepted` and nothing returns a request to
+   * `pending`/`quoted`, so there it is still true.
+   */
+  it('only claims no payment was taken where a payment could not have happened', () => {
+    const bannerFor = (reason: 'failed' | 'not-accepted' | 'closed'): string => {
+      cleanup();
+      render(<CheckoutUnavailable reason={reason} requestId={REQUEST_ID} vendorName="June H." />);
+      return screen.getByRole('status').textContent ?? '';
+    };
+
+    expect(bannerFor('not-accepted')).toContain('No payment was taken');
+    expect(bannerFor('failed')).toContain('No payment was taken');
+    expect(bannerFor('closed')).not.toContain('No payment was taken');
   });
 
   /*

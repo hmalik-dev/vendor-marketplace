@@ -4,6 +4,7 @@ import {
   calculateFees,
   calculateRefund,
   isUniversallyFutureDate,
+  type Booking,
   type BookingWithContext,
   type CancelledBooking,
   type CheckoutIntent,
@@ -11,6 +12,7 @@ import {
 import type { BookingRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
+import { toBookingView, toBookingWithContext } from '../../lib/booking-view.js';
 import {
   sendNotificationEmail,
   type NotificationEmailDeps,
@@ -400,7 +402,7 @@ export async function reconcileBooking(
       return null;
     }
 
-    return withContext(existing, existing.eventType);
+    return toBookingWithContext(existing, existing.eventType);
   }
 
   const row = await findPayableRequest(context.db, requestId);
@@ -436,18 +438,7 @@ export async function reconcileBooking(
 
   const { booking } = await recordSuccessfulPayment(context, intent);
 
-  return withContext(booking, row.eventType);
-}
-
-/**
- * The booking as the confirmed screen and the hubs read it.
- *
- * `eventType` lives on the request and `venue` mirrors `eventLocation`, exactly
- * as `listBookings` assembles them — the two reads answer with the same shape
- * because the same `bookingWithContextSchema` validates both ends of each.
- */
-function withContext(booking: BookingRow, eventType: string | null): BookingWithContext {
-  return { ...booking, eventType, venue: booking.eventLocation };
+  return toBookingWithContext(booking, row.eventType);
 }
 
 /** The two sides of a booking, and which one this caller is. */
@@ -488,7 +479,7 @@ export async function completeBooking(
   user: AuthenticatedUser,
   bookingId: string,
   now: Date,
-): Promise<BookingRow> {
+): Promise<Booking> {
   const { booking, side } = await participantIn(context, user, bookingId);
 
   if (side !== 'vendor') {
@@ -534,7 +525,7 @@ export async function completeBooking(
     bookingId: completed.id,
   });
 
-  return completed;
+  return toBookingView(completed);
 }
 
 /**
@@ -661,7 +652,7 @@ export async function cancelBooking(
   }
 
   return {
-    booking: cancelled,
+    booking: toBookingView(cancelled),
     refundCents: refund.amountCents,
     /*
      * Read off the money that actually moved, not off the tier the quote would

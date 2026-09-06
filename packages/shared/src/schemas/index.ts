@@ -3,6 +3,7 @@ import {
   formatPrice,
   isBeyondBookingHorizon,
   isUniversallyPastDate,
+  normalizeImageRefPath,
   stripBidiControls,
 } from '../utils/index.js';
 import {
@@ -162,7 +163,7 @@ export const imageRefSchema = z
        * `a/../b.webp` does and a guard that reads the stored spelling misses
        * it.
        */
-      const path = value.replace(/\\/g, '/').replace(/%2e/gi, '.');
+      const path = normalizeImageRefPath(value);
 
       return !path.startsWith('//') && !path.split('/').includes('..');
     },
@@ -324,12 +325,49 @@ export const updateUserSchema = z
      * minimum, "   " stored as an empty string and rendered as a bio that was
      * there but said nothing.
      */
-    bio: trimmedString(MAX_CUSTOMER_BIO_LENGTH).nullable(),
-    city: trimmedString(MAX_NAME_LENGTH).nullable(),
-    state: trimmedString(MAX_NAME_LENGTH).nullable(),
+    /*
+     * Every message here is written out rather than left to Zod (#412). The
+     * customer profile form parses this schema **client-side** and shows
+     * `issues[0].message` on screen, so the default was the entire text a
+     * customer got for a bio one character too long — `Invalid input` in the
+     * browser build, `Too big: expected string to have <=300 characters` in
+     * Node. Neither says what to do, and `40-states.md` requires a message
+     * that does: "how to fix it, never 'Invalid'".
+     */
+    /*
+     * `freeText` with the bounds written out, not `trimmedString` — the first
+     * `.max()` on a chain is the one that reports, so a second call adding a
+     * message never runs.
+     */
+    bio: freeText()
+      .min(1)
+      .max(MAX_CUSTOMER_BIO_LENGTH, {
+        message: `Keep this to ${MAX_CUSTOMER_BIO_LENGTH} characters or fewer.`,
+      })
+      .nullable(),
+    city: freeText()
+      .min(1)
+      .max(MAX_NAME_LENGTH, { message: `A city name is at most ${MAX_NAME_LENGTH} characters.` })
+      .nullable(),
+    state: freeText()
+      .min(1)
+      .max(MAX_NAME_LENGTH, { message: `A state name is at most ${MAX_NAME_LENGTH} characters.` })
+      .nullable(),
     budgetTier: budgetTierSchema.nullable(),
-    typicalGuestCountMin: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
-    typicalGuestCountMax: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
+    typicalGuestCountMin: z
+      .int()
+      .min(1, { message: 'A guest count starts at 1.' })
+      .max(MAX_GUEST_COUNT, {
+        message: `That is more than ${MAX_GUEST_COUNT.toLocaleString('en-US')} guests.`,
+      })
+      .nullable(),
+    typicalGuestCountMax: z
+      .int()
+      .min(1, { message: 'A guest count starts at 1.' })
+      .max(MAX_GUEST_COUNT, {
+        message: `That is more than ${MAX_GUEST_COUNT.toLocaleString('en-US')} guests.`,
+      })
+      .nullable(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
@@ -659,11 +697,36 @@ export type UpdatePortfolioItemInput = z.infer<typeof updatePortfolioItemSchema>
 
 // --- Availability ----------------------------------------------------------
 
-export const availabilitySchema = z.object({
+/**
+ * The calendar as a visitor sees it (#407).
+ *
+ * Declared explicitly and **extended** into the private shape below, rather
+ * than the private shape being `omit`-ed down to this one — the same doctrine
+ * `publicVendorProfileSchema` states: a public shape that starts from the
+ * private one and remembers to omit leaks the next column somebody adds. The
+ * next thing stored against a date — a hold reason, an internal reference, the
+ * customer's name — is private until this object names it.
+ *
+ * Whether a date is free is the whole of what a customer needs. Why it is
+ * taken is the vendor's, and `GET /vendors/:slug/availability` is
+ * unauthenticated.
+ */
+export const publicAvailabilitySchema = z.object({
   id: uuidSchema,
   vendorId: uuidSchema,
   date: calendarDateSchema,
   status: availabilityStatusSchema,
+});
+export type PublicAvailability = z.infer<typeof publicAvailabilitySchema>;
+
+/** The vendor's own calendar, which is the public one plus their private note. */
+export const availabilitySchema = publicAvailabilitySchema.extend({
+  /**
+   * The vendor's reminder against the date — "Sarah & Tom, deposit paid". It
+   * never leaves their own calendar: the public read answers
+   * `publicAvailabilitySchema`, and the DAO behind it does not select this
+   * column at all.
+   */
   note: z.string().max(MAX_CAPTION_LENGTH).nullable(),
 });
 export type Availability = z.infer<typeof availabilitySchema>;
@@ -842,6 +905,20 @@ export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
 // --- Bookings --------------------------------------------------------------
 
+/**
+ * A booking as either party reads it.
+ *
+ * **The money internals are deliberately absent (#407).** The row carries
+ * `platform_fee_cents`, `vendor_payout_cents`, `stripe_payment_intent_id` and
+ * `stripe_transfer_id`; every read that answers this schema is reached by a
+ * customer, and `payments.service.ts` already states that the platform's
+ * commission "is none of the customer's business". Nothing on either hub
+ * renders them — the vendor's own payout figure comes from
+ * `vendorDashboardSchema.nextPayout`, which only a vendor can reach — so the
+ * fields are dropped from the read model rather than branched on the caller's
+ * role. A route that genuinely needs them declares its own schema, the way
+ * `adminPaymentRowSchema` does.
+ */
 export const bookingSchema = z.object({
   id: uuidSchema,
   requestId: uuidSchema,
@@ -850,11 +927,7 @@ export const bookingSchema = z.object({
   eventDate: calendarDateSchema,
   eventLocation: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
   totalAmountCents: z.int(),
-  platformFeeCents: z.int(),
-  vendorPayoutCents: z.int(),
   status: bookingStatusSchema,
-  stripePaymentIntentId: z.string().max(255).nullable(),
-  stripeTransferId: z.string().max(255).nullable(),
   paidAt: z.date().nullable(),
   completedAt: z.date().nullable(),
   cancelledAt: z.date().nullable(),

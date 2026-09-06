@@ -26,5 +26,24 @@ longer class (`gap-2` / `gap-2.5`, `px-6` / `px-6.5`, `py-1.75` / `py-1`,
 mutating the intended line and re-running — cheap, and it turns a suspicion into
 a demonstrated failure. Prefer asserting the rendered `className` of the element,
 or a longer anchored substring including the neighbouring classes.
+**The comment-prose variant (#393).** The colliding second match is often not
+another _class_ — it is the file's own docstring. `frame-13-parity.test.ts`
+pinned the new scroll axis with `expect(dataTable).toContain('overflow-auto')`,
+and `data-table.tsx`'s docstring says "inside an `overflow-auto` body". Reverting
+the className to `overflow-y-auto` left that file 34/34 green. This repo writes
+essay-length comments naming the very classes the guards assert, so
+`grep -n '<class>' <file>` will usually return the comment as well as the code —
+count the matches, do not eyeball the className.
+
+**The hand-computed-derivation variant (#393).** A test that claims to
+_recompute_ a constant from the shell is only as pinned as the inputs it
+actually reads. That one read `--sidebar-admin-width` numerically but hardcoded
+the rail's `12 * 2` gutters and `1` border while merely asserting
+`toContain('px-3')` / `toContain('lg:border-r')` beside them — both of which
+match `px-3.5` and `lg:border-r-2`. Widening the nav gutter to `px-3.5` kept all
+34 green with the derived constant 8px wrong. **For each number in the
+arithmetic, ask which assertion would have to fail if that number moved; a
+`toContain` next to a literal is decoration.**
+
 Related: [[review-checklist-pseudo-element-hit-areas]],
 [[review-checklist-unpinned-safety-constants]].

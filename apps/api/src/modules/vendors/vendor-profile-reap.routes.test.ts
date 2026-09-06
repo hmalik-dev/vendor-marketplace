@@ -193,20 +193,57 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
 
   /*
    * The key on a row is client-supplied and every public vendor page hands out
-   * the keys it renders, so a vendor can name a rival's key. The owner segment
-   * is the only thing that stops the reap acting on it.
+   * the keys it renders, so a vendor could name a rival's key. The reap guard
+   * kept it from deleting the rival's bytes; #407 stops the reference being
+   * created at all, because the row itself was the damage — it counts as a live
+   * reference, so the rival's own replacement then found the object still
+   * referenced and left it in the bucket, rendered as this vendor's work with
+   * no way for its owner to remove it.
    */
-  it('never reaps an image minted for another vendor', async () => {
+  it('refuses a profile image minted for another vendor', async () => {
     await createProfile(VENDOR, 'Sunlit Studio');
     await createProfile(OTHER_VENDOR, 'Rival Studio');
     const rival = await upload('vendor-profile', await ownerIdOf(OTHER_VENDOR), 'rival');
-    const mine = await upload('vendor-profile', await ownerIdOf(VENDOR), 'mine');
 
-    await save(VENDOR, { profileImageUrl: rival });
-    await save(VENDOR, { profileImageUrl: mine });
+    const response = await harness.app.inject({
+      method: 'PUT',
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+      payload: { profileImageUrl: rival },
+    });
 
+    expect(response.statusCode).toBe(403);
+    expect(response.json().message).toBe('That image belongs to another account');
+
+    // Nothing was written, so nothing was reaped either.
     expect(inBucket(rival)).toBe(true);
-    expect(inBucket(rival.replace(/\.webp$/, '-thumb.webp'))).toBe(true);
+    const [row] = await harness.database.db
+      .select({ profileImageUrl: vendorProfiles.profileImageUrl })
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.userId, await ownerIdOf(VENDOR)));
+    expect(row!.profileImageUrl).toBeNull();
+  });
+
+  /* The same refusal on the way in, before a profile exists at all. */
+  it('refuses a foreign cover on profile creation', async () => {
+    await createProfile(OTHER_VENDOR, 'Rival Studio');
+    const rival = await upload('vendor-cover', await ownerIdOf(OTHER_VENDOR), 'rival-cover');
+
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+      payload: {
+        businessName: 'Sunlit Studio',
+        categoryIds: [photographyId],
+        city: 'Austin',
+        state: 'TX',
+        coverImageUrl: rival,
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(inBucket(rival)).toBe(true);
   });
 
   /*

@@ -212,6 +212,29 @@ describe('/booking-requests', () => {
       expect(response.statusCode).toBe(403);
     });
 
+    /**
+     * The refusal, not a validation failure that happens to also deny.
+     *
+     * `requireRole` runs at `preHandler`, which is *after* Fastify's body
+     * parser and schema validation — so a vendor posting a malformed body was
+     * answered `400 VALIDATION_ERROR`. They were still denied, because no
+     * handler ran, but the code reads like a broken endpoint rather than a
+     * refusal, and an audit counting 403s would not see it. Measured against a
+     * live signed-in vendor while verifying #412; `requireRoleBeforeValidation`
+     * is the guard that exists for exactly this.
+     */
+    it('answers a vendor 403 even when the body would not validate', async () => {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/booking-requests',
+        headers: bearer(VENDOR),
+        payload: { vendorId: 'not-a-uuid' },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('FORBIDDEN');
+    });
+
     it('hides another customer request behind a 404', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
@@ -1430,6 +1453,71 @@ describe('/booking-requests', () => {
       const [booking] = response.json() as { eventType: string; venue: string }[];
       expect(booking?.eventType).toBe('wedding');
       expect(booking?.venue).toBe('Barr Mansion, Austin, TX');
+    });
+
+    /*
+     * #407. `listBookings` used to spread the whole row through
+     * `bookingWithContextSchema`, which carried the platform's commission, the
+     * vendor's payout split and both Stripe identifiers — to the customer, who
+     * `payments.service.ts` already records has no business seeing the
+     * commission. Nothing on either hub renders them, so they are gone from the
+     * read model rather than branched on the caller's role.
+     */
+    it('hands neither party the fee split or the Stripe identifiers', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const request = created.json() as RequestBody;
+
+      const customer = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.clerkUserId, CUSTOMER));
+
+      await harness.database.db.insert(bookings).values({
+        requestId: request.id,
+        customerId: customer[0]!.id,
+        vendorId,
+        eventDate: EVENT_DATE,
+        eventLocation: 'Barr Mansion, Austin, TX',
+        totalAmountCents: 145_000,
+        platformFeeCents: 17_400,
+        vendorPayoutCents: 127_600,
+        stripePaymentIntentId: 'pi_secret_407',
+        stripeTransferId: 'tr_secret_407',
+      });
+
+      for (const actor of [CUSTOMER, VENDOR]) {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: '/bookings',
+          headers: bearer(actor),
+        });
+
+        expect(response.statusCode).toBe(200);
+        const [booking] = response.json() as Record<string, unknown>[];
+        expect(Object.keys(booking!).sort()).toEqual([
+          'cancellationReason',
+          'cancelledAt',
+          'completedAt',
+          'createdAt',
+          'customerId',
+          'eventDate',
+          'eventLocation',
+          'eventType',
+          'id',
+          'paidAt',
+          'requestId',
+          'status',
+          'totalAmountCents',
+          'updatedAt',
+          'vendorId',
+          'venue',
+        ]);
+        expect(response.payload).not.toContain('pi_secret_407');
+        expect(response.payload).not.toContain('tr_secret_407');
+        // The total is still there: it is what the customer paid.
+        expect(booking!.totalAmountCents).toBe(145_000);
+      }
     });
 
     it('is empty for someone with no bookings', async () => {

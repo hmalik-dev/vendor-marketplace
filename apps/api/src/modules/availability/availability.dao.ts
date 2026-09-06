@@ -5,7 +5,7 @@ import {
   type AvailabilityRow,
   type NewAvailabilityRow,
 } from '@vendor-marketplace/db/schema';
-import { LIVE_BOOKING_REQUEST_STATUSES } from '@vendor-marketplace/shared';
+import { LIVE_BOOKING_REQUEST_STATUSES, type PublicAvailability } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
@@ -68,6 +68,43 @@ export async function findAvailabilityInRange(
 
   return db
     .select()
+    .from(availability)
+    .where(
+      and(
+        eq(availability.vendorId, vendorId),
+        gte(availability.date, from),
+        lte(availability.date, to),
+      ),
+    )
+    .orderBy(asc(availability.date));
+}
+
+/**
+ * The same window as `findAvailabilityInRange`, without the vendor's `note`.
+ *
+ * A separate read rather than a projection applied afterwards (#407): the
+ * public endpoint is unauthenticated, and the strongest form of "the visitor
+ * never sees the note" is that the column is never selected. The two callers
+ * genuinely want different columns — the vendor's own calendar renders the
+ * note — so this is the shape of the difference, not a duplicate.
+ */
+export async function findPublicAvailabilityInRange(
+  db: AppDatabase,
+  vendorId: string,
+  from: string,
+  to: string,
+): Promise<PublicAvailability[]> {
+  if (!vendorId) {
+    return [];
+  }
+
+  return db
+    .select({
+      id: availability.id,
+      vendorId: availability.vendorId,
+      date: availability.date,
+      status: availability.status,
+    })
     .from(availability)
     .where(
       and(

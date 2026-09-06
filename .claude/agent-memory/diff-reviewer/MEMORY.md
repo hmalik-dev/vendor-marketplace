@@ -8,7 +8,7 @@
 - [Abort listener registered after an await](review-checklist-abort-listener-after-await.md) — count the awaits before `addEventListener('abort')`; a mocked uploader models abort as always effective
 - [Tailwind v4 transition lists](review-checklist-tailwind-v4-transition-lists.md) — `transform` is not `scale`/`translate`/`rotate`/`filter`, and leaving `box-shadow` in keeps the ring ramping; compile + probe in Chromium
 - [Hand-rolled focus trap vs portals](review-checklist-handrolled-focus-trap-vs-portals.md) — Radix popover content lives at `<body>`, so `panel.contains(activeElement)` yanks focus on every Tab and Escape closes both layers
-- [Source-grep substring collisions](review-checklist-source-grep-substring-collisions.md) — `toContain('gap-2')` passes on the file's unrelated `gap-2.5`; count the matches, then mutate the intended line
+- [Source-grep substring collisions](review-checklist-source-grep-substring-collisions.md) — `toContain('gap-2')` passes on `gap-2.5`, or on the file's own docstring; count the matches, then mutate the line
 - [Ring offset in the ground's own colour](review-checklist-ring-offset-same-as-ground.md) — the ring is already outside the border box; re-grounding the offset in the parent's colour deletes its only 3:1 edge. Scan pixels outward
 - [Frames render content-box](review-checklist-design-frames-are-content-box.md) — the .dc.html has no preflight, so a bordered div there is `D + 2×stroke`; measuring it under the app's CSS gives the wrong answer
 - [Seeded rows vs the production writer](review-checklist-seeded-rows-vs-the-production-writer.md) — diff the seed's `values` against the service that owns that insert; a column the seed nulls is a null branch the UI renders for ever
@@ -20,5 +20,6 @@
 - [Status filter vs webhook idempotency](review-checklist-status-filter-vs-webhook-idempotency.md) — narrowing a shared finder blinds `recordSuccessfulPayment`'s "already recorded?" read; a redelivery then 409s for three days
 - [Single-URL validator vs list-shaped rows](review-checklist-single-url-validator-vs-list-shape.md) — `new URL(value)` once is blind to a comma-separated `WEB_URL`; read each row's shape regex, then feed a two-entry value
 - [.dc.html tag balance](review-checklist-dc-html-tag-balance.md) — a re-cut block's surplus `</div>` evicts a frame from its `.sc`; string-sliced frame tests can't see it. Diff div counts, then diff `closest('.sc')` in Chromium
+- [Path guard vs URL normalization](review-checklist-guard-parses-raw-path-url-normalises.md) — `split('/')` ownership checks miss `a/<victim>/./c`; run the candidate through the write schema, then `new URL()`, and compare
 - [Viewer anchor vs the read behind it](review-checklist-viewer-anchor-vs-the-read-behind-it.md) — re-anchoring a surface on the viewer's clock without widening the server read behind it; an absent row in a sparse table is a claim, not a gap
 - [Source-guard regex truncation](review-checklist-source-guard-regex-truncation.md) — `<button\b([^>]*)>` is cut at an arrow fn's `=>`, and never matches `<Button`; mutation-test every guard

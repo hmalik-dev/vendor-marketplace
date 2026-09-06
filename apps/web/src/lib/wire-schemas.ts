@@ -16,6 +16,7 @@ import {
   portfolioItemSchema,
   nearbyAvailabilityResultSchema,
   nearbyVendorSchema,
+  publicAvailabilitySchema,
   publicReviewSchema,
   publicVendorProfileSchema,
   servicePackageSchema,
@@ -161,6 +162,15 @@ export type WirePublicVendorProfile = z.infer<typeof wirePublicVendorProfileSche
  */
 export const wireAvailabilityListSchema = z.array(availabilitySchema);
 export type WireAvailability = z.infer<typeof availabilitySchema>;
+
+/**
+ * The public calendar read. It carries no `note` — the vendor's private
+ * reminder never leaves their own calendar (#407) — so the visitor-facing
+ * surfaces parse this and cannot come to depend on a field the API will not
+ * send them.
+ */
+export const wirePublicAvailabilityListSchema = z.array(publicAvailabilitySchema);
+export type WirePublicAvailability = z.infer<typeof publicAvailabilitySchema>;
 
 /*
  * The booking surfaces, as JSON. Dates on the wire are ISO strings; the domain

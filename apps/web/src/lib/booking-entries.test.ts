@@ -5,6 +5,7 @@ import {
   daysUntil,
   entriesForTab,
   formatCardDate,
+  formatEventDate,
   groupByMonth,
   requestToEntry,
   summarise,
@@ -75,11 +76,7 @@ function booking(overrides: Partial<WireBooking> = {}): WireBooking {
     eventDate: '2026-06-14',
     eventLocation: 'Barr Mansion',
     totalAmountCents: 145_000,
-    platformFeeCents: 17_400,
-    vendorPayoutCents: 127_600,
     status: 'confirmed',
-    stripePaymentIntentId: null,
-    stripeTransferId: null,
     paidAt: NOW,
     completedAt: null,
     cancelledAt: null,
@@ -107,7 +104,33 @@ describe('formatCardDate', () => {
   });
 });
 
+describe('formatEventDate', () => {
+  it('writes the date out, as the request form and its review step do', () => {
+    expect(formatEventDate('2026-10-20')).toBe('October 20, 2026');
+  });
+
+  it('reads the date as UTC, so no viewer west of UTC loses a day', () => {
+    expect(formatEventDate('2026-01-01')).toBe('January 1, 2026');
+  });
+});
+
 describe('toEntries', () => {
+  /**
+   * #412's second finding. `/customer/profile` sized the shared sidebar badge
+   * as `requests.length + bookings.length`, which counts every paid request
+   * twice — 9 against the hub's 7, in the one navigation element the two pages
+   * share. `toEntries` is the count, on both pages.
+   */
+  it('counts a paid request once, not once per table', () => {
+    const entries = toEntries(
+      [request({ id: 'req-1' }), request({ id: 'req-2' })],
+      [booking({ requestId: 'req-1' })],
+      NOW,
+    );
+
+    expect(entries).toHaveLength(2);
+  });
+
   it('renders a request that became a booking once, as the booking', () => {
     const entries = toEntries([request({ id: 'req-1' })], [booking({ requestId: 'req-1' })], NOW);
 

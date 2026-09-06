@@ -8,7 +8,7 @@ import type { NewPortfolioItemRow, PortfolioItemRow } from '@vendor-marketplace/
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
 import { assertCompleteOrder } from '../../lib/ordering.js';
-import { ownsObjectKey, type ObjectStorage } from '../../lib/storage.js';
+import { assertOwnedImageRefs, ownsObjectKey, type ObjectStorage } from '../../lib/storage.js';
 import { requireOwnVendorProfile } from '../vendors/vendors.service.js';
 import {
   applyPortfolioOrder,
@@ -39,6 +39,8 @@ export async function addPortfolioItem(
   userId: string,
   input: CreatePortfolioItemInput,
 ): Promise<PortfolioItem> {
+  assertOwnedImageRefs([input.imageUrl, input.thumbnailUrl], userId);
+
   const vendor = await requireOwnVendorProfile(db, userId);
 
   const values: NewPortfolioItemRow = {
