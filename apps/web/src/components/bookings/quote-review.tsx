@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiClientError } from '@/lib/api-client';
 import { useApi } from '@/lib/use-api';
-import { REQUEST_PRESENTATION } from '@/lib/booking-entries';
+import { formatEventDate, REQUEST_PRESENTATION } from '@/lib/booking-entries';
 import { wireBookingRequestSchema, type WireBookingRequest } from '@/lib/wire-schemas';
 
 /**
@@ -150,7 +150,9 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
               : `${request.vendor.businessName} sent a quote`}
         </h1>
         <p className="mt-1 text-sm text-stone-600">
-          {[occasion, request.eventDate, request.eventLocation].filter(Boolean).join(' · ')}
+          {[occasion, formatEventDate(request.eventDate), request.eventLocation]
+            .filter(Boolean)
+            .join(' · ')}
         </p>
       </div>
 

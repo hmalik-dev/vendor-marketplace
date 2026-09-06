@@ -66,7 +66,7 @@ export function AdminSurface({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 px-6 pt-4.5 pb-3.5">
+      <div className="shrink-0 px-6 pt-4 pb-3">
         <div className="mb-3.5 flex items-baseline justify-between gap-4">
           <h1 className="display-heading text-[23px] text-stone-900">{heading}</h1>
           <div className="flex items-baseline gap-4">
@@ -102,7 +102,7 @@ export function AdminSurface({
         stopped being true at exactly the data volume that produces a pager.
         It lives in the title row above instead, where the frame leaves space.
       */}
-      <div className="min-h-0 flex-1 overflow-hidden px-6 pb-5">{children}</div>
+      <div className="min-h-0 flex-1 overflow-hidden px-6 pb-4">{children}</div>
     </div>
   );
 }

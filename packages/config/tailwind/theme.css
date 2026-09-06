@@ -90,12 +90,21 @@
    * `apps/web/src/app/type-scale-parity.test.ts` reads these values and the
    * frame file, so neither side can drift from the other.
    *
-   * #198 reconciled the font sizes. Three roles the frames draw sit *between*
-   * the t-shirt steps, so they are named for the role rather than the position:
-   * a scale cannot say "half a step below `xs`". Each answers to a frame class,
-   * which is where its value is read from and what the parity test compares it
-   * against — `.lbl`/`.tl`, `.tn`, and the inline card meta line.
+   * #198 reconciled the font sizes. Four roles the frames draw sit *between* or
+   * below the t-shirt steps, so they are named for the role rather than the
+   * position: a scale cannot say "half a step below `xs`". Each answers to a
+   * frame class, which is where its value is read from and what the parity test
+   * compares it against — `.pill`, `.lbl`/`.tl`, `.tn`, and the card meta line.
    */
+  /*
+   * `.pill` — the status vocabulary, and the smallest text the frames draw.
+   * A step of its own rather than a reuse of `label`: those are half a pixel
+   * apart, which is why the pill spent four parity passes rendering at
+   * `--text-xs`'s 11px and measuring 47.36x26 against the frame's 44.88x23
+   * (#392). `03-components.md` prescribed the 11 too, so the plan moved with it.
+   */
+  --text-pill: 10px;
+  --text-pill--line-height: normal;
   --text-label: 10.5px; /* `.lbl`, `.tl` — uppercase micro-labels */
   --text-label--line-height: normal;
   --text-xs: 11px;

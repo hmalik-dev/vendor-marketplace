@@ -9,7 +9,12 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth, requireRole } from '../../lib/guards.js';
+import {
+  authenticated,
+  requireAuth,
+  requireRole,
+  requireRoleBeforeValidation,
+} from '../../lib/guards.js';
 import type { NotificationEmailDeps } from '../notifications/notification-email.js';
 import {
   createBookingRequest,
@@ -59,7 +64,16 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
   app.post(
     REQUESTS_PATH,
     {
-      preHandler: requireRole('customer'),
+      /*
+       * `onRequest`, not `preHandler` — the stage that runs before Fastify's
+       * own body parser and before schema validation. A vendor posting a
+       * malformed body here got `400 VALIDATION_ERROR`: they were still denied,
+       * because no handler below ever ran, but the status code reads like a
+       * broken endpoint rather than the refusal it is. Measured against a
+       * signed-in vendor while verifying #412's storefront CTA gate — a
+       * well-formed body already answered 403, so only the code was wrong.
+       */
+      onRequest: requireRoleBeforeValidation('customer'),
       schema: {
         body: createBookingRequestSchema,
         response: {

@@ -248,8 +248,9 @@ nothing else.
 
 | Token         | Size / line-height    | Marketing use         | App use                                     |
 | ------------- | --------------------- | --------------------- | ------------------------------------------- |
+| `text-pill`   | 10px / `normal`       | —                     | status pill labels (`.pill`)                |
 | `text-label`  | 10.5px / `normal`     | column headings       | uppercase micro-labels (`.lbl`, `.tl`)      |
-| `text-xs`     | 11px / `normal`       | badges, timestamps    | pill labels, chips                          |
+| `text-xs`     | 11px / `normal`       | badges, timestamps    | count badges, chips                         |
 | `text-helper` | 11.5px / `normal`     | —                     | helper and hint lines, field errors (`.tn`) |
 | `text-meta`   | 12px / `normal`       | —                     | card meta: rating, location, `From`         |
 | `text-sm`     | 12.5px / `normal`     | metadata              | secondary controls, the profile rail        |
@@ -276,7 +277,11 @@ this table is read directly off a frame class or an inline declaration.
 
 **Font size was reconciled with the frames on 2026-08-29** (#198). The frames draw
 three roles at sizes no t-shirt step covered, so the scale gained a step for each
-rather than the components rounding to the nearest one they already had. They are
+rather than the components rounding to the nearest one they already had. **#392
+added a fourth**, `text-pill`: the status pill rendered through `text-xs` at
+11px against `.pill`'s 10, which is the same failure one step lower — and the
+reason it survived four parity passes is that 11, 10.5 and 10 are indistinguishable
+by eye, so only a source read finds it. They are
 named for the role because they sit _between_ steps — a scale cannot say "half a
 step below `xs`" — and each is read from a frame class, which is what
 `type-scale-parity.test.ts` compares it against:
@@ -286,6 +291,7 @@ step below `xs`" — and each is read from a frame class, which is what
 | `text-label`  | `.lbl` / `.tl`, 10.5px     | `text-xs` (11px) at 11 sites, `text-[10.5px]` at 13 |
 | `text-helper` | `.tn`, 11.5px              | `text-xs` (11px) on hints and errors                |
 | `text-meta`   | the card rating line, 12px | `text-xs` and `text-sm` on the vendor card          |
+| `text-pill`   | `.pill`, 10px              | `text-xs` (11px) on every status pill (#392)        |
 
 `.inp` needed no new step — `text-base` was already 13.5px. What broke it at 1440
 was shadcn's stock `md:text-sm` on the shared `Input` and `Textarea`, which took

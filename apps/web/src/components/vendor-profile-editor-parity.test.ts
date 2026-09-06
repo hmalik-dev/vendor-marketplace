@@ -620,12 +620,24 @@ describe('helper lines the frame does not draw (#152)', () => {
   });
 
   /*
-   * Kept on purpose. `40-states.md` requires this exact line: "Constraints,
-   * stated before the picker opens … The same line appears in the drop zone
-   * and the requirements rail." It is sourced, so it is not an offender.
+   * Kept on purpose — but the **single**-image form of it (#412).
+   *
+   * `40-states.md` states the constraint "before the picker opens", and the
+   * line it fixes ("12 MB each · 20 files per upload") belongs to the batch
+   * drop zone: the contract draws that wording only in frame `24 Image
+   * upload`, and its singular form, in the same file, is "up to 12 MB" with no
+   * "each". This screen's two fields are a profile photo and a cover photo,
+   * one file apiece, and frame `09` draws no constraint line under them at
+   * all — so the batch sentence here described a control the vendor does not
+   * have.
+   *
+   * Asserted against the exact constant, not a substring: the previous check
+   * was `toContain('UPLOAD_CONSTRAINT_LINE')`, which `SINGLE_UPLOAD_CONSTRAINT_
+   * LINE` also satisfies — a check nothing could fail.
    */
-  it('keeps the upload constraint line, which 40-states.md mandates', () => {
-    expect(formSource).toContain('UPLOAD_CONSTRAINT_LINE');
+  it('states the single-image constraint, not the batch one', () => {
+    expect(formSource).toContain('SINGLE_UPLOAD_CONSTRAINT_LINE');
+    expect(formSource).not.toMatch(/[^_]\bUPLOAD_CONSTRAINT_LINE/);
   });
 });
 

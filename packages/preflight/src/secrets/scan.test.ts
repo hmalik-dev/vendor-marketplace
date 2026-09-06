@@ -47,6 +47,26 @@ describe('forbidden paths', () => {
   );
 
   /*
+   * Playwright storage state: live Clerk session cookies, one file per role,
+   * and since #392 that set includes an `admin` session with authority over the
+   * console. No *content* rule reaches them — the high-entropy rule keys on
+   * `SECRET|TOKEN|PASSWORD`-shaped key names and storage state files the JWT
+   * under `"value"` — so the path is the only thing that can catch a
+   * `git add -f`, which is precisely what `.gitignore` does not stop.
+   */
+  it.each(['.auth/admin.json', '.auth/vendor.json', '.claude/worktrees/t1/.auth/customer.json'])(
+    'refuses %s',
+    (path) => {
+      expect(rules(path, '{"cookies":[]}')).toEqual(['forbidden-path']);
+    },
+  );
+
+  it('does not ban every file that happens to sit under an auth directory', () => {
+    // `src/auth/config.json` is not `.auth/`, and the rule must tell them apart.
+    expect(scan('src/auth/config.json', '{"provider":"clerk"}')).toEqual([]);
+  });
+
+  /*
    * This repository commits a `.npmrc`, and most do — it carries registry
    * settings. Banning it by name made the scanner fail on a clean checkout,
    * so the danger is located in the contents instead.

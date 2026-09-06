@@ -315,6 +315,37 @@ export function formatCardDate(date: string): string {
   return CARD_DATE.format(new Date(`${date}T00:00:00Z`));
 }
 
+const EVENT_DATE = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/**
+ * "October 20, 2026" — the long form the request form and its review step use.
+ *
+ * The request detail screen printed `request.eventDate` straight into its
+ * summary line, so the one page a customer lands on from the hub read
+ * `Wedding · 2026-10-20 · Barr Mansion` while every other rendering of that
+ * same date was written out. UTC because an event date is a `DATE` column and
+ * must not be re-read in the viewer's zone — the same anchoring `formatCardDate`
+ * and `MONTH_LABEL` above use.
+ *
+ * **This is the only implementation.** The request form, its review step and
+ * the customer's own history each carried a private copy, two of them under
+ * this exact name, agreeing on the output by coincidence of construction
+ * rather than by contract (#412).
+ */
+export function formatEventDate(date: string): string {
+  const parsed = new Date(`${date}T00:00:00Z`);
+
+  // A value that is not a date is handed back as it came, never as
+  // `Invalid Date` — the callers that want their own word for "no date yet"
+  // say so at the call site.
+  return Number.isNaN(parsed.getTime()) ? date : EVENT_DATE.format(parsed);
+}
+
 /**
  * "4 upcoming bookings. Next up is Kessler & Co. in 49 days." — derived from
  * the nearest future booking, or `null` when there is none to name.

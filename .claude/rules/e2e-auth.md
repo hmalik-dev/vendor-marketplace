@@ -8,9 +8,10 @@ paths:
 
 # Browser agents never type a password
 
-**Sign in once, reuse the session.** `pnpm e2e:auth` signs in as both E2E accounts
-and writes Playwright storage state to `.auth/customer.json` and
-`.auth/vendor.json`. Every browser agent loads that instead of authenticating:
+**Sign in once, reuse the session.** `pnpm e2e:auth` signs in as **all three** E2E
+accounts and writes Playwright storage state to `.auth/customer.json`,
+`.auth/vendor.json` and `.auth/admin.json`. Every browser agent loads that
+instead of authenticating:
 
 ```js
 const context = await browser.newContext({ storageState: '.auth/vendor.json' });
@@ -41,12 +42,36 @@ Two mechanics the script had to learn, worth keeping:
 
 - **`.auth/` is gitignored and must stay so** — those files are live session
   cookies. A committed one is a credential leak; rotate the account if it happens.
+  Since #392 the secret scanner bans the path too, because an ignore rule stops
+  an accidental `git add` and not a deliberate `git add -f`, and no content rule
+  reaches a JWT filed under `"value"`.
 - **Never print a credential**, and never write one into a scratchpad file. If a
   session is expired or invalid, re-run `pnpm e2e:auth` — do not fall back to
   typing a password.
 - **Sessions expire.** A pass that lands on `/sign-in` should re-run
   `pnpm e2e:auth` once and retry, then report the failure rather than working
   around it.
+- **Every role, or none.** The default list omitted `admin` until #392 — it
+  predated the persistent admin account (D27) — so a no-argument refresh renewed
+  two of three sessions and left `.auth/admin.json` stale in every lane that
+  copied it. `scripts/e2e-auth.test.mjs` now pins the list to the roles
+  `db:seed:e2e` provisions, so a role added to the seed cannot be left out of the
+  refresh. A role whose credentials are absent is **skipped and logged**, not
+  failed — `E2E_ADMIN_EMAIL` is optional in the seed — unless you named that role
+  on argv, which is asking for it by name. So a lane whose `.worktreeinclude`
+  snapshot of `.env.e2e.local` predates the admin key gets **exit 0 and a stale
+  `.auth/admin.json`**: read the per-role lines, not the exit code. `skipped` on
+  a role you need means the env copy has drifted — recopy it and re-run.
+- **Off localhost there is no default.** `resolveBaseUrl` puts `E2E_BASE_URL` at
+  the top of its chain precisely so a run can be aimed at a deployed origin, and
+  `docs/pre-launch.md` records that production still authenticates against the
+  **same Clerk development instance** — so the E2E passwords work there and
+  `admin` carries authority over the real console. `pnpm e2e:auth` therefore
+  refuses to choose roles for a non-loopback origin and makes you name them
+  (`scripts/e2e-roles.mjs`). Signing in against a deployment stays possible; it
+  just cannot be something a default did on your behalf. The refusal is
+  **exit 1 before any browser launches** and prints what to type instead — it is
+  not a failed sign-in, so do not retry it or regenerate storage state.
 - **Do not create throwaway accounts** to get past auth. It pollutes the database
   and consumes fixtures the next pass depends on.
 
