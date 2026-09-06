@@ -301,6 +301,34 @@ describe('CATEGORY_SLUG_SUCCESSORS', () => {
 });
 
 describe('publish blockers', () => {
+  /*
+   * The list is six, and it is the *only* list. Ruled 2026-09-04 (D30, #385):
+   * three artefacts held three different lists agreeing on a count by accident,
+   * and frames `20` and `27 Vendor dashboard — empty · 1024` drew a seventh row
+   * (a starting price) beside portfolio and availability rows that never gated
+   * publishing. `payouts` is not here either, and #360 ruled it must not become
+   * a key — it is Connect state with its own banner.
+   *
+   * Pinned by name and by order, not by length alone: the checklist rail, the
+   * blocker banner and the editor's save bar all render this array directly, so
+   * a key added here appears on three surfaces at once and a reordering moves
+   * which row reads "Finish →".
+   */
+  it('is the six keys the publish gate holds, in the order the checklist renders', () => {
+    expect(PUBLISH_BLOCKER_KEYS).toEqual([
+      'businessName',
+      'location',
+      'categories',
+      'bio',
+      'responseTime',
+      'packages',
+    ]);
+  });
+
+  it('does not carry payouts, which is Connect state and not a publish gate', () => {
+    expect(PUBLISH_BLOCKER_KEYS).not.toContain('payouts');
+  });
+
   it('gives every blocker a section, a short noun and a full sentence', () => {
     for (const key of PUBLISH_BLOCKER_KEYS) {
       const blocker = PUBLISH_BLOCKERS[key];

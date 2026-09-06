@@ -226,10 +226,21 @@ export async function seedE2eFixtures<
        * not live with requests waiting on it.
        */
       await clearLiveRequests(tx, vendorProfileId);
+      /*
+       * And the two blockers the frame draws open. Without this the draft
+       * fixture rendered `Publish checklist · 6 of 6` on an unpublished
+       * profile — a real state, but not the one frames `20` and
+       * `27 Vendor dashboard — empty · 1024` are of: their whole premise is that
+       * an empty dashboard has a cause, and the gold banner names it. A
+       * long-lived account carries whatever the last published run left, so this
+       * has to retire it rather than skip creating it (#371).
+       */
+      await openPublishBlockers(tx, vendorProfileId);
 
       return {
         vendorUserId,
         customerUserId,
+        ...(adminUserId === undefined ? {} : { adminUserId }),
         vendorProfileId,
         packageId: null,
         bookingRequestId: null,
@@ -351,6 +362,13 @@ async function ensureProfile(
          */
         stripeOnboarded: payoutsReady,
         stripeAccountId,
+        /*
+         * Restored on a published adoption, for the same reason the package is:
+         * the draft fixture nulls it to open the `responseTime` blocker, and a
+         * published run that left it null would seed a storefront the publish
+         * gate refuses.
+         */
+        ...(draft ? {} : { responseTimeHours: 4 }),
         updatedAt: sql`now()`,
       })
       .where(eq(vendorProfiles.id, owned.id))
@@ -415,6 +433,32 @@ async function clearLiveRequests(tx: Tx, vendorProfileId: string): Promise<void>
   await tx.delete(bookingRequests).where(eq(bookingRequests.vendorId, vendorProfileId));
 }
 
+/**
+ * Re-opens the two publish blockers the draft frames draw — response time and a
+ * bookable package.
+ *
+ * **Both are cleared rather than left uncreated**, because the account is
+ * long-lived: `ensureProfile` adopts the row a published run left behind, and
+ * that row already has a response time and at least one active package. The
+ * result was a draft storefront with an empty `publishBlockers`, which renders a
+ * dashboard with no gold banner and a full checklist — the one composition
+ * frames `20` and `27 Vendor dashboard — empty · 1024` do not draw.
+ *
+ * The packages are deactivated, not deleted: `publishBlockers` counts *active*
+ * packages, and a delete would take the rows a past booking still points at.
+ */
+async function openPublishBlockers(tx: Tx, vendorProfileId: string): Promise<void> {
+  await tx
+    .update(vendorProfiles)
+    .set({ responseTimeHours: null, updatedAt: sql`now()` })
+    .where(eq(vendorProfiles.id, vendorProfileId));
+
+  await tx
+    .update(servicePackages)
+    .set({ isActive: false, updatedAt: sql`now()` })
+    .where(eq(servicePackages.vendorId, vendorProfileId));
+}
+
 /** Files the fixture vendor under one category, so search can return them. */
 async function attachCategory(tx: Tx, vendorId: string): Promise<void> {
   const [category] = await tx
@@ -459,6 +503,7 @@ async function ensurePackage(tx: Tx, vendorId: string): Promise<SeededPackage> {
       id: servicePackages.id,
       priceCents: servicePackages.priceCents,
       durationHours: servicePackages.durationHours,
+      isActive: servicePackages.isActive,
     })
     .from(servicePackages)
     .where(and(eq(servicePackages.vendorId, vendorId), eq(servicePackages.name, name)))
@@ -466,15 +511,26 @@ async function ensurePackage(tx: Tx, vendorId: string): Promise<SeededPackage> {
 
   if (existing) {
     /*
-     * Only when it is actually missing. NUMERIC comes back with its scale
-     * (`8.0` for an `8`), so the comparison is on the parsed number rather than
-     * on the string — otherwise this writes on every run for ever, and
-     * `lane:up` runs it once per lane.
+     * Two repairs on adoption, and each one only when it is actually needed.
+     *
+     * The duration: NUMERIC comes back with its scale (`8.0` for an `8`), so the
+     * comparison is on the parsed number rather than on the string — otherwise
+     * this writes on every run for ever, and `lane:up` runs it once per lane.
+     *
+     * The active flag: the draft fixture deactivates this row to open the
+     * `packages` blocker, so a published run that only *found* it left the
+     * storefront with no bookable package and no way back to published without
+     * editing the profile by hand (#371).
      */
-    if (parseDurationHours(existing.durationHours) !== Number(durationHours)) {
+    const staleDuration = parseDurationHours(existing.durationHours) !== Number(durationHours);
+
+    if (staleDuration || !existing.isActive) {
       await tx
         .update(servicePackages)
-        .set({ durationHours })
+        .set({
+          ...(staleDuration ? { durationHours } : {}),
+          ...(existing.isActive ? {} : { isActive: true }),
+        })
         .where(eq(servicePackages.id, existing.id));
     }
 

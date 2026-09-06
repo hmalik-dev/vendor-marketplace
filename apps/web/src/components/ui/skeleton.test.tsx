@@ -113,15 +113,18 @@ describe('VendorCardSkeleton', () => {
   /*
    * Every spacing class, against the card's compact branch. These are the
    * values the 14px of drift lived in — the body's asymmetric padding, the 2px
-   * between name and meta, the chip row's margin, and the price row carrying
-   * the rule as its own border rather than as a separate element with
-   * symmetric margins.
+   * between name and meta, and the price row carrying the rule as its own
+   * border rather than as a separate element with symmetric margins.
+   *
+   * The name's clearance is the monogram's, so it is `min-[90rem]:mt-2.75` on
+   * both sides now rather than unconditional: D30 stopped the compact card's
+   * monogram at 1440, and a skeleton reserving room for a monogram the card no
+   * longer draws is the same 1024 shift by another route.
    */
   it.each([
     ['body padding', 'px-3.5 pt-3 pb-3.5'],
-    ['name margin', 'mt-2.75'],
+    ['name margin', 'min-[90rem]:mt-2.75'],
     ['meta margin', 'mt-0.5'],
-    ['chip row', 'mt-2 flex flex-wrap gap-1.25'],
     ['price row', 'mt-2.5 flex items-center justify-between border-t border-stone-200 pt-2.25'],
   ])('takes its %s from the compact card', (_label, classes) => {
     expect(skeletonBody).toContain(classes);
@@ -130,9 +133,8 @@ describe('VendorCardSkeleton', () => {
   /* The same classes, proven to be the card's rather than merely plausible. */
   it.each([
     ['px-3.5 pt-3 pb-3.5'],
-    ['mt-2.75'],
+    ['min-[90rem]:mt-2.75'],
     ['mt-0.5'],
-    ['mt-2 gap-1.25'],
     ['mt-2.5 pt-2.25'],
     ['border-t border-stone-200'],
   ])('and %s is what the compact card itself declares', (classes) => {
@@ -163,15 +165,21 @@ describe('VendorCardSkeleton', () => {
     expect(bars[4]).toContain('h-[20px]');
   });
 
-  it('keeps the chip row the card keeps, and keeps it empty', () => {
+  it('draws no chip row, because the loaded card draws none', () => {
     const { container } = render(<VendorCardSkeleton />);
-    const chipRow = container.querySelector('.flex-wrap');
 
-    // Present, because its margin is part of the body's rhythm.
-    expect(chipRow).not.toBeNull();
-    // Empty, because the loaded card's is.
-    expect(chipRow?.childElementCount).toBe(0);
-    expect(cardSource).toContain('isCompact\n              ? null');
+    expect(container.querySelector('.flex-wrap')).toBeNull();
+    /*
+     * The card renders the row only when it has a chip to put in it, and on the
+     * search grid it never does: the category chip is compact-suppressed and the
+     * grid passes no availability date. An empty flex box still contributes its
+     * `margin-top`, so a skeleton drawing one stood 8px taller than the card it
+     * stands in for — which is the shift this state exists to prevent.
+     */
+    expect(cardSource).toContain('categoryChips.length > 0 || freeDate ?');
+    expect(cardSource).toContain(
+      'const categoryChips = isCompact ? [] : vendor.categories.slice(0, 1);',
+    );
   });
 
   /*

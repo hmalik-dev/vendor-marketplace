@@ -229,7 +229,7 @@ describe('frame 02 — the active chip’s clear affordance carries the law’s 
   it('charges the label-to-glyph gap to the button that needs the width', () => {
     // The chip's geometry moved into `chipTrigger` when #167 replaced the
     // panels; the split it encodes is unchanged, and that is what is asserted.
-    expect(refineBar).toContain("hasClear ? 'pr-0' : 'pr-3.25'");
+    expect(refineBar).toContain("hasClear ? 'pr-0' : 'pr-2.75 min-[90rem]:pr-3.25'");
     expect(refineBar).toContain('pr-2.75 pl-2.5');
   });
 });
