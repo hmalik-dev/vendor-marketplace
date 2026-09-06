@@ -17,6 +17,8 @@ import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
 import { assertOwnedImageRefs, thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
 import { reapObjects } from '../portfolio/portfolio.service.js';
+import { replaceVendorTags } from '../tags/tags.dao.js';
+import { resolveVendorTagSelection } from '../tags/tags.service.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import {
   findActiveCategoryIds,
@@ -155,6 +157,32 @@ async function resolveSlug(
   throw conflict('That business name is already taken. Try a different one.');
 }
 
+/**
+ * `Promise.all` with a deterministic failure: every input is awaited, and the
+ * **first one in argument order** that rejected is what throws.
+ *
+ * `Promise.all` reports whichever rejected soonest, which for independent
+ * database reads is a race. The checks these callers run refuse for different
+ * reasons and with different statuses, so the vendor would be told to fix
+ * whichever field the database happened to answer about first — and could be
+ * told something different on an identical retry (#405).
+ */
+async function firstRejection<T extends readonly unknown[]>(
+  work: readonly [...{ [K in keyof T]: T[K] | Promise<T[K]> }],
+): Promise<T> {
+  const settled = await Promise.allSettled(work);
+
+  for (const outcome of settled) {
+    if (outcome.status === 'rejected') {
+      throw outcome.reason;
+    }
+  }
+
+  return settled.map(
+    (outcome) => (outcome as PromiseFulfilledResult<unknown>).value,
+  ) as unknown as T;
+}
+
 /** Rejects category ids that do not exist or are no longer selectable. */
 async function assertCategoriesSelectable(
   db: AppDatabase,
@@ -263,8 +291,25 @@ export async function createVendorProfile(
     throw conflict('You already have a vendor profile');
   }
 
-  const categoryIds = await assertCategoriesSelectable(db, input.categoryIds);
-  const slug = await resolveSlug(db, input.slug ?? input.businessName);
+  /*
+   * Every check the write depends on, resolved **before** the write and
+   * concurrently with each other. Before, never after: a refused tag list must
+   * not leave a profile row behind that the vendor's next attempt then 409s on
+   * (#405). Concurrently because they ask three unrelated questions of three
+   * tables, and awaiting them in a row spends three round trips to learn what
+   * one buys.
+   *
+   * `firstRejection` rather than `Promise.all` so the *answer* stays in
+   * declaration order even though the queries do not. These three do not fail
+   * alike — the slug throws a 409 and the other two a 400 naming their own
+   * control — and letting whichever query returned first decide would make a
+   * body that is wrong in two ways answer differently between identical runs.
+   */
+  const [categoryIds, tags, slug] = await firstRejection([
+    assertCategoriesSelectable(db, input.categoryIds),
+    input.tagIds === undefined ? undefined : resolveVendorTagSelection(db, input.tagIds),
+    resolveSlug(db, input.slug ?? input.businessName),
+  ] as const);
 
   const values: NewVendorProfileRow = {
     userId,
@@ -284,8 +329,15 @@ export async function createVendorProfile(
     coverImageUrl: input.coverImageUrl ?? null,
   };
 
-  const row = await insertVendorProfile(db, values);
-  await replaceVendorCategories(db, row.id, categoryIds);
+  const row = await db.transaction(async (tx) => {
+    const inserted = await insertVendorProfile(tx, values);
+    await replaceVendorCategories(tx, inserted.id, categoryIds);
+    if (tags !== undefined) {
+      await replaceVendorTags(tx, inserted.id, tags.tagIds);
+    }
+
+    return inserted;
+  });
 
   return loadDetail(db, row);
 }
@@ -361,10 +413,12 @@ export async function updateVendorProfile(
     patch.coverImageUrl = input.coverImageUrl;
   }
 
-  const categoryIds =
-    input.categoryIds === undefined
-      ? undefined
-      : await assertCategoriesSelectable(db, input.categoryIds);
+  // Resolved before anything is written, and concurrently — see
+  // `createVendorProfile`.
+  const [categoryIds, tags] = await firstRejection([
+    input.categoryIds === undefined ? undefined : assertCategoriesSelectable(db, input.categoryIds),
+    input.tagIds === undefined ? undefined : resolveVendorTagSelection(db, input.tagIds),
+  ] as const);
 
   if (input.isPublished !== undefined) {
     if (input.isPublished) {
@@ -386,14 +440,23 @@ export async function updateVendorProfile(
     patch.isPublished = input.isPublished;
   }
 
-  if (categoryIds !== undefined) {
-    await replaceVendorCategories(db, existing.id, categoryIds);
-  }
+  /*
+   * One transaction over all three writes, so a failure part-way through takes
+   * the whole save with it rather than leaving the row edited and its
+   * selections not (#405).
+   */
+  const row = await db.transaction(async (tx) => {
+    if (categoryIds !== undefined) {
+      await replaceVendorCategories(tx, existing.id, categoryIds);
+    }
+    if (tags !== undefined) {
+      await replaceVendorTags(tx, existing.id, tags.tagIds);
+    }
 
-  const row =
-    Object.keys(patch).length > 0
-      ? await updateVendorProfileById(db, existing.id, patch)
+    return Object.keys(patch).length > 0
+      ? await updateVendorProfileById(tx, existing.id, patch)
       : existing;
+  });
 
   if (!row) {
     throw notFound('You have not created a vendor profile yet');

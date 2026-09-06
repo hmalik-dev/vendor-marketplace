@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ApiClientError } from '@/lib/api-client';
+import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { formatEventDate } from '@/lib/booking-entries';
 import { useApi } from '@/lib/use-api';
 import { cancelledBookingWireSchema } from '@/lib/wire-schemas';
@@ -66,14 +66,17 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
         body: {},
         schema: cancelledBookingWireSchema,
       });
-      router.refresh();
     } catch (failure) {
-      setError(
-        failure instanceof ApiClientError
-          ? failure.message
-          : 'That did not reach us. Check your connection and try again.',
-      );
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
+      /*
+       * Refreshed whichever way it went (#405). A cancel that the server
+       * carried out but whose response this client could not parse — a schema
+       * drift, say — has already issued the refund and cancelled the row; not
+       * re-reading left the customer looking at a live booking and a `Cancel`
+       * button for something that no longer exists.
+       */
+      router.refresh();
       setBusy(false);
       setConfirming(false);
     }

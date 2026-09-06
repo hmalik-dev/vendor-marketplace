@@ -213,7 +213,8 @@ describe('free text on a request body', () => {
     const names = bodySchemaNames();
 
     // Pinned, not a floor: a change that halved discovery would pass a floor.
-    expect(names).toHaveLength(20);
+    // 19 since #405 removed `PUT /vendor/tags` and its `setVendorTagsSchema`.
+    expect(names).toHaveLength(19);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 

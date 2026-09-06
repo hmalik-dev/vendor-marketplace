@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UploadQueue } from '@/lib/use-upload-queue';
 import { isBatchInFlight, type UploadTask } from '@/lib/uploads';
+import type { WirePortfolioItem } from '@/lib/wire-schemas';
 
 const cancel = vi.fn();
 let tasks: readonly UploadTask[] = [];
@@ -171,5 +172,71 @@ describe('PortfolioManager header count', () => {
     render(<PortfolioManager initialItems={[]} />);
 
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * #405. Reordering was offered while an upload was still going up, and the two
+ * writes race in both directions: the POST commits first and the reorder's id
+ * list is incomplete, so `assertCompleteOrder` refuses an order the vendor got
+ * right; or the reorder is handled first and its response replaces the list,
+ * erasing the photo `persist` had already appended.
+ */
+describe('PortfolioManager reorder while uploading', () => {
+  function item(id: string, displayOrder: number): WirePortfolioItem {
+    return {
+      id,
+      vendorId: '66666666-6666-4666-8666-666666666666',
+      imageUrl: `https://cdn.example.com/${id}.webp`,
+      thumbnailUrl: null,
+      caption: null,
+      displayOrder,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+  }
+
+  const ITEMS = [
+    item('11111111-1111-4111-8111-111111111111', 0),
+    item('22222222-2222-4222-8222-222222222222', 1),
+  ];
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('offers reordering when nothing is uploading', () => {
+    tasks = [];
+    render(<PortfolioManager initialItems={ITEMS} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Move photo 1 later' }).hasAttribute('disabled'),
+    ).toBe(false);
+  });
+
+  it('refuses reordering while a batch is in flight', () => {
+    tasks = [uploading('a.jpg')];
+    render(<PortfolioManager initialItems={ITEMS} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Move photo 1 later' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Move photo 2 earlier' }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  /*
+   * The buttons are only half of it: the tiles are also drag targets, and a
+   * drop calls `move` without going through a disabled control.
+   */
+  it('stops the tiles being dragged while a batch is in flight', () => {
+    tasks = [uploading('a.jpg')];
+    const { container } = render(<PortfolioManager initialItems={ITEMS} />);
+
+    const draggables = [...container.querySelectorAll('[draggable]')];
+    expect(draggables).toHaveLength(ITEMS.length);
+    for (const node of draggables) {
+      expect(node.getAttribute('draggable')).toBe('false');
+    }
   });
 });

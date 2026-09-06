@@ -531,6 +531,16 @@ export const vendorProfileSchema = z.object({
 });
 export type VendorProfile = z.infer<typeof vendorProfileSchema>;
 
+/**
+ * A vendor's full tag selection, applied as one replace operation.
+ *
+ * The per-category ceiling is enforced by the service, which resolves each id
+ * to its category; the bound here is only the total any selection could reach.
+ */
+export const vendorTagIdsSchema = z
+  .array(uuidSchema)
+  .max(TAG_CATEGORIES.length * MAX_TAGS_PER_CATEGORY);
+
 export const createVendorProfileSchema = z.object({
   /*
    * The required fields carry their own messages: they are the ones a vendor
@@ -566,6 +576,15 @@ export const createVendorProfileSchema = z.object({
     .optional(),
   profileImageUrl: imageRefSchema.optional(),
   coverImageUrl: imageRefSchema.optional(),
+  /*
+   * Tags travel with the profile so that saving the storefront is one write
+   * the vendor can trust (#405). They used to be a second request the editor
+   * fired after the profile write landed — `PUT /vendor/tags`, since removed —
+   * which meant a refused tag list left the profile edit standing with nothing
+   * to undo it and the form stuck on "Unsaved changes" forever. Omitted means
+   * "leave the selection alone"; an empty array clears it.
+   */
+  tagIds: vendorTagIdsSchema.optional(),
 });
 export type CreateVendorProfileInput = z.infer<typeof createVendorProfileSchema>;
 
@@ -1394,16 +1413,6 @@ export const tagSuggestionResponseSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('submitted'), suggestionId: uuidSchema }),
 ]);
 export type TagSuggestionResponse = z.infer<typeof tagSuggestionResponseSchema>;
-
-/**
- * A vendor's full tag selection, applied as one replace operation. The
- * per-category ceiling is enforced by the service, which resolves each id to
- * its category.
- */
-export const setVendorTagsSchema = z.object({
-  tagIds: z.array(uuidSchema).max(TAG_CATEGORIES.length * MAX_TAGS_PER_CATEGORY),
-});
-export type SetVendorTagsInput = z.infer<typeof setVendorTagsSchema>;
 
 /**
  * What the vendor's own profile endpoints return: the row plus the two

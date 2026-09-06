@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
-import { ApiClientError } from '@/lib/api-client';
+import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { useViewerToday } from '@/lib/use-viewer-today';
 import { wireBookingSchema } from '@/lib/wire-schemas';
@@ -78,11 +78,7 @@ export function CompleteBooking({
       });
       router.refresh();
     } catch (failure) {
-      setError(
-        failure instanceof ApiClientError
-          ? failure.message
-          : 'That did not reach us. Check your connection and try again.',
-      );
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
       setBusy(false);
     }

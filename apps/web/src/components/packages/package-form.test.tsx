@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { WireServicePackage } from '@/lib/wire-schemas';
 
 const requestMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -157,5 +158,79 @@ describe('PackageForm — a pristine submit', () => {
       );
     });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+/*
+ * #405. The reset effect was keyed on the `servicePackage` **object**, and the
+ * manager rebuilds its list on every reorder and every bookable toggle — so the
+ * same package arrived as a new object, the effect reseeded the form from the
+ * last saved values, and whatever the vendor had typed vanished with no prompt.
+ */
+describe('PackageForm — a parent that replaces its list objects', () => {
+  const SAVED: WireServicePackage = {
+    id: '55555555-5555-4555-8555-555555555555',
+    vendorId: '66666666-6666-4666-8666-666666666666',
+    name: 'Half-day coverage',
+    description: 'Four hours of documentary coverage and an online gallery.',
+    priceCents: 120_000,
+    priceType: 'fixed',
+    durationHours: 4,
+    maxGuests: null,
+    inclusions: ['Online gallery'],
+    isActive: true,
+    displayOrder: 0,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+  };
+
+  it('keeps unsaved edits when the same package arrives as a new object', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <PackageForm servicePackage={SAVED} onSaved={vi.fn()} onCancel={vi.fn()} />,
+    );
+
+    const name = screen.getByLabelText('Package name');
+    await user.clear(name);
+    await user.type(name, 'Full-day coverage');
+
+    // What `persistOrder` and `applyActive` do: same row, new object.
+    rerender(
+      <PackageForm
+        servicePackage={{ ...SAVED, displayOrder: 1 }}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText<HTMLInputElement>('Package name').value).toBe('Full-day coverage');
+  });
+
+  /*
+   * The other half of the same rule: choosing a different package *must* still
+   * reseed. The manager does that with `key={selection}`, so the assertion is
+   * on a remount — a bare `rerender` with a new id is a shape the manager
+   * cannot produce, and asserting on it would be asserting on the effect this
+   * ticket removed rather than on the behaviour.
+   */
+  it('reseeds when the manager remounts it for a different package', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <PackageForm key={SAVED.id} servicePackage={SAVED} onSaved={vi.fn()} onCancel={vi.fn()} />,
+    );
+
+    await user.clear(screen.getByLabelText('Package name'));
+    await user.type(screen.getByLabelText('Package name'), 'Full-day coverage');
+
+    const other = {
+      ...SAVED,
+      id: '77777777-7777-4777-8777-777777777777',
+      name: 'Elopement',
+    };
+    rerender(
+      <PackageForm key={other.id} servicePackage={other} onSaved={vi.fn()} onCancel={vi.fn()} />,
+    );
+
+    expect(screen.getByLabelText<HTMLInputElement>('Package name').value).toBe('Elopement');
   });
 });

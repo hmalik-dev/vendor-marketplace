@@ -335,19 +335,14 @@ describe('VendorProfileForm — a save the form itself refuses', () => {
 
   it('sends the profile once every blocking field is answered', async () => {
     const user = userEvent.setup();
-    // The editor saves the profile and the tags through two endpoints in one
-    // submit, and they answer with different shapes.
-    requestMock.mockImplementation((path: string) =>
-      path === '/vendor/tags'
-        ? Promise.resolve([])
-        : Promise.resolve({
-            id: 'v1',
-            slug: 'sunlit-studio',
-            isPublished: false,
-            publishBlockers: [],
-            tags: [],
-          }),
-    );
+    // One endpoint since #405: the profile write carries the tag selection.
+    requestMock.mockResolvedValue({
+      id: 'v1',
+      slug: 'sunlit-studio',
+      isPublished: false,
+      publishBlockers: [],
+      tags: [],
+    });
     renderOnboarding();
 
     await completeTheProfile(user);
@@ -613,14 +608,191 @@ describe('the Payouts rail entry (#360)', () => {
    * below is evidence rather than a vacuous pass.
    */
   it('shows the publish-blocker line when a real blocker stands', () => {
-    renderSaved({ stripeOnboarded: true, publishBlockers: ['packages'] });
+    // Unpublished: a live storefront keeps its off switch instead (#405).
+    renderSaved({ isPublished: false, stripeOnboarded: true, publishBlockers: ['packages'] });
 
     expect(screen.getByText(/before you can publish/i)).toBeTruthy();
   });
 
   it('does not count payouts as a publish blocker', () => {
-    renderSaved({ stripeOnboarded: false, publishBlockers: [] });
+    renderSaved({ isPublished: false, stripeOnboarded: false, publishBlockers: [] });
 
     expect(screen.queryByText(/before you can publish/i)).toBeNull();
+  });
+});
+
+/*
+ * #405. The editor saved the profile and the tags as two requests with nothing
+ * tying them together, snapshotted "what is saved" from the live form rather
+ * than from what it had sent, and offered a publish switch gated on unsaved
+ * state while the switch wrote the saved row.
+ */
+describe('VendorProfileForm — the save is one unit, and it is honest about it', () => {
+  /*
+   * The parsed `wireVendorProfileSchema` response, built by the same factory as
+   * the prop rather than as a bare literal — so a field added to that schema
+   * and read by `send()` fails typecheck here instead of arriving `undefined`
+   * and letting the test assert on a shape the server never sends.
+   */
+  const SAVED_RESPONSE: WireVendorProfile = savedProfile({
+    isPublished: false,
+    publishBlockers: [],
+    tags: [],
+    state: 'TX',
+  });
+
+  it('sends the tag selection in the profile body, not a second request', async () => {
+    const user = userEvent.setup();
+    requestMock.mockResolvedValue(SAVED_RESPONSE);
+    renderSaved({ isPublished: false, state: 'TX' });
+
+    await user.type(screen.getByLabelText('Business name'), '!');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(requestMock).toHaveBeenCalledWith(
+        '/vendor/profile',
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.objectContaining({ tagIds: [] }),
+        }),
+      );
+    });
+
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock.mock.calls.map((call) => call[0])).not.toContain('/vendor/tags');
+  });
+
+  /*
+   * The snapshot used to be taken from the *live* form on success, so anything
+   * typed while the request was in flight was marked saved: `isDirty` went
+   * false, the bar read `Saved`, the leave guard installed nothing, and
+   * navigating away dropped text the stored row never had.
+   */
+  it('leaves text typed during the save unsaved', async () => {
+    const user = userEvent.setup();
+    let release: (() => void) | undefined;
+    requestMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(SAVED_RESPONSE);
+        }),
+    );
+    renderSaved({ isPublished: false, state: 'TX' });
+
+    const tagline = screen.getByLabelText('Your line');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByText('Saving…');
+
+    await user.type(tagline, ' and then some');
+    release?.();
+
+    await waitFor(() => {
+      expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    });
+    expect(screen.queryByText('Saved')).toBeNull();
+    /*
+     * A second, differently shaped read of the same state: the leave guard is
+     * what actually protects the keystrokes, and it is armed off `isDirty` —
+     * so is the switch. A status line alone would not distinguish "still
+     * dirty" from "relabelled".
+     */
+    expect(
+      screen.getByRole('switch', { name: 'Visible to customers' }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('marks the save clean when nothing was typed during it', async () => {
+    const user = userEvent.setup();
+    requestMock.mockResolvedValue(SAVED_RESPONSE);
+    renderSaved({ isPublished: false, state: 'TX' });
+
+    await user.type(screen.getByLabelText('Your line'), '!');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Saved')).toBeTruthy();
+    });
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
+  });
+
+  /*
+   * The switch writes the saved row, so operating it from unsaved state
+   * produced a red "complete your profile" toast over a form showing no
+   * blockers and no field to fix.
+   */
+  it('disables the publish switch while there are unsaved changes', async () => {
+    const user = userEvent.setup();
+    requestMock.mockResolvedValue(SAVED_RESPONSE);
+    renderSaved({ isPublished: false, publishBlockers: [], state: 'TX' });
+
+    const before = screen.getByRole('switch', { name: 'Visible to customers' });
+    expect(before.hasAttribute('disabled')).toBe(false);
+
+    await user.type(screen.getByLabelText('Your line'), '!');
+
+    expect(
+      screen.getByRole('switch', { name: 'Visible to customers' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.getByText(/Save your changes first/)).toBeTruthy();
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  /*
+   * The mirror case: clearing the bio of a *live* storefront used to replace
+   * the switch with "1 thing left before you can publish", leaving a published
+   * vendor no way to take themselves down over an edit they had not saved.
+   */
+  it('keeps the off switch on a published storefront with an unsaved blocker', async () => {
+    const user = userEvent.setup();
+    renderSaved({ isPublished: true, publishBlockers: [], state: 'TX' });
+
+    await user.clear(screen.getByLabelText('About your business'));
+
+    expect(screen.getByRole('switch', { name: 'Visible to customers' })).toBeTruthy();
+    expect(screen.queryByText(/before you can publish/i)).toBeNull();
+  });
+
+  /*
+   * Presence is not usability. Unpublishing cannot fail the way publishing can
+   * — the server refuses a publish against outstanding blockers and accepts an
+   * unpublish unconditionally — so holding it behind `isDirty` stranded the
+   * vendor outright: clearing a *required* field makes the form permanently
+   * dirty, because the client refuses the save that would clean it. The switch
+   * could then never be re-enabled without reloading and losing the edit.
+   */
+  it('lets a published vendor unpublish even with an unsavable edit in the form', async () => {
+    const user = userEvent.setup();
+    requestMock.mockResolvedValue({ ...SAVED_RESPONSE, isPublished: false });
+    renderSaved({ isPublished: true, publishBlockers: [], state: 'TX' });
+
+    // Required by the schema, so `attemptSubmit` will never let a save through.
+    await user.clear(screen.getByLabelText('Business name'));
+
+    const publishSwitch = screen.getByRole('switch', { name: 'Visible to customers' });
+    expect(publishSwitch.hasAttribute('disabled')).toBe(false);
+
+    await user.click(publishSwitch);
+
+    await waitFor(() => {
+      expect(requestMock).toHaveBeenCalledWith(
+        '/vendor/profile',
+        expect.objectContaining({ method: 'PUT', body: { isPublished: false } }),
+      );
+    });
+  });
+
+  /* The other direction still waits for a clean form. */
+  it('still holds publishing until the form is saved', async () => {
+    const user = userEvent.setup();
+    renderSaved({ isPublished: false, publishBlockers: [], state: 'TX' });
+
+    await user.type(screen.getByLabelText('Your line'), '!');
+
+    expect(
+      screen.getByRole('switch', { name: 'Visible to customers' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.getByText(/Save your changes first/)).toBeTruthy();
+    expect(requestMock).not.toHaveBeenCalled();
   });
 });

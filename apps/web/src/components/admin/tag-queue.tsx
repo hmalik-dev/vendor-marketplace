@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { useApi } from '@/lib/use-api';
-import { userFacingError } from '@/lib/user-facing-error';
+import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import {
   wireAdminTagSuggestionResultSchema,
   type WireAdminTagRow,
@@ -111,9 +111,7 @@ function SuggestionCard({
     } catch (failure) {
       // `userFacingError`, not `failure.message` — the same reason
       // `ConfirmAction` uses it: a 5xx body is written about the server.
-      setError(
-        userFacingError(failure, 'That did not reach us. Check your connection and try again.'),
-      );
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
       setBusy(false);
     }

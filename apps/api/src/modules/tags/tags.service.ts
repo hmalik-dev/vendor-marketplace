@@ -7,15 +7,13 @@ import {
 } from '@vendor-marketplace/shared';
 import type { TagRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import { notFound, validationFailed } from '../../lib/errors.js';
-import { findVendorProfileByUserId } from '../vendors/vendors.dao.js';
+import { validationFailed } from '../../lib/errors.js';
 import {
   findActiveTagByCategoryAndName,
   findActiveTags,
   findActiveTagsByIds,
   findPendingSuggestion,
   insertTagSuggestion,
-  replaceVendorTags,
 } from './tags.dao.js';
 
 /**
@@ -31,22 +29,27 @@ export async function listActiveTags(db: AppDatabase): Promise<Tag[]> {
   return findActiveTags(db);
 }
 
-/**
- * Applies a vendor's full tag selection. Duplicate ids in the request are
- * collapsed rather than rejected — the client sending the same tag twice is
- * harmless, and the composite primary key would otherwise fail the insert.
- * An empty array is a valid selection and clears every tag.
- */
-export async function setVendorTags(
-  db: AppDatabase,
-  userId: string,
-  tagIds: readonly string[],
-): Promise<Tag[]> {
-  const profile = await findVendorProfileByUserId(db, userId);
-  if (!profile) {
-    throw notFound('You have not created a vendor profile yet');
-  }
+/** A tag selection that has been checked against the live list and the per-category ceiling. */
+export interface VendorTagSelection {
+  /** Deduplicated ids, in the order they arrived. */
+  readonly tagIds: readonly string[];
+  /** The resolved rows, in the order the picker renders them. */
+  readonly tags: Tag[];
+}
 
+/**
+ * Checks a tag selection **without writing anything**.
+ *
+ * Separated from the write so the storefront save can refuse a bad selection
+ * before it touches the profile row (#405). Every realistic refusal here — a
+ * tag an admin has since hidden, a selection over the per-category ceiling — is
+ * knowable up front, so the vendor gets one failed save rather than a profile
+ * edit that stands with no tags to go with it.
+ */
+export async function resolveVendorTagSelection(
+  db: AppDatabase,
+  tagIds: readonly string[],
+): Promise<VendorTagSelection> {
   const unique = [...new Set(tagIds)];
   const resolved = await findActiveTagsByIds(db, unique);
 
@@ -63,14 +66,14 @@ export async function setVendorTags(
   for (const tag of resolved) {
     const next = (perCategory.get(tag.category) ?? 0) + 1;
     if (next > MAX_TAGS_PER_CATEGORY) {
-      throw validationFailed(`Choose at most ${MAX_TAGS_PER_CATEGORY} tags per category.`);
+      throw validationFailed(`Choose at most ${MAX_TAGS_PER_CATEGORY} tags per category.`, {
+        field: 'tagIds',
+      } satisfies FieldErrorDetails);
     }
     perCategory.set(tag.category, next);
   }
 
-  await replaceVendorTags(db, profile.id, unique);
-
-  return sortForDisplay(resolved);
+  return { tagIds: unique, tags: sortForDisplay(resolved) };
 }
 
 /** Same ordering the picker renders: category group, then display order. */

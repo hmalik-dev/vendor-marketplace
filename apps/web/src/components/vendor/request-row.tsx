@@ -24,6 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApiClientError } from '@/lib/api-client';
+import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { wireBookingRequestSchema, type WireBookingRequest } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
@@ -51,14 +52,19 @@ const ROW_DATE = new Intl.DateTimeFormat('en-US', {
  */
 function vendorFacingError(failure: unknown): string {
   if (!(failure instanceof ApiClientError)) {
-    return 'That did not reach us. Check your connection and try again.';
+    return REQUEST_DID_NOT_ARRIVE;
   }
 
   if (failure.code === ERROR_CODES.VALIDATION_ERROR) {
     return `Enter a price between ${formatPrice(MIN_BOOKING_AMOUNT_CENTS)} and ${formatPrice(MAX_PACKAGE_PRICE_CENTS)}.`;
   }
 
-  return failure.message;
+  /*
+   * The remaining generic shapes go the same way (#405). `Internal server
+   * error` on a 500 is the leak `userFacingError` exists to stop, and this
+   * branch was reaching around it to print `failure.message` raw.
+   */
+  return userFacingError(failure, REQUEST_DID_NOT_ARRIVE);
 }
 
 /*

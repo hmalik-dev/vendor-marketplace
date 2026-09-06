@@ -58,7 +58,7 @@ describe('wireUserSchema', () => {
 describe('wireTagListSchema', () => {
   /*
    * The domain `tagSchema` types `createdAt` as a `Date`, so validating a JSON
-   * response against it rejects every tag. `PUT /vendor/tags` returns exactly
+   * response against it rejects every tag. `GET /tags` returns exactly
    * this shape, and getting it wrong failed the whole profile save.
    */
   it('accepts the ISO timestamp a tag response actually carries', () => {

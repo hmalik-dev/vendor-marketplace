@@ -1,13 +1,11 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   categories,
   tagSuggestions,
   tags,
   users,
   vendorProfiles,
-  vendorTags,
 } from '@vendor-marketplace/db/schema';
-import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { violatesConstraint } from '../../lib/constraint-violation.js';
@@ -20,17 +18,6 @@ const CUSTOMER = 'user_customer';
 describe('tag routes', () => {
   let harness: TestHarness;
   let photographyId: string;
-
-  async function tagIdsFor(category: TagCategory, count: number): Promise<string[]> {
-    const rows = await harness.database.db
-      .select({ id: tags.id })
-      .from(tags)
-      .where(and(eq(tags.category, category), eq(tags.isActive, true)))
-      .limit(count);
-
-    expect(rows).toHaveLength(count);
-    return rows.map((row) => row.id);
-  }
 
   async function tagIdByName(name: string): Promise<string> {
     const rows = await harness.database.db
@@ -164,206 +151,15 @@ describe('tag routes', () => {
     });
   });
 
-  describe('PUT /vendor/tags', () => {
-    it('rejects a customer', async () => {
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(CUSTOMER),
-        payload: { tagIds: [] },
-      });
-
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('answers 404 when the vendor has no profile yet', async () => {
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds: [] },
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it('stores the selection and returns the resolved tags', async () => {
-      await createVendorProfile();
-      const tagIds = await tagIdsFor('language', 2);
-
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toHaveLength(2);
-      expect(await harness.database.db.select().from(vendorTags)).toHaveLength(2);
-    });
-
-    it('replaces the previous selection rather than adding to it', async () => {
-      await createVendorProfile();
-      const [first, second] = await tagIdsFor('language', 2);
-
-      await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds: [first] },
-      });
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds: [second] },
-      });
-
-      expect(response.json().map((tag: { id: string }) => tag.id)).toEqual([second]);
-      const stored = await harness.database.db.select().from(vendorTags);
-      expect(stored.map((row) => row.tagId)).toEqual([second]);
-    });
-
-    it('accepts an empty array as "clear my tags"', async () => {
-      await createVendorProfile();
-      const tagIds = await tagIdsFor('language', 2);
-      await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds },
-      });
-
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds: [] },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual([]);
-      expect(await harness.database.db.select().from(vendorTags)).toHaveLength(0);
-    });
-
-    it('collapses a duplicate id rather than failing the insert', async () => {
-      await createVendorProfile();
-      const [only] = await tagIdsFor('language', 1);
-
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds: [only, only] },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toHaveLength(1);
-    });
-
-    it('rejects a tag id that does not exist', async () => {
-      await createVendorProfile();
-
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds: ['11111111-1111-4111-8111-111111111111'] },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json().message).toMatch(/tags are unavailable/i);
-    });
-
-    /*
-     * #222: the storefront editor saves tags in the same submit as the profile,
-     * so a refusal here has to reach the tag picker rather than a toast the
-     * vendor has to match to a control by hand.
-     */
-    it('names the offending field, so the editor can mark the right control', async () => {
-      await createVendorProfile();
-
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds: ['11111111-1111-4111-8111-111111111111'] },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json().details).toEqual({ field: 'tagIds' });
-    });
-
-    it('rejects a deactivated tag', async () => {
-      await createVendorProfile();
-      const spanishId = await tagIdByName('Spanish');
-      await harness.database.db.update(tags).set({ isActive: false }).where(eq(tags.id, spanishId));
-
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds: [spanishId] },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it(`rejects more than ${MAX_TAGS_PER_CATEGORY} tags in one category`, async () => {
-      await createVendorProfile();
-      const tagIds = await tagIdsFor('language', MAX_TAGS_PER_CATEGORY + 1);
-
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json().message).toMatch(/at most 5 tags per category/i);
-      expect(await harness.database.db.select().from(vendorTags)).toHaveLength(0);
-    });
-
-    it('allows the per-category maximum in each category at once', async () => {
-      await createVendorProfile();
-      const tagIds = [
-        ...(await tagIdsFor('language', MAX_TAGS_PER_CATEGORY)),
-        ...(await tagIdsFor('cultural', MAX_TAGS_PER_CATEGORY)),
-        ...(await tagIdsFor('dietary', 4)),
-      ];
-
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toHaveLength(14);
-    });
-
-    it('surfaces the selection on the vendor profile', async () => {
-      await createVendorProfile();
-      const tagIds = await tagIdsFor('language', 2);
-      await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/tags',
-        headers: bearer(VENDOR),
-        payload: { tagIds },
-      });
-
-      const profile = await harness.app.inject({
-        method: 'GET',
-        url: '/vendor/profile',
-        headers: bearer(VENDOR),
-      });
-
-      expect(profile.json().tags).toHaveLength(2);
-    });
-  });
+  /*
+   * `PUT /vendor/tags` was removed by #405. A vendor's selection is written by
+   * `POST`/`PUT /vendor/profile`, in the same transaction as the row it belongs
+   * to, and every rule this block used to police — the per-category ceiling, a
+   * deactivated tag, duplicate collapsing, "empty means clear" — is asserted
+   * there, in `vendors.routes.test.ts`. A second endpoint would be a second
+   * write path to one piece of state, and necessarily the non-transactional
+   * one.
+   */
 
   describe('POST /tags/suggest', () => {
     it('rejects a customer', async () => {

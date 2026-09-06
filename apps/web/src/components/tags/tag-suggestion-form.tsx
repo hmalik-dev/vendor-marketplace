@@ -19,8 +19,12 @@ export interface TagSuggestionFormProps {
   category: TagCategory;
   /** The full active list, used for the optimistic client-side dedup pass. */
   allTags: readonly WireTag[];
-  /** Called when a suggestion resolved to a tag the vendor should now hold. */
-  onTagResolved: (tag: WireTag) => void;
+  /**
+   * Called when a suggestion resolved to a tag the vendor should now hold.
+   * Returns whether the tag ended up selected — the per-category ceiling can
+   * refuse it, and this form must not then claim it was selected (#405).
+   */
+  onTagResolved: (tag: WireTag) => boolean;
 }
 
 /** The comparison key both dedup layers use; mirrors `normalizeTagName`. */
@@ -53,6 +57,26 @@ export function TagSuggestionForm({
     setName('');
   };
 
+  /**
+   * Reports what actually happened to a suggestion that turned out to be an
+   * existing tag.
+   *
+   * #405: this always said "we've selected X for you". At the per-category
+   * ceiling the picker refuses the selection and toasts the limit, so the
+   * vendor got two contradictory toasts and a tag that was not selected. The
+   * picker owns the refusal message, so this stays quiet and leaves the panel
+   * open when the answer is no — closing it would hide the control the vendor
+   * has to use to make room.
+   */
+  const announce = (tag: WireTag): void => {
+    if (!onTagResolved(tag)) {
+      return;
+    }
+
+    toast.success(`Already available — we've selected ${tag.name} for you.`);
+    close();
+  };
+
   const submit = async (): Promise<void> => {
     const parsed = createTagSuggestionSchema.safeParse({ suggestedName: name, category });
     if (!parsed.success) {
@@ -64,9 +88,7 @@ export function TagSuggestionForm({
       (tag) => tag.category === category && normalize(tag.name) === normalize(name),
     );
     if (alreadyListed) {
-      onTagResolved(alreadyListed);
-      toast.success(`Already available — we've selected ${alreadyListed.name} for you.`);
-      close();
+      announce(alreadyListed);
       return;
     }
 
@@ -79,9 +101,11 @@ export function TagSuggestionForm({
       });
 
       if (result.status === 'exists') {
-        onTagResolved(result.tag);
-        toast.success(`Already available — we've selected ${result.tag.name} for you.`);
-      } else if (result.status === 'already_suggested') {
+        announce(result.tag);
+        return;
+      }
+
+      if (result.status === 'already_suggested') {
         toast.info('Already submitted for review.');
       } else {
         toast.success("Submitted for review — we'll notify you when it's approved.");

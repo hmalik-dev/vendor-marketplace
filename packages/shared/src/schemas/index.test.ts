@@ -14,7 +14,7 @@ import {
   imageRefSchema,
   paginatedSchema,
   sendMessageSchema,
-  setVendorTagsSchema,
+  vendorTagIdsSchema,
   tagSchema,
   tagSuggestionResponseSchema,
   uploadedImageSchema,
@@ -320,9 +320,9 @@ describe('createTagSuggestionSchema', () => {
   });
 });
 
-describe('setVendorTagsSchema', () => {
+describe('vendorTagIdsSchema', () => {
   it('accepts an empty selection so a vendor can clear every tag', () => {
-    expect(setVendorTagsSchema.parse({ tagIds: [] })).toEqual({ tagIds: [] });
+    expect(vendorTagIdsSchema.parse([])).toEqual([]);
   });
 
   it('rejects more tags than every category combined allows', () => {
@@ -330,11 +330,11 @@ describe('setVendorTagsSchema', () => {
       { length: TAG_CATEGORIES.length * MAX_TAGS_PER_CATEGORY + 1 },
       () => UUID,
     );
-    expect(setVendorTagsSchema.safeParse({ tagIds: tooMany }).success).toBe(false);
+    expect(vendorTagIdsSchema.safeParse(tooMany).success).toBe(false);
   });
 
   it('rejects a non-uuid tag id', () => {
-    expect(setVendorTagsSchema.safeParse({ tagIds: ['not-a-uuid'] }).success).toBe(false);
+    expect(vendorTagIdsSchema.safeParse(['not-a-uuid']).success).toBe(false);
   });
 });
 
