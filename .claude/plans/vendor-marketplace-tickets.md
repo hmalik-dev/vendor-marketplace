@@ -238,10 +238,10 @@ handling of values it cannot use — some announced, some silent, one sen |
 mount, so the date and guest count chosen on the vendor profile rail — or given
 in the URL — are silently replaced by whatever was saved earlier. A URL-only
 guest count is itself persisted as a 'draft'. |
-| **405** | **The storefront editor keeps unsaved work it did not save, and loses work it should have** | P1.5 | M4.5 | **P1 High** | **In Progress** | `worktree-t405` | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 8 verified findings. The vendor editor's save is two writes with no rollback, its post-save
+| **405** | **The storefront editor keeps unsaved work it did not save, and loses work it should have** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-t405` | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 8 verified findings. The vendor editor's save is two writes with no rollback, its post-save
 snapshot is taken from the live form rather than what was sent, and its publish
 switch reads unsaved state while toggling the saved row. Around it, the package
-form and the portfolio manager both discard edits when their parent r |
+form and the portfolio manager both discard edits when their parent r **Done 2026-09-06** — squash `b1b06a2`, PR #120, branch `worktree-t405`. Tags moved onto the profile body and `PUT /vendor/tags` was deleted, so the save is one transactional write; the snapshot is taken from what was sent; publishing waits for a clean form while unpublishing never does. `diff-reviewer` found criterion 7 unmet — the ceiling was still counted through a list that cannot hold a tag approved since page load, which this ticket's own transaction made severe — plus a stuck state where a published vendor who cleared a required field could never re-enable the switch; both fixed. `security-auditor` PASS. Browser 32/32, twice. |
 | **406** | **Development defaults can reach a deployed build** | INFRA | M-OPS | **P0 Critical** | **Done** | `worktree-t406` | **None** | `core` `auth` `storage` `stripe` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 6 verified findings. Five variables carry a development default that a production build silently Landed as `dedab3e` (PR #98) on 2026-09-05. `packages/shared/src/env/deployment.ts` answers "am I deployed?" once — platform markers plus a `DEPLOYMENT_PLATFORM` declaration for a host it does not name — and a `deployed` `ShapeTarget` refuses both a per-environment row left on its default and one whose value is loopback anyway, per entry so `WEB_URL`'s allow-list cannot smuggle localhost in as the origin handed to Stripe. **Ruling (D31): a CI build is not a deployment, and the distinction is drawn from what the platform sets, never from a hand-set flag.** `isDeployedBuild` reads only platform markers, because `next build` and `tsc` set `NODE_ENV=production` on a laptop too; `isDeployedRuntime` may additionally trust `NODE_ENV=production`, because no build or typecheck ever executes a server. A row with a *placeholder* and no default (`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`) is still required on **every** build, deployed or not — CI states it in `ci.yml` beside the Clerk key it already stated, inline because a *publishable* key is public by construction; a future ticket must not relax that to deployment-only, because checkout reads the key at module scope and the failure would simply move from the build to the first customer. Markers live in turbo's `globalEnv`, not its pass-through list: an unhashed marker lets a laptop's artefact be restored on the platform with localhost inlined. **Open, and not this ticket's:** the Vercel project must gain `WEB_URL`, `NEXT_PUBLIC_S3_PUBLIC_URL` and `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` before the web app builds there again — the gate now refuses what it used to ship silently. Parity on frame `05` also found ~25 pre-existing divergences (double header, Stripe Link block, `red-*` for `error-*`, one 4.20:1 contrast failure); none caused by this change, none fixed here.
 accepts: the API boots on localhost and MinIO, the web bundle bakes
 `http://localhost:4000` as its API origin, every stored-key image resolves to
@@ -2464,7 +2464,7 @@ guest count is itself persisted as a 'draft'.
 
 ### #405: The storefront editor keeps unsaved work it did not save, and loses work it should have
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2502,7 +2502,54 @@ list.
 
 #### Tests (required)
 
-- [ ] A test per behaviour; the two-write rollback needs a failing tag write with a succeeding profile write
+- [x] A test per behaviour, each watched failing before and passing after. The
+      two-write rollback is asserted from both ends in `vendors.routes.test.ts`:
+      a refused tag list on create leaves **no** profile row (so the retry
+      succeeds rather than 409ing), and on update leaves the business name
+      unchanged. The tag-write half is now unreachable by construction — there
+      is no second write.
+
+#### What the reviews changed
+
+Two findings from `diff-reviewer`, both real, and the first was made **worse**
+by this ticket's own fix:
+
+- **The per-category ceiling was still counted through `allTags`.** The picker
+  resolves a *held* id through that list, and a tag an admin approves after the
+  page loads is not in it — so a suggestion the server matched to one was
+  selected but invisible: counted as zero, drawing no pill and therefore no
+  Remove button, letting the vendor pick a full five more with no warning.
+  Harmless-ish before; severe after, because the save is now one transaction, so
+  the over-limit selection the API refuses stops the **whole** save — bio,
+  business name and all — against a tag the vendor cannot see to remove, on
+  every retry, until a reload throws the edit away. The picker now remembers
+  tags it learns about and merges them into the list everything downstream
+  counts and renders against.
+- **A published vendor could be stranded.** `disabled={isDirty}` gated both
+  directions of the visibility switch. Clearing a *required* field makes the
+  form permanently dirty — the client refuses the save that would clean it — so
+  the switch could never be re-enabled without reloading and losing the edit.
+  Unpublishing is now never held: it cannot fail the way publishing can, and it
+  is the control a vendor reaches for when something is wrong. The first test
+  written for this asserted the switch was *present*, which passed while it was
+  disabled; presence is not usability.
+
+Also from review: the pre-write checks run concurrently but report failures in
+declaration order, so a body wrong in two ways cannot answer 400 or 409
+depending on which query returned first.
+
+Rejected: `router.refresh()` moving into `finally` on the cancel path was called
+scope creep. It is quoted verbatim in this ticket's own finding for acceptance 8
+— "the refund has already been issued and the row cancelled, but
+`router.refresh()` is skipped" — and the assertion it replaced was asserting the
+bug.
+
+Two classes closed rather than two instances, both verified to fail when the
+defect is reintroduced: `no-raw-upstream-message.test.ts` greps every component
+for an `ApiClientError.message` read that reaches no filter, per occurrence
+rather than per file; `replace-in-transaction-guard.test.ts` asserts the two
+wholesale-replace writers are only ever handed a transaction, which is the
+premise they now depend on for atomicity after dropping their own.
 
 ---
 
