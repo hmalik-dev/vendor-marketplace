@@ -268,7 +268,7 @@ the silent-submit work #388 closed:
 - **Portfolio lightbox** (`portfolio-pane.tsx:108-160`) is `role="dialog"
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
-| **412** | **Customer profile and storefront CTAs report things that are not so** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 7 verified findings. Seven small correctness and copy defects on the customer profile and the public
+| **412** | **Customer profile and storefront CTAs report things that are not so** | P1.5 | M4.5 | **P2 Medium** | **Done** | `worktree-t412` | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 7 verified findings. Seven small correctness and copy defects on the customer profile and the public **Closed 2026-09-05** — squash `df9706b` (PR #106), CI green. All seven findings fixed and each driven in a real browser at 1440x900 across the signed-out, customer and vendor states. Also fixed in the same lane, same defect class: the identical `Number.parseInt` truncation on the booking **request** form (it sent `2.7` to a vendor as an event size of 2); `POST /booking-requests` answering a vendor 400 rather than 403 when the body was also malformed (moved to `requireRoleBeforeValidation`); the same batch upload line above the vendor editor's two single-image fields; three private `formatEventDate` implementations collapsed to one; the unsaved-changes dialog extracted so both forms share it; and `getCurrentUser` wrapped in `cache()`. `parity-checker` returns MATCH on the frame `03` rail on all six axes signed out — the state the frame draws is untouched. Its pass also recorded pre-existing frame `03` deviations that are **not** this ticket's and are not re-filed: the shell's missing `max-width:1400px`, the rail card sitting 24px low, ASCII quote glyphs on the tagline (`profile-header.tsx:213`), two unapproved zero-state strings, and a 13.4x20 hit area on the date picker's month arrows against the 44x44 law. Those belong to #372 and #383.
 | **413** | **Frame `06 Booking confirmed` fails parity on five axes** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by #386's parity pass**, the first to measure this frame — #386 changed one colour on it and the pass around that change found the rest. Nine measured misses, all in `booking-confirmed.tsx`, and the first three are one fix: the component renders a **second `<main>`** inside the layout's, whose `flex-1` resolves against a non-flex parent, so the sage gradient is `[0,64,1440,515]` and stops 321px short of the viewport the frame draws full-bleed — which also clips all four cross-sell chips' focus outlines by 4px. |
 | **414** | **`imageRefSchema` accepts references that are not image references** | P1.5 | M4.5 | **P2 Medium** | **Done** | `worktree-t414` | **None** | `storage` | **Filed 2026-09-04 from #398's boundary sweep, measured rather than reported.** The validator's own comment says a stored reference "may not traverse" and "may not be protocol-relative", and both guards are bypassable. `/\evil.com/x.png` is accepted — `startsWith('//')` does not see it — and `resolveImageUrl` returns a `/`-leading value **verbatim**, so it reaches `<img src>` as written and the URL parser normalises the backslash, loading the image from `evil.com`. A vendor can therefore point their public storefront's photo at a host they control and collect every visitor's IP. The enforced `img-src 'self' data: blob: https://img.clerk.com https://*.stripe.com https://*.link.com http://localhost:9000` blocks it in a browser today, which is why this is P2 and not P1 — but CSP is defence in depth and an email template carries no CSP at all. Separately, an interior tab or newline defeats the scheme test (`jav\tascript:alert(1)` and `jav\nascript:alert(1)` are both accepted) because the anchored regex fails and the value falls into the relative-path branch; browsers strip those characters before parsing a scheme, so it is live the moment any consumer puts a stored ref somewhere other than `<img src>`. Bidi controls are accepted too (`aaa‮bbb`), which is inert — it breaks resolution rather than reordering prose — and is why `request-body-free-text.test.ts` excludes image refs by reference rather than folding them into the free-text boundary. **Not the whole story: the leading-whitespace bypass this repository's security memory recorded is fixed** — `.trim()` runs before the `.refine()`, so `" javascript:alert(1)"`, `"\njavascript:…"` and `"//evil.com/x.png"` are all rejected; that memory has been corrected. Fix shape: reject control characters outright, and decide the relative-path branch after normalising `\` to `/` rather than before | **Closed 2026-09-05 in `d210d17` (PR #94).** All four acceptances landed, measured against the built `dist` as well as the source. Control characters (C0, DEL, C1) and the bidi formatting characters — U+061C included — are refused outright rather than stripped, because stripping leaves a reference resolving to a different object than the one uploaded while refusing the write says so. The relative branch now decides on the value a URL parser sees: `\` folded to `/` and `%2e` folded to `.` before the protocol-relative and traversal tests, so `/\evil.com/x.png`, `\\evil.com/x.png`, `/marketing\..\..\etc/passwd` and `a/%2e%2e/%2e%2e/b.webp` are all refused. The absolute branch additionally refuses credentials in the authority (`https://cdn.ours@evil.example/x.png`) — the same disguise, in the one branch backslashes never reached. **Deliberately not closed, and now stated in the test rather than hidden by it:** the absolute branch has no *host* allowlist, so `https://evil.example/x.png` is accepted. That is the schema's stated contract, not a bypass — a Clerk avatar depends on it, and the field is also a Fastify **response** schema, so narrowing it would 500 any row it newly refuses. Both reviewers flagged that the first draft of the "cannot produce a request to another origin" test named a guarantee the schema does not have; it now proves what is true (no relative form escapes our origins) and asserts the exception beside it. Narrowing the host set is a product decision, not this ticket. **Not a read-path regression:** 131 stored references across the e2e, demo and marketing seeders parsed through the new schema, zero refused. **Browser-verified twice at 1440x900.** Signed out, the storefront and search render every seeded reference; the vendor dashboard, profile edit and portfolio manager load; a real upload through the portfolio UI stored `portfolio/<owner>/<uuid>.webp` and rendered; the customer avatar upload works. Through the authenticated API, `PUT /vendor/profile` answered **400** to `/\evil.example/x.png`, a real TAB inside `javascript:`, and a bidi override, with the stored value unchanged each time. **Fixed here rather than filed:** driving it exposed a broken avatar on `/bookings` — a nested wire field does not inherit the image resolution its siblings get, so the vendor's bare object key reached `<img src>` unresolved and the browser asked the *web* origin for it, a 500 and a broken image for every vendor with a profile photo. `wireBookingRequestSchema` now resolves it; re-driven, the avatar loads from the image origin at `naturalWidth 1600` with no `localhost:3031/vendor-profile/…` request on the page. diff-reviewer and security-auditor both run, every blocking finding applied; the security-auditor project memory was corrected in the same commit
 | **415** | **A cancelled booking has no honest surface on either side** | P1.5 | M4.5 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 from #400's review.** #400 made the customer's booking row reachable and settled its parent request, and both changes landed on screens with nothing to say about a cancelled booking. **Customer:** `/bookings/<requestId>` routes any non-`accepted` request to `QuoteReview`, which now reads `This request was cancelled.` — neutral, and deliberately so, because the wire object carries nothing distinguishing a withdrawal from a refunded booking (`acceptedAt` is on the checkout read, not this one). It states no amount, no refund and no date, for a row where money moved. **Vendor:** the bookings page filters `status === 'accepted'`, so a cancelled booking now vanishes from it entirely — correct for the `coming up` count, but the vendor has no surface at all showing a date they lost. **Admin:** a ban that could not refund raises a `role="alert"` over the vendor table that survives no reload, and nothing else in `/admin` lists a `confirmed` booking on a banned account. Fix shape: put `acceptedAt` (or a cancellation summary) on the booking-request read so the customer's screen can state what happened and what was refunded; give the vendor a settled list; and give the operator a durable view of bookings whose refund failed |
@@ -2741,8 +2741,9 @@ the silent-submit work #388 closed:
 
 ### #412: Customer profile and storefront CTAs report things that are not so
 
-**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M4.5 | **Priority:** P2 Medium | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
+**Branch:** `worktree-t412` | **Squash:** `df9706b` | **PR:** #106
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
 below was reproduced or traced by a read-only hunter or a browser pass, then put
@@ -2774,7 +2775,49 @@ storefront, each of which tells the reader something untrue.
 
 #### Tests (required)
 
-- [ ] A test per item
+- [x] A test per item
+
+#### What shipped
+
+Each finding, and how it was closed:
+
+1. `guestCountFromInput` in `apps/web/src/lib/guest-count.ts`, beside the URL
+   boundary's own parser so the bounds are stated once. It differs from
+   `parseGuestCountParam` in exactly one deliberate way — a leading zero is
+   accepted, because `050` is a whole number somebody typed and refusing it
+   under "has to be a whole number of people" would contradict itself.
+2. The profile page takes the hub's `toEntries(...).length`, which is the only
+   place the paid-request de-duplication rule may live.
+3. `updateUserSchema`'s customer fields carry written messages instead of Zod
+   defaults, and the form uses `FieldMessage`/`errorProps` rather than a fourth
+   hand-rolled error treatment. The bio is also blocked client-side, since it
+   was the one field on the form that could still reach the schema by typing.
+4. `useUnsavedChangesGuard`, and a new shared `UnsavedChangesDialog` that the
+   storefront editor now renders too.
+5. `SINGLE_UPLOAD_CONSTRAINT_LINE`. The contract draws "12 MB **each** · 20
+   files per upload" only in frame `24 Image upload`; its singular form has no
+   "each", and frame `09` draws no constraint line at all above the two
+   single-image fields that were also using the batch one.
+6. `canBook` on `BookingRail`, required rather than defaulting, computed from
+   `readRoleForChrome()`. Presentation only — `POST /conversations` and
+   `POST /booking-requests` still answer 403, verified live against a signed-in
+   vendor.
+7. One exported `formatEventDate`, replacing three private implementations.
+
+**Fixed in the same lane, out of the original seven.** The identical
+`parseInt` truncation was live on the booking **request** form, where `2.7`
+reached a vendor as an event size of 2; `POST /booking-requests` answered a
+wrong-role caller 400 rather than 403 when the body was also malformed, which
+`requireRoleBeforeValidation` exists to prevent; and `getCurrentUser` is now
+`cache()`d, so the storefront's role read is not a second `/users/me` per
+request on top of the layout header's.
+
+**Not this ticket, not re-filed.** `parity-checker`'s frame `03` pass recorded
+pre-existing deviations outside this change: the shell's missing
+`max-width:1400px`, the rail card 24px low, ASCII quote glyphs on the tagline
+(`profile-header.tsx:213`), two unapproved zero-state strings, and the date
+picker's month arrows at 13.4x20 against the 44x44 law. The first four belong
+to #372's parity close-out and the last to #383.
 
 ---
 

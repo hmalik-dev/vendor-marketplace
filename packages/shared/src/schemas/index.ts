@@ -325,12 +325,49 @@ export const updateUserSchema = z
      * minimum, "   " stored as an empty string and rendered as a bio that was
      * there but said nothing.
      */
-    bio: trimmedString(MAX_CUSTOMER_BIO_LENGTH).nullable(),
-    city: trimmedString(MAX_NAME_LENGTH).nullable(),
-    state: trimmedString(MAX_NAME_LENGTH).nullable(),
+    /*
+     * Every message here is written out rather than left to Zod (#412). The
+     * customer profile form parses this schema **client-side** and shows
+     * `issues[0].message` on screen, so the default was the entire text a
+     * customer got for a bio one character too long — `Invalid input` in the
+     * browser build, `Too big: expected string to have <=300 characters` in
+     * Node. Neither says what to do, and `40-states.md` requires a message
+     * that does: "how to fix it, never 'Invalid'".
+     */
+    /*
+     * `freeText` with the bounds written out, not `trimmedString` — the first
+     * `.max()` on a chain is the one that reports, so a second call adding a
+     * message never runs.
+     */
+    bio: freeText()
+      .min(1)
+      .max(MAX_CUSTOMER_BIO_LENGTH, {
+        message: `Keep this to ${MAX_CUSTOMER_BIO_LENGTH} characters or fewer.`,
+      })
+      .nullable(),
+    city: freeText()
+      .min(1)
+      .max(MAX_NAME_LENGTH, { message: `A city name is at most ${MAX_NAME_LENGTH} characters.` })
+      .nullable(),
+    state: freeText()
+      .min(1)
+      .max(MAX_NAME_LENGTH, { message: `A state name is at most ${MAX_NAME_LENGTH} characters.` })
+      .nullable(),
     budgetTier: budgetTierSchema.nullable(),
-    typicalGuestCountMin: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
-    typicalGuestCountMax: z.int().min(1).max(MAX_GUEST_COUNT).nullable(),
+    typicalGuestCountMin: z
+      .int()
+      .min(1, { message: 'A guest count starts at 1.' })
+      .max(MAX_GUEST_COUNT, {
+        message: `That is more than ${MAX_GUEST_COUNT.toLocaleString('en-US')} guests.`,
+      })
+      .nullable(),
+    typicalGuestCountMax: z
+      .int()
+      .min(1, { message: 'A guest count starts at 1.' })
+      .max(MAX_GUEST_COUNT, {
+        message: `That is more than ${MAX_GUEST_COUNT.toLocaleString('en-US')} guests.`,
+      })
+      .nullable(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {

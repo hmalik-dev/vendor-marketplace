@@ -72,6 +72,14 @@ describe('AcceptedRequest', () => {
     expect(screen.queryByRole('button', { name: 'Cancel booking' })).toBeNull();
   });
 
+  /** #412's seventh finding — the same summary line as `QuoteReview`. */
+  it('writes the event date out rather than printing the ISO string', () => {
+    render(<AcceptedRequest request={acceptedRequest()} booking={null} />);
+
+    expect(screen.getByText('Wedding · June 14, 2027 · Barr Mansion, Austin, TX')).toBeDefined();
+    expect(screen.queryByText(new RegExp(FAR_EVENT))).toBeNull();
+  });
+
   it('becomes the booking once it is paid for', () => {
     render(<AcceptedRequest request={acceptedRequest()} booking={booking()} />);
 

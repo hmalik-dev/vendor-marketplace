@@ -17,8 +17,19 @@ explicitly so a run can be aimed at a deployed origin;
 as its example. So aiming a sign-in script at production is a supported,
 tested, one-variable act with no origin guard anywhere downstream.
 
-Since #392 `DEFAULT_ROLES` in `scripts/e2e-auth.mjs` includes `admin`, so the
-no-argument run mints an **admin console** session, not just customer/vendor.
+Since #392 the default role list includes `admin`, so a no-argument run mints
+an **admin console** session and not just customer/vendor — and #392 therefore
+also **added the guard**: `resolveRoles` in `scripts/e2e-roles.mjs` refuses to
+choose roles at all when `new URL(BASE).hostname` is not loopback, exiting 1
+before Chromium launches and printing the explicit form to type instead. Roles
+named on argv still work against any origin, because that is somebody's
+decision rather than a default's. `scripts/e2e-auth.test.mjs` covers the
+loopback list, the deployed refusal, the explicit override, and four hostnames
+a substring match would have wrongly accepted.
+
+**Do not re-report the default.** What remains open is the shared instance
+itself — `docs/pre-launch.md` §1.2 is the tracking item, and no guard here can
+substitute for production getting its own Clerk instance.
 
 **Why:** the repo law "a development default must never be able to reach
 production" is normally satisfied by a marker check (see

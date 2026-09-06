@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { cache } from 'react';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
@@ -53,8 +54,16 @@ export const POST_SIGN_IN_PATH_BY_ROLE: Record<UserRole, string> = {
  * the Clerk session on the server and never ships a token to the browser.
  * Returns `null` when nobody is signed in or the session no longer resolves to
  * an account, which is the caller's cue to send them to sign-in.
+ *
+ * `cache()` because a single render asks more than once: the root layout's
+ * header reads the role for its user menu, and a page underneath it reads the
+ * same record for its own reasons — the vendor storefront, for one, to decide
+ * whether its two CTAs are offered at all. Without this each of those is its
+ * own `/users/me` round trip on the request's critical path, for one record
+ * that cannot change between them. Per-request and server-only, so nothing is
+ * shared between two visitors.
  */
-export async function getCurrentUser(): Promise<WireUser | null> {
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<WireUser | null> {
   const { getToken } = await auth();
   const token = await getToken();
 
@@ -70,7 +79,7 @@ export async function getCurrentUser(): Promise<WireUser | null> {
     }
     throw error;
   }
-}
+});
 
 /**
  * Loads the caller and sends them somewhere sensible when there is no usable

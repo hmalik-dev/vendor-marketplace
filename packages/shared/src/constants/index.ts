@@ -1009,6 +1009,19 @@ export const ACCEPTED_IMAGE_LABEL = 'JPG or PNG';
 export const UPLOAD_CONSTRAINT_LINE = `${ACCEPTED_IMAGE_LABEL} · ${MAX_UPLOAD_BYTES / BYTES_PER_MB} MB each · min ${MIN_UPLOAD_IMAGE_WIDTH}px wide · ${MAX_UPLOAD_BATCH_FILES} files per upload`;
 
 /**
+ * The same contract for a field that holds **one** image.
+ *
+ * `UPLOAD_CONSTRAINT_LINE` is the batch drop zone's sentence — `40-states.md`
+ * fixes it for the portfolio uploader, where "each" and "20 files per upload"
+ * are both facts. A single-photo field has neither: the customer profile photo
+ * offered "12 MB each · 20 files per upload" above a chooser that takes one
+ * file and a refusal that already says "under 12 MB · at least 1200px wide",
+ * so the hint was the only copy on the screen describing a control that does
+ * not exist.
+ */
+export const SINGLE_UPLOAD_CONSTRAINT_LINE = `${ACCEPTED_IMAGE_LABEL} · under ${MAX_UPLOAD_BYTES / BYTES_PER_MB} MB · at least ${MIN_UPLOAD_IMAGE_WIDTH}px wide`;
+
+/**
  * The cover is landscape 3:2. Frame `09` draws its drop zone 216x144, and the
  * public card and profile header crop to the same ratio.
  *

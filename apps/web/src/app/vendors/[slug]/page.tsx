@@ -18,6 +18,7 @@ import { ProfileHeader } from '@/components/vendors/profile/profile-header';
 import { ProfileTabs } from '@/components/vendors/profile/profile-tabs';
 import { ReviewsPane } from '@/components/vendors/profile/reviews-pane';
 import { siteOrigin } from '@/config/env';
+import { readRoleForChrome } from '@/lib/current-user';
 import {
   getPublicVendorAvailability,
   getPublicVendorProfile,
@@ -159,10 +160,24 @@ export default async function VendorProfilePage({
     discarded — a page nobody can see is not worth a second round trip to
     optimise.
   */
-  const [vendor, availability, reviews] = await Promise.all([
+  const [vendor, availability, reviews, viewerRole] = await Promise.all([
     getPublicVendorProfile(slug),
     getPublicVendorAvailability(slug),
     getPublicVendorReviews(slug),
+    /*
+     * Which role is reading, not whether they may read: this page is public and
+     * stays public. It decides only whether the rail's two CTAs are offered —
+     * both are `requireRole('customer')` at the API, so a vendor or an admin
+     * was being shown a pair of controls neither of them can use, and a
+     * vendor's own storefront offered them against themselves.
+     *
+     * `readRoleForChrome` rather than `readIdentityOnPublicRoute`: this needs
+     * the role and nothing else, and it must not add a *redirect* to a public
+     * page that had none. It degrades to `null`, which is the signed-out
+     * answer — the CTAs are offered and the refusal stays with the API, where
+     * it is load-bearing.
+     */
+    readRoleForChrome(),
   ]);
 
   /*
@@ -262,6 +277,7 @@ export default async function VendorProfilePage({
             reviewCount={vendor.reviewCount}
             serverToday={serverToday}
             calendar={calendar}
+            canBook={viewerRole === null || viewerRole === 'customer'}
           />
         }
       >

@@ -2,7 +2,7 @@
 
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
-  UPLOAD_CONSTRAINT_LINE,
+  SINGLE_UPLOAD_CONSTRAINT_LINE,
   type UploadedImage,
 } from '@vendor-marketplace/shared';
 import { ImagePlus } from 'lucide-react';
@@ -322,7 +322,13 @@ export function ImageUpload({
           className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
         />
       </div>
-      {showHint ? <p className="text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p> : null}
+      {/*
+        The **single**-image sentence. This component holds exactly one file —
+        the chooser takes one and the refusal copy reads "under 12 MB · at
+        least 1200px wide" — so the batch line's "12 MB each · 20 files per
+        upload" described a control the reader does not have.
+      */}
+      {showHint ? <p className="text-xs text-stone-600">{SINGLE_UPLOAD_CONSTRAINT_LINE}</p> : null}
 
       {/*
         The reason and its matching fix, side by side and persistent. Gold for
