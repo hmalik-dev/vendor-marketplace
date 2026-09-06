@@ -4,7 +4,7 @@ import {
   centsToDollars,
   dollarsToCents,
   formatPrice,
-  TAG_CATEGORIES,
+  tagCategoriesFor,
   VENDOR_SORT_OPTIONS,
   type CategoryFacet,
   type TagCategory,
@@ -499,12 +499,20 @@ export function RefineBar({
         </span>
 
         {/*
-          Five chips, in the frame's order: Price and Rating above, then
-          Languages, Cultural and Dietary from `TAG_CATEGORIES`. A sixth,
-          `Style ▾`, shipped in #281 and came out in #329 when Style was ruled
-          out of the MVP — frames `02`, `17`, `27` and `28` draw five.
+          Price and Rating above, then the tag groups this category can answer.
+          A sixth chip, `Style ▾`, shipped in #281 and came out in #329 when
+          Style was ruled out of the MVP — frames `02`, `17`, `27` and `28`
+          draw five.
+
+          **Five is the un-narrowed count, not a fixed one (#418).** `Dietary`
+          holds four diets, which only a vendor who serves food can
+          accommodate, so on a photography search it is a control that can only
+          ever empty the grid — the furniture `01-foundations.md` names. Which
+          groups a category can answer is declared on its seed rather than
+          listed here: a filter bar is the wrong place to hold a fact about the
+          taxonomy, and this component would be the third to learn it.
         */}
-        {TAG_CATEGORIES.map(tagChip)}
+        {tagCategoriesFor(state.category).map(tagChip)}
 
         {hasAnyRefinement ? (
           <button

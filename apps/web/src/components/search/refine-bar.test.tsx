@@ -665,8 +665,19 @@ describe('the refine chips', () => {
     expect(frameChips.slice(2)).toEqual(['Languages ▾', 'Cultural ▾', 'Dietary ▾']);
   });
 
+  /*
+   * The frame's own five are the **un-narrowed** set, which is why this renders
+   * with no vendor type.
+   *
+   * Frame `02` draws all five over a *Photography* search (`searchValue:
+   * isCategory ? 'Photography' : …`), and #418 is a deliberate override of the
+   * frame on that one point: the account holder ruled that a filter which can
+   * only ever return zero must not be offered, and no photographer carries a
+   * dietary tag. The chip *set* the frame draws is still the contract, and it
+   * is still asserted — on the search this bar draws it for.
+   */
   it('draws the three tag chips the frame draws, and no Style chip', () => {
-    renderChips('photography');
+    renderChips('');
 
     for (const label of ['Languages', 'Cultural', 'Dietary']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeDefined();
@@ -675,16 +686,18 @@ describe('the refine chips', () => {
   });
 
   /*
-   * Every remaining group is global, so the option set no longer moves with the
-   * vendor type — the scoping that `style` needed went with it. Asserted from
-   * the rendered chips rather than from the filter expression.
+   * The scoping that `style` needed went with it: within a group the option set
+   * is global, so it does not move with the vendor type. **Which groups are
+   * offered does** (#418) — asserted separately below — and these are two
+   * different claims that were one test until this ticket separated them.
    */
-  it('draws the same chips whichever vendor type is selected', () => {
+  it('offers a group’s whole option set whichever vendor type is selected', async () => {
+    const user = userEvent.setup();
     renderChips('videography');
 
-    for (const label of ['Languages', 'Cultural', 'Dietary']) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeDefined();
-    }
+    await user.click(screen.getByRole('button', { name: /^Languages/ }));
+
+    expect(await screen.findByRole('option', { name: 'English' })).toBeDefined();
     expect(screen.queryByRole('button', { name: /^Style/ })).toBeNull();
   });
 
@@ -830,5 +843,70 @@ describe('the Price chip states the bounds that were actually set', () => {
   /* A $0 floor is a bound the reader set, so it is stated, not swallowed. */
   it('keeps a zero floor rather than treating it as absent', () => {
     expect(chipText({ minPriceCents: 0 })).toBe('$0+');
+  });
+});
+
+/*
+ * #418. A control that can open nothing is furniture (`01-foundations.md`), and
+ * `Dietary` on a photography search is exactly that: the four dietary tags are
+ * diets, and no photographer is tagged with one. The applicable set is read
+ * from the category seed, so this suite asserts the bar *consults* it — which
+ * groups each category gets is asserted in `packages/shared`.
+ */
+describe('offers only the tag groups the searched category can answer', () => {
+  const TAGS = [
+    { id: 'a1111111-1111-4111-8111-111111111111', name: 'English', category: 'language' },
+    { id: 'a2222222-2222-4222-8222-222222222222', name: 'South Asian', category: 'cultural' },
+    { id: 'a3333333-3333-4333-8333-333333333333', name: 'Halal', category: 'dietary' },
+  ] as const;
+
+  afterEach(() => cleanup());
+
+  function chipNames(overrides: Partial<SearchState>): string[] {
+    render(
+      <RefineBar
+        state={state(overrides)}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={TAGS as unknown as React.ComponentProps<typeof RefineBar>['tags']}
+        facets={[]}
+      />,
+    );
+
+    return screen.getAllByRole('button').map((button) => button.textContent ?? '');
+  }
+
+  it('withholds Dietary on a photography search', () => {
+    const chips = chipNames({ category: 'photography' });
+
+    expect(chips).toContain('Languages');
+    expect(chips).toContain('Cultural');
+    expect(chips).not.toContain('Dietary');
+  });
+
+  it('offers Dietary on a catering search', () => {
+    expect(chipNames({ category: 'catering' })).toContain('Dietary');
+  });
+
+  it('offers Dietary on a carts search, which serves food too', () => {
+    expect(chipNames({ category: 'carts' })).toContain('Dietary');
+  });
+
+  /*
+   * No category is not "no food": the grid then spans every category, caterers
+   * included, so the filter can still return something.
+   */
+  it('offers every group when no category is chosen', () => {
+    const chips = chipNames({ category: '' });
+
+    expect(chips).toContain('Languages');
+    expect(chips).toContain('Cultural');
+    expect(chips).toContain('Dietary');
+  });
+
+  it('draws the groups it does offer in the frame’s order, Languages then Cultural', () => {
+    const chips = chipNames({ category: 'photography' });
+
+    expect(chips.indexOf('Languages')).toBeLessThan(chips.indexOf('Cultural'));
   });
 });
