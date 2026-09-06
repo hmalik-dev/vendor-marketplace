@@ -55,11 +55,24 @@ describe('CheckoutUnavailable', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       "This booking isn't open any more",
     );
-    expect(screen.getByRole('status').textContent).toBe('No payment was taken.');
+    expect(screen.getByRole('status').textContent).toBe('Nothing is owed on this booking.');
     expect(screen.queryByRole('link', { name: 'Try this payment again' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Back to this booking' }).getAttribute('href')).toBe(
       `/bookings/${REQUEST_ID}`,
     );
+  });
+
+  /*
+   * #400 made this the screen a *paid* customer can reach. Cancelling now
+   * settles the parent request, so the checkout answers `closed` where it used
+   * to redirect to the confirmation — and "No payment was taken." is a false
+   * statement to someone who paid and was refunded. The other two reasons keep
+   * that sentence, because for them it is true.
+   */
+  it('does not claim no payment was taken on a booking that may have been paid and refunded', () => {
+    render(<CheckoutUnavailable reason="closed" requestId={REQUEST_ID} vendorName="June Harlow" />);
+
+    expect(screen.getByRole('status').textContent).not.toContain('No payment was taken');
   });
 
   /*

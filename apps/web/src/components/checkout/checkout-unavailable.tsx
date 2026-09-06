@@ -30,7 +30,10 @@ interface Copy {
   eyebrow: string;
   heading: string;
   body: string;
-  /** The money position, stated even though the answer is always "nothing". */
+  /**
+   * The money position. "Nothing was taken" for the two reasons where that is
+   * true, and a claim-free sentence for `closed`, where it is not (#400).
+   */
   money: string;
   action: { label: string; href: string };
   secondary: { label: string; href: string } | null;
@@ -49,7 +52,17 @@ function copyFor(
       eyebrow: 'Checkout closed',
       heading: "This booking isn't open any more",
       body: "It was cancelled, declined or it expired, so there's nothing left to pay for. Your date isn't being held.",
-      money: 'No payment was taken.',
+      /*
+       * Not "No payment was taken." — #400 made this screen reachable by a
+       * customer who *did* pay. Cancelling a confirmed booking now settles the
+       * parent request, so this checkout answers `closed` where it used to
+       * redirect to the confirmation, and the old sentence told someone who had
+       * paid $1,450 and been refunded that no payment was taken. This one is
+       * true of every closed booking — refunded in full, refunded by half, or
+       * never paid at all — and asserts nothing about money that moved. What
+       * that money actually did belongs on a surface that knows it (#415).
+       */
+      money: 'Nothing is owed on this booking.',
       action: { label: 'Back to this booking', href: booking },
       secondary: { label: 'Browse vendors', href: '/search' },
     };
