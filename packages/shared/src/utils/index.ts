@@ -585,3 +585,43 @@ export function joinWithAnd(items: readonly string[]): string {
 
   return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
+
+/** A `LIMIT`/`OFFSET` pair — one page of a list, as the DAOs take it. */
+export interface PageWindow {
+  limit: number;
+  offset: number;
+}
+
+/**
+ * The page a `{ page, pageSize }` query names, as SQL takes it.
+ *
+ * One definition, because #408 closed four reads that had none at all and the
+ * arithmetic is exactly the sort that gets written out a fifth time with the
+ * `- 1` missing.
+ */
+export function pageWindow(query: { page: number; pageSize: number }): PageWindow {
+  return { limit: query.pageSize, offset: (query.page - 1) * query.pageSize };
+}
+
+/**
+ * Case- and diacritic-insensitive, whitespace-collapsed matching text.
+ *
+ * `NFD` splits an accented character into its base letter plus a combining
+ * mark, and the range strips the marks — so `José` becomes `jose` and matches
+ * a customer who typed either spelling. Both sides go through this, which is
+ * what makes it symmetric: `San Jose` finds `San José` **and** the reverse.
+ *
+ * It lives here rather than in the web app because **three processes have to
+ * agree on it** since #384: the browser's category filter, the seed that
+ * writes `us_cities.search_name`, and the API that normalises the customer's
+ * typed query before comparing the two. A second copy of this function is a
+ * city the customer can see but not find.
+ */
+export function normaliseForMatch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}

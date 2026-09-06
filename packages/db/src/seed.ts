@@ -7,7 +7,9 @@ import {
 import { eq, inArray, not, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
-import { categories, tags, vendorCategories } from './schema/index.js';
+import { categories, tags, usCities, vendorCategories } from './schema/index.js';
+import type { NewUsCityRow } from './schema/us-cities.js';
+import { usCityRows } from './us-cities.js';
 
 export interface SeedResult {
   categoriesUpserted: number;
@@ -173,7 +175,78 @@ export async function seedTags<
   return inserted.length;
 }
 
-/** Populates every reference table. Safe to run repeatedly. */
+/**
+ * How many `us_cities` rows go in one statement.
+ *
+ * The dataset is ~35,600 places and Postgres caps a statement at 65,535 bound
+ * parameters; four columns puts the ceiling at 16,383 rows, so this is a third
+ * of the limit and not a guess about performance. One statement per chunk, no
+ * transaction: the insert is idempotent per row, so a torn run is repaired by
+ * running it again rather than by rolling anything back.
+ */
+const CITY_CHUNK = 5_000;
+
+/**
+ * The US places the `City` typeahead suggests (#384).
+ *
+ * Reference data in the same sense the taxonomy is: owned by the seed, changed
+ * by a data refresh rather than by anything a user does, and **independent of
+ * `vendor_profiles`**. Before #384 the field was fed by the inventory itself,
+ * which is what made a place with nobody in it unpickable; the user's
+ * instruction was that any US city must be searchable, so the source of truth
+ * moved here.
+ *
+ * Upserts rather than replaces. A refresh that emptied the table first would
+ * leave a window in which the search bar suggests nothing, and it would do it
+ * on every `pnpm db:seed` — including the one `lane:up` runs.
+ */
+export async function seedUsCities<
+  TQueryResult extends PgQueryResultHKT,
+  TFullSchema extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+>(
+  db: AnyPgDatabase<TQueryResult, TFullSchema, TSchema>,
+  /*
+   * The committed dataset by default; a handful of rows in a test that is about
+   * matching rather than about the data. Inserting all 35,618 to prove `Austin`
+   * outranks `Austin, MN` costs ~3s and proves nothing extra.
+   *
+   * Resolved inside the function rather than as a default expression, because
+   * `usCityRows` loads the 612KB dataset with a dynamic import — a caller that
+   * passes its own rows must not pay for it, which is the whole reason that
+   * import is dynamic.
+   */
+  given?: readonly NewUsCityRow[],
+): Promise<number> {
+  const rows = given ?? (await usCityRows());
+
+  for (let at = 0; at < rows.length; at += CITY_CHUNK) {
+    await db
+      .insert(usCities)
+      .values(rows.slice(at, at + CITY_CHUNK))
+      .onConflictDoUpdate({
+        target: [usCities.name, usCities.state],
+        set: {
+          population: sql`excluded.population`,
+          searchName: sql`excluded.search_name`,
+        },
+      });
+  }
+
+  return rows.length;
+}
+
+/**
+ * Populates the reference tables **every surface needs to render**. Safe to run
+ * repeatedly.
+ *
+ * `seedUsCities` is deliberately not in here, and the reason is measured: the
+ * places dataset is 35,618 rows and takes ~3s to insert into PGlite, which
+ * every API test suite would pay once for a table almost none of them reads.
+ * `pnpm db:seed` runs both — see `scripts/seed.ts` — so a lane and a developer
+ * still get a complete database from one command, and a test that needs places
+ * inserts the handful it is about.
+ */
 export async function seedReferenceData<
   TQueryResult extends PgQueryResultHKT,
   TFullSchema extends Record<string, unknown>,

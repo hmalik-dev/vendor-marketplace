@@ -4,6 +4,7 @@ import type { NotificationRow } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import type { EmailGateway } from '../../lib/email.js';
+import type { BackgroundWork } from '../../lib/background.js';
 import { findUserEmail } from './notification-email.dao.js';
 
 /**
@@ -108,6 +109,33 @@ export interface NotificationEmailDeps {
   log: FastifyBaseLogger;
   /** `canonicalWebOrigin(env)` — never `BRAND_DOMAIN`, which is display only. */
   webOrigin: string;
+  /** Where the send runs, so no request waits on Resend. See `queueNotificationEmail`. */
+  background: BackgroundWork;
+}
+
+/**
+ * Sends the email **off the request path**, and this is the function every
+ * service calls.
+ *
+ * `sendNotificationEmail` below is the send itself and stays awaitable — the
+ * unit suite drives it directly — but nothing on a request should await it. The
+ * email cannot change the answer the caller is about to get: the notification
+ * row is already written, the action already committed, and a failed send is
+ * logged and swallowed either way. Awaiting it only lent the request Resend's
+ * latency, which had no ceiling until #408 gave it one, and a list read that
+ * aged several requests out at once paid it several times over.
+ *
+ * `void` rather than a promise, so the type makes the intent unmissable: there
+ * is nothing here to await. A suite that needs the send to have happened drains
+ * the queue (`app.background.drain()`), which is the same code production runs
+ * on shutdown rather than a test-only path.
+ */
+export function queueNotificationEmail(
+  deps: NotificationEmailDeps,
+  row: NotificationEmailRow,
+  audience: 'customer' | 'vendor' = 'customer',
+): void {
+  deps.background.run(() => sendNotificationEmail(deps, row, audience));
 }
 
 /**

@@ -229,6 +229,15 @@ export interface PaymentIntentSnapshot {
 /** Stripe's terminal success state for an intent. */
 export const PAYMENT_INTENT_SUCCEEDED = 'succeeded';
 
+/**
+ * The refund statuses that mean the customer's money is coming back.
+ *
+ * `pending` is included: it is a refund in flight, and treating it as absent
+ * would send a second one. `failed` and `canceled` are not — the money is back
+ * in the platform balance and the customer has none of it.
+ */
+const USABLE_REFUND_STATUSES = new Set(['succeeded', 'pending', 'requires_action']);
+
 export interface CreateRecipientAccountInput {
   /** Stored on the Stripe account so a support question can be traced back. */
   vendorId: string;
@@ -481,8 +490,19 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
     },
 
     async findRefund(paymentIntentId) {
-      const { data } = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 1 });
-      const [refund] = data;
+      const { data } = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 10 });
+      /*
+       * Only a refund that is on its way to the customer counts as one (#415).
+       *
+       * `refunds.list` returns `failed` and `canceled` refunds too, with
+       * `amount` populated — a failed refund puts the money back in the
+       * platform balance, not in the customer's account. Reading one of those
+       * as "already refunded" used only to skip a retry; it is now written to
+       * `bookings.refund_amount_cents` and rendered to both parties as money
+       * returned, so a bank rejection would have the product state a refund
+       * that never landed.
+       */
+      const refund = data.find((candidate) => USABLE_REFUND_STATUSES.has(candidate.status ?? ''));
 
       return refund ? { refundId: refund.id, amountCents: refund.amount } : null;
     },

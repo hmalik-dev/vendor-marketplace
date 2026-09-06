@@ -29,15 +29,17 @@
   --color-sage-50: #edf0e9;
   --color-sage-100: #e4e9de;
   --color-sage-150: #d9e2c8; /* pale sage — the italic accent on an ink ground */
-  --color-sage-300: #c9d3be; /* sage banner border */
+  --color-sage-175: #c4d6a8; /* the `Vending` role label over a scrimmed photograph — #306 */
   --color-sage-200: #a8c08e; /* pale sage — decorative dots on an ink ground */
+  --color-sage-300: #c9d3be; /* sage banner border */
   --color-sage-400: #5e6b4f;
   --color-sage-600: #4b5940; /* sage as text */
 
   /* Gold — waiting on someone. */
   --color-gold-50: #f5eedc;
-  --color-gold-300: #e8dbb8; /* gold banner border */
+  --color-gold-150: #f9e2bd; /* the italic accent over a scrimmed photograph — D30 */
   --color-gold-200: #f3c98b; /* pale gold — the italic accent on an ink ground */
+  --color-gold-300: #e8dbb8; /* gold banner border */
   --color-gold-400: #c99a2e;
   --color-gold-600: #7a5a12; /* gold as text — #8A6716 measures 4.27:1 and fails */
 

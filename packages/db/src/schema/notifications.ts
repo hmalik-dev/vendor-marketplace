@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { MAX_NOTIFICATION_TITLE_LENGTH } from '@vendor-marketplace/shared';
 import { users } from './users.js';
 
 export const notifications = pgTable(
@@ -13,7 +14,12 @@ export const notifications = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** One of `NOTIFICATION_TYPES`; kept as varchar so new types need no migration. */
     type: varchar('type', { length: 50 }).notNull(),
-    title: varchar('title', { length: 200 }).notNull(),
+    /**
+     * Wider than the 200-character business name it interpolates, because the
+     * title is derived: `"<business name> sent a quote"` is 214 at the name's
+     * own limit. See `MAX_NOTIFICATION_TITLE_LENGTH` (#408).
+     */
+    title: varchar('title', { length: MAX_NOTIFICATION_TITLE_LENGTH }).notNull(),
     body: text('body'),
     /** Deep-link payload, e.g. `{ bookingId, vendorSlug, conversationId }`. */
     data: jsonb('data').$type<Record<string, unknown>>(),

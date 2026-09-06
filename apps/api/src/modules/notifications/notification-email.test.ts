@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { BRAND_NAME, NOTIFICATION_TYPES } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 import type { EmailMessage } from '../../lib/email.js';
+import { createBackgroundWork } from '../../lib/background.js';
 import {
   sendNotificationEmail,
   type NotificationEmailDeps,
@@ -46,6 +47,9 @@ function deps(overrides: Partial<NotificationEmailDeps> = {}): {
         info: () => undefined,
       } as unknown as NotificationEmailDeps['log'],
       webOrigin: 'https://web.test',
+      background: createBackgroundWork({
+        error: (...args: unknown[]) => errors.push(args),
+      } as unknown as NotificationEmailDeps['log']),
       ...overrides,
     },
   };

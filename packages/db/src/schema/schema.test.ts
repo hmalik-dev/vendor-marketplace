@@ -33,6 +33,7 @@ const EXPECTED_TABLES = [
   'service_packages',
   'tag_suggestions',
   'tags',
+  'us_cities',
   'users',
   'vendor_categories',
   'vendor_profiles',
@@ -51,7 +52,7 @@ afterAll(async () => {
 });
 
 describe('migrations', () => {
-  it('creates all 16 tables from the data model', async () => {
+  it('creates all 17 tables from the data model', async () => {
     const result = await testDb.db.execute<{ table_name: string }>(
       sql`SELECT table_name FROM information_schema.tables
           WHERE table_schema = 'public' AND table_type = 'BASE TABLE'

@@ -86,6 +86,11 @@ describe('swallowed errors', () => {
       // `/messages`, where the list is the whole screen — which is exactly the
       // distinction this file exists to force. Both paths leave the trace.
       'src/lib/messaging-data.ts',
+      // #384: the City typeahead's suggestion request. It degrades to "no
+      // suggestions", which is the same panel a genuine no-match draws — so an
+      // API that is refusing every request looks exactly like a customer
+      // mistyping every city name, on a field that is on every page.
+      'src/lib/use-place-suggestions.ts',
     ];
 
     const reporting = sourceFiles(SOURCE_ROOT)

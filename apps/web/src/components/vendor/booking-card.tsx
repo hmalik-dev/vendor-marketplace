@@ -35,14 +35,26 @@ export interface BookingCardProps {
   serverToday: string;
 }
 
+/**
+ * How this page names the person who booked.
+ *
+ * Exported for the cancelled list beside it: both cards render the same
+ * customer on the same page, and the `'A customer'` fallback drifting between
+ * them would show one row a name the other could not.
+ */
+export function customerDisplayName(customer: WireBookingRequest['customer']): string {
+  const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
+
+  return fullName || customer.firstName || 'A customer';
+}
+
 export function BookingCard({
   request,
   booking,
   serverToday,
 }: BookingCardProps): React.ReactElement {
   const { customer } = request;
-  const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
-  const displayName = fullName || customer.firstName || 'A customer';
+  const displayName = customerDisplayName(customer);
 
   return (
     <li className="rounded-[14px] bg-stone-0 px-4 py-3.5 shadow-sm">
@@ -119,8 +131,15 @@ export function BookingCard({
   );
 }
 
-/** "Wedding · Saturday, June 14, 2027 · Barr Mansion · 120 guests · Full day coverage" */
-function factsLine(request: WireBookingRequest): string {
+/**
+ * "Wedding · Saturday, June 14, 2027 · Barr Mansion · 120 guests · Full day
+ * coverage"
+ *
+ * Exported for the cancelled list, which draws the same facts about a date the
+ * vendor no longer holds. Two copies of this line is how the two halves of one
+ * page come to describe one booking differently.
+ */
+export function factsLine(request: WireBookingRequest): string {
   return [
     request.eventType
       ? (EVENT_TYPE_LABELS[request.eventType as EventType] ?? request.eventType)

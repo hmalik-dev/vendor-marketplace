@@ -42,7 +42,11 @@ import {
   vendorCategories,
   vendorProfiles,
 } from './schema/index.js';
-import { recomputeVendorRatings, type AnyPgDatabase } from './seed-support.js';
+import {
+  recomputeVendorRatings,
+  refreshCustomerBookingCounts,
+  type AnyPgDatabase,
+} from './seed-support.js';
 
 /**
  * The demo marketplace — `pnpm db:seed:demo`.
@@ -765,6 +769,17 @@ export async function seedDemoData<
         updatedAt: sql`excluded.updated_at`,
       },
     });
+
+  /*
+   * The customers' derived booking counters, recomputed from the rows just
+   * written. The seed bypasses the API entirely, so none of the three DAO
+   * functions that normally maintain these ran — and without this every demo
+   * customer holding bookings reads as a 0-booking "New member" on their own
+   * profile and in `/admin/customers`, which is exactly the defect #408 closed.
+   */
+  for (const customerId of new Set(bookingValues.map((booking) => booking.customerId))) {
+    await refreshCustomerBookingCounts(db, customerId);
+  }
 
   // --- Conversations and messages ----------------------------------------
   const conversationValues = plan.map((entry, planIndex) => {

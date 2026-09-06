@@ -1,6 +1,6 @@
 'use client';
 
-import type { Category, VendorCity } from '@vendor-marketplace/shared';
+import type { Category } from '@vendor-marketplace/shared';
 import { usePathname } from 'next/navigation';
 import { NameSearch } from './name-search';
 import { SearchBar } from './search-bar';
@@ -8,8 +8,6 @@ import { useSearchState } from './search-state';
 
 export interface HeaderQueryProps {
   categories: readonly Category[];
-  /** The cities that have vendors, so City can only ask a real question. */
-  cities: readonly VendorCity[];
 }
 
 /**
@@ -25,7 +23,7 @@ export interface HeaderQueryProps {
  * There is no shared React state between the two: both read and write the same
  * `nuqs` params, so the URL is the single source and they cannot disagree.
  */
-export function HeaderQuery({ categories, cities }: HeaderQueryProps): React.ReactElement | null {
+export function HeaderQuery({ categories }: HeaderQueryProps): React.ReactElement | null {
   const pathname = usePathname();
   const { state, setState } = useSearchState();
 
@@ -38,7 +36,6 @@ export function HeaderQuery({ categories, cities }: HeaderQueryProps): React.Rea
       {/* 560px is the frame's cap; the bar grows to it and then stops. */}
       <SearchBar
         categories={categories}
-        cities={cities}
         value={{
           category: state.category,
           city: state.city,

@@ -1,6 +1,7 @@
 import {
   customerProfileSchema,
   customerReviewSchema,
+  historyPageQuerySchema,
   uuidSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
@@ -22,8 +23,11 @@ export const customerRoutes: FastifyPluginAsyncZod = async (app) => {
    */
   app.get(
     '/customers/me/reviews',
-    { preHandler: requireRole('customer'), schema: { response: { 200: reviewListSchema } } },
-    async (request) => listOwnReviews(app.db, authenticated(request.auth)),
+    {
+      preHandler: requireRole('customer'),
+      schema: { querystring: historyPageQuerySchema, response: { 200: reviewListSchema } },
+    },
+    async (request) => listOwnReviews(app.db, authenticated(request.auth), request.query),
   );
 
   /**
@@ -44,9 +48,18 @@ export const customerRoutes: FastifyPluginAsyncZod = async (app) => {
     '/customers/:customerId/reviews',
     {
       preHandler: requireAuth,
-      schema: { params: customerParamsSchema, response: { 200: reviewListSchema } },
+      schema: {
+        params: customerParamsSchema,
+        querystring: historyPageQuerySchema,
+        response: { 200: reviewListSchema },
+      },
     },
     async (request) =>
-      listCustomerReviews(app.db, authenticated(request.auth), request.params.customerId),
+      listCustomerReviews(
+        app.db,
+        authenticated(request.auth),
+        request.params.customerId,
+        request.query,
+      ),
   );
 };

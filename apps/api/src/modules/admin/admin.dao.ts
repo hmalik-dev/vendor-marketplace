@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
   bookingRequests,
@@ -16,6 +17,7 @@ import {
   type UserRow,
 } from '@vendor-marketplace/db/schema';
 import type {
+  AdminBookingFlag,
   AdminPayoutFilter,
   AdminVendorStatus,
   BookingStatus,
@@ -523,6 +525,50 @@ export async function countAdminCustomers(db: AppDatabase, q: string | undefined
 // --- Bookings and payments -------------------------------------------------
 
 /**
+ * The vendor's own `users` row, aliased because the customer already holds the
+ * unaliased one on every bookings query.
+ */
+const vendorOwner = alias(users, 'vendor_owner');
+
+/**
+ * A booking a ban could not unwind (#415).
+ *
+ * `setUserBanned` refunds each confirmed booking before cancelling it and
+ * `continue`s past one Stripe refuses — right, because cancelling underneath a
+ * customer whose money did not come back is worse than leaving the row alone,
+ * but it leaves a `confirmed` booking on a suspended account that nothing in
+ * the console listed. Derived rather than stored: a flag column would have to
+ * be cleared by whatever finishes the refund, and nothing does that yet.
+ *
+ * **It mirrors `findConfirmedBookingsToUnwind` exactly, `event_date` bound and
+ * all.** That producer only ever looks at *future* bookings, so without the
+ * date the predicate also swept up every past-dated `confirmed` booking on the
+ * account — and those are the common case, not an edge, because `completed` is
+ * only reached by the vendor pressing `Mark complete` and no sweep does it for
+ * them. One failed refund on a vendor with thirty un-completed past events
+ * would have listed thirty-one rows under a red `Refund did not go through`,
+ * thirty of which had no refund attempted at all. A money claim, made about
+ * rows the unwind never looked at.
+ *
+ * The consequence, stated rather than hidden: a genuinely stuck booking leaves
+ * this list once its event date passes. That is the same horizon the unwind
+ * itself works to, and a list that mirrors its producer is worth more than one
+ * that keeps a row by being wrong about thirty others.
+ *
+ * A join rather than a correlated `exists`: `vendor_profiles_user_id_key`
+ * makes the owning user strictly one per profile, so it cannot multiply rows —
+ * and an `EXISTS` under an `or` is never pulled up into a semi-join, so it
+ * would run once per candidate row instead of once.
+ */
+function refundStuck(today: string): SQL<boolean> {
+  return sql<boolean>`(
+    ${bookings.status} = 'confirmed'
+    and ${bookings.eventDate} > ${today}
+    and (${users.isBanned} or ${vendorOwner.isBanned})
+  )`;
+}
+
+/**
  * `bookings` joined to both sides' names.
  *
  * The customer is a `users` row and the vendor a `vendor_profiles` row, so this
@@ -565,18 +611,47 @@ export interface AdminBookingProjection {
   createdAt: Date;
 }
 
+/**
+ * The Bookings table's row: the shared projection plus the one thing only that
+ * table computes. Payments reads the same booking rows without it.
+ */
+export interface AdminBookingListProjection extends AdminBookingProjection {
+  refundStuck: boolean;
+}
+
+export interface AdminBookingFilters {
+  status?: BookingStatus | undefined;
+  flag?: AdminBookingFlag | undefined;
+  /** The operator's day, for the one filter that is bounded by the event date. */
+  today: string;
+}
+
+function bookingFilterCondition(filters: AdminBookingFilters): SQL | undefined {
+  return and(
+    filters.status ? eq(bookings.status, filters.status) : undefined,
+    filters.flag === 'refund-stuck' ? refundStuck(filters.today) : undefined,
+  );
+}
+
 export async function findAdminBookings(
   db: AppDatabase,
-  status: BookingStatus | undefined,
+  filters: AdminBookingFilters,
   limit: number,
   offset: number,
-): Promise<AdminBookingProjection[]> {
+): Promise<AdminBookingListProjection[]> {
+  /*
+   * `refundStuck` is added here rather than to `bookingSelection()`, which the
+   * Payments read shares: the flag is computed from the `vendor_owner` join
+   * below, and putting it in the shared projection made `/admin/payments`
+   * answer 500 on a column its own query does not join.
+   */
   return db
-    .select(bookingSelection())
+    .select({ ...bookingSelection(), refundStuck: refundStuck(filters.today) })
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
-    .where(status ? eq(bookings.status, status) : undefined)
+    .innerJoin(vendorOwner, eq(vendorOwner.id, vendorProfiles.userId))
+    .where(bookingFilterCondition(filters))
     .orderBy(desc(bookings.createdAt))
     .limit(limit)
     .offset(offset);
@@ -584,12 +659,25 @@ export async function findAdminBookings(
 
 export async function countAdminBookings(
   db: AppDatabase,
-  status: BookingStatus | undefined,
+  filters: AdminBookingFilters,
 ): Promise<number> {
+  /*
+   * The same three joins as the read above, unconditionally. `refundStuck`
+   * reads both `is_banned` columns, so counting without them would be a
+   * different query from the one being counted and the pager would report a
+   * total the table cannot show. Unconditional rather than added only when the
+   * flag is set: these are inner joins, which Postgres does **not** eliminate
+   * when nothing references them, so the unfiltered count does pay for them —
+   * three lookups on non-null foreign keys to unique keys, which is the price
+   * of the two queries being the same query.
+   */
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(bookings)
-    .where(status ? eq(bookings.status, status) : undefined);
+    .innerJoin(users, eq(users.id, bookings.customerId))
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
+    .innerJoin(vendorOwner, eq(vendorOwner.id, vendorProfiles.userId))
+    .where(bookingFilterCondition(filters));
 
   return rows?.[0]?.total ?? 0;
 }

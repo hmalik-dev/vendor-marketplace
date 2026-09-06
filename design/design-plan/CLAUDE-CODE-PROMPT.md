@@ -232,6 +232,6 @@ a number to a public page, stop — see `98-post-mvp.md`.
 - [ ] The Refine bar renders exactly four tag chips, asserted by name — a count alone passes if the wrong group went missing
 - [ ] The profile editor's Tags section renders three multi-selects
 - [ ] `POST /vendor/profile` with `state: 'Texas'` is a 400; with `state: 'TX'` it succeeds
-- [ ] `GET /vendors/cities` returns one Austin row, and a search for it returns every Austin vendor
+- [ ] `GET /places?q=aus` suggests `Austin, TX`, and a search for it returns every Austin vendor
 - [ ] `grep -rn "US_STATES" apps/web/src` shows labels derived from the shared list, not a second copy of it
 - [ ] `git diff --stat` touches only the bookings page, the two search surfaces, the marketing header, the sign-up screen, the vendor profile's meta/stat block, the profile editor's Tags and Location rows, the tag vocabulary, the state list, their migrations, and their tests

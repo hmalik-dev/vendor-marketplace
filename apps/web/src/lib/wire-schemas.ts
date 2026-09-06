@@ -36,7 +36,6 @@ import {
   vendorCardSchema,
   vendorProfileDetailSchema,
   vendorReviewsPageSchema,
-  vendorCityListSchema,
   vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
 import { resolveImageUrl } from '@vendor-marketplace/shared';
@@ -182,14 +181,6 @@ export const wireCustomerReviewSchema = customerReviewSchema.extend({
 export type WireCustomerReview = z.infer<typeof wireCustomerReviewSchema>;
 export const wireCustomerReviewListSchema = z.array(wireCustomerReviewSchema);
 
-/**
- * The cities that have vendors. No dates on it, so the domain schema passes
- * straight through — it is re-exported here only so every read in the app
- * reaches for its schema in one place.
- */
-export const wireVendorCityListSchema = vendorCityListSchema;
-export type WireVendorCity = z.infer<typeof wireVendorCityListSchema>[number];
-
 /** One appended page of the vendor profile's Reviews tab. */
 export const wireVendorReviewsPageSchema = vendorReviewsPageSchema.extend({
   items: z.array(publicReviewSchema.extend({ createdAt: z.coerce.date() })),
@@ -206,6 +197,18 @@ export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
    * vendor who has a profile photo. Found driving #414.
    */
   vendor: bookingRequestDetailSchema.shape.vendor.extend({ avatarUrl: imageUrl() }),
+  /*
+   * Nested dates, and nested means they need saying: JSON hands these back as
+   * strings and the object is `nullable`, so the coercion is applied to the
+   * inner shape and the whole thing re-wrapped rather than spread.
+   */
+  settlement: bookingRequestDetailSchema.shape.settlement
+    .unwrap()
+    .extend({
+      paidAt: z.coerce.date().nullable(),
+      cancelledAt: z.coerce.date().nullable(),
+    })
+    .nullable(),
   expiresAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

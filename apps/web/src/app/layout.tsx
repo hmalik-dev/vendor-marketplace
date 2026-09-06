@@ -1,12 +1,9 @@
-import { ClerkProvider } from '@clerk/nextjs';
-import { ui } from '@clerk/ui';
-import { shadcn } from '@clerk/ui/themes';
 import type { Metadata } from 'next';
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
-import { CLERK_COPY } from './clerk-copy';
 import { siteOrigin } from '@/config/env';
+import { ClerkShell } from '@/components/auth/clerk-shell';
 import { OutsideAdmin, PublicChrome } from '@/components/public-chrome';
 import { SiteFooter } from '@/components/site-footer';
 import { SearchStatusProvider } from '@/components/search/search-status';
@@ -81,25 +78,11 @@ export default function RootLayout({
     >
       <body className="flex min-h-screen flex-col">
         {/*
-          Clerk inherits the palette through the shadcn slots bound in
-          `globals.css`. Where its own chrome fights the layout — the auth
-          panel already draws the surface, and the panel's Serif headline
-          already says what Clerk's header repeats — it is corrected there too,
-          against the same tokens. Never hand-write a brand hex into an
-          appearance object: it becomes a second source of truth and it drifts.
+          The provider is a Client Component so its localization can follow the
+          route: Clerk keys the submit label globally, and `/sign-up` is the
+          only screen with a frame that specifies it. See `clerk-shell.tsx`.
         */}
-        <ClerkProvider
-          ui={ui}
-          appearance={{ theme: shadcn, variables: { borderRadius: 'var(--radius-lg)' } }}
-          localization={CLERK_COPY}
-          /*
-            Clerk's SDK posts usage telemetry to `clerk-telemetry.com`, which
-            the enforced CSP (#396) rightly blocks — it is Clerk's product
-            analytics, not anything this app reads. Off, rather than widening
-            `connect-src` to let a console error through as an outbound channel.
-          */
-          telemetry={false}
-        >
+        <ClerkShell>
           {/*
             The adapter sits above the header, not inside the search page: on
             `/search` the query bar lives in the header and the results live in
@@ -173,7 +156,7 @@ export default function RootLayout({
             offset={{ bottom: TOAST_BOTTOM_OFFSET }}
             mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
           />
-        </ClerkProvider>
+        </ClerkShell>
       </body>
     </html>
   );
