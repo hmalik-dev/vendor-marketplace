@@ -115,17 +115,21 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
             ? 'Requests land here the moment a customer sends one. Keeping your calendar current is what puts you in their search.'
             : 'Nothing has come in because your listing is still a draft.'
         }
-        action={
-          dashboard.isPublished ? null : (
-            /*
-              `.btnS` on frame `20`, not the clay fill: the pane is a waiting
-              state, not the one action the screen exists for.
-            */
-            <Button asChild variant="secondary">
-              <Link href={`/vendors/${profile.slug}`}>Preview my profile</Link>
-            </Button>
-          )
-        }
+        /*
+          **No control, and that is the correction, not an omission.** Frames
+          `20` and `27 Vendor dashboard — empty · 1024` draw `Preview my profile`
+          here, and there is nothing for it to open: `/vendors/<slug>` is filtered
+          to published storefronts at the DAO (`vendor-profile.dao.ts`'s
+          `VISIBLE`), so on the one screen this button renders it is a guaranteed
+          404. A draft has no public URL in the MVP; the only preview of one is
+          the editor's own rail. `31-content-voice.md`'s rule that a control which
+          opens nothing is furniture decides it.
+
+          Nothing is lost: the gold banner directly above names the cause and
+          carries `Finish profile`, which is the action the frame's own blurb says
+          this state exists to offer.
+        */
+        action={null}
       />
     ) : (
       <ul className="flex flex-col gap-2.5">
@@ -158,12 +162,20 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
                   waiting.length === 1 ? 'request' : 'requests'
                 }`}
           </h1>
-          <Link
-            href={`/vendors/${profile.slug}`}
-            className="text-sm font-semibold text-clay-500 hover:underline"
-          >
-            View my public profile
-          </Link>
+          {/*
+            Only while there *is* a public profile. The same `VISIBLE` predicate
+            404s a draft, so on an unpublished dashboard this link was a second
+            control opening the error page — found alongside the pane's CTA and
+            fixed with it rather than left for a later pass.
+          */}
+          {dashboard.isPublished ? (
+            <Link
+              href={`/vendors/${profile.slug}`}
+              className="text-sm font-semibold text-clay-500 hover:underline"
+            >
+              View my public profile
+            </Link>
+          ) : null}
         </div>
 
         {/*
@@ -174,7 +186,10 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
           it. Payouts keep their own banner below, where frame `08` puts them and
           where #360 ruled they belong — they are not a publish blocker.
         */}
-        <PublishBlockerBanner blockers={dashboard.publishBlockers} />
+        <PublishBlockerBanner
+          blockers={dashboard.publishBlockers}
+          isPublished={dashboard.isPublished}
+        />
 
         {/*
           The payout gate. Gold rather than red because nothing has failed —

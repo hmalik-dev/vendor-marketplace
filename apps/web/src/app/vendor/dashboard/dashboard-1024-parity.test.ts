@@ -80,9 +80,39 @@ describe('the empty pane says what the frame says', () => {
     expect(page).not.toContain('within a couple of weeks');
   });
 
-  it('offers the frame’s control, and not a second copy of the banner’s', () => {
-    expect(page).toContain('Preview my profile');
+  /*
+   * **The frame's `Preview my profile` has nothing to open.** `/vendors/<slug>`
+   * is filtered to published storefronts by `vendor-profile.dao.ts`'s `VISIBLE`
+   * predicate, and this pane renders only when the profile is *not* published —
+   * so on the one screen that button exists, it is a guaranteed 404. The same
+   * goes for the title row's `View my public profile`, which is now rendered
+   * only when there is a public profile to view.
+   *
+   * Asserted as an absence with the reason attached, because a later pass
+   * reading the frame will otherwise put both back.
+   */
+  it('offers no control that 404s on a draft storefront', () => {
+    expect(page).not.toContain('Preview my profile');
     expect(page).not.toContain('Finish your profile');
+    // The public storefront link survives, behind the flag that makes it real.
+    expect(page).toContain('dashboard.isPublished ? (');
+    expect(page).toContain('View my public profile');
+  });
+
+  it('leaves the gold banner as the screen’s one way to fix the cause', () => {
+    expect(page).toContain('action={null}');
+    expect(
+      readFileSync(join(process.cwd(), 'src/components/vendor/publish-blocker-banner.tsx'), 'utf8'),
+    ).toContain('Finish profile');
+  });
+
+  /*
+   * Published-with-blockers is reachable — `updateVendorProfile` re-runs the
+   * gate only on a request that sets `isPublished`, and `bio` has no minimum
+   * length — so the banner is gated on the flag, not on the list being empty.
+   */
+  it('gates the banner on the published flag, not on an empty blocker list', () => {
+    expect(page).toContain('isPublished={dashboard.isPublished}');
   });
 });
 

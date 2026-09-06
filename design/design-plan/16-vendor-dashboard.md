@@ -211,11 +211,25 @@ with "Nobody can find you yet", a sentence about the checklist, and a second
 Built to the frames. The banner reads `Your profile isn't live yet — N thing(s)
 left` over the open blockers joined by `·`, with `Finish profile` beside it, and
 it is built from `publishBlockers` — the gate itself, per D30 above — so it can
-never name a step the gate is not holding. It renders nothing at zero. The pane
-below it goes back to being a waiting state: `No requests yet`, `Nothing has come
-in because your listing is still a draft.`, and `Preview my profile`.
+never name a step the gate is not holding. It renders nothing at zero, **and
+nothing to a published vendor**: `updateVendorProfile` re-runs the gate only on a
+request that sets `isPublished` and `bio` has no minimum length, so live-with-a-
+blocker is reachable and an empty list is not what "already live" looks like. The
+pane below it goes back to being a waiting state: `No requests yet` over
+`Nothing has come in because your listing is still a draft.`
 
-Three recorded deviations, all deliberate:
+**`Preview my profile` does not ship, and neither does the title row's
+`View my public profile` while the storefront is a draft.** Both open
+`/vendors/<slug>`, which `vendor-profile.dao.ts`'s `VISIBLE` predicate filters to
+published storefronts — so on the one screen these frames draw, both are a
+guaranteed 404. A draft has no public URL in the MVP and the only preview of one
+is the editor's own rail, so `31-content-voice.md`'s rule that a control which
+opens nothing is furniture decides it: the pane carries no control, the public
+link renders only once there is a public profile, and the banner's
+`Finish profile` is the screen's one action — which is what the frame's own blurb
+says this state exists to offer.
+
+Three further recorded deviations, all deliberate:
 
 - **The count is a numeral.** The frames write "two things left"; the editor's
   save bar one screen over writes `1 thing left before you can publish`, and two
@@ -228,7 +242,8 @@ Three recorded deviations, all deliberate:
   #372 also refuses.
 - **The banner does not repeat "Customers can't find you until both are done".**
   It is only true at exactly two blockers, and the checklist's gold panel one
-  column over already says it.
+  column over already says it. The frame's closing full stop after the blocker
+  list is kept.
 
 **The draft fixture had to move for any of this to be verifiable.** `pnpm
 db:seed:e2e:draft` unpublished the storefront but left the response time and the
