@@ -112,7 +112,12 @@ describe('the chrome above the grid steps at 1024', () => {
   });
 
   it('steps the bar and the band in the source rather than pinning the 1440 rung', () => {
-    expect(bar).toContain('px-5 py-2');
+    /*
+     * Anchored on the whole run, not on `px-5 py-2`: that substring is also in
+     * `px-5 py-2.75` — the 1440 rung — so the loose form passed on exactly the
+     * regression it names, a bar that never stepped down.
+     */
+    expect(bar).toContain('bg-stone-0 px-5 py-2 lg:flex-row');
     expect(bar).toContain('min-[90rem]:px-6.5 min-[90rem]:py-2.75');
     expect(shell).toContain('pt-3.25 pb-2.25');
     expect(shell).toContain('min-[90rem]:pt-3.75 min-[90rem]:pb-2.75');
