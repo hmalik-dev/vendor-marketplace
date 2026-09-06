@@ -2,7 +2,9 @@ import { MAX_PACKAGE_PRICE_CENTS } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 import {
   activeRefineCount,
+  applicableTagSelection,
   clearedParamsLine,
+  droppedTagGroupsLine,
   parseSearchState,
   searchParsers,
   toSearchQuery,
@@ -466,5 +468,91 @@ describe('a param that is only partly a number', () => {
    */
   it('honours a zero-padded page rather than complaining about it', () => {
     expect(parseUrl({ page: '01' }).state.page).toBe(1);
+  });
+});
+
+/*
+ * #418. A tag id in the URL says nothing about which group it belongs to, so
+ * this is the one filter the schema in this file cannot judge: it takes the tag
+ * list the screen already holds and reports what the chosen category cannot
+ * offer, so the shell can drop it *before* the request and say so afterwards.
+ */
+describe('applicableTagSelection', () => {
+  const ENGLISH = 'a1111111-1111-4111-8111-111111111111';
+  const SOUTH_ASIAN = 'a2222222-2222-4222-8222-222222222222';
+  const HALAL = 'a3333333-3333-4333-8333-333333333333';
+  const KOSHER = 'a4444444-4444-4444-8444-444444444444';
+
+  const KNOWN = [
+    { id: ENGLISH, category: 'language' },
+    { id: SOUTH_ASIAN, category: 'cultural' },
+    { id: HALAL, category: 'dietary' },
+    { id: KOSHER, category: 'dietary' },
+  ] as const;
+
+  it('drops a dietary tag on a photography search and names the group', () => {
+    expect(applicableTagSelection('photography', [ENGLISH, HALAL], KNOWN)).toEqual({
+      kept: [ENGLISH],
+      droppedGroups: ['dietary'],
+    });
+  });
+
+  it('names a group once however many of its tags were chosen', () => {
+    expect(applicableTagSelection('photography', [HALAL, KOSHER], KNOWN)).toEqual({
+      kept: [],
+      droppedGroups: ['dietary'],
+    });
+  });
+
+  it('keeps a dietary tag on a catering search', () => {
+    expect(applicableTagSelection('catering', [ENGLISH, HALAL], KNOWN)).toEqual({
+      kept: [ENGLISH, HALAL],
+      droppedGroups: [],
+    });
+  });
+
+  it('keeps everything when no category is chosen', () => {
+    expect(applicableTagSelection('', [HALAL], KNOWN)).toEqual({
+      kept: [HALAL],
+      droppedGroups: [],
+    });
+  });
+
+  /*
+   * An id we cannot classify has told us nothing, and dropping a filter on a
+   * guess is the failure this ticket is about pointing the other way. The API
+   * answers an unknown tag id with an empty grid, which is a truthful answer.
+   */
+  it('leaves an id it cannot classify alone rather than guessing it away', () => {
+    expect(
+      applicableTagSelection('photography', ['b0000000-0000-4000-8000-000000000000'], KNOWN),
+    ).toEqual({
+      kept: ['b0000000-0000-4000-8000-000000000000'],
+      droppedGroups: [],
+    });
+  });
+
+  it('preserves the order of the ids it keeps', () => {
+    expect(
+      applicableTagSelection('photography', [SOUTH_ASIAN, HALAL, ENGLISH], KNOWN).kept,
+    ).toEqual([SOUTH_ASIAN, ENGLISH]);
+  });
+});
+
+describe('droppedTagGroupsLine', () => {
+  it('says which filter went and which vendors it does not apply to', () => {
+    expect(droppedTagGroupsLine(['dietary'], 'photography')).toBe(
+      'Dietary filters don’t apply to photographers, so they were cleared — the rest of your search still applies.',
+    );
+  });
+
+  it('names two groups as a pair rather than stacking two sentences', () => {
+    expect(droppedTagGroupsLine(['cultural', 'dietary'], 'photography')).toBe(
+      'Cultural and Dietary filters don’t apply to photographers, so they were cleared — the rest of your search still applies.',
+    );
+  });
+
+  it('says nothing when nothing was dropped', () => {
+    expect(droppedTagGroupsLine([], 'photography')).toBeNull();
   });
 });

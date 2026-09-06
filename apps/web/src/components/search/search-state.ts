@@ -9,13 +9,18 @@ import {
   paginationQuerySchema,
   REVIEW_RATING_MAX,
   slugSchema,
+  TAG_CATEGORIES,
+  tagCategoriesFor,
   uuidSchema,
+  vendorNounFor,
   VENDOR_SORT_OPTIONS,
+  type TagCategory,
   type VendorSortOption,
 } from '@vendor-marketplace/shared';
 import { useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { z } from 'zod';
+import { TAG_CATEGORY_CHIP_LABELS } from '@/components/tags/tag-display';
 import {
   parseAsArrayOf,
   parseAsFloat,
@@ -371,6 +376,91 @@ export function clearedParamsLine(dropped: readonly DroppedSearchField[]): strin
   return `${subject} — the rest of your search still applies.`;
 }
 
+/**
+ * A tag's group, which is the only thing this file needs to know about a tag.
+ *
+ * Structural rather than `WireTag`, so the URL layer does not take a dependency
+ * on the API's response shape to answer a question about the URL.
+ */
+export interface TagGroupMembership {
+  readonly id: string;
+  readonly category: TagCategory;
+}
+
+export interface ApplicableTagSelection {
+  /** The chosen ids the category can still answer, in the order they were in. */
+  readonly kept: readonly string[];
+  /** The groups something was dropped from, in `TAG_CATEGORIES` order. */
+  readonly droppedGroups: readonly TagCategory[];
+}
+
+/**
+ * Splits a tag selection into what this category can answer and what it cannot.
+ *
+ * **The one refinement `searchStateSchema` above cannot judge.** A tag is a
+ * uuid in the URL and says nothing about its own group, so deciding whether
+ * `Halal` belongs on a photography search needs the tag list the screen fetched
+ * — which arrives as a prop, not as a param. So it is decided here and applied
+ * by the shell, on the same terms as the rest: dropped before the request goes
+ * out, and named afterwards rather than discarded in silence (`40-states.md`).
+ *
+ * An id absent from `known` is **kept**. Dropping a filter we could not
+ * classify would be the same defect as offering one that can only return zero,
+ * pointed the other way; an unknown id reaches the API and comes back as an
+ * honest empty grid.
+ */
+export function applicableTagSelection(
+  category: string,
+  selected: readonly string[],
+  known: readonly TagGroupMembership[],
+): ApplicableTagSelection {
+  const offered = tagCategoriesFor(category);
+  const groupOf = new Map(known.map((tag) => [tag.id, tag.category]));
+  const dropped = new Set<TagCategory>();
+
+  const kept = selected.filter((id) => {
+    const group = groupOf.get(id);
+
+    if (group === undefined || offered.includes(group)) {
+      return true;
+    }
+
+    dropped.add(group);
+    return false;
+  });
+
+  // `TAG_CATEGORIES` order rather than the order the ids happened to be in, so
+  // the sentence below names the groups in the order the bar drew them.
+  return { kept, droppedGroups: TAG_CATEGORIES.filter((group) => dropped.has(group)) };
+}
+
+/**
+ * What the reader is told when their category no longer offers a filter they
+ * had set — on a shared link, or the moment they change vendor type.
+ *
+ * It names the vendors rather than the category ("photographers", not
+ * "photography"), because the reason is about them: a photographer has no
+ * dietary tags to match. `vendorNounFor` already owns that sentence's noun.
+ *
+ * Its own line rather than a `dropped` field, because `dropped` is what the URL
+ * asked for and could not be *read* — this value was read fine and is simply
+ * not applicable, and the two want different words.
+ */
+export function droppedTagGroupsLine(
+  groups: readonly TagCategory[],
+  category: string,
+): string | null {
+  if (groups.length === 0) {
+    return null;
+  }
+
+  const labels = groups.map((group) => TAG_CATEGORY_CHIP_LABELS[group]);
+  const named =
+    labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
+
+  return `${named} filters don’t apply to ${vendorNounFor(category, 2)}, so they were cleared — the rest of your search still applies.`;
+}
+
 /** The three values the search bar owns. Never rendered as Refine chips. */
 export type SearchQueryValues = Pick<SearchState, 'category' | 'city' | 'date'>;
 
@@ -379,8 +469,17 @@ export interface UseSearchState {
   state: SearchState;
   /** Params the URL asked for that could not be used, so the screen can say so. */
   dropped: readonly DroppedSearchField[];
-  /** Applies a patch. Any change but paging returns to page 1. */
-  setState: (patch: SearchPatch) => void;
+  /**
+   * Applies a patch. Any change but paging returns to page 1.
+   *
+   * `correction: true` writes over the current history entry instead of pushing
+   * a new one, and is for the screen correcting a URL rather than the reader
+   * asking something. A push there is a trap: the effect's entry sits on top of
+   * the URL that provoked it, so Back returns to the uncorrectable URL, whose
+   * effect immediately pushes the correction again — the reader is pinned and
+   * cannot get past it. A correction is not a place anyone navigated to.
+   */
+  setState: (patch: SearchPatch, options?: { readonly correction?: boolean }) => void;
   /** Clears the Refine bar only — the query stays, because it is the question. */
   clearRefinements: () => void;
 }
@@ -417,14 +516,16 @@ export function useSearchState(): UseSearchState {
   return {
     state,
     dropped,
-    setState: (patch) => {
+    setState: (patch, options) => {
       /*
        * Changing a filter while on page 3 would otherwise ask for the third
        * page of a result set that may only have one — the user sees an empty
        * grid and reads it as "no matches".
        */
       const resetsPage = Object.keys(patch).some((key) => key !== 'page');
-      void setQuery(resetsPage ? { ...patch, page: null } : patch);
+      void setQuery(resetsPage ? { ...patch, page: null } : patch, {
+        history: options?.correction === true ? 'replace' : 'push',
+      });
     },
     /*
      * "Clear" sits in the Refine bar and clears the Refine bar. Wiping the
