@@ -238,7 +238,7 @@ handling of values it cannot use — some announced, some silent, one sen |
 mount, so the date and guest count chosen on the vendor profile rail — or given
 in the URL — are silently replaced by whatever was saved earlier. A URL-only
 guest count is itself persisted as a 'draft'. |
-| **405** | **The storefront editor keeps unsaved work it did not save, and loses work it should have** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 8 verified findings. The vendor editor's save is two writes with no rollback, its post-save
+| **405** | **The storefront editor keeps unsaved work it did not save, and loses work it should have** | P1.5 | M4.5 | **P1 High** | **In Progress** | `worktree-t405` | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 8 verified findings. The vendor editor's save is two writes with no rollback, its post-save
 snapshot is taken from the live form rather than what was sent, and its publish
 switch reads unsaved state while toggling the saved row. Around it, the package
 form and the portfolio manager both discard edits when their parent r |
@@ -2464,7 +2464,7 @@ guest count is itself persisted as a 'draft'.
 
 ### #405: The storefront editor keeps unsaved work it did not save, and loses work it should have
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** In Progress | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding

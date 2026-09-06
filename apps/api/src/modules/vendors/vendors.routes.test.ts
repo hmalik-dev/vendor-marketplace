@@ -1,5 +1,13 @@
-import { eq } from 'drizzle-orm';
-import { categories, users, vendorCategories, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { and, eq } from 'drizzle-orm';
+import { MAX_TAGS_PER_CATEGORY, type TagCategory } from '@vendor-marketplace/shared';
+import {
+  categories,
+  tags,
+  users,
+  vendorCategories,
+  vendorProfiles,
+  vendorTags,
+} from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -550,6 +558,257 @@ describe('/vendor/profile', () => {
       });
 
       expect(response.statusCode).toBe(400);
+    });
+  });
+
+  /*
+   * #405. The storefront editor used to save the profile and the tags as two
+   * requests with nothing tying them together, so a refused tag list left the
+   * profile write standing: the vendor could never get a clean save, the bar
+   * said `Unsaved changes` forever, and on first-time creation the retry 409'd
+   * on the profile the failed attempt had already made. Tags now travel in the
+   * profile body and every write lands or none does.
+   */
+  describe('tags saved with the profile', () => {
+    async function createProfile(overrides: Record<string, unknown> = {}): Promise<void> {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody(overrides),
+      });
+      expect(response.statusCode).toBe(201);
+    }
+
+    // `hiddenTagId` deactivates a shared reference row, and the suite's own
+    // `afterEach` only clears profiles and users.
+    afterEach(async () => {
+      await harness.database.db.update(tags).set({ isActive: true });
+    });
+
+    async function activeTagIds(category: TagCategory, count: number): Promise<string[]> {
+      const rows = await harness.database.db
+        .select({ id: tags.id })
+        .from(tags)
+        .where(and(eq(tags.category, category), eq(tags.isActive, true)))
+        .limit(count);
+
+      expect(rows).toHaveLength(count);
+      return rows.map((row) => row.id);
+    }
+
+    /** A tag an admin has taken out of circulation — the deterministic case. */
+    async function hiddenTagId(): Promise<string> {
+      const [id] = await activeTagIds('language', 1);
+      await harness.database.db.update(tags).set({ isActive: false }).where(eq(tags.id, id!));
+
+      return id!;
+    }
+
+    it('stores tags sent with the create, and returns them', async () => {
+      const tagIds = await activeTagIds('language', 2);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody({ tagIds }),
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(
+        response
+          .json()
+          .tags.map((tag: { id: string }) => tag.id)
+          .sort(),
+      ).toEqual([...tagIds].sort());
+      expect(await harness.database.db.select().from(vendorTags)).toHaveLength(2);
+    });
+
+    it('creates no profile at all when the tag list is refused', async () => {
+      const hidden = await hiddenTagId();
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody({ tagIds: [hidden] }),
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details?.field).toBe('tagIds');
+      // The row the old two-request save left behind is what made the vendor's
+      // next attempt answer 409 instead of succeeding.
+      expect(await harness.database.db.select().from(vendorProfiles)).toHaveLength(0);
+
+      const retry = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody(),
+      });
+      expect(retry.statusCode).toBe(201);
+    });
+
+    it('stores tags sent with an update', async () => {
+      await createProfile();
+      const tagIds = await activeTagIds('dietary', 1);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { businessName: 'Sunlit Studio Co', tagIds },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tags.map((tag: { id: string }) => tag.id)).toEqual(tagIds);
+    });
+
+    it('keeps no part of an update whose tag list is refused', async () => {
+      await createProfile();
+      const hidden = await hiddenTagId();
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { businessName: 'Renamed Studio', tagIds: [hidden] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details?.field).toBe('tagIds');
+
+      const rows = await harness.database.db.select().from(vendorProfiles);
+      expect(rows[0]?.businessName).toBe('Sunlit Studio');
+      expect(await harness.database.db.select().from(vendorTags)).toHaveLength(0);
+    });
+
+    it('leaves the existing selection alone when the body carries no tagIds', async () => {
+      const tagIds = await activeTagIds('language', 1);
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody({ tagIds }),
+      });
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { businessName: 'Sunlit Studio Co' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tags.map((tag: { id: string }) => tag.id)).toEqual(tagIds);
+    });
+
+    it('collapses a duplicate id rather than failing the insert', async () => {
+      await createProfile();
+      const [only] = await activeTagIds('language', 1);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds: [only, only] },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tags).toHaveLength(1);
+      expect(await harness.database.db.select().from(vendorTags)).toHaveLength(1);
+    });
+
+    it('rejects a tag id that does not exist, and names the control', async () => {
+      await createProfile();
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds: ['00000000-0000-4000-8000-0000000000ff'] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details).toEqual({ field: 'tagIds' });
+    });
+
+    it(`rejects more than ${MAX_TAGS_PER_CATEGORY} tags in one category`, async () => {
+      await createProfile();
+      const tagIds = await activeTagIds('language', MAX_TAGS_PER_CATEGORY + 1);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details).toEqual({ field: 'tagIds' });
+      expect(await harness.database.db.select().from(vendorTags)).toHaveLength(0);
+    });
+
+    it('allows the per-category maximum in each category at once', async () => {
+      await createProfile();
+      const tagIds = [
+        ...(await activeTagIds('language', MAX_TAGS_PER_CATEGORY)),
+        ...(await activeTagIds('cultural', MAX_TAGS_PER_CATEGORY)),
+      ];
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tags).toHaveLength(MAX_TAGS_PER_CATEGORY * 2);
+    });
+
+    it('replaces the previous selection rather than adding to it', async () => {
+      await createProfile();
+      const [first, second] = await activeTagIds('language', 2);
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds: [first] },
+      });
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds: [second] },
+      });
+
+      expect(response.json().tags.map((tag: { id: string }) => tag.id)).toEqual([second]);
+      const stored = await harness.database.db.select().from(vendorTags);
+      expect(stored.map((row) => row.tagId)).toEqual([second]);
+    });
+
+    it('clears the selection when the body carries an empty tagIds', async () => {
+      const tagIds = await activeTagIds('language', 1);
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody({ tagIds }),
+      });
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds: [] },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tags).toEqual([]);
+      expect(await harness.database.db.select().from(vendorTags)).toHaveLength(0);
     });
   });
 });

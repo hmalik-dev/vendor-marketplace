@@ -10,7 +10,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ApiClientError } from '@/lib/api-client';
+import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { formatEventDate, REQUEST_PRESENTATION } from '@/lib/booking-entries';
 import { SettlementNote } from '@/components/bookings/settlement-note';
@@ -127,11 +127,7 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
       // have withdrawn, or the request may have expired, while this was open.
       router.refresh();
     } catch (failure) {
-      setError(
-        failure instanceof ApiClientError
-          ? failure.message
-          : 'That did not reach us. Check your connection and try again.',
-      );
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
       setBusy(false);
     }

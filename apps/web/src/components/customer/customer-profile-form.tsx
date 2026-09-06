@@ -20,7 +20,7 @@ import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiClientError } from '@/lib/api-client';
+import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { guestCountFromInput } from '@/lib/guest-count';
 import { useApi } from '@/lib/use-api';
 import type { FieldIssue } from '@/lib/use-submit-validation';
@@ -294,11 +294,7 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
       setSaved(current);
       toast.success('Profile saved');
     } catch (failure) {
-      setError(
-        failure instanceof ApiClientError
-          ? failure.message
-          : 'That did not reach us. Check your connection and try again.',
-      );
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
       setSaving(false);
     }

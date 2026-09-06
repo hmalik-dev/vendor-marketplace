@@ -162,8 +162,21 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
     }
   };
 
+  /*
+   * Reordering is refused while an upload is in flight (#405). The two writes
+   * race in both directions and both orderings are wrong: if the POST commits
+   * first, the reorder's id list is missing the new row and the API's
+   * `assertCompleteOrder` refuses it — the tiles snap back and the vendor is
+   * told they got the order wrong when they did not. If the reorder is handled
+   * first, its response replaces the whole list and erases the photo `persist`
+   * had already appended. The controls are disabled rather than queued: an
+   * upload settles in seconds and the grid is about to change under the vendor
+   * anyway, so the honest answer is "not while these are still going up".
+   */
+  const reorderLocked = isBusy || queue.inFlight;
+
   const move = (from: number, to: number): void => {
-    if (from === to || to < 0 || to >= items.length) {
+    if (reorderLocked || from === to || to < 0 || to >= items.length) {
       return;
     }
     void persistOrder(moveItem(items, from, to));
@@ -361,7 +374,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
             {items.map((item, index) => (
               <li
                 key={item.id}
-                draggable={!isBusy}
+                draggable={!reorderLocked}
                 onDragStart={() => setDraggingId(item.id)}
                 onDragEnd={() => setDraggingId(null)}
                 onDragOver={(event) => event.preventDefault()}
@@ -418,7 +431,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
                         size="icon"
                         className="size-11 lg:size-8"
                         aria-label={`Move photo ${index + 1} earlier`}
-                        disabled={isBusy || index === 0}
+                        disabled={reorderLocked || index === 0}
                         onClick={() => move(index, index - 1)}
                       >
                         <ArrowLeft aria-hidden="true" />
@@ -429,7 +442,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
                         size="icon"
                         className="size-11 lg:size-8"
                         aria-label={`Move photo ${index + 1} later`}
-                        disabled={isBusy || index === items.length - 1}
+                        disabled={reorderLocked || index === items.length - 1}
                         onClick={() => move(index, index + 1)}
                       >
                         <ArrowRight aria-hidden="true" />

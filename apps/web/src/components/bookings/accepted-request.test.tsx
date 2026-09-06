@@ -1,7 +1,9 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { AcceptedRequest } from './accepted-request';
+import { ApiClientError } from '@/lib/api-client';
 import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
 
 const requestMock = vi.fn();
@@ -154,6 +156,41 @@ describe('AcceptedRequest', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('That did not reach us. Check your connection and try again.');
-    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  /*
+   * #405. This rendered `ApiClientError.message` verbatim, so a 500 on the
+   * money path put `Internal server error` in the alert — one of the shapes
+   * `user-facing-error.ts` pins as never-shown, and neither half of what
+   * `40-states.md` asks an error to say.
+   */
+  it('does not print the API’s own words for a server failure', async () => {
+    requestMock.mockRejectedValue(
+      new ApiClientError(500, ERROR_CODES.INTERNAL_ERROR, 'Internal server error'),
+    );
+    render(<AcceptedRequest request={acceptedRequest()} booking={booking()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel booking' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Yes, cancel/ }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('That did not reach us. Check your connection and try again.');
+    expect(alert.textContent).not.toContain('Internal server error');
+  });
+
+  /*
+   * #405. The refund may already have been issued and the row cancelled when
+   * the client cannot parse the answer — a schema drift. Skipping the refresh
+   * left the customer looking at a live booking and a `Cancel` button for
+   * something that no longer existed, so it now runs whichever way it went.
+   */
+  it('re-reads the booking even when the cancellation appeared to fail', async () => {
+    requestMock.mockRejectedValue(new Error('schema drift'));
+    render(<AcceptedRequest request={acceptedRequest()} booking={booking()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel booking' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Yes, cancel/ }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
   });
 });

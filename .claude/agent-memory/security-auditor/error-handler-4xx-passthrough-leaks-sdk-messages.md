@@ -33,6 +33,15 @@ What is still true and still worth checking:
   4xx message straight to the reader. That is safe _because_ of the narrowing
   above — the two are coupled, so narrowing `messageOf` further is fine but
   widening it re-opens the leak at both ends.
+- **As of #405 that helper is the only client-side path to error text.** The
+  last components rendering `failure.message` raw from a `catch` (four forms
+  plus `request-row.tsx`'s `vendorFacingError`, which reached _around_ the
+  helper) were converted, and the shared fallback is the exported
+  `REQUEST_DID_NOT_ARRIVE`. Verified 2026-09-06: no non-test file in `apps/web`
+  renders an `ApiClientError.message` except `image-upload.tsx`, which routes it
+  through `rejectedFailure` → `isUpstreamErrorShape` on the
+  `VALIDATION_ERROR` branch only. So a new `setError(err.message)` in a diff is
+  now a regression to name, not a pre-existing pattern to tolerate.
 
 **How to apply:** on a diff introducing a new upstream client in `apps/api`,
 check the log path rather than the reply path. Wrapping the SDK call and

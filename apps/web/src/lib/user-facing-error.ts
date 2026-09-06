@@ -33,6 +33,16 @@ export const UPSTREAM_ERROR_SHAPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The one fallback that is genuinely shared: a request that never arrived.
+ *
+ * Every other fallback names what the caller was doing and belongs to it, which
+ * is what `userFacingError` below argues for. This sentence does not — seven
+ * call sites had it written out verbatim, free to drift from each other one
+ * edit at a time (#405). `31-content-voice.md` owns the wording.
+ */
+export const REQUEST_DID_NOT_ARRIVE = 'That did not reach us. Check your connection and try again.';
+
+/**
  * Resolves what to show a person for a failed request.
  *
  * @param error whatever was thrown — an `ApiClientError`, a network `TypeError`,

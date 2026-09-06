@@ -119,24 +119,26 @@ export async function findVendorCategoryIds(db: AppDatabase, vendorId: string): 
 }
 
 /**
- * Replaces the vendor's category selection wholesale. Delete and insert run in
- * one transaction so a failed insert cannot leave the vendor with no
- * categories at all.
+ * Replaces the vendor's category selection wholesale.
+ *
+ * **Must be called inside a transaction**, which is what makes the delete and
+ * the insert one unit — a failed insert would otherwise leave the vendor with
+ * none at all. It used to open its own, but every caller now runs inside the
+ * profile save's transaction (#405), so that only added a `SAVEPOINT` /
+ * `RELEASE` pair per call and held the row locks two round trips longer.
  */
 export async function replaceVendorCategories(
   db: AppDatabase,
   vendorId: string,
   categoryIds: readonly string[],
 ): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx.delete(vendorCategories).where(eq(vendorCategories.vendorId, vendorId));
+  await db.delete(vendorCategories).where(eq(vendorCategories.vendorId, vendorId));
 
-    if (categoryIds.length > 0) {
-      await tx
-        .insert(vendorCategories)
-        .values(categoryIds.map((categoryId) => ({ vendorId, categoryId })));
-    }
-  });
+  if (categoryIds.length > 0) {
+    await db
+      .insert(vendorCategories)
+      .values(categoryIds.map((categoryId) => ({ vendorId, categoryId })));
+  }
 }
 
 /** A vendor's tags, in the picker's own order: group first, then display order. */

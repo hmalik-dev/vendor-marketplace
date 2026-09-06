@@ -10,7 +10,7 @@ import {
   type PriceType,
 } from '@vendor-marketplace/shared';
 import { Plus, X } from 'lucide-react';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { PRICE_TYPE_LABELS } from '@/lib/package-labels';
 
@@ -148,13 +148,22 @@ export function PackageForm({
   /** Nothing is said in red before a submit attempt (`40-states.md`). */
   const formMessage = validation.attempted ? problem.formMessage : null;
 
-  // Selecting a different package replaces what the pane is editing.
-  useEffect(() => {
-    setForm(initialState(servicePackage));
-    validation.reset();
-    // `validation` is recreated every render; only the selection should reseed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [servicePackage]);
+  /*
+   * There is deliberately **no effect syncing `servicePackage` into `form`**
+   * (#405).
+   *
+   * The manager renders this pane with `key={selection}`, so choosing a
+   * different package unmounts and remounts it and `useState` above reseeds
+   * from the new row. Within one mount the id can never change, so the effect
+   * that used to sit here could only ever fire for the *same* package — and it
+   * was keyed on the `servicePackage` **object**, which the manager rebuilds
+   * on every reorder and every bookable toggle. The vendor's typed name,
+   * description, price and inclusions were silently replaced with the last
+   * saved values, with no prompt.
+   *
+   * Two reset mechanisms for one concern is what made that possible. The `key`
+   * is the one that works; this is the other one, removed.
+   */
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
     setForm((previous) => ({ ...previous, [key]: value }));

@@ -8,7 +8,6 @@ import { PublishChecklist } from '@/components/vendor/publish-checklist';
 import { PublishedRail } from '@/components/vendor/published-rail';
 import { RequestRow } from '@/components/vendor/request-row';
 import { EmptyState, EmptyStateGlyph } from '@/components/ui/empty-state';
-import { Button } from '@/components/ui/button';
 import { getOwnBookingRequests } from '@/lib/vendor-requests';
 import { Banner } from '@/components/ui/banner';
 import { getOwnVendorProfile, getVendorDashboard } from '@/lib/vendor-data';

@@ -23,8 +23,9 @@ export interface TagCategorySectionProps {
   /** Every active tag, of every category; this section filters to its own. */
   allTags: readonly WireTag[];
   selectedTagIds: readonly string[];
-  onToggle: (tagId: string) => void;
-  onSelect: (tagId: string) => void;
+  onToggle: (tag: WireTag) => void;
+  /** Adds a tag; returns whether it ended up selected (the limit can refuse it). */
+  onSelect: (tag: WireTag) => boolean;
   disabled?: boolean;
 }
 
@@ -110,7 +111,7 @@ export function TagCategorySection({
                       key={tag.id}
                       value={tag.name}
                       disabled={!isSelected && atLimit}
-                      onSelect={() => onToggle(tag.id)}
+                      onSelect={() => onToggle(tag)}
                     >
                       <Check
                         aria-hidden="true"
@@ -141,7 +142,7 @@ export function TagCategorySection({
               {tag.name}
               <button
                 type="button"
-                onClick={() => onToggle(tag.id)}
+                onClick={() => onToggle(tag)}
                 disabled={disabled}
                 aria-label={`Remove ${tag.name}`}
                 className="relative inline-flex size-5 items-center justify-center rounded-full transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-stone-900/10 disabled:opacity-50 sm:after:hidden"
@@ -153,11 +154,7 @@ export function TagCategorySection({
         ))}
       </ul>
 
-      <TagSuggestionForm
-        category={category}
-        allTags={allTags}
-        onTagResolved={(tag) => onSelect(tag.id)}
-      />
+      <TagSuggestionForm category={category} allTags={allTags} onTagResolved={onSelect} />
     </section>
   );
 }

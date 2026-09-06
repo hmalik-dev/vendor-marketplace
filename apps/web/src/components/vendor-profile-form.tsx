@@ -41,7 +41,6 @@ import { cn } from '@/lib/utils';
 import { US_STATE_OPTIONS, usStateName } from '@/lib/us-states';
 import {
   toImageSrc,
-  wireTagListSchema,
   wireVendorProfileSchema,
   type WireTag,
   type WireVendorProfile,
@@ -205,7 +204,29 @@ function toPayload(form: FormState): Record<string, unknown> {
     profileImageUrl: form.profileImageUrl ?? undefined,
     coverImageUrl: form.coverImageUrl ?? undefined,
     categoryIds: form.categoryIds,
+    // Tags ride with the profile rather than a second request, so a refused
+    // selection cannot leave a profile edit standing on its own (#405).
+    tagIds: form.tagIds,
   };
+}
+
+/**
+ * Whether the vendor has left `key` alone since the save went out.
+ *
+ * Array-aware, because two of the form's fields are lists and `===` on those
+ * compares references rather than selections.
+ */
+function unchangedSince<K extends keyof FormState>(
+  live: FormState,
+  sent: FormState,
+  key: K,
+): boolean {
+  const a = live[key];
+  const b = sent[key];
+
+  return Array.isArray(a) && Array.isArray(b)
+    ? a.length === b.length && a.every((value, at) => value === b[at])
+    : a === b;
 }
 
 /**
@@ -298,9 +319,12 @@ const FORM_SELECT_TRIGGER = cn(
  * edits. Saving is explicit rather than autosaved: a half-typed business name
  * would otherwise be published to a live profile.
  *
- * Tags are saved through their own endpoint because they are a separate
- * many-to-many replace, but the vendor sees one "Save" — so the profile write
- * lands first, and the tag write is only attempted once the profile exists.
+ * The vendor sees one "Save" and it **is** one write (#405). Tags used to go
+ * through their own endpoint after the profile write landed, which meant a
+ * refused tag list left the profile edit standing with nothing to undo it: the
+ * vendor could never get a clean save, and on first-time creation the retry
+ * hit a 409 on the profile the failed attempt had already made. They now
+ * travel in the profile body and land in its transaction.
  */
 export function VendorProfileForm({
   profile,
@@ -490,35 +514,54 @@ export function VendorProfileForm({
     }
   };
 
-  const send = async (payload: Record<string, unknown>): Promise<void> => {
+  /**
+   * Saves `sent` — the values as they were when Save was pressed, not as they
+   * are when the response lands.
+   *
+   * #405: the snapshot used to be taken from the *live* form on success, so
+   * anything typed while the request was in flight was marked saved. `isDirty`
+   * went false, the bar read `Saved`, `useUnsavedChangesGuard(false)` installed
+   * no interception, and navigating away dropped text the stored row never had.
+   * Snapshotting what was sent keeps those keystrokes unsaved and the guard
+   * armed, which is why the fields can stay editable during the save.
+   */
+  const send = async (sent: FormState): Promise<void> => {
     setIsSaving(true);
     try {
       const saved = await request('/vendor/profile', {
         method: isNew ? 'POST' : 'PUT',
-        body: payload,
+        body: toPayload(sent),
+        // The wire variant: `tagSchema.createdAt` is a `Date`, and JSON carries
+        // an ISO string.
         schema: wireVendorProfileSchema,
       });
 
-      const savedTags = await request('/vendor/tags', {
-        method: 'PUT',
-        body: { tagIds: form.tagIds },
-        // The wire variant: `tagSchema.createdAt` is a `Date`, and JSON carries
-        // an ISO string.
-        schema: wireTagListSchema,
-      });
+      /*
+       * The fields the server decides rather than the form. The `Pick` is the
+       * list, and both the writeback and the snapshot below read from this one
+       * object — so adding a field means widening the type, which makes the
+       * compiler ask for the writeback line rather than leaving it to be
+       * forgotten.
+       */
+      const fromServer: Pick<FormState, 'slug' | 'tagIds'> = {
+        slug: saved.slug,
+        tagIds: saved.tags.map((tag) => tag.id),
+      };
 
       setPublishBlockers(saved.publishBlockers);
       setIsPublished(saved.isPublished);
       setLastSavedAt(saved.updatedAt);
-      setForm((previous) => {
-        const next = {
-          ...previous,
-          slug: saved.slug,
-          tagIds: savedTags.map((tag) => tag.id),
-        };
-        setSavedSnapshot(JSON.stringify(next));
-        return next;
-      });
+      /*
+       * Written back onto the live form only where the vendor has not touched
+       * the field since the request went out; overwriting an edit made
+       * mid-flight would be the same data loss from the other side.
+       */
+      setForm((previous) => ({
+        ...previous,
+        slug: unchangedSince(previous, sent, 'slug') ? fromServer.slug : previous.slug,
+        tagIds: unchangedSince(previous, sent, 'tagIds') ? fromServer.tagIds : previous.tagIds,
+      }));
+      setSavedSnapshot(JSON.stringify({ ...sent, ...fromServer }));
 
       setJustSaved(true);
       setServerProblem(NO_PROBLEM);
@@ -547,7 +590,7 @@ export function VendorProfileForm({
         return;
       }
 
-      void send(toPayload(form));
+      void send(form);
     });
   };
 
@@ -1054,7 +1097,7 @@ export function VendorProfileForm({
               <p className="text-base text-stone-700">
                 You can change any of this after you create your profile.
               </p>
-            ) : blockers.length > 0 ? (
+            ) : !isPublished && blockers.length > 0 ? (
               /*
                * The third of the three places a blocker appears at once — the
                * field, the nav, and here — so the vendor sees what and where
@@ -1070,12 +1113,33 @@ export function VendorProfileForm({
                 </span>
               </p>
             ) : (
+              /*
+               * #405: this switch writes the **saved** row, so it may only be
+               * *published* from saved state. It used to be offered whenever
+               * the live checklist was clear, which is what the vendor has
+               * typed rather than what is stored — so a form that looked
+               * complete produced a red 'complete your profile' toast with
+               * nothing on screen to fix. Publishing is now held until the
+               * form is clean, and the line below says so.
+               *
+               * **Unpublishing is never held.** It cannot fail the way
+               * publishing can — the server refuses a publish against
+               * outstanding blockers and accepts an unpublish unconditionally
+               * — and it is the control a vendor reaches for when something is
+               * wrong. Gating it on `isDirty` stranded them: clearing a
+               * *required* field makes the form permanently dirty, because the
+               * client refuses the save that would clean it, so a switch
+               * disabled while dirty could never be re-enabled without
+               * reloading and losing the edit. The branch above is the same
+               * rule from the other side: a live storefront keeps its switch
+               * rather than being replaced by 'n things left'.
+               */
               <div className="flex items-start gap-3">
                 <Switch
                   id="isPublished"
                   className={SWITCH_TOUCH_TARGET}
                   checked={isPublished}
-                  disabled={isSaving}
+                  disabled={isSaving || (isDirty && !isPublished)}
                   onCheckedChange={(next) => void togglePublished(next)}
                 />
                 <div>
@@ -1083,7 +1147,9 @@ export function VendorProfileForm({
                   <p className="text-xs text-stone-600">
                     {isPublished
                       ? 'Customers can find and book you.'
-                      : 'Ready to publish — flip this when you are.'}
+                      : isDirty
+                        ? 'Save your changes first — this switch applies to your saved storefront.'
+                        : 'Ready to publish — flip this when you are.'}
                   </p>
                 </div>
               </div>
@@ -1092,18 +1158,24 @@ export function VendorProfileForm({
             <div className="flex items-center gap-3.5">
               {/*
                 Four states, in the order they outrank each other: a save in
-                flight, a save just confirmed, work that would be lost, and —
+                flight, work that would be lost, a save just confirmed, and —
                 when none of those apply — when this storefront was last saved
                 (#258). The last one is what a vendor returning to the screen
                 needs, and it is the only one that was missing.
+
+                `Unsaved changes` outranks `Saved` (#405). It did not, so text
+                typed while the request was in flight left the bar reading
+                `Saved` over a form that had work in it — the same lie the
+                snapshot fix removes from the leave guard, and this is the half
+                the vendor can see.
               */}
               <span aria-live="polite" className="text-sm text-stone-600">
                 {isSaving
                   ? 'Saving…'
-                  : justSaved
-                    ? 'Saved'
-                    : isDirty
-                      ? 'Unsaved changes'
+                  : isDirty
+                    ? 'Unsaved changes'
+                    : justSaved
+                      ? 'Saved'
                       : savedAgo === ''
                         ? ''
                         : `Saved ${savedAgo} ago`}

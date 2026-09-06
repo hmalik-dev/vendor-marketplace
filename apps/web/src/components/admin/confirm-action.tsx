@@ -3,7 +3,7 @@
 import { AlertDialog } from 'radix-ui';
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { userFacingError } from '@/lib/user-facing-error';
+import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 
 export interface ConfirmActionProps {
   /** The control that opens the dialog — an overflow-menu item or a row button. */
@@ -60,9 +60,7 @@ export function ConfirmAction({
        * complaining about an API key. That helper suppresses those and passes
        * the API's own 4xx sentences through.
        */
-      setError(
-        userFacingError(failure, 'That did not reach us. Check your connection and try again.'),
-      );
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
       setBusy(false);
     }
