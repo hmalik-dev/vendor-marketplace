@@ -511,6 +511,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   418: [], // Refine reads which tag groups apply to the searched category
   419: [], // folds the Florals category into Decor, seed and migration
   420: [], // landing footer — placeholder support link and links at page parity
+  421: ['auth', 'email'], // /support form: session identity, and one Resend send
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

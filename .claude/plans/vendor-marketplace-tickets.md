@@ -277,10 +277,11 @@ storefront, each of which tells the reader something untrue. |
 | **417** | **Search chrome: the empty-state mark, the `New` badge, and a picker that will not close** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 by the user's own review of a verified parity pass** (`parity-review/FINDINGS.md`, screenshots beside it). Four defects on one surface, grouped because they are one browser session and one component tree. **(1) The vendor-type picker does not close on selection** — a real mouse click sets the value but leaves `aria-expanded="true"` with all 12 options rendered; a programmatic `.click()` *does* close it, so it is a pointer-event race (refocus reopening the list) and not a missing handler, which is why no test caught it. **Must be fixed on both the landing page and `/search`** — the same picker is mounted in the header and in `#main`. **(2) The no-results mark is the wrong glyph, and the block sits high** — the account holder also instructed on 2026-09-06 that the empty state be **vertically centred in the results pane** so it stops reading as a misaligned page, and **updated frame `18` to match**, so re-read that frame rather than trusting the geometry recorded here — the app draws a 32x32 `lucide-search-x`; frame `18` draws the Orla twin-ring mark, 62x38, two 38x38 circles offset 24px, one `1.5px solid #D5CEC2` and one `1.5px dashed`. **(3) `New` is inline text and its logic is wrong** — the app prints `New · Austin, TX` as plain meta *replacing* the rating whenever `reviewCount` is 0, but frame `02` draws `New` as a pill (`10.5px/600`, `background #F0EAE1`, `color #4A443C`, `padding 3px 8px`, `radius 5px`) sitting *beside* a real rating. **The account holder ruled the trigger on 2026-09-06: `New` means a genuinely new vendor, not a review-less one** — an established vendor can have no reviews and must not be labelled new. Use recency of the vendor profile (30 days is the stated starting point; confirm the column exists before relying on it) |
 | **418** | **Refine offers filters that cannot apply to the category being searched** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the user's instruction**, verbatim: *"we need context aware filtering - Dietary shouldnt appear if the search type is photography for example"*. The Refine bar renders `Price`, `Rating`, `Languages`, `Cultural` and `Dietary` unconditionally. `dietary` is a `tag_category` with 4 tags and is meaningful only where food is served — catering and carts — so on a photography search it is a control that can only ever return zero. `01-foundations.md`'s own rule that a control which opens nothing is furniture applies to a filter that can only empty the grid. **The mapping from category to applicable tag groups does not exist yet and is the substance of this ticket** — decide where it lives (a column on `categories`, or a constant beside `TAG_CATEGORIES`), and make the bar read it rather than hardcoding a list in the component. `language` and `cultural` plausibly apply everywhere; `dietary` plausibly does not. **Do not silently drop an active filter** when the category changes — say what was dropped, per `40-states.md` |
 | **419** | **Fold Florals into Decor so the category list reflects one real market** | P2 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the user's instruction**, verbatim: *"i think we can probably couple florals into decor... currently they intertwine and the goal is to fill up our categories"*. **Ruled 2026-09-06: `florals` is removed and `Decor` survives — 11 categories become 10.** There are 11 seeded categories and **only `photography` has any vendors**; `florals` and `decor` both have zero, and in this market the same vendor usually sells both. Folding them makes the surviving category real rather than aspirational. **This is a data migration, not a copy change** — it needs: the seed and any fixture that names `florals`; a migration that re-points `vendor_categories` rows and then removes the row (both are currently empty locally, so write it to be correct rather than assuming); a redirect or 410 for `/search?category=florals`, which is a shareable URL; and every design surface that draws the category list. **Confirm the surviving name and slug before writing the migration** — `Decor` alone, or something that names both. Do not implement any Post-MVP category work alongside it |
-| **420** | **Footer: a Contact support link, and nav links at parity with the page above them** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the user's instruction**, verbatim: *"we need a placeholder contact support in the footer area where other links are on main page. and update the footer main page links to be the first 4 that are on the main page as well for parity"*. Two changes to the landing footer. **(1) Add a `Contact support` link** beside the existing footer links. **It is explicitly a placeholder** — the account holder asked for the link, not for a working destination, because the real monitored address is **#374**, which is `Deferred — needs a human`. Point it somewhere honest and inert; **do not invent a support email address**, and do not let the placeholder read as a working channel to a customer. **(2) Footer links at page parity is ALREADY TRUE** — `site-footer.tsx` derives its Browse column from `LANDING_JUMP_CATEGORY_SLUGS`, the same constant the hero reads, and says so in a comment. Measured 2026-09-06. What is missing is a **test pinning them together**, so the remaining work is a regression guard rather than a change. **This ticket does NOT unblock #372** — that ticket's `Contact support` is on frame `16`, the error page, and still needs #374's real destination |
+| **420** | **Footer: a Contact support link, and nav links at parity with the page above them** | P1 | M3 | **P2 Medium** | **Closed — Superseded** | — | **None** | `core` | **Superseded by #421 on 2026-09-06**, the day after it was filed, when the account holder supplied a full design for the contact-support screen and instructed that the feature ship as one ticket. Both halves moved: the footer `Contact support` link is now #421's, because the link and the screen it opens are one change; and the footer-parity regression test moved with it, because #421 edits the same footer and a second lane in that file would collide for no reason. **Nothing here is dropped** — the measured finding that footer/hero parity is already true and only lacks a test is restated in #421. Not worked directly | **Filed 2026-09-06 on the user's instruction**, verbatim: *"we need a placeholder contact support in the footer area where other links are on main page. and update the footer main page links to be the first 4 that are on the main page as well for parity"*. Two changes to the landing footer. **(1) Add a `Contact support` link** beside the existing footer links. **It is explicitly a placeholder** — the account holder asked for the link, not for a working destination, because the real monitored address is **#374**, which is `Deferred — needs a human`. Point it somewhere honest and inert; **do not invent a support email address**, and do not let the placeholder read as a working channel to a customer. **(2) Footer links at page parity is ALREADY TRUE** — `site-footer.tsx` derives its Browse column from `LANDING_JUMP_CATEGORY_SLUGS`, the same constant the hero reads, and says so in a comment. Measured 2026-09-06. What is missing is a **test pinning them together**, so the remaining work is a regression guard rather than a change. **This ticket does NOT unblock #372** — that ticket's `Contact support` is on frame `16`, the error page, and still needs #374's real destination |
+| **421** | **Contact support — the `/support` screen, its six states, and every route into it** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `auth` `email` | **Filed 2026-09-06 with a design.** The account holder supplied `design/contact-support/` — frame **`29 Contact support`** plus `PROMPT.md` — and instructed that the whole feature ship as **one** ticket. **The frame is NOT in `design/Orla - Screens.dc.html`** and there is no `design-plan/` file for it, so the parity gate for this ticket reads `design/contact-support/29-contact-support.html` and `PROMPT.md` instead. Builds `/support` as a form that sends one email through the existing Resend transport and says so — **explicitly not a helpdesk**: no threads, no in-app replies, no ticket status, no attachments, no triage queue. All six states are drawn and all six ship. **Every existing and new entry point routes here**, which is what makes it one ticket: the footer link, and frame `16`'s `Contact support`. **Absorbs #420 whole**, including that ticket's footer-parity regression test, because both edit the same footer. **Does not need #374** — the destination is an env var and state 6's single action is retry, not a fallback address |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **384 rows as of 2026-09-03: 200 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06, after the 25-ticket run closed and #417-#419 were filed: 35 rows — 6 Backlog, 2 Deferred — needs a human, and 27 `Done` awaiting the next archive sweep.** Of the 6 Backlog rows, #370 and #372 are blocked behind the two `Deferred` ones, so **#417, #418, #419 and #420 are the only rows a session can start.** Parallel lanes move these while they run, so the number is a reading rather than a promise. **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06, after the 25-ticket run closed and #417-#419 were filed: 36 rows — 6 Backlog, 2 Deferred — needs a human, 1 `Closed — Superseded`, and 27 `Done` awaiting the next archive sweep.** Of the 6 Backlog rows, #370 and #372 are blocked behind the two `Deferred` ones, so **#417, #418, #419 and #421 are the only rows a session can start** — #420 was superseded into #421 the day after it was filed. Parallel lanes move these while they run, so the number is a reading rather than a promise. **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. That sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -3864,3 +3865,153 @@ measure it and report what you found rather than rewriting the constant.
 **#372's `Contact support` is a different one** — it lives on frame `16`, the
 error page, and it still needs #374's real destination. Adding a placeholder to
 the footer does not answer that, and #372 stays blocked.
+
+### #421: Contact support — the `/support` screen, its six states, and every route into it
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
+**Blocked by:** None
+
+**Filed 2026-09-06 with a design supplied by the account holder**, who instructed
+that the entire feature ship as **one** ticket.
+
+#### The design is not where the others are — read this first
+
+`design/contact-support/` holds **frame `29 Contact support`**
+(`29-contact-support.html`, three drawn frames plus a details column) and
+`PROMPT.md`, which is the spec.
+
+**Frame `29` is not in `design/Orla - Screens.dc.html`** — that file holds 46
+frames ending at `28 Dropdown variants` — and **there is no
+`design-plan/29-*.md`**. So for this ticket the parity gate reads
+`design/contact-support/29-contact-support.html` and `PROMPT.md`. Everything
+else about the gate is unchanged: 1440x900, all six axes, and **the literal
+strings are the design**.
+
+#### What it is
+
+A form at `/support` that sends **one email** through the existing Resend
+transport (`apps/api/src/lib/email.ts`) and says exactly that.
+
+**It is not a helpdesk, and the design says so on its face:** no message threads,
+no in-app replies, no ticket status, no attachments, no admin triage queue. The
+confirmation says *we'll email you* precisely so nobody returns looking for a
+status. Anything that stores and tracks conversations is a separate product.
+
+#### Why a form rather than a `mailto:` — settled, do not relitigate
+
+1. It ships without a published address: the destination is an env var, so this
+   lands before **#374** rules on a monitored address, and that address can
+   change without a deploy. It is also not scraped.
+2. It carries the error reference **for** the visitor. `app/error.tsx` shows
+   Next's `digest` deliberately, because it matches the server log line, and
+   frame `16` asks the visitor to paste it. A hidden field removes that step and
+   the common case where they don't and the report is unactionable.
+3. Clerk already identifies a signed-in submitter, so no email field and no typo.
+4. The transport exists. This is a route and a form, not new infrastructure.
+
+#### The six states — all drawn, all ship
+
+1. **Signed out.** Topic, **Your email**, Message. The only state with an email
+   field, and the only one that justifies asking: *"The only address we'll use,
+   and only to answer this."* No reference block — a visitor from the footer
+   carries none.
+2. **Signed in.** No email field. A **statement**, not an input: *"We'll reply to
+   `<address>` — the email on your account."* Changing where replies go means
+   changing the account.
+3. **Prefilled from an error** — the flagship, drawn at 1440. The digest sits in
+   a stone block labelled **`Attached automatically`** with timestamp and route,
+   **above** the topic field. Mono type, no input chrome, **no clear
+   affordance** — *"Nothing to copy, and no field to accidentally clear."*
+4. **Submitting.** One idiom for the whole screen, the same one frames `24` and
+   `26` use: full clay `#B4552F` button, `.spin` spinner, label to the present
+   participle (`Sending…`), fields read-only. **No tint** — a lightened button
+   loses contrast against its own white label. **No skeletons** — the content is
+   already on screen. **No full-page overlay** — it would hide the message they
+   just wrote.
+5. **Sent.** Hands back a reference (`ORL-4K7Q-P2` in the frame) in a bordered
+   block with a **Copy** control: *"Quote this if you follow up. It's in the
+   confirmation email too."* States plainly that there is nothing to check back
+   on here. **The reference is the message id, not the error digest** — a send
+   from the footer has no digest, so the digest cannot be what this state
+   returns.
+6. **Failed to send.** Names the cause as **transport**, not their input — *"our
+   mail service rejected it… it isn't something you can fix by editing it"* — so
+   they don't reword a message that was fine. **Exactly one action: `Try
+   again`.** There is no fallback address yet (#374) and a second button would
+   imply a choice that does not exist. **The reference is issued here too, before
+   the send resolves**, which is what lets a failed message still be something
+   they can ask about.
+
+#### Topic list — five, exactly
+
+`Something broke` · `A booking or payment` · `My vendor profile` ·
+`Trust & safety` · `Something else`
+
+**The first is preselected when a reference is attached.** Topic is the routing
+key in the email subject; it earns its place because a human reads it, not
+because it feeds a queue.
+
+#### Every route in — this is what makes it one ticket
+
+- **The footer**, on every page that renders `site-footer.tsx`.
+- **Frame `16`'s `Contact support`**, the error screen — it currently has no
+  destination, which is why **#372** listed it as blocked on #374. It now has
+  one: this route. **Confirm with the account holder whether that closes #372's
+  item, rather than editing #372 yourself.**
+- Any other `Contact support` string in the tree. Grep for it; there must be no
+  support affordance left that does not lead here.
+
+When the entry point is the error screen, the digest, timestamp and route travel
+with it into state 3.
+
+#### Absorbed from #420
+
+- The footer `Contact support` link — the link and the screen it opens are one
+  change.
+- The **footer-parity regression test**. Measured 2026-09-06: `site-footer.tsx`
+  already derives its Browse column from `LANDING_JUMP_CATEGORY_SLUGS`, the same
+  constant the landing hero reads, and says so in a comment — so the two
+  **already agree** and there is no drift to fix. What is missing is a test
+  pinning them together so a future edit cannot silently diverge them. Add it
+  here, since this ticket edits that file anyway.
+
+#### Acceptance
+
+1. `/support` exists and renders all six states, each matching frame `29` on all
+   six axes at 1440x900 — **including the literal strings**.
+2. Signed out shows an email field; signed in shows none and names the account
+   it will reply to.
+3. Arriving from an error attaches the digest, timestamp and route as
+   non-editable context, with `Something broke` preselected.
+4. Submitting locks the fields and uses the one screen idiom — no tint, no
+   skeleton, no overlay.
+5. A successful send returns a reference the visitor can copy, and the same
+   reference is in the confirmation email.
+6. **A failed send still issues a reference**, names transport as the cause, and
+   offers `Try again` as the only action.
+7. The five topics are exactly as listed and reach the email subject.
+8. The footer links here, frame `16` links here, and no `Contact support`
+   affordance anywhere leads somewhere else.
+9. The support destination is read from env. **No address is written into any
+   tracked file.**
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing before and passing after.
+- [ ] **The failure state is tested against a rejecting transport**, not a
+      mocked-happy one — #416 shipped a broken refund for months because the
+      double was more permissive than the real gateway. Make the double reject
+      what Resend rejects.
+- [ ] A test pinning the footer's Browse links to the hero's source.
+
+#### Engineering constraints the design does not decide
+
+- The signed-out endpoint is **public and unauthenticated**, so it takes rate
+  limiting (`RATE_LIMIT_MAX` exists) and #398's neutralisation at the free-text
+  write boundary.
+- Message length is bounded at the schema **and** against whatever stores or
+  sends it — #408's rule that a value the schema accepts must fit what receives
+  it.
+- `RESEND_API_KEY` and `EMAIL_FROM` are already present locally, so the `email`
+  capability gate passes; the **support destination** is a new variable and must
+  be added to the registry rather than hardcoded.
