@@ -10,7 +10,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { MAX_ADMIN_NOTE_LENGTH } from '@vendor-marketplace/shared';
+import { MAX_ADMIN_NOTE_LENGTH, MAX_TAG_SLUG_LENGTH } from '@vendor-marketplace/shared';
 import { tagCategoryEnum, tagSuggestionStatusEnum } from './enums.js';
 import { users } from './users.js';
 import { vendorProfiles } from './vendor-profiles.js';
@@ -27,8 +27,12 @@ export const tags = pgTable(
      * Category-prefixed and globally unique. Names only have to be unique
      * within a category — "Korean" and "Japanese" are both a language and a
      * culture — so the prefix keeps the dedup/search key collision-free.
+     *
+     * Wider than the name column for that reason: the prefix is nine more
+     * characters on top of a name at its own limit, and a `varchar(100)` here
+     * refused a legal 100-character suggestion at approve time (#408).
      */
-    slug: varchar('slug', { length: 100 }).notNull(),
+    slug: varchar('slug', { length: MAX_TAG_SLUG_LENGTH }).notNull(),
     category: tagCategoryEnum('category').notNull(),
     displayOrder: integer('display_order').notNull().default(0),
     isActive: boolean('is_active').notNull().default(true),

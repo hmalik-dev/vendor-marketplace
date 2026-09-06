@@ -1058,6 +1058,48 @@ export const MAX_ADDRESS_LENGTH = 500;
 export const MAX_CAPTION_LENGTH = 500;
 export const MAX_TITLE_LENGTH = 200;
 
+/**
+ * The widest value `integer` (int4) holds, and therefore the ceiling on every
+ * `displayOrder` a request may carry.
+ *
+ * Zod's `z.int()` accepts up to 2^53, so a body of `2147483648` passed
+ * validation, reached the insert and came back as an opaque 500 —
+ * `value "2147483648" is out of range for type integer` is a Postgres error,
+ * not an `AppError`. Every other bounded integer in the wire schema (guest
+ * count, price, years in business, service radius, page) already states its
+ * ceiling; this is the one that did not (#408).
+ */
+export const MAX_DISPLAY_ORDER = 2_147_483_647;
+
+/**
+ * `notifications.title`, which is **not** `MAX_TITLE_LENGTH`.
+ *
+ * A notification title is derived, not typed: three of them interpolate a
+ * business name at its own 200-character limit — `"<name> sent a quote"` is the
+ * longest at 214 — so a column sized for the input was always too narrow for
+ * the output. The write happens *after* the state transition has committed, so
+ * the overflow turned a legal quote or decline into a 500 on a request that had
+ * already moved, with no notification and no email for the other party (#408).
+ *
+ * Derived from the business-name limit rather than written down, so widening
+ * that column moves this with it. `56` is headroom for the longest fixed
+ * wording either side of the name.
+ */
+export const MAX_NOTIFICATION_TITLE_LENGTH = MAX_BUSINESS_NAME_LENGTH + 56;
+
+/**
+ * `tags.slug`, which is wider than `MAX_SLUG_LENGTH` for the same reason.
+ *
+ * The slug is category-prefixed — `${category}-${generateSlug(name)}` — because
+ * `tags_slug_key` is global while a name is only unique within its category.
+ * The prefix is up to 8 characters plus a hyphen, on top of a name at its own
+ * 100-character limit, so a legal 100-character suggestion produced a
+ * 109-character slug that `varchar(100)` refused: the approve transaction
+ * rolled back, the admin got an opaque INTERNAL_ERROR, and the suggestion
+ * stayed in the queue with no way to resolve it (#408).
+ */
+export const MAX_TAG_SLUG_LENGTH = MAX_NAME_LENGTH + 28;
+
 // --- Error codes -----------------------------------------------------------
 
 /**

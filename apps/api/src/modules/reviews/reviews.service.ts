@@ -7,7 +7,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import {
-  sendNotificationEmail,
+  queueNotificationEmail,
   type NotificationEmailDeps,
 } from '../notifications/notification-email.js';
 import type { EventHub } from '../../lib/event-stream.js';
@@ -213,7 +213,7 @@ export async function createReview(
        * and the reviewed party here is whoever was not the reviewer.
        */
       if (mail) {
-        await sendNotificationEmail(mail, written.notification, isCustomer ? 'vendor' : 'customer');
+        queueNotificationEmail(mail, written.notification, isCustomer ? 'vendor' : 'customer');
       }
     }
 

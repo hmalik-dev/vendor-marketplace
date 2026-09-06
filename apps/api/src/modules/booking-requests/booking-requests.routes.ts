@@ -3,6 +3,7 @@ import {
   bookingRequestListQuerySchema,
   bookingWithContextSchema,
   createBookingRequestSchema,
+  historyPageQuerySchema,
   quoteBookingRequestSchema,
   uuidSchema,
 } from '@vendor-marketplace/shared';
@@ -52,6 +53,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
     email: app.email,
     log,
     webOrigin: options.webOrigin,
+    background: app.background,
   });
 
   app.post(
@@ -164,7 +166,13 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
 
   app.get(
     '/bookings',
-    { preHandler: requireAuth, schema: { response: { 200: z.array(bookingWithContextSchema) } } },
-    async (request) => listBookings(app.db, authenticated(request.auth)),
+    {
+      preHandler: requireAuth,
+      schema: {
+        querystring: historyPageQuerySchema,
+        response: { 200: z.array(bookingWithContextSchema) },
+      },
+    },
+    async (request) => listBookings(app.db, authenticated(request.auth), request.query),
   );
 };

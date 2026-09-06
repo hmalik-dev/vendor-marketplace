@@ -83,7 +83,13 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
     stripe: app.stripe,
     hub: app.events,
     log: app.log,
-    mail: { db: app.db, email: app.email, log: app.log, webOrigin: options.webOrigin },
+    mail: {
+      db: app.db,
+      email: app.email,
+      log: app.log,
+      webOrigin: options.webOrigin,
+      background: app.background,
+    },
   });
 
   app.get(

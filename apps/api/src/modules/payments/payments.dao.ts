@@ -1,9 +1,10 @@
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, ne, sql, type SQL } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
   bookings,
   servicePackages,
+  users,
   vendorProfiles,
   type BookingRow,
   type NewBookingRow,
@@ -173,6 +174,46 @@ export interface ConfirmBookingInput {
 }
 
 /**
+ * Rewrites the customer's three derived booking counters from the bookings
+ * themselves.
+ *
+ * `users.total/completed/cancelled_bookings_count` were documented as derived
+ * and had **no writer anywhere**, so every customer read as a permanent
+ * 0-booking "New member": their own profile said so, `/admin/customers` listed
+ * zero for everyone, and `GET /customers/:id/profile` told every vendor the
+ * person they were about to work with had never booked anything and had a null
+ * completion rate (#408).
+ *
+ * Recomputed rather than incremented, and called from the three DAO functions
+ * that are the only writers of a `bookings` row — so no service can add a
+ * fourth path and forget. This is the shape `recalculateCustomerRating` already
+ * uses for the review counters, and for the same reason: a counter that is
+ * added to drifts the first time a write is retried, and a counter derived from
+ * the rows it counts cannot.
+ *
+ * One statement, so the three subqueries read one snapshot and no lock is
+ * needed to keep them agreeing with each other.
+ */
+export async function refreshCustomerBookingCounts(
+  db: AppDatabase,
+  customerId: string,
+): Promise<void> {
+  const countOf = (predicate: SQL): SQL<number> =>
+    sql`(select count(*)::int from ${bookings}
+         where ${bookings.customerId} = ${customerId} and ${predicate})`;
+
+  await db
+    .update(users)
+    .set({
+      totalBookingsCount: countOf(sql`true`),
+      completedBookingsCount: countOf(sql`${bookings.status} = 'completed'`),
+      cancelledBookingsCount: countOf(sql`${bookings.status} = 'cancelled'`),
+      updatedAt: sql`now()`,
+    })
+    .where(eq(users.id, customerId));
+}
+
+/**
  * The booking, the held date and nothing else — in **one transaction**.
  *
  * Both writes or neither. A booking row without its `booked` availability row
@@ -221,6 +262,8 @@ export async function confirmBooking(
         set: { status: 'booked' },
       });
 
+    await refreshCustomerBookingCounts(tx, row.customerId);
+
     return row;
   });
 }
@@ -232,13 +275,28 @@ export async function applyBookingTransition(
   from: BookingRow['status'],
   patch: Partial<NewBookingRow>,
 ): Promise<BookingRow | null> {
-  const updated = await db
-    .update(bookings)
-    .set({ ...patch, updatedAt: sql`now()` })
-    .where(and(eq(bookings.id, bookingId), eq(bookings.status, from)))
-    .returning();
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(bookings)
+      .set({ ...patch, updatedAt: sql`now()` })
+      .where(and(eq(bookings.id, bookingId), eq(bookings.status, from)))
+      .returning();
 
-  return updated?.[0] ?? null;
+    const row = updated?.[0];
+
+    if (!row) {
+      return null;
+    }
+
+    /*
+     * In the transaction with the move, like the other two writers. `completed`
+     * is terminal, so a recompute that failed on its own would leave this
+     * customer's counters stale until some *other* booking of theirs moved.
+     */
+    await refreshCustomerBookingCounts(tx, row.customerId);
+
+    return row;
+  });
 }
 
 /**
@@ -300,6 +358,8 @@ export async function cancelBookingAndFreeDate(
       .update(bookingRequests)
       .set({ status: 'cancelled', updatedAt: sql`now()` })
       .where(and(eq(bookingRequests.id, row.requestId), eq(bookingRequests.status, 'accepted')));
+
+    await refreshCustomerBookingCounts(tx, row.customerId);
 
     return row;
   });

@@ -32,7 +32,7 @@ import type { EventHub } from '../../lib/event-stream.js';
 import type { StripeConnectGateway } from '../../lib/stripe.js';
 import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import {
-  sendNotificationEmail,
+  queueNotificationEmail,
   type NotificationEmailDeps,
 } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
@@ -388,7 +388,7 @@ export async function setUserBanned(
          * body written for *this* reader, so both parties read the same refund
          * figure and neither reads the other's.
          */
-        await sendNotificationEmail(
+        queueNotificationEmail(
           context.mail,
           stored,
           recipient === booking.customerId ? 'customer' : 'vendor',
@@ -623,7 +623,7 @@ async function notifyVendorOfTag(
     });
 
     // Always the vendor: a tag suggestion is theirs, and so is the surface.
-    await sendNotificationEmail(context.mail, stored, 'vendor');
+    queueNotificationEmail(context.mail, stored, 'vendor');
   }
 }
 

@@ -16,6 +16,7 @@ import {
 import {
   LIVE_BOOKING_REQUEST_STATUSES,
   type BookingRequestStatus,
+  type PageWindow,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -92,9 +93,17 @@ export interface RequestListFilter {
   status?: BookingRequestStatus;
 }
 
+/**
+ * One page of the actor's history, never the whole of it.
+ *
+ * The read had no `LIMIT`: every row they had ever had was loaded and
+ * serialised on each load, and `listBookingRequests` then started one expiry
+ * chain per row at once. Both grew forever with the account (#408).
+ */
 export async function findRequests(
   db: AppDatabase,
   filter: RequestListFilter,
+  window: PageWindow,
 ): Promise<BookingRequestRow[]> {
   const conditions = [
     filter.customerId ? eq(bookingRequests.customerId, filter.customerId) : undefined,
@@ -110,7 +119,9 @@ export async function findRequests(
     .select()
     .from(bookingRequests)
     .where(and(...conditions))
-    .orderBy(...newestFirst);
+    .orderBy(...newestFirst)
+    .limit(window.limit)
+    .offset(window.offset);
 }
 
 /**
@@ -507,6 +518,7 @@ export interface BookingWithContextRow {
 export async function findBookings(
   db: AppDatabase,
   filter: { customerId?: string; vendorId?: string },
+  window: PageWindow,
 ): Promise<BookingWithContextRow[]> {
   const conditions = [
     filter.customerId ? eq(bookings.customerId, filter.customerId) : undefined,
@@ -522,7 +534,9 @@ export async function findBookings(
     .from(bookings)
     .innerJoin(bookingRequests, eq(bookings.requestId, bookingRequests.id))
     .where(and(...conditions))
-    .orderBy(desc(bookings.eventDate));
+    .orderBy(desc(bookings.eventDate))
+    .limit(window.limit)
+    .offset(window.offset);
 }
 
 /**

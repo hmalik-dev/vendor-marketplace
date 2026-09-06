@@ -486,6 +486,7 @@ describe('/booking-requests', () => {
     it('emails the vendor, with the notification’s own subject', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       await createRequest(vendorId, { packageId });
+      await harness.flushEmail();
 
       expect(harness.email.sent).toHaveLength(1);
       expect(harness.email.sent[0]?.subject).toBe('New booking request');
@@ -508,6 +509,7 @@ describe('/booking-requests', () => {
 
       await createRequest(vendorId, { packageId });
       await createRequest(vendorId, { packageId });
+      await harness.flushEmail();
 
       expect(harness.email.sent).toHaveLength(1);
     });
@@ -524,6 +526,7 @@ describe('/booking-requests', () => {
       const response = await createRequest(vendorId, { packageId });
 
       expect(response.statusCode).toBe(201);
+      await harness.flushEmail();
       expect(harness.email.sent).toEqual([]);
 
       const rows = await harness.database.db
@@ -597,6 +600,7 @@ describe('/booking-requests', () => {
 
       // The row and the email, together — one without the other is the drift.
       expect(rows.map((row) => row.type)).toContain(type);
+      await harness.flushEmail();
       expect(harness.email.sent).toHaveLength(1);
     });
 

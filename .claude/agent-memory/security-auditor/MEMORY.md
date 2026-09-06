@@ -36,3 +36,5 @@
 - [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the key is the booking id, the amount drifts by tier and the unwind flags changed; Stripe refuses the retry
 - [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — refund precedes the row move, no refund column, and past 24h a retry debits the vendor a second time
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
+- [Drizzle query errors log every bound parameter](drizzle-query-errors-log-bound-parameters.md) — `Failed query: … params: …` is in the message and pino emits it; pre-existing and accepted, check what the statement binds before escalating
+- [The background queue carries no session](background-work-queue-carries-no-session.md) — `app.background` re-derives its recipient from the notification row; a second caller must not close over `request.auth` or a `tx`
