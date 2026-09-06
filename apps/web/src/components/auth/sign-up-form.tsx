@@ -221,8 +221,9 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
         />
 
         {/*
-          The hint explains the disabled Continue button, so it belongs directly
-          beneath it — `21-sign-up.md`. Clerk owns the card, and its footer
+          The hint explains the disabled `Create my account` button, so it
+          belongs directly beneath it — `21-sign-up.md`. Clerk owns the card,
+          and its footer
           ("Already with us?", "Secured by Clerk") renders after the form, which
           left this 133px below the button it describes. `globals.css` flattens
           Clerk's two structural boxes and orders these three by hand: form,
@@ -231,7 +232,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
         {chosenRole === null ? (
           <p
             data-role-hint=""
-            className="mt-1.5 text-center text-xs text-stone-600"
+            className="mt-1.5 text-center text-helper text-stone-600"
             role={roleMissing ? 'alert' : undefined}
           >
             Pick one above to continue

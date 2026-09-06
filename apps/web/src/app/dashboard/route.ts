@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { ApiClientError } from '@/lib/api-client';
-import { DASHBOARD_PATH_BY_ROLE, getCurrentUser } from '@/lib/current-user';
+import { getCurrentUser } from '@/lib/current-user';
 import { signInPathReturningTo } from '@/lib/return-path';
+import { DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 
 /**
  * "Take me to my dashboard" — the header's signed-in link, which cannot know

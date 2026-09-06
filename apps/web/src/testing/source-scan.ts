@@ -23,15 +23,27 @@ export interface SourceFile {
   code: string;
 }
 
-async function walk(dir: string): Promise<string[]> {
+/**
+ * What a scan reads. The JSX guards want components and nothing else, so `.tsx`
+ * stays the default; a guard checking a rule that a route handler can also
+ * break asks for `.ts` as well rather than making every other guard read files
+ * it has no question about.
+ */
+export const TSX_ONLY = ['.tsx'] as const;
+export const TS_AND_TSX = ['.ts', '.tsx'] as const;
+
+async function walk(dir: string, extensions: readonly string[]): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   const found: string[] = [];
 
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      found.push(...(await walk(full)));
-    } else if (entry.name.endsWith('.tsx') && !entry.name.includes('.test.')) {
+      found.push(...(await walk(full, extensions)));
+    } else if (
+      extensions.some((extension) => entry.name.endsWith(extension)) &&
+      !entry.name.includes('.test.')
+    ) {
       found.push(full);
     }
   }
@@ -51,14 +63,18 @@ export function withoutComments(source: string): string {
 }
 
 /**
- * Every non-test `.tsx` file under `dir`, comments already stripped.
+ * Every non-test source file under `dir`, comments already stripped — `.tsx`
+ * unless `extensions` widens it.
  *
  * Read once per call and returned whole: a guard file asks several questions of
  * the same text, and re-walking the tree and re-reading 150 files for each one
  * is work paid on every `vitest` run and in CI.
  */
-export async function sourceFiles(dir: string = WEB_SOURCE): Promise<SourceFile[]> {
-  const paths = await walk(dir);
+export async function sourceFiles(
+  dir: string = WEB_SOURCE,
+  extensions: readonly string[] = TSX_ONLY,
+): Promise<SourceFile[]> {
+  const paths = await walk(dir, extensions);
 
   return Promise.all(
     paths.map(async (full) => ({
