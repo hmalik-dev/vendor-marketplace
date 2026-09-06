@@ -10,7 +10,7 @@
 - [`redirect_url` is Clerk's param, not ours](clerk-redirect-url-param-collision.md) — the raw search param outranks `fallbackRedirectUrl`, skipping our validator and `/after-sign-in`
 - [safeReturnPath's validate/return mismatch is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise landed in #76; 894k-case chain fuzz is clean, do not re-report
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths; slugSchema and 404s close the gap
-- [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `DASHBOARD_PATH_BY_ROLE.admin` is `/admin` now; the check-every-destination invariant still stands
+- [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — maps live in `lib/role-routes.ts` now; `roleCanReach` is a redirect hint and must never become a gate
 - [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema without the read schemas on the same column and a user's data 500s someone else's page
 - [Every image-ref bypass is FIXED; the host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — #414 closed the whitespace, backslash and control-char holes; `https://evil.example/x.png` was never closed and is the same attack
 - [Customer PII has two disclosure gates](customer-pii-has-two-disclosure-gates.md) — the profile relationship gate is permanent and customer-wide; the request-status gate is per-request, and they share no code

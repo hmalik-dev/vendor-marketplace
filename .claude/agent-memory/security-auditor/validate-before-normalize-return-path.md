@@ -29,6 +29,14 @@ U+202E, zero-width, lone surrogates and double-encoding. **Zero** origin escapes
 zero loop-guard evasions, zero non-idempotent returns
 (`safeReturnPath(safeReturnPath(v)) === safeReturnPath(v)` holds throughout).
 
+**#410 moved one caller's call site, not the boundary.**
+`app/after-sign-in/route.ts` now reads the **raw** `returnTo` and hands it to
+`postSignInPath` in `lib/role-routes.ts`, which calls `safeReturnPath` itself and
+falls back to `POST_SIGN_IN_PATH_BY_ROLE[role]` on `null`. Re-fuzzed 2026-09-05
+through `postSignInPath` over 1,170,906 cases: zero origin escapes, zero
+`LOOPING_PREFIXES` evasions, still idempotent. The raw read at that line is not a
+finding.
+
 **How to apply:** the open-redirect boundary itself is settled. Spend audit time
 on the _callers_ that assemble a candidate (`/vendors/${slug}/request...`,
 `/messages?...`, `/bookings?tab=...`) and on where the destination lands after

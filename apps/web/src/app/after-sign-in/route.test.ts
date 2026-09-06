@@ -107,6 +107,44 @@ describe('GET /after-sign-in', () => {
       expect(absoluteLocationOf(response)).not.toContain('evil.test');
     });
 
+    /*
+     * #410. Each of these was forwarded verbatim, and the role bounce waiting
+     * at the far end is an RSC `redirect()` — which the App Router cannot
+     * reconcile on the client-side navigation that follows sign-in. The
+     * browser stayed on the destination showing an empty `<main>` under the
+     * signed-out header. The handler now answers with a route the role renders,
+     * so there is no second redirect to lose.
+     */
+    it.each([
+      ['a vendor', 'vendor', '/vendors/e2e-test-studio/request', '/vendor/dashboard'],
+      ['a vendor', 'vendor', '/customer/profile', '/vendor/dashboard'],
+      ['a vendor', 'vendor', '/', '/vendor/dashboard'],
+      ['a customer', 'customer', '/vendor/dashboard', '/'],
+      ['a customer', 'customer', '/admin', '/'],
+      ['an admin', 'admin', '/vendor/dashboard', '/admin'],
+      ['an admin', 'admin', '/bookings', '/admin'],
+    ] as const)(
+      'starts %s carrying %s on %s instead of that blank page',
+      async (_label, role, returnTo, expected) => {
+        getCurrentUser.mockResolvedValue({ id: 'u1', firstName: 'Ada', role });
+
+        const response = await GET(requestReturningTo(returnTo));
+
+        expect(response.status).toBe(307);
+        expect(locationOf(response)).toBe(expected);
+      },
+    );
+
+    it('still returns a vendor to their own surfaces', async () => {
+      getCurrentUser.mockResolvedValue({ id: 'u2', firstName: 'Grace', role: 'vendor' });
+
+      const response = await GET(requestReturningTo('/vendor/packages?filter=active'));
+
+      expect(absoluteLocationOf(response)).toBe(
+        'http://localhost:3000/vendor/packages?filter=active',
+      );
+    });
+
     it('sends a suspended account to /suspended even with a destination', async () => {
       getCurrentUser.mockRejectedValue(new ApiClientError(403, 'FORBIDDEN', 'Suspended'));
 
