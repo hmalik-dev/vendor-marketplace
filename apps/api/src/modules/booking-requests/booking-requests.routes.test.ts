@@ -212,6 +212,29 @@ describe('/booking-requests', () => {
       expect(response.statusCode).toBe(403);
     });
 
+    /**
+     * The refusal, not a validation failure that happens to also deny.
+     *
+     * `requireRole` runs at `preHandler`, which is *after* Fastify's body
+     * parser and schema validation — so a vendor posting a malformed body was
+     * answered `400 VALIDATION_ERROR`. They were still denied, because no
+     * handler ran, but the code reads like a broken endpoint rather than a
+     * refusal, and an audit counting 403s would not see it. Measured against a
+     * live signed-in vendor while verifying #412; `requireRoleBeforeValidation`
+     * is the guard that exists for exactly this.
+     */
+    it('answers a vendor 403 even when the body would not validate', async () => {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/booking-requests',
+        headers: bearer(VENDOR),
+        payload: { vendorId: 'not-a-uuid' },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('FORBIDDEN');
+    });
+
     it('hides another customer request behind a 404', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
