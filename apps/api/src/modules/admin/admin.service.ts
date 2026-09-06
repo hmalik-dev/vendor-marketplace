@@ -269,6 +269,13 @@ export async function setUserBanned(
   let refundsFailed = 0;
 
   for (const booking of affected) {
+    /*
+     * What actually came back, for the row to record (#415). `null` while no
+     * refund has moved, which is both the unpaid booking and the one whose
+     * refund the loop below is about to fail on.
+     */
+    let refundedCents: number | null = null;
+
     if (booking.stripePaymentIntentId) {
       try {
         /*
@@ -280,7 +287,7 @@ export async function setUserBanned(
         const alreadyRefunded = await context.stripe.findRefund(booking.stripePaymentIntentId);
 
         if (!alreadyRefunded) {
-          await context.stripe.createRefund({
+          const refund = await context.stripe.createRefund({
             paymentIntentId: booking.stripePaymentIntentId,
             amountCents: booking.totalAmountCents,
             /*
@@ -293,6 +300,18 @@ export async function setUserBanned(
              */
             idempotencyKey: `ban-refund:unwind:${booking.id}`,
           });
+
+          refundedCents = refund.amountCents;
+        } else {
+          /*
+           * Read off the money that moved, not off the amount this call asked
+           * for. They agree on every first attempt and part company on the one
+           * that matters: a booking the customer had already half-refunded
+           * through their own cancellation, whose row never moved, is found
+           * here — and recording `totalAmountCents` for it would tell them
+           * they got everything back when half of it never left Stripe.
+           */
+          refundedCents = alreadyRefunded.amountCents;
         }
 
         refundsIssued += 1;
@@ -323,6 +342,14 @@ export async function setUserBanned(
     const cancelled = await cancelBookingAndFreeDate(context.db, booking.id, {
       cancelledAt: now,
       cancellationReason: 'The other party’s account was suspended',
+      /*
+       * The column, not the sentence above it (#415). Both parties' screens
+       * have to distinguish an operator's unwind from a customer's own
+       * cancellation, and reading that off `cancellation_reason` would make
+       * this string load-bearing copy.
+       */
+      cancelledBy: 'admin',
+      refundAmountCents: refundedCents,
     });
 
     if (!cancelled) {
@@ -445,11 +472,18 @@ function fullName(firstName: string, lastName: string): string {
 export async function listBookings(
   db: AppDatabase,
   query: AdminBookingQuery,
+  now: Date,
 ): Promise<AdminBookingPage> {
   const offset = offsetOf(query);
+  /*
+   * The day, because `refund-stuck` mirrors the unwind's own `event_date`
+   * bound (#415). Passed from the clock rather than read as `current_date` so
+   * the filter answers the same question a test's fake clock asks.
+   */
+  const filters = { status: query.status, flag: query.flag, today: toDateString(now) };
   const [rows, total] = await Promise.all([
-    findAdminBookings(db, query.status, query.pageSize, offset),
-    countAdminBookings(db, query.status),
+    findAdminBookings(db, filters, query.pageSize, offset),
+    countAdminBookings(db, filters),
   ]);
 
   return {
@@ -461,6 +495,7 @@ export async function listBookings(
       customerName: fullName(row.customerFirstName, row.customerLastName),
       vendorName: row.vendorName,
       vendorSlug: row.vendorSlug,
+      refundStuck: row.refundStuck,
       createdAt: row.createdAt,
     })),
     total,

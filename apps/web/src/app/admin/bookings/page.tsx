@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BOOKING_STATUSES, formatPrice } from '@vendor-marketplace/shared';
+import { ADMIN_BOOKING_FLAGS, BOOKING_STATUSES, formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
@@ -17,6 +17,9 @@ import {
 
 const PATH = '/admin/bookings';
 
+/** The one flag's label, so the filter option and the row pill cannot drift. */
+const REFUND_STUCK_LABEL = 'Refund did not go through';
+
 const EVENT_DATE = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -27,12 +30,45 @@ const EVENT_DATE = new Intl.DateTimeFormat('en-US', {
 export default async function AdminBookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: RawParam; page?: RawParam }>;
+  searchParams: Promise<{ status?: RawParam; flag?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const status = oneOf(raw.status, BOOKING_STATUSES);
-  const dropped = droppedKeys(raw, { status });
-  const bookings = await getAdminBookings(adminQueryString({ status, page: pageNumber(raw.page) }));
+  const flag = oneOf(raw.flag, ADMIN_BOOKING_FLAGS);
+  const dropped = droppedKeys(raw, { status, flag });
+  const bookings = await getAdminBookings(
+    adminQueryString({ status, flag, page: pageNumber(raw.page) }),
+  );
+  /*
+   * One place the empty states are chosen, so headline and description cannot
+   * fall out of step — and **both** filters are read, not just the flag.
+   *
+   * `refund-stuck` is only ever `confirmed`, so pairing it with any other
+   * status returns nothing by construction, and that pairing is two clicks
+   * away because each select carries the other. Branching on the flag alone
+   * answered it with "Every booking on a suspended account has been unwound."
+   * — told to an operator with stuck refunds one click away.
+   */
+  const empty =
+    flag && status
+      ? {
+          headline: 'No bookings match both filters',
+          description: `A stuck refund is always ${BOOKING_PRESENTATION.confirmed.label.toLowerCase()}. Clear the status to see them.`,
+        }
+      : flag
+        ? {
+            headline: 'No refunds are stuck',
+            description: 'Every booking on a suspended account has been unwound.',
+          }
+        : status
+          ? {
+              headline: 'No bookings with that status',
+              description: 'Clear the filter to see every booking.',
+            }
+          : {
+              headline: 'No bookings yet',
+              description: 'A booking appears here the moment a customer pays.',
+            };
 
   return (
     <AdminSurface
@@ -43,7 +79,7 @@ export default async function AdminBookingsPage({
         <FilterBar action={PATH}>
           <FilterSelect
             action={PATH}
-            carried={{ status }}
+            carried={{ flag }}
             name="status"
             label="Status"
             value={status ?? ''}
@@ -52,11 +88,26 @@ export default async function AdminBookingsPage({
               label: BOOKING_PRESENTATION[value].label,
             }))}
           />
+          {/*
+            The one state the console could not find (#415). A ban refunds each
+            confirmed booking before cancelling it and skips one Stripe
+            refuses, which leaves a confirmed booking on a suspended account —
+            announced once, in component state, over the vendors table, and
+            gone on the next navigation.
+          */}
+          <FilterSelect
+            action={PATH}
+            carried={{ status }}
+            name="flag"
+            label="Needs attention"
+            value={flag ?? ''}
+            options={[{ value: 'refund-stuck', label: REFUND_STUCK_LABEL }]}
+          />
         </FilterBar>
       }
       pager={{
         path: PATH,
-        params: { status },
+        params: { status, flag },
         page: bookings.page,
         pageSize: bookings.pageSize,
         total: bookings.total,
@@ -65,16 +116,7 @@ export default async function AdminBookingsPage({
       <DataTable
         rows={bookings.items}
         rowKey={(row) => row.id}
-        empty={
-          <EmptyState
-            headline={status ? 'No bookings with that status' : 'No bookings yet'}
-            description={
-              status
-                ? 'Clear the filter to see every booking.'
-                : 'A booking appears here the moment a customer pays.'
-            }
-          />
-        }
+        empty={<EmptyState headline={empty.headline} description={empty.description} />}
         columns={[
           {
             key: 'vendor',
@@ -118,6 +160,22 @@ export default async function AdminBookingsPage({
                 {BOOKING_PRESENTATION[row.status].label}
               </StatusPill>
             ),
+          },
+          {
+            key: 'attention',
+            width: '1.2fr',
+            header: 'Needs attention',
+            /*
+              Marked on every row rather than only inside the filter, so an
+              operator scanning the table finds these without having to already
+              know the filter exists — which is the whole failure this replaces.
+            */
+            cell: (row) =>
+              row.refundStuck ? (
+                <StatusPill tone="failed">{REFUND_STUCK_LABEL}</StatusPill>
+              ) : (
+                <span className="text-stone-600">—</span>
+              ),
           },
         ]}
       />

@@ -747,6 +747,31 @@ describe('payments', () => {
     });
 
     /*
+     * #415. The screens on both sides have to say who ended the booking and
+     * what came back, and neither survived on the row: `cancellation_reason`
+     * is the customer's free text here and an operator's sentence on the ban
+     * path, so telling them apart meant matching a string that is one copy
+     * edit from being wrong — and the refund figure existed only in this
+     * response, which nothing stores.
+     */
+    it('records who cancelled it and what was refunded', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [before] = await harness.database.db.select().from(bookings);
+
+      await inject('PUT', `/customer/bookings/${before!.id}/cancel`, CUSTOMER, {
+        reason: 'The venue fell through.',
+      });
+
+      const [after] = await harness.database.db.select().from(bookings);
+      expect(after).toMatchObject({
+        status: 'cancelled',
+        cancelledBy: 'customer',
+        refundAmountCents: PRICE_CENTS,
+      });
+    });
+
+    /*
      * #399. The refund is sent before the guarded update that decides who won,
      * so two concurrent cancels both reach Stripe. The update's
      * `status = 'confirmed'` predicate means only one writes the row — and

@@ -9,6 +9,7 @@ import {
   type NewBookingRow,
 } from '@vendor-marketplace/db/schema';
 import { refreshCustomerBookingCounts } from '@vendor-marketplace/db';
+import type { BookingCancelledBy } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
@@ -270,10 +271,30 @@ export async function applyBookingTransition(
  * reads as available; the explicit row is kept so the calendar shows the vendor
  * that something happened to that day.
  */
+/**
+ * What every cancellation must record about itself (#415).
+ *
+ * Required, not an open `Partial<NewBookingRow>`. Both screens that describe a
+ * cancelled booking read these four, and the two that matter cannot be
+ * recovered afterwards: who acted is otherwise only a sentence in
+ * `cancellation_reason`, and the refund figure exists nowhere but the response
+ * of the call that sent it. Making them a parameter puts the invariant in the
+ * one function every cancellation goes through, rather than in two call sites'
+ * comments — a third path would have to write nulls on purpose.
+ */
+export interface CancellationRecord {
+  cancelledAt: Date;
+  /** The customer's own words, the operator's sentence, or nothing. */
+  cancellationReason: string | null;
+  cancelledBy: BookingCancelledBy;
+  /** What Stripe actually moved. `null` when there was no payment to return. */
+  refundAmountCents: number | null;
+}
+
 export async function cancelBookingAndFreeDate(
   db: AppDatabase,
   bookingId: string,
-  patch: Partial<NewBookingRow>,
+  patch: CancellationRecord,
 ): Promise<BookingRow | null> {
   return db.transaction(async (tx) => {
     const updated = await tx

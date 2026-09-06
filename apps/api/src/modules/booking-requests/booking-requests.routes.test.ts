@@ -874,6 +874,92 @@ describe('/booking-requests', () => {
 
       expect(response.json()).toEqual([]);
     });
+
+    /*
+     * #415. Both parties' screens describe a cancelled booking, and the
+     * request row cannot tell a withdrawal from a refunded booking — so the
+     * booking rides along with the request rather than being fetched per row,
+     * and `null` is the answer for a request that never reached one.
+     */
+    it('carries no settlement on a request that never reached a booking', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/booking-requests/${created.json().id}`,
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(response.json().settlement).toBeNull();
+    });
+
+    it('carries what the money did once the request has a booking', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+      const [customer] = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.clerkUserId, CUSTOMER));
+
+      const cancelledAt = new Date('2026-06-01T12:00:00.000Z');
+      await harness.database.db.insert(bookings).values({
+        requestId,
+        customerId: customer!.id,
+        vendorId,
+        eventDate: EVENT_DATE,
+        totalAmountCents: 145_000,
+        platformFeeCents: 17_400,
+        vendorPayoutCents: 127_600,
+        status: 'cancelled',
+        cancelledAt,
+        cancelledBy: 'admin',
+        refundAmountCents: 145_000,
+      });
+
+      /* Both sides, because both sides render it. */
+      for (const actor of [CUSTOMER, VENDOR]) {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: `/booking-requests/${requestId}`,
+          headers: bearer(actor),
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().settlement).toMatchObject({
+          status: 'cancelled',
+          totalAmountCents: 145_000,
+          cancelledBy: 'admin',
+          refundAmountCents: 145_000,
+          cancelledAt: cancelledAt.toISOString(),
+        });
+        /*
+         * The whole key set, in #407's shape. This projection is served to
+         * **both** parties, so a widening of it — the commission, the payout
+         * split, a Stripe identifier — would publish to the customer exactly
+         * what `toBookingView` exists to keep from them. Listing the keys is
+         * what makes that a failing test rather than a silent leak.
+         */
+        expect(Object.keys(response.json().settlement).sort()).toEqual([
+          'bookingId',
+          'cancelledAt',
+          'cancelledBy',
+          'paidAt',
+          'refundAmountCents',
+          'status',
+          'totalAmountCents',
+        ]);
+      }
+
+      /* And on the list read, which is what the vendor's page renders. */
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: '/booking-requests',
+        headers: bearer(VENDOR),
+      });
+      expect(listed.json()[0].settlement).toMatchObject({ refundAmountCents: 145_000 });
+    });
   });
 
   describe('expiry', () => {
@@ -1502,6 +1588,9 @@ describe('/booking-requests', () => {
         expect(Object.keys(booking!).sort()).toEqual([
           'cancellationReason',
           'cancelledAt',
+          // Who ended it and what came back (#415). Both are facts about this
+          // reader's own booking; neither is the commission or a Stripe id.
+          'cancelledBy',
           'completedAt',
           'createdAt',
           'customerId',
@@ -1510,6 +1599,7 @@ describe('/booking-requests', () => {
           'eventType',
           'id',
           'paidAt',
+          'refundAmountCents',
           'requestId',
           'status',
           'totalAmountCents',

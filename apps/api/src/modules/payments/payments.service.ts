@@ -646,6 +646,16 @@ export async function cancelBooking(
   const cancelled = await cancelBookingAndFreeDate(context.db, bookingId, {
     cancelledAt: now,
     cancellationReason: reason ?? null,
+    /*
+     * Written down rather than left to be inferred (#415). The customer's own
+     * screen has to say who ended the booking and what came back, and neither
+     * fact survives on the row otherwise: `cancellation_reason` is the
+     * customer's free text here and an operator's sentence on the ban path, so
+     * telling the two apart meant string-matching a copy edit, and the refund
+     * figure existed only in this response.
+     */
+    cancelledBy: 'customer',
+    refundAmountCents: refund.amountCents,
   });
 
   if (!cancelled) {

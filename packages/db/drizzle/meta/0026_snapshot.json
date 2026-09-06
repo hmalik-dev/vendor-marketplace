@@ -1,6 +1,6 @@
 {
-  "id": "c4ebc73c-f264-4e86-9afd-97cd498fd25c",
-  "prevId": "65cd7b31-a4d5-4bdd-a073-a8612263cac0",
+  "id": "7cd9b239-9f28-4008-b599-f837be00d756",
+  "prevId": "c4ebc73c-f264-4e86-9afd-97cd498fd25c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -833,7 +833,7 @@
         },
         "slug": {
           "name": "slug",
-          "type": "varchar(100)",
+          "type": "varchar(128)",
           "primaryKey": false,
           "notNull": true
         },
@@ -2315,7 +2315,7 @@
         },
         "title": {
           "name": "title",
-          "type": "varchar(200)",
+          "type": "varchar(256)",
           "primaryKey": false,
           "notNull": true
         },

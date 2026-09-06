@@ -505,7 +505,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   412: [], // copy and validation, no external service
   413: [], // frame `06` parity — markup, type and a contrast ruling
   414: ['storage'], // image references are stored keys the uploader writes
-  415: ['core'], // reading and rendering rows that already exist
+  415: ['core', 'stripe'], // states what a refund moved, and the browser pass drives a real one
   416: ['stripe'], // the refund call itself, against a real connected account
 };
 

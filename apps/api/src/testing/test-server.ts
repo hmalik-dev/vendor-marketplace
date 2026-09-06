@@ -211,6 +211,17 @@ export interface FakeStripe extends StripeConnectGateway {
     reverseTransfer: boolean;
     /** Gave Orla's commission back as well (D31). */
     refundApplicationFee: boolean;
+    /**
+     * Stripe's own refund status, defaulting to `succeeded` (#415).
+     *
+     * The fake used to model refunds as a list of requests with no state, so
+     * `findRefund` returned any of them — and the real gateway's
+     * `refunds.list` returns `failed` and `canceled` refunds too, with
+     * `amount` populated. A double more permissive than the thing it stands
+     * in for, on the path that now writes what the customer is told came
+     * back. A suite pushes a `failed` refund here to reach that branch.
+     */
+    status?: string;
   }[];
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
@@ -355,7 +366,18 @@ function createFakeStripe(): FakeStripe {
     },
 
     findRefund: async (paymentIntentId) => {
-      const index = refunds.findIndex((refund) => refund.paymentIntentId === paymentIntentId);
+      /*
+       * The same status filter the real adapter applies. A `failed` refund put
+       * the money back in the platform balance, not the customer's account, so
+       * reading it as "already refunded" both skips a retry that is owed and
+       * writes a figure the screens state as money returned.
+       */
+      const index = refunds.findIndex(
+        (refund) =>
+          refund.paymentIntentId === paymentIntentId &&
+          (refund.status ?? 'succeeded') !== 'failed' &&
+          (refund.status ?? 'succeeded') !== 'canceled',
+      );
 
       return index === -1
         ? null
