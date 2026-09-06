@@ -165,18 +165,31 @@ describe('VendorCardSkeleton', () => {
     expect(bars[4]).toContain('h-[20px]');
   });
 
-  it('draws no chip row, because the loaded card draws none', () => {
+  it('draws no badge row, because the card a skeleton stands in for draws none', () => {
     const { container } = render(<VendorCardSkeleton />);
 
     expect(container.querySelector('.flex-wrap')).toBeNull();
     /*
-     * The card renders the row only when it has a chip to put in it, and on the
-     * search grid it never does: the category chip is compact-suppressed and the
-     * grid passes no availability date. An empty flex box still contributes its
-     * `margin-top`, so a skeleton drawing one stood 8px taller than the card it
-     * stands in for — which is the shift this state exists to prevent.
+     * The card renders the row only when it has something to put in it. On the
+     * search grid the category chip is compact-suppressed and the grid passes
+     * no availability date, so the row is absent for every established vendor —
+     * and an empty flex box still contributes its `margin-top`, which is how a
+     * skeleton drawing one stood 8px taller than the card it stands in for.
+     *
+     * **`isNew` is the one thing that can put the row back** (#417 item 3):
+     * frame `02` draws the `New` pill on a search card, so a genuinely new
+     * vendor's card is taller than its own skeleton. **Measured at 27px**, not
+     * the row's 8px `margin-top` — the pill itself is ~19px on top of that
+     * (10.5px line plus 3px of padding either side). A first reading of this
+     * quoted the margin alone and was 3.4x under.
+     *
+     * It ships anyway, because the frame draws it: the cost is bounded at one
+     * pill, the grid sizes a row to its tallest card so it cannot cascade down
+     * the page, and the alternative is reserving 27px on every card for a badge
+     * most of them will never carry. Recorded here with the real number so the
+     * trade is legible rather than understated.
      */
-    expect(cardSource).toContain('categoryChips.length > 0 || freeDate ?');
+    expect(cardSource).toContain('categoryChips.length > 0 || freeDate || vendor.isNew ?');
     expect(cardSource).toContain(
       'const categoryChips = isCompact ? [] : vendor.categories.slice(0, 1);',
     );

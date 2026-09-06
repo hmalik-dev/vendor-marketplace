@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { useModalSheet } from '@/lib/use-modal-sheet';
 import { useViewerToday } from '@/lib/use-viewer-today';
 import { Button } from '@/components/ui/button';
-import { EmptyState } from '@/components/ui/empty-state';
+import { EmptyState, SearchEmptyGlyph } from '@/components/ui/empty-state';
 import { NO_DISCARD, type RangeDiscarded } from '@/components/ui/dropdown-range';
 import { VendorCardSkeleton } from '@/components/ui/skeleton';
 import { VendorCard } from '@/components/vendors/vendor-card';
@@ -431,7 +431,26 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   }`;
 
   return (
-    <div data-app-shell className="flex w-full min-w-0 flex-col lg:app-shell">
+    /*
+      **Below `lg` the shell needs a floor, or nothing under it can be centred.**
+
+      `app-shell` sets `height: calc(100dvh - var(--header-height))`, and it is
+      `lg:`-prefixed — so below `lg` this column is content-height, `app-pane`'s
+      own `height: 100%` resolves to auto, and the no-results block's
+      `min-h-full` resolves to nothing. The screen then ended wherever its
+      content ended: measured at 768, the pane finished at y≈486 in a 1024px
+      viewport, leaving 538px of page background under it. That is the misaligned
+      page #417 item 2b is about, one breakpoint below where it was reported.
+
+      A **`min-height`**, never a height: the box is free to grow past the
+      viewport, so a long result grid still scrolls the page rather than turning
+      `app-pane`'s `overflow-y: auto` into an inner scroll region — which on a
+      phone would take the URL bar's hide-on-scroll with it.
+    */
+    <div
+      data-app-shell
+      className="flex w-full min-w-0 flex-col max-lg:min-h-[calc(100dvh-var(--header-height))] lg:app-shell"
+    >
       {/*
         The tablet and mobile home for the query — frame `14`. From `lg` the
         bar lives in the header instead (frame `02`), so this row is hidden
@@ -656,7 +675,28 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         solving it structurally instead. Any `app-pane` whose first focusable
         child is flush against the content origin has this.
       */}
-      <div className="app-pane -mt-1 px-5 pt-1 pb-20 min-[90rem]:px-6.5 lg:pb-4">
+      {/*
+        `max-lg:flex-1` is the other half of the shell's floor above: the shell
+        can only hand its spare height to a child that asks for it, and every
+        row above this one is `shrink-0`. At `lg` and up the pane already fills
+        by shrinking against `app-shell`'s definite height, so this is scoped
+        below it rather than changing a layout that is correct.
+
+        **`flex flex-col` at every width**, because `min-height: 100%` on the
+        no-results box needs a parent whose height is *definite*, and below `lg`
+        this pane's height comes from `flex-1` — a used value Chrome will not
+        resolve a child's percentage against. Measured: with the floor in place
+        but the pane still a block, the block sat at the top of a full-height
+        pane at 768 and 390, with 538px under it. Making the pane a column and
+        letting the box grow answers it without a percentage.
+
+        Safe for the other states: each branch below is this pane's only child,
+        so `align-items: stretch` gives it the same full width it had as a
+        block, and nothing shrinks — at `lg` the box carries `min-h-full` rather
+        than `flex-1`, and below `lg` the pane's own height is a floor the
+        content is free to exceed.
+      */}
+      <div className="app-pane -mt-1 flex flex-col px-5 pt-1 pb-20 max-lg:flex-1 min-[90rem]:px-6.5 lg:pb-4">
         {hasFailed ? (
           /*
             `40-states.md`: red is "it failed". This branch previously drew the
@@ -687,25 +727,44 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
             customer actually set, the sentence names the narrowest one, and
             each button loosens exactly one thing so they can see what changed.
           */
-          <>
-            <EmptyState
-              icon={<SearchX />}
-              scale="marketing"
-              headline={noResultsHeadline(state, categorySlugs)}
-              description={
-                // With nothing filtered there is no culprit to name, so it says
-                // where to go next instead of inventing a diagnosis.
-                diagnosis ?? 'Try a different vendor type or city.'
-              }
-              action={
-                <div className="flex flex-wrap items-center justify-center gap-2.5">
-                  {relaxations(state, categorySlugs).map((relaxation, index) => (
-                    <button
-                      key={relaxation.label}
-                      type="button"
-                      onClick={() => setState(relaxation.patch)}
-                      className={cn(
-                        /*
+          /*
+            **Centred in the pane, not in the viewport** (#417 item 2b), on the
+            account holder's instruction: *"for the empty search state -
+            vertically center the no results content so it doesnt read as a
+            misaligned page"*. The mark, the headline, the explanation and the
+            relaxation buttons used to begin just under the Refine bar and leave
+            the rest of the pane empty, so the screen read as a page that failed
+            to fill rather than as a considered state.
+
+            `min-h-full` against `app-pane`'s `height: 100%`, and `m-auto` on
+            the block rather than `justify-center` on the box. The two centre
+            identically while the content fits; they differ when it does not —
+            `justify-content: center` on a scroll container pushes the first
+            child's top out of reach, and an auto margin resolves to 0 instead.
+            The band below can make this taller than the pane at 1024 and under.
+
+            The header and the Refine bar are outside this box and do not move.
+          */
+          <div data-slot="search-no-results" className="flex min-h-full flex-col max-lg:flex-1">
+            <div className="m-auto w-full">
+              <EmptyState
+                icon={<SearchEmptyGlyph />}
+                scale="marketing"
+                headline={noResultsHeadline(state, categorySlugs)}
+                description={
+                  // With nothing filtered there is no culprit to name, so it says
+                  // where to go next instead of inventing a diagnosis.
+                  diagnosis ?? 'Try a different vendor type or city.'
+                }
+                action={
+                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                    {relaxations(state, categorySlugs).map((relaxation, index) => (
+                      <button
+                        key={relaxation.label}
+                        type="button"
+                        onClick={() => setState(relaxation.patch)}
+                        className={cn(
+                          /*
                           Frame `18`'s own `.btnP` / `.btnS`: 13.5px/600 at a
                           10px radius, `padding:11px 20px` primary and `10px
                           20px` secondary — the secondary's 1px border makes up
@@ -716,11 +775,11 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
                           frame's padding gives ~40px, which is under the law's
                           44 for touch, and no frame draws this state narrow.
                         */
-                        'min-h-11 rounded-[10px] px-5 text-base font-semibold lg:min-h-0',
-                        // The first is the one most likely to bring results back,
-                        // so it is the primary action rather than one of a row.
-                        index === 0
-                          ? /*
+                          'min-h-11 rounded-[10px] px-5 text-base font-semibold lg:min-h-0',
+                          // The first is the one most likely to bring results back,
+                          // so it is the primary action rather than one of a row.
+                          index === 0
+                            ? /*
                               clay-400, not clay-500. `01-foundations.md` labels
                               clay-400 PRIMARY FILL and clay-500 "clay as text";
                               `03-components.md`'s Primary is `bg-clay-400`, and
@@ -728,39 +787,40 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
                               clay-400. clay-500 was a step off in the one place
                               the palette names explicitly.
                             */
-                            'bg-clay-400 py-2.75 text-stone-0 hover:bg-clay-500'
-                          : /*
+                              'bg-clay-400 py-2.75 text-stone-0 hover:bg-clay-500'
+                            : /*
                               `text-stone-800` resolved to Tailwind's built-in
                               `#292524` — the theme defines no `stone-800`, so
                               the class fell through the token layer entirely
                               and put an off-palette colour on a public page.
                               The frame's `.btnS` draws `#23201C`: stone-900.
                             */
-                            'border border-stone-300 bg-stone-0 py-2.5 text-stone-900 hover:bg-stone-100',
-                      )}
-                    >
-                      {relaxation.label}
-                    </button>
-                  ))}
-                  {refineCount > 0 ? (
-                    <button
-                      type="button"
-                      onClick={clearRefinements}
-                      className="text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
-                    >
-                      Clear all
-                    </button>
-                  ) : null}
-                </div>
-              }
-            />
-            {/*
-              Only with a date to be near. Without one the customer has not
-              asked a date question, and the band would be answering something
-              nobody said.
-            */}
-            <NearbyDatesBand date={state.date} category={state.category} city={state.city} />
-          </>
+                              'border border-stone-300 bg-stone-0 py-2.5 text-stone-900 hover:bg-stone-100',
+                        )}
+                      >
+                        {relaxation.label}
+                      </button>
+                    ))}
+                    {refineCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={clearRefinements}
+                        className="text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
+                      >
+                        Clear all
+                      </button>
+                    ) : null}
+                  </div>
+                }
+              />
+              {/*
+                Only with a date to be near. Without one the customer has not
+                asked a date question, and the band would be answering something
+                nobody said.
+              */}
+              <NearbyDatesBand date={state.date} category={state.category} city={state.city} />
+            </div>
+          </div>
         ) : (
           <div className={GRID_COLUMNS}>
             {result?.items.map((vendor) => (

@@ -123,7 +123,16 @@ export function CategorySelect({
       density={isHero ? 'default' : 'compact'}
       scrim={isHero}
       className={cn(
-        'flex min-w-0 flex-col rounded-full text-left',
+        /*
+          `max-sm:rounded-sm`, matching `search-bar.tsx`'s `segment` and for the
+          reason recorded there: below `sm` this segment is a stacked row with
+          no left padding, so a `rounded-full` cap on a 41px box curves 20.5px
+          across a label that starts at inset 0. `rounded-sm` is 6px and
+          `max-sm:py-1.5` puts the label at y=6, so the arc ends exactly where
+          the glyphs begin. Measured at 390 on both surfaces: intrusion 0.00px.
+        */
+        'flex min-w-0 flex-col max-sm:rounded-sm sm:rounded-full',
+        'text-left',
         /*
           The segment treatment, and the same one `search-bar.tsx`'s `segment`
           applies to City and Event date: a `stone-200` fill and a clay label,
@@ -152,12 +161,47 @@ export function CategorySelect({
           `flex-basis` is 0, so a missing 14px is redistributed and every
           boundary in the bar moves.
         */
+        /*
+          **The left padding is the focus fill's geometry, not spacing** (#417
+          item 1b).
+
+          This is the bar's first segment, so it used to take its inset from the
+          bar's own `padding-left` and carry none itself. The fill is
+          `rounded-full`, so its corner radius is **half the segment's height**
+          — and with `padding-left: 0` the cap curved inward across exactly the
+          characters it was meant to contain. Measured on `/search` at 1440: the
+          glyphs of `Vendor type` began at inset 0.0px from the segment's left
+          edge, taken with a `Range` rather than off the element box.
+
+          Each step's padding is that step's radius, so the label clears the cap
+          at **every** y rather than at the one that happened to be sampled.
+          Segment heights measured in Chromium: 27px compact at every width;
+          hero 29 at 768, 28 at 1024 and 1280, 34 at 1440. Hence 14 / 15 / 14 /
+          18. The hero at 1440 is the one that makes this a ladder rather than a
+          single value — a flat 14px there left the label 3px inside a 17px cap.
+
+          **The bar's total left inset is unchanged.** Every pixel added here
+          comes off the form's `padding-left` in `search-bar.tsx`, step for step
+          (18 = 4 + 14 compact; 20/18/24 = 5/4/6 + 15/14/18 hero), so no flex
+          weight, divider or segment boundary moves at any width in
+          `30-responsive.md`. `search-bar-inset.test.tsx` fails if the two halves
+          stop summing, or if either stops clearing its cap.
+
+          The `min-w` floors grow with it for the same reason: they are
+          border-box floors under a 0 `flex-basis`, so leaving them would have
+          spent the new padding out of the space "Any vendor type" needs and
+          truncated it at 1024, which is the failure the floors exist for. The
+          hero floor grows by the **largest** of its three paddings (15), not by
+          each step's own — a floor one pixel generous at 1024 costs nothing,
+          and a second `min-w` declaration to shave it would be arithmetic
+          nobody can check against a frame.
+        */
         isHero
-          ? 'sm:min-w-36 sm:flex-[1.2] sm:pr-3.5 lg:flex-[1.3] lg:pr-0'
-          : 'sm:min-w-33 sm:flex-[1.15]',
+          ? 'sm:min-w-39.75 sm:flex-[1.2] sm:pr-3.5 sm:pl-3.75 lg:flex-[1.3] lg:pr-0 lg:pl-3.5 min-[90rem]:pl-4.5'
+          : 'sm:min-w-36.5 sm:flex-[1.15] sm:pl-3.5',
       )}
       labelClassName={cn(
-        'cursor-text font-semibold tracking-label text-stone-600 uppercase',
+        'font-semibold tracking-label text-stone-600 uppercase',
         // "…and a clay label", the other half of the segment treatment.
         'transition-colors duration-(--duration-fast) group-has-[:focus-visible]/segment:text-clay-600 group-focus-visible/segment:text-clay-600',
         /* `.lbl` is 10.5px and only `01 Landing` takes it unmodified. */

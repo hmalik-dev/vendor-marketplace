@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { categories, vendorCategories, vendorProfiles } from '@vendor-marketplace/db/schema';
 import type { CategoryFacet, VendorCard, VendorSearchQuery } from '@vendor-marketplace/shared';
+import { isNewVendor } from './vendor-recency.js';
 import type { AppDatabase } from '../../lib/database.js';
 import { escapeLikePattern } from '../../lib/like-pattern.js';
 
@@ -212,6 +213,13 @@ export interface VendorSearchPage {
 export async function searchVendors(
   db: AppDatabase,
   query: VendorSearchQuery,
+  /*
+   * The instance clock, threaded from the route rather than read here.
+   * `plugins/clock.ts` exists so "now" has one named source per request: the
+   * `New` badge is a "now" answer, and a `new Date()` in this file would be an
+   * instant no test could pin and no other value in the same response shares.
+   */
+  now: Date,
 ): Promise<VendorSearchPage> {
   const where = and(...filters(query));
   const offset = (query.page - 1) * query.pageSize;
@@ -228,6 +236,7 @@ export async function searchVendors(
       avgRating: vendorProfiles.avgRating,
       reviewCount: vendorProfiles.reviewCount,
       startingPriceCents: startingPriceCents(),
+      createdAt: vendorProfiles.createdAt,
     })
     .from(vendorProfiles)
     .where(where)
@@ -282,6 +291,7 @@ export async function searchVendors(
       avgRating: Number(row.avgRating),
       reviewCount: row.reviewCount,
       startingPriceCents: row.startingPriceCents === null ? null : Number(row.startingPriceCents),
+      isNew: isNewVendor(row.createdAt, now),
       categories: categoriesByVendor.get(row.id) ?? [],
       // The filter already excluded anyone unavailable, so every row that
       // survives a dated query is available on that date.
