@@ -61,6 +61,36 @@ describe('relaxations', () => {
     expect(option?.patch).toEqual({ minPriceCents: null, maxPriceCents: null });
   });
 
+  /*
+   * The pair travels together, here as everywhere else. A patch is **merged**,
+   * so clearing `city` alone left `state=IL` in the URL — invisible, because
+   * the bar then reads `Anywhere`, and terminal, because the next render sees
+   * `city === ''`, offers no relaxation at all, and shows the
+   * marketplace-is-empty copy over a grid still filtered to one state.
+   *
+   * #384 is why this is a regression test rather than a nicety: it made
+   * `Springfield, IL` pickable, which put that dead end on the primary path of
+   * the flow the ticket exists for.
+   */
+  it('clears both halves of the city pair, so no orphan state survives the escape', () => {
+    const [option] = relaxations(state({ city: 'Springfield', state: 'IL' }), KNOWN_SLUGS);
+
+    expect(option?.label).toBe('Anywhere');
+    expect(option?.patch).toEqual({ city: '', state: '' });
+  });
+
+  it('leaves nothing to relax once Anywhere has been taken', () => {
+    const start = state({ city: 'Springfield', state: 'IL' });
+    const [option] = relaxations(start, KNOWN_SLUGS);
+
+    // The state the patch actually produces, not a hand-written one — the
+    // defect was that these two disagreed.
+    const after = { ...start, ...option?.patch };
+
+    expect(after.state).toBe('');
+    expect(relaxations(after, KNOWN_SLUGS)).toEqual([]);
+  });
+
   it('does not offer the vendor type, which is the question rather than a filter', () => {
     const labels = relaxations(
       state({ category: 'photography', date: '2026-06-14' }),

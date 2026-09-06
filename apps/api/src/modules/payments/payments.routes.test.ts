@@ -607,6 +607,76 @@ describe('payments', () => {
     });
   });
 
+  /*
+   * #408: `users.total/completed/cancelled_bookings_count` are documented as
+   * derived from bookings and had **no writer anywhere**, so every customer
+   * read as a permanent 0-booking "New member" — on their own profile, in
+   * `/admin/customers`, and in the profile a vendor sees before agreeing to
+   * work with them. The three DAO functions that write a `bookings` row are now
+   * the only writers of these counters, so each of them is driven here.
+   */
+  describe('the derived booking counters', () => {
+    async function countsFor(customerId: string): Promise<{
+      total: number;
+      completed: number;
+      cancelled: number;
+    }> {
+      const [row] = await harness.database.db
+        .select({
+          total: users.totalBookingsCount,
+          completed: users.completedBookingsCount,
+          cancelled: users.cancelledBookingsCount,
+        })
+        .from(users)
+        .where(eq(users.id, customerId));
+
+      return row!;
+    }
+
+    it('counts the booking a payment confirms', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      expect(await countsFor(booking!.customerId)).toEqual({
+        total: 1,
+        completed: 0,
+        cancelled: 0,
+      });
+    });
+
+    it('moves the booking into completed when the vendor marks it done', async () => {
+      const booking = await pastBooking();
+
+      expect(
+        (await inject('PUT', `/vendor/bookings/${booking.id}/complete`, VENDOR)).statusCode,
+      ).toBe(200);
+
+      expect(await countsFor(booking.customerId)).toEqual({
+        total: 1,
+        completed: 1,
+        cancelled: 0,
+      });
+    });
+
+    it('moves it into cancelled when the customer cancels', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      expect(
+        (await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {})).statusCode,
+      ).toBe(200);
+
+      expect(await countsFor(booking!.customerId)).toEqual({
+        total: 1,
+        completed: 0,
+        cancelled: 1,
+      });
+    });
+  });
+
   describe('completion', () => {
     it('lets the vendor mark a past event complete', async () => {
       const booking = await pastBooking();
@@ -719,6 +789,31 @@ describe('payments', () => {
           refundApplicationFee: true,
         },
       ]);
+    });
+
+    /*
+     * #415. The screens on both sides have to say who ended the booking and
+     * what came back, and neither survived on the row: `cancellation_reason`
+     * is the customer's free text here and an operator's sentence on the ban
+     * path, so telling them apart meant matching a string that is one copy
+     * edit from being wrong — and the refund figure existed only in this
+     * response, which nothing stores.
+     */
+    it('records who cancelled it and what was refunded', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [before] = await harness.database.db.select().from(bookings);
+
+      await inject('PUT', `/customer/bookings/${before!.id}/cancel`, CUSTOMER, {
+        reason: 'The venue fell through.',
+      });
+
+      const [after] = await harness.database.db.select().from(bookings);
+      expect(after).toMatchObject({
+        status: 'cancelled',
+        cancelledBy: 'customer',
+        refundAmountCents: PRICE_CENTS,
+      });
     });
 
     /*

@@ -14,7 +14,6 @@ import {
   wireTagListSchema,
   wirePublicVendorProfileSchema,
   wireVendorDashboardSchema,
-  wireVendorCityListSchema,
   wireVendorReviewsPageSchema,
   wireVendorSearchResultSchema,
   wireVendorProfileSchema,
@@ -27,7 +26,6 @@ import {
   type WireVendorCard,
   type WireVendorDashboard,
   type WireVendorProfile,
-  type WireVendorCity,
   type WireVendorReviewsPage,
   type WireVendorPayoutStatus,
   wireVendorPayoutStatusSchema,
@@ -378,34 +376,6 @@ export const getPublicVendorAvailability = cache(
     }
   },
 );
-
-/**
- * The cities that have vendors, for the search bar's City field.
- *
- * Public reference data, like the taxonomy: it changes when a vendor publishes
- * rather than per request, and every visitor gets the same answer — so it is
- * cached on the same hour the categories are. An empty list is the honest
- * degradation: the field then offers "Anywhere" and nothing else, which is
- * true of a marketplace whose vendors have not said where they work.
- */
-export async function getVendorCities(): Promise<WireVendorCity[]> {
-  try {
-    return await apiRequest('/vendors/cities', {
-      schema: wireVendorCityListSchema,
-      revalidate: REFERENCE_DATA_REVALIDATE_SECONDS,
-    });
-  } catch (error) {
-    if (
-      error instanceof ApiClientError ||
-      error instanceof ApiTimeoutError ||
-      error instanceof TypeError
-    ) {
-      return [];
-    }
-
-    throw error;
-  }
-}
 
 /**
  * The first page of the profile's Reviews tab, plus its summary and what this

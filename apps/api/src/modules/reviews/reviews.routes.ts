@@ -93,6 +93,7 @@ export const reviewRoutes: FastifyPluginAsyncZod<ReviewRoutesOptions> = async (a
           email: app.email,
           log: request.log,
           webOrigin: options.webOrigin,
+          background: app.background,
         },
       );
 

@@ -7,6 +7,7 @@ import {
   type Paginated,
   type SendMessageResult,
 } from '@vendor-marketplace/shared';
+import type { FastifyBaseLogger } from 'fastify';
 import type { MessageRow, NotificationRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EventHub } from '../../lib/event-stream.js';
@@ -317,6 +318,7 @@ function toMessage(row: MessageRow): SendMessageResult {
 export async function sendMessage(
   db: AppDatabase,
   hub: EventHub,
+  log: FastifyBaseLogger,
   user: AuthenticatedUser,
   conversationId: string,
   content: string,
@@ -349,7 +351,21 @@ export async function sendMessage(
     hub.publish(participant, { type: 'new_message', conversationId, message });
   }
 
-  await notifyRecipient(db, hub, row, side, inserted);
+  /*
+   * The message is already stored and already pushed to both tabs. A failure in
+   * the bell that follows it used to 500 the route, so the composer showed
+   * "That message did not send. Your text is still here." over a message the
+   * recipient could already read — and re-sending it delivered a second copy.
+   * The notification is the part that may be lost; the message is not (#408).
+   */
+  try {
+    await notifyRecipient(db, hub, row, side, inserted);
+  } catch (error) {
+    log.error(
+      { conversationId, messageId: inserted.id, err: error },
+      'The message was sent but its notification could not be recorded',
+    );
+  }
 
   return message;
 }

@@ -3,11 +3,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { BookingCard } from '@/components/vendor/booking-card';
+import { CancelledBookingCard } from '@/components/vendor/cancelled-booking-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { requireRole } from '@/lib/current-user';
 import { getOwnBookingRequests } from '@/lib/vendor-requests';
 import { getOwnBookings } from '@/lib/customer-data';
-import { splitByEventDate } from '@/lib/booking-split';
+import { lostBookings, splitByEventDate } from '@/lib/booking-split';
 import { getOwnVendorProfile } from '@/lib/vendor-data';
 
 export const metadata: Metadata = {
@@ -74,6 +75,20 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
    */
   const accepted = requests.filter((request) => request.status === 'accepted');
   const { upcoming, past } = splitByEventDate(accepted);
+  /*
+   * Separate from the two lists above, and after them (#415). A cancelled
+   * booking is not work the vendor still has — it must not reach `Upcoming`,
+   * the "coming up" count or `Past events`, which is why the `accepted` filter
+   * is right and why fixing this by widening it would be wrong. What was
+   * missing is any record at all of a date they committed to and lost.
+   *
+   * Not split on the date: the upcoming/past line exists to lead with the next
+   * thing to turn up to, and there is nothing to turn up to here. Most
+   * recently lost first.
+   */
+  const lost = lostBookings(requests).toSorted((left, right) =>
+    right.eventDate.localeCompare(left.eventDate),
+  );
 
   return (
     <div data-app-shell className="w-full px-4 pt-5.5 sm:px-6 lg:px-0 lg:pl-6">
@@ -116,6 +131,17 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
                 booking={bookingByRequest.get(request.id) ?? null}
                 serverToday={serverToday}
               />
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {lost.length > 0 ? (
+        <>
+          <h2 className="mt-6 mb-2.5 font-display text-[21px] text-stone-900">Cancelled</h2>
+          <ul className="flex flex-col gap-2.5">
+            {lost.map((request) => (
+              <CancelledBookingCard key={request.id} request={request} />
             ))}
           </ul>
         </>

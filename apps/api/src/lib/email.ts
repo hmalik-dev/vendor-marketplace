@@ -16,6 +16,23 @@
 
 const RESEND_API = 'https://api.resend.com/emails';
 
+/**
+ * How long one send may take before it is abandoned.
+ *
+ * `fetch` carries no deadline of its own, so a stalled Resend left the await
+ * sitting on undici's ~300s headers timeout. That mattered because the send used
+ * to run on the request path: a browser call has no deadline by design
+ * (`api-client.ts`), so the customer's "Sending…" and the vendor's Accept
+ * button sat busy for minutes with nothing to show. #408 moved the send off the
+ * request path, and this is the other half — an abandoned send must not pin a
+ * connection or a background task for five minutes either.
+ *
+ * Ten seconds is generous for one POST and still an order of magnitude inside
+ * the 300s it replaces. A timed-out send throws, which `sendNotificationEmail`
+ * already logs and swallows.
+ */
+export const EMAIL_SEND_TIMEOUT_MS = 10_000;
+
 export interface EmailMessage {
   to: string;
   subject: string;
@@ -62,6 +79,7 @@ export function createResendGateway({ apiKey, from }: ResendOptions): EmailGatew
     async send(message) {
       const response = await fetch(RESEND_API, {
         method: 'POST',
+        signal: AbortSignal.timeout(EMAIL_SEND_TIMEOUT_MS),
         headers: {
           authorization: `Bearer ${apiKey}`,
           'content-type': 'application/json',

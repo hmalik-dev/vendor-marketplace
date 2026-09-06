@@ -15,7 +15,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
 import { toBookingView, toBookingWithContext } from '../../lib/booking-view.js';
 import {
-  sendNotificationEmail,
+  queueNotificationEmail,
   type NotificationEmailDeps,
 } from '../notifications/notification-email.js';
 import type { EventHub } from '../../lib/event-stream.js';
@@ -315,9 +315,42 @@ export async function recordSuccessfulPayment(
     return { booking: settled, created: false };
   }
 
-  await announceBooking(context, booking, row.vendorBusinessName);
+  await bestEffortNotice(context, { bookingId: booking.id }, () =>
+    announceBooking(context, booking, row.vendorBusinessName),
+  );
 
   return { booking, created: true };
+}
+
+/**
+ * Runs the notifications, and never lets them undo the booking they announce.
+ *
+ * **The booking has already committed** — `confirmBooking` returned — and this
+ * is the one place where a throw afterwards is not merely rude but permanent.
+ * The webhook would answer 500, Stripe would retry, and the retry
+ * short-circuits at `existing` above and reports `already-booked`: so neither
+ * party ever receives the `booking_confirmed` row or its email, and no
+ * redelivery can repair it. The reconcile path had the milder version of the
+ * same bug — `/confirmed` threw to the error boundary for a booking that
+ * existed, and a reload fixed it.
+ *
+ * The specific cause was a notification title too long for its column (#408),
+ * and that column is now wide enough; this is the general rule the specific one
+ * revealed. Nothing is silent: the failure is logged against the booking.
+ */
+async function bestEffortNotice(
+  context: PaymentContext,
+  subject: { bookingId: string },
+  work: () => Promise<void>,
+): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    context.log.error(
+      { ...subject, err: error },
+      'The booking was recorded but its notifications could not be',
+    );
+  }
 }
 
 /** Both parties are told, because both have something to do next. */
@@ -387,10 +420,11 @@ async function notify(
     /*
      * After the row and after the push, and unable to fail either: every
      * caller here is already outside its transaction — `announceBooking` runs
-     * after `confirmBooking` commits — and `sendNotificationEmail` swallows its
-     * own failures so a booking that succeeded cannot appear to fail.
+     * after `confirmBooking` commits — the send runs off the request path, and
+     * it swallows its own failures so a booking that succeeded cannot appear
+     * to fail.
      */
-    await sendNotificationEmail(context.mail, stored, audience);
+    queueNotificationEmail(context.mail, stored, audience);
   }
 }
 
@@ -539,11 +573,13 @@ export async function completeBooking(
     throw conflict('That booking changed while you were completing it');
   }
 
-  await notify(context, completed.customerId, 'booking_completed', {
-    title: 'Your event is wrapped up',
-    body: 'The vendor marked it complete. Leave them a review when you have a moment.',
-    bookingId: completed.id,
-  });
+  await bestEffortNotice(context, { bookingId: completed.id }, () =>
+    notify(context, completed.customerId, 'booking_completed', {
+      title: 'Your event is wrapped up',
+      body: 'The vendor marked it complete. Leave them a review when you have a moment.',
+      bookingId: completed.id,
+    }),
+  );
 
   return toBookingView(completed);
 }
@@ -630,6 +666,16 @@ export async function cancelBooking(
   const cancelled = await cancelBookingAndFreeDate(context.db, bookingId, {
     cancelledAt: now,
     cancellationReason: reason ?? null,
+    /*
+     * Written down rather than left to be inferred (#415). The customer's own
+     * screen has to say who ended the booking and what came back, and neither
+     * fact survives on the row otherwise: `cancellation_reason` is the
+     * customer's free text here and an operator's sentence on the ban path, so
+     * telling the two apart meant string-matching a copy edit, and the refund
+     * figure existed only in this response.
+     */
+    cancelledBy: 'customer',
+    refundAmountCents: refund.amountCents,
   });
 
   if (!cancelled) {
@@ -648,26 +694,28 @@ export async function cancelBooking(
   const vendorUserId = await findVendorUserId(context.db, cancelled.vendorId);
 
   if (vendorUserId) {
-    await notify(
-      context,
-      vendorUserId,
-      'booking_cancelled',
-      {
-        title: 'A booking was cancelled',
-        /*
-         * The reversal is named rather than left to be discovered on a Stripe
-         * statement (D31). The full unwind takes the vendor's share back out of
-         * their connected account, proportionally at either refund tier, and a
-         * vendor already paid out is carried negative by it — so the one
-         * message the product sends about this cancellation has to say so.
-         */
-        body:
-          'The date is free again on your calendar. Their refund takes back the same share of ' +
-          'your payout, out of your Stripe balance — which can leave it negative if this ' +
-          'booking had already been paid out.',
-        bookingId: cancelled.id,
-      },
-      'vendor',
+    await bestEffortNotice(context, { bookingId: cancelled.id }, () =>
+      notify(
+        context,
+        vendorUserId,
+        'booking_cancelled',
+        {
+          title: 'A booking was cancelled',
+          /*
+           * The reversal is named rather than left to be discovered on a Stripe
+           * statement (D31). The full unwind takes the vendor's share back out of
+           * their connected account, proportionally at either refund tier, and a
+           * vendor already paid out is carried negative by it — so the one
+           * message the product sends about this cancellation has to say so.
+           */
+          body:
+            'The date is free again on your calendar. Their refund takes back the same share of ' +
+            'your payout, out of your Stripe balance — which can leave it negative if this ' +
+            'booking had already been paid out.',
+          bookingId: cancelled.id,
+        },
+        'vendor',
+      ),
     );
   }
 

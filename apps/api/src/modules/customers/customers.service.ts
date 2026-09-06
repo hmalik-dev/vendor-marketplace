@@ -1,7 +1,9 @@
 import {
   completionRate,
+  pageWindow,
   type CustomerProfile,
   type CustomerReview,
+  type HistoryPageQuery,
 } from '@vendor-marketplace/shared';
 import type { UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
@@ -96,7 +98,9 @@ export async function getCustomerProfileForVendor(
     throw notFound('That customer does not exist');
   }
 
-  const reviews = (await findCustomerReviews(db, customerId, INLINE_REVIEW_COUNT)).map(toReview);
+  const reviews = (
+    await findCustomerReviews(db, customerId, { limit: INLINE_REVIEW_COUNT, offset: 0 })
+  ).map(toReview);
   const limited = toLimited(customer, reviews);
 
   if (!relationship.accepted) {
@@ -122,17 +126,19 @@ export async function listCustomerReviews(
   db: AppDatabase,
   user: AuthenticatedUser,
   customerId: string,
+  query: HistoryPageQuery,
 ): Promise<CustomerReview[]> {
   // Reuses the profile's own gate, so the two cannot diverge on who may read.
   await getCustomerProfileForVendor(db, user, customerId);
 
-  return (await findCustomerReviews(db, customerId)).map(toReview);
+  return (await findCustomerReviews(db, customerId, pageWindow(query))).map(toReview);
 }
 
 /** The signed-in customer's own review history — no relationship gate needed. */
 export async function listOwnReviews(
   db: AppDatabase,
   user: AuthenticatedUser,
+  query: HistoryPageQuery,
 ): Promise<CustomerReview[]> {
-  return (await findCustomerReviews(db, user.id)).map(toReview);
+  return (await findCustomerReviews(db, user.id, pageWindow(query))).map(toReview);
 }

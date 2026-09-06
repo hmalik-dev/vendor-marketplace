@@ -32,7 +32,7 @@ import type { EventHub } from '../../lib/event-stream.js';
 import type { StripeConnectGateway } from '../../lib/stripe.js';
 import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import {
-  sendNotificationEmail,
+  queueNotificationEmail,
   type NotificationEmailDeps,
 } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
@@ -269,6 +269,13 @@ export async function setUserBanned(
   let refundsFailed = 0;
 
   for (const booking of affected) {
+    /*
+     * What actually came back, for the row to record (#415). `null` while no
+     * refund has moved, which is both the unpaid booking and the one whose
+     * refund the loop below is about to fail on.
+     */
+    let refundedCents: number | null = null;
+
     if (booking.stripePaymentIntentId) {
       try {
         /*
@@ -280,7 +287,7 @@ export async function setUserBanned(
         const alreadyRefunded = await context.stripe.findRefund(booking.stripePaymentIntentId);
 
         if (!alreadyRefunded) {
-          await context.stripe.createRefund({
+          const refund = await context.stripe.createRefund({
             paymentIntentId: booking.stripePaymentIntentId,
             amountCents: booking.totalAmountCents,
             /*
@@ -293,6 +300,18 @@ export async function setUserBanned(
              */
             idempotencyKey: `ban-refund:unwind:${booking.id}`,
           });
+
+          refundedCents = refund.amountCents;
+        } else {
+          /*
+           * Read off the money that moved, not off the amount this call asked
+           * for. They agree on every first attempt and part company on the one
+           * that matters: a booking the customer had already half-refunded
+           * through their own cancellation, whose row never moved, is found
+           * here — and recording `totalAmountCents` for it would tell them
+           * they got everything back when half of it never left Stripe.
+           */
+          refundedCents = alreadyRefunded.amountCents;
         }
 
         refundsIssued += 1;
@@ -323,6 +342,14 @@ export async function setUserBanned(
     const cancelled = await cancelBookingAndFreeDate(context.db, booking.id, {
       cancelledAt: now,
       cancellationReason: 'The other party’s account was suspended',
+      /*
+       * The column, not the sentence above it (#415). Both parties' screens
+       * have to distinguish an operator's unwind from a customer's own
+       * cancellation, and reading that off `cancellation_reason` would make
+       * this string load-bearing copy.
+       */
+      cancelledBy: 'admin',
+      refundAmountCents: refundedCents,
     });
 
     if (!cancelled) {
@@ -350,50 +377,52 @@ export async function setUserBanned(
     const refunded = booking.stripePaymentIntentId !== null;
 
     for (const recipient of recipients) {
-      const body =
-        recipient === booking.customerId
-          ? refunded
-            ? 'The other party’s account was suspended. Your payment has been refunded in full.'
-            : 'The other party’s account was suspended. Nothing was charged for this booking.'
-          : refunded
-            ? 'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.'
-            : 'The customer’s account was suspended and the booking was cancelled. Nothing had been charged for it.';
+      await bestEffortNotice(context, { bookingId: booking.id, recipient }, async () => {
+        const body =
+          recipient === booking.customerId
+            ? refunded
+              ? 'The other party’s account was suspended. Your payment has been refunded in full.'
+              : 'The other party’s account was suspended. Nothing was charged for this booking.'
+            : refunded
+              ? 'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.'
+              : 'The customer’s account was suspended and the booking was cancelled. Nothing had been charged for it.';
 
-      const stored = await insertNotification(context.db, {
-        userId: recipient,
-        type: 'booking_cancelled',
-        title: 'A booking was cancelled',
-        body,
-        data: { bookingId: booking.id },
-      });
-
-      if (stored) {
-        context.hub.publish(recipient, {
-          type: 'new_notification',
-          notification: {
-            id: stored.id,
-            type: stored.type,
-            title: stored.title,
-            body: stored.body,
-            href: '/bookings',
-            isRead: false,
-            createdAt: stored.createdAt,
-          },
+        const stored = await insertNotification(context.db, {
+          userId: recipient,
+          type: 'booking_cancelled',
+          title: 'A booking was cancelled',
+          body,
+          data: { bookingId: booking.id },
         });
 
-        /*
-         * Per recipient, which is the point. One shared string here once told a
-         * vendor their payment had been refunded — they had not paid, and on an
-         * unpaid booking nothing was refunded at all. The email carries the
-         * body written for *this* reader, so both parties read the same refund
-         * figure and neither reads the other's.
-         */
-        await sendNotificationEmail(
-          context.mail,
-          stored,
-          recipient === booking.customerId ? 'customer' : 'vendor',
-        );
-      }
+        if (stored) {
+          context.hub.publish(recipient, {
+            type: 'new_notification',
+            notification: {
+              id: stored.id,
+              type: stored.type,
+              title: stored.title,
+              body: stored.body,
+              href: '/bookings',
+              isRead: false,
+              createdAt: stored.createdAt,
+            },
+          });
+
+          /*
+           * Per recipient, which is the point. One shared string here once told a
+           * vendor their payment had been refunded — they had not paid, and on an
+           * unpaid booking nothing was refunded at all. The email carries the
+           * body written for *this* reader, so both parties read the same refund
+           * figure and neither reads the other's.
+           */
+          queueNotificationEmail(
+            context.mail,
+            stored,
+            recipient === booking.customerId ? 'customer' : 'vendor',
+          );
+        }
+      });
     }
   }
 
@@ -443,11 +472,18 @@ function fullName(firstName: string, lastName: string): string {
 export async function listBookings(
   db: AppDatabase,
   query: AdminBookingQuery,
+  now: Date,
 ): Promise<AdminBookingPage> {
   const offset = offsetOf(query);
+  /*
+   * The day, because `refund-stuck` mirrors the unwind's own `event_date`
+   * bound (#415). Passed from the clock rather than read as `current_date` so
+   * the filter answers the same question a test's fake clock asks.
+   */
+  const filters = { status: query.status, flag: query.flag, today: toDateString(now) };
   const [rows, total] = await Promise.all([
-    findAdminBookings(db, query.status, query.pageSize, offset),
-    countAdminBookings(db, query.status),
+    findAdminBookings(db, filters, query.pageSize, offset),
+    countAdminBookings(db, filters),
   ]);
 
   return {
@@ -459,6 +495,7 @@ export async function listBookings(
       customerName: fullName(row.customerFirstName, row.customerLastName),
       vendorName: row.vendorName,
       vendorSlug: row.vendorSlug,
+      refundStuck: row.refundStuck,
       createdAt: row.createdAt,
     })),
     total,
@@ -594,37 +631,67 @@ function tagSlug(category: TagCategory, name: string): string {
   return `${category}-${generateSlug(name)}`;
 }
 
+/**
+ * Runs a notification, and never lets it undo the work it announces.
+ *
+ * Both notification writes in this file follow work that has already
+ * committed — `setUserBanned` has issued refunds through Stripe and cancelled
+ * the bookings, `approveSuggestion`'s tag transaction has closed and the
+ * suggestion is no longer `pending`. A throw at that point answered 500 on an
+ * operation the operator cannot repeat: the retry re-enters a partly applied
+ * ban, or finds a suggestion it can no longer resolve. Same rule as
+ * `bestEffortAnnouncement` in the booking-request service and `bestEffortNotice`
+ * in payments; #408 added it there and left these two, which is exactly how a
+ * rule becomes a special case.
+ */
+async function bestEffortNotice(
+  context: AdminContext,
+  subject: Record<string, string>,
+  work: () => Promise<void>,
+): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    context.log.error(
+      { ...subject, err: error },
+      'The operation succeeded but its notification could not be recorded',
+    );
+  }
+}
+
 async function notifyVendorOfTag(
   context: AdminContext,
   userId: string,
   title: string,
   body: string,
 ): Promise<void> {
-  const stored = await insertNotification(context.db, {
-    userId,
-    type: 'tag_suggestion_approved',
-    title,
-    body,
-    data: {},
-  });
-
-  if (stored) {
-    context.hub.publish(userId, {
-      type: 'new_notification',
-      notification: {
-        id: stored.id,
-        type: stored.type,
-        title: stored.title,
-        body: stored.body,
-        href: '/vendor/profile/edit',
-        isRead: false,
-        createdAt: stored.createdAt,
-      },
+  await bestEffortNotice(context, { userId }, async () => {
+    const stored = await insertNotification(context.db, {
+      userId,
+      type: 'tag_suggestion_approved',
+      title,
+      body,
+      data: {},
     });
 
-    // Always the vendor: a tag suggestion is theirs, and so is the surface.
-    await sendNotificationEmail(context.mail, stored, 'vendor');
-  }
+    if (stored) {
+      context.hub.publish(userId, {
+        type: 'new_notification',
+        notification: {
+          id: stored.id,
+          type: stored.type,
+          title: stored.title,
+          body: stored.body,
+          href: '/vendor/profile/edit',
+          isRead: false,
+          createdAt: stored.createdAt,
+        },
+      });
+
+      // Always the vendor: a tag suggestion is theirs, and so is the surface.
+      queueNotificationEmail(context.mail, stored, 'vendor');
+    }
+  });
 }
 
 /**

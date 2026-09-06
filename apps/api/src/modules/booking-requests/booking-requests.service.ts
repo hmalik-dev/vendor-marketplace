@@ -6,13 +6,16 @@ import {
   addDays,
   disclosesCustomerContact,
   isUniversallyPastDate,
+  pageWindow,
   parseDurationHours,
   replyDeadline,
   toDateString,
   type BookingRequestDetail,
   type BookingRequestStatus,
+  type BookingSettlement,
   type BookingWithContext,
   type CreateBookingRequestInput,
+  type HistoryPageQuery,
   type NotificationType,
   type QuoteBookingRequestInput,
 } from '@vendor-marketplace/shared';
@@ -24,9 +27,10 @@ import type {
   VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { mapWithConcurrency } from '../../lib/concurrency.js';
 import { toBookingWithContext } from '../../lib/booking-view.js';
 import {
-  sendNotificationEmail,
+  queueNotificationEmail,
   type NotificationEmailDeps,
 } from '../notifications/notification-email.js';
 import type { EventHub } from '../../lib/event-stream.js';
@@ -40,6 +44,7 @@ import {
   findActivePackage,
   findAvailabilityOn,
   findBookings,
+  findSettlements,
   findLiveRequest,
   findPackagesByIds,
   findRequestById,
@@ -171,6 +176,14 @@ function toDetail(
   vendor: VendorSummaryRow,
   servicePackage: ServicePackageRow | null,
   customer: CustomerIdentityRow,
+  /**
+   * The booking this request produced, or `null` because it produced none
+   * (#415). Passed in rather than looked up here so the list read fetches them
+   * in one query, and required rather than defaulted so a caller has to decide
+   * — a wrong `null` reads on the screen as "you withdrew this", which is the
+   * exact sentence this field exists to stop.
+   */
+  settlement: BookingSettlement | null,
 ): BookingRequestDetail {
   /*
    * The one place the privacy line is drawn, so the three layers that enforce
@@ -197,6 +210,7 @@ function toDetail(
       phone: disclosed ? customer.phone : null,
     },
     package: servicePackage ? toPackageSummary(servicePackage) : null,
+    settlement,
   };
 }
 
@@ -206,6 +220,18 @@ async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIden
 
   return found ?? NO_CUSTOMER;
 }
+
+/**
+ * How many expiry chains a single list read may have open at once.
+ *
+ * `Promise.all` over the rows started all of them together, and each chain is
+ * four statements and a notification write — so a vendor with a long history
+ * opened one connection per expired request against a pool sized for a handful.
+ * The page window bounds how many rows arrive; this bounds how many are worked
+ * at a time, which is the half that decides whether the read starves everything
+ * else on the instance (#408).
+ */
+const EXPIRY_CONCURRENCY = 4;
 
 /**
  * Expiry is lazy: nothing sweeps the table on a timer, so a request that has
@@ -243,25 +269,27 @@ async function ageIfExpired(
    * guarded UPDATE doing the work, not a check here. A second caller finds the
    * status already moved, gets `null` above, and returns before this line.
    */
-  await notifyParty(
-    db,
-    expired,
-    'customer',
-    'request_expired',
-    {
-      title: 'Your request expired',
-      /*
-       * "for a week" was a literal that #401 made false: the reply window is
-       * now capped at the event, so a request sent four days before its date
-       * expires in four days, not seven. The duration is dropped rather than
-       * recomputed — the customer's next move does not depend on how long it
-       * waited, and a second place that states this deadline is a second place
-       * for it to drift.
-       */
-      body: 'It closed without a reply. Send it again, or find another vendor for the date.',
-    },
-    undefined,
-    mail,
+  await bestEffortAnnouncement(mail, expired.id, () =>
+    notifyParty(
+      db,
+      expired,
+      'customer',
+      'request_expired',
+      {
+        title: 'Your request expired',
+        /*
+         * "for a week" was a literal that #401 made false: the reply window is
+         * now capped at the event, so a request sent four days before its date
+         * expires in four days, not seven. The duration is dropped rather than
+         * recomputed — the customer's next move does not depend on how long it
+         * waited, and a second place that states this deadline is a second place
+         * for it to drift.
+         */
+        body: 'It closed without a reply. Send it again, or find another vendor for the date.',
+      },
+      undefined,
+      mail,
+    ),
   );
 
   return expired;
@@ -350,7 +378,41 @@ async function deliverNotification(
   }
 
   if (mail) {
-    await sendNotificationEmail(mail, delivery.stored, party);
+    queueNotificationEmail(mail, delivery.stored, party);
+  }
+}
+
+/**
+ * Runs the announcement, and never lets it undo the thing it announces.
+ *
+ * **Everything this guards has already committed.** `applyTransition` and
+ * `syncHeldDate` are the transaction; `announce` runs after it, and a throw
+ * there used to surface as an opaque 500 on a request that was already
+ * `quoted` or `declined` — so the vendor saw a failure, the customer got no
+ * notification and no email, and the retry answered 409
+ * `INVALID_STATE_TRANSITION` because the state had in fact moved. The specific
+ * cause was a title too long for its column (#408), and that column is now wide
+ * enough; this is the general rule the specific one revealed. A notification is
+ * not what the caller asked for, and it may not be allowed to fail what they
+ * did ask for.
+ *
+ * Never silent: the failure is logged with the row it belongs to. `log` is
+ * absent only when a caller supplies no mail deps at all, which no route does —
+ * the services take them optionally so a unit test can drive the state machine
+ * without an inbox.
+ */
+async function bestEffortAnnouncement(
+  mail: NotificationEmailDeps | undefined,
+  requestId: string,
+  work: () => Promise<void>,
+): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    mail?.log.error(
+      { bookingRequestId: requestId, err: error },
+      'The request changed state but its notification could not be recorded',
+    );
   }
 }
 
@@ -538,7 +600,18 @@ export async function createBookingRequest(
     }
 
     return {
-      request: toDetail(existing, vendor, servicePackage, await nameOf(db, existing.customerId)),
+      /*
+       * `null`, and provably so: this branch returns a request the unique index
+       * says is still `pending` or `quoted`, and a booking exists only past
+       * `accepted`.
+       */
+      request: toDetail(
+        existing,
+        vendor,
+        servicePackage,
+        await nameOf(db, existing.customerId),
+        null,
+      ),
       created: false,
     };
   }
@@ -554,11 +627,13 @@ export async function createBookingRequest(
   }
 
   return {
+    /* A request created one line ago has no booking. */
     request: toDetail(
       created.row,
       vendor,
       servicePackage,
       await nameOf(db, created.row.customerId),
+      null,
     ),
     created: true,
   };
@@ -586,17 +661,26 @@ export async function getBookingRequest(
     throw notFound('That request does not exist');
   }
 
-  const servicePackage = current.packageId
-    ? ((await findPackagesByIds(db, [current.packageId]))[0] ?? null)
-    : null;
+  /* Independent of each other, and of the vendor read above. */
+  const [packages, customer, settlements] = await Promise.all([
+    current.packageId ? findPackagesByIds(db, [current.packageId]) : Promise.resolve([]),
+    nameOf(db, current.customerId),
+    findSettlements(db, [current.id]),
+  ]);
 
-  return toDetail(current, vendor, servicePackage, await nameOf(db, current.customerId));
+  return toDetail(
+    current,
+    vendor,
+    packages[0] ?? null,
+    customer,
+    settlements.get(current.id) ?? null,
+  );
 }
 
 export async function listBookingRequests(
   db: AppDatabase,
   user: AuthenticatedUser,
-  query: { status?: BookingRequestStatus },
+  query: { status?: BookingRequestStatus } & HistoryPageQuery,
   now: Date = new Date(),
   mail?: NotificationEmailDeps,
 ): Promise<BookingRequestDetail[]> {
@@ -607,31 +691,51 @@ export async function listBookingRequests(
    * own — neither can name whose requests to read, so scoping is derived from
    * the session rather than accepted from the query string.
    */
-  const filter = vendorId ? { vendorId } : { customerId: user.id };
   if (user.role === 'vendor' && !vendorId) {
     return [];
   }
 
-  const rows = await findRequests(db, filter);
-
   /*
-   * Expiry is applied before the status filter, so asking for `expired`
-   * returns the request that aged out on this very read rather than missing it
-   * until someone happens to open it.
+   * The status goes into the query, not into a filter over the answer.
+   *
+   * It used to be applied after the read, which was equivalent while the read
+   * was unbounded and is not once it is one page: `?status=pending` would then
+   * return the pending rows that happened to land on that page of *all*
+   * statuses — empty whenever the page held none, with matches further down
+   * (#408). `readsAs` carries the lazy expiry into SQL so asking for `expired`
+   * still returns the request that ages out on this very read.
    */
-  const aged = await Promise.all(rows.map((row) => ageIfExpired(db, row, now, mail)));
-  const visible = query.status ? aged.filter((row) => row.status === query.status) : aged;
+  const filter = {
+    ...(vendorId ? { vendorId } : { customerId: user.id }),
+    ...(query.status ? { status: query.status } : {}),
+    now,
+  };
+
+  const rows = await findRequests(db, filter, pageWindow(query));
+
+  const visible = await mapWithConcurrency(rows, EXPIRY_CONCURRENCY, (row) =>
+    ageIfExpired(db, row, now, mail),
+  );
 
   if (visible.length === 0) {
     return [];
   }
 
-  const vendors = await findVendorsByIds(db, [...new Set(visible.map((row) => row.vendorId))]);
-  const packages = await findPackagesByIds(db, [
-    ...new Set(visible.map((row) => row.packageId).filter((id) => id !== null)),
+  /*
+   * Four reads, none of which depends on another — they are all keyed off
+   * `visible` — so the queue pays one round trip rather than four.
+   */
+  const [vendors, packages, names, settlements] = await Promise.all([
+    findVendorsByIds(db, [...new Set(visible.map((row) => row.vendorId))]),
+    findPackagesByIds(db, [
+      ...new Set(visible.map((row) => row.packageId).filter((id) => id !== null)),
+    ]),
+    findCustomerNames(db, [...new Set(visible.map((row) => row.customerId))]),
+    findSettlements(
+      db,
+      visible.map((row) => row.id),
+    ),
   ]);
-
-  const names = await findCustomerNames(db, [...new Set(visible.map((row) => row.customerId))]);
 
   const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]));
   const packageById = new Map(packages.map((row) => [row.id, row]));
@@ -649,6 +753,7 @@ export async function listBookingRequests(
         vendor,
         row.packageId ? (packageById.get(row.packageId) ?? null) : null,
         nameById.get(row.customerId) ?? NO_CUSTOMER,
+        settlements.get(row.id) ?? null,
       ),
     ];
   });
@@ -727,22 +832,31 @@ export async function transitionRequest(
     return written;
   });
 
-  await announce(
-    db,
-    updated,
-    action,
-    row.status,
-    vendor.businessName,
-    party,
-    options.hub,
-    options.mail,
+  await bestEffortAnnouncement(options.mail, updated.id, () =>
+    announce(
+      db,
+      updated,
+      action,
+      row.status,
+      vendor.businessName,
+      party,
+      options.hub,
+      options.mail,
+    ),
   );
 
   const servicePackage = updated.packageId
     ? ((await findPackagesByIds(db, [updated.packageId]))[0] ?? null)
     : null;
 
-  return toDetail(updated, vendor, servicePackage, await nameOf(db, updated.customerId));
+  /*
+   * `null`. Every edge on `BOOKING_REQUEST_TRANSITIONS` starts from a live
+   * status, and a booking exists only on an accepted request — the one
+   * transition that settles an accepted request is the cancellation, and that
+   * is written by `cancelBookingAndFreeDate` rather than walked through here
+   * (#400).
+   */
+  return toDetail(updated, vendor, servicePackage, await nameOf(db, updated.customerId), null);
 }
 
 /**
@@ -1043,6 +1157,7 @@ async function announce(
 export async function listBookings(
   db: AppDatabase,
   user: AuthenticatedUser,
+  query: HistoryPageQuery,
 ): Promise<BookingWithContext[]> {
   const vendorId = await actorVendorId(db, user);
 
@@ -1050,7 +1165,11 @@ export async function listBookings(
     return [];
   }
 
-  const rows = await findBookings(db, vendorId ? { vendorId } : { customerId: user.id });
+  const rows = await findBookings(
+    db,
+    vendorId ? { vendorId } : { customerId: user.id },
+    pageWindow(query),
+  );
 
   return rows.map(({ booking, eventType }) => toBookingWithContext(booking, eventType));
 }

@@ -4,7 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { CheckContext } from '../types.js';
-import { evaluateBranchSafety, hostOf, resolveBranch, checkDemoData } from './database.js';
+import { CATEGORY_SEEDS, TAG_SEEDS } from '@vendor-marketplace/shared';
+import {
+  evaluateBranchSafety,
+  hostOf,
+  resolveBranch,
+  checkDemoData,
+  checkSeed,
+} from './database.js';
 
 const NEON_URL =
   'postgresql://owner:secret@ep-lucky-cherry-1234-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require';
@@ -128,6 +135,59 @@ describe('evaluateBranchSafety', () => {
 
   it('fails when DATABASE_URL is absent entirely', () => {
     expect(evaluateBranchSafety(contextWith({})).ok).toBe(false);
+  });
+});
+
+describe('checkSeed', () => {
+  /*
+   * Three counts in one check, and the third is the one that needed adding.
+   * `us_cities` (#384) is the only reference table whose absence is silent: an
+   * unseeded one leaves the City field answering "No US city matches" to every
+   * word a customer types, which reads as their typo rather than as a database
+   * nobody seeded.
+   */
+  const counts = (categories: number, tags: number, cities: number): postgres.Sql => {
+    const answers = [[{ count: categories }], [{ count: tags }], [{ count: cities }]];
+    let at = 0;
+    return (() => Promise.resolve(answers[at++] ?? [])) as unknown as postgres.Sql;
+  };
+
+  it('passes when all three reference tables are populated', async () => {
+    const result = await checkSeed(counts(CATEGORY_SEEDS.length, TAG_SEEDS.length, 35_618));
+
+    expect(result.ok).toBe(true);
+    expect(result.detail).toContain('35,618 US cities');
+  });
+
+  it('fails when the places table is empty even though the taxonomy is seeded', async () => {
+    const result = await checkSeed(counts(CATEGORY_SEEDS.length, TAG_SEEDS.length, 0));
+
+    expect(result.ok).toBe(false);
+    expect(result.fix).toBe('pnpm db:seed');
+    expect(result.detail).toContain('0 US cities');
+  });
+
+  it('fails on a half-inserted places table rather than passing on a truncated seed', async () => {
+    const result = await checkSeed(counts(CATEGORY_SEEDS.length, TAG_SEEDS.length, 5_000));
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('still fails on a missing taxonomy, with the places count alongside it', async () => {
+    const result = await checkSeed(counts(0, 0, 35_618));
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('0 categories');
+  });
+
+  it('fails rather than throwing when a reference table is unreadable', async () => {
+    const sql = (() =>
+      Promise.reject(new Error('relation "us_cities" does not exist'))) as unknown as postgres.Sql;
+
+    const result = await checkSeed(sql);
+
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('us_cities');
   });
 });
 
