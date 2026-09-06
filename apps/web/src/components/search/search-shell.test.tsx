@@ -588,7 +588,12 @@ describe('SearchShell against a hostile URL', () => {
         ),
       ).toBeDefined(),
     );
-    expect(setState).toHaveBeenCalledWith({ date: '' });
+    /*
+     * A **correction**, so it writes over the current history entry. Pushed,
+     * the correction sits on top of the stale link, and Back returns to that
+     * link — whose effect pushes the correction again, pinning the reader.
+     */
+    expect(setState).toHaveBeenCalledWith({ date: '' }, { correction: true });
   });
 
   /*
@@ -605,11 +610,25 @@ describe('SearchShell against a hostile URL', () => {
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
 
-    for (const [path] of apiRequest.mock.calls) {
+    /*
+     * The **vendor search** specifically, not every request the screen makes.
+     *
+     * The empty grid also mounts `NearbyDatesBand`, which asks
+     * `/vendors/availability/nearby` about the date on purpose — that endpoint
+     * is the one whose whole job is a date. Here it keeps asking about the
+     * stale one only because `setState` is a `vi.fn()` that never writes back,
+     * so `state.date` is frozen in a way no browser reproduces. Scoped `for`
+     * over every call, the assertion passed or failed on whether that second
+     * request had landed yet when the loop ran — a race, not a check.
+     */
+    const searches = apiRequest.mock.calls.filter(([path]) => String(path).startsWith('/vendors?'));
+
+    expect(searches.length).toBeGreaterThan(0);
+    for (const [path] of searches) {
       expect(path).not.toContain('date=');
     }
     // The rest of the question survives — this is a strip, not a refusal.
-    expect(apiRequest.mock.calls[0]?.[0]).toContain('category=photography');
+    expect(searches[0]?.[0]).toContain('category=photography');
   });
 
   /*
@@ -768,5 +787,183 @@ describe('SearchShell out-of-range page', () => {
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
     expect(setState).not.toHaveBeenCalledWith({ page: 1 });
+  });
+});
+
+/*
+ * #418 acceptances 4 and 5. `?category=photography&tags=<a dietary tag>` is a
+ * URL anyone can paste — it is what a catering search becomes the moment its
+ * vendor type is switched, and then shared. The filter is not one photography
+ * can answer, so it is dropped **before** the request, the URL is corrected,
+ * and the reader is told which filter went; what it must never do is quietly
+ * narrow the grid to nothing, and it must never 500.
+ */
+describe('a tag filter the searched category cannot answer', () => {
+  const HALAL = 'a3333333-3333-4333-8333-333333333333';
+  const ENGLISH = 'a1111111-1111-4111-8111-111111111111';
+
+  const TAGS = [
+    {
+      id: ENGLISH,
+      name: 'English',
+      slug: 'language-english',
+      category: 'language' as const,
+      displayOrder: 1,
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    },
+    {
+      id: HALAL,
+      name: 'Halal',
+      slug: 'dietary-halal',
+      category: 'dietary' as const,
+      displayOrder: 3,
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    },
+  ];
+
+  beforeEach(() => {
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue(emptyResult());
+    setState.mockReset();
+    state = baseState();
+  });
+
+  afterEach(() => cleanup());
+
+  function renderWithTags() {
+    return render(<SearchShell categories={CATEGORIES} tags={TAGS} />);
+  }
+
+  /** The vendor search alone — the screen makes other requests. */
+  const searches = (): string[] =>
+    apiRequest.mock.calls
+      .map(([path]) => String(path))
+      .filter((path) => path.startsWith('/vendors?'));
+
+  it('never sends it, so the grid is not narrowed by a filter about to be retracted', async () => {
+    state = baseState({ category: 'photography', tags: [ENGLISH, HALAL] });
+    renderWithTags();
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+
+    expect(searches().length).toBeGreaterThan(0);
+    for (const path of searches()) {
+      expect(path).toContain(ENGLISH);
+      expect(path).not.toContain(HALAL);
+    }
+  });
+
+  /*
+   * And as a **correction**, which replaces the current history entry rather
+   * than pushing one. Pushed, the entry sits on top of the URL that provoked
+   * it, so Back returns to that URL and its effect pushes the correction
+   * straight back — the reader cannot get past it.
+   */
+  it('clears it out of the URL, so the link says the search that ran', async () => {
+    state = baseState({ category: 'photography', tags: [ENGLISH, HALAL] });
+    renderWithTags();
+
+    await waitFor(() =>
+      expect(setState).toHaveBeenCalledWith({ tags: [ENGLISH] }, { correction: true }),
+    );
+  });
+
+  it('says which filter was dropped rather than discarding it in silence', async () => {
+    state = baseState({ category: 'photography', tags: [HALAL] });
+    renderWithTags();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Dietary filters don’t apply to photographers, so they were cleared — the rest of your search still applies.',
+        ),
+      ).toBeDefined(),
+    );
+  });
+
+  it('announces it in the live region the other cleared params use', async () => {
+    state = baseState({ category: 'photography', tags: [HALAL] });
+    const { container } = renderWithTags();
+
+    await waitFor(() => expect(screen.getByText(/Dietary filters/)).toBeDefined());
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('Dietary filters');
+  });
+
+  it('leaves the same filter alone on a catering search, which can answer it', async () => {
+    state = baseState({ category: 'catering', tags: [HALAL] });
+    renderWithTags();
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+
+    expect(searches()[0]).toContain(HALAL);
+    expect(setState).not.toHaveBeenCalledWith({ tags: [] });
+    expect(screen.queryByText(/Dietary filters/)).toBeNull();
+  });
+
+  /*
+   * An id the tag list does not describe cannot be classified, so dropping it
+   * would be a guess. It goes to the API, which answers it honestly.
+   */
+  it('passes an unknown tag id through rather than guessing it away', async () => {
+    const unknown = 'b0000000-0000-4000-8000-000000000000';
+    state = baseState({ category: 'photography', tags: [unknown] });
+    renderWithTags();
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+
+    expect(searches()[0]).toContain(unknown);
+    expect(screen.queryByText(/filters don’t apply/)).toBeNull();
+  });
+
+  /*
+   * The notice is retracted by the drop being **spent**, not by the category
+   * merely changing away from it.
+   *
+   * Keyed on the category alone, a vendor type the reader leaves and comes back
+   * to re-satisfied the guard forever: `?category=photography` with no tag in
+   * the URL at all re-rendered "Dietary filters were cleared" into the live
+   * region, so a screen-reader user was told a filter had just gone when none
+   * had. That is the same untruth #403 removed, one step over — and it survived
+   * the first review because nothing exercised a *second* visit.
+   */
+  it('does not re-announce the drop when the reader returns to the category', async () => {
+    state = baseState({ category: 'photography', tags: [HALAL] });
+    const { rerender } = renderWithTags();
+
+    await waitFor(() => expect(screen.getByText(/Dietary filters/)).toBeDefined());
+
+    // The correction the effect just applied, then away to a category that can
+    // answer Dietary, and back — with nothing left to drop on either leg.
+    state = baseState({ category: 'photography' });
+    rerender(<SearchShell categories={CATEGORIES} tags={TAGS} />);
+
+    state = baseState({ category: 'catering' });
+    rerender(<SearchShell categories={CATEGORIES} tags={TAGS} />);
+    await waitFor(() => expect(screen.queryByText(/Dietary filters/)).toBeNull());
+
+    state = baseState({ category: 'photography' });
+    rerender(<SearchShell categories={CATEGORIES} tags={TAGS} />);
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+    expect(screen.queryByText(/Dietary filters/)).toBeNull();
+  });
+
+  /*
+   * And it survives the correction it triggers. The effect empties the ids, so
+   * a notice derived from the live selection would appear and vanish in one
+   * tick — the reader would never read it.
+   */
+  it('keeps the notice up after the correction that erased its evidence', async () => {
+    state = baseState({ category: 'photography', tags: [HALAL] });
+    const { rerender } = renderWithTags();
+
+    await waitFor(() => expect(screen.getByText(/Dietary filters/)).toBeDefined());
+
+    state = baseState({ category: 'photography' });
+    rerender(<SearchShell categories={CATEGORIES} tags={TAGS} />);
+
+    expect(screen.getByText(/Dietary filters/)).toBeDefined();
   });
 });

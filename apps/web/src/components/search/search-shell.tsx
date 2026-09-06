@@ -4,6 +4,7 @@ import {
   isPastDate,
   vendorNounFor,
   type Category,
+  type TagCategory,
   type VendorSearchResult,
 } from '@vendor-marketplace/shared';
 import { wireVendorSearchResultSchema } from '@/lib/wire-schemas';
@@ -28,7 +29,9 @@ import { useSearchStatus } from './search-status';
 import { noResultsDiagnosis, noResultsHeadline, relaxations } from './relaxations';
 import {
   activeRefineCount,
+  applicableTagSelection,
   clearedParamsLine,
+  droppedTagGroupsLine,
   toSearchQuery,
   useSearchState,
   type SearchState,
@@ -177,6 +180,21 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   const dateIsPast = viewerToday !== '' && state.date !== '' && isPastDate(state.date, viewerToday);
 
   /*
+   * The tags this category can still answer, and the groups it cannot (#418).
+   *
+   * The same shape of problem as the stale date above, and handled the same
+   * way: a value the URL carried that only this screen can judge. A tag is a
+   * uuid in the URL, so it takes the fetched tag list to know that `Halal` is
+   * dietary and a photography search has nothing to match it with — and a
+   * shared link, or one press on the vendor-type control, is all it takes to
+   * put the two together.
+   */
+  const tagSelection = useMemo(
+    () => applicableTagSelection(state.category, state.tags, tags),
+    [state.category, state.tags, tags],
+  );
+
+  /*
    * The querystring to send, or `null` while there is nothing sendable — one
    * value, so "strip the stale date" and "hold until the clock lands" cannot
    * drift apart into two rules that disagree.
@@ -198,7 +216,14 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   const query =
     state.date !== '' && viewerToday === ''
       ? null
-      : toSearchQuery(dateIsPast ? { ...state, date: '' } : state);
+      : toSearchQuery({
+          ...state,
+          ...(dateIsPast ? { date: '' } : {}),
+          // Stripped **before** the request, for the reason the date is: the
+          // grid must never be drawn from a filter the screen is about to
+          // retract, and a search sent with it comes back empty.
+          tags: [...tagSelection.kept],
+        });
 
   useEffect(() => {
     if (query === null) {
@@ -295,15 +320,69 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
    * beside the params the URL asked for and did not get.
    */
   const [discardedPrice, setDiscardedPrice] = useState<RangeDiscarded>(NO_DISCARD);
+  /*
+   * #418: the tag groups dropped because the chosen category cannot answer
+   * them, and the category they were dropped from — which is the word the
+   * sentence needs, not the guard on whether to say it.
+   *
+   * Held in state at all because **the drop erases its own evidence**: the
+   * effect below empties the ids, so a notice derived from the live selection
+   * would appear and vanish in one tick, and the reader would never read it.
+   */
+  const [droppedTags, setDroppedTags] = useState<{
+    readonly category: string;
+    readonly groups: readonly TagCategory[];
+  } | null>(null);
+  /*
+   * The category the drop effect last ran against, so it can tell **a new
+   * question from the correction it just applied** — the one thing neither the
+   * live selection nor the notice's own category can say.
+   *
+   * Guarding the notice on `droppedTags.category === state.category` instead
+   * looked equivalent and was not: a vendor type the reader leaves and comes
+   * back to re-satisfies that comparison forever, so `?category=photography`
+   * carrying no tag at all re-announced "Dietary filters were cleared" into the
+   * live region. Told a screen-reader user a filter had just gone when none
+   * had — the untruth #403 removed, one step over.
+   */
+  const dropRanFor = useRef(state.category);
 
   useEffect(() => {
     if (dateIsPast) {
       setDroppedPastDate(state.date);
-      setState({ date: '' });
+      // A correction, not a navigation — same reasoning as the tag drop below,
+      // and the same trap: a pushed correction leaves Back returning to the
+      // stale link whose effect pushes it straight back.
+      setState({ date: '' }, { correction: true });
     }
     // `setState` is a fresh closure each render; the date is what this watches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateIsPast, state.date]);
+
+  useEffect(() => {
+    const askedSomethingNew = dropRanFor.current !== state.category;
+    dropRanFor.current = state.category;
+
+    if (tagSelection.droppedGroups.length > 0) {
+      setDroppedTags({ category: state.category, groups: tagSelection.droppedGroups });
+      // The URL is corrected too, so the link the reader copies is the search
+      // that actually ran — and the chip for a hidden group cannot come back
+      // still ticked when they switch to a category that offers it.
+      setState({ tags: [...tagSelection.kept] }, { correction: true });
+      return;
+    }
+
+    /*
+     * Nothing to drop. The notice stays up through the re-render the correction
+     * above causes — same category, so nothing new was asked — and is retracted
+     * the moment the reader asks a different question.
+     */
+    if (askedSomethingNew) {
+      setDroppedTags(null);
+    }
+    // `setState` is a fresh closure each render, as above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tagSelection, state.category]);
 
   /*
    * The past-date line keeps its own wording — it can name the date, because
@@ -320,6 +399,13 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
       ...(discardedPrice.min ? (['minPriceCents'] as const) : []),
       ...(discardedPrice.max ? (['maxPriceCents'] as const) : []),
     ]),
+    /*
+     * Its own sentence rather than another `dropped` field: those params could
+     * not be *read*, and this one was read perfectly well and simply does not
+     * apply here. Saying "that tag isn't one we can use" of `Halal` would be
+     * untrue — it is a tag, on the wrong search.
+     */
+    droppedTags === null ? null : droppedTagGroupsLine(droppedTags.groups, droppedTags.category),
   ].filter((line): line is string => line !== null);
 
   const refineCount = activeRefineCount(state);
@@ -410,8 +496,10 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           setState={setState}
           clearRefinements={() => {
             // Clearing the refinements retracts the notice with them; the
-            // discarded bound is one of the things being cleared.
+            // discarded bound and the dropped tag group are both things being
+            // cleared.
             setDiscardedPrice(NO_DISCARD);
+            setDroppedTags(null);
             clearRefinements();
           }}
           tags={tags}

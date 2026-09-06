@@ -23,6 +23,7 @@ import {
   TAG_CATEGORIES,
   TAG_SEEDS,
   TAG_SUGGESTION_STATUSES,
+  tagCategoriesFor,
   USER_ROLES,
 } from './index.js';
 
@@ -168,6 +169,56 @@ describe('CATEGORY_SEEDS', () => {
     for (const category of CATEGORY_SEEDS) {
       expect(category.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
     }
+  });
+
+  /*
+   * The mapping #418 introduced, asserted against the tag list rather than
+   * against the sentence that proposed it. `dietary` holds Vegan, Vegetarian,
+   * Halal and Kosher — four diets, which only a vendor who serves food can
+   * accommodate. `Venues` is the deliberate near-miss: its seed sells the room
+   * ("Halls, lofts, rooftops, gardens, and private dining rooms"), and a venue
+   * that also caters is listing under Catering to say so.
+   */
+  it('offers Dietary only where the category serves food', () => {
+    const dietary = CATEGORY_SEEDS.filter((category) =>
+      category.applicableTagCategories.includes('dietary'),
+    ).map((category) => category.slug);
+
+    expect(dietary).toEqual(['catering', 'carts']);
+  });
+
+  it('offers Languages and Cultural on every category, since every vendor has both', () => {
+    for (const category of CATEGORY_SEEDS) {
+      expect(category.applicableTagCategories, category.slug).toContain('language');
+      expect(category.applicableTagCategories, category.slug).toContain('cultural');
+    }
+  });
+
+  it('declares applicable groups in TAG_CATEGORIES order, which is the order they are drawn', () => {
+    for (const category of CATEGORY_SEEDS) {
+      expect(category.applicableTagCategories, category.slug).toEqual(
+        TAG_CATEGORIES.filter((group) => category.applicableTagCategories.includes(group)),
+      );
+    }
+  });
+});
+
+describe('tagCategoriesFor', () => {
+  it('withholds Dietary from a photography search', () => {
+    expect(tagCategoriesFor('photography')).toEqual(['language', 'cultural']);
+  });
+
+  it('offers Dietary on a catering search', () => {
+    expect(tagCategoriesFor('catering')).toEqual(['language', 'cultural', 'dietary']);
+  });
+
+  it('offers every group when no category is chosen, since the grid then spans all of them', () => {
+    expect(tagCategoriesFor('')).toEqual(TAG_CATEGORIES);
+    expect(tagCategoriesFor(undefined)).toEqual(TAG_CATEGORIES);
+  });
+
+  it('offers every group for a slug it does not seed, rather than guessing one away', () => {
+    expect(tagCategoriesFor('does-not-exist')).toEqual(TAG_CATEGORIES);
   });
 });
 
