@@ -29,7 +29,17 @@ export default defineConfig({
   // A journey drives several pages; the default 30s is tight once a cold Next
   // route compiles on first hit.
   timeout: 90_000,
-  expect: { timeout: 10_000 },
+  /*
+   * 30s, for the same reason `navigationTimeout` below is 60: the first hit on
+   * a route compiles it. The assertion that most often straddles that compile
+   * is the `toHaveURL` right after a click — the click starts a navigation
+   * into a route no earlier test has touched, and at 10s that reported a
+   * working `Request booking` as a broken one, twice, on the run where it
+   * happened to go first. A real failure now takes 30s to report instead of
+   * 10, which is cheap against a 90s per-test budget and much cheaper than a
+   * red suite that points at the product.
+   */
+  expect: { timeout: 30_000 },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   /*

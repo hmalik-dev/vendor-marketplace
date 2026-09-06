@@ -212,6 +212,63 @@ asset is fixed, hand-picked and never dynamic — stands untouched, and is now
 belt-and-braces rather than load-bearing, because the panel clears AA against
 white.
 
+### The confirmed field, measured node by node — #413, 2026-09-05
+
+Frame `06` is the product's one full sage field, and every line over it is
+white. There is no scrim to move and no darker ink than white, so this is the
+case the D30 disjunction was written for, and it resolves as **both**: the ink
+moves where it can, the ground moves where it cannot.
+
+**The depth is set by the narrowest width, not by the reference one — that is
+the finding worth keeping.** A `150deg` gradient's line is `0.5W + 0.866H`
+long, so a narrower field is a _shorter_ line, and a centred headline spreads
+across more of it: 21% of the line at 1440, 35% at 390. The same headline
+therefore sits on lighter ground at 390 than it ever does at the reference
+viewport. A ruling measured only at 1440 would have shipped a screen that
+fails the floor everywhere else, and D30 kept that floor blanket.
+
+Worst sample under any text box on the screen, measured in a browser at each
+width:
+
+| Viewport  | Worst    |     | Viewport              | Worst    |
+| --------- | -------- | --- | --------------------- | -------- |
+| 1728x1080 | 5.99     |     | 768x1024              | 5.75     |
+| 1440x900  | **5.90** |     | 720x450 (400% reflow) | 4.81     |
+| 1280x800  | 5.83     |     | 390x844               | 4.62     |
+| 1024x640  | 5.68     |     | 320x568               | **4.56** |
+
+Per node at the reference viewport, before and after:
+
+| Node                                                     | Was       | Now      |
+| -------------------------------------------------------- | --------- | -------- |
+| `<h1>` 48px `stone-0`                                    | 4.04      | **5.90** |
+| Sub-line, `stone-0/88` → `stone-0`, 13.5px → 16px        | 3.58      | **5.94** |
+| `View booking` 12.5px → 14px                             | —         | **6.77** |
+| `Still need someone for …`, `stone-0/75` → `stone-0`     | 3.40      | **6.53** |
+| Four cross-sell chips, over `white/.14` → `stone-900/14` | 3.72–3.98 | **7.71** |
+
+What moved, and why each was the smallest move available:
+
+1. **The two dimmed lines go to full `stone-0`.** Both carry meaning, and the
+   table above bans dimming anything that does — the same rule that took `12`'s
+   `Both` label from .55 to .82.
+2. **The gradient goes 20% deeper**: `#7A9468 / #5E7A4E / #49613D` →
+   **`#627653 / #4B623E / #3A4E31`**, the same three stops at the same
+   0% / 55% / 100% on the same 150° line, scaled in sRGB so no hue relationship
+   in the field changes. The 48px headline is the reason: its ink is already
+   the lightest the system has, so the ground was the only thing left to move.
+   Unlike the sign-up scrim this field carries no photograph, so deepening it
+   dims nothing but itself. **6.5% was tried first and was the wrong answer** —
+   it cleared 4.62 at 1440 and still measured 3.66 at 390.
+3. **The chip wash inverts**, `rgba(255,255,255,.14)` → `stone-900/14`. A
+   translucent _white_ pill lightens the exact ground its white label needs
+   dark, and cost those four labels about 1.1 ratio points unaided. The pill
+   keeps its shape, size, padding and white label; only the direction of the
+   wash changes.
+
+The `✓` glyph is `aria-hidden` and decorative, and is exempt. Everything inside
+the white receipt card already passed (15.96, 5.75).
+
 ### D24 and the frames disagree on purpose — do not file it again
 
 `avatar.tsx` sets monograms below the 16px serif floor in Instrument Sans; the

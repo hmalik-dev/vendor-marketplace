@@ -58,7 +58,16 @@ export async function expectSignedIn(page: Page): Promise<void> {
     'redirected to sign-in — the stored session is stale or wrong-port',
   ).not.toHaveURL(/\/sign-(in|up)(\?|$|\/)/);
 
-  await page.waitForFunction(() => window.Clerk?.loaded === true, undefined, { timeout: 15_000 });
+  /*
+   * 45s, for the same reason `playwright.config.ts` gives `navigationTimeout`
+   * 60: the first hit on a route compiles it. `domcontentloaded` returns as
+   * soon as the server's HTML lands, and the client chunks Clerk hydrates from
+   * are compiled *after* that — so on a cold route this wall clock starts
+   * where the navigation's generous one stopped. At 15s it timed out on a
+   * fully working inbox, which is the most expensive kind of wrong answer: it
+   * points the next reader at messaging instead of at the compile.
+   */
+  await page.waitForFunction(() => window.Clerk?.loaded === true, undefined, { timeout: 45_000 });
 
   const userId = await page.evaluate(() => window.Clerk?.user?.id ?? null);
   expect(userId, 'Clerk reports no signed-in user despite the stored state').not.toBeNull();

@@ -407,6 +407,31 @@
 }
 
 /*
+ * A full-bleed field that fills the viewport below the header **and grows**.
+ *
+ * `app-shell` above is a fixed height with `overflow: hidden`, which is right
+ * for a surface whose panes scroll inside it and wrong for one whose content is
+ * a single centred stack: at 200% zoom, or in any short window, a fixed height
+ * clips that stack at both ends with no scrollbar and no way to reach either —
+ * the defect `04-laws.md` names as "no pane clips its own content mid-element".
+ * The scroll-budget table lists the 1.0x surfaces by name and the confirmed
+ * screen is not one of them, so it may scroll rather than clip.
+ *
+ * `100vh`, not `100dvh`, so the field is never shorter than the `main` it sits
+ * in: `body` is `min-h-screen`, and a `dvh` field inside a `vh` layout leaves a
+ * band of page ground under a gradient that is supposed to be full-bleed.
+ *
+ * `overflow: hidden` still applies — the field's own decorative bleed is what
+ * it clips — but a `min-height` box grows past it rather than cutting content
+ * off, which is the whole difference from `app-shell`.
+ */
+@utility app-field {
+  position: relative;
+  min-height: calc(100vh - var(--header-height));
+  overflow: hidden;
+}
+
+/*
  * A pane inside the shell that scrolls on its own.
  *
  * `position: relative` is load-bearing, not decoration: an absolutely

@@ -113,7 +113,7 @@ describe('Avatar', () => {
    * is the check that closes the gap, and it reads the component's own sizes
    * rather than a list written down twice.
    *
-   * Four of the six sizes are below the floor and the frames draw all four in
+   * Four of the sizes are below the floor and the frames draw all four in
    * Instrument Serif, so this is frame-versus-law. D24 rules for the law and
    * changes the face rather than the size: raising the glyph to 16px would
    * change the monogram's ratio in four frames and break their geometry.
@@ -146,10 +146,11 @@ describe('Avatar', () => {
 
     /*
      * Counted, not pinned to a total. The exact split moves whenever the design
-     * gains a size — `thumb` (54) made it 4/3 — and pinning it turns "the check
-     * above is not vacuous" into a change-detector that fails on a size the
-     * check already covers. Both sides non-empty is the property this test is
-     * named for; the sum is what proves no size went unmeasured.
+     * gains a size — `receipt` (50) and `thumb` (54) each moved it — and pinning
+     * it turns "the check above is not vacuous" into a change-detector that
+     * fails on a size the check already covers. Both sides non-empty is the
+     * property this test is named for; the sum is what proves no size went
+     * unmeasured.
      */
     expect(glyphs.filter((glyph) => glyph < SERIF_FLOOR_PX).length).toBeGreaterThan(0);
     expect(glyphs.filter((glyph) => glyph >= SERIF_FLOOR_PX).length).toBeGreaterThan(0);

@@ -78,16 +78,35 @@ export function BookingConfirmed({
   return (
     /*
       A labelled region, not a second `<main>`: `app/layout.tsx` already renders
-      the page's one `main#main`, and this sat inside it. `Skip to content`
-      landed on the layout wrapper rather than here, and landmark navigation
-      announced two mains.
+      the page's one `main#main`, and this sat inside it (#411).
 
-      The class list is unchanged on purpose — the gradient's own sizing is
-      #413's, and this commit fixes the landmark alone.
+      **`app-field`, not `flex-1`.** `flex-1` resolved against `main#main`,
+      which is a block, so it did nothing: the field sized to its content at
+      514.88px and left 321px of bare `stone-50` below a gradient the frame
+      draws full-bleed. It also put the cross-sell chips flush against the
+      `overflow:hidden` edge, which cut 4px off all four focus rings, and left
+      `justify-center` no slack, so the check circle sat hard against the
+      header. `app-field` states the height once, in the theme, against
+      `--header-height` — nothing here re-derives 64px.
+
+      It is a **`min-height`**, and deliberately not `app-shell`: this stack
+      does not scroll inside itself, so a fixed height would clip it at both
+      ends with no scrollbar in any short window or at 200% zoom, which
+      `04-laws.md` names as a bug outright. The scroll-budget table lists the
+      1.0x surfaces and this screen is not one of them.
+
+      The frame draws no header at all. That is the frame omitting chrome, not
+      the screen refusing it: `04-laws.md` fixes the reference viewport at
+      1440x900 "with a 64px header", making 836px the budget every app surface
+      spends, and law 2 keeps the header fixed rather than scrolled away.
+      Recorded in `15-confirmed.md`.
+
+      The gradient is 20% deeper than the frame's transcription. See the
+      contrast note on the sub-line below.
     */
     <section
       aria-label="Booking confirmed"
-      className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-linear-[150deg,#7A9468_0%,#5E7A4E_55%,#49613D_100%] px-10"
+      className="app-field flex flex-col items-center justify-center bg-linear-[150deg,#627653_0%,#4B623E_55%,#3A4E31_100%] px-10"
     >
       {/* The two low-opacity circles the frame draws, and nothing else. */}
       <span
@@ -115,17 +134,60 @@ export function BookingConfirmed({
         date is what they bought.
       */}
       <h1 className="display-heading mt-5.5 text-[48px] text-stone-0">{day} is yours.</h1>
-      <p className="mt-2.5 max-w-[480px] text-center text-base leading-relaxed text-stone-0/88">
+      {/*
+        **Full `stone-0`, and the ground moved to carry it.** D30 refused a
+        large-text carve-out and kept the 4.5:1 floor blanket, which left this
+        screen a choice between moving the colour and moving the ground. Both
+        moved, each as little as it could: the two dimmed lines over the field
+        (this one at .88 and `Still need …` at .75) go to full ink, because the
+        floor bans dimming anything that carries meaning; and the gradient
+        goes 20% deeper, because white is already the lightest ink the system
+        has, so the 48px headline had nowhere else to go.
+
+        **The depth is set by the narrowest width, not by the reference one.**
+        A 150deg gradient's line is `0.5W + 0.866H` long, so a narrower field
+        is a shorter line and a centred headline spreads across more of it —
+        21% of the line at 1440, 35% at 390 — reaching ground the reference
+        viewport never shows it. 6.5% deeper cleared 4.62 at 1440 and still
+        measured 3.66 at 390, and the floor D30 kept is blanket.
+
+        Worst sample under any text box on this screen, measured: **4.56** at
+        320x568, 4.62 at 390x844, 4.81 at 720x450 (400% reflow), 5.68 at
+        1024x640, 5.90 at 1440x900. The `✓` is `aria-hidden` and decorative,
+        so it is exempt and is not measured. Per-node table in
+        `01-foundations.md`.
+      */}
+      <p className="mt-2.5 max-w-[480px] text-center text-lg leading-prose text-stone-0">
         {vendor.businessName} has been paid into escrow and your booking is confirmed. They&apos;ll
-        message you before the day to plan the details.
+        message you two weeks out to plan the timeline.
       </p>
 
-      <div className="mt-7 flex items-center gap-6.5 rounded-[18px] bg-stone-0 px-5.5 py-4.5 shadow-[0_12px_40px_rgba(35,40,38,.2)]">
+      {/*
+        `flex-wrap` and `max-w-full` are inert at every width the degradation
+        table draws and load-bearing below about 500, where the three groups
+        stop fitting on one row. The field clips its overflow, so without them
+        the booking id — the one thing on this card a support request is
+        about — is simply cut off the right edge rather than wrapping. The
+        table has no row for this screen, so this is the card refusing to hide
+        content rather than a composition invented for a width nothing draws.
+      */}
+      <div className="mt-7 flex max-w-full flex-wrap items-center justify-center gap-y-4 gap-x-6.5 rounded-[18px] bg-stone-0 px-5.5 py-4.5 shadow-[0_12px_40px_rgba(35,40,38,.2)]">
         <div className="flex items-center gap-3">
-          <Avatar size="lg" name={vendor.businessName} src={vendor.avatarUrl} />
+          {/*
+            The frame draws a 50px square at an 11px radius, not the 64px
+            circle this was. `receipt` is the size; the radius comes through
+            `className`, which every branch of `Avatar` appends last precisely
+            so a caller's override wins over the shared `rounded-full`.
+          */}
+          <Avatar
+            size="receipt"
+            name={vendor.businessName}
+            src={vendor.avatarUrl}
+            className="rounded-[11px]"
+          />
           <div>
             <p className="font-display text-[18px] text-stone-900">{vendor.businessName}</p>
-            <p className="mt-0.5 text-xs text-stone-600">
+            <p className="mt-0.5 text-meta text-stone-600">
               {[occasionLabel(booking.eventType), booking.venue, vendor.city]
                 .filter(Boolean)
                 .join(' · ')}
@@ -136,7 +198,7 @@ export function BookingConfirmed({
         <span aria-hidden="true" className="h-11 w-px bg-stone-200" />
 
         <div>
-          <p className="text-label text-stone-600">Paid</p>
+          <p className="text-label font-semibold tracking-label text-stone-600 uppercase">Paid</p>
           <p className="font-display text-[24px] text-stone-900">
             {formatPrice(booking.totalAmountCents)}
           </p>
@@ -145,7 +207,9 @@ export function BookingConfirmed({
         <span aria-hidden="true" className="h-11 w-px bg-stone-200" />
 
         <div>
-          <p className="text-label text-stone-600">Booking</p>
+          <p className="text-label font-semibold tracking-label text-stone-600 uppercase">
+            Booking
+          </p>
           {/*
             The row id, in mono, as the frame draws it. It is what a support
             request is about, so it is legible and selectable rather than
@@ -180,26 +244,32 @@ export function BookingConfirmed({
             So this takes the system's sage-as-text and the deviation is
             recorded here rather than resolved by inventing a `sage-700`.
           */
-          className="rounded-[10px] bg-stone-0 px-6 py-3.25 text-sm font-semibold text-sage-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
+          className="rounded-[10px] bg-stone-0 px-6 py-3.25 text-cta font-semibold text-sage-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
         >
           Message {vendor.businessName}
         </Link>
         <Link
           href="/bookings"
-          className="rounded-[10px] border border-stone-0/45 px-6 py-3.25 text-sm font-semibold text-stone-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
+          className="rounded-[10px] border border-stone-0/45 px-6 py-3.25 text-cta font-semibold text-stone-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
         >
           View booking
         </Link>
       </div>
 
-      <div className="mt-7.5 w-[600px] border-t border-stone-0/20 pt-5.5 text-center">
-        <p className="mb-3 text-[12.5px] text-stone-0/75">Still need someone for {day}?</p>
-        <div className="flex justify-center gap-2.5">
+      {/*
+        `max-w-[600px]`, not `w-[600px]`: the rule is 600 wide wherever 600 fits
+        — every width the degradation table draws — and the field clips its
+        overflow, so a fixed 600 ran the divider off both edges and cut the
+        first and last chip in half below ~680. Same reason the chip row wraps.
+      */}
+      <div className="mt-7.5 w-full max-w-[600px] border-t border-stone-0/20 pt-5.5 text-center">
+        <p className="mb-3 text-sm text-stone-0">Still need someone for {day}?</p>
+        <div className="flex flex-wrap justify-center gap-2.5">
           {CROSS_SELL.map((category) => (
             <Link
               key={category.slug}
               href={`/search?category=${category.slug}&date=${booking.eventDate}`}
-              className="rounded-full bg-white/14 px-3.75 py-2 text-[12.5px] font-semibold text-stone-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
+              className="rounded-full bg-stone-900/14 px-3.75 py-2 text-sm font-semibold text-stone-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
             >
               {category.label}
             </Link>

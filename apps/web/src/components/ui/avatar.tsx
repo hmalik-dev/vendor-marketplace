@@ -37,6 +37,15 @@ export const AVATAR_SIZES = {
   sm: 36,
   md: 38,
   /*
+   * The confirmed receipt card, frame `06`. Named for its one call site rather
+   * than given a t-shirt letter, like `row` above: 50 sits between `md` and
+   * `xl` and the scale has no step to spare there. The frame draws it as a
+   * square at an 11px radius, which the call site asks for through `className`
+   * — an *arbitrary* radius, which tailwind-merge does resolve against
+   * `rounded-full`, unlike the project token `thumb` needs. See `AVATAR_SHAPES`.
+   */
+  receipt: 50,
+  /*
    * Frame `05`'s checkout rail, whose `.ph` is 54px. Paired with `shape="panel"`
    * there: the rail draws the thing being bought rather than a person.
    */
@@ -256,7 +265,7 @@ export function Avatar({
          * system, and `display-type.test.ts` enforces it across the whole tree
          * — except here, where the size comes from a numeric prop through
          * `style` and no class states it. That exemption was a readability
-         * limitation of the guard, never a licence: four of the six sizes
+         * limitation of the guard, never a licence: four of the sizes
          * (`xs` 13, `row` 13, `sm` 13, `md` 15.96) were setting Instrument
          * Serif below the floor.
          *
