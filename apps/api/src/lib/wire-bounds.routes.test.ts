@@ -49,6 +49,9 @@ describe('wire bounds agree with their columns', () => {
   /** A business name at exactly the column's limit — the case that overflowed. */
   const LONGEST_BUSINESS_NAME = 'A'.repeat(MAX_BUSINESS_NAME_LENGTH);
 
+  /** A well-formed id that names nothing — the read must 400 before it 404s. */
+  const NIL_UUID = '11111111-1111-4111-8111-111111111111';
+
   async function createVendorProfile(clerkUserId: string, businessName: string): Promise<string> {
     const profile = await harness.app.inject({
       method: 'POST',
@@ -362,13 +365,80 @@ describe('wire bounds agree with their columns', () => {
       expect(new Set(ids).size).toBe(3);
     });
 
+    /*
+     * The regression the window itself introduced. `?status=` used to be applied
+     * to the rows *after* they came back, which was equivalent while the read
+     * was unbounded — and once it is one page, a "page" is the matching subset
+     * of a page of all statuses, so it reads empty whenever that page holds none
+     * while matches sit further down. At the default page size that made an
+     * account's oldest pending request invisible to `?status=pending` outright.
+     */
+    it('filters by status in the query, not over the page it returned', async () => {
+      const vendorId = await createVendorProfile(VENDOR, 'Sunlit Studio');
+
+      const ids: string[] = [];
+      for (const days of [10, 20, 30]) {
+        const created = await harness.app.inject({
+          method: 'POST',
+          url: '/booking-requests',
+          headers: bearer(CUSTOMER),
+          payload: {
+            vendorId,
+            eventDate: toDateString(addDays(new Date(), days)),
+            eventType: 'wedding',
+            eventLocation: 'Barr Mansion, Austin, TX',
+            customDetails: 'Full-day documentary coverage for about a hundred guests.',
+          },
+        });
+        expect(created.statusCode, created.body).toBe(201);
+        ids.push(created.json().id as string);
+      }
+
+      /*
+       * The two newest are declined, so the only `pending` row is the oldest —
+       * off the first page of two, because the queue is newest-first.
+       */
+      for (const id of ids.slice(1)) {
+        const declined = await harness.app.inject({
+          method: 'POST',
+          url: `/booking-requests/${id}/decline`,
+          headers: bearer(VENDOR),
+        });
+        expect(declined.statusCode, declined.body).toBe(200);
+      }
+
+      const pending = await harness.app.inject({
+        method: 'GET',
+        url: '/booking-requests?status=pending&pageSize=2',
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(pending.statusCode).toBe(200);
+      expect(pending.json()).toHaveLength(1);
+      expect(pending.json()[0].id).toBe(ids[0]);
+      expect(pending.json()[0].status).toBe('pending');
+
+      // And the complement, from the same window.
+      const declined = await harness.app.inject({
+        method: 'GET',
+        url: '/booking-requests?status=declined&pageSize=2',
+        headers: bearer(CUSTOMER),
+      });
+      expect(declined.json()).toHaveLength(2);
+    });
+
     it('refuses a page size past the ceiling on all four reads', async () => {
       const beyond = MAX_PAGE_SIZE + 1;
 
+      /*
+       * All four, including the vendor-facing one behind a relationship gate:
+       * the ceiling has to be refused before the gate, not instead of it.
+       */
       for (const [url, actor] of [
         ['/booking-requests', CUSTOMER],
         ['/bookings', CUSTOMER],
         ['/customers/me/reviews', CUSTOMER],
+        [`/customers/${NIL_UUID}/reviews`, VENDOR],
       ] as const) {
         const response = await harness.app.inject({
           method: 'GET',

@@ -194,6 +194,46 @@ describe('seedDemoData', () => {
     expect(new Set(rows.map((row) => row.status))).toEqual(new Set(BOOKING_STATUSES));
   });
 
+  /*
+   * #408: the counters are derived from bookings and had no writer at all, so
+   * every customer read as a permanent 0-booking "New member". The API's three
+   * booking writers maintain them now, and the seed bypasses all three — so a
+   * seeded database showed the defect the ticket closed unless the seed
+   * recomputes them itself.
+   */
+  it('leaves every booking counter agreeing with the bookings under it', async () => {
+    await seedDemoData(testDb.db, NOW);
+
+    const actual = await testDb.db
+      .select({
+        customerId: bookings.customerId,
+        status: bookings.status,
+      })
+      .from(bookings);
+
+    const stored = await testDb.db
+      .select({
+        id: users.id,
+        total: users.totalBookingsCount,
+        completed: users.completedBookingsCount,
+        cancelled: users.cancelledBookingsCount,
+      })
+      .from(users);
+
+    // The seed writes bookings for several customers; a zero here is the bug.
+    expect(actual.length).toBeGreaterThan(0);
+
+    for (const row of stored) {
+      const theirs = actual.filter((booking) => booking.customerId === row.id);
+
+      expect(row, `counters for ${row.id}`).toMatchObject({
+        total: theirs.length,
+        completed: theirs.filter((booking) => booking.status === 'completed').length,
+        cancelled: theirs.filter((booking) => booking.status === 'cancelled').length,
+      });
+    }
+  });
+
   it('writes at least 20 reviews, in both directions, with the resolved visibility', async () => {
     await seedDemoData(testDb.db, NOW);
 

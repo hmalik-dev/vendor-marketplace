@@ -22,3 +22,4 @@
 - [.dc.html tag balance](review-checklist-dc-html-tag-balance.md) — a re-cut block's surplus `</div>` evicts a frame from its `.sc`; string-sliced frame tests can't see it. Diff div counts, then diff `closest('.sc')` in Chromium
 - [Path guard vs URL normalization](review-checklist-guard-parses-raw-path-url-normalises.md) — `split('/')` ownership checks miss `a/<victim>/./c`; run the candidate through the write schema, then `new URL()`, and compare
 - [Viewer anchor vs the read behind it](review-checklist-viewer-anchor-vs-the-read-behind-it.md) — re-anchoring a surface on the viewer's clock without widening the server read behind it; an absent row in a sparse table is a claim, not a gap
+- [LIMIT added under a post-fetch filter](review-checklist-limit-added-under-a-post-fetch-filter.md) — paging a read whose service filters afterwards returns `[]` on page 1; probe with pageSize=2, not the default

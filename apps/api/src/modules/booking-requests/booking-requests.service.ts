@@ -666,22 +666,31 @@ export async function listBookingRequests(
    * own — neither can name whose requests to read, so scoping is derived from
    * the session rather than accepted from the query string.
    */
-  const filter = vendorId ? { vendorId } : { customerId: user.id };
   if (user.role === 'vendor' && !vendorId) {
     return [];
   }
 
+  /*
+   * The status goes into the query, not into a filter over the answer.
+   *
+   * It used to be applied after the read, which was equivalent while the read
+   * was unbounded and is not once it is one page: `?status=pending` would then
+   * return the pending rows that happened to land on that page of *all*
+   * statuses — empty whenever the page held none, with matches further down
+   * (#408). `readsAs` carries the lazy expiry into SQL so asking for `expired`
+   * still returns the request that ages out on this very read.
+   */
+  const filter = {
+    ...(vendorId ? { vendorId } : { customerId: user.id }),
+    ...(query.status ? { status: query.status } : {}),
+    now,
+  };
+
   const rows = await findRequests(db, filter, pageWindow(query));
 
-  /*
-   * Expiry is applied before the status filter, so asking for `expired`
-   * returns the request that aged out on this very read rather than missing it
-   * until someone happens to open it.
-   */
-  const aged = await mapWithConcurrency(rows, EXPIRY_CONCURRENCY, (row) =>
+  const visible = await mapWithConcurrency(rows, EXPIRY_CONCURRENCY, (row) =>
     ageIfExpired(db, row, now, mail),
   );
-  const visible = query.status ? aged.filter((row) => row.status === query.status) : aged;
 
   if (visible.length === 0) {
     return [];

@@ -8,7 +8,11 @@ import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { hashString, makeRandom } from './deterministic.js';
-import { recomputeVendorRatings, type AnyPgDatabase } from './seed-support.js';
+import {
+  recomputeVendorRatings,
+  refreshCustomerBookingCounts,
+  type AnyPgDatabase,
+} from './seed-support.js';
 import {
   MARKETING_COVER_BASE,
   MARKETING_CUSTOMERS,
@@ -390,6 +394,7 @@ async function seedReviewHistory<
 ): Promise<{ bookingsCreated: number; reviewsCreated: number }> {
   let bookingsCreated = 0;
   let reviewsCreated = 0;
+  const customerIdsWithBookings: string[] = [];
 
   for (const vendor of MARKETING_VENDORS) {
     const vendorId = vendorIdBySlug.get(vendor.slug);
@@ -445,6 +450,7 @@ async function seedReviewHistory<
       .values(bookingValues)
       .returning({ id: bookings.id });
     bookingsCreated += bookingRows.length;
+    customerIdsWithBookings.push(...bookingValues.map((booking) => booking.customerId));
 
     const reviewValues = bookingRows.map((booking, index) => {
       const rating = ratings[index]!;
@@ -465,6 +471,17 @@ async function seedReviewHistory<
   }
 
   await recomputeVendorRatings(db, [...vendorIdBySlug.values()]);
+
+  /*
+   * And the customers' derived booking counters, for the same reason the
+   * ratings are recomputed here: the seed writes `bookings` rows directly, so
+   * nothing on the API's write path runs and the counters would stay at their
+   * column default. That is the "every customer is a 0-booking New member"
+   * symptom #408 exists to remove, reproduced on every seeded database.
+   */
+  for (const customerId of new Set(customerIdsWithBookings)) {
+    await refreshCustomerBookingCounts(db, customerId);
+  }
 
   return { bookingsCreated, reviewsCreated };
 }

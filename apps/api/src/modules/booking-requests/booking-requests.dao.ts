@@ -1,4 +1,18 @@
-import { and, desc, eq, getTableColumns, inArray, isNull, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  not,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -14,6 +28,7 @@ import {
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import {
+  EXPIRABLE_BOOKING_REQUEST_STATUSES,
   LIVE_BOOKING_REQUEST_STATUSES,
   type BookingRequestStatus,
   type PageWindow,
@@ -91,6 +106,55 @@ export interface RequestListFilter {
   customerId?: string;
   vendorId?: string;
   status?: BookingRequestStatus;
+  /**
+   * The instant the caller is reading at, so the status predicate agrees with
+   * the lazy expiry the service applies to the rows it gets back.
+   */
+  now: Date;
+}
+
+/**
+ * A row whose reply window has run out but whose `status` has not caught up.
+ *
+ * Expiry is lazy — nothing sweeps the table, a row is aged on the next read of
+ * it — so `status` is the value as last *written* and the reader's value is one
+ * step ahead of it. Every predicate that filters on status therefore has to
+ * know about this, or it answers with the stale one.
+ */
+function hasLapsed(now: Date): SQL {
+  return and(
+    inArray(bookingRequests.status, [...EXPIRABLE_BOOKING_REQUEST_STATUSES]),
+    isNotNull(bookingRequests.expiresAt),
+    lte(bookingRequests.expiresAt, now),
+  ) as SQL;
+}
+
+/**
+ * The status the *reader* sees, as SQL.
+ *
+ * This has to be a predicate rather than a filter over the returned rows,
+ * because the rows are now one page rather than the whole history: filtering
+ * after the window means `?status=pending` returns the pending rows that happen
+ * to be on that page of *all* statuses, which is empty whenever the page holds
+ * none — while matches sit further down. At the default page size that made an
+ * account's oldest pending request invisible to `?status=pending` outright
+ * (#408).
+ *
+ * `expired` is the status a row reaches without anyone writing it, so it takes
+ * both the rows that have been aged and the rows that are about to be; the
+ * expirable statuses correspondingly shed the rows that have lapsed. Anything
+ * terminal cannot move on its own and compares directly.
+ */
+function readsAs(status: BookingRequestStatus, now: Date): SQL {
+  if (status === 'expired') {
+    return or(eq(bookingRequests.status, 'expired'), hasLapsed(now)) as SQL;
+  }
+
+  if ((EXPIRABLE_BOOKING_REQUEST_STATUSES as readonly string[]).includes(status)) {
+    return and(eq(bookingRequests.status, status), not(hasLapsed(now))) as SQL;
+  }
+
+  return eq(bookingRequests.status, status);
 }
 
 /**
@@ -105,15 +169,16 @@ export async function findRequests(
   filter: RequestListFilter,
   window: PageWindow,
 ): Promise<BookingRequestRow[]> {
-  const conditions = [
+  const owner = [
     filter.customerId ? eq(bookingRequests.customerId, filter.customerId) : undefined,
     filter.vendorId ? eq(bookingRequests.vendorId, filter.vendorId) : undefined,
-    filter.status ? eq(bookingRequests.status, filter.status) : undefined,
   ].filter((condition) => condition !== undefined);
 
-  if (conditions.length === 0) {
+  if (owner.length === 0) {
     return [];
   }
+
+  const conditions = filter.status ? [...owner, readsAs(filter.status, filter.now)] : owner;
 
   return db
     .select()

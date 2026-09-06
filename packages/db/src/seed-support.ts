@@ -1,8 +1,8 @@
-import { inArray, sql } from 'drizzle-orm';
+import { eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 
-import { vendorProfiles } from './schema/index.js';
+import { bookings, users, vendorProfiles } from './schema/index.js';
 
 /**
  * Database helpers shared by the fabricating seeds.
@@ -28,6 +28,68 @@ export type AnyPgDatabase<
   TFullSchema extends Record<string, unknown>,
   TSchema extends TablesRelationalConfig,
 > = PgDatabase<TQueryResult, TFullSchema, TSchema>;
+
+/**
+ * Rewrites a customer's three derived booking counters from the bookings
+ * themselves.
+ *
+ * `users.total/completed/cancelled_bookings_count` were documented as derived
+ * and had **no writer anywhere**, so every customer read as a permanent
+ * 0-booking "New member": their own profile said so, `/admin/customers` listed
+ * zero for everyone, and `GET /customers/:id/profile` told every vendor the
+ * person they were about to work with had never booked anything and had a null
+ * completion rate (#408).
+ *
+ * Recomputed rather than incremented, exactly as `recomputeVendorRatings` below
+ * is and for the same reason: a counter that is added to drifts the first time
+ * a write is retried, and a counter derived from the rows it counts cannot.
+ *
+ * **It lives beside the seed helpers rather than in the API's DAO because the
+ * seeds write `bookings` rows too.** `seed-demo` and `seed-marketing` bypass
+ * the API entirely, so a writer only the API could reach left every freshly
+ * seeded database showing the exact symptom the ticket exists to remove — and
+ * `apps -> packages` is one-way, so the shared derivation has to be this side
+ * of it. The API's three booking writers call it from their transactions.
+ */
+export async function refreshCustomerBookingCounts<
+  TQueryResult extends PgQueryResultHKT,
+  TFullSchema extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+>(db: AnyPgDatabase<TQueryResult, TFullSchema, TSchema>, customerId: string): Promise<void> {
+  /*
+   * The `users` row first, and this is not belt-and-braces.
+   *
+   * Under READ COMMITTED a second transaction blocks on this row, then
+   * re-evaluates the `SET` subqueries against **its own** statement snapshot —
+   * taken before the first one committed — so two bookings confirmed
+   * concurrently both write "1" and the customer's total is short by one until
+   * some other booking of theirs moves. Reproduced on the Docker Postgres.
+   * Taking the lock before the aggregate is what serialises the two readers;
+   * `no key update` because nothing here touches the primary key, so an
+   * unrelated foreign-key check against this user is not made to wait. Same
+   * mechanism as `lockForRecompute` in the API's review DAO.
+   */
+  await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, customerId))
+    .for('no key update')
+    .limit(1);
+
+  const countOf = (predicate: SQL): SQL<number> =>
+    sql`(select count(*)::int from ${bookings}
+         where ${bookings.customerId} = ${customerId} and ${predicate})`;
+
+  await db
+    .update(users)
+    .set({
+      totalBookingsCount: countOf(sql`true`),
+      completedBookingsCount: countOf(sql`${bookings.status} = 'completed'`),
+      cancelledBookingsCount: countOf(sql`${bookings.status} = 'cancelled'`),
+      updatedAt: sql`now()`,
+    })
+    .where(eq(users.id, customerId));
+}
 
 /**
  * Recomputes `avg_rating` and `review_count` from the rows that actually exist.
