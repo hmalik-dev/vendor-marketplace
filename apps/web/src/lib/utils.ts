@@ -18,6 +18,7 @@ import { extendTailwindMerge } from 'tailwind-merge';
  * fails if a step is added there and not here.
  */
 const PROJECT_FONT_SIZES = [
+  'pill',
   'label',
   'helper',
   'meta',

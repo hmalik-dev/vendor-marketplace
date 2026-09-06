@@ -43,6 +43,22 @@ function read(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
 }
 
+/**
+ * One of the frame file's shared CSS rules, by selector.
+ *
+ * `.nav` and `.pill` are the two misses `#392` closed that live in the
+ * stylesheet rather than in frame `13`'s own markup, so the frame slice above
+ * cannot reach them. Read here for the same reason every other expectation in
+ * this file is read off the frame: a re-cut moves the target instead of
+ * silently disagreeing with a number written down beside it.
+ */
+function frameRule(selector: string): string {
+  const rule = new RegExp(`\\${selector}\\{([^}]*)\\}`).exec(frames);
+  expect(rule, selector).not.toBeNull();
+
+  return (rule as RegExpExecArray)[1] as string;
+}
+
 const frame = adminFrame();
 const dataTable = read('src/components/admin/data-table.tsx');
 const vendorTable = read('src/components/admin/vendor-table.tsx');
@@ -117,6 +133,51 @@ describe('the 210px rail', () => {
     }
   });
 
+  /*
+   * The rail's pitch, which `#392` found 14px too tall on every one of the
+   * seven rows — the rail ended 93px below where frame `13` draws it.
+   *
+   * `.side` sets no `gap`, so in the frame an item's pitch *is* its height:
+   * 9px of padding either side of a 13.5px line box. The app had a `min-h-11`
+   * floor and a `gap-1` between items, which is 44 + 4. Both are right below
+   * `lg`, where there is no rail at all and the strip is a touch target under
+   * `04-laws.md`; both are wrong from `lg` up, where the frame applies. So the
+   * assertions below are on the `lg:` branch, and the mobile floor is asserted
+   * to survive rather than being collateral of the fix.
+   */
+  it('builds a rail row out of the frame’s own box, not a 44px floor', () => {
+    const navRule = frameRule('.nav');
+
+    expect(navRule).toContain('padding:9px 12px');
+    expect(navRule).toContain('border-radius:9px');
+    expect(navRule).toContain('font-size:13.5px');
+    expect(navRule).toContain('font-weight:500');
+    expect(navRule).toContain('gap:10px');
+
+    /*
+     * 12px, 9px, 9px, 10px and 13.5px — anchored on the *link's* own fragment
+     * rather than class by class. A bare `toContain('px-3')` is satisfied twice
+     * over: by `px-3.5`, which this file warns about elsewhere, and by the
+     * `<nav>` wrapper's own `px-3`, so mutating the link to `px-4` left it green.
+     */
+    expect(nav).toContain('items-center gap-2.5 rounded-[9px] px-3 py-2.25 text-base font-medium');
+    expect(themeCss).toContain('--text-base: 13.5px');
+  });
+
+  it('drops the 44px floor and the inter-item gap where the frame draws the rail', () => {
+    // Kept below `lg`: the strip is a touch target there, and no frame draws it.
+    expect(nav).toContain('min-h-11');
+    // And released at `lg`, or the row is 44px tall against the frame's 34.
+    expect(nav).toContain('lg:min-h-0');
+
+    /*
+     * `.side` declares no `gap`, so seven `gap-1`s put the last row 24px low
+     * and the rail 93px low overall once the height error compounds with it.
+     */
+    expect(frameRule('.side')).not.toContain('gap:');
+    expect(nav).toContain('lg:gap-0');
+  });
+
   it('marks the active item the way `.navA` does', () => {
     expect(frame).toContain('class="nav navA"');
     // `.navA{background:#F7E7E0;color:#8E3F20;font-weight:600;box-shadow:inset 3px 0 0 #B4552F}`
@@ -151,7 +212,15 @@ describe('the table', () => {
   it('draws the surface, border and radius the frame draws', () => {
     expect(frame).toContain('background:#FFFDF9;border:1px solid #E4DDD1;border-radius:12px');
     expect(themeCss).toContain('--color-stone-300: #e4ddd1');
-    expect(dataTable).toContain('rounded-xl border border-stone-300 bg-stone-0');
+    /*
+     * 12px is `--radius-panel`, and `--radius-xl` on the line above it is 14 —
+     * near neighbours in the same ramp, which is exactly the drift a browser
+     * pass is worst at seeing and this file exists to catch. The pane read
+     * `rounded-xl` for four parity passes (#392).
+     */
+    expect(themeCss).toContain('--radius-panel: 12px');
+    expect(dataTable).toContain('rounded-panel border border-stone-300 bg-stone-0');
+    expect(dataTable).not.toContain('rounded-xl');
   });
 
   it('fixes the header row and scrolls the body, not the page', () => {
@@ -205,8 +274,8 @@ describe('the table', () => {
     const rail = railContent * 16 + 12 * 2 + 1;
 
     // `AdminSurface`'s pane gutters, and the table's own hairline either side.
-    expect(surface).toContain('overflow-hidden px-6 pb-5');
-    expect(dataTable).toContain('rounded-xl border border-stone-300 bg-stone-0');
+    expect(surface).toContain('overflow-hidden px-6 pb-4');
+    expect(dataTable).toContain('rounded-panel border border-stone-300 bg-stone-0');
     const smallLaptop = 1024;
     const expected = smallLaptop - rail - 24 * 2 - 1 * 2;
 
@@ -269,11 +338,11 @@ describe('the table', () => {
      * stopped being true at the first page that needed a pager.
      */
     expect(surface).toContain(
-      '<div className="min-h-0 flex-1 overflow-hidden px-6 pb-5">{children}</div>',
+      '<div className="min-h-0 flex-1 overflow-hidden px-6 pb-4">{children}</div>',
     );
     // The pager is inside the title block, above the pane that scrolls.
     const pagerAt = surface.indexOf('<Pager {...pager}');
-    const paneAt = surface.indexOf('<div className="min-h-0 flex-1 overflow-hidden px-6 pb-5">');
+    const paneAt = surface.indexOf('<div className="min-h-0 flex-1 overflow-hidden px-6 pb-4">');
     expect(pagerAt).toBeGreaterThan(-1);
     expect(pagerAt).toBeLessThan(paneAt);
   });
@@ -346,6 +415,32 @@ describe('the status pills', () => {
       expect(textToken.toLowerCase(), `${label} text`).toContain(text.toLowerCase());
       expect(vendorTable, label).toContain(`{ tone: '${tone}', label: '${label}' }`);
     }
+  });
+
+  /*
+   * The pill's *box*, which `#392` measured at 47.36x26 against the frame's
+   * 44.88x23 on every surface that draws one — not only the console.
+   *
+   * This is the miss that was a plan correction rather than a component fix:
+   * `px-2.5 py-1.5 text-xs` is what `03-components.md` prescribes, so the
+   * component was obeying the plan and the plan disagreed with the frame. Design
+   * law is that the frame wins, so both moved. `03-components.md` is asserted
+   * here too, or the next pass reads the old vocabulary and re-lands the defect.
+   */
+  it('sizes the pill off `.pill`, and keeps the plan saying the same thing', () => {
+    const pillRule = frameRule('.pill');
+
+    expect(pillRule).toContain("font:700 10px 'Instrument Sans'");
+    expect(pillRule).toContain('letter-spacing:.07em');
+    expect(pillRule).toContain('padding:5px 10px');
+    expect(pillRule).toContain('border-radius:999px');
+
+    // 10px is a step of its own: `--text-xs` is 11 and `--text-label` is 10.5.
+    expect(themeCss).toContain('--text-pill: 10px');
+
+    const box = 'rounded-full px-2.5 py-[5px] text-pill font-bold tracking-[.07em] uppercase';
+    expect(read('src/components/ui/status-pill.tsx')).toContain(box);
+    expect(read('../../design/design-plan/03-components.md')).toContain(box);
   });
 });
 
@@ -494,6 +589,30 @@ describe('the title row and the Refine bar', () => {
   it('sets the heading at the frame’s 23px, not `.h2`’s 26px', () => {
     expect(frame).toContain('class="h2" style="font-size:23px">Vendors<');
     expect(surface).toContain('text-[23px]');
+  });
+
+  /*
+   * The shell's three vertical paddings, which together decide whether the
+   * fifteenth row fits — `22-admin.md`'s emphatic *fifteen*, and the one thing
+   * it says to verify rather than assume.
+   *
+   * jsdom cannot measure the pane, so what is guarded here is the arithmetic's
+   * inputs. The app was 2px over the frame at the top, 2px over at the bottom
+   * of the title block, and 4px over in the pane: 8px, which is `(704 − 34) /
+   * 45 = 14.89` rows against the frame's 15.07. `#385` named two of the three
+   * and fixing only those would have left the block 2px tall (#416).
+   */
+  it('takes all three of the shell’s vertical paddings from the frame', () => {
+    expect(frame).toContain('padding:16px 24px 12px');
+    // The closing quote matters: without it `pb-3` is a prefix of `pb-3.5`, the
+    // pre-#392 value, so the exact half-revert #416 was filed for stayed green.
+    expect(surface).toContain('className="shrink-0 px-6 pt-4 pb-3"');
+
+    expect(frame).toContain('flex:1;overflow:hidden;padding:0 24px 16px');
+    expect(surface).toContain('overflow-hidden px-6 pb-4');
+
+    expect(frame).toContain('justify-content:space-between;margin-bottom:14px');
+    expect(surface).toContain('mb-3.5 flex items-baseline justify-between');
   });
 
   it('keeps the count line’s clauses and its separator', () => {

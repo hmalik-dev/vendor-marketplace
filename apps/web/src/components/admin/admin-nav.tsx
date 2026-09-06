@@ -31,6 +31,13 @@ const ITEMS = [
  * a 1px right border — so `box-content` is what makes the same token measure
  * the footprint the frame draws rather than 25px narrow. Same arithmetic as
  * `VendorNav`, and the same reason.
+ *
+ * A row is the frame's `.nav` box from `lg` up: 9px of padding either side of a
+ * 13.5px line box, 34px, with no gap between rows. `min-h-11` is released there
+ * (`lg:min-h-0`) — it made every row 44px and, with `gap-1`, a 48px pitch, which
+ * ended the rail 93px below where frame `13` draws it (#392). It survives below
+ * `lg`, where the rail is a horizontal touch strip and `04-laws.md`'s target
+ * size is the governing constraint rather than a frame nothing draws.
  */
 export function AdminNav({ reviewCount }: AdminNavProps): React.ReactElement {
   const pathname = usePathname();
@@ -44,8 +51,12 @@ export function AdminNav({ reviewCount }: AdminNavProps): React.ReactElement {
         A rail from `lg` up, where frame `13` draws one. Below that it is a
         horizontally scrollable strip rather than seven stacked full-width rows,
         which would spend most of a small screen before the table begins.
+
+        `lg:gap-0` because `.side` sets no gap: an item's pitch in the frame *is*
+        its height. Below `lg` the strip keeps `gap-1`, where nothing is drawn to
+        match and the rows read as separate targets rather than one bar.
       */}
-      <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+      <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-visible">
         {ITEMS.map((item) => {
           /*
            * Exact match for Overview, prefix for the rest. `/admin` is a prefix
@@ -63,7 +74,7 @@ export function AdminNav({ reviewCount }: AdminNavProps): React.ReactElement {
                 href={item.href}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-11 items-center gap-2.5 rounded-[9px] px-3 py-2.25 text-base font-medium whitespace-nowrap transition-colors duration-(--duration-fast)',
+                  'flex min-h-11 items-center gap-2.5 rounded-[9px] px-3 py-2.25 text-base font-medium whitespace-nowrap transition-colors duration-(--duration-fast) lg:min-h-0',
                   isActive
                     ? 'bg-clay-100 font-semibold text-clay-600 shadow-[inset_3px_0_0_var(--color-clay-400)]'
                     : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900',
