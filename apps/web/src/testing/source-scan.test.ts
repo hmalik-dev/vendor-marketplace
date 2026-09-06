@@ -43,4 +43,39 @@ describe('withoutComments', () => {
 
     expect(withoutComments(source)).toBe(source);
   });
+
+  /*
+   * The harder half, and the one a `(^|[^:])//` guard gets wrong in the
+   * opposite direction: `://*` in a CSP entry. The `:` stops the line-comment
+   * rule, and then the second slash and the `*` open a **block** comment that
+   * runs to the next `*​/` anywhere below — swallowing every line in between.
+   * `security-headers.ts` lost 151 lines to exactly this.
+   */
+  it('does not let a wildcard URL open a block comment that eats the file', () => {
+    const source = [
+      "const csp = ['https://*.clerk.accounts.dev'];",
+      'const between = 1;',
+      '/* an ordinary block comment */',
+      'const after = 2;',
+    ].join('\n');
+    const lines = withoutComments(source).split('\n');
+
+    expect(lines[0]).toBe(source.split('\n')[0]);
+    expect(lines[1]).toBe('const between = 1;');
+    expect(lines[2]?.trim()).toBe('');
+    expect(lines[3]).toBe('const after = 2;');
+  });
+
+  /*
+   * The guard above must not have bought itself immunity by refusing to strip
+   * comments that merely mention a URL. Both of these are comments and both go.
+   */
+  it('still strips a comment that contains a URL', () => {
+    expect(withoutComments('const a = 1; // see https://example.com/docs')).toBe(
+      'const a = 1;                                ',
+    );
+    expect(withoutComments('/* https://example.com */ const a = 1;')).toBe(
+      '                          const a = 1;',
+    );
+  });
 });

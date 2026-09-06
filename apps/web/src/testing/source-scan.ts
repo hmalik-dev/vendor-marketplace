@@ -52,15 +52,25 @@ async function walk(dir: string, extensions: readonly string[]): Promise<string[
 }
 
 /**
- * A block comment, or a line comment that is not the `//` of a URL.
+ * A URL's own slashes, a block comment, or a line comment — in that order,
+ * because the order is the whole guard.
  *
- * The `(^|[^:])` guard is why this is one pattern rather than two chained
- * replaces: without it `https://host/path` in a string literal loses everything
- * from the slashes to the end of the line, and the guard reading that file
- * quietly stops seeing the rest of it. The character before the slashes is
- * captured so the replacer can put it back.
+ * A URL is matched **first and kept**, so neither comment rule can start inside
+ * one. Anything less is a hole, and both halves have been one:
+ *
+ * - Without the URL alternative at all, `'https://host/path'` in a string reads
+ *   as a line comment and the rest of that line disappears — the guard scanning
+ *   the file quietly stops seeing it.
+ * - Guarding it as `(^|[^:])//` instead is worse, and it is the version #395
+ *   nearly shipped. The `:` stops the *line*-comment rule, then the scan
+ *   advances one character and the second slash of `://*` opens a **block**
+ *   comment that runs to the next `*​/` anywhere below. On `security-headers.ts`,
+ *   whose CSP lists `'https://*.clerk.accounts.dev'`, that swallowed 151 lines.
+ *
+ * So the URL is consumed rather than merely stepped over. `[^\s'"\`]*` ends it
+ * at whitespace or the closing quote, which is where a URL in source ends.
  */
-const COMMENT = /\/\*[\s\S]*?\*\/|(^|[^:])\/\/[^\n]*/gm;
+const COMMENT = /(:\/\/[^\s'"`]*)|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
 
 /**
  * Prose explaining a trap is not an instance of it.
@@ -76,13 +86,12 @@ const COMMENT = /\/\*[\s\S]*?\*\/|(^|[^:])\/\/[^\n]*/gm;
  * about to make a fifth. This is the union of them, and the only one left.
  */
 export function withoutComments(source: string): string {
-  return source.replace(COMMENT, (match, before?: string) => {
-    const kept = before ?? '';
-
-    // Blanked, not deleted, so every line *and column* after a comment is still
-    // the one a reader finds at the `file:line` a guard prints.
-    return kept + match.slice(kept.length).replace(/[^\n]/g, ' ');
-  });
+  return source.replace(COMMENT, (match, url?: string) =>
+    // A URL is matched only to be handed back untouched — see `COMMENT`. A real
+    // comment is blanked rather than deleted, so every line *and column* after
+    // it is still the one a reader finds at the `file:line` a guard prints.
+    url === undefined ? match.replace(/[^\n]/g, ' ') : match,
+  );
 }
 
 /**

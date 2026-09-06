@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import { BRAND_NAME, pageTitle, uuidSchema } from '@vendor-marketplace/shared';
-import { Logo, LOGO_SIZES } from '@/components/brand/logo';
-import { CheckoutScreen, SAGE_DOT } from '@/components/checkout/checkout-screen';
+import { pageTitle, uuidSchema } from '@vendor-marketplace/shared';
+import { CheckoutScreen } from '@/components/checkout/checkout-screen';
 import {
   CheckoutUnavailable,
   type CheckoutUnavailableReason,
@@ -26,11 +25,10 @@ interface PageProps {
 /**
  * Frame `05`. The screen that takes the money.
  *
- * The shell is **not** the app shell: `14-checkout.md` strips the header back to
- * the wordmark and one reassurance line, with no nav at all, because nothing on
- * this screen should compete with finishing. That is a deliberate exception to
- * the shared chrome rather than an oversight, and it is why the header is here
- * rather than in a layout.
+ * The shell is **not** the app shell — `14-checkout.md` strips the chrome back
+ * to a wordmark and one reassurance line — and that shell is `layout.tsx` in
+ * this directory, so the segment's `not-found` and `error` boundaries wear it
+ * too. See the note there.
  */
 export default async function CheckoutPage({ params }: PageProps): Promise<React.ReactElement> {
   await requireRole('customer');
@@ -67,41 +65,10 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
     notFound();
   }
 
-  return (
-    <div className="flex min-h-dvh flex-col bg-stone-50">
-      <header className="flex h-(--header-height) flex-none items-center justify-between border-b border-stone-300 bg-stone-0 px-8">
-        {/*
-          No nav, and the wordmark is not a link — nothing leads away from here.
-
-          `desktopHeader`, not `authPanel`: frame `05` line 878 draws 15px
-          circles on this bar, the same mark the app shell wears. The 19px
-          panel size belongs to the sign-in card, where the wordmark is the
-          screen's own masthead rather than a corner mark.
-        */}
-        <Logo size={LOGO_SIZES.desktopHeader} />
-        <p className="flex items-center gap-2.25 text-sm text-stone-700">
-          <span aria-hidden="true" className={SAGE_DOT} />
-          Secure checkout · encrypted by Stripe
-        </p>
-      </header>
-
-      {/*
-        A labelled region, not a second `<main>`. The layout owns the page's one
-        `main#main` landmark, and nesting another inside it announced two main
-        regions and made every `role=main` locator ambiguous. `<section>` keeps
-        the name this area had without claiming the landmark twice.
-      */}
-      <section
-        aria-label={`Checkout · ${BRAND_NAME}`}
-        className="flex flex-1 flex-col overflow-hidden"
-      >
-        {outcome.state === 'ready' ? (
-          <CheckoutScreen checkout={outcome.checkout} requestId={parsed.data} />
-        ) : (
-          await unavailableScreen(outcome.state, parsed.data)
-        )}
-      </section>
-    </div>
+  return outcome.state === 'ready' ? (
+    <CheckoutScreen checkout={outcome.checkout} requestId={parsed.data} />
+  ) : (
+    await unavailableScreen(outcome.state, parsed.data)
   );
 }
 
