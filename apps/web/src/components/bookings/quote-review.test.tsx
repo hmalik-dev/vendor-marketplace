@@ -1,3 +1,4 @@
+import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +25,25 @@ function quotedRequest(overrides: Partial<WireBookingRequest> = {}): WireBooking
     vendor: { slug: 'kessler-and-co', businessName: 'Kessler & Co.', avatarUrl: null },
     ...overrides,
   } as unknown as WireBookingRequest;
+}
+
+/** A request whose booking was paid for and then cancelled. */
+function cancelledBooking(
+  settlement: Partial<NonNullable<WireBookingRequest['settlement']>> = {},
+): WireBookingRequest {
+  return quotedRequest({
+    status: 'cancelled',
+    settlement: {
+      bookingId: 'bk-1',
+      status: 'cancelled',
+      totalAmountCents: 145_000,
+      paidAt: new Date('2026-05-02T00:00:00Z'),
+      cancelledAt: new Date('2026-06-01T12:00:00Z'),
+      cancelledBy: 'customer',
+      refundAmountCents: 145_000,
+      ...settlement,
+    },
+  });
 }
 
 beforeEach(() => {
@@ -257,15 +277,80 @@ describe('QuoteReview', () => {
      * the only route to a `cancelled` request. #400 added two more — cancelling
      * a paid booking now settles its request, and so does an admin unwinding a
      * suspended account — and made the screen reachable from the hub, so the
-     * personal wording became false on two of the three paths. The status is
-     * the only thing the wire object carries about them, so the sentence says
-     * only what the status says.
+     * personal wording became false on two of the three paths. It then said
+     * "This request was cancelled.", which is never false and says nothing
+     * about a booking where money moved.
+     *
+     * #415 put the booking on the wire, so the three are told apart by shape:
+     * a withdrawal produced no booking at all, and the two that did carry who
+     * ended it.
      */
-    it('states that it was cancelled without claiming who did it', () => {
-      render(<QuoteReview request={quotedRequest({ status: 'cancelled' })} />);
+    it('names the withdrawal when no booking was ever made', () => {
+      render(<QuoteReview request={quotedRequest({ status: 'cancelled', settlement: null })} />);
 
-      expect(screen.getByText('This request was cancelled.')).toBeDefined();
+      expect(screen.getByText('You withdrew this request before it was accepted.')).toBeDefined();
+      expect(screen.queryByText(/refunded/i)).toBeNull();
+    });
+
+    /**
+     * The finding this ticket was filed for: a booking the customer paid for
+     * and cancelled said nothing about the amount or the refund.
+     */
+    it('names what was paid and what came back on a booking the customer cancelled', () => {
+      render(<QuoteReview request={cancelledBooking()} />);
+
+      expect(screen.getByText('You cancelled this booking on June 1, 2026.')).toBeDefined();
+      expect(
+        screen.getByText(
+          'You paid $1,450, and all of it was refunded to your original payment method.',
+        ),
+      ).toBeDefined();
       expect(screen.queryByText(/you withdrew/i)).toBeNull();
+    });
+
+    it('says a partial refund was partial rather than calling it the whole amount', () => {
+      render(<QuoteReview request={cancelledBooking({ refundAmountCents: 72_500 })} />);
+
+      expect(
+        screen.getByText('You paid $1,450, and $725 was refunded to your original payment method.'),
+      ).toBeDefined();
+    });
+
+    /**
+     * The third origin, and the one the old sentence was flatly untrue about:
+     * an operator unwinding a suspended account is not something the customer
+     * did.
+     */
+    it('says an operator unwound it, and does not blame the customer', () => {
+      render(<QuoteReview request={cancelledBooking({ cancelledBy: 'admin' })} />);
+
+      expect(
+        screen.getByText(
+          `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved was suspended.`,
+        ),
+      ).toBeDefined();
+      expect(screen.queryByText(/you cancelled/i)).toBeNull();
+    });
+
+    /**
+     * A booking cancelled before the column existed. It genuinely does not
+     * know who acted, and the fix for this screen was never to start guessing.
+     */
+    it('names no actor on a row that does not record one', () => {
+      render(<QuoteReview request={cancelledBooking({ cancelledBy: null })} />);
+
+      expect(screen.getByText('This booking was cancelled on June 1, 2026.')).toBeDefined();
+      expect(screen.queryByText(/you cancelled/i)).toBeNull();
+      expect(screen.queryByText(new RegExp(`${BRAND_NAME} cancelled`, 'i'))).toBeNull();
+    });
+
+    it('does not claim a refund on a booking that has none on record', () => {
+      render(<QuoteReview request={cancelledBooking({ refundAmountCents: null })} />);
+
+      expect(
+        screen.getByText('You paid $1,450. This booking has no refund on record.'),
+      ).toBeDefined();
+      expect(screen.queryByText(/was refunded/i)).toBeNull();
     });
 
     it('stays impersonal about a decline, which either party can make', () => {

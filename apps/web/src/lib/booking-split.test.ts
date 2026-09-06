@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitByEventDate } from './booking-split';
+import { lostBookings, splitByEventDate } from './booking-split';
 
 const NOW = new Date('2026-09-04T02:00:00.000Z');
 
@@ -61,5 +61,44 @@ describe('splitByEventDate', () => {
 
   it('returns two empty sides for no entries', () => {
     expect(splitByEventDate([], NOW)).toEqual({ upcoming: [], past: [] });
+  });
+});
+
+/*
+ * The vendor had no surface at all for a cancelled booking (#415): the page
+ * filters `accepted`, and #400 settles the parent request when a booking is
+ * cancelled, so the card simply stopped rendering.
+ */
+describe('lostBookings', () => {
+  const settlement = {
+    bookingId: 'bk-1',
+    status: 'cancelled' as const,
+    totalAmountCents: 145_000,
+    paidAt: new Date('2026-05-02T00:00:00Z'),
+    cancelledAt: new Date('2026-06-01T12:00:00Z'),
+    cancelledBy: 'customer' as const,
+    refundAmountCents: 145_000,
+  };
+
+  it('takes a cancelled request that reached a booking', () => {
+    expect(lostBookings([{ status: 'cancelled' as const, settlement }])).toHaveLength(1);
+  });
+
+  /*
+   * A withdrawal cost the vendor nothing — the date was never held — so
+   * listing it as a booking they lost would be the mirror of the defect.
+   */
+  it('leaves out a request withdrawn before it was ever accepted', () => {
+    expect(lostBookings([{ status: 'cancelled' as const, settlement: null }])).toEqual([]);
+  });
+
+  it('leaves out requests that are not cancelled', () => {
+    expect(
+      lostBookings([
+        { status: 'accepted' as const, settlement },
+        { status: 'declined' as const, settlement: null },
+        { status: 'pending' as const, settlement: null },
+      ]),
+    ).toEqual([]);
   });
 });

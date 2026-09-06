@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   AVAILABILITY_STATUSES,
+  BOOKING_CANCELLED_BY,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
@@ -57,6 +58,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'tag_category', values: TAG_CATEGORIES },
     { enumName: 'user_role', values: USER_ROLES },
     { enumName: 'booking_status', values: BOOKING_STATUSES },
+    { enumName: 'booking_cancelled_by', values: BOOKING_CANCELLED_BY },
     { enumName: 'booking_request_status', values: BOOKING_REQUEST_STATUSES },
     { enumName: 'availability_status', values: AVAILABILITY_STATUSES },
     { enumName: 'review_type', values: REVIEW_TYPES },

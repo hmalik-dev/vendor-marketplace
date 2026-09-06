@@ -236,6 +236,23 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
 export const BOOKING_STATUSES = ['confirmed', 'completed', 'cancelled', 'disputed'] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
+/**
+ * Who ended a booking, recorded rather than inferred.
+ *
+ * A cancelled booking reaches the customer's screen by two routes that read
+ * identically on the row — they cancelled it themselves, or an operator
+ * unwound it when the other party was suspended — and the two need different
+ * words. It was only ever distinguishable by string-matching
+ * `cancellation_reason` against the sentence `admin.service.ts` happens to
+ * write, which is a copy edit away from being wrong.
+ *
+ * A request withdrawn before acceptance is the third case and is **not** a
+ * value here: it produces no `bookings` row at all, so its absence is what
+ * names it.
+ */
+export const BOOKING_CANCELLED_BY = ['customer', 'admin'] as const;
+export type BookingCancelledBy = (typeof BOOKING_CANCELLED_BY)[number];
+
 export const REVIEW_TYPES = ['customer_to_vendor', 'vendor_to_customer'] as const;
 export type ReviewType = (typeof REVIEW_TYPES)[number];
 

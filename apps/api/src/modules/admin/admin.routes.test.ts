@@ -621,6 +621,116 @@ describe('admin routes', () => {
     });
 
     /*
+     * #415. The unwind records what Stripe *moved*, not what it asked for.
+     *
+     * The two agree on every first attempt and part company on the one that
+     * matters: a booking the customer already half-refunded through their own
+     * cancellation, whose row never moved, is found by `findRefund` here — and
+     * writing `totalAmountCents` for it would tell them on their own screen
+     * that they got everything back when half of it never left Stripe.
+     */
+    it('records the refund Stripe already sent, not the full charge', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      await createFutureBooking(customerId, vendor.profileId);
+
+      /* Half of the $1,200 charge, as a late customer cancellation would have
+         sent under D3's second tier, on a row that then failed to move. */
+      harness.stripe.refunds.push({
+        paymentIntentId: 'pi_test_ban',
+        amountCents: 60_000,
+        reason: 'requested_by_customer',
+        idempotencyKey: 'cancel_earlier_unwind',
+        reverseTransfer: true,
+        refundApplicationFee: true,
+      });
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(booking).toMatchObject({
+        status: 'cancelled',
+        cancelledBy: 'admin',
+        totalAmountCents: 120_000,
+        refundAmountCents: 60_000,
+      });
+    });
+
+    /*
+     * #415, and the same class as D31's own lesson: a refund Stripe *failed*
+     * is not money the customer got back.
+     *
+     * `refunds.list` returns `failed` and `canceled` refunds with `amount`
+     * populated. Reading one as "already refunded" used only to skip a retry;
+     * it now writes `refund_amount_cents`, which both parties' screens state
+     * as money returned — so a bank rejection would have the product name a
+     * refund that never landed.
+     */
+    it('does not read a failed refund as money the customer got back', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      await createFutureBooking(customerId, vendor.profileId);
+
+      harness.stripe.refunds.push({
+        paymentIntentId: 'pi_test_ban',
+        amountCents: 120_000,
+        reason: 'requested_by_customer',
+        idempotencyKey: 'cancel_failed_unwind',
+        reverseTransfer: true,
+        refundApplicationFee: true,
+        status: 'failed',
+      });
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      /* A second, real refund was sent rather than the failed one reused. */
+      expect(harness.stripe.refunds).toHaveLength(2);
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(booking).toMatchObject({ status: 'cancelled', refundAmountCents: 120_000 });
+      expect(harness.stripe.refunds[1]).toMatchObject({
+        idempotencyKey: 'ban-refund:unwind:' + booking!.id,
+      });
+    });
+
+    /*
+     * #415. The customer's screen must not tell them they cancelled a booking
+     * an operator unwound, and reading that off `cancellation_reason` would
+     * make an operator-facing sentence load-bearing copy.
+     */
+    it('records the unwind as the operator’s, with the whole charge refunded', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      await createFutureBooking(customerId, vendor.profileId);
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      const [booking] = await harness.database.db.select().from(bookings);
+      /* The literal, not `booking.totalAmountCents` — an assertion that reads
+         the row it is checking passes whatever the row says. */
+      expect(booking).toMatchObject({
+        status: 'cancelled',
+        cancelledBy: 'admin',
+        totalAmountCents: 120_000,
+        refundAmountCents: 120_000,
+      });
+    });
+
+    /*
      * One failure must not abandon the rest of the unwind — which needs **two**
      * bookings, one refusable and one not. A first version of this test refused
      * `pi_test_ban`, which `createFutureBooking` writes on every row, so there
@@ -973,6 +1083,120 @@ describe('admin routes', () => {
       });
       expect(filtered.json().total).toBe(0);
       expect(filtered.json().items).toEqual([]);
+    });
+
+    /*
+     * #415. A ban that cannot refund leaves a `confirmed` booking on a
+     * suspended account, deliberately — cancelling underneath a customer whose
+     * money did not come back is worse. The operator was told about it once,
+     * as a `role="alert"` in component state, and after the next navigation
+     * the only record was a log line. This is the durable list.
+     */
+    it('lists a confirmed booking left behind on a banned account', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const stuck = await createFutureBooking(customerId, vendor.profileId);
+      harness.stripe.refundsToRefuse.add('pi_test_ban');
+
+      const ban = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+      expect(ban.json()).toMatchObject({ refundsFailed: 1, bookingsCancelled: 0 });
+
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/bookings?flag=refund-stuck',
+        headers: bearer(ADMIN),
+      });
+
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().total).toBe(1);
+      expect(listed.json().items[0]).toMatchObject({
+        id: stuck,
+        status: 'confirmed',
+        refundStuck: true,
+      });
+    });
+
+    /*
+     * The predicate mirrors `findConfirmedBookingsToUnwind`, `event_date` bound
+     * and all. Without it the list also swept up every past-dated `confirmed`
+     * booking on the account — and those are the common case, because
+     * `completed` is only reached by the vendor pressing `Mark complete` and
+     * nothing sweeps for them. Thirty un-completed past events would have
+     * arrived under a red `Refund did not go through` beside the one row the
+     * banner actually meant.
+     */
+    it('leaves out a past booking the unwind never looked at', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const past = await createFutureBooking(customerId, vendor.profileId, {
+        eventDate: '2020-04-01',
+        stripePaymentIntentId: 'pi_test_ban_past',
+      });
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      /* Untouched by the ban — the unwind is bounded by the event date too. */
+      const [row] = await harness.database.db
+        .select({ status: bookings.status })
+        .from(bookings)
+        .where(eq(bookings.id, past));
+      expect(row?.status).toBe('confirmed');
+
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/bookings?flag=refund-stuck',
+        headers: bearer(ADMIN),
+      });
+
+      expect(listed.json().total).toBe(0);
+      expect(listed.json().items).toEqual([]);
+
+      /* And not marked on the unfiltered table either. */
+      const all = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/bookings',
+        headers: bearer(ADMIN),
+      });
+      expect(all.json().items[0]).toMatchObject({ id: past, refundStuck: false });
+    });
+
+    /*
+     * The filter has to *filter*. Reading `total` off an unfiltered count is
+     * how a pager comes to promise pages the table cannot show, and a list
+     * that returns every booking would send the operator hunting.
+     */
+    it('leaves out a booking on an account nobody suspended', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      await createFutureBooking(customerId, vendor.profileId);
+
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/bookings?flag=refund-stuck',
+        headers: bearer(ADMIN),
+      });
+
+      expect(listed.json().total).toBe(0);
+      expect(listed.json().items).toEqual([]);
+
+      // And the row is not marked on the unfiltered table either.
+      const all = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/bookings',
+        headers: bearer(ADMIN),
+      });
+      expect(all.json().items[0]).toMatchObject({ refundStuck: false });
     });
 
     it('shows only bookings whose money actually moved', async () => {

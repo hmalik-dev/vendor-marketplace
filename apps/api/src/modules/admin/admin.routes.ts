@@ -165,7 +165,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       onRequest: adminOnly,
       schema: { querystring: adminBookingQuerySchema, response: { 200: adminBookingPageSchema } },
     },
-    async (request) => listBookings(app.db, request.query),
+    async (request) => listBookings(app.db, request.query, app.clock()),
   );
 
   app.get(

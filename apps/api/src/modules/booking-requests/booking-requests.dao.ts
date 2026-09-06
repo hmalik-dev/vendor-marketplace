@@ -16,6 +16,7 @@ import {
 import {
   LIVE_BOOKING_REQUEST_STATUSES,
   type BookingRequestStatus,
+  type BookingSettlement,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -523,6 +524,43 @@ export async function findBookings(
     .innerJoin(bookingRequests, eq(bookings.requestId, bookingRequests.id))
     .where(and(...conditions))
     .orderBy(desc(bookings.eventDate));
+}
+
+/**
+ * What the money did on each of these requests, for the requests that got as
+ * far as a booking (#415).
+ *
+ * Batched by id in the same shape `findCustomerNames` uses, because the two
+ * surfaces that need it are lists: a per-row lookup to render a queue is how a
+ * hub gets slow, and the vendor's page renders every request they have.
+ *
+ * Reads **every** booking status, not only `cancelled`. The read model states
+ * what happened to a booking whatever happened to it, and a `cancelled`-only
+ * projection would make `settlement === null` mean two different things.
+ */
+export async function findSettlements(
+  db: AppDatabase,
+  requestIds: readonly string[],
+): Promise<Map<string, BookingSettlement>> {
+  if (requestIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({
+      requestId: bookings.requestId,
+      bookingId: bookings.id,
+      status: bookings.status,
+      totalAmountCents: bookings.totalAmountCents,
+      paidAt: bookings.paidAt,
+      cancelledAt: bookings.cancelledAt,
+      cancelledBy: bookings.cancelledBy,
+      refundAmountCents: bookings.refundAmountCents,
+    })
+    .from(bookings)
+    .where(inArray(bookings.requestId, [...requestIds]));
+
+  return new Map(rows.map(({ requestId, ...settlement }) => [requestId, settlement]));
 }
 
 /**

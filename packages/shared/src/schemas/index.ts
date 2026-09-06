@@ -12,6 +12,7 @@ import {
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
   BOOKING_WEEK_WINDOW_DAYS,
   BOOKING_REQUEST_STATUSES,
+  BOOKING_CANCELLED_BY,
   BOOKING_STATUSES,
   BUDGET_TIERS,
   DEFAULT_PAGE_SIZE,
@@ -239,6 +240,7 @@ export const vendorSettableAvailabilityStatusSchema = z.enum(VENDOR_SETTABLE_AVA
 export const bookingRequestStatusSchema = z.enum(BOOKING_REQUEST_STATUSES);
 export const eventTypeSchema = z.enum(EVENT_TYPES);
 export const bookingStatusSchema = z.enum(BOOKING_STATUSES);
+export const bookingCancelledBySchema = z.enum(BOOKING_CANCELLED_BY);
 export const reviewTypeSchema = z.enum(REVIEW_TYPES);
 export const budgetTierSchema = z.enum(BUDGET_TIERS);
 export const tagCategorySchema = z.enum(TAG_CATEGORIES);
@@ -836,8 +838,35 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
       inclusions: z.array(z.string()),
     })
     .nullable(),
+  /**
+   * What the money did, for a request that got as far as a booking (#415).
+   *
+   * A request reaches `cancelled` three ways — withdrawn before acceptance,
+   * cancelled after payment, unwound by an operator — and the row itself
+   * cannot tell them apart, so both parties' screens said only "This request
+   * was cancelled." on a booking where hundreds of dollars had moved and come
+   * back. `null` **is** the first case: a withdrawal never produced a
+   * `bookings` row, so the absence names it and no screen has to guess.
+   *
+   * A projection of the `bookings` row, not a second source of truth: it is
+   * read from that row on every request read that has one, and nothing writes
+   * through it.
+   */
+  settlement: z
+    .object({
+      bookingId: uuidSchema,
+      status: bookingStatusSchema,
+      /** What the customer paid, which under D1 is the quoted price. */
+      totalAmountCents: z.int(),
+      paidAt: z.date().nullable(),
+      cancelledAt: z.date().nullable(),
+      cancelledBy: bookingCancelledBySchema.nullable(),
+      refundAmountCents: z.int().nullable(),
+    })
+    .nullable(),
 });
 export type BookingRequestDetail = z.infer<typeof bookingRequestDetailSchema>;
+export type BookingSettlement = NonNullable<BookingRequestDetail['settlement']>;
 
 /** A custom request has no package, so its description is the whole brief. */
 const CUSTOM_REQUEST_MIN_LENGTH = 10;
@@ -932,6 +961,15 @@ export const bookingSchema = z.object({
   completedAt: z.date().nullable(),
   cancelledAt: z.date().nullable(),
   cancellationReason: z.string().nullable(),
+  /**
+   * Who ended it, for the screens that have to say so in words. `null` on a
+   * live booking and on rows cancelled before #415 recorded it — a screen
+   * reading this must have a sentence for "cancelled, and we do not know by
+   * whom" rather than defaulting to one of the two.
+   */
+  cancelledBy: bookingCancelledBySchema.nullable(),
+  /** What Stripe actually sent back, in cents. `null` until a refund moves. */
+  refundAmountCents: z.int().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -1839,6 +1877,21 @@ export const adminCustomerQuerySchema = z.object({
   q: trimmedString(MAX_NAME_LENGTH).optional(),
 });
 
+/**
+ * The one state `/admin` had no list for (#415).
+ *
+ * A ban unwinds the account's confirmed bookings, and a booking whose refund
+ * Stripe refuses is skipped — deliberately, because cancelling underneath a
+ * customer whose money did not come back is worse. What was left behind was a
+ * `confirmed` booking on a suspended account, announced once as a
+ * `role="alert"` in component state and gone on the next navigation. The state
+ * is derivable rather than stored: it exists exactly when a booking is still
+ * `confirmed` and one of its two parties is banned.
+ */
+export const ADMIN_BOOKING_FLAGS = ['refund-stuck'] as const;
+export const adminBookingFlagSchema = z.enum(ADMIN_BOOKING_FLAGS);
+export type AdminBookingFlag = (typeof ADMIN_BOOKING_FLAGS)[number];
+
 export const adminBookingRowSchema = z.object({
   id: uuidSchema,
   /*
@@ -1854,6 +1907,12 @@ export const adminBookingRowSchema = z.object({
   customerName: z.string(),
   vendorName: z.string(),
   vendorSlug: z.string(),
+  /**
+   * Whether this row is the state above. Carried on every row rather than only
+   * on the filtered list, so an operator scanning the unfiltered table sees it
+   * without having to know the filter exists.
+   */
+  refundStuck: z.boolean(),
   createdAt: z.date(),
 });
 export type AdminBookingRow = z.infer<typeof adminBookingRowSchema>;
@@ -2014,6 +2073,7 @@ export type AdminCustomerPage = z.infer<typeof adminCustomerPageSchema>;
 export const adminBookingQuerySchema = z.object({
   ...adminPaginationShape,
   status: bookingStatusSchema.optional(),
+  flag: adminBookingFlagSchema.optional(),
 });
 export type AdminBookingQuery = z.infer<typeof adminBookingQuerySchema>;
 export const adminBookingPageSchema = paginatedSchema(adminBookingRowSchema);
