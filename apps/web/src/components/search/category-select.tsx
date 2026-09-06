@@ -4,6 +4,7 @@ import { CATEGORY_SEEDS, type Category } from '@vendor-marketplace/shared';
 import { ComboboxDropdown } from '@/components/ui/dropdown-combobox';
 import type { DropdownOption } from '@/components/ui/dropdown';
 import { filterOptions } from '@/lib/option-filter';
+import { SEGMENT_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 
 /**
@@ -124,19 +125,18 @@ export function CategorySelect({
       className={cn(
         'flex min-w-0 flex-col rounded-full text-left',
         /*
-          No *outward* ring: on this trigger alone it would be a rounded box
-          breaking out past the pill's edge. The bar draws the halo that says
-          the bar has focus, and this tints while it is the focused segment
-          (#89) — without which a keyboard user cannot tell `Vendor type` from
-          `City`.
+          The segment treatment, and the same one `search-bar.tsx`'s `segment`
+          applies to City and Event date: a `stone-200` fill and a clay label,
+          no border, edge or outline. `has-[:focus-visible]` rather than
+          `focus-visible`, because the focus lands on the `<input>` **inside**
+          this box rather than on the box itself.
 
-          `has-[:focus-visible]` rather than `focus-visible`, because the focus
-          now lands on the input **inside** this box rather than on the box
-          itself. Same treatment, one level out; `search-bar.tsx`'s `segment`
-          does it the same way for City and Event date.
+          It carried an inset ring and a `clay-400/10` tint until #383; the
+          comment in `search-bar.tsx` records why one fill replaced four
+          overlapping indicators.
         */
-        'transition-colors duration-(--duration-fast) has-[:focus-visible]:bg-clay-400/10',
-        'has-[:focus-visible]:inset-ring-2 has-[:focus-visible]:inset-ring-clay-400/30',
+        'group/segment transition-colors duration-(--duration-fast)',
+        SEGMENT_FOCUS,
         // Stacks to a full-width row below `sm`, with the bar itself.
         'max-sm:w-full max-sm:py-1.5',
         /*
@@ -158,6 +158,8 @@ export function CategorySelect({
       )}
       labelClassName={cn(
         'cursor-text font-semibold tracking-label text-stone-600 uppercase',
+        // "…and a clay label", the other half of the segment treatment.
+        'transition-colors duration-(--duration-fast) group-has-[:focus-visible]/segment:text-clay-600 group-focus-visible/segment:text-clay-600',
         /* `.lbl` is 10.5px and only `01 Landing` takes it unmodified. */
         isHero ? 'text-[9.5px] min-[90rem]:text-label' : 'text-[9.5px]',
       )}

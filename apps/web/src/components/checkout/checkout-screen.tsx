@@ -45,7 +45,13 @@ const APPEARANCE: Appearance = {
   },
   rules: {
     '.Input': { border: '1px solid #E4DDD1', padding: '11px 13px', boxShadow: 'none' },
-    '.Input:focus': { border: '1.5px solid #B4552F', boxShadow: '0 0 0 3px rgba(180,85,47,.16)' },
+    /*
+      The bordered-field treatment, hand-written because Stripe's Elements live
+      in a cross-origin iframe that no stylesheet of ours reaches: `#B4552F` is
+      `clay-400` and `.15` is the alpha `@/lib/focus`'s `FIELD_FOCUS` uses. It
+      was `.16` until #383 — a third opacity for the one idiom.
+    */
+    '.Input:focus': { border: '1.5px solid #B4552F', boxShadow: '0 0 0 3px rgba(180,85,47,.15)' },
     '.Input--invalid': {
       border: '1.5px solid #B23A30',
       boxShadow: '0 0 0 3px rgba(178,58,48,.18)',

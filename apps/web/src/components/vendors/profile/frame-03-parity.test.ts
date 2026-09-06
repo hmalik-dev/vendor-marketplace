@@ -305,19 +305,23 @@ describe('frame 03 — the tab strip draws its focus ring where it cannot be cli
 
   /*
    * The half that was missing. `globals.css` puts `ring-2 ring-offset-2` on
-   * every `:focus-visible` in the app, so the inward outline was being drawn
-   * *alongside* a 4px outward ring — and the outward one is the one this
-   * container slices. Both layers have to be switched off, not just the ring:
-   * `ring-offset-2` paints its own 2px shadow.
+   * every `:focus-visible` that has not claimed its own, so the inward outline
+   * was being drawn *alongside* a 4px outward ring — and the outward one is the
+   * one this container slices.
+   *
+   * It was a hand-rolled `ring-0 ring-offset-0` until #383, which is a pairing
+   * three components each rediscovered and seven more never did — and which
+   * cannot work in general, because a component that overrides `ring-*` alone
+   * keeps the offset band. `data-focus-own` takes the whole rule off.
    */
   it('switches off the app-wide outward ring that the container would slice', () => {
-    expect(tabClasses).toContain('focus-visible:ring-0');
-    expect(tabClasses).toContain('focus-visible:ring-offset-0');
+    expect(tabsSource).toContain('data-focus-own');
   });
 
   it('still has an app-wide outward ring for this to be opting out of', () => {
     const globalsCss = readFileSync(join(process.cwd(), 'src', 'app', 'globals.css'), 'utf8');
-    const rule = globalsCss.match(/:focus-visible\s*\{([^}]*)\}/)?.[1] ?? '';
+    const rule =
+      globalsCss.match(/:focus-visible:not\(\[data-focus-own\]\)\s*\{([^}]*)\}/)?.[1] ?? '';
 
     expect(rule).toContain('ring-2');
     expect(rule).toContain('ring-offset-2');

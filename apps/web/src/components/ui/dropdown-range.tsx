@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Dropdown, DropdownFooter, type DropdownWidth } from './dropdown';
+import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 import { useStableValue } from '@/lib/use-stable-value';
 
@@ -304,6 +305,8 @@ function AmountField({
          * the parser. No frame pins the hint.
          */
         inputMode="decimal"
+        // A bordered field owns its indicator; see `@/lib/focus`.
+        data-focus-own
         value={editing ? raw : value === null ? '' : format(value)}
         placeholder="Any"
         onFocus={() => {
@@ -318,7 +321,13 @@ function AmountField({
           setRaw(typed);
           onChange(parsed, parsed === null && typed.trim() !== '');
         }}
-        className="w-full rounded-md border border-stone-300 bg-stone-150 px-2.5 py-2 text-[13px] text-stone-900 outline-none focus-visible:border-[1.5px] focus-visible:border-clay-400 focus-visible:px-[9px] focus-visible:py-[7px] focus-visible:shadow-[0_0_0_3px_rgba(180,85,47,.15)]"
+        className={cn(
+          'w-full rounded-md border border-stone-300 bg-stone-150 px-2.5 py-2 text-[13px] text-stone-900 outline-none',
+          // The 1.5px focus border keeps the box the same size; the padding
+          // gives back the half-pixel it takes on each side.
+          'focus-visible:border-[1.5px] focus-visible:px-[9px] focus-visible:py-[7px]',
+          FIELD_FOCUS,
+        )}
       />
     </div>
   );

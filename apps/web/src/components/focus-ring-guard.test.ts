@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { sourceFiles, type SourceFile } from '@/testing/source-scan';
+import { sourceFiles, TS_AND_TSX, WEB_SOURCE, type SourceFile } from '@/testing/source-scan';
 
 /**
  * A focus ring that is declared must actually paint.
@@ -30,10 +30,40 @@ const COMPONENTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 /** The components tree, walked and read once for every check below. */
 let files: SourceFile[] = [];
+/** The whole web source tree, for the rules that a route or a page can break too. */
+let allFiles: SourceFile[] = [];
 
 beforeAll(async () => {
-  files = await sourceFiles(COMPONENTS_DIR);
+  [files, allFiles] = await Promise.all([
+    sourceFiles(COMPONENTS_DIR),
+    sourceFiles(WEB_SOURCE, TS_AND_TSX),
+  ]);
 });
+
+/**
+ * An element declaring an indicator **of its own** — not one it paints for a
+ * descendant.
+ *
+ * The `has-[…]:` and `group-…:` variants are deliberately excluded: those draw
+ * on an ancestor for a control that is focused somewhere else, and that control
+ * is the thing that must opt out, in whichever file defines it.
+ */
+const OWN_INDICATOR =
+  /(?<![\]:\w-])focus-visible:(?:ring-[1-9]|inset-ring-[1-9]|outline-(?:[1-9]|\[)|border-clay-400)|\bFIELD_FOCUS\b/;
+
+/** The one escape hatch. `@/lib/focus` and `app/globals.css` say why. */
+const OPTS_OUT = /\bdata-focus-own\b/;
+
+/**
+ * `@/lib/focus` is where the treatments are *written*; it renders nothing and
+ * has no element to hang the attribute on. Every other file that names them is
+ * applying them.
+ */
+const DEFINES_THE_TREATMENTS = 'lib/focus.ts';
+
+function declaresOwnIndicator({ name, code }: SourceFile): boolean {
+  return name !== DEFINES_THE_TREATMENTS && OWN_INDICATOR.test(code);
+}
 
 describe('focus rings paint', () => {
   it('finds the components it is meant to be guarding', async () => {
@@ -71,6 +101,72 @@ describe('focus rings paint', () => {
    * Scoped to lines that declare a focus ring, so an unrelated `transition-all`
    * on something with no ring is left alone.
    */
+  /*
+   * #383, and the defect the user reported: *"multiple (including an outdated
+   * focus) on the inputs"*.
+   *
+   * `globals.css` puts the unbordered treatment on every `:focus-visible` that
+   * has not claimed its own, and a component cannot partly override it —
+   * `ring-*`, `inset-ring-*`, `ring-offset-*` and `outline` are four separate
+   * properties, so overriding one leaves the other three painting. A plain text
+   * input measured **three** concentric edges that way and the search bar
+   * stacked **four**. Seven components hit this; three of them found it and
+   * turned the base rule off by hand, each in its own idiom, and nothing made
+   * the fourth do the same.
+   *
+   * So: declare your own indicator and you must also carry `data-focus-own`.
+   * File-scoped rather than element-scoped, because half these class lists live
+   * in a `const` at module scope while the attribute is on the JSX below it —
+   * the pairing is what is checkable here, and the rendered proof that each
+   * node paints exactly one indicator is `e2e/focus-indicator.spec.ts`.
+   */
+  it('never declares its own focus indicator without opting out of the base rule', () => {
+    const offenders = allFiles
+      .filter((file) => declaresOwnIndicator(file) && !OPTS_OUT.test(file.code))
+      .map(({ name }) => name);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('finds the declarations that rule is meant to be pairing', () => {
+    // Guards the guard, the lesson #411 recorded: a source rule that matches
+    // nothing passes forever while defending nothing.
+    const declaring = allFiles.filter(declaresOwnIndicator);
+
+    expect(declaring.length).toBeGreaterThanOrEqual(8);
+  });
+
+  /*
+   * The same idiom, written twice, is two idioms — which is the second half of
+   * what the user was seeing: the same field type rendered a different ring
+   * depending on which file built it.
+   *
+   * `border-ring` and `ring-ring/50` are shadcn's own tokens, never
+   * re-tokenised in five files; `rgba(180,85,47,…)` is `clay-400` written so no
+   * token change can reach it. Both go through `@/lib/focus` now.
+   */
+  it('routes every focus colour through a token, not a second source', () => {
+    const offenders: string[] = [];
+
+    for (const { name, code } of allFiles) {
+      /*
+       * Stripe's Elements render in a cross-origin iframe that no stylesheet of
+       * ours reaches, so its appearance rules are hand-written hexes by
+       * necessity. The file is allowed the literal and `checkout-screen.tsx`
+       * carries the comment tying the value back to the token.
+       */
+      if (name.endsWith('checkout/checkout-screen.tsx')) {
+        continue;
+      }
+
+      if (/\b(?:border-ring|ring-ring)\b/.test(code) || /rgba\(\s*180\s*,/.test(code)) {
+        offenders.push(name);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   it('never transitions the property its focus ring is painted with', () => {
     const offenders: string[] = [];
     for (const { name, code } of files) {

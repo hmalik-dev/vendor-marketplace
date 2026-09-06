@@ -138,4 +138,35 @@ describe('BookingConfirmed', () => {
       expect(screen.getByRole('link', { name: chip }).textContent).toBe(chip);
     }
   });
+
+  /*
+   * #383. This hero is the one dark surface in the product, and the only place
+   * that keeps an outline rather than taking the base `:focus-visible` ring:
+   * clay at `/40` over a `stone-50` band is designed for the cream ground and
+   * is both low-contrast and a bright halo on deep sage. What it must not do is
+   * paint *both*, which is what it did — the outline plus the base rule's ring,
+   * on all three controls.
+   *
+   * Asserted as a class-level fact. The page needs a confirmed, paid booking to
+   * reach in a browser, so this is the check that runs on every commit; the
+   * mechanism itself is driven for real on nine routes in
+   * `e2e/focus-indicator.spec.ts`.
+   */
+  it('opts its three controls out of the base ring, keeping one outline each', () => {
+    render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
+
+    const controls = [
+      screen.getByRole('link', { name: /^Message / }),
+      screen.getByRole('link', { name: 'View booking' }),
+      screen.getByRole('link', { name: 'Florals' }),
+    ];
+
+    for (const control of controls) {
+      expect(control.getAttribute('data-focus-own'), control.textContent).not.toBeNull();
+      expect(control.className).toContain('focus-visible:outline-2');
+      // Without the style the width utility paints nothing at all.
+      expect(control.className).toContain('focus-visible:outline-solid');
+      expect(control.className).not.toContain('focus-visible:ring-');
+    }
+  });
 });

@@ -34,6 +34,7 @@ import { useApi } from '@/lib/use-api';
 import { useSavedDraft } from '@/lib/use-saved-draft';
 import { useSubmitValidation, type FieldIssue } from '@/lib/use-submit-validation';
 import { useViewerToday } from '@/lib/use-viewer-today';
+import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 
 export interface BookingRequestScreenProps {
@@ -578,6 +579,8 @@ export function BookingRequestScreen({
                       type="button"
                       aria-haspopup="dialog"
                       aria-expanded={dateOpen}
+                      // A bordered field owns its indicator; see `@/lib/focus`.
+                      data-focus-own
                       className={cn(
                         'flex w-full items-center justify-between gap-2 text-left',
                         props.className,
@@ -756,8 +759,10 @@ export function BookingRequestScreen({
 }
 
 /** `.inp` from the frame: `stone-150` fill, `stone-300` hairline, 10px radius. */
-const FIELD_CONTROL =
-  'h-auto w-full rounded-[10px] border border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900 focus-visible:border-clay-400 focus-visible:ring-3 focus-visible:ring-clay-400/15';
+const FIELD_CONTROL = cn(
+  'h-auto w-full rounded-[10px] border border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900',
+  FIELD_FOCUS,
+);
 
 interface FieldProps {
   id: string;

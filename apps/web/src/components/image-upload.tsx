@@ -257,7 +257,7 @@ export function ImageUpload({
             `overflow-hidden` (which clips the uploaded image to the rounded
             zone) does not clip it.
           */
-          'has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-clay-400/30 has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-stone-50',
+          'has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-clay-400/40 has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-stone-50',
           src ? 'bg-stone-50' : 'placeholder-hatch',
           // 128px circle from `sm`, the size frame 09 draws the profile photo.
           rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-lg'),
@@ -334,6 +334,8 @@ export function ImageUpload({
           accept={ACCEPT}
           disabled={isBusy}
           onChange={(event) => void handleFile(event.target.files?.[0])}
+          /* The zone above rings for this input; it does not ring itself. */
+          data-focus-own
           className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
         />
       </div>

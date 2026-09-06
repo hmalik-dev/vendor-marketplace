@@ -9,6 +9,7 @@ import {
 import { useEffect, useId, useState } from 'react';
 import { useStableValue } from '@/lib/use-stable-value';
 import { useViewerToday } from '@/lib/use-viewer-today';
+import { SEGMENT_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
 import { DateDropdown } from '@/components/ui/dropdown-date';
@@ -166,6 +167,9 @@ export function SearchBar({
    */
   const label = cn(
     'font-semibold tracking-label text-stone-600 uppercase',
+    // "…and a clay label" — the other half of the segment treatment, on the
+    // element that has the colour. `group/segment` is set in `segment` below.
+    'transition-colors duration-(--duration-fast) group-has-[:focus-visible]/segment:text-clay-600 group-focus-visible/segment:text-clay-600',
     isHero ? 'text-[9.5px] min-[90rem]:text-label' : 'text-[9.5px]',
   );
   /*
@@ -227,22 +231,31 @@ export function SearchBar({
       : 'sm:h-6.5 sm:bg-stone-200',
   );
   /*
-   * #89. The halo on the pill says the bar has focus; it cannot say *which*
-   * segment has it, so focusing `Vendor type` and focusing `City` rendered
-   * pixel-identically and a keyboard user could not tell them apart.
+   * #89, #73, #383. The segment treatment, and it is the whole indicator.
    *
-   * #73 law 2 then asked for a per-segment ring at the law's value. #89 had
-   * rejected an *outward* one for a reason that still holds — a rectangular
-   * ring around one segment breaks out past the pill's edge and reads as a
-   * second, misaligned box — so this is an **inset** ring: the law's width and
-   * colour, staying inside the bar and following the segment's own
-   * `rounded-full`. The tint #89 added stays alongside it; two cues cost
-   * nothing and the tint is what reads at a glance.
+   * `03-components.md` § Inputs names three focus mechanisms and forbids mixing
+   * them. A segment inside a joined bar or panel takes **a `stone-200` fill and
+   * a clay label — no border, edge or outline** — and the reason is geometric:
+   * any ring around one segment of a pill breaks out past the pill's own edge
+   * (#89 rejected an outward one) or, drawn inward, is a second concentric
+   * shape inside a control that already has one.
+   *
+   * #73 law 2 asked for a per-segment inset ring and this carried one, over a
+   * `clay-400/10` tint, *under* the bar-level halo, *under* the base
+   * `:focus-visible` ring on the focused control itself. Four indicators for
+   * one focus, at four different opacities — the exact stack the user reported.
+   * The fill alone says which segment has focus, which is all #89 ever needed
+   * it to say, and it is the value the contract states.
+   *
+   * `has-[:focus-visible]` for the two comboboxes, whose focus lands on an
+   * `<input>` inside the box; `focus-visible` for the date, which *is* the
+   * button. Both spellings, because the segment is both shapes.
    */
   const segment = cn(
-    'flex min-w-0 flex-col max-sm:w-full max-sm:px-0 max-sm:py-1.5',
-    'rounded-full transition-colors duration-(--duration-fast) has-[:focus-visible]:bg-clay-400/10',
-    'has-[:focus-visible]:inset-ring-2 has-[:focus-visible]:inset-ring-clay-400/30',
+    'group/segment flex min-w-0 flex-col max-sm:w-full max-sm:px-0 max-sm:py-1.5',
+    'rounded-full transition-colors duration-(--duration-fast)',
+    SEGMENT_FOCUS,
+    'focus-visible:bg-stone-200',
   );
 
   return (
@@ -278,11 +291,15 @@ export function SearchBar({
       className={cn(
         'relative flex bg-stone-0 max-sm:flex-col max-sm:items-stretch max-sm:rounded-2xl max-sm:px-4 max-sm:py-3 sm:flex-row sm:items-center sm:rounded-full',
         /*
-          The halo follows the pill because it is set on the pill. `:not(
-          [type=submit])` keeps it off when the Search button is focused —
-          that button is its own control and rings itself.
+          #383. The bar-level halo is gone. It was #89's answer to "the bar has
+          focus" from before the segments could say so themselves; once each
+          segment fills, a 3px ring around the whole pill at a fourth opacity
+          is a second indicator for the same event, and `03-components.md`
+          gives the segment treatment no ring at any level. Frame `02` draws no
+          focus state either way — the frames never do — so the plan rules, and
+          this is recorded rather than re-argued: #89 and #73 both moved this
+          line, and the record of why is here and in `segment` above.
         */
-        'transition-shadow duration-(--duration-fast) has-[:focus-visible:not([type=submit])]:ring-3 has-[:focus-visible:not([type=submit])]:ring-clay-400/20',
         isHero
           ? /*
               Padding and shadow per frame: `6 6 6 20` at 768, `6 6 6 18` at
@@ -371,6 +388,8 @@ export function SearchBar({
               ties it to the control it is about for anyone arriving later.
             */
             aria-describedby={pastDate ? `${fieldId}-date-error` : undefined}
+            // The segment fill above is this button's whole indicator.
+            data-focus-own
             className={cn(
               segment,
               'text-left',

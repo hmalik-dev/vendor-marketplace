@@ -180,12 +180,29 @@ export function BookingConfirmed({
             So this takes the system's sage-as-text and the deviation is
             recorded here rather than resolved by inventing a `sage-700`.
           */
+          /*
+            #383. `data-focus-own` on all three controls in this hero, and the
+            outline stays.
+
+            The base `:focus-visible` rule is the unbordered treatment for the
+            product's cream ground: clay at `/40` over a `stone-50` offset
+            band. This section is the one dark surface in the product, and both
+            halves of that are wrong on it — clay on deep sage is low contrast,
+            and a cream band is a bright halo. `outline-stone-0` is the same
+            treatment inverted, and an outline is the right primitive rather
+            than a ring because its offset shows the gradient through instead
+            of needing a flat colour to match.
+
+            Without the opt-out these painted the outline *and* the base ring.
+          */
+          data-focus-own
           className="rounded-[10px] bg-stone-0 px-6 py-3.25 text-sm font-semibold text-sage-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
         >
           Message {vendor.businessName}
         </Link>
         <Link
           href="/bookings"
+          data-focus-own
           className="rounded-[10px] border border-stone-0/45 px-6 py-3.25 text-sm font-semibold text-stone-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
         >
           View booking
@@ -199,6 +216,7 @@ export function BookingConfirmed({
             <Link
               key={category.slug}
               href={`/search?category=${category.slug}&date=${booking.eventDate}`}
+              data-focus-own
               className="rounded-full bg-white/14 px-3.75 py-2 text-[12.5px] font-semibold text-stone-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
             >
               {category.label}

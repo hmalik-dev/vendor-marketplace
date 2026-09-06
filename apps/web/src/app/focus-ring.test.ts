@@ -5,10 +5,16 @@ import { describe, expect, it } from 'vitest';
 /*
  * Frame `08/09/11 shared`, Access axis.
  *
- * The law is one line of `design/design-plan/04-laws.md`: every interactive
- * element takes `ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50`
- * on focus. The frames are static and draw no focus state, so the plan is the
- * contract here rather than the `.dc.html` bundle.
+ * The law is `design/design-plan/03-components.md` § Inputs, restated in
+ * `04-laws.md`: **three** focus treatments chosen by what the element already
+ * has, never mixed. The base rule in `globals.css` is the *unbordered control*
+ * one — `ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50` — and
+ * both files state `/40`. It was `/30` here and in every hand-rolled copy of it
+ * until #383; the two plan files already agreed, and the code was the outlier,
+ * so nothing in the plan moved.
+ *
+ * The frames are static and draw no focus state, so the plan is the contract
+ * here rather than the `.dc.html` bundle.
  *
  * This is a source guard, not the real gate. The parity pass that found this
  * had to tab to each control with a real keyboard and read the rendered ring,
@@ -18,8 +24,11 @@ import { describe, expect, it } from 'vitest';
  */
 const globalsCss = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
 
-/** The four utilities the law names, in the order it names them. */
-const RING = ['ring-2', 'ring-clay-400/30', 'ring-offset-2', 'ring-offset-stone-50'] as const;
+/** The unbordered treatment: the four utilities the law names, in its order. */
+const RING = ['ring-2', 'ring-clay-400/40', 'ring-offset-2', 'ring-offset-stone-50'] as const;
+
+/** The bordered-field treatment. No offset — a field has an edge already. */
+const FIELD = ['border-clay-400', 'ring-3', 'ring-clay-400/15'] as const;
 
 function ruleFor(selector: string): string {
   const match = globalsCss.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`));
@@ -30,7 +39,7 @@ function ruleFor(selector: string): string {
 
 describe('the product’s focus ring reaches every control', () => {
   it('declares the ring once, for anything focusable', () => {
-    const rule = ruleFor(':focus-visible');
+    const rule = ruleFor(':focus-visible:not\\(\\[data-focus-own\\]\\)');
 
     for (const utility of RING) {
       expect(rule).toContain(utility);
@@ -38,6 +47,29 @@ describe('the product’s focus ring reaches every control', () => {
 
     // Chrome's blue must not survive alongside it.
     expect(rule).toContain('outline-none');
+  });
+
+  /*
+   * #383, and the whole mechanism of it. `ring-*`, `inset-ring-*`,
+   * `ring-offset-*` and `outline` are four different properties, so a component
+   * that overrode one of them kept the rest of this rule and painted two, three
+   * or four concentric indicators. `:not([data-focus-own])` is what lets a
+   * component take the rule off entirely, which is the only override that
+   * works.
+   */
+  it('lets a control that owns its indicator take the base rule off', () => {
+    expect(globalsCss).toContain(':focus-visible:not([data-focus-own])');
+    // And a plain `:focus-visible { … }` must not survive beside it, or the
+    // escape hatch is decorative.
+    expect(globalsCss).not.toMatch(/^\s*:focus-visible \{/m);
+  });
+
+  /*
+   * Opting out of the ring is not opting into Chrome's blue. Every treatment
+   * ends at `outline-none` unless the component restores an outline itself.
+   */
+  it('still suppresses the browser outline on a control that opts out', () => {
+    expect(ruleFor('\\[data-focus-own\\]:focus-visible')).toContain('outline-none');
   });
 
   /*
@@ -76,39 +108,55 @@ describe('the product’s focus ring reaches every control', () => {
    * base rule correctly, which is what proves the layer is the cause rather
    * than the selector.
    */
-  it('restates the ring for the three controls Clerk styles itself', () => {
-    /*
-     * One grouped rule, so it is read as one: `ruleFor` matches a single
-     * selector and these three share a declaration block on purpose.
-     */
-    const match = globalsCss.match(
-      /\[data-auth-screen\] \.cl-formFieldInput\.cl-formFieldInput:focus-visible[^{]*\{([^}]*)\}/,
-    );
-
-    expect(match).not.toBeNull();
-
-    const rule = match?.[1] ?? '';
+  it('restates the treatments for the three controls Clerk styles itself', () => {
     const start = globalsCss.indexOf(
-      '[data-auth-screen] .cl-formFieldInput.cl-formFieldInput:focus-visible',
+      '[data-auth-screen] .cl-formButtonPrimary.cl-formButtonPrimary:focus-visible',
     );
-    const selectors = globalsCss.slice(start, start + 340);
+
+    expect(start).toBeGreaterThan(-1);
+
+    const selectors = globalsCss.slice(start, start + 280);
 
     /*
      * Each class is repeated to reach (0,4,0). Clerk's submit rule ties at
      * (0,3,0) and, being injected at runtime, wins every tie on source order.
      */
     for (const control of [
-      '.cl-formFieldInput.cl-formFieldInput:focus-visible',
       '.cl-formButtonPrimary.cl-formButtonPrimary:focus-visible',
       '.cl-formFieldInputShowPasswordButton.cl-formFieldInputShowPasswordButton:focus-visible',
     ]) {
       expect(selectors).toContain(control);
     }
 
+    /*
+     * The two buttons are unbordered controls and take the offset ring; the
+     * text field is a bordered field and takes the tight one with no offset.
+     * They shared a block, at the unbordered value, until #383 — which is the
+     * same "one treatment for everything" the base rule was carrying.
+     */
+    const buttons = globalsCss.slice(start).match(/\{([^}]*)\}/)?.[1] ?? '';
+
     for (const utility of RING) {
+      expect(buttons).toContain(utility);
+    }
+
+    const rule = ruleFor(
+      '\\[data-auth-screen\\] \\.cl-formFieldInput\\.cl-formFieldInput:focus-visible',
+    );
+
+    for (const utility of FIELD) {
       expect(rule).toContain(utility);
     }
 
+    /*
+     * And it must zero the offset rather than merely not set one. Clerk's nodes
+     * cannot carry `data-focus-own`, so the base rule still reaches them and
+     * `ring-offset-*` is a separate property from `ring-*`: without this the
+     * field kept the unbordered treatment's 2px band under the bordered
+     * treatment's ring.
+     */
+    expect(rule).toContain('ring-offset-0');
+    expect(buttons).toContain('outline-none');
     expect(rule).toContain('outline-none');
     /*
      * And it must NOT reset `box-shadow`. Tailwind's `ring-*` utilities are
@@ -137,6 +185,8 @@ describe('the product’s focus ring reaches every control', () => {
     const form = readFileSync(join(process.cwd(), 'src/components/auth/sign-up-form.tsx'), 'utf8');
 
     expect(form).toContain('has-focus-visible:ring-offset-stone-50');
+    // And at the law's opacity, like every other copy of this treatment.
+    expect(form).toContain('has-focus-visible:ring-clay-400/40');
   });
 
   it('names tokens rather than hexes, so the palette stays one source', () => {

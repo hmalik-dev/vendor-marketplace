@@ -81,7 +81,7 @@ export default async function BookingRequestPage({
     <div className="mx-auto w-full max-w-[660px] px-6 py-10 xl:px-10">
       <Link
         href="/bookings"
-        className="mb-5 inline-block rounded-xs text-sm font-semibold text-clay-500 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400"
+        className="mb-5 inline-block rounded-xs text-sm font-semibold text-clay-500 hover:underline"
       >
         ← Your bookings
       </Link>

@@ -495,18 +495,48 @@ describe('SearchBar — pill and circle discipline', () => {
     );
 
     /*
-     * Every segment carries the same per-segment tint (#167), and it is spelled
-     * `has-[:focus-visible]` on all of them — the focus lands on the control
-     * *inside* the segment, which since #375 is an input on two of the three.
+     * Every segment carries the same fill (#167, #383), spelled
+     * `has-[:focus-visible]` because the focus lands on the control *inside*
+     * the segment — which since #375 is an input on two of the three. The date
+     * segment **is** its own trigger, so it also takes the plain variant.
+     *
+     * `stone-200`, and nothing beside it. It was a `clay-400/10` tint plus an
+     * inset ring per segment, under a 3px halo on the whole pill, under the
+     * base rule's ring on the focused control: four indicators at four
+     * opacities for one focus, which is the stack the user reported.
      */
-    expect(screen.getByRole('button', { name: 'Event date' }).className).toContain(
-      'has-[:focus-visible]:bg-clay-400/10',
-    );
+    const date = screen.getByRole('button', { name: 'Event date' });
+    expect(date.className).toContain('has-[:focus-visible]:bg-stone-200');
+    expect(date.className).toContain('focus-visible:bg-stone-200');
+    expect(date.getAttribute('data-focus-own')).not.toBeNull();
 
     for (const name of ['City', 'Vendor type']) {
       const segment = screen.getByRole('combobox', { name }).parentElement;
-      expect(segment?.className).toContain('has-[:focus-visible]:bg-clay-400/10');
+      expect(segment?.className).toContain('has-[:focus-visible]:bg-stone-200');
+      expect(segment?.className).not.toContain('inset-ring');
     }
+  });
+
+  /*
+   * #89 gave the whole pill a 3px halo, when no segment could say it held the
+   * focus. Each one now fills, so the halo is a second indicator for the same
+   * event — and `03-components.md` gives a bar segment no ring at any level.
+   */
+  it('draws no bar-level halo behind the segment fills', () => {
+    const { container } = render(
+      <SearchBar
+        categories={CATEGORIES}
+        cities={CITIES}
+        value={EMPTY}
+        onSubmit={vi.fn()}
+        size="hero"
+      />,
+    );
+
+    const bar = container.querySelector('form[role="search"]');
+
+    expect(bar).not.toBeNull();
+    expect(bar?.className).not.toContain('has-[:focus-visible:not([type=submit])]:ring-3');
   });
 
   it('drops the visible label in the compact header, never the accessible one', () => {

@@ -1425,3 +1425,79 @@ the conditional this ruling's copy is careful to state rather than assume. Closi
 Stripe account-configuration and product decision (manual payout schedule plus a
 release-after-event job), not a refund-flag one, and it is recorded here rather than guessed
 at.
+
+---
+
+### D32: The Focus Ring Has One Owner and One Escape Hatch — *2026-09-06*
+
+**Ruled for #383**, whose acceptance asked which of the two plan files had to move on the
+unbordered ring's opacity. **Neither.** `03-components.md:124` and `04-laws.md:166` both say
+`ring-2 ring-clay-400/40`, and have since the three treatments replaced the single one. The
+outlier was the code: `globals.css` and **nine** hand-written copies of that treatment all
+said `/30`, the value of the law the plan had already superseded. The plan is unchanged by
+this ticket; the code moved to it.
+
+**The base `:focus-visible` rule is one of the three treatments, not a floor under them.**
+
+```css
+:focus-visible:not([data-focus-own]) {
+  @apply ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50 outline-none;
+}
+```
+
+It is the **unbordered control** treatment, so an unbordered control writes nothing and
+cannot write it wrong — `Button`, the category cards, the landing links and the calendar
+chevrons each carried their own copy and each has had it deleted.
+
+**A component that owns its indicator says so with `data-focus-own`, and that is the only
+override that works.** A floor sounds right and cannot be built: Tailwind's `ring-*`,
+`inset-ring-*` and `ring-offset-*` write three different custom properties and `outline` is a
+fourth CSS property, so a component overriding one kept the other three. Measured before the
+fix: a plain `input[data-slot="input"]` painted a `stone-50` band at 2px, a clay ring at 5px
+and a clay border — **three concentric edges**; keyboard-focusing `Vendor type` on `/search`
+painted **four** indicators across three elements at four different opacities. Three
+components had each discovered this independently and turned the base rule off by hand, in
+three different spellings; seven more had not. `data-focus-own` is now the single spelling,
+and `components/focus-ring-guard.test.ts` fails any file that declares an indicator without
+it.
+
+**The two opt-in treatments are written once, in `apps/web/src/lib/focus.ts`** — `FIELD_FOCUS`
+and `SEGMENT_FOCUS`. The bordered field's ring had been spelled four ways across the app:
+shadcn's `border-ring` + `ring-ring/50` in five files, the correct clay string in three, a
+hardcoded `rgba(180,85,47,.15)` in `dropdown-range.tsx`, and `.16` in the Stripe Elements
+appearance. Same field type, four rings — the second half of what the user reported.
+
+**The search bar's halo and its per-segment inset ring are both gone, and this overrules #89
+and #73 law 2.** `03-components.md` gives a bar segment **a `stone-200` fill and a clay label,
+and no border, edge or outline** — the geometry is the reason: an outward ring around one
+segment of a pill breaks past the pill's edge (#89 rejected that), and an inward one is a
+second concentric shape inside a control that already has one. #89's bar-level halo answered
+"the bar has focus" from before any segment could say so itself; now each one fills, it is a
+second indicator for the same event. Frame `02` cannot settle it — the frames draw no focus
+state at all — so the plan rules. The record of the argument stays in `search-bar.tsx`, which
+is where the next person will look.
+
+**The confirmation hero keeps an outline, and that is the one deliberate exception.**
+`booking-confirmed.tsx` is the only dark surface in the product. Clay at `/40` over a
+`stone-50` band is designed for the cream ground and is both low-contrast and a bright halo on
+deep sage, so its three controls take `outline-2 outline-offset-2 outline-solid outline-stone-0`
+— the same treatment inverted. An outline rather than a ring because its offset shows the
+gradient through, where a ring's offset needs a flat colour to match. They now carry
+`data-focus-own`, which is what they were missing: they painted the outline *and* the base
+ring. `outline-stone-0` was flagged in the ticket as "near-white on cream"; on the ground it
+actually sits on, it is the high-contrast choice, and that is the justification the acceptance
+asked for.
+
+**Clerk's nodes cannot carry the attribute, so each treatment is restated unlayered for them**
+— and the text field has to write `ring-offset-0` by hand. That line is the whole mechanism in
+miniature: overriding Clerk's ring alone left the base rule's 2px band underneath it, and the
+sign-in field rendered the bordered treatment's tight ring pushed two pixels off the control.
+Found in the browser after the source guards were already green.
+
+**The gate is rendered, not declared.** `e2e/focus-indicator.spec.ts` tabs nine routes across
+signed-out, customer and vendor, reads Tailwind's ring custom properties and the outline off
+every stop and its ancestors, and fails on more than one indicator — and on an indicator drawn
+outside a clipping ancestor that cannot scroll to reveal it. That second check found the
+`/messages` conversation rows: `w-full` inside a scrolling `<ul>`, so every row's ring had
+**0px** of horizontal slack and painted entirely outside the list. Same class as the vendor
+card in #73, and invisible to every class-list assertion in the repository.

@@ -685,8 +685,23 @@ export function MessagesScreen({
                 type="button"
                 onClick={() => select(row.id)}
                 aria-current={row.id === activeId ? 'true' : undefined}
+                /*
+                  #383. The inward outline, for the same reason the profile
+                  tablist takes one: this button is `w-full` inside a scroll
+                  container, and a scroll container clips on **both** axes
+                  whatever CSS says about `overflow-y`. The base rule's outward
+                  ring therefore had 0px of horizontal slack — computed
+                  correctly, painted entirely outside the list, and the list has
+                  no horizontal scroll to reveal it. Measured in Chromium on both
+                  conversations.
+
+                  `outline-solid` is load-bearing: `outline-2` alone inherits
+                  `--tw-outline-style: none` and draws nothing.
+                */
+                data-focus-own
                 className={cn(
                   'flex w-full gap-2.75 border-b border-stone-200 px-4.5 py-3.25 text-left',
+                  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400',
                   row.id === activeId
                     ? 'bg-clay-100 shadow-[inset_3px_0_0_var(--color-clay-400)]'
                     : 'hover:bg-stone-100',
@@ -782,7 +797,21 @@ export function MessagesScreen({
 
             <div
               ref={scroller}
-              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5.5 py-4.5"
+              /*
+                #383. Chromium makes a scrollable region a keyboard stop of its
+                own once its content overflows — so the message history becomes
+                focusable without the app ever saying so, and takes the base
+                `:focus-visible` ring. Being `flex-1` in a column that clips, it
+                had **0px** of horizontal slack: computed correctly, painted
+                entirely outside the pane.
+
+                It only overflows once a thread is long enough, which is why a
+                suite that had already sent messages failed here and a fresh one
+                did not. The inward outline is the same treatment the list rows
+                and the profile tablist take, for the same reason.
+              */
+              data-focus-own
+              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5.5 py-4.5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400"
             >
               {/*
                 The thread opens at its newest page, so the history is above

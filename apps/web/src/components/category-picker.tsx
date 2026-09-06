@@ -64,7 +64,6 @@ export function CategoryPicker({
                    * padding is what makes the chip 38px tall.
                    */
                   'inline-flex min-h-11 items-center gap-2 rounded-full border py-[7px] pr-[13px] pl-2 text-action transition-colors duration-(--duration-fast) sm:min-h-0',
-                  'focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:outline-none',
                   isSelected
                     ? // `clay-600` is the token for text on a `clay-100`
                       // surface, which is exactly what a selected chip is.

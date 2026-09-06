@@ -291,6 +291,13 @@ export function ComboboxDropdown({
       type="text"
       role="combobox"
       /*
+        Both mounts put this field inside a segment that paints the focus fill
+        for it — see `search-bar.tsx`'s `segment`. Without this it also took the
+        base `:focus-visible` ring, which is the unbordered treatment and breaks
+        out past the pill's edge.
+      */
+      data-focus-own
+      /*
         Named twice on purpose, with the same string. The visible
         `<label htmlFor>` is what `04-laws.md:141` requires and is what names it
         on the anchored mount; `aria-label` is what names it inside the sheet,
