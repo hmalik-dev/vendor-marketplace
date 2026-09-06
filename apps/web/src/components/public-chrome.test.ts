@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAppRoute } from './public-chrome';
+import { drawsItsOwnHeader, isAppRoute } from './public-chrome';
 
 /**
  * Which routes wear the marketplace's public chrome, and which are the
@@ -52,5 +52,40 @@ describe('isAppRoute', () => {
     expect(isAppRoute('/vendors/kessler-co/request/extra')).toBe(false);
     expect(isAppRoute('/vendors/request')).toBe(false);
     expect(isAppRoute('/request')).toBe(false);
+  });
+});
+
+/**
+ * Which routes replace the marketplace header rather than sit under it.
+ *
+ * #395: checkout draws its own wordmark bar, and the shell header above it made
+ * 128px of chrome where frame `05` draws 64 — which pushed the pay button to a
+ * bottom edge of 917px, past the 900px fold.
+ */
+describe('drawsItsOwnHeader', () => {
+  it.each(['/admin', '/admin/bookings', '/bookings/9f1c/checkout'])(
+    'suppresses the shell header on %s',
+    (pathname) => {
+      expect(drawsItsOwnHeader(pathname)).toBe(true);
+    },
+  );
+
+  it.each(['/', '/search', '/bookings', '/vendor/dashboard', '/administrators'])(
+    'keeps the shell header on %s',
+    (pathname) => {
+      expect(drawsItsOwnHeader(pathname)).toBe(false);
+    },
+  );
+
+  /*
+   * The request detail screen is an ordinary app screen one segment short of
+   * checkout, and it keeps the shell. A prefix or `includes` test would take
+   * its header away too.
+   */
+  it('does not take the header off the request screen or a lookalike', () => {
+    expect(drawsItsOwnHeader('/bookings/9f1c')).toBe(false);
+    expect(drawsItsOwnHeader('/bookings/9f1c/confirmed')).toBe(false);
+    expect(drawsItsOwnHeader('/bookings/9f1c/checkout/extra')).toBe(false);
+    expect(drawsItsOwnHeader('/bookings/checkout')).toBe(false);
   });
 });

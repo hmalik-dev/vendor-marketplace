@@ -19,6 +19,7 @@ import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import type { EmailGateway } from './lib/email.js';
 import type { StripeConnectGateway } from './lib/stripe.js';
 import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
+import { backgroundPlugin } from './plugins/background.js';
 import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
@@ -31,6 +32,7 @@ import { bookingRequestRoutes } from './modules/booking-requests/booking-request
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
 import { messagingRoutes } from './modules/messaging/messaging.routes.js';
+import { placeRoutes } from './modules/places/places.routes.js';
 import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
@@ -134,6 +136,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   // oversized upload is refused rather than read into memory in full.
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
 
+  await app.register(backgroundPlugin);
   await app.register(clockPlugin, options.clock ? { clock: options.clock } : {});
   await app.register(databasePlugin, { db });
   await app.register(eventsPlugin);
@@ -157,6 +160,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(categoryRoutes);
   await app.register(tagRoutes);
+  await app.register(placeRoutes);
   await app.register(userRoutes);
   await app.register(customerRoutes);
   await app.register(vendorRoutes);

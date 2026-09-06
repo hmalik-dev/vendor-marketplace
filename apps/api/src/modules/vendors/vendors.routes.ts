@@ -4,7 +4,6 @@ import {
   nearbyAvailabilityResultSchema,
   updateVendorProfileSchema,
   vendorProfileDetailSchema,
-  vendorCityListSchema,
   vendorSearchQuerySchema,
   vendorSearchResultSchema,
   publicVendorProfileSchema,
@@ -23,7 +22,6 @@ import {
   updateVendorProfile,
 } from './vendors.service.js';
 import { getPublicVendorAvailability, getPublicVendorProfile } from './vendor-profile.service.js';
-import { findVendorCities } from './vendor-profile.dao.js';
 import { findNearbyAvailability } from './nearby-availability.service.js';
 
 /** Where a vendor's own profile lives, used as the `Location` on creation. */
@@ -64,20 +62,6 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => searchPublishedVendors(app.db, request.query),
-  );
-
-  /**
-   * The cities a customer can search, each with its state.
-   *
-   * Declared before `/vendors/:slug` so the literal path wins the match.
-   *
-   * Public reference data, like the taxonomy: it changes when vendors publish,
-   * not per request, and every visitor gets the same answer. Cached for the
-   * same reason `/categories` is — and it is safe to cache for exactly that
-   * reason, since nothing here is scoped to a session.
-   */
-  app.get('/vendors/cities', { schema: { response: { 200: vendorCityListSchema } } }, async () =>
-    findVendorCities(app.db),
   );
 
   /**

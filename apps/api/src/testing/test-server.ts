@@ -401,6 +401,15 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   stripe: FakeStripe;
   /** The transactional-email boundary, recorded rather than sent. */
   email: FakeEmail;
+  /**
+   * Settles the sends this request dispatched, before asserting on `email`.
+   *
+   * The transactional email runs off the request path (#408), so a suite that
+   * reads `email.sent` the instant `inject` resolves is racing it. This is
+   * `app.background.drain()` — the same call the instance makes on close, not a
+   * test-only path — so what the suite waits for is what production runs.
+   */
+  flushEmail: () => Promise<void>;
   /** Simulates the storage bucket going away, for the readiness probe. */
   setStorageAvailable: (available: boolean) => void;
   close: () => Promise<void>;
@@ -502,6 +511,7 @@ export async function createTestHarness(
     clerkUsers,
     validWebhookSignatures,
     stripe,
+    flushEmail: () => app.background.drain(),
     setStorageAvailable: (available) => {
       storageAvailable = available;
     },

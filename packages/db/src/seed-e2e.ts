@@ -2,6 +2,7 @@ import {
   BOOKING_REQUEST_EXPIRY_DAYS,
   EVENT_TYPES,
   type EventType,
+  parseDurationHours,
   toDateString,
 } from '@vendor-marketplace/shared';
 import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
@@ -483,29 +484,57 @@ interface SeededPackage {
   priceCents: number;
 }
 
-/** One bookable package, which is what makes the vendor publishable. */
+/**
+ * One bookable package, which is what makes the vendor publishable.
+ *
+ * The duration is part of the fixture rather than an optional extra: frame `05`
+ * draws the checkout rail's sub-line as `<package> · <duration>`, so a package
+ * without one leaves half of that line unreachable to a parity pass. It is
+ * backfilled onto an existing row too — a lane seeded before #395 would
+ * otherwise keep measuring the shorter line for ever.
+ */
 async function ensurePackage(tx: Tx, vendorId: string): Promise<SeededPackage> {
   const name = 'Full day coverage';
+  /** Eight, because that is what this package's own description promises. */
+  const durationHours = '8';
 
   const [existing] = await tx
-    .select({ id: servicePackages.id, priceCents: servicePackages.priceCents })
+    .select({
+      id: servicePackages.id,
+      priceCents: servicePackages.priceCents,
+      durationHours: servicePackages.durationHours,
+      isActive: servicePackages.isActive,
+    })
     .from(servicePackages)
     .where(and(eq(servicePackages.vendorId, vendorId), eq(servicePackages.name, name)))
     .limit(1);
 
   if (existing) {
     /*
-     * Re-activated on every adoption. The draft fixture deactivates this row to
-     * open the `packages` blocker, so a published run that only *found* it left
-     * the storefront with no bookable package and no way back to published
-     * without editing the profile by hand.
+     * Two repairs on adoption, and each one only when it is actually needed.
+     *
+     * The duration: NUMERIC comes back with its scale (`8.0` for an `8`), so the
+     * comparison is on the parsed number rather than on the string — otherwise
+     * this writes on every run for ever, and `lane:up` runs it once per lane.
+     *
+     * The active flag: the draft fixture deactivates this row to open the
+     * `packages` blocker, so a published run that only *found* it left the
+     * storefront with no bookable package and no way back to published without
+     * editing the profile by hand (#371).
      */
-    await tx
-      .update(servicePackages)
-      .set({ isActive: true, updatedAt: sql`now()` })
-      .where(eq(servicePackages.id, existing.id));
+    const staleDuration = parseDurationHours(existing.durationHours) !== Number(durationHours);
 
-    return existing;
+    if (staleDuration || !existing.isActive) {
+      await tx
+        .update(servicePackages)
+        .set({
+          ...(staleDuration ? { durationHours } : {}),
+          ...(existing.isActive ? {} : { isActive: true }),
+        })
+        .where(eq(servicePackages.id, existing.id));
+    }
+
+    return { id: existing.id, priceCents: existing.priceCents };
   }
 
   const [created] = await tx
@@ -515,6 +544,7 @@ async function ensurePackage(tx: Tx, vendorId: string): Promise<SeededPackage> {
       name,
       description: 'Eight hours of coverage, edited gallery delivered in three weeks.',
       priceCents: 145_000,
+      durationHours,
     })
     .returning({ id: servicePackages.id, priceCents: servicePackages.priceCents });
 

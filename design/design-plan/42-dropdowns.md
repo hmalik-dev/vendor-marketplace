@@ -46,14 +46,28 @@ runs off it, which is why mobile switches rather than shrinks.
    The two differ in one behaviour and it is deliberate. **Vendor type opens on
    the full taxonomy**, because eleven categories are worth seeing and teaching.
    **City opens nothing until something is typed** — "cities can vary
-   drastically", so a scroll list is not the affordance. City also caps at eight
-   suggestions and says how many more matched.
+   drastically", so a scroll list is not the affordance. City caps at eight
+   suggestions.
+
+   **City searches every US city, not our inventory (D32, #384).** It used to
+   suggest only places that already had a published vendor, preloaded whole and
+   labelled with how many were there, on the reasoning that the field may only
+   ask questions the platform can answer. The user overruled that: _"i currently
+   want the city dropdown to function the way airbnb's 'where' input functions.
+   Do not preload and indicate how many vendors are in each city.. users should
+   be able to search for any city and see the results."_ So the suggestions come
+   from a seeded US places table as the customer types, no row carries a count,
+   and no count orders two same-named cities — population does, and it never
+   leaves the API. A city with nobody in it commits and lands on frame `18`'s
+   no-results state with relaxations, which is a better answer than making the
+   place unpickable.
 
    **What survives unchanged is the constraint, not the shape:** the committed
    value is still a category slug or empty, and still a real `(city, state)`
    pair or empty. Typing is an input affordance and never a query term; only a
    click or a keyboard commit changes the query, and uncommitted text reverts on
-   blur, `Esc` and `Tab`. That is D6, and it is untouched.
+   blur, `Esc` and `Tab`. That is the half of D6 D32 left standing, and a bare
+   `Enter` on a string that matches no place still commits nothing.
 
 3. **Multi-select** (style, and any "pick any" filter) — **checkboxes, not
    checkmarks**; the square says "more than one" before anything is read. Footer
@@ -73,7 +87,7 @@ makes the results grid flicker and re-sort under the user's hand.
 - **Keyboard:** ↑↓ moves, ↵ commits, typing **narrows the list in place** (not a jump-to-first-letter), `Tab` closes and moves on. Focus returns to the field on close. On a combobox or typeahead the field never lost focus in the first place, so ↑↓ must `preventDefault` — a text input's own arrows move the caret, and the ticket's requirement that the caret stay put is a requirement to suppress that.
 - **Open state on the field:** open **adds to** the focused state rather than replacing it — same `stone-200` fill and clay label, plus the value turning clay and the caret flipping. (The earlier "open replaces focus" rule made an open segment look quieter than a focused one.) In the compact header bar the open segment is the only clay element. A segment inside a joined bar takes a fill and a clay label at every rung — **never a border, edge or outline**, which would fight the bar it sits inside.
 - **Scrim:** hero and mobile only, where the dropdown is the page's subject. **Never** in the compact header — results must stay readable behind it.
-- **Empty body** (a city with no vendors in that category): one row of `stone-600` copy saying so plus a single action, never a blank panel.
+- **Empty body**: one row of `stone-600` copy saying so plus a single action, never a blank panel. The example used to be _"a city with no vendors in that category"_ and **#384 retired it** — a city with no vendors is not an empty panel any more, it is a suggestion that commits and lands on frame `18`. City's empty bodies are now a typed string no US place matches, a request still in flight, and a request that failed; all three carry `Search anywhere` as the action.
 
 ## The `▾` in the frames is a recorded override, not a miss
 

@@ -32,7 +32,6 @@ vi.mock('@/lib/current-user', () => ({
 vi.mock('@/lib/vendor-data', () => ({
   getCategories: () => getCategories(),
   getFeaturedVendors: () => getFeaturedVendors(),
-  getVendorCities: async () => [],
 }));
 
 /**

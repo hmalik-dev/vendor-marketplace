@@ -46,26 +46,12 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-/** The cities the City select offers — real places with published vendors. */
-const CITIES = [
-  { city: 'Austin', state: 'TX', vendorCount: 11 },
-  { city: 'Portland', state: 'OR', vendorCount: 3 },
-];
-
 const EMPTY: SearchBarValues = { category: '', city: '', state: '', date: '' };
 
 function renderBar(value: SearchBarValues = EMPTY, onSubmit = vi.fn()) {
   return {
     onSubmit,
-    ...render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={value}
-        onSubmit={onSubmit}
-        size="hero"
-      />,
-    ),
+    ...render(<SearchBar categories={CATEGORIES} value={value} onSubmit={onSubmit} size="hero" />),
   };
 }
 
@@ -156,15 +142,7 @@ describe('SearchBar', () => {
   it('offers no free-text query field — typing filters, only a choice commits', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={onSubmit}
-        size="hero"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={onSubmit} size="hero" />);
 
     const type = screen.getByRole('combobox', { name: 'Vendor type' });
     await user.type(type, 'phot');
@@ -297,13 +275,7 @@ describe('SearchBar accessible names', () => {
 
   it.each(['hero', 'compact'] as const)('names every control in the %s bar', (size) => {
     const { container } = render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        size={size}
-      />,
+      <SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size={size} />,
     );
 
     expect(screen.getByRole('combobox', { name: 'City' })).toBeDefined();
@@ -362,15 +334,7 @@ describe('SearchBar — pill and circle discipline', () => {
    * #306 owns raising the token's alpha.
    */
   it('keeps the submit ring on the button edge, where it has an edge to contrast with', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        size="hero"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     const submit = screen.getByRole('button', { name: 'Search' });
 
@@ -380,21 +344,13 @@ describe('SearchBar — pill and circle discipline', () => {
   });
 
   it('labels the submit control by default, for the hero and the full-width bar', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        size="hero"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
   });
 
   it('keeps the label on the full-width bar even at its compact size', () => {
-    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
   });
@@ -412,15 +368,7 @@ describe('SearchBar — pill and circle discipline', () => {
    * the 1024 frame draws.
    */
   it('steps the hero submit through all three frames that draw it', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        size="hero"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     const submit = screen.getByRole('button', { name: 'Search' });
 
@@ -454,15 +402,7 @@ describe('SearchBar — pill and circle discipline', () => {
    * The compact bar is a different control and keeps its own `sm:ml-1.5`.
    */
   it("gives the hero submit no left margin, so the segments keep the frame's width", () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        size="hero"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     const submit = screen.getByRole('button', { name: 'Search' });
 
@@ -471,7 +411,7 @@ describe('SearchBar — pill and circle discipline', () => {
   });
 
   it("leaves the compact bar's own submit margin alone", () => {
-    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Search' }).className).toContain('sm:ml-1.5');
   });
@@ -484,15 +424,7 @@ describe('SearchBar — pill and circle discipline', () => {
    * class because jsdom resolves neither `:focus-visible` nor `has-()`.
    */
   it('marks which segment has focus, not just that the bar has it', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        size="hero"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     /*
      * Every segment carries the same per-segment tint (#167), and it is spelled
@@ -510,15 +442,7 @@ describe('SearchBar — pill and circle discipline', () => {
   });
 
   it('drops the visible label in the compact header, never the accessible one', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        action="icon"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
 
     const button = screen.getByRole('button', { name: 'Search' });
 
@@ -528,15 +452,7 @@ describe('SearchBar — pill and circle discipline', () => {
 
   /* A circle without a glyph is not a reduced control, it is an unlabelled one. */
   it('never renders a bare ring — the circle always holds the magnifier', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        action="icon"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
 
     const button = screen.getByRole('button', { name: 'Search' });
 
@@ -556,15 +472,7 @@ describe('SearchBar — pill and circle discipline', () => {
    * the rule at all, which is what a component test can see.
    */
   it('gives the icon-only circle a 44x44 hit area past its own paint', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        action="icon"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} action="icon" />);
 
     const button = screen.getByRole('button', { name: 'Search' });
 
@@ -586,7 +494,6 @@ describe('SearchBar — pill and circle discipline', () => {
     render(
       <SearchBar
         categories={CATEGORIES}
-        cities={CITIES}
         value={{ category: 'photography', city: 'Austin', state: 'TX', date: '' }}
         onSubmit={onSubmit}
         action="icon"
@@ -617,7 +524,7 @@ describe('SearchBar — while a search is in flight', () => {
       <SearchStatusHarness searching={searching}>
         <SearchBar
           categories={CATEGORIES}
-          cities={CITIES}
+
           value={EMPTY}
           onSubmit={vi.fn()}
           action="icon"
@@ -645,15 +552,7 @@ describe('SearchBar — while a search is in flight', () => {
 
   /* The hero is never inside the provider, so it must not care. */
   it('leaves the labelled pill alone', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        size="hero"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     expect(screen.getByRole('button', { name: 'Search' }).textContent).toBe('Search');
   });
@@ -665,7 +564,7 @@ describe('SearchBar — the compact bar’s own measurements', () => {
   /* 40px at 1024, 42px from 1280 — frames `25` and `17`/`18`. */
   it('takes the frame’s heights from lg up', () => {
     const { container } = render(
-      <SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />,
+      <SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />,
     );
     const form = container.querySelector('form');
 
@@ -674,22 +573,14 @@ describe('SearchBar — the compact bar’s own measurements', () => {
   });
 
   it('shortens the date label, which is what leaves room for a date', () => {
-    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
 
     expect(screen.getByText('Date')).toBeDefined();
     expect(screen.queryByText('Event date')).toBeNull();
   });
 
   it('spells it out on the hero, where there is room', () => {
-    render(
-      <SearchBar
-        categories={CATEGORIES}
-        cities={CITIES}
-        value={EMPTY}
-        onSubmit={vi.fn()}
-        size="hero"
-      />,
-    );
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} size="hero" />);
 
     expect(screen.getByText('Event date')).toBeDefined();
   });
@@ -735,7 +626,7 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
   const PICKED: SearchBarValues = { category: '', city: '', state: '', date: '2026-06-14' };
 
   it('renders the 1440 frames literal, not the browser picker', () => {
-    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
 
     // `17 Search loading` and `18 Search no results` both draw `Jun 14, 2026`.
     const literal = dateLiteralIn('17 Search loading');
@@ -744,7 +635,7 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
   });
 
   it('renders the 1024 frames shorter literal alongside it', () => {
-    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
 
     const literal = dateLiteralIn('27 Search results — 1024');
 
@@ -757,7 +648,7 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
    * the wrong one on the server and change it under the reader after mount.
    */
   it('hides the year below 1440 and shows it at 1440', () => {
-    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />);
 
     /*
      * `min-[90rem]:`, not `xl:`. The test's own name says 1440 and `xl` is
@@ -785,7 +676,7 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
   it('opens the designed picker, not the browser’s', async () => {
     const user = userEvent.setup();
     const { container } = render(
-      <SearchBar categories={CATEGORIES} cities={CITIES} value={PICKED} onSubmit={vi.fn()} />,
+      <SearchBar categories={CATEGORIES} value={PICKED} onSubmit={vi.fn()} />,
     );
 
     expect(container.querySelector('input[type="date"]')).toBeNull();
@@ -805,7 +696,7 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
   });
 
   it('still draws the prompt, not a literal, while no date is picked', () => {
-    render(<SearchBar categories={CATEGORIES} cities={CITIES} value={EMPTY} onSubmit={vi.fn()} />);
+    render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={vi.fn()} />);
 
     expect(screen.getByText('Add a date').textContent).toBe('Add a date');
     expect(screen.queryByText(/2026/)).toBeNull();
@@ -821,7 +712,7 @@ describe('SearchBar — the picked date is shown in the frames words', () => {
       render(
         <SearchBar
           categories={CATEGORIES}
-          cities={CITIES}
+
           value={{ category: '', city: '', state: '', date: hostile }}
           onSubmit={vi.fn()}
         />,
@@ -844,7 +735,7 @@ describe('a draft made while the search is in flight', () => {
   const bar = (value: SearchBarValues): React.ReactElement => (
     <SearchBar
       categories={CATEGORIES}
-      cities={CITIES}
+
       value={value}
       onSubmit={vi.fn()}
       size="hero"

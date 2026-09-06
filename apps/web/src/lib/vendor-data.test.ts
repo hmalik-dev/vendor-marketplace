@@ -31,7 +31,6 @@ const {
   getPublicVendorAvailability,
   getPublicVendorProfile,
   getPublicVendorReviews,
-  getVendorCities,
 } = await import('./vendor-data');
 
 const upstream500 = new ApiClientError(
@@ -300,10 +299,6 @@ describe('an upstream that never answers', () => {
   it('costs the header its taxonomy without taking the page down', async () => {
     await expect(getCategories()).resolves.toEqual([]);
     await expect(getActiveTags()).resolves.toEqual([]);
-  });
-
-  it('leaves the city field offering Anywhere', async () => {
-    await expect(getVendorCities()).resolves.toEqual([]);
   });
 
   it('opens the availability tab on a free month rather than breaking the page', async () => {

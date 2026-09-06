@@ -42,7 +42,8 @@
     "seed:demo": "tsx src/scripts/seed-demo.ts",
     "studio": "drizzle-kit studio",
     "keys:from-urls": "tsx src/scripts/keys-from-urls.ts",
-    "cover:from-portfolio": "tsx src/scripts/cover-from-portfolio.ts"
+    "cover:from-portfolio": "tsx src/scripts/cover-from-portfolio.ts",
+    "cities:build": "tsx src/scripts/build-us-cities.ts"
   },
   "dependencies": {
     "@vendor-marketplace/shared": "workspace:*",

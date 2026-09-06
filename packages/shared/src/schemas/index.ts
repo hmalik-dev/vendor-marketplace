@@ -23,6 +23,7 @@ import {
   MAX_BUSINESS_NAME_LENGTH,
   MAX_CAPTION_LENGTH,
   MAX_CUSTOMER_BIO_LENGTH,
+  MAX_DISPLAY_ORDER,
   MAX_NEARBY_DATE_WINDOW_DAYS,
   MAX_TAGLINE_LENGTH,
   MAX_VENDOR_BIO_LENGTH,
@@ -34,6 +35,7 @@ import {
   MAX_EMAIL_LENGTH,
   MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
+  MAX_NOTIFICATION_TITLE_LENGTH,
   MAX_REVIEWER_DISPLAY_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
   MAX_PAGE,
@@ -636,7 +638,7 @@ const servicePackageFieldsSchema = z.object({
   durationHours: z.number().min(0.5).max(999.9).optional(),
   maxGuests: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
   inclusions: inclusionsSchema,
-  displayOrder: z.int().min(0).optional(),
+  displayOrder: z.int().min(0).max(MAX_DISPLAY_ORDER).optional(),
 });
 
 export const createServicePackageSchema = servicePackageFieldsSchema.extend({
@@ -677,7 +679,7 @@ export const createPortfolioItemSchema = z.object({
   // Nullish, not optional: an upload with no thumbnail sends an explicit null.
   thumbnailUrl: imageRefSchema.nullish(),
   caption: freeText().max(MAX_CAPTION_LENGTH).optional(),
-  displayOrder: z.int().min(0).optional(),
+  displayOrder: z.int().min(0).max(MAX_DISPLAY_ORDER).optional(),
 });
 export type CreatePortfolioItemInput = z.infer<typeof createPortfolioItemSchema>;
 
@@ -916,8 +918,33 @@ export const bookingRequestReasonSchema = z.object({
 export type BookingRequestReasonInput = z.infer<typeof bookingRequestReasonSchema>;
 
 /** Whose requests a list call wants — the caller's role decides which is legal. */
+/**
+ * The page window for the four reads that return a person's **own** history.
+ *
+ * `GET /booking-requests`, `GET /bookings` and the two customer-review reads
+ * accepted no window at all and applied no `LIMIT`, so each one loaded and
+ * serialised every row the caller had ever had — two of them through a join
+ * that grows with it, and the requests read then started one expiry chain per
+ * row at once. The payload had no ceiling and neither did the work behind it
+ * (#408).
+ *
+ * The ceiling is the page size, and it defaults to the **maximum** rather than
+ * to `DEFAULT_PAGE_SIZE`. These are not browsed lists: `/bookings` is a hub the
+ * customer reads whole, and the vendor's queue is one screen. A default of 20
+ * would have silently hidden a 21st booking from a page that does not page,
+ * which is a worse defect than the one this closes. A caller that outgrows one
+ * page walks it with `page`, exactly like every other paginated read here.
+ */
+export const historyPageQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(MAX_PAGE_SIZE),
+});
+export type HistoryPageQuery = z.infer<typeof historyPageQuerySchema>;
+export const historyPageQueryShape = historyPageQuerySchema.shape;
+
 export const bookingRequestListQuerySchema = z.object({
   status: bookingRequestStatusSchema.optional(),
+  ...historyPageQueryShape,
 });
 export type BookingRequestListQuery = z.infer<typeof bookingRequestListQuerySchema>;
 
@@ -1037,6 +1064,21 @@ export const checkoutIntentSchema = z.object({
     businessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
     avatarUrl: imageRefSchema.nullable(),
   }),
+  /**
+   * The package being bought, for the rail's sub-line — frame `05` line 907
+   * draws `<package> · <duration>` under the vendor's name.
+   *
+   * `null` for a custom request, which was quoted rather than priced by a
+   * package and so has nothing to name. `durationHours` is separately nullable
+   * because a package need not declare one, and the sub-line degrades to the
+   * package name alone rather than printing an empty half.
+   */
+  servicePackage: z
+    .object({
+      name: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+      durationHours: z.number().nullable(),
+    })
+    .nullable(),
   /** The date the vendor accepted, for the "Maya accepted your request on…" line. */
   acceptedAt: z.date().nullable(),
 });
@@ -1444,7 +1486,7 @@ export type SendMessageResult = z.infer<typeof sendMessageResultSchema>;
 export const notificationItemSchema = z.object({
   id: uuidSchema,
   type: notificationTypeSchema,
-  title: z.string().max(MAX_TITLE_LENGTH),
+  title: z.string().max(MAX_NOTIFICATION_TITLE_LENGTH),
   body: z.string().nullable(),
   /** Where clicking it goes, derived from the payload — never a raw id. */
   href: z.string().max(MAX_URL_LENGTH).nullable(),
@@ -1459,7 +1501,7 @@ export const notificationSchema = z.object({
   id: uuidSchema,
   userId: uuidSchema,
   type: notificationTypeSchema,
-  title: z.string().max(MAX_TITLE_LENGTH),
+  title: z.string().max(MAX_NOTIFICATION_TITLE_LENGTH),
   body: z.string().nullable(),
   data: z.record(z.string(), z.unknown()).nullable(),
   readAt: z.date().nullable(),
@@ -1690,22 +1732,41 @@ export const categoryFacetSchema = z.object({
 export type CategoryFacet = z.infer<typeof categoryFacetSchema>;
 
 /**
- * One place a customer can actually search, and how many vendors are in it.
+ * One place the `City` field may suggest — a **US place**, not an inventory row.
  *
  * City and state travel **together**, always. "Springfield" names a place in
  * thirty-odd states and "Portland" names two people would fly between; a city
  * field that took either on its own could not tell a customer which one they
  * had asked for. The pair is also the unit the vendor profile stores and the
  * search filters on, so nothing has to be re-joined to use it.
+ *
+ * **#384 removed `vendorCount` from this shape and it must not come back.** The
+ * user's instruction was verbatim: *"Do not preload and indicate how many
+ * vendors are in each city."* Suggestions now come from the seeded `us_cities`
+ * reference table, so a place with nobody in it is offered, committed, and
+ * answered with the honest no-results state rather than being unpickable.
  */
-export const vendorCitySchema = z.object({
+export const placeSuggestionSchema = z.object({
   city: z.string().max(MAX_NAME_LENGTH),
-  state: z.string().max(MAX_NAME_LENGTH),
-  /** Published vendors there — a query result, never a platform statistic. */
-  vendorCount: z.int().min(1),
+  state: usStateCodeSchema,
 });
-export type VendorCity = z.infer<typeof vendorCitySchema>;
-export const vendorCityListSchema = z.array(vendorCitySchema);
+export type PlaceSuggestion = z.infer<typeof placeSuggestionSchema>;
+export const placeSuggestionListSchema = z.array(placeSuggestionSchema);
+
+/** At most this many suggestions are returned, matching the panel's own cap. */
+export const PLACE_SUGGESTION_LIMIT = 8;
+
+/**
+ * `GET /places?q=` — the typeahead's only input.
+ *
+ * `q` is **required and non-empty**: there is no "everything" answer here by
+ * design. A request with nothing typed is the preload the ticket removed, so
+ * the contract refuses it rather than the caller remembering not to send it.
+ */
+export const placeSearchQuerySchema = z.object({
+  q: z.string().min(1).max(MAX_NAME_LENGTH),
+});
+export type PlaceSearchQuery = z.infer<typeof placeSearchQuerySchema>;
 
 export const vendorSearchResultSchema = z.object({
   items: z.array(vendorCardSchema),
@@ -1998,7 +2059,7 @@ export const updateTagSchema = z
   .object({
     name: trimmedString(MAX_NAME_LENGTH, 2).optional(),
     isActive: z.boolean().optional(),
-    displayOrder: z.int().min(0).optional(),
+    displayOrder: z.int().min(0).max(MAX_DISPLAY_ORDER).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update' });
 export type UpdateTag = z.infer<typeof updateTagSchema>;

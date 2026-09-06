@@ -34,7 +34,13 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
     stripe: app.stripe,
     hub: app.events,
     log,
-    mail: { db: app.db, email: app.email, log, webOrigin: options.webOrigin },
+    mail: {
+      db: app.db,
+      email: app.email,
+      log,
+      webOrigin: options.webOrigin,
+      background: app.background,
+    },
     platformFeeRate: options.platformFeeRate,
   });
 

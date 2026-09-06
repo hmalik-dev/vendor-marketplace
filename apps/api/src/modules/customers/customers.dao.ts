@@ -7,6 +7,7 @@ import {
   vendorProfiles,
   type UserRow,
 } from '@vendor-marketplace/db/schema';
+import type { PageWindow } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /** Booking-request statuses that mean the vendor agreed to the work. */
@@ -88,7 +89,7 @@ export interface CustomerReviewRow {
 export async function findCustomerReviews(
   db: AppDatabase,
   customerId: string,
-  limit?: number,
+  window: PageWindow,
 ): Promise<CustomerReviewRow[]> {
   if (!customerId) {
     return [];
@@ -118,9 +119,11 @@ export async function findCustomerReviews(
         eq(reviews.isPublic, true),
       ),
     )
-    .orderBy(desc(reviews.createdAt));
+    .orderBy(desc(reviews.createdAt))
+    .limit(window.limit)
+    .offset(window.offset);
 
-  return limit === undefined ? query : query.limit(limit);
+  return query;
 }
 
 /** The vendor profile this user owns, for scoping a vendor's own reads. */

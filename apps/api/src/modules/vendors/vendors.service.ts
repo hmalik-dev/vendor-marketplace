@@ -1,4 +1,5 @@
 import {
+  MAX_SLUG_LENGTH,
   generateSlug,
   vendorSearchResultSchema,
   type CreateVendorProfileInput,
@@ -111,6 +112,28 @@ export function publishBlockers(
 }
 
 /**
+ * `base` with a collision suffix, trimmed so the result still fits the column.
+ *
+ * `generateSlug` caps the base at `MAX_SLUG_LENGTH`, which is also the width of
+ * `vendor_profiles.slug` — so appending `-2` to a business name at its own
+ * 200-character limit produced a 202-character candidate. `slugExists` compared
+ * it happily and the insert then threw `value too long for type character
+ * varying(200)`: an opaque 500 rather than the 409 this loop is written to
+ * produce, and a candidate the response schema could not have serialised
+ * either. The suffix is what has to survive — it is the part that makes the
+ * slug unique — so the base yields the room (#408).
+ *
+ * The trailing-hyphen strip matters: cutting a base mid-separator would leave
+ * `studio--2`, which is not the slug shape the rest of the product reads.
+ */
+function withSuffix(base: string, attempt: number): string {
+  const suffix = `-${attempt}`;
+  const room = MAX_SLUG_LENGTH - suffix.length;
+
+  return `${base.length <= room ? base : base.slice(0, room).replace(/-+$/, '')}${suffix}`;
+}
+
+/**
  * Finds a free slug near `desired`. The unique index is still the authority —
  * a concurrent insert can win between the check and the write — but resolving
  * it here keeps the common case a clean, readable slug rather than a UUID.
@@ -123,7 +146,7 @@ async function resolveSlug(
   const base = generateSlug(desired);
 
   for (let attempt = 1; attempt <= MAX_SLUG_ATTEMPTS; attempt += 1) {
-    const candidate = attempt === 1 ? base : `${base}-${attempt}`;
+    const candidate = attempt === 1 ? base : withSuffix(base, attempt);
     if (!(await slugExists(db, candidate, exceptVendorId))) {
       return candidate;
     }

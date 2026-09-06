@@ -130,6 +130,13 @@ for the referral case (someone was handed a business card).
 **Revisit if:** there is enough profile copy to index for semantic search — and even
 then it is an *additional* entry point beside the pickers, never a replacement.
 
+**Amended by D32 (2026-09-05), for the city half only.** The rule that the field may
+only ask questions the platform can answer no longer governs `City`: it searches every
+US city, and a place with no vendors in it is a legitimate question with an honest
+answer. The vendor-type half is untouched, and so is the invariant that made this a
+*select* rather than a text box — a value the customer did not pick still never reaches
+the query.
+
 ---
 
 ### D7: No Search Filter Rail — *2026-08-27*
@@ -1425,3 +1432,115 @@ the conditional this ruling's copy is careful to state rather than assume. Closi
 Stripe account-configuration and product decision (manual payout schedule plus a
 release-after-event job), not a refund-flag one, and it is recorded here rather than guessed
 at.
+
+---
+
+### D32: `City` Is a Place Search Over Every US City, Not the Inventory List — *2026-09-05*
+
+**The third user override of the design contract, after D28 (#364) and #375.** The
+instruction is recorded verbatim, because the whole decision is that it outranks the
+reasoning it replaces:
+
+> *"also create a ticket to rework our 'search' - i currently want the city dropdown to
+> function the way airbnb's 'where' input functions. Do not preload and indicate how many
+> vendors are in each city.. users should be able to search for any city and see the
+> results.."*
+
+**Decision:** the `City` field searches **every US city**. Three things go with it, and
+each was load-bearing somewhere:
+
+1. **The preloaded list.** `GET /vendors/cities` returned every distinct `(city, state)`
+   of a published profile on every page load, in the site header, on every route. It is
+   deleted. Suggestions now come from `GET /places?q=`, requested as the customer types
+   and never before the first character.
+2. **`vendorCount`, as a label and as an ordering.** It is out of the response schema,
+   off the row, and out of the ranking. The instruction covers both halves: a field that
+   *sorts* by how many vendors are in a city is indicating it, more quietly.
+3. **The rule that a city with nobody in it is unpickable.** `Springfield, IL` commits
+   whether or not anyone has published there.
+
+**What it overrules, and what it does not.** It amends **D6** for the city half only —
+the field may now ask a question the platform cannot answer with vendors, because it can
+answer it honestly with the frame `18` no-results state and relaxations, which the select
+could not produce at all. It overrules **#375's closing invariant** (*"a free-text city
+that reaches the API as a filter is a regression, not this ticket"*) for a city that
+**exists**, and keeps it for one that does not: selection commits, typing never does, and
+a bare `Enter` on `Sprngfield` still commits nothing. `lower(city) = $1` matches exactly,
+so a typo would return an empty grid with nothing to say about why — the same defect the
+select was built to prevent, and the reason that half survives.
+
+**The suggestion source: a seeded `us_cities` table in `packages/db`, not a geocoder.**
+The ticket's stated default, taken as ruled. It needs no provider account and no
+credential, so the work stayed `Backlog` rather than becoming *"Deferred — needs a
+human"*; it adds no per-keystroke billable call; and `us_state` has been a closed
+fifty-states-plus-DC enum since #332, so the product is US-only by construction and
+international coverage buys nothing. 35,618 places, from two public sources because
+neither alone is right: the **US Census 2024 Gazetteer** (public domain) is the authority
+on which places exist, and **GeoNames** (CC BY 4.0) supplies population and the names
+people type — the Census file calls Honolulu *"Urban Honolulu CDP"*, and its population
+series covers incorporated places only, which would sort `Arlington, VA` and
+`Paradise, NV` to the bottom of their own name. The attribution ships in the dataset's
+own header.
+
+**The tie-break is population, descending — ruled, not defaulted.** The ticket allowed
+population or alphabetical-by-state and asked for a ruling. Population is the honest
+generalisation of the tier it replaces: `vendorCount` put `Portland, OR` above
+`Portland, ME` because that is the one more people mean, and population says the same
+thing without saying anything about us. It is a `us_cities` column that the API orders
+by and **never selects**, so no number reaches a screen and the no-invented-numbers law
+is untouched. Alphabetical-by-state was rejected for putting `Portland, ME` first, which
+is wrong for almost every customer who types `portl`.
+
+**Consequence.** `findVendorCities`, `vendorCitySchema`, `getVendorCities` and
+`rankCityMatches` are all deleted; each one's argument for the old design is rewritten in
+place as a record of the override rather than removed, so the next reader does not
+re-derive it. `pnpm db:seed` fills `us_cities`, and does it **outside** `seedReferenceData`
+— 35,618 rows is ~3s of PGlite that every API test suite would otherwise pay for a table
+almost none of them reads.
+
+**Revisit if:** the product serves somewhere outside the fifty states and DC, at which
+point the closed `us_state` enum is the thing that has to move first and a geocoder
+becomes the cheaper answer.
+
+---
+
+### D33: Frame `05`'s Card Form Is Stripe's, and the Frame Is the Overruled Party — *2026-09-05*
+
+**Ruled for #395**, whose parity pass took frame `05 Checkout` to 1:1 on everything the
+application draws. Two of the frame's items are inside the `PaymentElement` iframe, and this
+records why they stay unmatched rather than being re-filed at the next pass.
+
+Frame lines 886–898 draw a bare card form: **Card number**, **Expiry**, **CVC**, **Name on
+card**, **Country**, **ZIP** — six fields, one payment method, no chrome. The live element
+draws Card/Bank/Klarna tabs, a Link row, a "Save my information for faster checkout" block,
+and no name field.
+
+**What is ours and was fixed.** The appearance tokens. `.Input`, `.Input:focus`,
+`.Input--invalid` and `.Label` are handed to the iframe as an `Appearance` object, and
+`.Label` had been 11px at `.06em` where the frame's `.lbl` is **10.5px at `.05em`** — the
+same micro-label the rest of the app wears, restated as literals only because Stripe's iframe
+is a different document and cannot read this one's custom properties. That is fixed.
+
+**What is not ours.**
+
+- **"Name on card" cannot be added.** Whether the card form collects a name is Stripe's
+  decision from `billingDetails`, and its only settings are `auto` — already the default —
+  and `never`. There is no option that forces the field on. The frame draws a field the
+  integration has no way to render.
+- **The method set is a payments decision, not a layout one.** Bank and Klarna are tabs
+  because the connected account has them enabled. Removing them from the screen would be
+  deciding which payment methods Orla accepts, which is not a parity fix, and neither
+  `layout` value hides them: `tabs` puts them in a row, `accordion` stacks them. `tabs` is
+  kept because it is the shorter of the two, and on this screen height is what keeps the pay
+  button above the fold.
+
+**So the frame is the record of what was overruled**, in the sense
+`web-design-parity.md` already gives that phrase for D24 and D25. A later pass measuring
+frame `05` should score the six axes on the application's own markup and stop at the iframe
+boundary. Do not re-file the tabs, the Link row, the save-info block or the missing name
+field.
+
+One thing genuinely deferred rather than ruled: `04-laws.md:135` specifies `ring-clay-400/40`
+for an unbordered control and the shipped `Button` renders `/30`. The law file and the
+primitive disagree everywhere, not on checkout, so it belongs to whichever ticket owns the
+`Button` primitive — #395 deliberately did not settle it from one screen.

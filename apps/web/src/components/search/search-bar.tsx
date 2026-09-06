@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  isPastDate,
-  todayDateString,
-  type Category,
-  type VendorCity,
-} from '@vendor-marketplace/shared';
+import { isPastDate, todayDateString, type Category } from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
 import { useStableValue } from '@/lib/use-stable-value';
 import { useViewerToday } from '@/lib/use-viewer-today';
@@ -64,8 +59,6 @@ export interface SearchBarValues {
 
 export interface SearchBarProps {
   categories: readonly Category[];
-  /** Every city with a published vendor, so City can only ask a real question. */
-  cities: readonly VendorCity[];
   value: SearchBarValues;
   onSubmit: (value: SearchBarValues) => void;
   /** `compact` is the header variant; `hero` is the landing one. */
@@ -86,7 +79,6 @@ export interface SearchBarProps {
 
 export function SearchBar({
   categories,
-  cities,
   value,
   onSubmit,
   size = 'compact',
@@ -312,13 +304,13 @@ export function SearchBar({
       <span aria-hidden="true" className={divider} />
 
       {/*
-        City is a select over the places that actually have vendors, and it
-        carries the state with it (#167). Typed, it could not distinguish the
-        two Portlands or the thirty Springfields, and a city nobody works in
-        produced an empty grid with nothing to say about why.
+        City is a place search over every US city, and it carries the state
+        with it (#167, #384). The state travels because a typed name cannot
+        distinguish the two Portlands or the thirty Springfields; what #384
+        changed is only *which* places may be suggested — any of them, not only
+        the ones we already have a vendor in.
       */}
       <CitySelect
-        cities={cities}
         city={draft.city}
         state={draft.state}
         onChange={(next) => setDraft((previous) => ({ ...previous, ...next }))}

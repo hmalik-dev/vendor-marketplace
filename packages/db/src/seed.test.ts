@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   CATEGORY_SEEDS,
   CATEGORY_SLUG_SUCCESSORS,
@@ -6,8 +6,8 @@ import {
   TAG_SEEDS,
 } from '@vendor-marketplace/shared';
 import { asc, eq } from 'drizzle-orm';
-import { categories, tags } from './schema/index.js';
-import { seedCategories, seedReferenceData, seedTags } from './seed.js';
+import { categories, tags, usCities } from './schema/index.js';
+import { seedCategories, seedReferenceData, seedTags, seedUsCities } from './seed.js';
 import { createTestDatabase, type TestDatabase } from './testing/test-db.js';
 
 let testDb: TestDatabase;
@@ -248,5 +248,58 @@ describe('seedReferenceData', () => {
       categoriesUpserted: CATEGORY_SEEDS.length,
       tagsUpserted: TAG_SEEDS.length,
     });
+  });
+
+  /*
+   * The places dataset is 35,618 rows and ~3s of PGlite, and every API test
+   * suite calls `seedReferenceData` once. Keeping it out is a measured choice,
+   * so it needs a test — otherwise the next person to tidy the two functions
+   * together adds three seconds to fifty suites and nothing says so.
+   */
+  it('leaves the 35,618-row places dataset to `seedUsCities`', async () => {
+    await seedReferenceData(testDb.db);
+
+    expect(await testDb.db.select().from(usCities)).toEqual([]);
+  });
+});
+
+describe('seedUsCities', () => {
+  // One database for the whole file, so each case starts from a known table
+  // rather than from whatever the previous one left.
+  beforeEach(async () => {
+    await testDb.db.delete(usCities);
+  });
+
+  const row = (name: string, state: 'TX' | 'MN', population: number) => ({
+    name,
+    state,
+    population,
+    searchName: name.toLowerCase(),
+  });
+
+  it('inserts the rows it is given, with the pair as the identity', async () => {
+    const inserted = await seedUsCities(testDb.db, [
+      row('Austin', 'TX', 993_588),
+      row('Austin', 'MN', 26_690),
+    ]);
+
+    expect(inserted).toBe(2);
+
+    const stored = await testDb.db.select().from(usCities).orderBy(asc(usCities.state));
+    expect(stored.map((place) => `${place.name}, ${place.state}`)).toEqual([
+      'Austin, MN',
+      'Austin, TX',
+    ]);
+  });
+
+  it('updates a place in place on a re-run rather than duplicating or emptying it', async () => {
+    await seedUsCities(testDb.db, [row('Austin', 'TX', 900_000)]);
+    await seedUsCities(testDb.db, [row('Austin', 'TX', 993_588)]);
+
+    // Upsert, not replace: `pnpm db:seed` runs on every `lane:up`, and a
+    // delete-then-insert would leave a window where the field suggests nothing.
+    const stored = await testDb.db.select().from(usCities);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.population).toBe(993_588);
   });
 });
