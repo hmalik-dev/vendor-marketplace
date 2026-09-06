@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CLERK_COPY, SIGN_UP_CLERK_COPY } from '@/app/clerk-copy';
@@ -85,5 +87,20 @@ describe('ClerkShell', () => {
    */
   it('sends Clerk no telemetry, so the enforced CSP has nothing to block', () => {
     expect(renderAt('/').telemetry).toBe(false);
+  });
+
+  /*
+   * The assertions above hold this component to its contract; this one holds
+   * the application to using it. Everything the provider carries — the
+   * telemetry switch above, the route-scoped label, the appearance — is lost
+   * silently if the root layout stops rendering it, and no test that renders
+   * the shell in isolation can notice.
+   */
+  it('is the provider the root layout actually renders', () => {
+    // Vitest runs with the package root as cwd, which is where vitest.config.ts sits.
+    const layout = readFileSync(join(process.cwd(), 'src/app/layout.tsx'), 'utf8');
+
+    expect(layout).toContain('<ClerkShell>');
+    expect(layout).not.toContain('<ClerkProvider');
   });
 });
