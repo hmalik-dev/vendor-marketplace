@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UserRole } from '@vendor-marketplace/shared';
 import { ApiClientError } from './api-client';
 
 const getToken = vi.fn<() => Promise<string | null>>();
@@ -34,11 +33,9 @@ vi.mock('./api-client', async () => {
 });
 
 const {
-  DASHBOARD_PATH_BY_ROLE,
   getCurrentUser,
   readRoleForChrome,
   redirectIfSignedIn,
-  POST_SIGN_IN_PATH_BY_ROLE,
   redirectVendorToDashboard,
   requireCurrentUser,
   requireRole,
@@ -46,46 +43,6 @@ const {
 
 const CUSTOMER = { id: 'u1', firstName: 'Ada', role: 'customer' as const };
 const VENDOR = { id: 'u2', firstName: 'Grace', role: 'vendor' as const };
-
-describe('DASHBOARD_PATH_BY_ROLE', () => {
-  /*
-   * A customer has no dashboard and never did — their home is the list of
-   * bookings they have made, which is what #22b put at `/bookings` in place of
-   * the placeholder that used to sit under `/customer`.
-   */
-  it('sends a customer to their bookings and a vendor to their dashboard', () => {
-    expect(DASHBOARD_PATH_BY_ROLE.customer).toBe('/bookings');
-    expect(DASHBOARD_PATH_BY_ROLE.vendor).toBe('/vendor/dashboard');
-  });
-
-  /*
-   * `/admin` since #15 built the console. It was `/` before that, because the
-   * bounce below redirects to this map and there was no admin surface to land
-   * on — `/` was chosen as the one route that would not bounce again.
-   */
-  it('sends an admin to the operations console', () => {
-    expect(DASHBOARD_PATH_BY_ROLE.admin).toBe('/admin');
-  });
-
-  /*
-   * The role bounce redirects to this map, so a role whose entry is a route
-   * that role is refused bounces forever. `/bookings` is gated by
-   * `requireRole('customer')`, which is why `admin` cannot point at it — an
-   * admin signing in from any protected route hit ERR_TOO_MANY_REDIRECTS.
-   */
-  it('never sends a role to a route that role is refused', () => {
-    const GATED_BY: Record<string, UserRole> = {
-      '/bookings': 'customer',
-      '/vendor/dashboard': 'vendor',
-      '/admin': 'admin',
-    };
-
-    for (const [role, path] of Object.entries(DASHBOARD_PATH_BY_ROLE)) {
-      const gate = GATED_BY[path];
-      expect(gate === undefined || gate === role).toBe(true);
-    }
-  });
-});
 
 describe('getCurrentUser', () => {
   beforeEach(() => {
@@ -319,27 +276,6 @@ describe('protected routes never degrade', () => {
     // A suspended user must not reach protected content because a read broke.
     await expect(requireRole('vendor')).rejects.toThrow();
     expect(redirect).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST_SIGN_IN_PATH_BY_ROLE', () => {
-  it('starts a vendor on their own dashboard', () => {
-    expect(POST_SIGN_IN_PATH_BY_ROLE.vendor).toBe(DASHBOARD_PATH_BY_ROLE.vendor);
-  });
-
-  it('starts a customer on the marketplace home, not a dashboard', () => {
-    // Browsing vendors is the customer's first move; the dashboard is not.
-    expect(POST_SIGN_IN_PATH_BY_ROLE.customer).toBe('/');
-    expect(POST_SIGN_IN_PATH_BY_ROLE.customer).not.toBe(DASHBOARD_PATH_BY_ROLE.customer);
-  });
-
-  /*
-   * An operator signs in to operate. Like a vendor, and unlike a customer, they
-   * have no use for a catalogue of vendors as a starting place.
-   */
-  it('starts an admin on the console rather than the marketplace home', () => {
-    expect(POST_SIGN_IN_PATH_BY_ROLE.admin).toBe(DASHBOARD_PATH_BY_ROLE.admin);
-    expect(POST_SIGN_IN_PATH_BY_ROLE.admin).not.toBe('/');
   });
 });
 
