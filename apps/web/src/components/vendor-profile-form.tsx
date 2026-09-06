@@ -16,7 +16,7 @@ import {
   RESPONSE_TIME_HOURS_OPTIONS,
   shortTimeAgo,
   updateVendorProfileSchema,
-  UPLOAD_CONSTRAINT_LINE,
+  SINGLE_UPLOAD_CONSTRAINT_LINE,
   type Category,
   type VendorCard as VendorCardData,
   type PublishBlockerKey,
@@ -55,17 +55,10 @@ import {
 } from '@/components/form-error-summary';
 import { FormSectionNav, type FormSection } from '@/components/form-section-nav';
 import { ImageUpload } from '@/components/image-upload';
+import { UnsavedChangesDialog } from '@/components/unsaved-changes-dialog';
 import { StorefrontPreview } from '@/components/vendor/storefront-preview';
 import { TagPicker } from '@/components/tags/tag-picker';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
@@ -351,9 +344,7 @@ export function VendorProfileForm({
    * them away regardless. The indicator is only worth drawing if leaving costs
    * something, so the same flag now guards both exits — the tab and the router.
    */
-  const { pendingHref, confirmLeave, cancelLeave } = useUnsavedChangesGuard(isDirty, {
-    navigate: (href) => router.push(href),
-  });
+  const guard = useUnsavedChangesGuard(isDirty, { navigate: (href) => router.push(href) });
   const radiusFillPercent = serviceRadiusFillPercent(form.serviceRadiusMiles);
   const bioRemaining = MAX_VENDOR_BIO_LENGTH - form.bio.length;
 
@@ -688,7 +679,17 @@ export function VendorProfileForm({
                   <FieldMessage issue={validation.issueFor('coverImage')} />
                 </div>
               </div>
-              <p className="mt-2 text-xs text-stone-600">{UPLOAD_CONSTRAINT_LINE}</p>
+              {/*
+                The **single**-image sentence, for the two single-image fields
+                above it (#412). This carried the portfolio batch line — "12 MB
+                each · 20 files per upload" — under a profile photo and a cover
+                photo that hold one file apiece. `40-states.md` fixes that line
+                for the batch drop zone, and frame `24 Image upload` is where
+                the contract draws it; frame `09` draws no constraint line here
+                at all, and the contract's own singular form is "up to 12 MB",
+                without the "each".
+              */}
+              <p className="mt-2 text-xs text-stone-600">{SINGLE_UPLOAD_CONSTRAINT_LINE}</p>
 
               <div className="field-grid mt-5 border-t border-stone-300 pt-5">
                 <div>
@@ -1120,31 +1121,7 @@ export function VendorProfileForm({
         destructive option and is styled as such; staying is the escape hatch
         the same section requires.
       */}
-      <Dialog
-        open={pendingHref !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            cancelLeave();
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Leave without saving?</DialogTitle>
-            <DialogDescription>
-              Your changes to this profile have not been saved. Leaving now discards them.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={cancelLeave}>
-              Keep editing
-            </Button>
-            <Button type="button" variant="destructive" onClick={confirmLeave}>
-              Discard changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UnsavedChangesDialog guard={guard} />
     </div>
   );
 }

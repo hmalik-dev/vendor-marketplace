@@ -11,6 +11,7 @@ import { CustomerHistory, CustomerReviews } from '@/components/customer/customer
 import { CustomerProfileForm } from '@/components/customer/customer-profile-form';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { toEntries } from '@/lib/booking-entries';
 import { getOwnBookingRequests, getOwnBookings, getOwnCustomerReviews } from '@/lib/customer-data';
 import { requireRole } from '@/lib/current-user';
 
@@ -59,6 +60,16 @@ export default async function CustomerProfilePage({
     getOwnCustomerReviews(),
   ]);
 
+  /*
+   * The hub's own count, from the hub's own flattening — not `requests.length +
+   * bookings.length`. Every accepted request that was paid for exists in *both*
+   * lists, so the sum double-counted it: the badge read 9 here and 7 on
+   * `/bookings`, in the one navigation element the two pages share. `toEntries`
+   * is what drops the paid request in favour of its booking, and it is the only
+   * place that rule may live.
+   */
+  const bookingCount = toEntries(requests, bookings).length;
+
   const settledRate = completionRate(user.completedBookingsCount, user.cancelledBookingsCount);
   const budget = user.budgetTier ? BUDGET_TIER_LABELS[user.budgetTier as BudgetTier] : null;
   const isNewMember = user.totalBookingsCount === 0;
@@ -69,7 +80,7 @@ export default async function CustomerProfilePage({
       does not navigate the sidebar away from under the reader.
     */
     <div className="flex min-h-[calc(100dvh-var(--header-height))]">
-      <BookingsSidebar bookingCount={requests.length + bookings.length} current="profile" />
+      <BookingsSidebar bookingCount={bookingCount} current="profile" />
       <div className="min-w-0 flex-1 px-6 pt-6.5 pb-12 xl:px-10">
         <div className="flex items-center gap-4">
           <Avatar name={user.firstName || 'You'} src={user.avatarUrl} size="lg" />

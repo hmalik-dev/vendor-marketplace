@@ -30,6 +30,7 @@ import {
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
   ERROR_CODES,
   MAX_CUSTOMER_BIO_LENGTH,
+  MAX_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
   MAX_TAGLINE_LENGTH,
   MAX_TAGS_PER_CATEGORY,
@@ -184,6 +185,31 @@ describe('a user avatar is an image reference, not a URL', () => {
 });
 
 describe('updateUserSchema', () => {
+  /**
+   * #412's third finding. The customer profile form parses this schema in the
+   * browser and shows `issues[0].message` verbatim, so a bio one character too
+   * long produced the whole of the customer's feedback: `Invalid input`. Zod's
+   * default is a developer's sentence, and on some builds not even that.
+   */
+  it.each([
+    [{ bio: 'x'.repeat(MAX_CUSTOMER_BIO_LENGTH + 1) }, 'Keep this to 300 characters or fewer.'],
+    [{ city: 'x'.repeat(MAX_NAME_LENGTH + 1) }, 'A city name is at most 100 characters.'],
+    [{ state: 'x'.repeat(MAX_NAME_LENGTH + 1) }, 'A state name is at most 100 characters.'],
+    [{ typicalGuestCountMin: 0 }, 'A guest count starts at 1.'],
+    [{ typicalGuestCountMax: 100_001 }, 'That is more than 100,000 guests.'],
+  ])('says how to fix %o rather than leaving Zod to answer', (payload, message) => {
+    const result = updateUserSchema.safeParse(payload);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(message);
+  });
+
+  it('names the field every refusal belongs to', () => {
+    const result = updateUserSchema.safeParse({ bio: 'x'.repeat(MAX_CUSTOMER_BIO_LENGTH + 1) });
+
+    expect(result.error?.issues[0]?.path).toEqual(['bio']);
+  });
+
   it('trims names before validating emptiness', () => {
     expect(updateUserSchema.parse({ firstName: '  Jane  ' })).toEqual({ firstName: 'Jane' });
   });

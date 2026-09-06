@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
+import { formatEventDate } from '@/lib/booking-entries';
 import type { WireBooking, WireBookingRequest, WireCustomerReview } from '@/lib/wire-schemas';
 
 /**
@@ -52,21 +53,6 @@ const BOOKING_LABELS: Record<BookingStatus, string> = {
   cancelled: 'Cancelled',
   disputed: 'Disputed',
 };
-
-/** `2026-11-14` → `November 14, 2026`, without a timezone shifting the day. */
-function formatEventDate(value: string): string {
-  const [year, month, day] = value.split('-').map(Number);
-
-  if (!year || !month || !day) {
-    return value;
-  }
-
-  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
 
 function occasionOf(eventType: string | null): string | null {
   if (!eventType) {

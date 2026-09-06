@@ -31,7 +31,31 @@ export interface BookingRailProps {
   serverToday: string;
   /** The vendor's published availability, keyed by `YYYY-MM-DD`. */
   calendar: Readonly<Record<string, AvailabilityStatus>>;
+  /**
+   * Whether the account reading this page can act on either CTA.
+   *
+   * `true` for a signed-out visitor and for a customer; `false` for a vendor or
+   * an admin, **including a vendor on their own storefront**. Both actions are
+   * `requireRole('customer')` at the API, so for anyone else the pair were two
+   * controls that could not work — and they failed differently: `Send a
+   * message` printed a refusal, while `Request booking` was a `<Link>` whose
+   * destination bounced silently to the vendor dashboard. One account, one
+   * page, two answers to the same question.
+   *
+   * Required rather than defaulting to `true`: a call site that forgets it is
+   * how the CTAs come back for a vendor, which is the defect this closes.
+   */
+  canBook: boolean;
 }
+
+/**
+ * What stands where the two CTAs do for an account that cannot use them.
+ *
+ * #31: a control either does something or says why it cannot. Two controls
+ * that cannot are not offered at all — the sentence is offered instead, and it
+ * is the same sentence in the rail and in the bottom bar.
+ */
+const CANNOT_BOOK_LINE = 'Only a customer account can book or message a vendor.';
 
 /**
  * The rail from frame `03`, in the frame's fixed order: from-price, the event
@@ -51,6 +75,7 @@ export function BookingRail({
   reviewCount,
   serverToday,
   calendar,
+  canBook,
 }: BookingRailProps): React.ReactElement {
   const today = useViewerToday(serverToday);
   const fieldId = useId();
@@ -242,23 +267,33 @@ export function BookingRail({
        * would narrow the clay box inside a button that is already the right
        * width.
        */}
-      <Button asChild variant="primary" className="flex-1 justify-center px-0 py-3.25 text-[14px]">
-        <Link href={requestHref}>Request booking</Link>
-      </Button>
-      {/*
-       * `Message`, not the rail's `Send a message`. The frame draws the shorter
-       * word here and the longer one in the rail, which is not an inconsistency
-       * to normalise away: the bar has four controls across 768px and the rail
-       * has a full column.
-       */}
-      <Button
-        variant="secondary"
-        onClick={openThread}
-        disabled={opening}
-        className="shrink-0 px-4.5 py-3"
-      >
-        Message
-      </Button>
+      {canBook ? (
+        <>
+          <Button
+            asChild
+            variant="primary"
+            className="flex-1 justify-center px-0 py-3.25 text-[14px]"
+          >
+            <Link href={requestHref}>Request booking</Link>
+          </Button>
+          {/*
+           * `Message`, not the rail's `Send a message`. The frame draws the
+           * shorter word here and the longer one in the rail, which is not an
+           * inconsistency to normalise away: the bar has four controls across
+           * 768px and the rail has a full column.
+           */}
+          <Button
+            variant="secondary"
+            onClick={openThread}
+            disabled={opening}
+            className="shrink-0 px-4.5 py-3"
+          >
+            Message
+          </Button>
+        </>
+      ) : (
+        <p className="flex-1 text-[12px] leading-normal text-stone-600">{CANNOT_BOOK_LINE}</p>
+      )}
     </div>
   );
 
@@ -426,41 +461,50 @@ export function BookingRail({
             </div>
           ) : null}
 
-          {/* `12px 0` on a 3px offset at 1024, `13px 0` on 4px at 1440. */}
-          <Button
-            asChild
-            variant="primary"
-            className="mt-0.75 w-full justify-center py-3 min-[90rem]:mt-1 min-[90rem]:py-3.25"
-          >
-            <Link href={requestHref}>Request booking</Link>
-          </Button>
-          {/*
-          #110, answered. The control was disabled under an `sr-only` line
-          saying messaging was not available, because `/messages` could only
-          open a thread that already existed and enabling it would have sent a
-          customer nowhere. #310 gave it one to open, so the frame's enabled
-          control is now the honest one — and the blocked-state copy is gone
-          rather than left behind contradicting it.
-        */}
-          <Button
-            variant="secondary"
-            onClick={openThread}
-            disabled={opening}
-            aria-describedby={messageError ? errorId : undefined}
-            className="w-full justify-center py-2.75 min-[90rem]:py-3"
-          >
-            Send a message
-          </Button>
-          {messageError ? (
-            /*
-            `40-states.md`: the failure is named beside the control that failed,
-            in the reader's words with one thing to do. The upstream message is
-            not printed — it is the API's sentence, not a reader's.
-          */
-            <p id={errorId} role="alert" className="text-center text-helper text-red-600">
-              {messageError}
+          {canBook ? (
+            <>
+              {/* `12px 0` on a 3px offset at 1024, `13px 0` on 4px at 1440. */}
+              <Button
+                asChild
+                variant="primary"
+                className="mt-0.75 w-full justify-center py-3 min-[90rem]:mt-1 min-[90rem]:py-3.25"
+              >
+                <Link href={requestHref}>Request booking</Link>
+              </Button>
+              {/*
+              #110, answered. The control was disabled under an `sr-only` line
+              saying messaging was not available, because `/messages` could only
+              open a thread that already existed and enabling it would have sent
+              a customer nowhere. #310 gave it one to open, so the frame's
+              enabled control is now the honest one — and the blocked-state copy
+              is gone rather than left behind contradicting it.
+            */}
+              <Button
+                variant="secondary"
+                onClick={openThread}
+                disabled={opening}
+                aria-describedby={messageError ? errorId : undefined}
+                className="w-full justify-center py-2.75 min-[90rem]:py-3"
+              >
+                Send a message
+              </Button>
+              {messageError ? (
+                /*
+                `40-states.md`: the failure is named beside the control that
+                failed, in the reader's words with one thing to do. The upstream
+                message is not printed — it is the API's sentence, not a
+                reader's.
+              */
+                <p id={errorId} role="alert" className="text-center text-helper text-red-600">
+                  {messageError}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="mt-0.75 text-center text-helper text-stone-600 min-[90rem]:mt-1">
+              {CANNOT_BOOK_LINE}
             </p>
-          ) : null}
+          )}
 
           {/*
           The frame's charge reassurance, and only that. It previously carried
@@ -468,9 +512,11 @@ export function BookingRail({
           and which wrapped a one-line helper onto two. That sentence existed to
           explain a disabled `Send a message`, which is no longer disabled.
         */}
-          <p className="text-center text-[11px] leading-normal text-stone-600 min-[90rem]:mt-0.5 min-[90rem]:text-helper">
-            You won&apos;t be charged yet — {businessName} confirms the date first.
-          </p>
+          {canBook ? (
+            <p className="text-center text-[11px] leading-normal text-stone-600 min-[90rem]:mt-0.5 min-[90rem]:text-helper">
+              You won&apos;t be charged yet — {businessName} confirms the date first.
+            </p>
+          ) : null}
         </div>
 
         {/* `12px 18px` on an 8px stack at 1024, `13px 20px` on 9px at 1440. */}

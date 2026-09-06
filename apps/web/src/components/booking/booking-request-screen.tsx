@@ -26,6 +26,8 @@ import { FormErrorCard, FormErrorSummary } from '@/components/form-error-summary
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { formatEventDate } from '@/lib/booking-entries';
+import { guestCountFromInput } from '@/lib/guest-count';
 import { userFacingError } from '@/lib/user-facing-error';
 import { wireBookingRequestSchema } from '@/lib/wire-schemas';
 import { useApi } from '@/lib/use-api';
@@ -373,12 +375,30 @@ export function BookingRequestScreen({
     }
 
     if (form.guestCount) {
-      const guests = Number.parseInt(form.guestCount, 10);
+      /*
+       * `guestCountFromInput`, not `Number.parseInt` (#412). `parseInt` reads
+       * a prefix and discards the rest, and `type="number"` hands `2.7` and
+       * `1e21` to `onChange` intact — so `2.7` passed every check here as
+       * **2** and was sent to the vendor as 2, on the form that actually
+       * creates a booking. The same truncation was fixed on the customer's
+       * guest-range preferences; this is where it costs a real quote.
+       */
+      const guests = guestCountFromInput(form.guestCount);
 
-      if (!Number.isFinite(guests) || guests < 1) {
-        blocker('guestCount', 'Enter how many people are coming, as a whole number.');
-      } else if (guests > MAX_GUEST_COUNT) {
-        blocker('guestCount', `That is more than ${MAX_GUEST_COUNT.toLocaleString()} guests.`);
+      if (guests === null) {
+        /*
+         * The over-ceiling case keeps its own sentence; everything else is
+         * "that is not a whole number of people". `Number.isNaN`, not
+         * `Number.isFinite` — `Number('1e400')` is `Infinity`, which is a
+         * number over the ceiling and would have taken the wrong branch.
+         */
+        const typed = Number(form.guestCount);
+
+        if (!Number.isNaN(typed) && typed > MAX_GUEST_COUNT) {
+          blocker('guestCount', `That is more than ${MAX_GUEST_COUNT.toLocaleString()} guests.`);
+        } else {
+          blocker('guestCount', 'Enter how many people are coming, as a whole number.');
+        }
       } else if (servicePackage?.maxGuests && guests > servicePackage.maxGuests) {
         blocker(
           'guestCount',
@@ -433,7 +453,10 @@ export function BookingRequestScreen({
           ...(form.eventType ? { eventType: form.eventType } : {}),
           ...(form.eventStartTime ? { eventStartTime: form.eventStartTime } : {}),
           ...(form.eventLocation.trim() ? { eventLocation: form.eventLocation.trim() } : {}),
-          ...(form.guestCount ? { guestCount: Number.parseInt(form.guestCount, 10) } : {}),
+          /* The parsed value, so what is sent is what the checks above passed. */
+          ...(form.guestCount
+            ? { guestCount: guestCountFromInput(form.guestCount) ?? undefined }
+            : {}),
           ...(servicePackage
             ? form.notes.trim()
               ? { customDetails: form.notes.trim() }
@@ -812,25 +835,6 @@ function Field({
   );
 }
 
-/**
- * "June 14, 2026", the way the frame writes a date. Built from the parts rather
- * than from `new Date(value)`, which reads a bare `YYYY-MM-DD` as UTC midnight
- * and shows the day before in any western timezone.
- */
-function formatEventDate(value: string): string {
-  const [year, month, day] = value.split('-').map(Number);
-
-  if (!year || !month || !day) {
-    return 'Not set';
-  }
-
-  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
 /** "2:00 PM" from the `HH:MM` the input holds. */
 function formatClockTime(value: string): string {
   const [hours, minutes] = value.split(':').map(Number);
@@ -860,7 +864,11 @@ function ReviewSummary({
   onEdit,
 }: ReviewSummaryProps): React.ReactElement {
   const rows: { label: string; value: string }[] = [
-    { label: FIELD_LABELS.eventDate, value: formatEventDate(form.eventDate) },
+    {
+      label: FIELD_LABELS.eventDate,
+      // The review step's own word for a step not reached yet.
+      value: form.eventDate === '' ? 'Not set' : formatEventDate(form.eventDate),
+    },
     {
       label: FIELD_LABELS.eventType,
       value: form.eventType ? EVENT_TYPE_LABELS[form.eventType] : '—',
