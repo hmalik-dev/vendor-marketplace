@@ -154,6 +154,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
       const created = await sendMessage(
         app.db,
         app.events,
+        request.log,
         authenticated(request.auth),
         request.params.conversationId,
         request.body.content,

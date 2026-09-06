@@ -197,6 +197,18 @@ export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
    * vendor who has a profile photo. Found driving #414.
    */
   vendor: bookingRequestDetailSchema.shape.vendor.extend({ avatarUrl: imageUrl() }),
+  /*
+   * Nested dates, and nested means they need saying: JSON hands these back as
+   * strings and the object is `nullable`, so the coercion is applied to the
+   * inner shape and the whole thing re-wrapped rather than spread.
+   */
+  settlement: bookingRequestDetailSchema.shape.settlement
+    .unwrap()
+    .extend({
+      paidAt: z.coerce.date().nullable(),
+      cancelledAt: z.coerce.date().nullable(),
+    })
+    .nullable(),
   expiresAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

@@ -12,6 +12,7 @@ import {
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
   BOOKING_WEEK_WINDOW_DAYS,
   BOOKING_REQUEST_STATUSES,
+  BOOKING_CANCELLED_BY,
   BOOKING_STATUSES,
   BUDGET_TIERS,
   DEFAULT_PAGE_SIZE,
@@ -22,6 +23,7 @@ import {
   MAX_BUSINESS_NAME_LENGTH,
   MAX_CAPTION_LENGTH,
   MAX_CUSTOMER_BIO_LENGTH,
+  MAX_DISPLAY_ORDER,
   MAX_NEARBY_DATE_WINDOW_DAYS,
   MAX_TAGLINE_LENGTH,
   MAX_VENDOR_BIO_LENGTH,
@@ -33,6 +35,7 @@ import {
   MAX_EMAIL_LENGTH,
   MAX_GUEST_COUNT,
   MAX_NAME_LENGTH,
+  MAX_NOTIFICATION_TITLE_LENGTH,
   MAX_REVIEWER_DISPLAY_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
   MAX_PAGE,
@@ -239,6 +242,7 @@ export const vendorSettableAvailabilityStatusSchema = z.enum(VENDOR_SETTABLE_AVA
 export const bookingRequestStatusSchema = z.enum(BOOKING_REQUEST_STATUSES);
 export const eventTypeSchema = z.enum(EVENT_TYPES);
 export const bookingStatusSchema = z.enum(BOOKING_STATUSES);
+export const bookingCancelledBySchema = z.enum(BOOKING_CANCELLED_BY);
 export const reviewTypeSchema = z.enum(REVIEW_TYPES);
 export const budgetTierSchema = z.enum(BUDGET_TIERS);
 export const tagCategorySchema = z.enum(TAG_CATEGORIES);
@@ -634,7 +638,7 @@ const servicePackageFieldsSchema = z.object({
   durationHours: z.number().min(0.5).max(999.9).optional(),
   maxGuests: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
   inclusions: inclusionsSchema,
-  displayOrder: z.int().min(0).optional(),
+  displayOrder: z.int().min(0).max(MAX_DISPLAY_ORDER).optional(),
 });
 
 export const createServicePackageSchema = servicePackageFieldsSchema.extend({
@@ -675,7 +679,7 @@ export const createPortfolioItemSchema = z.object({
   // Nullish, not optional: an upload with no thumbnail sends an explicit null.
   thumbnailUrl: imageRefSchema.nullish(),
   caption: freeText().max(MAX_CAPTION_LENGTH).optional(),
-  displayOrder: z.int().min(0).optional(),
+  displayOrder: z.int().min(0).max(MAX_DISPLAY_ORDER).optional(),
 });
 export type CreatePortfolioItemInput = z.infer<typeof createPortfolioItemSchema>;
 
@@ -836,8 +840,35 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
       inclusions: z.array(z.string()),
     })
     .nullable(),
+  /**
+   * What the money did, for a request that got as far as a booking (#415).
+   *
+   * A request reaches `cancelled` three ways — withdrawn before acceptance,
+   * cancelled after payment, unwound by an operator — and the row itself
+   * cannot tell them apart, so both parties' screens said only "This request
+   * was cancelled." on a booking where hundreds of dollars had moved and come
+   * back. `null` **is** the first case: a withdrawal never produced a
+   * `bookings` row, so the absence names it and no screen has to guess.
+   *
+   * A projection of the `bookings` row, not a second source of truth: it is
+   * read from that row on every request read that has one, and nothing writes
+   * through it.
+   */
+  settlement: z
+    .object({
+      bookingId: uuidSchema,
+      status: bookingStatusSchema,
+      /** What the customer paid, which under D1 is the quoted price. */
+      totalAmountCents: z.int(),
+      paidAt: z.date().nullable(),
+      cancelledAt: z.date().nullable(),
+      cancelledBy: bookingCancelledBySchema.nullable(),
+      refundAmountCents: z.int().nullable(),
+    })
+    .nullable(),
 });
 export type BookingRequestDetail = z.infer<typeof bookingRequestDetailSchema>;
+export type BookingSettlement = NonNullable<BookingRequestDetail['settlement']>;
 
 /** A custom request has no package, so its description is the whole brief. */
 const CUSTOM_REQUEST_MIN_LENGTH = 10;
@@ -887,8 +918,33 @@ export const bookingRequestReasonSchema = z.object({
 export type BookingRequestReasonInput = z.infer<typeof bookingRequestReasonSchema>;
 
 /** Whose requests a list call wants — the caller's role decides which is legal. */
+/**
+ * The page window for the four reads that return a person's **own** history.
+ *
+ * `GET /booking-requests`, `GET /bookings` and the two customer-review reads
+ * accepted no window at all and applied no `LIMIT`, so each one loaded and
+ * serialised every row the caller had ever had — two of them through a join
+ * that grows with it, and the requests read then started one expiry chain per
+ * row at once. The payload had no ceiling and neither did the work behind it
+ * (#408).
+ *
+ * The ceiling is the page size, and it defaults to the **maximum** rather than
+ * to `DEFAULT_PAGE_SIZE`. These are not browsed lists: `/bookings` is a hub the
+ * customer reads whole, and the vendor's queue is one screen. A default of 20
+ * would have silently hidden a 21st booking from a page that does not page,
+ * which is a worse defect than the one this closes. A caller that outgrows one
+ * page walks it with `page`, exactly like every other paginated read here.
+ */
+export const historyPageQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(MAX_PAGE).default(1),
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(MAX_PAGE_SIZE),
+});
+export type HistoryPageQuery = z.infer<typeof historyPageQuerySchema>;
+export const historyPageQueryShape = historyPageQuerySchema.shape;
+
 export const bookingRequestListQuerySchema = z.object({
   status: bookingRequestStatusSchema.optional(),
+  ...historyPageQueryShape,
 });
 export type BookingRequestListQuery = z.infer<typeof bookingRequestListQuerySchema>;
 
@@ -932,6 +988,15 @@ export const bookingSchema = z.object({
   completedAt: z.date().nullable(),
   cancelledAt: z.date().nullable(),
   cancellationReason: z.string().nullable(),
+  /**
+   * Who ended it, for the screens that have to say so in words. `null` on a
+   * live booking and on rows cancelled before #415 recorded it — a screen
+   * reading this must have a sentence for "cancelled, and we do not know by
+   * whom" rather than defaulting to one of the two.
+   */
+  cancelledBy: bookingCancelledBySchema.nullable(),
+  /** What Stripe actually sent back, in cents. `null` until a refund moves. */
+  refundAmountCents: z.int().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -1406,7 +1471,7 @@ export type SendMessageResult = z.infer<typeof sendMessageResultSchema>;
 export const notificationItemSchema = z.object({
   id: uuidSchema,
   type: notificationTypeSchema,
-  title: z.string().max(MAX_TITLE_LENGTH),
+  title: z.string().max(MAX_NOTIFICATION_TITLE_LENGTH),
   body: z.string().nullable(),
   /** Where clicking it goes, derived from the payload — never a raw id. */
   href: z.string().max(MAX_URL_LENGTH).nullable(),
@@ -1421,7 +1486,7 @@ export const notificationSchema = z.object({
   id: uuidSchema,
   userId: uuidSchema,
   type: notificationTypeSchema,
-  title: z.string().max(MAX_TITLE_LENGTH),
+  title: z.string().max(MAX_NOTIFICATION_TITLE_LENGTH),
   body: z.string().nullable(),
   data: z.record(z.string(), z.unknown()).nullable(),
   readAt: z.date().nullable(),
@@ -1858,6 +1923,21 @@ export const adminCustomerQuerySchema = z.object({
   q: trimmedString(MAX_NAME_LENGTH).optional(),
 });
 
+/**
+ * The one state `/admin` had no list for (#415).
+ *
+ * A ban unwinds the account's confirmed bookings, and a booking whose refund
+ * Stripe refuses is skipped — deliberately, because cancelling underneath a
+ * customer whose money did not come back is worse. What was left behind was a
+ * `confirmed` booking on a suspended account, announced once as a
+ * `role="alert"` in component state and gone on the next navigation. The state
+ * is derivable rather than stored: it exists exactly when a booking is still
+ * `confirmed` and one of its two parties is banned.
+ */
+export const ADMIN_BOOKING_FLAGS = ['refund-stuck'] as const;
+export const adminBookingFlagSchema = z.enum(ADMIN_BOOKING_FLAGS);
+export type AdminBookingFlag = (typeof ADMIN_BOOKING_FLAGS)[number];
+
 export const adminBookingRowSchema = z.object({
   id: uuidSchema,
   /*
@@ -1873,6 +1953,12 @@ export const adminBookingRowSchema = z.object({
   customerName: z.string(),
   vendorName: z.string(),
   vendorSlug: z.string(),
+  /**
+   * Whether this row is the state above. Carried on every row rather than only
+   * on the filtered list, so an operator scanning the unfiltered table sees it
+   * without having to know the filter exists.
+   */
+  refundStuck: z.boolean(),
   createdAt: z.date(),
 });
 export type AdminBookingRow = z.infer<typeof adminBookingRowSchema>;
@@ -1958,7 +2044,7 @@ export const updateTagSchema = z
   .object({
     name: trimmedString(MAX_NAME_LENGTH, 2).optional(),
     isActive: z.boolean().optional(),
-    displayOrder: z.int().min(0).optional(),
+    displayOrder: z.int().min(0).max(MAX_DISPLAY_ORDER).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update' });
 export type UpdateTag = z.infer<typeof updateTagSchema>;
@@ -2033,6 +2119,7 @@ export type AdminCustomerPage = z.infer<typeof adminCustomerPageSchema>;
 export const adminBookingQuerySchema = z.object({
   ...adminPaginationShape,
   status: bookingStatusSchema.optional(),
+  flag: adminBookingFlagSchema.optional(),
 });
 export type AdminBookingQuery = z.infer<typeof adminBookingQuerySchema>;
 export const adminBookingPageSchema = paginatedSchema(adminBookingRowSchema);

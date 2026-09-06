@@ -6,48 +6,13 @@ import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { requestedPath } from './requested-path';
 import { RETURN_PATH_PARAM, safeReturnPath, signInPathReturningTo } from './return-path';
-import { wireUserSchema, type WireUser } from './wire-schemas';
-
-/** Where each role's own dashboard lives. */
-export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
-  /*
-   * A customer has no dashboard and never did — their home is the list of
-   * bookings they have made. #22b replaced the placeholder that used to sit
-   * at `/customer/dashboard`.
-   */
-  customer: '/bookings',
-  vendor: '/vendor/dashboard',
-  /*
-   * The operations console (#15). It was `/` until the console existed, with a
-   * comment explaining that `/` was terminal *because there was no admin
-   * surface* — the mismatch branch below redirects here, so a destination that
-   * bounced again would loop forever, and `/bookings` is gated by
-   * `requireRole('customer')`.
-   *
-   * `/admin` is terminal for the same reason `/vendor/dashboard` is: it is
-   * gated by `requireRole('admin')`, which this role passes, so the bounce
-   * lands and stops.
-   */
-  admin: '/admin',
-};
-
-/**
- * Where each role *starts* after authenticating, which is not the same question
- * as where its dashboard lives. A customer's first move is to browse vendors,
- * so sign-in drops them on the marketplace home rather than a dashboard they
- * did not ask for; a vendor has no use for a catalogue of other vendors, so
- * they start on their own.
+/*
+ * The role→route tables live in `role-routes.ts`, beside the table saying which
+ * roles each route renders for: one place computes a role's destination, and a
+ * bounce target the role would itself be bounced out of is a loop (#410).
  */
-export const POST_SIGN_IN_PATH_BY_ROLE: Record<UserRole, string> = {
-  customer: '/',
-  vendor: DASHBOARD_PATH_BY_ROLE.vendor,
-  /*
-   * An operator signs in to operate. Like a vendor, they have no use for a
-   * catalogue of vendors as a *starting* place, so this matches their dashboard
-   * rather than the marketplace home.
-   */
-  admin: DASHBOARD_PATH_BY_ROLE.admin,
-};
+import { DASHBOARD_PATH_BY_ROLE } from './role-routes';
+import { wireUserSchema, type WireUser } from './wire-schemas';
 
 /**
  * Loads the caller's profile from the API. Server Components only — it reads

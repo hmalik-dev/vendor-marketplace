@@ -13,34 +13,28 @@ import { Button } from '@/components/ui/button';
 import { ApiClientError } from '@/lib/api-client';
 import { useApi } from '@/lib/use-api';
 import { formatEventDate, REQUEST_PRESENTATION } from '@/lib/booking-entries';
+import { SettlementNote } from '@/components/bookings/settlement-note';
+import { cancellationNarrative } from '@/lib/settlement-copy';
 import { wireBookingRequestSchema, type WireBookingRequest } from '@/lib/wire-schemas';
 
 /**
  * What a request that is over says about itself.
  *
- * Plain restatements of the labels the hub already renders, in the past tense
- * — `cancel` is customer-only, so "you withdrew this" is a fact rather than a
- * guess, while `declined` can be either party and so stays impersonal.
- */
-/*
- * `cancelled` says only that, and deliberately does not say who.
+ * Plain restatements of the labels the hub already renders, in the past tense.
+ * `declined` can be either party, so it stays impersonal.
  *
- * It used to read "You withdrew this request." — true of the only route that
- * reached this screen while a cancelled *booking* was unreachable by
- * navigation. #400 made it reachable, and #400's own fix settles the parent
- * request when a booking is cancelled, so this status now covers three
- * different events: a customer withdrawing before acceptance, a customer
- * cancelling a booking they paid for, and an admin unwinding a suspended
- * account. Telling the last two that they withdrew something is false, and the
- * middle one is a refund the sentence does not mention at all.
+ * **`cancelled` is not in here**, and deliberately. It used to read "You
+ * withdrew this request." — true of the only route that reached this screen
+ * while a cancelled *booking* was unreachable by navigation, and false on the
+ * two routes #400 added. Its replacement, "This request was cancelled.", was
+ * never false and said nothing at all about a booking where money had moved
+ * and come back.
  *
- * The wire object carries nothing that tells them apart — `acceptedAt` is on
- * the checkout read, not this one — so this is neutral wording rather than a
- * guess. #415 owns giving a cancelled booking a surface that states the amount
- * and the refund.
+ * The three are now told apart from the booking the request produced (#415),
+ * so the sentence comes from `cancellationNarrative` rather than from a status
+ * lookup that cannot know which of the three this is.
  */
 const SETTLED_SENTENCE: Record<string, string> = {
-  cancelled: 'This request was cancelled.',
   declined: 'This request was declined.',
   expired: 'This request expired before it was answered.',
 };
@@ -109,6 +103,13 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
    * the unique indexes and the expiry sweep use.
    */
   const settled = !LIVE_BOOKING_REQUEST_STATUSES.includes(request.status);
+  /*
+   * Only for a cancellation. A declined or expired request never reached a
+   * booking, so it has no money to account for and the narrative would be a
+   * paragraph explaining that nothing happened.
+   */
+  const cancellation =
+    request.status === 'cancelled' ? cancellationNarrative(request.settlement, 'customer') : null;
   const occasion = request.eventType
     ? (EVENT_TYPE_LABELS[request.eventType as keyof typeof EVENT_TYPE_LABELS] ?? request.eventType)
     : null;
@@ -157,7 +158,12 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
       </div>
 
       <div className="flex flex-col gap-4 px-6 py-5">
-        {settled ? (
+        {cancellation ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm leading-[1.6] text-stone-700">{cancellation.what}</p>
+            <SettlementNote money={cancellation.money} />
+          </div>
+        ) : settled ? (
           <p className="text-sm leading-[1.6] text-stone-700">
             {SETTLED_SENTENCE[request.status] ??
               `This request is ${(REQUEST_PRESENTATION[request.status]?.label ?? request.status).toLowerCase()}.`}

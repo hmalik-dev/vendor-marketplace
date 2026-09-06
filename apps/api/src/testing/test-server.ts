@@ -211,6 +211,17 @@ export interface FakeStripe extends StripeConnectGateway {
     reverseTransfer: boolean;
     /** Gave Orla's commission back as well (D31). */
     refundApplicationFee: boolean;
+    /**
+     * Stripe's own refund status, defaulting to `succeeded` (#415).
+     *
+     * The fake used to model refunds as a list of requests with no state, so
+     * `findRefund` returned any of them — and the real gateway's
+     * `refunds.list` returns `failed` and `canceled` refunds too, with
+     * `amount` populated. A double more permissive than the thing it stands
+     * in for, on the path that now writes what the customer is told came
+     * back. A suite pushes a `failed` refund here to reach that branch.
+     */
+    status?: string;
   }[];
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
@@ -355,7 +366,18 @@ function createFakeStripe(): FakeStripe {
     },
 
     findRefund: async (paymentIntentId) => {
-      const index = refunds.findIndex((refund) => refund.paymentIntentId === paymentIntentId);
+      /*
+       * The same status filter the real adapter applies. A `failed` refund put
+       * the money back in the platform balance, not the customer's account, so
+       * reading it as "already refunded" both skips a retry that is owed and
+       * writes a figure the screens state as money returned.
+       */
+      const index = refunds.findIndex(
+        (refund) =>
+          refund.paymentIntentId === paymentIntentId &&
+          (refund.status ?? 'succeeded') !== 'failed' &&
+          (refund.status ?? 'succeeded') !== 'canceled',
+      );
 
       return index === -1
         ? null
@@ -379,6 +401,15 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   stripe: FakeStripe;
   /** The transactional-email boundary, recorded rather than sent. */
   email: FakeEmail;
+  /**
+   * Settles the sends this request dispatched, before asserting on `email`.
+   *
+   * The transactional email runs off the request path (#408), so a suite that
+   * reads `email.sent` the instant `inject` resolves is racing it. This is
+   * `app.background.drain()` — the same call the instance makes on close, not a
+   * test-only path — so what the suite waits for is what production runs.
+   */
+  flushEmail: () => Promise<void>;
   /** Simulates the storage bucket going away, for the readiness probe. */
   setStorageAvailable: (available: boolean) => void;
   close: () => Promise<void>;
@@ -480,6 +511,7 @@ export async function createTestHarness(
     clerkUsers,
     validWebhookSignatures,
     stripe,
+    flushEmail: () => app.background.drain(),
     setStorageAvailable: (available) => {
       storageAvailable = available;
     },

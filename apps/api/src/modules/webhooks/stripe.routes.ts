@@ -173,6 +173,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
               email: app.email,
               log: request.log,
               webOrigin: options.webOrigin,
+              background: app.background,
             },
             platformFeeRate: options.platformFeeRate,
           },

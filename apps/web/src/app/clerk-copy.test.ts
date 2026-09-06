@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
-import { CLERK_COPY } from './clerk-copy';
+import { CLERK_COPY, SIGN_UP_CLERK_COPY } from './clerk-copy';
 
 /** Every string anywhere in the localization object, however deeply nested. */
 function strings(value: unknown): string[] {
@@ -54,9 +54,7 @@ describe('Clerk localization overrides', () => {
 
   /*
    * Scoped keys only. `signIn.*` cannot reach `/sign-up`, and the existing
-   * `signUp.start.actionText` cannot reach `/sign-in` — the reason the submit
-   * button is deliberately absent from this object is that `formButtonPrimary`
-   * is a single global key shared by every flow.
+   * `signUp.start.actionText` cannot reach `/sign-in`.
    */
   it('carries no repository name anywhere in the object', () => {
     for (const value of strings(CLERK_COPY)) {
@@ -64,7 +62,19 @@ describe('Clerk localization overrides', () => {
     }
   });
 
-  it('keeps the submit button unset, so no flow label can reach another', () => {
+  /*
+   * #194, D16. `formButtonPrimary` is a single global key shared by every flow,
+   * so the frame's `Create my account` is kept out of the base object and
+   * applied per route by `ClerkShell`. In here it would relabel the sign-in
+   * form, where it is simply false — and there is no sign-in frame asking for
+   * anything but Clerk's `Continue`.
+   */
+  it('keeps the submit label out of the base object, where it would reach every flow', () => {
     expect('formButtonPrimary' in CLERK_COPY).toBe(false);
+  });
+
+  it("writes the frame's submit label into the sign-up overrides only", () => {
+    expect(SIGN_UP_CLERK_COPY.formButtonPrimary).toBe('Create my account');
+    expect(SIGN_UP_CLERK_COPY.signIn).toBe(CLERK_COPY.signIn);
   });
 });

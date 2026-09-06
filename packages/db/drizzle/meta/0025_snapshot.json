@@ -1,5 +1,5 @@
 {
-  "id": "fc6491c6-c7df-4568-9fcc-be6ae2ce9d73",
+  "id": "c4ebc73c-f264-4e86-9afd-97cd498fd25c",
   "prevId": "65cd7b31-a4d5-4bdd-a073-a8612263cac0",
   "version": "7",
   "dialect": "postgresql",
@@ -1716,6 +1716,19 @@
           "primaryKey": false,
           "notNull": false
         },
+        "cancelled_by": {
+          "name": "cancelled_by",
+          "type": "booking_cancelled_by",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refund_amount_cents": {
+          "name": "refund_amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2381,70 +2394,6 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.us_cities": {
-      "name": "us_cities",
-      "schema": "",
-      "columns": {
-        "name": {
-          "name": "name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "state": {
-          "name": "state",
-          "type": "us_state",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "population": {
-          "name": "population",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "search_name": {
-          "name": "search_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "us_cities_search_name_prefix_idx": {
-          "name": "us_cities_search_name_prefix_idx",
-          "columns": [
-            {
-              "expression": "search_name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last",
-              "opclass": "text_pattern_ops"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "us_cities_name_state_pk": {
-          "name": "us_cities_name_state_pk",
-          "columns": [
-            "name",
-            "state"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -2457,6 +2406,14 @@
         "blocked",
         "pending",
         "completed"
+      ]
+    },
+    "public.booking_cancelled_by": {
+      "name": "booking_cancelled_by",
+      "schema": "public",
+      "values": [
+        "customer",
+        "admin"
       ]
     },
     "public.booking_request_status": {

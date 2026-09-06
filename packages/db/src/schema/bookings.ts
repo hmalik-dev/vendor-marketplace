@@ -12,7 +12,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { bookingRequestStatusEnum, bookingStatusEnum } from './enums.js';
+import { bookingCancelledByEnum, bookingRequestStatusEnum, bookingStatusEnum } from './enums.js';
 import { servicePackages } from './service-packages.js';
 import { users } from './users.js';
 import { vendorProfiles } from './vendor-profiles.js';
@@ -146,6 +146,23 @@ export const bookings = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancellationReason: text('cancellation_reason'),
+    /**
+     * Who ended it. Null on a booking that has not been cancelled, and on the
+     * rows that predate this column — a cancelled booking written before #415
+     * genuinely does not record it, and guessing `customer` for those would put
+     * a claim about who acted in front of the person it was done to.
+     */
+    cancelledBy: bookingCancelledByEnum('cancelled_by'),
+    /**
+     * What actually came back to the customer, in cents.
+     *
+     * Not derivable from this row: `calculateRefund` picks a tier from the
+     * event date and the moment of cancellation (D3), and a retry that finds
+     * an existing refund settles for the amount already sent rather than the
+     * tier it would have chosen now. The figure the customer is told has to be
+     * the one Stripe moved, so it is written down when it moves.
+     */
+    refundAmountCents: integer('refund_amount_cents'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

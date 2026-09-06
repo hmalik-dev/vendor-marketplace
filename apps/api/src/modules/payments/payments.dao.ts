@@ -8,6 +8,8 @@ import {
   type BookingRow,
   type NewBookingRow,
 } from '@vendor-marketplace/db/schema';
+import { refreshCustomerBookingCounts } from '@vendor-marketplace/db';
+import type { BookingCancelledBy } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
@@ -221,6 +223,8 @@ export async function confirmBooking(
         set: { status: 'booked' },
       });
 
+    await refreshCustomerBookingCounts(tx, row.customerId);
+
     return row;
   });
 }
@@ -232,13 +236,28 @@ export async function applyBookingTransition(
   from: BookingRow['status'],
   patch: Partial<NewBookingRow>,
 ): Promise<BookingRow | null> {
-  const updated = await db
-    .update(bookings)
-    .set({ ...patch, updatedAt: sql`now()` })
-    .where(and(eq(bookings.id, bookingId), eq(bookings.status, from)))
-    .returning();
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(bookings)
+      .set({ ...patch, updatedAt: sql`now()` })
+      .where(and(eq(bookings.id, bookingId), eq(bookings.status, from)))
+      .returning();
 
-  return updated?.[0] ?? null;
+    const row = updated?.[0];
+
+    if (!row) {
+      return null;
+    }
+
+    /*
+     * In the transaction with the move, like the other two writers. `completed`
+     * is terminal, so a recompute that failed on its own would leave this
+     * customer's counters stale until some *other* booking of theirs moved.
+     */
+    await refreshCustomerBookingCounts(tx, row.customerId);
+
+    return row;
+  });
 }
 
 /**
@@ -252,10 +271,30 @@ export async function applyBookingTransition(
  * reads as available; the explicit row is kept so the calendar shows the vendor
  * that something happened to that day.
  */
+/**
+ * What every cancellation must record about itself (#415).
+ *
+ * Required, not an open `Partial<NewBookingRow>`. Both screens that describe a
+ * cancelled booking read these four, and the two that matter cannot be
+ * recovered afterwards: who acted is otherwise only a sentence in
+ * `cancellation_reason`, and the refund figure exists nowhere but the response
+ * of the call that sent it. Making them a parameter puts the invariant in the
+ * one function every cancellation goes through, rather than in two call sites'
+ * comments — a third path would have to write nulls on purpose.
+ */
+export interface CancellationRecord {
+  cancelledAt: Date;
+  /** The customer's own words, the operator's sentence, or nothing. */
+  cancellationReason: string | null;
+  cancelledBy: BookingCancelledBy;
+  /** What Stripe actually moved. `null` when there was no payment to return. */
+  refundAmountCents: number | null;
+}
+
 export async function cancelBookingAndFreeDate(
   db: AppDatabase,
   bookingId: string,
-  patch: Partial<NewBookingRow>,
+  patch: CancellationRecord,
 ): Promise<BookingRow | null> {
   return db.transaction(async (tx) => {
     const updated = await tx
@@ -300,6 +339,8 @@ export async function cancelBookingAndFreeDate(
       .update(bookingRequests)
       .set({ status: 'cancelled', updatedAt: sql`now()` })
       .where(and(eq(bookingRequests.id, row.requestId), eq(bookingRequests.status, 'accepted')));
+
+    await refreshCustomerBookingCounts(tx, row.customerId);
 
     return row;
   });

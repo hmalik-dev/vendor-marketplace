@@ -230,7 +230,7 @@ describe('SignUpForm', () => {
     const accent = headline.querySelector('span');
     expect(accent?.textContent).toBe('No back-and-forth.');
     expect(accent?.className).toContain('italic');
-    expect(accent?.className).toContain('text-gold-200');
+    expect(accent?.className).toContain('text-gold-150');
   });
 
   it('leads the customer panel with the three-line headline, closing in italic', async () => {
@@ -243,11 +243,11 @@ describe('SignUpForm', () => {
 
     // Both halves of the premise, then the line that hands over the decision.
     expect(headline.textContent).toBe('See the price.See the open dates.Then decide.');
-    // "Then decide." is the only italic run, and it is pale gold on the ink wash.
+    // "Then decide." is the only italic run, in the scrimmed-panel gold (D30).
     const accent = headline.querySelector('span');
     expect(accent?.textContent).toBe('Then decide.');
     expect(accent?.className).toContain('italic');
-    expect(accent?.className).toContain('text-gold-200');
+    expect(accent?.className).toContain('text-gold-150');
   });
 
   it('demonstrates published pricing rather than calling it transparent', async () => {

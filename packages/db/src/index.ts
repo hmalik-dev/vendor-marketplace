@@ -1,4 +1,5 @@
 export * from './client.js';
+export { refreshCustomerBookingCounts } from './seed-support.js';
 export { loadEnv } from './load-env.js';
 export * from './schema/index.js';
 export {
