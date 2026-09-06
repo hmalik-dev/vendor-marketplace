@@ -585,3 +585,20 @@ export function joinWithAnd(items: readonly string[]): string {
 
   return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
+
+/** A `LIMIT`/`OFFSET` pair — one page of a list, as the DAOs take it. */
+export interface PageWindow {
+  limit: number;
+  offset: number;
+}
+
+/**
+ * The page a `{ page, pageSize }` query names, as SQL takes it.
+ *
+ * One definition, because #408 closed four reads that had none at all and the
+ * arithmetic is exactly the sort that gets written out a fifth time with the
+ * `- 1` missing.
+ */
+export function pageWindow(query: { page: number; pageSize: number }): PageWindow {
+  return { limit: query.pageSize, offset: (query.page - 1) * query.pageSize };
+}

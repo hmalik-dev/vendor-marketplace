@@ -31,5 +31,22 @@ cost a round trip. The lane session had moved on while the review was queued.
   `src/**/*.test.{ts,tsx}`), but delete it and re-run `git status` at the end.
   Format-on-save will rewrite it under you; that is not a finding.
 
+**The tree moves under you mid-review (#408).** Reviewing an _uncommitted_ diff
+is the unstable case: the lane committed it and merged `origin/main` while I was
+mid-probe, so `git status` went from 29 modified files to **clean**, and the
+checkout silently reverted an in-place mutation I had made to run a
+mutation-coverage check. Two consequences, both real: the review target gained a
+transaction wrapper and 70 lines of new tests I had not read, and one finding
+("no test covers the new writer") was already fixed by the version that landed.
+
+- Re-run `git status --porcelain` and `git log --oneline -3` **after** any probe
+  that takes minutes, not only before. A clean tree is not proof nothing changed.
+- Then diff the new commit's `--stat` against the `--stat` you started from,
+  file by file. Every count that matches means your reading still holds; the one
+  that moved is the only file worth re-reading.
+- A mutation check (edit in place, run the suite, restore) is safe only while
+  you own the tree. Keep a `cp` backup, and treat "my edit vanished" as evidence
+  someone else committed, not as a tool failure.
+
 Related: [[review-checklist-source-grep-substring-collisions]],
 [[review-checklist-controlled-index-drops-the-selection-seed]]

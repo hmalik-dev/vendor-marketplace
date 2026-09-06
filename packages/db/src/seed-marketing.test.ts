@@ -204,6 +204,40 @@ describe('seedMarketingData', () => {
     }
   }, 120_000);
 
+  /*
+   * #408, the same property `seed-demo.test.ts` pins: these counters are
+   * derived from bookings, the API's three booking writers maintain them, and
+   * this seed reaches none of those — so without its own recompute every
+   * customer it writes reads as a 0-booking "New member".
+   */
+  it('leaves every booking counter agreeing with the bookings under it', async () => {
+    await seedMarketingData(testDb.db, NOW);
+
+    const written = await testDb.db
+      .select({ customerId: bookings.customerId, status: bookings.status })
+      .from(bookings);
+    expect(written.length).toBeGreaterThan(0);
+
+    const stored = await testDb.db
+      .select({
+        id: users.id,
+        total: users.totalBookingsCount,
+        completed: users.completedBookingsCount,
+        cancelled: users.cancelledBookingsCount,
+      })
+      .from(users);
+
+    for (const row of stored) {
+      const theirs = written.filter((booking) => booking.customerId === row.id);
+
+      expect(row, `counters for ${row.id}`).toMatchObject({
+        total: theirs.length,
+        completed: theirs.filter((booking) => booking.status === 'completed').length,
+        cancelled: theirs.filter((booking) => booking.status === 'cancelled').length,
+      });
+    }
+  }, 120_000);
+
   it('backs every review with a completed booking, as the product requires', async () => {
     const result = await seedMarketingData(testDb.db, NOW);
 
