@@ -48,3 +48,4 @@
 - [ClerkProvider carries no auth guarantee](clerk-provider-carries-no-auth-guarantee.md) — its server variant only adds `initialState` (needs `dynamic`) and dev keyless; `assertWebEnv` is now the sole gate on the inlined key
 - [`/places` replaced an inventory oracle](places-endpoint-replaced-an-inventory-oracle.md) — `/vendors/cities` leaked per-city vendor counts into every page's RSC payload; the missing `ESCAPE` clause is correct on Postgres
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — `replaceVendorTags`/`replaceVendorCategories` stopped self-transacting in #405; `PUT /vendor/tags` is gone on purpose
+- [The public vendor card is the widest anonymous projection](public-vendor-card-is-the-widest-anonymous-projection.md) — the Zod serializer strips unmapped columns and 500s on a missing one; `isNew`'s recency disclosure is settled

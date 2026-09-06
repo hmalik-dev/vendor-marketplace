@@ -243,9 +243,30 @@ export function SearchBar({
    * `<input>` inside the box; `focus-visible` for the date, which *is* the
    * button. Both spellings, because the segment is both shapes.
    */
+  /*
+   * **The fill's radius is not one value** (#417 item 1b, second half).
+   *
+   * `rounded-full` is right at `sm` and up, where each segment sits in the pill
+   * and carries a left padding that clears its own cap. Below `sm` the three
+   * segments stack into a card, that padding is gone, and `rounded-full` on a
+   * ~40px-tall stacked row is a 20px cap over a label starting at inset 0 — the
+   * exact defect this ticket fixes at 1440, reappearing at 390 because the
+   * remedy was written in `sm:` utilities and the base step kept the bug.
+   *
+   * `rounded-sm` there instead — **6px, and that is the whole argument**. The
+   * corner has to clear the label at the label's own y rather than at the box's,
+   * and the `max-sm:py-1.5` on this same line puts that y at exactly 6px: the
+   * arc is finished the moment the glyphs begin, so nothing curves across them.
+   * The two numbers are one decision and move together; `search-bar-inset`
+   * asserts the relation rather than either value.
+   *
+   * Padding could have answered it instead, but the card's own `px-4` is the
+   * inset every stacked row shares, and moving 16px of it onto three segments
+   * and the submit control still would not clear a 20px cap.
+   */
   const segment = cn(
     'group/segment flex min-w-0 flex-col max-sm:w-full max-sm:px-0 max-sm:py-1.5',
-    'rounded-full transition-colors duration-(--duration-fast)',
+    'max-sm:rounded-sm transition-colors duration-(--duration-fast) sm:rounded-full',
     SEGMENT_FOCUS,
     'focus-visible:bg-stone-200',
   );
@@ -297,16 +318,28 @@ export function SearchBar({
               Padding and shadow per frame: `6 6 6 20` at 768, `6 6 6 18` at
               1024, `7 7 7 24` at 1440, and a 26px blur at 768 against 28
               elsewhere.
+
+              **The frame's left inset is split with the first segment** since
+              #417 item 1b. `CategorySelect` carries the half that has to clear
+              its focus fill's corner radius — 15 at 768, 14 at 1024, 18 at 1440
+              — so what the bar declares here is the frame's number minus that:
+              5, 4, 6. The sums are the frame's 20 / 18 / 24, and the fill now
+              starts left of its own label instead of curving across it.
+              `search-bar-inset.test.tsx` holds the two halves together.
             */
-            'shadow-[0_8px_26px_rgba(35,32,28,.10)] sm:py-1.5 sm:pr-1.5 sm:pl-5 lg:pl-4.5 lg:shadow-lg min-[90rem]:py-1.75 min-[90rem]:pr-1.75 min-[90rem]:pl-6'
+            'shadow-[0_8px_26px_rgba(35,32,28,.10)] sm:py-1.5 sm:pr-1.5 sm:pl-1.25 lg:pl-1 lg:shadow-lg min-[90rem]:py-1.75 min-[90rem]:pr-1.75 min-[90rem]:pl-1.5'
           : /*
               A fixed height from `lg`, because the compact bar sits inside a
               header of its own fixed height and the frames measure it: 40px at
               1024 (`25`), 42px at 1440 (`17`, `18`). Below `lg` the bar is not
               in the header at all — `SearchShell` renders it as its own row —
               so it keeps its padding-driven height there.
+
+              `pl-1` and not `pl-4.5`: the frame's 18px inset is split with
+              `CategorySelect`'s own `pl-3.5` (#417 item 1b, and the hero
+              branch above). 4 + 14 = 18, so the bar is unmoved.
             */
-            'border border-stone-300 shadow-sm sm:py-1 sm:pr-1.25 sm:pl-4.5 lg:h-10 lg:py-0 min-[90rem]:h-[42px]',
+            'border border-stone-300 shadow-sm sm:py-1 sm:pr-1.25 sm:pl-1 lg:h-10 lg:py-0 min-[90rem]:h-[42px]',
         className,
       )}
     >

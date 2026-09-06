@@ -520,8 +520,12 @@ function withThumbnail(key: string | null): string[] {
 export async function searchPublishedVendors(
   db: AppDatabase,
   query: VendorSearchQuery,
+  now: Date,
 ): Promise<VendorSearchResult> {
-  const [page, facets] = await Promise.all([searchVendors(db, query), categoryFacets(db, query)]);
+  const [page, facets] = await Promise.all([
+    searchVendors(db, query, now),
+    categoryFacets(db, query),
+  ]);
 
   return vendorSearchResultSchema.parse({
     items: page.items,

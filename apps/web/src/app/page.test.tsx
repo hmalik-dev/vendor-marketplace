@@ -69,6 +69,7 @@ function vendor(overrides: Partial<VendorCardData> = {}): VendorCardData {
     avgRating: 4.9,
     reviewCount: 127,
     startingPriceCents: 145_000,
+    isNew: false,
     categories: [{ id: 'cat-1', name: 'Photography', slug: 'photography' }],
     ...overrides,
   };

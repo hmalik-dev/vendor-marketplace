@@ -15,6 +15,7 @@ function vendor(overrides: Partial<VendorCardData> = {}): VendorCardData {
     avgRating: 4.9,
     reviewCount: 127,
     startingPriceCents: 145_000,
+    isNew: false,
     categories: [{ id: 'cat-1', name: 'Photography', slug: 'photography' }],
     ...overrides,
   };
@@ -141,13 +142,88 @@ describe('VendorCard', () => {
 
   /*
    * No invented numbers: an unreviewed vendor shows no rating rather than a
-   * 0.0, which reads as a bad one.
+   * 0.0, which reads as a bad one. The meta line falls back to the location
+   * alone — `New` used to stand in for the rating here and no longer does.
    */
   it('shows no rating for an unreviewed vendor', () => {
     render(<VendorCard vendor={vendor({ avgRating: 0, reviewCount: 0 })} />);
 
     expect(screen.queryByText(/0\.0/)).toBeNull();
-    expect(screen.getByText(/New/)).toBeDefined();
+    expect(screen.getByText('Austin, TX')).toBeDefined();
+  });
+
+  /*
+   * #417 item 3, and the ruling behind it: *"reviewless shouldnt matter, an old
+   * vendor can be review less somehow"*. The card inferred `New` from
+   * `reviewCount === 0`, so a studio listed for a year that nobody had reviewed
+   * was advertised as new — in the one place a customer compares vendors side
+   * by side.
+   */
+  it('does not call an unreviewed vendor new', () => {
+    render(<VendorCard vendor={vendor({ avgRating: 0, reviewCount: 0, isNew: false })} />);
+
+    expect(screen.queryByText('New')).toBeNull();
+  });
+
+  /*
+   * The other half of the same ruling: newness is a fact about the profile, so
+   * a genuinely new vendor who has already been reviewed carries both — frame
+   * `02` draws the pill under `★ 5.0 (17)`, not instead of it.
+   */
+  it('draws the New pill beside a real rating rather than in place of one', () => {
+    render(<VendorCard vendor={vendor({ avgRating: 5, reviewCount: 17, isNew: true })} />);
+
+    expect(screen.getByText('New')).toBeDefined();
+    expect(screen.getByText(/5\.0/)).toBeDefined();
+    expect(screen.getByText(/\(17\)/)).toBeDefined();
+  });
+
+  /*
+   * A pill, not meta text (frame `02`): `10.5px/600`, `#F0EAE1` on `#4A443C`,
+   * `3px 8px` at a 5px radius — `stone-200`, `stone-700`, `text-label`. It
+   * shipped as `New · Austin, TX` in the meta paragraph, which is a different
+   * element with a different size, colour and weight.
+   */
+  it('draws New as frame 02’s pill on the search card', () => {
+    render(<VendorCard vendor={vendor({ isNew: true })} density="compact" />);
+
+    const pill = screen.getByText('New');
+
+    expect(pill.tagName).toBe('SPAN');
+    expect(pill.className).toContain('bg-stone-200');
+    expect(pill.className).toContain('text-stone-700');
+    expect(pill.className).toContain('text-label');
+    expect(pill.className).toContain('font-semibold');
+    expect(pill.className).toContain('rounded-[5px]');
+    expect(pill.className).toContain('px-2');
+    expect(pill.className).toContain('py-0.75');
+  });
+
+  /*
+   * The badge row is not rendered when it holds nothing — an empty flex box
+   * still contributes its `margin-top`, which is what put the 1024 card 8px
+   * over the height frame `27` measures.
+   */
+  it('draws no badge row at all when there is nothing to put in it', () => {
+    const { container } = render(
+      <VendorCard vendor={vendor({ isNew: false })} density="compact" />,
+    );
+
+    expect(container.querySelector('.flex-wrap')).toBeNull();
+  });
+
+  /*
+   * `city` and `state` are both nullable, so an unreviewed vendor can have
+   * nothing to put on this line at all. An empty `<p>` still contributes its
+   * `margin-top` and a line box — ~17px of blank the frame does not draw — and
+   * the case only became reachable when #417 moved `New` off this line.
+   */
+  it('draws no meta line at all for an unreviewed vendor with no location', () => {
+    const { container } = render(
+      <VendorCard vendor={vendor({ avgRating: 0, reviewCount: 0, city: null, state: null })} />,
+    );
+
+    expect(container.querySelector('p.text-meta')).toBeNull();
   });
 
   it('states the rating out of five for a screen reader, not just a star glyph', () => {

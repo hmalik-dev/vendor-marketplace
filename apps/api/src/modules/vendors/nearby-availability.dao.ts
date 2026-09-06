@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { categories, vendorCategories, vendorProfiles } from '@vendor-marketplace/db/schema';
 import type { NearbyAvailabilityQuery, NearbyVendor } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { isNewVendor } from './vendor-recency.js';
 
 /**
  * "Free on a nearby date instead" — the band that closes frame `18`.
@@ -93,6 +94,13 @@ export async function findVendorsFreeNearby(
   query: NearbyAvailabilityQuery,
   /** Today as `YYYY-MM-DD`, decided by the caller — see `nearestAvailableDate`. */
   today: string,
+  /*
+   * The same instant `today` was derived from, for the `New` badge. Threaded
+   * rather than read here for the reason `plugins/clock.ts` exists: two "now"s
+   * in one response are two answers that do not have to agree, which is the
+   * exact defect that plugin was written to close.
+   */
+  now: Date,
 ): Promise<NearbyAvailabilityPage> {
   const conditions = [VISIBLE, UNAVAILABLE_ON_TARGET(query.date)];
 
@@ -132,6 +140,7 @@ export async function findVendorsFreeNearby(
       avgRating: vendorProfiles.avgRating,
       reviewCount: vendorProfiles.reviewCount,
       startingPriceCents: STARTING_PRICE_CENTS,
+      createdAt: vendorProfiles.createdAt,
       nearestAvailableDate: nearest,
     })
     .from(vendorProfiles)
@@ -203,6 +212,7 @@ export async function findVendorsFreeNearby(
           reviewCount: row.reviewCount,
           startingPriceCents:
             row.startingPriceCents === null ? null : Number(row.startingPriceCents),
+          isNew: isNewVendor(row.createdAt, now),
           categories: categoriesByVendor.get(row.id) ?? [],
           // The vendor is, by construction, not free on the wanted date.
           availableOnDate: false,

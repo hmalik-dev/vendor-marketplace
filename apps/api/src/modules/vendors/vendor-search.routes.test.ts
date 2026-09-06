@@ -1,8 +1,9 @@
 import { categories, servicePackages, users, vendorProfiles } from '@vendor-marketplace/db/schema';
-import { ERROR_CODES, MAX_PAGE } from '@vendor-marketplace/shared';
+import { addDays, ERROR_CODES, MAX_PAGE } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { NEW_VENDOR_WINDOW_DAYS } from './vendor-recency.js';
 
 /**
  * Search is the front door, so these drive the real route rather than the DAO:
@@ -25,6 +26,8 @@ describe('GET /vendors', () => {
     reviewCount?: number;
     publish?: boolean;
     blockedDates?: string[];
+    /** How long ago the profile row was written — what `isNew` reads. */
+    createdDaysAgo?: number;
   }
 
   /** Creates a vendor through the real routes, then publishes it. */
@@ -69,14 +72,24 @@ describe('GET /vendors', () => {
       expect(blocked.statusCode).toBe(200);
     }
 
-    // Ratings are derived columns no endpoint may write, so the fixture sets
-    // them directly rather than pretending an endpoint exists.
-    if (spec.rating !== undefined || spec.reviewCount !== undefined) {
+    /*
+     * Ratings are derived columns no endpoint may write, and `created_at`
+     * defaults to `now()` with no endpoint that sets it — so the fixture writes
+     * all three directly rather than pretending an endpoint exists.
+     */
+    if (
+      spec.rating !== undefined ||
+      spec.reviewCount !== undefined ||
+      spec.createdDaysAgo !== undefined
+    ) {
       await harness.database.db
         .update(vendorProfiles)
         .set({
           ...(spec.rating !== undefined ? { avgRating: spec.rating.toFixed(2) } : {}),
           ...(spec.reviewCount !== undefined ? { reviewCount: spec.reviewCount } : {}),
+          ...(spec.createdDaysAgo === undefined
+            ? {}
+            : { createdAt: addDays(new Date(), -spec.createdDaysAgo) }),
         })
         .where(eq(vendorProfiles.id, vendorId));
     }
@@ -95,7 +108,7 @@ describe('GET /vendors', () => {
   }
 
   async function search(query = ''): Promise<{
-    items: Array<{ businessName: string; startingPriceCents: number | null }>;
+    items: Array<{ businessName: string; startingPriceCents: number | null; isNew: boolean }>;
     total: number;
     facets: { categories: Array<{ categoryId: string; count: number }> };
     page: number;
@@ -427,6 +440,40 @@ describe('GET /vendors', () => {
     // With no date asked, the card makes no claim about one.
     const undated = await search();
     expect(undated.items[0]).not.toHaveProperty('availableOnDate');
+  });
+
+  /*
+   * #417 item 3. `New` is a fact about how recently the profile was created,
+   * ruled by the account holder on 2026-09-06 against the `reviewCount === 0`
+   * the card used to infer it from: *"reviewless shouldnt matter, an old vendor
+   * can be review less somehow"*.
+   *
+   * Driven through the route rather than the DAO, because the badge has to
+   * survive the response schema — a field the DAO computes and the contract
+   * strips is a card that never draws it.
+   */
+  it('calls a recently created vendor new, whatever its reviews say', async () => {
+    await seedVendor({
+      user: 'user_a',
+      businessName: 'Just joined',
+      reviewCount: 17,
+      rating: 5,
+    });
+
+    const body = await search();
+    expect(body.items[0]).toMatchObject({ businessName: 'Just joined', isNew: true });
+  });
+
+  it('does not call an old review-less vendor new', async () => {
+    await seedVendor({
+      user: 'user_a',
+      businessName: 'Long established',
+      reviewCount: 0,
+      createdDaysAgo: NEW_VENDOR_WINDOW_DAYS + 1,
+    });
+
+    const body = await search();
+    expect(body.items[0]).toMatchObject({ businessName: 'Long established', isNew: false });
   });
 
   it('leaves a vendor in when only some other date is blocked', async () => {
