@@ -44,3 +44,4 @@
 - [`git push -q` trips the force-push hook](git-push-q-flag-trips-force-push-hook.md) — push with no short flags, and keep commit and push as separate calls
 - [Board rows do not all end with `|`](board-rows-lack-a-trailing-pipe.md) — `parts[-2]` silently writes into Capabilities; the board guard reports it as a bogus capability name
 - [Kill dev servers by lane port, never by name](kill-dev-servers-by-lane-port.md) — an unscoped pkill reaches every lane; it took down two mid-pass
+- [MCP Playwright cannot load storage state](mcp-playwright-cannot-load-storage-state.md) — signed-in browser verification needs a local Playwright script via `lane:exec`; never `networkidle`

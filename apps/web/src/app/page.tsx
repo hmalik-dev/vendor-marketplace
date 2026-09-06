@@ -526,7 +526,8 @@ export default async function HomePage(): Promise<React.ReactElement> {
           >
             {featuredVendors.map((vendor) => (
               <li key={vendor.id}>
-                <VendorCard vendor={vendor} density="featured" />
+                {/* `h3`: this strip has its own `h2` above it. */}
+                <VendorCard vendor={vendor} density="featured" headingLevel="h3" />
               </li>
             ))}
           </ul>

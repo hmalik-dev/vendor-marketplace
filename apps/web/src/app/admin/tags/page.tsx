@@ -60,7 +60,9 @@ export default async function AdminTagsPage({
             <Link
               key={value}
               href={`${PATH}${adminQueryString({ status: value })}`}
-              aria-pressed={status === value}
+              /* A link, so `aria-current` rather than `aria-pressed` — there
+                 is no pressed state on a link for a reader to report. */
+              aria-current={status === value ? 'page' : undefined}
               className={cn(
                 'rounded-md px-3.5 py-2 text-sm font-semibold',
                 status === value

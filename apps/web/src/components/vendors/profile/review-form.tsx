@@ -136,9 +136,14 @@ export function ReviewForm({
         validation.attemptSubmit(() => void send());
       }}
     >
-      <h3 id={`${fieldId}-prompt`} className="font-display text-[22px] text-stone-900">
+      {/*
+        `h2`: the profile's `h1` is the vendor's name and only the active pane
+        is mounted, so on the Reviews tab this was the page's first heading
+        under it — an h1 -> h3 skip.
+      */}
+      <h2 id={`${fieldId}-prompt`} className="font-display text-[22px] text-stone-900">
         How was your experience?
-      </h3>
+      </h2>
       <p className="mt-1 text-sm text-stone-600">
         Your review appears on {businessName}&apos;s profile under your first name and initial.
       </p>

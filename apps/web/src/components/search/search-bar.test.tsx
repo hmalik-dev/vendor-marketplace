@@ -5,6 +5,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { formatAccessibleDate } from '@/lib/calendar';
 import { SearchBar, type SearchBarValues } from './search-bar';
 import { SearchStatusProvider, useSearchStatus } from './search-status';
 
@@ -202,14 +203,19 @@ describe('SearchBar — the event date cannot be in the past', () => {
     await user.click(dateField());
     const grid = await screen.findByRole('grid', { name: 'Event date' });
 
-    const yesterday = within(grid).getByRole('gridcell', { name: /2026-06-13/ });
-    const today = within(grid).getByRole('gridcell', { name: /2026-06-14/ });
-    const tomorrow = within(grid).getByRole('gridcell', { name: /2026-06-15/ });
+    const day = (date: string): HTMLElement =>
+      within(grid).getByRole('gridcell', { name: new RegExp(formatAccessibleDate(date)) });
 
-    expect((yesterday as HTMLButtonElement).disabled).toBe(true);
+    /*
+     * `aria-disabled`, not `disabled` (#411): a `disabled` cell is skipped by
+     * the grid's own arrow keys as well as by Tab, so the days a customer may
+     * not choose were unreachable rather than merely unchoosable. They are
+     * reachable now and say why, and the click is refused in the handler.
+     */
+    expect(day('2026-06-13').getAttribute('aria-disabled')).toBe('true');
     // Today itself is bookable — an event happening today is still an event.
-    expect((today as HTMLButtonElement).disabled).toBe(false);
-    expect((tomorrow as HTMLButtonElement).disabled).toBe(false);
+    expect(day('2026-06-14').getAttribute('aria-disabled')).toBe('false');
+    expect(day('2026-06-15').getAttribute('aria-disabled')).toBe('false');
   });
 
   it('lets today itself through — an event happening today is still bookable', async () => {

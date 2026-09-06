@@ -1,12 +1,13 @@
 'use client';
 
 import {
+  addDays,
   isPastDate,
   parseDateString,
   toDateString,
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   CELL_AVAILABLE,
   CELL_HATCH,
@@ -16,7 +17,7 @@ import {
   CELL_TODAY,
   CELL_UNAVAILABLE,
 } from '@/components/availability/cell-marks';
-import { buildMonth, WEEKDAY_LABELS } from '@/lib/calendar';
+import { buildMonth, describeCell, WEEKDAY_LABELS } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 import { Dropdown, type DropdownWidth } from './dropdown';
 
@@ -112,6 +113,62 @@ function currentMonth(): Cursor {
   return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
 }
 
+/** `date` moved by `days`, or `null` if it was never a calendar date. */
+function shift(date: string, days: number): string | null {
+  const parsed = parseDateString(date);
+
+  return parsed === null ? null : toDateString(addDays(parsed, days));
+}
+
+/**
+ * `date` moved by whole months, clamped to the target month's length.
+ *
+ * `Date.UTC` overflows rather than clamping — 31 January plus a month is 3
+ * March — which would step PageDown past February entirely.
+ */
+function shiftMonths(date: string, months: number): string | null {
+  const parsed = parseDateString(date);
+  if (parsed === null) {
+    return null;
+  }
+
+  const year = parsed.getUTCFullYear();
+  const month = parsed.getUTCMonth() + months;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+
+  return toDateString(new Date(Date.UTC(year, month, Math.min(parsed.getUTCDate(), lastDay))));
+}
+
+/** The day at the start of `date`'s week, or `null` if it is not a date. */
+function weekStart(date: string): string | null {
+  const weekday = parseDateString(date)?.getUTCDay();
+
+  return weekday === undefined ? null : shift(date, -weekday);
+}
+
+/**
+ * Every key the grid answers to, and where it puts the roving cell.
+ *
+ * One table rather than a map of arrow deltas beside a switch for the other
+ * four: they are the same question — "which day does this key move to?" — and
+ * splitting them by *how* the answer is computed put the model in two places.
+ */
+const KEY_MOVES: Readonly<Record<string, (from: string) => string | null>> = {
+  ArrowLeft: (from) => shift(from, -1),
+  ArrowRight: (from) => shift(from, 1),
+  ArrowUp: (from) => shift(from, -7),
+  ArrowDown: (from) => shift(from, 7),
+  // Home and End mean the ends of the row, which in a calendar is the week.
+  Home: (from) => weekStart(from),
+  End: (from) => {
+    const start = weekStart(from);
+
+    return start === null ? null : shift(start, 6);
+  },
+  PageUp: (from) => shiftMonths(from, -1),
+  PageDown: (from) => shiftMonths(from, 1),
+};
+
 export function DateDropdown({
   open,
   onOpenChange,
@@ -171,6 +228,97 @@ export function DateDropdown({
     });
   }
 
+  /*
+   * The roving tab stop — the grid keyboard model `role="grid"` was promising
+   * and not implementing.
+   *
+   * Before this, all 42 day buttons were tab stops: reaching the control after
+   * the picker meant pressing Tab forty-two times, while the arrow keys the
+   * role advertises did nothing at all. A grid is one tab stop; the arrows move
+   * within it.
+   *
+   * `null` until a key is pressed, so the stop is *derived* from what the
+   * viewer is looking at — the chosen day, else today, else the first of the
+   * month — and follows the month chevrons without any state to keep in sync.
+   */
+  const [rovingDate, setRovingDate] = useState<string | null>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  // Set only by a key that moves the stop, so a re-render for any other reason
+  // never steals focus back into the grid.
+  const takeFocus = useRef(false);
+
+  const inMonth = (date: string | null | undefined): date is string => {
+    const of = monthOf(date);
+
+    return of !== null && of.year === cursor.year && of.month === cursor.month;
+  };
+
+  /*
+   * The order is what the viewer is most likely looking at: the day they chose,
+   * else today, else the first of the month they are on.
+   */
+  const roving = [rovingDate, value, today].find(inMonth) ?? firstOfMonth;
+
+  /*
+   * The keyboard's reach, which is wider than the pointer's: the arrows cross
+   * month boundaries, and the last navigable day is the last day of the last
+   * month the chevrons can reach — not the first, which is what `lastAllowed`
+   * marks.
+   */
+  const lastNavigable = toDateString(
+    new Date(Date.UTC(floor.year, floor.month + monthsAhead + 1, 0)),
+  );
+
+  function moveRovingTo(target: string | null): void {
+    if (target === null || target < firstAllowed || target > lastNavigable) {
+      return;
+    }
+
+    /*
+     * A key that does not move is not a move.
+     *
+     * `Home` on a Sunday and `End` on a Saturday both return where they
+     * started. Arming `takeFocus` for them left the flag set with nothing to
+     * clear it — the effect below is keyed on `roving`, which did not change —
+     * so the *next* thing to move the roving cell stole focus into the grid.
+     * Pressing `Home`, tabbing back to a month chevron and clicking it moved
+     * the month and then yanked focus off the chevron, making a second month
+     * step impossible without tabbing back in.
+     */
+    if (target === roving) {
+      return;
+    }
+
+    // Only when the arrows actually crossed a boundary: a new `Cursor` object
+    // holding the same two numbers is still a state change to React, and every
+    // arrow press within one month would re-render the whole grid for nothing.
+    const targetMonth = monthOf(target);
+    if (targetMonth !== null && !inMonth(target)) {
+      setCursor(targetMonth);
+    }
+    setRovingDate(target);
+    takeFocus.current = true;
+  }
+
+  function onGridKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
+    const move = KEY_MOVES[event.key];
+    if (move === undefined) {
+      return;
+    }
+
+    event.preventDefault();
+    moveRovingTo(move(roving));
+  }
+
+  useEffect(() => {
+    if (!takeFocus.current) {
+      return;
+    }
+
+    takeFocus.current = false;
+    grid.current?.querySelector<HTMLButtonElement>(`[data-date="${roving}"]`)?.focus();
+  }, [roving]);
+
   return (
     <Dropdown
       open={open}
@@ -214,52 +362,100 @@ export function DateDropdown({
         ))}
       </div>
 
+      {/*
+        A grid with rows in it.
+
+        `role="grid"` over a flat run of `gridcell`s is a malformed grid: the
+        role owes rows, and a reader given cells with no row structure cannot
+        say which week or which column a day is in. The week rows carry the
+        column gap and the outer column carries the row gap, so the geometry is
+        the single `grid-cols-7 gap-1` this replaces, to the pixel.
+      */}
       <div
+        ref={grid}
         role="grid"
         aria-label={label}
-        className="grid grid-cols-7 gap-1 text-center text-[11.5px]"
+        onKeyDown={onGridKeyDown}
+        className="flex flex-col gap-1 text-center text-[11.5px]"
       >
-        {month.weeks.flat().map((date, index) => {
-          if (date === null) {
-            return <span key={`pad-${index}`} aria-hidden="true" />;
-          }
+        {month.weeks.map((week, weekIndex) => (
+          <div
+            // A week is identified by the days in it; the leading and trailing
+            // rows are all-padding only in the degenerate case of an empty
+            // month, which `buildMonth` cannot produce.
+            key={week.find((date) => date !== null) ?? `pad-week-${weekIndex}`}
+            role="row"
+            className="grid grid-cols-7 gap-1"
+          >
+            {week.map((date, index) => {
+              if (date === null) {
+                return <span key={`pad-${index}`} role="gridcell" aria-hidden="true" />;
+              }
 
-          const past = isPastDate(date, today);
-          const state: DayState = past ? 'past' : dayStateOf(calendar[date]);
-          const selected = date === value;
-          const isToday = date === today;
-          const choosable = state === 'available' || state === 'held';
+              const past = isPastDate(date, today);
+              const state: DayState = past ? 'past' : dayStateOf(calendar[date]);
+              const selected = date === value;
+              const isToday = date === today;
+              const choosable = state === 'available' || state === 'held';
 
-          return (
-            <button
-              key={date}
-              type="button"
-              role="gridcell"
-              disabled={!choosable}
-              aria-current={isToday ? 'date' : undefined}
-              /* `aria-selected`, not `aria-pressed`: a gridcell supports the
-                 first and not the second, and this is a cell, not a toggle. */
-              aria-selected={selected}
-              aria-label={`${date} — ${selected ? 'selected' : DAY_LABELS[state]}`}
-              onClick={() => {
-                onChange(date);
-                onOpenChange(false);
-              }}
-              className={cn(
-                'rounded-md',
-                // The outlined states carry 1.5px of border, so they lose it
-                // from their padding rather than growing the row.
-                selected || isToday || state === 'held' ? 'py-[4.5px]' : 'py-1.5',
-                selected ? CELL_SELECTED : DAY_STYLES[state],
-                !selected && isToday ? CELL_TODAY : '',
-                choosable && !selected ? 'hover:bg-clay-50' : '',
-                choosable ? '' : 'cursor-not-allowed',
-              )}
-            >
-              {Number(date.slice(8, 10))}
-            </button>
-          );
-        })}
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  role="gridcell"
+                  data-date={date}
+                  /*
+                   * `aria-disabled`, not `disabled`.
+                   *
+                   * A `disabled` button is out of the tab order *and* skipped
+                   * by the arrow keys, so a day that cannot be booked could not
+                   * be reached to find out why: the grid silently jumped over
+                   * every past, booked and blocked day and told nobody. It
+                   * announces its state instead, and the click is refused here.
+                   */
+                  aria-disabled={!choosable}
+                  aria-current={isToday ? 'date' : undefined}
+                  /* `aria-selected`, not `aria-pressed`: a gridcell supports the
+                     first and not the second, and this is a cell, not a toggle. */
+                  aria-selected={selected}
+                  /*
+                   * The grid's one tab stop. Everything else is reachable with
+                   * the arrows, which is what the `grid` role promises.
+                   */
+                  tabIndex={date === roving ? 0 : -1}
+                  /*
+                   * The stop follows focus wherever it actually lands, rather
+                   * than only where the arrows put it. Without this the two can
+                   * disagree — the browser restoring focus, or assistive
+                   * technology moving it — and the next arrow press would then
+                   * jump relative to a cell the viewer is no longer on.
+                   */
+                  onFocus={() => setRovingDate(date)}
+                  aria-label={describeCell(date, selected ? 'selected' : DAY_LABELS[state])}
+                  onClick={() => {
+                    if (!choosable) {
+                      return;
+                    }
+                    onChange(date);
+                    onOpenChange(false);
+                  }}
+                  className={cn(
+                    'rounded-md',
+                    // The outlined states carry 1.5px of border, so they lose it
+                    // from their padding rather than growing the row.
+                    selected || isToday || state === 'held' ? 'py-[4.5px]' : 'py-1.5',
+                    selected ? CELL_SELECTED : DAY_STYLES[state],
+                    !selected && isToday ? CELL_TODAY : '',
+                    choosable && !selected ? 'hover:bg-clay-50' : '',
+                    choosable ? '' : 'cursor-not-allowed',
+                  )}
+                >
+                  {Number(date.slice(8, 10))}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       {/*
