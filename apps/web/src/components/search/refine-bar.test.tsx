@@ -442,6 +442,30 @@ describe('filter popovers are reachable and know when they are finished', () => 
   });
 
   /*
+   * #403 acceptance 2. The decimal point was stripped along with the `$` and
+   * the commas, so `999.99` became a $99,999 floor — a filter a hundred times
+   * the one that was typed, applied with no message — and `9.99` to `19.99`
+   * became `$999 – $1,999`. A `$` and a comma are furniture; a decimal point
+   * is the number.
+   */
+  it.each([
+    ['999.99', 99_999],
+    ['9.99', 999],
+    ['$1,800.50', 180_050],
+    ['1200', 120_000],
+    ['1200.', 120_000],
+  ])('reads %s as %i cents', async (typed, cents) => {
+    const user = userEvent.setup();
+    const setState = renderWithTags();
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), typed);
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(setState).toHaveBeenCalledWith({ minPriceCents: cents, maxPriceCents: null });
+  });
+
+  /*
    * #388: `Min = abc` parsed to `null`, which is indistinguishable from "no
    * minimum" — so Apply closed the panel, changed nothing, and said nothing.
    * The inverted range on the same control already explains itself; one control
@@ -468,7 +492,36 @@ describe('filter popovers are reachable and know when they are finished', () => 
     await user.type(screen.getByLabelText('Min'), 'abc');
     await user.click(screen.getByRole('button', { name: 'Apply' }));
 
-    expect(onPriceApplied).toHaveBeenCalledWith(true);
+    expect(onPriceApplied).toHaveBeenCalledWith({ min: true, max: false });
+  });
+
+  /*
+   * The bound that was unreadable, and only it. One flag for the pair made the
+   * screen say "the price range was cleared" over a Max the reader had typed
+   * correctly and which was still filtering the grid — the #388 notice
+   * repeating #403's own untruth one layer down.
+   */
+  it('names which bound it could not use', async () => {
+    const user = userEvent.setup();
+    const onPriceApplied = vi.fn();
+
+    render(
+      <RefineBar
+        state={state()}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+        onPriceApplied={onPriceApplied}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), '1200');
+    await user.type(screen.getByLabelText('Max'), 'abc');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(onPriceApplied).toHaveBeenCalledWith({ min: false, max: true });
   });
 
   it('says nothing when every typed bound was usable', async () => {
@@ -490,7 +543,7 @@ describe('filter popovers are reachable and know when they are finished', () => 
     await user.type(screen.getByLabelText('Min'), '1200');
     await user.click(screen.getByRole('button', { name: 'Apply' }));
 
-    expect(onPriceApplied).toHaveBeenCalledWith(false);
+    expect(onPriceApplied).toHaveBeenCalledWith({ min: false, max: false });
   });
 
   /* Clearing a bound is not discarding it — an empty field means "no bound". */
@@ -512,7 +565,7 @@ describe('filter popovers are reachable and know when they are finished', () => 
     await user.click(screen.getByRole('button', { name: 'Price' }));
     await user.click(screen.getByRole('button', { name: 'Apply' }));
 
-    expect(onPriceApplied).toHaveBeenCalledWith(false);
+    expect(onPriceApplied).toHaveBeenCalledWith({ min: false, max: false });
   });
 
   /*
@@ -646,5 +699,136 @@ describe('the refine chips', () => {
 
     expect(screen.getByRole('button', { name: /^Languages/ })).toBeDefined();
     expect(screen.queryByRole('button', { name: /^Style/ })).toBeNull();
+  });
+});
+
+/*
+ * #403 acceptance 8. Both refine panels re-seeded their draft from a `value`
+ * the bar rebuilds on every render — `{ min, max }` for price, `chosen.map(…)`
+ * for tags — so `[open, value]` re-ran the re-seed on each parent render. Under
+ * an **open** panel, a search result landing (three state updates in
+ * `SearchShell`: `setResult`, `setIsLoading`, `setSearching(false)`) wiped a
+ * half-typed range or a half-made tag selection back to the URL's, with no
+ * dismissal and nothing on screen to say why.
+ */
+describe('a refine draft made while the results are still landing', () => {
+  const LANGUAGE_TAGS = [
+    { id: 'a1111111-1111-4111-8111-111111111111', name: 'English', category: 'language' },
+    { id: 'a2222222-2222-4222-8222-222222222222', name: 'Spanish', category: 'language' },
+  ] as const;
+
+  afterEach(() => cleanup());
+
+  const bar = (setState = vi.fn()): React.ReactElement => (
+    <RefineBar
+      state={state()}
+      setState={setState}
+      clearRefinements={vi.fn()}
+      tags={LANGUAGE_TAGS as unknown as React.ComponentProps<typeof RefineBar>['tags']}
+      facets={[]}
+    />
+  );
+
+  it('keeps a half-typed price range through a parent render', async () => {
+    const user = userEvent.setup();
+    const setState = vi.fn();
+    const { rerender } = render(bar(setState));
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), '1200');
+
+    // A fresh `state` object carrying the same values, which is what the shell
+    // hands the bar when a search settles under an open panel.
+    rerender(bar(setState));
+
+    expect((screen.getByLabelText('Min') as HTMLInputElement).value).toBe('1200');
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(setState).toHaveBeenCalledWith({ minPriceCents: 120_000, maxPriceCents: null });
+  });
+
+  it('keeps a half-made tag selection through a parent render', async () => {
+    const user = userEvent.setup();
+    const setState = vi.fn();
+    const { rerender } = render(bar(setState));
+
+    await user.click(screen.getByRole('button', { name: /^Languages/ }));
+    await user.click(await screen.findByRole('option', { name: 'English' }));
+
+    rerender(bar(setState));
+
+    await user.click(screen.getByRole('button', { name: /^Apply/ }));
+    expect(setState).toHaveBeenCalledWith({ tags: [LANGUAGE_TAGS[0].id] });
+  });
+
+  /*
+   * The other half: re-opening the panel still discards what was typed and not
+   * applied, which is the contract the re-seed exists for. Without it, keying
+   * the effect on the values could have been written as deleting the effect.
+   */
+  it('still discards a draft dismissed without Apply', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(bar());
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), '1200');
+    await user.keyboard('{Escape}');
+
+    rerender(bar());
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+    expect((screen.getByLabelText('Min') as HTMLInputElement).value).toBe('');
+  });
+});
+
+/*
+ * Frame `18` labels a ceiling-only price filter **`Under $1,200`**, and frame
+ * `28`'s preset row is the same vocabulary — `Under $1k`, `$4k+`. The chip
+ * instead rendered `${min ?? $0} – ${max ?? $10,000+}`, so one bound was always
+ * drawn as a range against a bound the customer never set: a ceiling of $2,000
+ * on its own read `$0 – $2,000`, and a floor on its own read
+ * `$999.99 – $10,000+` against a constant that exists to give the slider a span.
+ * Same defect this ticket is named for, one control over. #403.
+ */
+describe('the Price chip states the bounds that were actually set', () => {
+  afterEach(() => cleanup());
+
+  const chipText = (overrides: Partial<SearchState>): string => {
+    render(
+      <RefineBar
+        state={state(overrides)}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+      />,
+    );
+
+    const chip = screen
+      .getAllByRole('button')
+      .find((button) => /Price|\$|Under/.test(button.textContent ?? ''));
+
+    return chip?.textContent?.replace(/Clear.*$/, '').trim() ?? '';
+  };
+
+  it('names a ceiling on its own as Under, never as a range from zero', () => {
+    expect(chipText({ maxPriceCents: 200_000 })).toBe('Under $2,000');
+  });
+
+  it('names a floor on its own with a plus, never against an invented ceiling', () => {
+    expect(chipText({ minPriceCents: 99_999 })).toBe('$999.99+');
+  });
+
+  it('draws a real range when both bounds were set', () => {
+    expect(chipText({ minPriceCents: 100_000, maxPriceCents: 200_000 })).toBe('$1,000 – $2,000');
+  });
+
+  it('rests as Price when neither was', () => {
+    expect(chipText({})).toBe('Price');
+  });
+
+  /* A $0 floor is a bound the reader set, so it is stated, not swallowed. */
+  it('keeps a zero floor rather than treating it as absent', () => {
+    expect(chipText({ minPriceCents: 0 })).toBe('$0+');
   });
 });

@@ -97,24 +97,52 @@ function filters(query: VendorSearchQuery, exceptCategory = false): SQL[] {
   }
 
   /*
-   * Price matches when ANY active package falls in the range, not just the
-   * cheapest: a vendor whose entry-level package is under budget but whose
-   * mid-tier is the one being searched for is still a real answer.
+   * Price filters the vendor's **starting rate** — the same "cheapest active
+   * package" the card prints as "From $X" and that `price_asc` sorts on — and
+   * not "any package in range".
+   *
+   * The control is labelled `Price · starting rate` in frame `28`, so the
+   * any-package reading made the label, the card and the result set three
+   * different claims: a `$4k+` floor returned vendors whose cards read
+   * `From $1,750`, because each happened to carry one expensive tier. A
+   * customer filtering by budget is filtering on the number they can see.
+   *
+   * A vendor with no active package produces no group here and so falls
+   * outside every band. That is deliberate rather than incidental: "starts
+   * under $1k" is a claim about a price, and there is no price to make it
+   * about. They stay visible in an unfiltered search as `Contact for pricing`.
+   *
+   * **Grouped, not correlated, and that was measured.** Written as
+   * `startingPriceCents() >= $1 AND startingPriceCents() <= $2` — which reads
+   * better, and reuses the helper below — Postgres plans each bound as its own
+   * SubPlan and runs no common-subexpression elimination across them, so a
+   * two-bound search evaluated the aggregate twice per candidate row in each of
+   * the three statements `filters()` feeds (the page, the total and the
+   * facets). On this lane's data that count query read **147 buffer pages over
+   * 4 SubPlan nodes**; the form below reads **26 with none**, planning as one
+   * `HashAggregate` over `service_packages` joined to the vendors once. Same
+   * rows, both times.
+   *
+   * `startingPriceCents()` therefore stays the single definition of the value
+   * — it is still what the card and the sort read — while this is the same
+   * rule as a set membership. `keeps a vendor whose starting rate is in band`
+   * asserts the two agree, so they cannot drift apart silently.
    */
   if (query.minPriceCents !== undefined || query.maxPriceCents !== undefined) {
     const bounds: SQL[] = [];
     if (query.minPriceCents !== undefined) {
-      bounds.push(sql`sp.price_cents >= ${query.minPriceCents}`);
+      bounds.push(sql`MIN(sp.price_cents) >= ${query.minPriceCents}`);
     }
     if (query.maxPriceCents !== undefined) {
-      bounds.push(sql`sp.price_cents <= ${query.maxPriceCents}`);
+      bounds.push(sql`MIN(sp.price_cents) <= ${query.maxPriceCents}`);
     }
 
-    conditions.push(sql`EXISTS (
-      SELECT 1 FROM service_packages sp
-      WHERE sp.vendor_id = vendor_profiles.id
-        AND sp.is_active = true
-        AND ${sql.join(bounds, sql` AND `)}
+    conditions.push(sql`vendor_profiles.id IN (
+      SELECT sp.vendor_id
+      FROM service_packages sp
+      WHERE sp.is_active = true
+      GROUP BY sp.vendor_id
+      HAVING ${sql.join(bounds, sql` AND `)}
     )`);
   }
 

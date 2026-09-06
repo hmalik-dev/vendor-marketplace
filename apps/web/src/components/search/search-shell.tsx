@@ -2,7 +2,6 @@
 
 import {
   isPastDate,
-  todayDateString,
   vendorNounFor,
   type Category,
   type VendorCity,
@@ -10,14 +9,16 @@ import {
 } from '@vendor-marketplace/shared';
 import { wireVendorSearchResultSchema } from '@/lib/wire-schemas';
 import { SlidersHorizontal, SearchX } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api-client';
 import { reportSwallowedError } from '@/lib/report-error';
 import type { WireTag } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
 import { useModalSheet } from '@/lib/use-modal-sheet';
+import { useViewerToday } from '@/lib/use-viewer-today';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { NO_DISCARD, type RangeDiscarded } from '@/components/ui/dropdown-range';
 import { VendorCardSkeleton } from '@/components/ui/skeleton';
 import { VendorCard } from '@/components/vendors/vendor-card';
 import { NameSearch } from './name-search';
@@ -164,9 +165,43 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
    */
   const { setSearching } = useSearchStatus();
 
-  const query = toSearchQuery(state);
+  /*
+   * The viewer's own day, which is the only clock that can judge the URL's
+   * date. `''` until after mount — a server render cannot know it — and that
+   * emptiness is what `canSearch` reads below.
+   */
+  const viewerToday = useViewerToday('');
+  const dateIsPast = viewerToday !== '' && state.date !== '' && isPastDate(state.date, viewerToday);
+
+  /*
+   * The querystring to send, or `null` while there is nothing sendable — one
+   * value, so "strip the stale date" and "hold until the clock lands" cannot
+   * drift apart into two rules that disagree.
+   *
+   * The stale date is dropped **before** the request, not a tick after it. The
+   * clearing used to live only in the effect below, which runs after the fetch
+   * effect has already sent the URL's date: the API refuses a date past
+   * everywhere on Earth, so opening a shared link from March in July fired a
+   * request that came back `400 Event date has already passed` and logged a
+   * console error, before the screen recovered and re-queried. The customer's
+   * recovery was fine; the failed request was not, and it happened on every
+   * open of every stale link.
+   *
+   * And a date nobody has been able to judge yet is not sent either: until
+   * `viewerToday` lands there is no way to know which of those two a date in
+   * hand is, and guessing is what sent the 400. That costs one effect flush,
+   * only when the URL carries a date, with the skeletons already on screen.
+   */
+  const query =
+    state.date !== '' && viewerToday === ''
+      ? null
+      : toSearchQuery(dateIsPast ? { ...state, date: '' } : state);
 
   useEffect(() => {
+    if (query === null) {
+      return;
+    }
+
     // An in-flight search for filters the user has already moved past is worse
     // than no search: it would land last and overwrite the current results.
     const controller = new AbortController();
@@ -256,16 +291,16 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
    * `dropped` cannot carry it; the bar reports it and it is read out here,
    * beside the params the URL asked for and did not get.
    */
-  const [discardedPrice, setDiscardedPrice] = useState(false);
+  const [discardedPrice, setDiscardedPrice] = useState<RangeDiscarded>(NO_DISCARD);
 
   useEffect(() => {
-    if (state.date !== '' && isPastDate(state.date, todayDateString())) {
+    if (dateIsPast) {
       setDroppedPastDate(state.date);
       setState({ date: '' });
     }
     // `setState` is a fresh closure each render; the date is what this watches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.date]);
+  }, [dateIsPast, state.date]);
 
   /*
    * The past-date line keeps its own wording — it can name the date, because
@@ -275,11 +310,24 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
     droppedPastDate === null
       ? null
       : `${AVAILABILITY_DATE_FORMATTER.format(new Date(`${droppedPastDate}T00:00:00Z`))} has already passed, so the date was cleared — pick a new one to check availability.`,
-    clearedParamsLine(discardedPrice ? [...dropped, 'minPriceCents'] : dropped),
+    clearedParamsLine([
+      ...dropped,
+      // Named per bound, so a Min the panel could not read does not announce
+      // the Max the reader typed correctly as cleared too.
+      ...(discardedPrice.min ? (['minPriceCents'] as const) : []),
+      ...(discardedPrice.max ? (['maxPriceCents'] as const) : []),
+    ]),
   ].filter((line): line is string => line !== null);
 
   const refineCount = activeRefineCount(state);
-  const diagnosis = noResultsDiagnosis(state);
+  /*
+   * The vendor types the platform actually has, so an empty result set can tell
+   * "there are no photographers" apart from "`does-not-exist` is not a vendor
+   * type". Read from the list the API returned rather than a compiled-in one,
+   * and memoized because it is a `relaxations` argument on every render.
+   */
+  const categorySlugs = useMemo(() => categories.map((category) => category.slug), [categories]);
+  const diagnosis = noResultsDiagnosis(state, categorySlugs);
   const total = result?.total ?? 0;
   /*
     The count row is for a search that found something, or is still looking.
@@ -361,7 +409,7 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
           clearRefinements={() => {
             // Clearing the refinements retracts the notice with them; the
             // discarded bound is one of the things being cleared.
-            setDiscardedPrice(false);
+            setDiscardedPrice(NO_DISCARD);
             clearRefinements();
           }}
           tags={tags}
@@ -518,7 +566,7 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
             <EmptyState
               icon={<SearchX />}
               scale="marketing"
-              headline={noResultsHeadline(state)}
+              headline={noResultsHeadline(state, categorySlugs)}
               description={
                 // With nothing filtered there is no culprit to name, so it says
                 // where to go next instead of inventing a diagnosis.
@@ -526,7 +574,7 @@ function SearchScreen({ categories, cities, tags }: SearchShellProps): React.Rea
               }
               action={
                 <div className="flex flex-wrap items-center justify-center gap-2.5">
-                  {relaxations(state).map((relaxation, index) => (
+                  {relaxations(state, categorySlugs).map((relaxation, index) => (
                     <button
                       key={relaxation.label}
                       type="button"

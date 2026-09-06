@@ -4,8 +4,12 @@ import {
   activeRefineCount,
   clearedParamsLine,
   parseSearchState,
+  searchParsers,
   toSearchQuery,
   hasQuery,
+  unusableSearchParams,
+  type DroppedSearchField,
+  type ParsedSearchState,
   type SearchState,
 } from './search-state';
 
@@ -24,6 +28,24 @@ const EMPTY: SearchState = {
 };
 
 const params = (state: SearchState): URLSearchParams => new URLSearchParams(toSearchQuery(state));
+
+/**
+ * The screen's boundary as the hook applies it: `nuqs` parses the URL, then
+ * `parseSearchState` judges what survived *and* what the URL asked for.
+ */
+function parseUrl(query: Record<string, string>): ParsedSearchState {
+  const params = new URLSearchParams(query);
+  const raw: SearchState = { ...EMPTY };
+
+  for (const field of Object.keys(query) as DroppedSearchField[]) {
+    const parsed = searchParsers[field].parse(query[field] as string);
+    if (parsed !== null) {
+      Object.assign(raw, { [field]: parsed });
+    }
+  }
+
+  return parseSearchState(raw, params);
+}
 
 describe('toSearchQuery', () => {
   it('sends only the always-present params when nothing is filtered', () => {
@@ -262,5 +284,187 @@ describe('clearedParamsLine', () => {
 
   it('never names a URL parameter key', () => {
     expect(clearedParamsLine(['minPriceCents'])).not.toContain('minPriceCents');
+  });
+});
+
+/*
+ * #403 acceptance 3. The two bounds are refused apart, so they are named apart:
+ * a ceiling above the cap with a floor the API accepted announced "that price
+ * range … was cleared" while the floor was still in the URL, still in the
+ * request and still drawing its chip.
+ */
+describe('clearedParamsLine — a half-rejected price range', () => {
+  it('names the maximum when only the ceiling was dropped', () => {
+    expect(clearedParamsLine(['maxPriceCents'])).toBe(
+      "That maximum price isn't one we can use, so it was cleared — the rest of your search still applies.",
+    );
+  });
+
+  it('names the minimum when only the floor was dropped', () => {
+    expect(clearedParamsLine(['minPriceCents'])).toBe(
+      "That minimum price isn't one we can use, so it was cleared — the rest of your search still applies.",
+    );
+  });
+
+  it('does not call one bound a range', () => {
+    expect(clearedParamsLine(['maxPriceCents'])).not.toContain('price range');
+  });
+});
+
+/*
+ * #403 acceptance 7. `nuqs` answers `null` for a value its parser cannot read
+ * and the parser's default then stands in, which is right for the value and
+ * silent about the ask: `?page=abc` and `?sort=evil` rendered defaults with no
+ * word, while `?page=2147483648` was announced as cleared. Which half a bad
+ * param landed in depended on whether it happened to survive as far as the
+ * schema, and the screen's own rule is that it names every param it drops.
+ */
+describe('unusableSearchParams', () => {
+  const of = (query: string): DroppedSearchField[] =>
+    unusableSearchParams(new URLSearchParams(query));
+
+  it('reports a non-numeric page', () => {
+    expect(of('page=abc')).toEqual(['page']);
+  });
+
+  it('reports an unknown sort', () => {
+    expect(of('sort=evil')).toEqual(['sort']);
+  });
+
+  it('reports a non-numeric price bound', () => {
+    expect(of('minPriceCents=abc&maxPriceCents=xyz')).toEqual(['minPriceCents', 'maxPriceCents']);
+  });
+
+  it('reports a non-numeric rating', () => {
+    expect(of('minRating=good')).toEqual(['minRating']);
+  });
+
+  it('says nothing about params it could read', () => {
+    expect(of('page=2&sort=price_asc&minPriceCents=1000&category=photography')).toEqual([]);
+  });
+
+  /*
+   * An empty value asks nothing, rather than asking something unreadable.
+   * Complaining about it would be inventing a complaint.
+   */
+  it('ignores a param present but empty', () => {
+    expect(of('sort=&page=&minRating=')).toEqual([]);
+  });
+
+  it('says nothing when the URL carries no params at all', () => {
+    expect(of('')).toEqual([]);
+  });
+
+  /*
+   * The whole point of finding them: the sentence. `?page=abc&sort=evil` said
+   * nothing at all before, and the combined bad URL listed every other dropped
+   * param while omitting the sort it had also replaced.
+   */
+  it('feeds the same sentence every other cleared param uses', () => {
+    expect(clearedParamsLine(of('page=abc&sort=evil'))).toBe(
+      "The sort order and page aren't ones we can use, so they were cleared — the rest of your search still applies.",
+    );
+  });
+});
+
+/*
+ * The two gates together, because neither is exhaustive alone and nothing else
+ * says so.
+ *
+ * `unusableSearchParams` catches the params whose `nuqs` parser answers `null`
+ * and lets a default stand in — `page`, `sort`, the price bounds, the rating —
+ * because those are the ones whose ask is erased before the schema can judge
+ * it. Every other param is a string all the way to `searchStateSchema`, which
+ * judges it there. The split is not arbitrary, but it is also not visible, and
+ * a param added with a parser that cannot fail would otherwise drop out of the
+ * notice with no lint error and no failing test.
+ *
+ * So: one hostile value per param, asserting each is named.
+ */
+describe('every search param is announced when the URL asks something unusable', () => {
+  const HOSTILE: Record<DroppedSearchField, string> = {
+    // Longer than MAX_BUSINESS_NAME_LENGTH.
+    name: 'n'.repeat(500),
+    category: 'Not A Slug!',
+    city: 'c'.repeat(500),
+    state: 's'.repeat(500),
+    minPriceCents: 'abc',
+    maxPriceCents: 'abc',
+    date: '2026-13-45',
+    minRating: 'excellent',
+    tags: 'not-a-uuid',
+    sort: 'evil',
+    page: 'abc',
+  };
+
+  it.each(Object.keys(HOSTILE) as DroppedSearchField[])('names %s', (field) => {
+    const { dropped } = parseUrl({ [field]: HOSTILE[field] });
+
+    expect(dropped).toContain(field);
+    expect(clearedParamsLine(dropped)).toContain("isn't one we can use");
+  });
+
+  /*
+   * And every one of them is *cleared*, not merely named. Announced-but-applied
+   * is the exact contradiction #403 exists to remove, so the two sets have to
+   * be one set — `parseSearchState` owns both halves for that reason.
+   */
+  it.each(Object.keys(HOSTILE) as DroppedSearchField[])('clears %s as well', (field) => {
+    const { state } = parseUrl({ [field]: HOSTILE[field] });
+
+    expect(state[field]).toEqual(EMPTY[field]);
+  });
+});
+
+/*
+ * `nuqs`'s numeric parsers are `parseInt`/`parseFloat`: they read a leading
+ * number and discard the rest, so only a value with no leading digits at all
+ * answers `null`. Measured against `nuqs@2.10.1`:
+ *
+ *   parseAsInteger.parse('12abc') -> 12     parseAsInteger.parse('0x10') -> 16
+ *   parseAsInteger.parse('1e3')   -> 1      parseAsFloat.parse('4.5xyz') -> 4.5
+ *
+ * Each of those was silently obeyed: `?minPriceCents=12abc` drew a $0.12 floor,
+ * sent `minPriceCents=12`, dropped every unpriced vendor from the grid, and
+ * said nothing. `?page=2abc` served page 2 — a non-numeric page, which is the
+ * literal wording of this ticket's acceptance criterion.
+ */
+describe('a param that is only partly a number', () => {
+  it.each([
+    ['minPriceCents', '12abc'],
+    ['minPriceCents', '0x10'],
+    ['minPriceCents', '1e3'],
+    ['maxPriceCents', '900zzz'],
+    ['page', '2abc'],
+    ['minRating', '4.5xyz'],
+  ] as const)('names and clears %s=%s', (field, value) => {
+    const { state, dropped } = parseUrl({ [field]: value });
+
+    expect(dropped).toContain(field);
+    expect(state[field]).toEqual(EMPTY[field]);
+  });
+
+  /* The well-formed forms the app itself writes must not be swept up with them. */
+  it.each([
+    ['minPriceCents', '120000'],
+    ['maxPriceCents', '0'],
+    ['page', '3'],
+    ['page', '01'],
+    ['minRating', '4.5'],
+    ['minRating', '4'],
+  ] as const)('leaves %s=%s alone', (field, value) => {
+    const { dropped } = parseUrl({ [field]: value });
+
+    expect(dropped).not.toContain(field);
+  });
+
+  /*
+   * `?page=01` is the case a round-trip check would get wrong: `parseInt` reads
+   * 1, `String(1)` is `'1'`, and comparing the two would announce the param as
+   * cleared while honouring it — the same untruth one step over. It is judged
+   * on its shape instead, so it is honoured silently.
+   */
+  it('honours a zero-padded page rather than complaining about it', () => {
+    expect(parseUrl({ page: '01' }).state.page).toBe(1);
   });
 });

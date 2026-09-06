@@ -36,3 +36,4 @@
 - [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the key is the booking id, the amount drifts by tier and the unwind flags changed; Stripe refuses the retry
 - [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — refund precedes the row move, no refund column, and past 24h a retry debits the vendor a second time
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
+- [The public price filter is a pricing oracle](search-price-filter-is-a-pricing-oracle.md) — any-package EXISTS let a stranger binary-search a vendor's whole tier ladder; MIN only exposes the printed "From" price
