@@ -19,6 +19,12 @@ finding count · `blocked` · `n/a`.
 The frame file is `design/Orla - Screens.dc.html`. Open it directly in the
 browser alongside the live screen; compare, never recall.
 
+> **Frame `29` is the one frame not in that file.** It was supplied on its own
+> (#421) and lives in `design/contact-support/` — `29-contact-support.html`
+> plus `PROMPT.md`, which is its spec; there is no `design-plan/29-*.md`. Its
+> row below is read against those two files. Everything else about the gate is
+> unchanged: 1440x900, all six axes, and the literal strings are the design.
+
 | # | Frame | Live route | Auth | Viewport | Status | Tickets |
 |---|-------|-----------|------|----------|--------|---------|
 | 1 | 01 Landing | `/` | guest | 1440x900 | **FAIL (8)** | #82–#89 |
@@ -61,6 +67,7 @@ browser alongside the live screen; compare, never recall.
 | 38 | 26 State library | `components, not a screen` | guest | 1440x900 | n/a | — |
 | 39 | 28 Dropdown open — hero | `/ (hero search)` | guest | 1440x900 | todo | #167 |
 | 40 | 28 Dropdown variants | `all select surfaces` | guest | 1440x900 | todo | #167 |
+| 41 | 29 Contact support | `/support` | guest + customer | 1440x900 | todo | #421 |
 
 ## Findings log
 

@@ -64,6 +64,14 @@ import {
   VENDOR_SORT_OPTIONS,
   PUBLISH_BLOCKER_KEYS,
 } from '../constants/index.js';
+import {
+  MAX_SUPPORT_ERROR_DIGEST_LENGTH,
+  MAX_SUPPORT_ERROR_ROUTE_LENGTH,
+  MAX_SUPPORT_MESSAGE_LENGTH,
+  SUPPORT_ERROR_DIGEST_PATTERN,
+  SUPPORT_REFERENCE_PATTERN,
+  SUPPORT_TOPICS,
+} from '../constants/support.js';
 
 // --- Primitives ------------------------------------------------------------
 
@@ -1821,6 +1829,79 @@ export const streamTicketSchema = z.object({
   ticket: z.string().min(1),
 });
 export type StreamTicket = z.infer<typeof streamTicketSchema>;
+
+// --- Contact support (#421) ------------------------------------------------
+
+/**
+ * The error context the 500 screen hands to `/support`, so the visitor never
+ * has to copy a hash out of one page and into another.
+ *
+ * Every field arrives in a query string, which `web-route-boundaries.md` calls
+ * attacker-controlled input: each one is shaped and bounded here, and the
+ * screen renders the block only when the **whole** object parses. A half-valid
+ * reference is worse than none — it reaches the support inbox looking like a
+ * log line that does not exist.
+ */
+export const supportErrorContextSchema = z.object({
+  /** Next's `error.digest`, which matches the server log entry. */
+  digest: freeText().max(MAX_SUPPORT_ERROR_DIGEST_LENGTH).regex(SUPPORT_ERROR_DIGEST_PATTERN),
+  /**
+   * The path the visitor was on. A same-origin path only.
+   *
+   * It is rendered as text and quoted into an email, never followed — but an
+   * address of someone else's choosing inside our own support mail is a link
+   * to every mail client that autolinks, so the leading-slash check is not
+   * enough on its own. `//evil.example.com` is a **protocol-relative URL** and
+   * clears a naive `^/`; a backslash clears it too and is normalised to `/` by
+   * every browser. Both are refused here, at the only place that decides.
+   */
+  route: freeText()
+    .max(MAX_SUPPORT_ERROR_ROUTE_LENGTH)
+    .regex(/^\/(?![/\\])[^\s\\]*$/, 'A route is a same-origin path'),
+  /** When the error was seen, as the screen that saw it recorded the moment. */
+  occurredAt: z.iso.datetime(),
+});
+export type SupportErrorContext = z.infer<typeof supportErrorContextSchema>;
+
+/**
+ * One support message, as the browser sends it.
+ *
+ * `email` is present only for a signed-out visitor. A signed-in one is
+ * identified by their session and the API reads the address off their account
+ * row, so the field is not merely hidden on that screen — it is ignored on the
+ * server, and no reply address can be chosen by whoever holds the form.
+ */
+export const supportMessageSchema = z.object({
+  topic: z.enum(SUPPORT_TOPICS),
+  email: emailSchema.optional(),
+  message: freeText()
+    .min(1, 'Tell us what happened, and what you expected instead')
+    .max(MAX_SUPPORT_MESSAGE_LENGTH),
+  errorContext: supportErrorContextSchema.optional(),
+});
+export type SupportMessageInput = z.infer<typeof supportMessageSchema>;
+
+/**
+ * What a send hands back: the reference, and nothing else.
+ *
+ * There is no status to poll and no thread to open, so there is nothing else
+ * for this to carry — which is the scope line the screen states in words.
+ */
+export const supportMessageReceiptSchema = z.object({
+  reference: z.string().regex(SUPPORT_REFERENCE_PATTERN),
+});
+export type SupportMessageReceipt = z.infer<typeof supportMessageReceiptSchema>;
+
+/**
+ * The `details` a failed send carries back.
+ *
+ * The reference is issued **before** the send is attempted, so a message the
+ * mail service rejected is still something the visitor can quote at us. That
+ * is the whole reason this shape exists: without it a failure hands back
+ * nothing, and the one state that most needs a handle has none.
+ */
+export const supportSendFailureDetailsSchema = supportMessageReceiptSchema;
+export type SupportSendFailureDetails = z.infer<typeof supportSendFailureDetailsSchema>;
 
 // --- Errors ----------------------------------------------------------------
 
