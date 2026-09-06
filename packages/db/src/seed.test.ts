@@ -5,7 +5,7 @@ import {
   TAG_CATEGORIES,
   TAG_SEEDS,
 } from '@vendor-marketplace/shared';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import {
   categories,
   tags,
@@ -272,6 +272,43 @@ describe('seedCategories — retired slugs', () => {
     expect(seeded).toHaveLength(CATEGORY_SEEDS.length);
     expect(seeded.every((row) => row.isActive)).toBe(true);
     expect(Object.keys(CATEGORY_SLUG_SUCCESSORS)).not.toContain('photography');
+  });
+
+  /*
+   * The fold is the one place in `seedCategories` that **deletes** rather than
+   * deactivates, and it is safe only because it has already copied everything
+   * that would go down with the row.
+   *
+   * Today `vendor_categories` is the sole cascading foreign key onto
+   * `categories.id`, and the fold copies those links first. There used to be a
+   * second — `tags.vendor_category_id`, added in `0015` and dropped by `0017`
+   * (#329) — and a fold run while it existed would have silently deleted every
+   * tag scoped to the retired category. Nothing about adding a third would
+   * prompt anyone to re-check that, and no constraint would fail: the delete
+   * would simply take more with it than the fold moved, on a seed that runs
+   * against production reference data with no dry run.
+   *
+   * So the invariant is asserted rather than remembered. A new cascading FK
+   * onto `categories` fails here, and the fix is to move those rows before the
+   * delete — or to make the FK `set null` / `restrict` and add it below.
+   */
+  it('folds safely only while vendor_categories is the sole cascading FK on categories', async () => {
+    const referencing = await testDb.db.execute(sql`
+      SELECT c.conrelid::regclass::text AS child, c.confdeltype AS on_delete
+      FROM pg_constraint c
+      WHERE c.confrelid = 'categories'::regclass AND c.contype = 'f'
+      ORDER BY child
+    `);
+    const rows = referencing.rows as { child: string; on_delete: string }[];
+
+    // Reads a real catalogue, so an empty result would mean the query broke
+    // rather than that nothing references the table.
+    expect(rows.length).toBeGreaterThan(0);
+
+    // `c` is ON DELETE CASCADE. Anything else cannot be silently carried off.
+    expect(rows.filter((row) => row.on_delete === 'c').map((row) => row.child)).toEqual([
+      'vendor_categories',
+    ]);
   });
 });
 
