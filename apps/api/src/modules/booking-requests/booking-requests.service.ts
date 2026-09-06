@@ -7,6 +7,7 @@ import {
   disclosesCustomerContact,
   isUniversallyPastDate,
   pageWindow,
+  parseDurationHours,
   replyDeadline,
   toDateString,
   type BookingRequestDetail,
@@ -125,15 +126,6 @@ function lastReplyDay(expiresAt: Date | null, now: Date): string {
 function parseRating(value: string): number {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function parseDurationHours(value: string | null): number | null {
-  if (value === null) {
-    return null;
-  }
-
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**

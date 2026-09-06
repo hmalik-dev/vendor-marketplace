@@ -63,15 +63,39 @@ export function isAdminRoute(pathname: string): boolean {
 }
 
 /**
- * Renders its children everywhere except the console.
+ * Checkout, which draws a wordmark-only header with no nav at all.
  *
- * The console draws its own inverted header (frame `13`), and `SiteHeader`
- * lives in the root layout above every route — so this removes it here rather
- * than threading a `showHeader` flag through every layout in between, which is
- * the same argument `PublicChrome` makes for the footer.
+ * Positional for the same reason `VENDOR_REQUEST_ROUTE` is: exactly one segment
+ * for the request id and then `checkout`, so `/bookings/<id>` — which is an
+ * ordinary app screen and keeps the shell — is not swept up with it.
+ */
+const CHECKOUT_ROUTE = /^\/bookings\/[^/]+\/checkout$/;
+
+/**
+ * The routes that draw a header of their own, and so must not also be given the
+ * marketplace one.
+ *
+ * Two of them: the operations console's inverted header (frame `13`), and
+ * checkout's wordmark bar (frame `05`, which `14-checkout.md` states as "no nav
+ * — nothing competes with finishing"). Stacking the shell above either one gave
+ * 128px of chrome where the frame draws 64, and on checkout that alone pushed
+ * the pay button past the 900px fold.
+ */
+export function drawsItsOwnHeader(pathname: string): boolean {
+  return isAdminRoute(pathname) || CHECKOUT_ROUTE.test(pathname);
+}
+
+/**
+ * Renders its children on every route that does **not** draw its own header.
+ *
+ * `SiteHeader` lives in the root layout above every route, so this removes it
+ * where a frame replaces it rather than threading a `showHeader` flag through
+ * every layout in between — the same argument `PublicChrome` makes for the
+ * footer. The name predates checkout joining the console here; the layout
+ * imports it, and that file belongs to another ticket this run.
  */
 export function OutsideAdmin({ children }: { children: ReactNode }): React.ReactNode {
-  return isAdminRoute(usePathname()) ? null : children;
+  return drawsItsOwnHeader(usePathname()) ? null : children;
 }
 
 /**

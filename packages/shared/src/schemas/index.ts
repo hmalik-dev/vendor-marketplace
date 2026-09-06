@@ -1064,6 +1064,21 @@ export const checkoutIntentSchema = z.object({
     businessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
     avatarUrl: imageRefSchema.nullable(),
   }),
+  /**
+   * The package being bought, for the rail's sub-line — frame `05` line 907
+   * draws `<package> · <duration>` under the vendor's name.
+   *
+   * `null` for a custom request, which was quoted rather than priced by a
+   * package and so has nothing to name. `durationHours` is separately nullable
+   * because a package need not declare one, and the sub-line degrades to the
+   * package name alone rather than printing an empty half.
+   */
+  servicePackage: z
+    .object({
+      name: z.string().max(MAX_BUSINESS_NAME_LENGTH),
+      durationHours: z.number().nullable(),
+    })
+    .nullable(),
   /** The date the vendor accepted, for the "Maya accepted your request on…" line. */
   acceptedAt: z.date().nullable(),
 });

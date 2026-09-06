@@ -2,6 +2,7 @@ import {
   BOOKING_REQUEST_EXPIRY_DAYS,
   EVENT_TYPES,
   type EventType,
+  parseDurationHours,
   toDateString,
 } from '@vendor-marketplace/shared';
 import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
@@ -439,18 +440,45 @@ interface SeededPackage {
   priceCents: number;
 }
 
-/** One bookable package, which is what makes the vendor publishable. */
+/**
+ * One bookable package, which is what makes the vendor publishable.
+ *
+ * The duration is part of the fixture rather than an optional extra: frame `05`
+ * draws the checkout rail's sub-line as `<package> · <duration>`, so a package
+ * without one leaves half of that line unreachable to a parity pass. It is
+ * backfilled onto an existing row too — a lane seeded before #395 would
+ * otherwise keep measuring the shorter line for ever.
+ */
 async function ensurePackage(tx: Tx, vendorId: string): Promise<SeededPackage> {
   const name = 'Full day coverage';
+  /** Eight, because that is what this package's own description promises. */
+  const durationHours = '8';
 
   const [existing] = await tx
-    .select({ id: servicePackages.id, priceCents: servicePackages.priceCents })
+    .select({
+      id: servicePackages.id,
+      priceCents: servicePackages.priceCents,
+      durationHours: servicePackages.durationHours,
+    })
     .from(servicePackages)
     .where(and(eq(servicePackages.vendorId, vendorId), eq(servicePackages.name, name)))
     .limit(1);
 
   if (existing) {
-    return existing;
+    /*
+     * Only when it is actually missing. NUMERIC comes back with its scale
+     * (`8.0` for an `8`), so the comparison is on the parsed number rather than
+     * on the string — otherwise this writes on every run for ever, and
+     * `lane:up` runs it once per lane.
+     */
+    if (parseDurationHours(existing.durationHours) !== Number(durationHours)) {
+      await tx
+        .update(servicePackages)
+        .set({ durationHours })
+        .where(eq(servicePackages.id, existing.id));
+    }
+
+    return { id: existing.id, priceCents: existing.priceCents };
   }
 
   const [created] = await tx
@@ -460,6 +488,7 @@ async function ensurePackage(tx: Tx, vendorId: string): Promise<SeededPackage> {
       name,
       description: 'Eight hours of coverage, edited gallery delivered in three weeks.',
       priceCents: 145_000,
+      durationHours,
     })
     .returning({ id: servicePackages.id, priceCents: servicePackages.priceCents });
 

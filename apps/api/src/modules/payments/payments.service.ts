@@ -4,6 +4,7 @@ import {
   calculateFees,
   calculateRefund,
   isUniversallyFutureDate,
+  parseDurationHours,
   type Booking,
   type BookingWithContext,
   type CancelledBooking,
@@ -207,7 +208,26 @@ function toCheckoutIntent(row: PayableRequestRow, intent: PaymentIntentSnapshot)
       businessName: row.vendorBusinessName,
       avatarUrl: row.vendorAvatarUrl,
     },
+    servicePackage: toRailPackage(row),
     acceptedAt: row.acceptedAt,
+  };
+}
+
+/**
+ * The package the rail names, or `null` when there is none to name.
+ *
+ * The left join means a custom request produces a row with every package column
+ * null, which is the same shape as "no package" — so the name is what decides,
+ * not the presence of the row.
+ */
+function toRailPackage(row: PayableRequestRow): CheckoutIntent['servicePackage'] {
+  if (row.packageName === null) {
+    return null;
+  }
+
+  return {
+    name: row.packageName,
+    durationHours: parseDurationHours(row.packageDurationHours),
   };
 }
 
