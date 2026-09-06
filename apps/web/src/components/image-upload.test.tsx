@@ -112,6 +112,34 @@ beforeEach(() => {
 });
 
 describe('ImageUpload', () => {
+  /*
+   * The focus ring belongs to the visible zone, not to the input (#411).
+   *
+   * The `<input type="file">` fills the drop zone at `opacity-0` — that is how
+   * clicking anywhere in the zone opens the picker — so the global
+   * `:focus-visible` ring painted on a fully transparent element and was
+   * invisible on all three photo fields. A keyboard user tabbing through the
+   * profile editor had no indicator at all, and no render assertion could see
+   * it, because the classes were all present and correct.
+   *
+   * jsdom performs no layout, so this asserts the class-level fact — that the
+   * ring is declared on the zone, keyed off the input's focus — rather than a
+   * measured outline. The rendered result is verified in the browser.
+   */
+  it('draws its focus ring on the zone rather than on the transparent input', () => {
+    const { container } = render(<Controlled />);
+
+    const input = container.querySelector('input[type="file"]');
+    const zone = input?.parentElement;
+
+    expect(input?.className).toContain('opacity-0');
+    expect(zone?.className).toContain('has-[input:focus-visible]:ring-2');
+    expect(zone?.className).toContain('has-[input:focus-visible]:ring-clay-400/30');
+    // The zone clips the uploaded image; a ring is a box-shadow drawn outside
+    // the border box, so its own `overflow-hidden` does not cut it.
+    expect(zone?.className).toContain('overflow-hidden');
+  });
+
   it('previews the resolved URL the upload returned, never the storage key', async () => {
     render(<Controlled />);
 

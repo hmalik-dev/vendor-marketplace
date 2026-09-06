@@ -95,6 +95,41 @@ describe('SearchShell loading state — frame 17', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Searching…');
   });
 
+  /*
+   * The announcer is a node of its own, always mounted, whose text changes.
+   *
+   * The first attempt put `aria-live` on the visible count row, which is
+   * hidden when `total` is 0 (frame `18` opens straight into the empty state)
+   * — so the region *unmounted* on the one transition that most needs
+   * speaking, and a reader who searched for nothing heard silence. A live
+   * region added to the DOM alongside its first content is unreliably
+   * announced too, which is why it is not conditional on anything.
+   */
+  function announcer(): HTMLElement | null {
+    // By slot, not by shape: the query bar's two comboboxes each render a
+    // `p[aria-live=polite][aria-atomic].sr-only` of their own, so the shape
+    // selector found one of theirs — empty — and called this one silent.
+    return document.querySelector('[data-slot="search-announcer"]');
+  }
+
+  it('announces that a search is running', async () => {
+    apiRequest.mockImplementation(neverResolves);
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    expect(announcer()?.textContent).toContain('Searching…');
+  });
+
+  it('announces a count that found nothing, where the visible row is hidden', async () => {
+    apiRequest.mockResolvedValue(emptyResult());
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(announcer()?.textContent).toBe('0 vendors'));
+    // The visible count row is gone — the announcement is all there is.
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+  });
+
   it('names the query in the searching line when the customer gave one', async () => {
     apiRequest.mockImplementation(neverResolves);
     state = baseState({ category: 'photography', city: 'Austin' });
@@ -230,7 +265,7 @@ describe('SearchShell no results — frame 18', () => {
 
     // Frame 18 spells the count — "all three filters", not "all 3".
     await waitFor(() =>
-      expect(screen.getByText('No photographers match all two filters')).toBeDefined(),
+      expect(screen.getByText('No photographers match both filters')).toBeDefined(),
     );
     expect(
       screen.getByText(
@@ -252,7 +287,7 @@ describe('SearchShell no results — frame 18', () => {
     render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
 
     const headline = await screen.findByRole('heading', {
-      name: 'No photographers match all two filters',
+      name: 'No photographers match both filters',
     });
 
     expect(headline.className).toContain('text-display-empty');
@@ -510,6 +545,113 @@ describe('SearchShell against a hostile URL', () => {
       ).toBeDefined(),
     );
     expect(setState).toHaveBeenCalledWith({ date: '' });
+  });
+
+  /*
+   * #403 acceptance 4. The date was stripped from the URL by the effect above,
+   * which runs *after* the fetch effect had already sent it: the API refuses a
+   * date past everywhere on Earth, so every open of a stale shared link fired a
+   * request that came back 400 and logged a console error before the screen
+   * recovered. The recovery was never the defect; the request was.
+   */
+  it('never sends a date that has already passed', async () => {
+    state = baseState({ category: 'photography', date: '2020-01-01' });
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+
+    for (const [path] of apiRequest.mock.calls) {
+      expect(path).not.toContain('date=');
+    }
+    // The rest of the question survives — this is a strip, not a refusal.
+    expect(apiRequest.mock.calls[0]?.[0]).toContain('category=photography');
+  });
+
+  /*
+   * #403 acceptance 3. `?minPriceCents=0&maxPriceCents=<above the cap>` is half
+   * a range: the ceiling is refused, the floor is not. The screen said "that
+   * price range … was cleared" while still sending the floor and still drawing
+   * its chip, so it announced the removal of a filter that was visibly
+   * narrowing the grid in front of the reader.
+   */
+  it('names only the bound it dropped when half a price range survives', async () => {
+    state = baseState({ minPriceCents: 0, maxPriceCents: 999_999_999_900 });
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toContain(
+      "That maximum price isn't one we can use, so it was cleared",
+    );
+    expect(status.textContent).not.toContain('price range');
+    // The surviving floor is still the filter it says the rest of the search
+    // still applies — so it is still in the request.
+    expect(apiRequest.mock.calls[0]?.[0]).toContain('minPriceCents=0');
+    expect(apiRequest.mock.calls[0]?.[0]).not.toContain('maxPriceCents');
+  });
+
+  /* Both bounds refused is the range refused, and is named once as the pair. */
+  it('names the range once when both bounds are dropped', async () => {
+    state = baseState({ minPriceCents: 900_000, maxPriceCents: 1_000 });
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toContain(
+      "That price range isn't one we can use, so it was cleared",
+    );
+  });
+});
+
+/*
+ * #403 acceptance 5. A well-formed slug the platform has no category for is a
+ * filter that rules out every vendor, and the screen read it as no filter at
+ * all: the headline fell through to "No vendors listed yet" — a false statement
+ * about the marketplace — with no way back and a diagnosis naming filters the
+ * customer never touched.
+ */
+describe('SearchShell unknown vendor type', () => {
+  beforeEach(() => {
+    apiRequest.mockReset();
+    setState.mockReset();
+    apiRequest.mockResolvedValue(emptyResult());
+    state = baseState({ category: 'does-not-exist' });
+  });
+
+  afterEach(() => cleanup());
+
+  it('renders the no-results state for the query, not the marketplace-empty copy', async () => {
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    expect(await screen.findByText('No vendors match that filter')).toBeDefined();
+    expect(screen.queryByText('No vendors listed yet')).toBeNull();
+    expect(
+      screen.getByText(
+        'The vendor type is the narrowest filter here. Loosen one filter and results come back.',
+      ),
+    ).toBeDefined();
+  });
+
+  /* And a way out of it, which the marketplace-empty copy never offered. */
+  it('offers a one-tap escape from the vendor type', async () => {
+    const user = userEvent.setup();
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Any vendor type' }));
+
+    expect(setState).toHaveBeenCalledWith({ category: '' });
+  });
+
+  /* A category the platform does have keeps the sentence that is true of it. */
+  it('still says a known vendor type is simply not listed yet', async () => {
+    state = baseState({ category: 'photography' });
+
+    render(<SearchShell categories={CATEGORIES} cities={CITIES} tags={[]} />);
+
+    expect(await screen.findByText('No photographers listed yet')).toBeDefined();
   });
 });
 

@@ -119,6 +119,8 @@ export function NearbyDatesBand({
             key={vendor.id}
             vendor={vendor}
             density="compact"
+            // `h3`: the band's own heading above these cards is an `h2`.
+            headingLevel="h3"
             // Not the searched date — the point of the card is the other one.
             freeOnDate={vendor.nearestAvailableDate}
           />

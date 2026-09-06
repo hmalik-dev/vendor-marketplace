@@ -151,6 +151,20 @@ export interface AvatarProps {
   size?: AvatarSize;
   /** A ring matching the ground behind it, for an avatar overlapping imagery. */
   ring?: AvatarRing;
+  /**
+   * Whether this avatar is the **only** thing naming the person, and so has to
+   * say the name itself.
+   *
+   * Off by default because it almost never is: eleven of the twelve places this
+   * component appears draw the name as visible text right beside it, and the
+   * avatar named it a second time — so a screen reader read the same name twice
+   * at every vendor card, every message row, every booking row and the checkout
+   * summary. A picture of a name that is already written is decoration.
+   *
+   * The exception is the operations header, where the avatar sits beside the
+   * operator's email address and nothing else says who they are.
+   */
+  labelled?: boolean;
   className?: string;
 }
 
@@ -159,6 +173,7 @@ export function Avatar({
   src,
   size = 'sm',
   ring,
+  labelled = false,
   className,
 }: AvatarProps): React.ReactElement {
   const pixels = AVATAR_SIZES[size];
@@ -189,7 +204,7 @@ export function Avatar({
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
-        alt={name}
+        alt={labelled ? name : ''}
         width={pixels}
         height={pixels}
         className={cn(shared, 'object-cover', className)}
@@ -200,8 +215,9 @@ export function Avatar({
 
   return (
     <span
-      role="img"
-      aria-label={name}
+      // A decorative monogram is hidden outright rather than left as an unnamed
+      // `img`, which a reader announces as "image" with nothing after it.
+      {...(labelled ? { role: 'img' as const, 'aria-label': name } : { 'aria-hidden': true })}
       data-slot="avatar-fallback"
       className={cn(
         shared,

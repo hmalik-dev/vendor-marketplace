@@ -89,7 +89,17 @@ export function TagCategorySection({
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
           <Command>
-            <CommandInput placeholder={`Search ${label.toLowerCase()}…`} />
+            {/*
+              A placeholder is not an accessible name: it is a fallback some
+              readers use and others ignore, and it disappears the moment the
+              operator types. Named explicitly, once per category, so the three
+              search boxes on this screen are told apart rather than all
+              reading as "search".
+            */}
+            <CommandInput
+              aria-label={`Search ${label.toLowerCase()}`}
+              placeholder={`Search ${label.toLowerCase()}…`}
+            />
             <CommandList>
               <CommandEmpty>No match. Suggest it below instead.</CommandEmpty>
               <CommandGroup>

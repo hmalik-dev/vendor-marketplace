@@ -9,6 +9,7 @@ import {
   type DropdownOption,
   type DropdownWidth,
 } from './dropdown';
+import { useStableValue } from '@/lib/use-stable-value';
 
 /**
  * Bodies 1 and 2 of `42-dropdowns.md`: single-select and multi-select.
@@ -132,11 +133,19 @@ export function MultiSelectDropdown({
    */
   const [draft, setDraft] = useState<readonly string[]>(value);
 
+  /*
+   * Seeded from the selection's *contents*, never from the array. Every caller
+   * builds this list with a `.map`, so `[open, value]` re-ran the re-seed on
+   * each parent render — under an open panel, that discarded the ticks the
+   * reader had just made the moment anything else on the screen changed (#403).
+   */
+  const seed = useStableValue(value);
+
   useEffect(() => {
     if (open) {
-      setDraft(value);
+      setDraft(seed);
     }
-  }, [open, value]);
+  }, [open, seed]);
 
   function toggle(next: string): void {
     setDraft((current) =>

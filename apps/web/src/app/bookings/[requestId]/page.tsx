@@ -71,7 +71,14 @@ export default async function BookingRequestPage({
   const booking = request.status === 'accepted' ? await getBookingForRequest(parsed.data) : null;
 
   return (
-    <main className="mx-auto w-full max-w-[660px] px-6 py-10 xl:px-10">
+    /*
+      A plain box, not a second `<main>`. The layout already owns the page's
+      one `main#main` landmark (`app/layout.tsx`), so a `<main>` here nested a
+      landmark inside itself: screen-reader landmark navigation announced two
+      main regions, and any `role=main` locator went ambiguous — Playwright's
+      own `main` locator threw a strict-mode violation on this route.
+    */
+    <div className="mx-auto w-full max-w-[660px] px-6 py-10 xl:px-10">
       <Link
         href="/bookings"
         className="mb-5 inline-block rounded-xs text-sm font-semibold text-clay-500 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400"
@@ -89,6 +96,6 @@ export default async function BookingRequestPage({
       ) : (
         <QuoteReview request={request} />
       )}
-    </main>
+    </div>
   );
 }

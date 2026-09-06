@@ -102,7 +102,11 @@ export function StorefrontPreview({
         that judgement where it can be made deliberately.
       */}
       {placement === 'search' ? (
-        <VendorCard vendor={vendor} preview />
+        /*
+          `h3`: this rail renders before the editor's own `h1` in document
+          order, so an `h2` here opened the page one level above its title.
+        */
+        <VendorCard vendor={vendor} preview headingLevel="h3" />
       ) : (
         <ProfilePlacement vendor={vendor} />
       )}

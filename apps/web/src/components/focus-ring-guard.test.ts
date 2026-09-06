@@ -1,7 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { sourceFiles, type SourceFile } from '@/testing/source-scan';
 
 /**
  * A focus ring that is declared must actually paint.
@@ -28,43 +28,26 @@ const RESTORES_STYLE = /\bfocus(?:-visible)?:outline-(?:solid|dashed|dotted|doub
 
 const COMPONENTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-async function sourceFiles(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const found: string[] = [];
+/** The components tree, walked and read once for every check below. */
+let files: SourceFile[] = [];
 
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      found.push(...(await sourceFiles(full)));
-    } else if (entry.name.endsWith('.tsx') && !entry.name.includes('.test.')) {
-      found.push(full);
-    }
-  }
-
-  return found;
-}
+beforeAll(async () => {
+  files = await sourceFiles(COMPONENTS_DIR);
+});
 
 describe('focus rings paint', () => {
   it('finds the components it is meant to be guarding', async () => {
-    const files = await sourceFiles(COMPONENTS_DIR);
-
     // Guards the guard: a scan that matched nothing would pass forever while
     // the rule it encodes went unenforced.
     expect(files.length).toBeGreaterThan(10);
   });
 
-  it('never restores an outline width on focus without its line style', async () => {
-    const files = await sourceFiles(COMPONENTS_DIR);
-
+  it('never restores an outline width on focus without its line style', () => {
     const offenders: string[] = [];
-    for (const file of files) {
-      const source = await readFile(file, 'utf8');
-      // Prose explaining the trap is not an instance of it.
-      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-
+    for (const { name, code } of files) {
       for (const [index, line] of code.split('\n').entries()) {
         if (SUPPRESSES.test(line) && RESTORES_WIDTH.test(line) && !RESTORES_STYLE.test(line)) {
-          offenders.push(`${path.relative(COMPONENTS_DIR, file)}:${index + 1}`);
+          offenders.push(`${name}:${index + 1}`);
         }
       }
     }
@@ -88,14 +71,9 @@ describe('focus rings paint', () => {
    * Scoped to lines that declare a focus ring, so an unrelated `transition-all`
    * on something with no ring is left alone.
    */
-  it('never transitions the property its focus ring is painted with', async () => {
-    const files = await sourceFiles(COMPONENTS_DIR);
-
+  it('never transitions the property its focus ring is painted with', () => {
     const offenders: string[] = [];
-    for (const file of files) {
-      const source = await readFile(file, 'utf8');
-      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-
+    for (const { name, code } of files) {
       /*
        * File-scoped, not line-scoped, and that is the point. In `vendor-card`
        * the ring and the transition that ramps it sit eighteen lines apart on
@@ -111,7 +89,7 @@ describe('focus rings paint', () => {
         /\btransition-all\b/.test(code) || /\btransition-\[[^\]]*box-shadow/.test(code);
 
       if (declaresRing && transitionsBoxShadow) {
-        offenders.push(path.relative(COMPONENTS_DIR, file));
+        offenders.push(name);
       }
     }
 

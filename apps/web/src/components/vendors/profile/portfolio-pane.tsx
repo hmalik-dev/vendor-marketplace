@@ -2,7 +2,7 @@
 
 import type { WirePortfolioItem } from '@/lib/wire-schemas';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 
 export interface PortfolioPaneProps {
@@ -25,6 +25,15 @@ export interface PortfolioPaneProps {
  */
 export function PortfolioPane({ items, businessName }: PortfolioPaneProps): React.ReactElement {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  /*
+   * The thumbnail that opened the lightbox, so focus can go back to it.
+   *
+   * A ref rather than `document.activeElement` read at close time: by then the
+   * dialog holds focus, and closing on Escape from the last thumbnail in the
+   * list is exactly the case where "wherever focus is now" is the wrong answer.
+   */
+  const opener = useRef<HTMLButtonElement | null>(null);
 
   const close = useCallback(() => setOpenIndex(null), []);
   const step = useCallback(
@@ -35,20 +44,78 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
     [items.length],
   );
 
+  /*
+   * Keyed on *whether* the lightbox is open, never on which image it shows.
+   *
+   * `openIndex` in the dependencies tore the `keydown` listener down and
+   * re-attached it — and re-wrote `body.style.overflow` — on every arrow press,
+   * and would have taken focus back off whichever arrow the viewer was holding.
+   * Neither `close` nor `step` varies with the index either: `close` is
+   * `useCallback([])` and `step` depends only on `items.length`.
+   */
+  const isOpen = openIndex !== null;
+
   useEffect(() => {
-    if (openIndex === null) {
+    if (!isOpen) {
       return;
     }
 
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         close();
+        return;
       }
       if (event.key === 'ArrowRight') {
         step(1);
+        return;
       }
       if (event.key === 'ArrowLeft') {
         step(-1);
+        return;
+      }
+      /*
+       * The trap.
+       *
+       * `aria-modal="true"` is a *claim* that the rest of the page is inert,
+       * and nothing in the browser makes it true. Without this, Tab walked
+       * straight out of the lightbox and through the profile underneath the
+       * scrim — every thumbnail, every tab, the booking rail — with the scrim
+       * hiding whatever was focused.
+       *
+       * Wrapping at both ends rather than one: Shift+Tab off the first control
+       * leaves by the other door and is the same defect.
+       */
+      if (event.key !== 'Tab') {
+        return;
+      }
+
+      const focusable = dialog.current?.querySelectorAll<HTMLElement>('button');
+      const first = focusable?.[0];
+      const last = focusable?.[focusable.length - 1];
+      if (!first || !last) {
+        return;
+      }
+
+      /*
+       * The container itself counts as "at the edge", in both directions.
+       *
+       * On open, focus sits on the dialog element — which has `tabIndex={-1}`
+       * and so is not in the sequential order at all. Forward Tab happens to
+       * walk into the dialog's own buttons, but **Shift+Tab from there falls
+       * through to the browser default** and lands on the last thumbnail
+       * *before* the dialog in the document: focus ends up on an invisible
+       * control underneath the scrim, which is the whole defect this trap
+       * exists to prevent.
+       */
+      const atStart = document.activeElement === first || document.activeElement === dialog.current;
+      const atEnd = document.activeElement === last || document.activeElement === dialog.current;
+
+      if (event.shiftKey && atStart) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && atEnd && document.activeElement !== dialog.current) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
@@ -58,11 +125,21 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
+    /*
+     * The container, not the close button: it carries the dialog's accessible
+     * name, so landing on it is what makes a screen reader announce which
+     * image opened.
+     */
+    dialog.current?.focus();
+
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previousOverflow;
+      // Back to the thumbnail, so a keyboard user resumes where they were
+      // instead of being dropped at the top of the page.
+      opener.current?.focus();
     };
-  }, [openIndex, close, step]);
+  }, [isOpen, close, step]);
 
   if (items.length === 0) {
     return (
@@ -90,7 +167,10 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
           <li key={item.id}>
             <button
               type="button"
-              onClick={() => setOpenIndex(index)}
+              onClick={(event) => {
+                opener.current = event.currentTarget;
+                setOpenIndex(index);
+              }}
               className="block w-full cursor-zoom-in overflow-hidden rounded-xl"
               aria-label={item.caption ?? `Open image ${index + 1} of ${items.length}`}
             >
@@ -107,9 +187,13 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
 
       {open ? (
         <div
+          ref={dialog}
           role="dialog"
           aria-modal="true"
           aria-label={open.caption ?? 'Portfolio image'}
+          // Programmatically focusable, not a tab stop: the effect above puts
+          // focus here on open, and the trap keeps Tab among the controls.
+          tabIndex={-1}
           onClick={close}
           className="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-stone-900/90 p-6"
         >

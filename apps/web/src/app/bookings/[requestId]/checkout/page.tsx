@@ -78,7 +78,13 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
         </p>
       </header>
 
-      <main
+      {/*
+        A labelled region, not a second `<main>`. The layout owns the page's one
+        `main#main` landmark, and nesting another inside it announced two main
+        regions and made every `role=main` locator ambiguous. `<section>` keeps
+        the name this area had without claiming the landmark twice.
+      */}
+      <section
         aria-label={`Checkout · ${BRAND_NAME}`}
         className="flex flex-1 flex-col overflow-hidden"
       >
@@ -87,7 +93,7 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
         ) : (
           await unavailableScreen(outcome.state, parsed.data)
         )}
-      </main>
+      </section>
     </div>
   );
 }
