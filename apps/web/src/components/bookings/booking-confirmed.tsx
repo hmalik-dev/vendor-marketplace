@@ -1,6 +1,11 @@
 'use client';
 
-import { EVENT_TYPE_LABELS, formatPrice, type EventType } from '@vendor-marketplace/shared';
+import {
+  CATEGORY_SEEDS,
+  EVENT_TYPE_LABELS,
+  formatPrice,
+  type EventType,
+} from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
@@ -33,13 +38,46 @@ const EVENT_DAY = new Intl.DateTimeFormat('en-US', {
  * Maya also booked" framing because it needs pairing data the app does not
  * have, and a count here would be exactly the invented number the parity rules
  * forbid on a public surface.
+ *
+ * **Every chip is a slug the taxonomy seeds**, and it takes that category's own
+ * name unless a `label` overrides it. Frame `06` draws the four as
+ * `Florals · Live music · Catering · Cake`, which is how a customer says it —
+ * but `live-music` and `cake` were never categories, so two of the four
+ * searched a slug the database has never held and drew an empty grid. Found
+ * and fixed with #419, which retired `florals` and would otherwise have made
+ * that three out of four.
+ *
+ * `Live music` keeps the customer's word because Entertainment is really
+ * behind it. `cake` had no honest home — the nearest is Carts, whose seed
+ * sells "Coffee, ice cream, dessert, and cocktail carts" — so it falls back to
+ * the category's name rather than promising a cake shop that is not there.
+ *
+ * Deriving the name is what keeps a chip from drifting off a renamed category
+ * while still pointing at it; `booking-confirmed.test.tsx` holds both guards.
  */
-const CROSS_SELL = [
-  { label: 'Florals', slug: 'florals' },
-  { label: 'Live music', slug: 'live-music' },
-  { label: 'Catering', slug: 'catering' },
-  { label: 'Cake', slug: 'cake' },
-] as const;
+const CROSS_SELL: readonly { readonly slug: string; readonly label?: string }[] = [
+  { slug: 'decor' },
+  { slug: 'entertainment', label: 'Live music' },
+  { slug: 'catering' },
+  { slug: 'carts' },
+];
+
+/** The chip's word: the product's where it has one, the taxonomy's otherwise. */
+function crossSellLabel(chip: (typeof CROSS_SELL)[number]): string {
+  return chip.label ?? CATEGORY_SEEDS.find((seed) => seed.slug === chip.slug)?.name ?? chip.slug;
+}
+
+/**
+ * The search this chip opens, with the event's own date already filled in.
+ *
+ * Built through `URLSearchParams` rather than interpolated. `eventDate` is a
+ * `DATE` column behind a wire schema so nothing odd reaches it today, but the
+ * only thing standing between "a column" and a broken href is that schema —
+ * and encoding costs nothing.
+ */
+function crossSellHref(slug: string, eventDate: string): string {
+  return `/search?${new URLSearchParams({ category: slug, date: eventDate }).toString()}`;
+}
 
 export interface BookingConfirmedProps {
   booking: WireBooking;
@@ -285,11 +323,11 @@ export function BookingConfirmed({
           {CROSS_SELL.map((category) => (
             <Link
               key={category.slug}
-              href={`/search?category=${category.slug}&date=${booking.eventDate}`}
+              href={crossSellHref(category.slug, booking.eventDate)}
               data-focus-own
               className="rounded-full bg-stone-900/14 px-3.75 py-2 text-sm font-semibold text-stone-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-stone-0"
             >
-              {category.label}
+              {crossSellLabel(category)}
             </Link>
           ))}
         </div>

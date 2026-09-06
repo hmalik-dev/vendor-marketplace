@@ -6,7 +6,14 @@ import {
   TAG_SEEDS,
 } from '@vendor-marketplace/shared';
 import { asc, eq } from 'drizzle-orm';
-import { categories, tags, usCities } from './schema/index.js';
+import {
+  categories,
+  tags,
+  usCities,
+  users,
+  vendorCategories,
+  vendorProfiles,
+} from './schema/index.js';
 import { seedCategories, seedReferenceData, seedTags, seedUsCities } from './seed.js';
 import { createTestDatabase, type TestDatabase } from './testing/test-db.js';
 
@@ -132,6 +139,106 @@ describe('seedCategories — retired slugs', () => {
       .where(eq(categories.slug, 'decor'));
     expect(survivor).toBeDefined();
     expect(survivor!.id).toBe(decor!.id);
+  });
+
+  /** The `florals` row as it stood before #419 dropped it from the seeds. */
+  async function insertRetiredFlorals(): Promise<{ id: string }> {
+    const [florals] = await testDb.db
+      .insert(categories)
+      .values({
+        name: 'Florals',
+        slug: 'florals',
+        description: 'Bouquets, centerpieces, arches, and floral installations.',
+        icon: 'flower',
+        displayOrder: 99,
+      })
+      .returning();
+    expect(florals).toBeDefined();
+
+    return florals!;
+  }
+
+  /** A vendor listed under each of `categoryIds`, in that order. */
+  async function insertVendorIn(
+    name: string,
+    categoryIds: readonly string[],
+  ): Promise<{ id: string }> {
+    const [user] = await testDb.db
+      .insert(users)
+      .values({
+        clerkUserId: `user_${name}_419`,
+        email: `${name}-419@example.com`,
+        role: 'vendor',
+        firstName: 'Saoirse',
+        lastName: 'Kelleher',
+      })
+      .returning();
+    const [vendor] = await testDb.db
+      .insert(vendorProfiles)
+      .values({ userId: user!.id, businessName: name, slug: `${name}-419` })
+      .returning();
+    await testDb.db
+      .insert(vendorCategories)
+      .values(categoryIds.map((categoryId) => ({ vendorId: vendor!.id, categoryId })));
+
+    return vendor!;
+  }
+
+  /** The categories a vendor is listed under, by id. */
+  async function categoryIdsOf(vendorId: string): Promise<string[]> {
+    const links = await testDb.db
+      .select({ categoryId: vendorCategories.categoryId })
+      .from(vendorCategories)
+      .where(eq(vendorCategories.vendorId, vendorId));
+
+    return links.map((link) => link.categoryId);
+  }
+
+  /*
+   * #419 — the acceptance criterion the ticket asked to be proven on data
+   * rather than assumed: both categories were empty locally, so a re-point
+   * that type-checks and silently drops rows would have looked identical to a
+   * working one until staging ran it.
+   *
+   * The vendor is inserted by hand rather than through the demo seed so the
+   * link exists *before* the fold runs, which is the only ordering that
+   * exercises the merge branch.
+   */
+  it('carries a florists vendor across when florals folds into decor', async () => {
+    await seedCategories(testDb.db);
+
+    const [decor] = await testDb.db.select().from(categories).where(eq(categories.slug, 'decor'));
+    expect(decor).toBeDefined();
+
+    const florals = await insertRetiredFlorals();
+    const vendor = await insertVendorIn('thistle', [florals.id]);
+
+    await seedCategories(testDb.db);
+
+    // The retired row is gone, not merely deactivated.
+    expect(
+      await testDb.db.select().from(categories).where(eq(categories.slug, 'florals')),
+    ).toHaveLength(0);
+
+    // And the vendor is listed under the survivor, on its original row.
+    expect(await categoryIdsOf(vendor.id)).toEqual([decor!.id]);
+  });
+
+  /*
+   * A vendor already selling under both is the collision the merge's
+   * `onConflictDoNothing` exists for — without it the composite primary key
+   * aborts the whole transaction and the fold never applies.
+   */
+  it('leaves a vendor listed under both with a single link, not a duplicate', async () => {
+    await seedCategories(testDb.db);
+
+    const [decor] = await testDb.db.select().from(categories).where(eq(categories.slug, 'decor'));
+    const florals = await insertRetiredFlorals();
+    const vendor = await insertVendorIn('wren', [florals.id, decor!.id]);
+
+    await seedCategories(testDb.db);
+
+    expect(await categoryIdsOf(vendor.id)).toEqual([decor!.id]);
   });
 
   it('deactivates a category the seeds no longer describe rather than deleting it', async () => {

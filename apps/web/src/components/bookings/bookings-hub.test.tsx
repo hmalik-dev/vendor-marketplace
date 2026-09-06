@@ -327,7 +327,7 @@ describe('BookingsHub refine chips', () => {
   const mixed = [
     entry({ id: 'photo', categoryName: 'Photography', eventDate: '2026-06-14' }),
     entry({ id: 'cater', categoryName: 'Catering', eventDate: '2026-05-02' }),
-    entry({ id: 'florals', categoryName: 'Florals', eventDate: '2026-07-30' }),
+    entry({ id: 'decor', categoryName: 'Decor', eventDate: '2026-07-30' }),
   ];
 
   function renderHub(category: string | null, sort: 'soonest' | 'latest') {
@@ -356,7 +356,7 @@ describe('BookingsHub refine chips', () => {
 
     expect(screen.getByText(/Photography/)).toBeDefined();
     expect(screen.getByText(/Catering/)).toBeDefined();
-    expect(screen.getByText(/Florals/)).toBeDefined();
+    expect(screen.getByText(/Decor/)).toBeDefined();
   });
 
   it('renders only the chosen category, and names it on the chip', () => {
@@ -367,7 +367,7 @@ describe('BookingsHub refine chips', () => {
       ?.nextElementSibling as HTMLElement;
     expect(within(list).getByText(/Catering/)).toBeDefined();
     expect(within(list).queryByText(/Photography/)).toBeNull();
-    expect(within(list).queryByText(/Florals/)).toBeNull();
+    expect(within(list).queryByText(/Decor/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Catering' })).toBeDefined();
   });
 

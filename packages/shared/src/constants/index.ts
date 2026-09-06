@@ -506,8 +506,8 @@ export interface CategorySeed {
 /**
  * Every group but `dietary` — what a category that serves no food offers.
  *
- * Named rather than spelled out eleven times, so the nine categories that
- * share this answer are visibly sharing one answer rather than nine that
+ * Named rather than spelled out ten times, so the eight categories that
+ * share this answer are visibly sharing one answer rather than eight that
  * happen to agree.
  */
 const NON_DIETARY_TAG_CATEGORIES: readonly TagCategory[] = TAG_CATEGORIES.filter(
@@ -520,8 +520,15 @@ const NON_DIETARY_TAG_CATEGORIES: readonly TagCategory[] = TAG_CATEGORIES.filter
  * two-word name is a sign the category is really two categories.
  *
  * `displayOrder` doubles as landing-page priority — `LANDING_CATEGORY_COUNT`
- * cards are featured on `/`, so the first entries are the highest-intent ones,
- * and the first six are exactly the six frame `01` draws, in its order.
+ * cards are featured on `/`, so the first entries are the highest-intent ones.
+ *
+ * **#419 removed `Florals` and folded it into `Decor`**, on the account
+ * holder's ruling: both were empty and in this market one vendor sells both.
+ * `Decor` inherits the fifth slot along with the vendors — the landing grid
+ * has no image fallback, and `apps/web/public/categories/` holds a photograph
+ * for exactly the first six, so leaving the order alone would have promoted
+ * `Carts` and shipped a broken image (`page.test.tsx` guards it). Frame `01`
+ * still draws a `Florals` card; it predates the ruling.
  */
 export const CATEGORY_SEEDS: readonly CategorySeed[] = [
   {
@@ -565,13 +572,13 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
-    name: 'Florals',
-    slug: 'florals',
-    description: 'Bouquets, centerpieces, arches, and floral installations.',
-    shortDescription: 'Bouquets & decor',
-    icon: 'flower',
+    name: 'Decor',
+    slug: 'decor',
+    description: 'Flowers, backdrops, table styling, uplighting, and stage design.',
+    shortDescription: 'Flowers & styling',
+    icon: 'palette',
     displayOrder: 5,
-    vendorNoun: { one: 'florist', many: 'florists' },
+    vendorNoun: { one: 'decorator', many: 'decorators' },
     applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
@@ -595,22 +602,12 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     applicableTagCategories: TAG_CATEGORIES,
   },
   {
-    name: 'Decor',
-    slug: 'decor',
-    description: 'Backdrops, table styling, uplighting, and stage design.',
-    shortDescription: 'Styling & lighting',
-    icon: 'palette',
-    displayOrder: 8,
-    vendorNoun: { one: 'decorator', many: 'decorators' },
-    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
-  },
-  {
     name: 'Videography',
     slug: 'videography',
     description: 'Highlight films, ceremony coverage, and drone work.',
     shortDescription: 'Films & drone',
     icon: 'video',
-    displayOrder: 9,
+    displayOrder: 8,
     vendorNoun: { one: 'videographer', many: 'videographers' },
     applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
@@ -620,7 +617,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Planners and day-of coordinators who run the event for you.',
     shortDescription: 'Planners & coordinators',
     icon: 'clipboard-list',
-    displayOrder: 10,
+    displayOrder: 9,
     vendorNoun: { one: 'planner', many: 'planners' },
     applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
@@ -630,7 +627,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     description: 'Tents, tables, chairs, AV, and everything in between.',
     shortDescription: 'Tents, tables, AV',
     icon: 'package',
-    displayOrder: 11,
+    displayOrder: 10,
     vendorNoun: { one: 'rental supplier', many: 'rental suppliers' },
     applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
@@ -676,23 +673,52 @@ export function tagCategoriesFor(categorySlug: string | undefined): readonly Tag
  * A plain rename moves the slug onto the existing row, keeping its id and every
  * `vendor_categories` link; a merge — `lighting` folding into `decor` — moves
  * the links onto the surviving row instead.
+ *
+ * Every value is a slug this file still seeds, so nothing chains: `floristry`
+ * points straight at `decor` rather than at `florals`, which #419 retired in
+ * turn. A chain would depend on object key order to resolve, and would resolve
+ * only if the intermediate hop happened to run first.
  */
 export const CATEGORY_SLUG_SUCCESSORS: Readonly<Record<string, string>> = {
   'dj-music': 'entertainment',
   'makeup-beauty': 'beauty',
   decoration: 'decor',
-  floristry: 'florals',
+  floristry: 'decor',
   'event-planning': 'planning',
   'rentals-equipment': 'rentals',
   lighting: 'decor',
+  // #419: Florals folded into Decor. Removing the seed alone would have left
+  // the live row standing with its vendors and merely deactivated.
+  florals: 'decor',
 };
+
+/**
+ * The seeded slug a retired one now points at, or `null` for a slug that was
+ * never retired — including one that is still live, and one that never existed.
+ *
+ * `/search?category=florals` is a link somebody may have shared before #419
+ * retired the category, and left alone it renders an empty result grid that
+ * reads as "this marketplace has no florists" rather than "this category moved".
+ * The search page redirects on this instead.
+ *
+ * `Object.hasOwn` rather than a plain lookup: the map is an object literal, so
+ * `?category=constructor` would otherwise resolve to `Object`'s own and send
+ * the visitor somewhere no category describes.
+ */
+export function retiredCategorySuccessor(slug: string | undefined | null): string | null {
+  if (typeof slug !== 'string' || !Object.hasOwn(CATEGORY_SLUG_SUCCESSORS, slug)) {
+    return null;
+  }
+
+  return CATEGORY_SLUG_SUCCESSORS[slug] ?? null;
+}
 
 export const CATEGORY_SLUGS = CATEGORY_SEEDS.map((category) => category.slug);
 
 /**
  * How many categories the landing page features. The full taxonomy belongs on
  * search (#6), where a category is a filter you can actually click; a landing
- * grid of eleven inert cards is bloat, not browse.
+ * grid of ten inert cards is bloat, not browse.
  */
 export const LANDING_CATEGORY_COUNT = 6;
 
@@ -701,17 +727,25 @@ export const LANDING_CATEGORY_COUNT = 6;
  *
  * A shortcut past the search bar for the visitor who already knows what they
  * need, so it is the four highest-intent types rather than the first four of
- * the row below it — Florals outranks Venues here and does not on the grid.
+ * the row below it — Beauty outranks Venues here and does not on the grid.
  * They replace the old "Popular: Florals · Taco carts · Live bands" link row,
  * which pointed at free-text queries that no longer exist.
+ *
+ * **The four and their order were ruled by the account holder on 2026-09-06**
+ * (#419), when `florals` left the taxonomy and took the second slot with it.
+ * `beauty` takes that slot; the other three keep theirs.
+ *
+ * The landing hero (`app/page.tsx`) and the footer's Browse column
+ * (`site-footer.tsx`) both read this one constant, deliberately, so the two
+ * can never disagree — editing it here moves both.
  *
  * See design/design-plan/10-landing.md.
  */
 export const LANDING_JUMP_CATEGORY_SLUGS = [
   'photography',
-  'florals',
   'catering',
   'entertainment',
+  'beauty',
 ] as const;
 
 // --- Tag seed data ---------------------------------------------------------
