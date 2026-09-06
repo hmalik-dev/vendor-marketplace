@@ -25,12 +25,39 @@ export interface Relaxation {
  * A date rules out every vendor already booked; a price ceiling rules out
  * whole tiers; a rating floor and tags trim the tail.
  */
-export function relaxations(state: SearchState): Relaxation[] {
+export function relaxations(
+  state: SearchState,
+  knownCategorySlugs: readonly string[],
+): Relaxation[] {
   const options: Relaxation[] = [];
 
   /*
-   * First, because a name match is the narrowest filter in the product: it
-   * rules out every vendor but one before any other filter is consulted.
+   * First, and only when the vendor type is one the platform does not have.
+   *
+   * A recognised category is deliberately absent from this list: it is the
+   * question the results answer, the search bar owns it, and "no photographers
+   * listed yet" is a true and useful thing to say when there are none. An
+   * **unrecognised** slug is neither. `?category=does-not-exist` rules out
+   * every vendor before any other filter is consulted, and with nothing in this
+   * list the headline fell through to "No vendors listed yet" — a false claim
+   * about the whole marketplace, on a screen with seventeen vendors one click
+   * away, and no way back.
+   *
+   * The slugs are the ones the API actually returned, not a compiled-in list:
+   * a category seeded after this build would otherwise read as unknown.
+   *
+   * Required, not optional: an argument whose absence silently restores the
+   * old answer for the same state is a footgun, and a caller with no list to
+   * hand passes `[]` and says so.
+   */
+  if (state.category !== '' && !knownCategorySlugs.includes(state.category)) {
+    options.push({ label: 'Any vendor type', patch: { category: '' } });
+  }
+
+  /*
+   * Ahead of every filter the customer can still get results from, because a
+   * name match is the narrowest of those: it rules out every vendor but one
+   * before any other filter is consulted.
    *
    * Its absence here was #72's fourth finding. With only a name searched,
    * `relaxations` returned nothing, so the headline fell through to "No
@@ -89,16 +116,30 @@ function spelled(count: number): string {
  * The headline. It counts the filters the customer actually set, because "all
  * three filters" when they set one reads as though the page misunderstood them.
  */
-export function noResultsHeadline(state: SearchState): string {
+export function noResultsHeadline(
+  state: SearchState,
+  knownCategorySlugs: readonly string[],
+): string {
   const noun = vendorNounFor(state.category === '' ? undefined : state.category, 0);
-  const count = relaxations(state).length;
+  const count = relaxations(state, knownCategorySlugs).length;
 
   if (count === 0) {
     return `No ${noun} listed yet`;
   }
 
-  return count === 1
-    ? `No ${noun} match that filter`
+  if (count === 1) {
+    return `No ${noun} match that filter`;
+  }
+
+  /*
+   * "both", never "all two". English has a word for two and `all` is not it,
+   * and the count template applied at n=2 shipped the sentence "No
+   * photographers match all two filters" to a public screen. Frame `18` draws
+   * the n=3 case — "match all three filters" — which is what the branch below
+   * keeps.
+   */
+  return count === 2
+    ? `No ${noun} match both filters`
     : `No ${noun} match all ${spelled(count)} filters`;
 }
 
@@ -107,24 +148,29 @@ export function noResultsHeadline(state: SearchState): string {
  * that loosening one brings results back. `null` when nothing was filtered —
  * there is no culprit to name, and inventing one would be a lie.
  */
-export function noResultsDiagnosis(state: SearchState): string | null {
-  const [first] = relaxations(state);
+export function noResultsDiagnosis(
+  state: SearchState,
+  knownCategorySlugs: readonly string[],
+): string | null {
+  const [first] = relaxations(state, knownCategorySlugs);
   if (first === undefined) {
     return null;
   }
 
   const culprit =
-    first.patch.name !== undefined
-      ? 'The name'
-      : first.patch.date !== undefined
-        ? 'The date'
-        : first.patch.minPriceCents !== undefined
-          ? 'The price range'
-          : first.patch.minRating !== undefined
-            ? 'The rating floor'
-            : first.patch.tags !== undefined
-              ? 'The tag filter'
-              : 'The city';
+    first.patch.category !== undefined
+      ? 'The vendor type'
+      : first.patch.name !== undefined
+        ? 'The name'
+        : first.patch.date !== undefined
+          ? 'The date'
+          : first.patch.minPriceCents !== undefined
+            ? 'The price range'
+            : first.patch.minRating !== undefined
+              ? 'The rating floor'
+              : first.patch.tags !== undefined
+                ? 'The tag filter'
+                : 'The city';
 
   /*
    * Frame `18` reads "Marfa is a small market — the distance limit is the

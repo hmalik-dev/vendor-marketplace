@@ -243,6 +243,21 @@ export function ImageUpload({
            * the uploaded image covers it once there is one.
            */
           'relative flex w-full items-center justify-center overflow-hidden border border-dashed border-stone-400 transition-colors',
+          /*
+            The focus ring belongs to the zone, not to the input.
+
+            The `<input type="file">` below fills the zone at `opacity-0` — it
+            is how clicking anywhere in the zone opens the picker — so the
+            global `:focus-visible` ring painted on a fully transparent element
+            and was invisible on all three photo fields. A keyboard user
+            tabbing through the profile editor had no indicator at all.
+
+            `has-[…]` puts the same ring on the visible box instead. The ring is
+            a box-shadow drawn outside the border box, so this element's own
+            `overflow-hidden` (which clips the uploaded image to the rounded
+            zone) does not clip it.
+          */
+          'has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-clay-400/30 has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-stone-50',
           src ? 'bg-stone-50' : 'placeholder-hatch',
           // 128px circle from `sm`, the size frame 09 draws the profile photo.
           rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-lg'),

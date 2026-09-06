@@ -330,6 +330,100 @@ describe('MessagesScreen', () => {
 
     expect(await screen.findByText('Just arrived')).toBeDefined();
   });
+
+  /*
+   * A message arriving on the open thread is spoken (#411).
+   *
+   * The bubbles themselves must not become a live region: this pane both
+   * *appends* arrivals and *prepends* whole pages of history behind `Load
+   * earlier messages`, and an `aria-live` container announces every node added
+   * to it — so a twenty-message history page would have been read out as
+   * twenty arrivals. A separate region watching the tail is the whole fix.
+   */
+  describe('an arriving message is announced', () => {
+    async function openThread(): Promise<void> {
+      respondWith([message('55555555-5555-4555-8555-555555555555', THEM, 'Already here')]);
+      render(
+        <MessagesScreen
+          initialConversations={[conversation()]}
+          viewerId={VIEWER}
+          initialConversationId={null}
+          listFailed={false}
+        />,
+      );
+
+      await screen.findByText('Already here');
+    }
+
+    /** The polite region's text, whatever it currently says. */
+    function announcement(): string {
+      return document.querySelector('[aria-live="polite"].sr-only')?.textContent ?? '';
+    }
+
+    async function arrive(id: string, senderId: string, content: string): Promise<void> {
+      await act(async () => {
+        onEventRef.current?.({
+          type: 'new_message',
+          conversationId: CONVERSATION,
+          message: {
+            ...message(id, senderId, content),
+            createdAt: new Date('2026-04-21T15:00:00Z').toISOString(),
+          },
+        });
+      });
+    }
+
+    it('says nothing about the messages that were already on the thread', async () => {
+      await openThread();
+
+      // Opening a thread is not an arrival. Announcing its newest message on
+      // load would speak an old message every time the reader switched threads.
+      expect(announcement()).toBe('');
+    });
+
+    it('names the sender and reads the message that arrived', async () => {
+      await openThread();
+      await arrive('77777777-7777-4777-8777-777777777777', THEM, 'Just arrived');
+
+      expect(announcement()).toBe('New message from Kessler & Co.: Just arrived');
+    });
+
+    /*
+     * The case an inferred watermark could not see.
+     *
+     * "Have I seen this thread?" was keyed off the last announced message id,
+     * so a thread with no messages had nothing to record and read as unseen —
+     * and the first message ever sent to it was swallowed. That is the case
+     * where the announcement matters most: there is no bubble above it, so
+     * nothing else on the screen changes in a way a reader can notice.
+     */
+    it('announces the first message ever sent to an empty thread', async () => {
+      respondWith([]);
+      render(
+        <MessagesScreen
+          initialConversations={[conversation()]}
+          viewerId={VIEWER}
+          initialConversationId={null}
+          listFailed={false}
+        />,
+      );
+
+      await screen.findByText(/Start the conversation/);
+      expect(announcement()).toBe('');
+
+      await arrive('66666666-6666-4666-8666-666666666666', THEM, 'Are you free in June?');
+
+      expect(announcement()).toBe('New message from Kessler & Co.: Are you free in June?');
+    });
+
+    it('stays quiet when the arriving message is the reader’s own', async () => {
+      await openThread();
+      await arrive('88888888-8888-4888-8888-888888888888', VIEWER, 'On my way');
+
+      // The reader wrote it; they do not need it read back to them.
+      expect(announcement()).toBe('');
+    });
+  });
   /*
    * #402. Every one of the cases below was a way for the thread pane to show
    * something other than the conversation its header named.

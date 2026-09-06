@@ -76,7 +76,16 @@ export function BookingConfirmed({
   }, []);
 
   return (
-    <main
+    /*
+      A labelled region, not a second `<main>`: `app/layout.tsx` already renders
+      the page's one `main#main`, and this sat inside it. `Skip to content`
+      landed on the layout wrapper rather than here, and landmark navigation
+      announced two mains.
+
+      The class list is unchanged on purpose — the gradient's own sizing is
+      #413's, and this commit fixes the landmark alone.
+    */
+    <section
       aria-label="Booking confirmed"
       className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-linear-[150deg,#7A9468_0%,#5E7A4E_55%,#49613D_100%] px-10"
     >
@@ -197,6 +206,6 @@ export function BookingConfirmed({
           ))}
         </div>
       </div>
-    </main>
+    </section>
   );
 }

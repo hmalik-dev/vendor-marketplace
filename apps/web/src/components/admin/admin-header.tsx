@@ -64,7 +64,12 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
         <span className="truncate text-action text-stone-400" title={email}>
           Logged in as {email}
         </span>
-        <Avatar name={name} size="xs" className="bg-stone-700 text-clay-150" />
+        {/*
+          The one `labelled` avatar in the product: the line beside it carries
+          the operator's email address, not their name, so this monogram is the
+          only thing that says who is signed in.
+        */}
+        <Avatar name={name} labelled size="xs" className="bg-stone-700 text-clay-150" />
       </div>
     </header>
   );

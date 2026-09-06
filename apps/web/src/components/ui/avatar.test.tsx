@@ -38,6 +38,25 @@ describe('avatarToneIndex', () => {
   });
 });
 
+/**
+ * The rendered monogram, found by its slot rather than by its name.
+ *
+ * The geometry and typography checks below are about the circle, not about
+ * what it announces — and since #411 an avatar is decorative unless the caller
+ * says otherwise, so most of them have no accessible name to be found by. The
+ * naming contract is asserted on its own, further down.
+ */
+function monogram(): HTMLElement {
+  const found = document.querySelectorAll<HTMLElement>('[data-slot="avatar-fallback"]');
+  const last = found[found.length - 1];
+
+  if (last === undefined) {
+    throw new Error('No avatar monogram rendered');
+  }
+
+  return last;
+}
+
 describe('Avatar', () => {
   afterEach(() => {
     cleanup();
@@ -46,9 +65,44 @@ describe('Avatar', () => {
   it('renders initials when there is no photograph', () => {
     render(<Avatar name="Maya Fernandez" size="lg" />);
 
-    const avatar = screen.getByRole('img', { name: 'Maya Fernandez' });
-    expect(avatar.textContent).toBe('MF');
-    expect(avatar.className).toContain('font-display');
+    expect(monogram().textContent).toBe('MF');
+    expect(monogram().className).toContain('font-display');
+  });
+
+  /*
+   * The naming contract, and the reason it is inverted.
+   *
+   * An avatar almost always sits beside the name it depicts — eleven of the
+   * twelve call sites in this product do — and naming it again made a screen
+   * reader read that name twice in a row on every vendor card, message row,
+   * booking row and the checkout summary. So it is decoration by default and
+   * says the name only when asked, which is the one case where nothing else
+   * on screen does.
+   */
+  it('is decoration by default, so it does not repeat the name beside it', () => {
+    render(<Avatar name="Maya Fernandez" />);
+
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(monogram().getAttribute('aria-hidden')).toBe('true');
+    expect(monogram().getAttribute('aria-label')).toBeNull();
+  });
+
+  it('names itself when it is the only thing naming the person', () => {
+    render(<Avatar name="Maya Fernandez" labelled />);
+
+    const named = screen.getByRole('img', { name: 'Maya Fernandez' });
+    expect(named.textContent).toBe('MF');
+    expect(named.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  it('leaves a decorative photograph with an empty alt rather than no alt', () => {
+    const { container } = render(<Avatar name="Maya Fernandez" src="https://example.test/m.jpg" />);
+
+    const image = container.querySelector('img');
+    // `alt=""` is what marks an image decorative. A *missing* alt makes a
+    // reader fall back to announcing the file name.
+    expect(image?.getAttribute('alt')).toBe('');
+    expect(screen.queryByRole('img')).toBeNull();
   });
 
   /*
@@ -69,7 +123,7 @@ describe('Avatar', () => {
     (size) => {
       render(<Avatar name="Maya Fernandez" size={size} />);
 
-      const avatar = screen.getByRole('img', { name: 'Maya Fernandez' });
+      const avatar = monogram();
       const glyph = Number.parseFloat(avatar.style.fontSize);
 
       expect(glyph).toBeGreaterThan(0);
@@ -87,9 +141,7 @@ describe('Avatar', () => {
   it('has sizes on both sides of the floor, so the check above is not vacuous', () => {
     const glyphs = Object.keys(AVATAR_SIZES).map((size) => {
       render(<Avatar name="Maya Fernandez" size={size as keyof typeof AVATAR_SIZES} />);
-      const rendered = screen.getAllByRole('img', { name: 'Maya Fernandez' }).at(-1);
-
-      return Number.parseFloat((rendered as HTMLElement).style.fontSize);
+      return Number.parseFloat(monogram().style.fontSize);
     });
 
     expect(glyphs.filter((glyph) => glyph < SERIF_FLOOR_PX).length).toBe(4);
@@ -99,12 +151,11 @@ describe('Avatar', () => {
   it('paints the fallback in clay or sage, never in one fixed colour', () => {
     render(<Avatar name="Maya Fernandez" />);
 
-    const avatar = screen.getByRole('img', { name: 'Maya Fernandez' });
-    expect(avatar.className).toMatch(/bg-(clay|sage)-100/);
+    expect(monogram().className).toMatch(/bg-(clay|sage)-100/);
   });
 
   it('renders the photograph when one exists, still with an accessible name', () => {
-    render(<Avatar name="Maya Fernandez" src="https://example.test/maya.jpg" />);
+    render(<Avatar name="Maya Fernandez" src="https://example.test/maya.jpg" labelled />);
 
     const image = screen.getByRole('img', { name: 'Maya Fernandez' });
     expect(image.tagName).toBe('IMG');
@@ -114,22 +165,17 @@ describe('Avatar', () => {
   it.each(Object.entries(AVATAR_SIZES))('sizes %s to %ipx square', (size, pixels) => {
     render(<Avatar name="Maya Fernandez" size={size as keyof typeof AVATAR_SIZES} />);
 
-    const avatar = screen.getByRole('img', { name: 'Maya Fernandez' });
-    expect(avatar.style.width).toBe(`${pixels}px`);
-    expect(avatar.style.height).toBe(`${pixels}px`);
+    expect(monogram().style.width).toBe(`${pixels}px`);
+    expect(monogram().style.height).toBe(`${pixels}px`);
     cleanup();
   });
 
   it('adds the stone-0 border only when it overlaps imagery', () => {
     render(<Avatar name="Maya Fernandez" ring="card" />);
-    expect(screen.getByRole('img', { name: 'Maya Fernandez' }).className).toContain(
-      'border-2 border-stone-0',
-    );
+    expect(monogram().className).toContain('border-2 border-stone-0');
 
     cleanup();
     render(<Avatar name="Maya Fernandez" />);
-    expect(screen.getByRole('img', { name: 'Maya Fernandez' }).className).not.toContain(
-      'border-stone-0',
-    );
+    expect(monogram().className).not.toContain('border-stone-0');
   });
 });

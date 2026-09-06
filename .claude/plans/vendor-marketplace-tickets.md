@@ -230,7 +230,7 @@ Reproduced end to end by the browser sweep. |
 sweep. Its thread loader has no cancellation and no owner check, its draft is
 one string for the whole screen, and the API pages from the oldest message —
 so a thread with more than 50 messages hides everything newer behind a |
-| **403** | **Search: the price filter means something other than its label, and bad params answer inconsistently** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 9 verified findings. Nine findings on one surface. The most serious is semantic: the filter is
+| **403** | **Search: the price filter means something other than its label, and bad params answer inconsistently** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-t403` | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 9 verified findings. Nine findings on one surface. The most serious is semantic: the filter is **Closed 2026-09-05 (`8da2c8a`, PR #108).** The control is labelled `Price · starting rate` (frame `28`) and every card prints `From $X`, but the filter matched **any** active package, so the label, the card and the result set were three different claims — a `$4k+` floor returned vendors whose cards read `From $1,750`. Measured on the lane's data, vendors whose *cheapest* package is in band against vendors with *any* package in band ran **11/11, 2/6, 1/8 and 0/5** across the four bands; the screen was showing the second column while promising the first. The predicate is **grouped rather than correlated, and that was measured**: written the obvious way — two `startingPriceCents()` bounds, which reads better and reuses the helper — Postgres plans each bound as its own SubPlan and eliminates no common subexpression, so a two-bound search evaluated the aggregate twice per candidate row in each of the three statements `filters()` feeds. That count query read **147 buffer pages over 4 SubPlan nodes**; the grouped form reads **26 with none**, same rows. `startingPriceCents()` stays the single definition of the value, and `keeps a vendor whose starting rate is in band` asserts the filter and the printed price agree so the two shapes cannot drift. **The class the obvious fix missed:** `nuqs`'s numeric parsers are `parseInt`/`parseFloat`, which read a prefix and discard the rest, so a `parse(raw) === null` test left a whole class *silently obeyed* — `?minPriceCents=12abc` drew a $0.12 floor, sent `minPriceCents=12`, dropped every unpriced vendor from the grid and said nothing, and `?page=2abc` served page 2, which is the literal wording of acceptance 7. Numeric params are now judged on their **text**, and `parseSearchState` owns both halves so **announced and cleared are the same set**; `?page=01` is deliberately honoured rather than complained about, which is why it is a shape check and not a round-trip of the parsed value. Found by `diff-reviewer` as blocking, with tests confirmed to fail without the fix. **Deviation from an acceptance criterion, recorded rather than silent:** acceptance 5 says an unknown-but-well-formed category renders the no-results state *for that query*, so it is not cleared the way a malformed slug is. The two therefore still get different treatments — but neither says anything false now, which is what the finding was actually about. Naming the unknown slug in the copy is forbidden by our own invariant: no URL value may enter that sentence. **Adjacent, fixed here rather than filed** (both in files this change already touches, both the same defect as the headline one): the Price chip invented the bound the reader did not set — a lone ceiling read `$0 – $2,000`, a lone floor read `$999.99 – $10,000+` against a constant that exists only to give the slider a span — and now reads `Under $2,000` and `$999.99+`, the vocabulary frames `18` and `28` already use; and `inputMode` moved from `numeric` to `decimal`, without which the decimal this ticket restored is untypeable on iOS. `useStableValue` replaces three hand-written re-seed keys with one hook, because enumerated dependency lists go stale in silence the day a field is added. **Browser-verified 2026-09-05 at 1440x900, signed out and as customer and vendor.** `$2,000 – $4,000` returns one card reading **From $3,800** — label, card and result set agree; `?date=2020-01-01` fires **exactly one** request carrying no `date=` where it used to fire a 400 and a console error first; the combined hostile URL names all six params **including the sort it used to omit**; `?category=does-not-exist` renders `No vendors match that filter` with a working `Any vendor type` escape. The draft race was driven with the API throttled to 7s: a half-typed `$1,200`/`34` in an open panel and a mid-search `Austin, TX` in the bar both survived the results landing. Zero console errors, **zero non-200 responses across the whole pass**, no horizontal overflow. `parity-checker`: **all six axes MATCH on five screens**; it re-read a spread of measurements after two late edits and correctly attributed the one disagreement to my edit rather than to the dev-server outage mid-pass, and **withdrew** its own max-only-chip finding because this ticket fixed it. `security-auditor`: **PASS**, and it noted the change *reduces* disclosure — the old any-package `EXISTS` was an unauthenticated oracle a stranger could binary-search to recover a vendor's whole tier ladder, none of which the API returns. **Eight pre-existing parity findings on frames `02`/`18` are NOT this lane's and are recorded here so they are not re-discovered**: the empty-state mark is a 32x32 `lucide-search-x` where the frame draws 62x38 twin circles; the frame's alternatives band is absent; `Clear all` sits in the action row rather than the Refine bar; the price presets wrap 3+1 in a 230px panel (a consequence of the recorded width ruling in `dropdown.tsx`); a focused field computes 1px where the class asks 1.5px; the empty-state description is 21.6px against the frame's 22.28px, which is a `--leading-prose` **token** question and not a one-off override; the card `New` badge renders as inline meta text rather than a pill; and the header submit's `ring-offset-0` is deliberate, documented in `search-bar.tsx`, and already filed to #306/#73 — **do not re-file it**. One item is this ticket's and left as-is: on `?category=does-not-exist` the diagnosis names a vendor-type control the header renders blank. Gate: secrets scan (1064 files), format, typecheck 7/7, lint 8/8, **3862 tests**, contention 4/4, agents, build 5/5 with 19/19 static pages — the build being what clears the `useSearchParams`-in-a-shared-header prerender question. Two of the four new DAO tests are deliberate over-correction guards rather than proofs, and say so in their own comments.
 labelled `STARTING RATE` and matches any package in range, so a vendor whose
 cheapest package is $400 appears under a $4,000 floor. The rest are the URL's
 handling of values it cannot use — some announced, some silent, one sen |
@@ -262,7 +262,7 @@ week'; east of UTC yesterday stays pickable on the booking req |
 signed-in role may not see leaves the browser on a blank page with signed-out
 chrome, rather than redirecting to somewhere that role can be. A vendor signing
 in from a booking request form, a vendor sent to `/customer/profile`,  |
-| **411** | **Accessibility: dialogs, calendars and composite controls are unreachable or unannounced** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 1 verified finding. The static accessibility hunt found, beyond the focus-ring work #383 owns and
+| **411** | **Accessibility: dialogs, calendars and composite controls are unreachable or unannounced** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-t411` | **None** | `core` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 1 verified finding. The static accessibility hunt found, beyond the focus-ring work #383 owns and **Closed 2026-09-05 (`6084c3a`, PR #109).** All five acceptances. The date picker implements the grid keyboard model — `role="row"` week rows, one roving tab stop, arrows/Home/End/PageUp/PageDown through a single `KEY_MOVES` table — and its unchoosable days moved from the native `disabled` to `aria-disabled`, which is the substance of it: a `disabled` cell is skipped by the arrow keys as well as by Tab, so a booked, blocked or past day could not be reached to find out **why**. The grid jumped over it and told nobody. `parity-checker` proved the row restructuring is geometrically inert by rebuilding the old flat grid live and measuring both — cell 25.1406px, 4px column and row gaps, 200x146 box, identical. **The lightbox's docstring became true**: it claimed focus returned to the opening thumbnail while nothing focused the dialog, trapped Tab or restored focus, so a keyboard user tabbed the profile underneath the scrim. **Colour stopped being the only carrier on the availability pane** — free-versus-booked was sage-versus-strikethrough with the words only in a `title=`, which is not part of a `<span>`'s accessible name and no keyboard can reach; both greys were also wrong against `01-foundations.md` (`stone-400` is a **border** token, measured **1.64:1** as text), so past takes `stone-500` and unavailable `stone-600` at **5.37:1**. **Three nested `<main>` landmarks** became `<section>`/`<div>` with byte-identical class lists, because the layout consequences are #413's and #395's. **`Avatar` is decoration by default** — eleven of twelve call sites write the name beside it — with a `labelled` prop for the operations header, the one place nothing else says who is signed in. Also: the image-upload focus ring moved off the `opacity-0` input onto the visible zone, the tag pickers' three search boxes got names, `aria-pressed` on two admin filter **links** became `aria-current`, and the heading skips closed. **`VendorCard` took a `headingLevel` prop and the browser is why**: hardcoding `h2` fixes `/search`, but the storefront editor renders a preview card **before** its own `h1`, so `h2` there opened the page one level above its title. **Five defects the reviews found that the ticket did not name, all fixed here.** `booking-request.spec.ts` selected day cells with `:not([disabled])` — the money-path E2E, which with the attribute gone matched every day, never walked the month, and clicked the 1st; proven both ways. The lightbox trap was **open at the state focus starts in**: the container is `tabIndex={-1}`, so Shift+Tab from it fell through to a thumbnail behind the scrim, and the test that missed it pressed Tab first. The search announcement was hung on the count row, hidden when the count is zero, so the live region **unmounted** on the one transition that most needs speaking. `takeFocus` stuck `true` after a no-op Home/End and the next chevron click yanked focus into the grid. And the first message ever sent to an **empty** thread was swallowed, because "have I seen this thread" was keyed off a last-announced id an empty thread has none of — the watermark is now written by the thread load, the only writer that can tell history from an arrival. **The guard was hollow, and that is the lesson worth keeping.** Its icon-button rule matched the opening tag with `/<button\b([^>]*)>/`; `[^>]*` stops at the first `>`, and `onClick={() => ...}` puts one **inside** the tag. It passed while defending nothing: stripping every `aria-label` in the tree made it report **2** offenders where a real parse finds **7**, and being case-sensitive it never scanned a single `<Button size="icon">`. `src/testing/source-scan.ts` now carries a brace- and quote-aware `elements()` reader, a second test asserts the rule **finds** at least seven icon-only buttons, and that file also replaces the tree walk and comment-stripping regexes `focus-ring-guard.test.ts` was carrying its own copy of. `diff-reviewer` recorded the class as `review-checklist-source-guard-regex-truncation.md`: mutate a source guard before trusting it. **Browser-verified 2026-09-05 at 1440x900**, driven in-session rather than delegated, signed out and as vendor, customer and admin: the lightbox's whole focus contract walked by keyboard, the picker driven Tab -> arrows -> End -> PageDown -> Enter with no mouse, `mainCount` **1** on every route including the three that had two, `aria-pressed` on a link **0** everywhere, and the focused upload ring measured on real extent (128x128, 216x144) with none of its six clipping ancestors cutting it. `parity-checker`: **no regression** on frames `02`, `03` and the `28` date body. All 15 Playwright specs green. **One flagged item was a false positive** and is recorded so it is not re-filed: a crude scan called the profile editor's publish `Switch` unnamed; Chromium's own computation says "Visible to customers", because a `<button>` is labelable and the adjacent `<Label htmlFor>` names it. **Deliberately not done:** the vendor calendar's "Available, in the past" wording (pre-existing copy, `31-content-voice.md` owns the strings); folding `checkout-screen.tsx`'s `EVENT_DAY` and `booking-card.tsx`'s `CARD_DATE` into the shared formatter (both files belong to open tickets #395/#413); and the confirmed page's gradient and clipped chip rings, which #413 claims by name.
 the silent-submit work #388 closed:
 
 - **Portfolio lightbox** (`portfolio-pane.tsx:108-160`) is `role="dialog"
@@ -2337,7 +2337,7 @@ so a thread with more than 50 messages hides everything newer behind a reload.
 
 ### #403: Search: the price filter means something other than its label, and bad params answer inconsistently
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2376,8 +2376,8 @@ API anyway.
 
 #### Tests (required)
 
-- [ ] A test per param class asserting both the request that goes out and the sentence that renders
-- [ ] A price-semantics test at the DAO level
+- [x] A test per param class asserting both the request that goes out and the sentence that renders — `search-state.test.ts` per param, plus `use-search-state.test.tsx`, which renders the hook and asserts the querystring it produces (`sort=relevance&page=1&pageSize=20` for `?page=abc&sort=evil`). That file exists because the suite was green with the wiring deleted.
+- [x] A price-semantics test at the DAO level — driven through the real route in `vendor-search.routes.test.ts`, which is that file's stated policy: a filter that works in isolation but is dropped by the querystring schema is still a broken search. Two of the four are proofs (`filters on the starting rate, not on any package in range`, `counts category facets on the starting rate too`); the other two are over-correction guards and say so.
 
 ---
 
@@ -2685,7 +2685,7 @@ customer sent to `/vendor/dashboard` all hit it.
 
 ### #411: Accessibility: dialogs, calendars and composite controls are unreachable or unannounced
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2735,8 +2735,176 @@ the silent-submit work #388 closed:
 
 #### Tests (required)
 
-- [ ] A landmark guard test
-- [ ] RTL tests for the lightbox focus contract and the date picker's keyboard model
+- [x] A landmark guard test
+- [x] RTL tests for the lightbox focus contract and the date picker's keyboard model
+
+#### What landed
+
+**All five acceptances.** Every item in the list above is fixed, or recorded
+below as already-fixed prose the ticket had gone stale on.
+
+**The date picker implements the grid keyboard model rather than dropping the
+role.** `role="grid"` over a flat run of 42 `gridcell` buttons is a malformed
+grid — the role owes rows — and every one of those cells was a tab stop, so
+reaching the control after the picker meant pressing Tab forty-two times while
+the arrow keys the role advertises did nothing. It now has `role="row"` week
+rows, one roving tab stop, and `ArrowLeft/Right/Up/Down`, `Home`, `End`,
+`PageUp` and `PageDown` through a single `KEY_MOVES` table. The geometry is
+unchanged to the pixel: the week rows carry the 4px column gap and the outer
+column carries the 4px row gap, which is exactly what the one `grid-cols-7
+gap-1` container did.
+
+**The unchoosable days became reachable, and that is the substance of it.** They
+carried the native `disabled` attribute, which removes an element from the arrow
+keys' reach as well as from the tab order — so a booked, blocked or past day
+could not be reached to find out *why* it could not be chosen; the grid jumped
+over it and told nobody. They now carry `aria-disabled`, announce their state,
+and the click is refused in the handler. Verified in the browser: arrowing onto
+2026-10-20 reads "Tuesday, October 20, 2026 — unavailable", and Enter on it
+leaves the picker open with nothing selected.
+
+**The lightbox's docstring was true for the first time.** It claimed focus was
+returned to the thumbnail that opened it; nothing focused the dialog, nothing
+trapped Tab and nothing restored focus, so a keyboard user tabbed the profile
+underneath the scrim. It now focuses the container on open, traps Tab in both
+directions and returns focus to the opening thumbnail. The **first** trap was
+still open at the state every viewer starts in — `diff-reviewer` caught that
+Shift+Tab from the container (`tabIndex={-1}`, so not in the sequential order)
+fell through to the browser default and landed on the last thumbnail *behind*
+the scrim. The test that missed it pressed Tab first; there is now one that
+does not.
+
+**Colour stopped being the only carrier on the read-only availability pane.**
+Free-versus-booked was sage-versus-strikethrough, with the words only in a
+`title=` — a tooltip, which is not part of a `<span>`'s accessible name, is
+unspoken by most readers and is unreachable by keyboard. Each cell now carries
+its date and state as real text. The two greys were also wrong against
+`01-foundations.md`: `stone-400` is a **border** token and measured **1.64:1**
+as text. Past days take `stone-500` (the table's sanctioned disabled tone) and
+unavailable days take `stone-600` — measured in Chrome at **5.37:1**, with free
+at 6.51:1.
+
+**Both calendars name their columns and their days.** The vendor grid's `<th>`
+elements had only an `aria-hidden` initial inside them, so every column header
+had an empty accessible name and `scope="col"` associated each day with
+nothing; they now carry the full weekday name. Every day cell in all three
+calendars reads its date as a person says it — "Tuesday, June 16, 2026 —
+Pending request" — through one shared `describeCell` in `lib/calendar.ts`
+rather than three hand-rolled concatenations.
+
+**Three nested `<main>` landmarks became `<section>`/`<div>`**, on the request
+detail, checkout and confirmed pages. **The class lists are byte-identical on
+purpose** — the gradient and sizing consequences of that nesting are #413's and
+#395's, and this ticket fixes the landmark alone.
+
+**`Avatar` is decoration by default.** Eleven of its twelve call sites write the
+name as visible text right beside it, so a reader heard the same name twice at
+every vendor card, message row, booking row and the checkout summary. It takes
+a `labelled` prop for the one site that needs it — the operations header, where
+the line beside the avatar is the operator's email and nothing else says who is
+signed in.
+
+**Also fixed:** the image-upload focus ring, which painted on the `opacity-0`
+file input filling the drop zone and so was invisible on all three photo fields
+(it is now `has-[input:focus-visible]` on the visible zone — measured as a real
+2px+4px ring on a 128x128 box); the three tag-picker `CommandInput`s, which had
+only a placeholder; `aria-pressed` on two admin filter **links**, which have no
+pressed state, now `aria-current`; and the heading skips on the vendor profile
+panes, the availability page and the search grid.
+
+**`VendorCard` took a `headingLevel` prop, and the browser is why.** Hardcoding
+`h2` fixes `/search`, where the card sits directly under the page's `h1`. But
+the storefront editor renders a preview card **before** its own `h1` in document
+order, so `h2` there opened the page one level above its title — worse than the
+skip it was fixing. The three surfaces that nest the card inside a section of
+their own pass `h3`.
+
+#### Already fixed — the ticket's prose had gone stale
+
+Verified against the tree before implementing, per "trust the repository over
+the ticket's prose":
+
+- **The admin filter search and the message composer** both already carried an
+  `aria-label`. Nothing to do.
+- **The messages send failure** already carried `role="alert"`, with a comment
+  explaining the choice.
+
+#### Five defects the reviews found that the ticket did not name, all fixed here
+
+1. **`booking-request.spec.ts` selected day cells with `:not([disabled])`** —
+   the money-path E2E. With the attribute gone that matched *every* day, the
+   month-walk never ran, and it clicked the 1st: in the past on every day but
+   one, and silently refused. Proven both ways — the spec fails with the old
+   selector and passes with `:not([aria-disabled="true"])`.
+2. **The lightbox trap was open at the state focus starts in** (above).
+3. **The search announcement was hung on the count row**, which is hidden when
+   `total` is 0 (frame `18` opens straight into the empty state) — so the live
+   region *unmounted* on the one transition that most needs speaking. It is now
+   its own always-mounted `sr-only` node whose text changes; a region added to
+   the DOM together with its first content is unreliably announced anyway.
+4. **`takeFocus` stuck `true` after a no-op `Home`/`End`.** `Home` on a Sunday
+   returns where it started, so `roving` never changed and nothing cleared the
+   flag — the next month-chevron click then yanked focus off the chevron into
+   the grid, making a second month step impossible without tabbing back.
+5. **The first message ever sent to an empty thread was swallowed.** "Have I
+   seen this thread?" was keyed off the last announced id, which an empty thread
+   has none of. The watermark is now written by the thread load itself, which is
+   the only writer that can tell history from an arrival.
+
+#### The guard was hollow, and that is recorded
+
+The landmark guard's first icon-button rule matched the opening tag with
+`/<button\b([^>]*)>/`. `[^>]*` stops at the first `>` — and `onClick={() => …}`
+puts one **inside** the opening tag, so the captured attributes were a truncated
+prefix and the "children" began with the tag's own leftover text. It passed, and
+it was defending nothing: stripping every `aria-label` in the tree made it report
+**2** offenders where a real parse finds **7**, and being case-sensitive it never
+scanned a single `<Button size="icon">`. `src/testing/source-scan.ts` now carries
+a small brace- and quote-aware `elements()` reader, the rule covers both tags,
+and a second test asserts the rule *finds* at least seven icon-only buttons — so
+a future truncation fails loudly instead of passing quietly. `diff-reviewer`
+recorded the class as
+`.claude/agent-memory/diff-reviewer/review-checklist-source-guard-regex-truncation.md`:
+mutate a source guard before trusting it.
+
+`source-scan.ts` also replaces the copy of the tree walk and the
+comment-stripping regexes that `focus-ring-guard.test.ts` was carrying; both
+guards now read the tree once instead of four times each.
+
+#### Verification
+
+**Local gate green:** `pnpm test` (2016 web tests, 5 packages), `typecheck`,
+`lint`, `build`, `format:check`, `secrets:scan:all`, and the full Playwright
+suite (15 specs).
+
+**Browser-verified 2026-09-05 at 1440x900**, driven in this session rather than
+delegated. Signed out on the storefront and `/search`; signed in as vendor,
+customer and admin through freshly minted lane storage state. The lightbox's
+whole focus contract was walked by keyboard (in, trap forwards, trap backwards,
+arrows without focus theft, Escape restoring to the opener, `body.overflow`
+restored); the picker was driven Tab -> arrows -> `End` -> `PageDown` ->
+`Enter` with no mouse; `mainCount` is **1** on every route including the three
+that had two; `aria-pressed` on a link is **0** everywhere; the admin header is
+the only `labelled` avatar. No console errors and no horizontal overflow on any
+surface.
+
+**One flagged item was a false positive**, and is recorded so it is not
+re-filed: a crude scan reported the profile editor's publish `Switch` as
+unnamed. Chromium's own name computation says it is "Visible to customers" — a
+`<button>` is a labelable element, so the adjacent `<Label htmlFor>` names it.
+
+#### Deliberately not done
+
+- **The vendor calendar's `"Available, in the past"` wording**, which reads
+  oddly on a past day with no row. It is pre-existing copy, unchanged by this
+  ticket, and `31-content-voice.md` owns the strings.
+- **Folding `checkout-screen.tsx`'s `EVENT_DAY` and `booking-card.tsx`'s
+  `CARD_DATE` into `formatAccessibleDate`** — they are the same formatter
+  options three times over, but both files belong to open tickets (#395, #413)
+  and one had a live lane in it.
+- **The layout consequences of the nested `<main>`s** — the confirmed page's
+  gradient stopping short and its clipped chip focus rings are #413's, by that
+  ticket's own words.
 
 ---
 

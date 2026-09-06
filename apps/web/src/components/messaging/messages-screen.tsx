@@ -117,6 +117,18 @@ export function MessagesScreen({
   const sendingRef = useRef(false);
 
   /*
+   * The newest message this reader has already been shown, so that a later
+   * tail is an arrival.
+   *
+   * Written by the thread load — the only writer that can tell "this is the
+   * thread's history" from "this just came in" — and `null` until a page
+   * lands, which is what stops a thread's own newest message being announced
+   * as though it had just arrived. An empty thread that HAS loaded is `''`,
+   * because conflating it with `null` is exactly the bug.
+   */
+  const seenThrough = useRef<string | null>(null);
+
+  /*
    * Below `md` the two panes become one screen, so exactly one of them shows.
    *
    * `14 Messaging tablet` draws both panes at 768 and there is no frame below
@@ -137,6 +149,46 @@ export function MessagesScreen({
 
   /** A `?conversation=` that names no thread of this reader's. */
   const notFound = activeId !== null && active === null;
+
+  /*
+   * A message that arrives while the reader is on the thread, spoken.
+   *
+   * The bubbles themselves are not a live region and must not become one: this
+   * pane both *appends* new messages and *prepends* whole pages of history
+   * behind `Load earlier messages`, and an `aria-live` container announces
+   * every node added to it — so twenty-message history pages would have been
+   * read out as arrivals. This watches the tail instead.
+   *
+   * Whatever a thread holds when its first page lands is history, not an
+   * arrival — **including nothing**, on a thread with no messages yet. So the
+   * watermark is written by the load itself (`seenThrough`, set beside
+   * `setMessages(first.items)` below) rather than inferred here: inference
+   * cannot tell an empty thread that has loaded from one that has not, and it
+   * swallowed the first message ever sent to an empty thread — the case where
+   * the announcement matters most, because there is no bubble above it to give
+   * the reader a clue.
+   */
+  const [arrival, setArrival] = useState('');
+  const newest = messages[messages.length - 1];
+  const otherPartyName = active?.otherPartyName;
+
+  useEffect(() => {
+    if (
+      seenThrough.current === null ||
+      newest === undefined ||
+      newest.id === seenThrough.current ||
+      newest.senderId === viewerId
+    ) {
+      return;
+    }
+
+    seenThrough.current = newest.id;
+    setArrival(
+      otherPartyName === undefined
+        ? `New message: ${newest.content}`
+        : `New message from ${otherPartyName}: ${newest.content}`,
+    );
+  }, [newest, otherPartyName, viewerId]);
 
   /*
    * `?conversation=` is followed on every change, not only at mount (#402).
@@ -248,6 +300,9 @@ export function MessagesScreen({
     setThreadError(null);
     setHasOlder(false);
     setPage(1);
+    // No page has landed for this thread yet, so nothing in it is an arrival.
+    seenThrough.current = null;
+    setArrival('');
 
     if (threadId === null) {
       return;
@@ -279,6 +334,12 @@ export function MessagesScreen({
         }
 
         setMessages(first.items);
+        /*
+         * Everything on this page is history, not an arrival. `''` rather than
+         * `null` for an empty thread: `null` means "not loaded", and treating
+         * the two alike swallowed the first message sent to an empty thread.
+         */
+        seenThrough.current = first.items[first.items.length - 1]?.id ?? '';
         /*
          * Read off the page itself, not `total`.
          *
@@ -829,6 +890,14 @@ export function MessagesScreen({
               })}
               <div ref={bottom} />
             </div>
+
+            {/*
+              The arrival announcement, outside the scroller so that nothing
+              the thread renders or re-orders lands inside a live region.
+            */}
+            <p aria-live="polite" className="sr-only">
+              {arrival}
+            </p>
 
             <div className="shrink-0 border-t border-stone-300 bg-stone-0 px-5.5 py-3.5">
               {/*

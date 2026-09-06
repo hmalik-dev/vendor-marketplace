@@ -36,6 +36,19 @@ export interface VendorCardProps {
    * static anyway.
    */
   preview?: boolean;
+  /**
+   * The heading level the business name takes.
+   *
+   * `h2` by default, because the card's commonest home is `/search`, where the
+   * page's only `h1` is the result count — an `h3` there skipped a level and a
+   * reader navigating by heading was told so (#411).
+   *
+   * The three surfaces that nest the card *inside* a section pass `h3`: the
+   * landing page's featured strip, the nearby-dates band, and the storefront
+   * editor's preview rail — where an `h2` landed **before** the page's own
+   * `h1` in document order, which is worse than the skip it was fixing.
+   */
+  headingLevel?: 'h2' | 'h3';
   className?: string;
 }
 
@@ -87,6 +100,7 @@ export function VendorCard({
   density = 'featured',
   freeOnDate,
   preview = false,
+  headingLevel: Heading = 'h2',
   className,
 }: VendorCardProps): React.ReactElement {
   const Shell = preview ? PreviewShell : LinkShell;
@@ -231,14 +245,14 @@ export function VendorCard({
             <Avatar name={vendor.businessName} src={vendor.profileImageUrl} size="sm" ring="card" />
           </div>
 
-          <h3
+          <Heading
             className={cn(
               'font-display text-stone-900',
               isCompact ? 'mt-2.75 text-[19px]' : 'mt-3 text-display-sm',
             )}
           >
             {vendor.businessName}
-          </h3>
+          </Heading>
 
           {/*
             Card meta is 12px at both densities: the frames draw it there on the
