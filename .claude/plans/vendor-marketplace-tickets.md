@@ -258,7 +258,7 @@ unbounded `Promise.all` that ends in an email send. |
 client, and three server components call it. West of UTC a vendor's current day
 renders as already past on the availability calendar and the dashboard's 'This
 week'; east of UTC yesterday stays pickable on the booking req |
-| **410** | **Signing in through returnTo lands on a blank page** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 3 verified findings. Three reproductions of one defect: a `returnTo` pointing at a route the
+| **410** | **Signing in through returnTo lands on a blank page** | P1.5 | M4.5 | **P1 High** | **Done** | `worktree-t410` | **None** | `core` `auth` | **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep**, which put every candidate through three adversarial skeptics before recording it. Groups 3 verified findings. Three reproductions of one defect: a `returnTo` pointing at a route the **Closed 2026-09-05 as fb44464 (PR #111).** `/after-sign-in` now computes a role-reachable target through `postSignInPath`, so the single HTTP redirect lands somewhere that renders and there is no RSC bounce to lose. Verified in a real browser at 1440x900 across 8 role/target pairs, signing in through the form: all five pre-fix blank landings now render, and destinations the role can use are kept.
 signed-in role may not see leaves the browser on a blank page with signed-out
 chrome, rather than redirecting to somewhere that role can be. A vendor signing
 in from a booking request form, a vendor sent to `/customer/profile`,  |
@@ -2651,7 +2651,7 @@ precedent.
 
 ### #410: Signing in through returnTo lands on a blank page
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core` `auth`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2679,7 +2679,63 @@ customer sent to `/vendor/dashboard` all hit it.
 
 #### Tests (required)
 
-- [ ] A test per role/target pair asserting the landing route and that the page renders
+- [x] A test per role/target pair asserting the landing route and that the page renders
+
+#### What landed
+
+**All three acceptances, and the reason the bug existed at all.** `/after-sign-in`
+forwarded the carried destination verbatim. When the role that turned up could not
+render it, the bounce waiting there is an RSC `redirect()` raised inside a page or
+layout — and the App Router cannot reconcile a redirect that crosses layout
+segments on the client-side navigation that follows sign-in. So nothing moved: the
+browser sat on the destination with an empty `<main>` under the previous render's
+signed-out header. It is precisely the failure `/dashboard` and `/after-sign-in`
+already exist as route handlers to avoid, pushed one hop downstream.
+
+**The destination is now decided rather than discovered.** `apps/web/src/lib/role-routes.ts`
+holds the role home maps beside a table of which roles each route renders for, and
+`postSignInPath(role, returnTo)` exchanges a destination the role would only be
+bounced out of for that role's own start. The handler's one HTTP redirect then lands
+somewhere that renders, and there is no second redirect to lose. `safeReturnPath`
+moved inside it, so the open-redirect boundary and the target computation are the
+same place — acceptance 3 read literally.
+
+**The table restates a fact that also lives in ~15 `requireRole` call sites**, and a
+comment naming each gate is not what keeps those in step: a gate added under a path
+no rule matches falls through to the default and reproduces this on that route,
+silently. `role-routes.guard.test.ts` reads the gates out of `app/` and checks both
+directions. It walks `.ts` handlers as well as `.tsx`, and — after `diff-reviewer`
+found the hole — checks a `layout.` gate at a child path as well as its own URL,
+because `admin/layout.tsx` protects the whole console while `/admin` is the only
+route the gate is *written* at. Mutation-tested three ways (drop a rule, widen one,
+narrow the admin rule to `/^\/admin$/`); each fails it by name.
+
+**Two limits of the guard, recorded rather than papered over.** It recognises
+`requireRole` and `redirectVendorToDashboard`; the inline `user.role !== 'admin'`
+check in `admin/vendors/export/route.ts` is invisible to it (covered today by the
+`/admin` rule). And `withoutComments` strips from `//` to end of line, so a gate
+written after a URL literal on the same physical line would be missed. Both fail
+toward this bug rather than toward a role reaching something it should not:
+`roleCanReach` is a redirect hint and never a gate, which `security-auditor`
+confirmed by grep across every caller.
+
+**Browser evidence, at 1440x900, signing in through the form** — a restored
+`storageState` never performs the navigation that breaks, so this had to be a real
+in-context sign-in. Before the fix, five of eight role/target pairs landed blank
+(`main` children 0, signed-out chrome, correct `<title>`): vendor to the request
+form, vendor to `/customer/profile`, vendor to `/`, customer to `/vendor/dashboard`,
+admin to `/vendor/dashboard`. The ticket listed three of those; `/` and the admin
+case were found here. After: all eight pass, with the role's own `h1` rendered and
+the signed-in header on the settled navigation, and destinations the role *can* use
+kept intact (`/vendor/packages`, `/bookings?tab=upcoming`).
+
+**Reviews.** `security-auditor` PASS — re-fuzzed the boundary through the new
+function (1,170,906 cases: 0 origin escapes, 0 loop landings) and confirmed the
+table is never load-bearing for authorization. `diff-reviewer` raised three: the
+layout-subtree hole (fixed), the doc overclaiming what the guard sees (narrowed),
+and that no *unit* test covers acceptance 2. The third is correct about unit tests
+and is carried by the browser pass above; asserting Clerk's own control components
+at first paint is what `.claude/rules/e2e-auth.md` forbids.
 
 ---
 

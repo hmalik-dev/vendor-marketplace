@@ -24,3 +24,4 @@
 - [Viewer anchor vs the read behind it](review-checklist-viewer-anchor-vs-the-read-behind-it.md) — re-anchoring a surface on the viewer's clock without widening the server read behind it; an absent row in a sparse table is a claim, not a gap
 - [LIMIT added under a post-fetch filter](review-checklist-limit-added-under-a-post-fetch-filter.md) — paging a read whose service filters afterwards returns `[]` on page 1; probe with pageSize=2, not the default
 - [Source-guard regex truncation](review-checklist-source-guard-regex-truncation.md) — `<button\b([^>]*)>` is cut at an arrow fn's `=>`, and never matches `<Button`; mutation-test every guard
+- [Layout gate checked at its own route](review-checklist-layout-gate-checked-at-its-own-route.md) — a rule narrowed to `/^\/admin$/` passes both directions of the guard while every child falls through; mutate rules by narrowing, not only dropping
