@@ -58,12 +58,29 @@ function routeOf(name: string): string {
 interface Gate {
   /** Repo-relative file the gate is written in, so a failure names it. */
   readonly file: string;
-  /** The URL that file gates. */
-  readonly route: string;
+  /** The URLs that file gates — more than one when it gates a whole subtree. */
+  readonly routes: readonly string[];
   /** The role the gate admits, or `null` for `/`'s vendor bounce. */
   readonly admits: UserRole | null;
   /** The role the gate turns away, when it names one rather than admitting one. */
   readonly denies: UserRole | null;
+}
+
+/**
+ * The URLs a gate covers.
+ *
+ * A gate in a `layout.tsx` runs for **everything beneath it**, not only for the
+ * layout's own URL — `/admin` is the only admin route with a gate written in it,
+ * and `/admin/reviews` is protected by inheriting that layout. Checking the
+ * layout's own URL alone therefore passes a rule far too narrow for what it
+ * guards: `/^\/admin$/` satisfies every assertion here while leaving
+ * `roleCanReach('customer', '/admin/reviews')` true, which is #410 again on
+ * every page of the console. A child path is checked alongside the layout's own.
+ */
+function routesCoveredBy(name: string, route: string): readonly string[] {
+  return path.basename(name).startsWith('layout.')
+    ? [route, `${route === '/' ? '' : route}/${SAMPLE_SEGMENT}`]
+    : [route];
 }
 
 let gates: Gate[] = [];
@@ -78,16 +95,16 @@ beforeAll(async () => {
   const files = await sourceFiles(APP, TS_AND_TSX);
 
   gates = files.flatMap((file) => {
-    const route = routeOf(file.name);
+    const routes = routesCoveredBy(file.name, routeOf(file.name));
     const found: Gate[] = [...file.code.matchAll(REQUIRE_ROLE)].map((match) => ({
       file: file.name,
-      route,
+      routes,
       admits: match[1] as UserRole,
       denies: null,
     }));
 
     if (VENDOR_BOUNCE.test(file.code)) {
-      found.push({ file: file.name, route, admits: null, denies: 'vendor' });
+      found.push({ file: file.name, routes, admits: null, denies: 'vendor' });
     }
 
     return found;
@@ -114,14 +131,16 @@ describe('the role-route table against the gates in app/', () => {
    */
   it('agrees with every gate about who renders that route', () => {
     const disagreements = gates.flatMap((gate) =>
-      ROLES.filter((role) => {
-        const expected = gate.admits !== null ? role === gate.admits : role !== gate.denies;
+      gate.routes.flatMap((route) =>
+        ROLES.filter((role) => {
+          const expected = gate.admits !== null ? role === gate.admits : role !== gate.denies;
 
-        return roleCanReach(role, gate.route) !== expected;
-      }).map(
-        (role) =>
-          `${gate.file} gates ${gate.route} to ${gate.admits ?? `everyone but ${gate.denies}`}, ` +
-          `but roleCanReach('${role}', '${gate.route}') is ${roleCanReach(role, gate.route)}`,
+          return roleCanReach(role, route) !== expected;
+        }).map(
+          (role) =>
+            `${gate.file} gates ${route} to ${gate.admits ?? `everyone but ${gate.denies}`}, ` +
+            `but roleCanReach('${role}', '${route}') is ${roleCanReach(role, route)}`,
+        ),
       ),
     );
 
@@ -135,7 +154,7 @@ describe('the role-route table against the gates in app/', () => {
    */
   it('carries no rule that no gate backs', () => {
     const unbacked = ROLE_ROUTE_RULES.filter(
-      (rule) => !gates.some((gate) => rule.pattern.test(gate.route)),
+      (rule) => !gates.some((gate) => gate.routes.some((route) => rule.pattern.test(route))),
     ).map((rule) => String(rule.pattern));
 
     expect(unbacked).toEqual([]);

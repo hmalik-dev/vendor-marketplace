@@ -59,6 +59,13 @@ export const POST_SIGN_IN_PATH_BY_ROLE: Record<UserRole, string> = {
  * `role-routes.guard.test.ts` reads the gates out of `app/` and checks both
  * directions against this table, so the drift fails a test rather than a
  * visitor. Exported for it, and for nothing else.
+ *
+ * The guard recognises the two shapes a gate is written in here —
+ * `requireRole(...)` and `redirectVendorToDashboard()`. A gate written inline
+ * instead, as `admin/vendors/export/route.ts` does with its own
+ * `user.role !== 'admin'` check, is invisible to it; that one is covered by the
+ * `/admin` rule, but the next inline gate on an unruled path would not be. Use
+ * `requireRole` for a new one, or add the rule here by hand.
  */
 export const ROLE_ROUTE_RULES: ReadonlyArray<{
   readonly pattern: RegExp;
