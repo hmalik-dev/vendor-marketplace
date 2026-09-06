@@ -231,6 +231,52 @@ export function ComboboxDropdown({
    * Japanese or Korean word. The value is still shown; only the filtering waits.
    */
   const composing = useRef(false);
+  /*
+   * The focus restore below is **not** the customer focusing the field.
+   *
+   * #417 BUG1: a row is a `<button>`, so committing with a real pointer moves
+   * focus into the panel; `commit`'s restore then fires a genuine `focus` event
+   * on a field whose `openOnFocus` reopens the list it has just closed. The
+   * panel stayed open with `aria-expanded="true"` and every row still drawn.
+   *
+   * A programmatic `.click()` never moved focus in the first place, so the
+   * restore was a no-op and nothing reopened — which is exactly why the suite
+   * was green while the control was visibly broken. The regression test drives
+   * a real pointer sequence for that reason.
+   */
+  const restoringFocus = useRef(false);
+
+  /**
+   * Hand focus back to the field without that reading as the customer focusing
+   * it.
+   *
+   * Both restore sites go through here: `commit`, and `close`'s deferred branch
+   * when focus is inside a panel that is about to unmount. `close` is the one
+   * that made this a function rather than two lines inline — its restore is
+   * latent today, because the only `openOnFocus` field has no empty action to
+   * put focus in the panel, and the next one that does would re-create BUG1
+   * exactly. The invariant is stated once instead of at whichever call site the
+   * bug happened to be reported from.
+   *
+   * Armed and disarmed around the call, not before and after the tick:
+   * `focus()` dispatches its event before it returns, so `onFocus` has already
+   * run — and where focus never moved, no event fired and the flag must not be
+   * left armed for the customer's next real click.
+   */
+  const restoreFocus = useCallback(() => {
+    restoringFocus.current = true;
+    inputRef.current?.focus();
+    restoringFocus.current = false;
+  }, []);
+
+  /*
+   * One cursor across the segment (#417 item 1c), resolved once so "one cursor"
+   * is literally true in the source rather than two ternaries that happen to
+   * agree. `text` on the anchored mount, where the segment *is* a field you can
+   * type into; `pointer` on the sheet mount, where the trigger is a button that
+   * opens a panel.
+   */
+  const cursorClass = anchored ? 'cursor-text' : 'cursor-pointer';
 
   const typed = query ?? '';
   const matched = openOnFocus || typed !== '' ? filter(options, typed) : [];
@@ -272,9 +318,9 @@ export function ComboboxDropdown({
        * it back. Focus landed on `<body>`, and the customer's next `Tab`
        * restarted at the top of the document.
        */
-      inputRef.current?.focus();
+      restoreFocus();
     },
-    [onCommit, revert],
+    [onCommit, restoreFocus, revert],
   );
 
   const close = useCallback(() => {
@@ -301,9 +347,9 @@ export function ComboboxDropdown({
      */
     const focused = document.activeElement;
     if (focused?.closest('[data-slot="dropdown"], [data-slot="dropdown-sheet"]')) {
-      setTimeout(() => inputRef.current?.focus(), 0);
+      setTimeout(restoreFocus, 0);
     }
-  }, [revert]);
+  }, [restoreFocus, revert]);
 
   /*
    * Derived rather than clamped in an effect. An effect would leave one render
@@ -471,7 +517,7 @@ export function ComboboxDropdown({
         setOpen(openOnFocus ? true : next.trim() !== '');
       }}
       onFocus={() => {
-        if (openOnFocus) {
+        if (openOnFocus && !restoringFocus.current) {
           setOpen(true);
         }
       }}
@@ -574,7 +620,44 @@ export function ComboboxDropdown({
           at all. Unconditional because both consumers of this component are
           search-bar segments.
         */
-        <div data-slot="combobox-field" data-focus-fill className={className}>
+        <div
+          data-slot="combobox-field"
+          data-focus-fill
+          /*
+            #417 item 1c. One cursor across the whole segment.
+
+            The `<input>` is a genuine typeable combobox and carries `text`,
+            while the box around it carried `auto` — so hovering the micro-label
+            or the segment's padding showed an arrow and hovering the value
+            showed a caret, on one control. `text` rather than `pointer`,
+            because `pointer` promises a button and this is a field: clicking
+            anywhere in it puts a caret in something you can type into, which
+            `onMouseDown` below is what makes true of the padding as well.
+
+            The sheet mount is a different control — the trigger there is a
+            button that opens a panel — so it takes the cursor that promises.
+          */
+          className={cn(cursorClass, className)}
+          /*
+            The segment's own padding is part of the field, so clicking it
+            focuses the input rather than doing nothing. Only a click that
+            landed on this box itself: the label already focuses through
+            `htmlFor`, and the input handles its own. `preventDefault` keeps the
+            browser from moving focus somewhere else after this.
+          */
+          onMouseDown={
+            anchored
+              ? (event) => {
+                  if (event.target !== event.currentTarget) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  inputRef.current?.focus();
+                }
+              : undefined
+          }
+        >
           {/*
             A real `<label htmlFor>`, not a caption span — `04-laws.md:141`:
             "Every input has a visible `<label htmlFor>`; placeholder is not a
@@ -588,7 +671,15 @@ export function ComboboxDropdown({
             a dangling association is worse than none, because it reads as
             correct to anything checking that inputs have labels.
           */}
-          <label {...(anchored ? { htmlFor: id } : {})} className={labelClassName}>
+          {/*
+            `cursor-text` **explicitly**, not by inheritance from the segment
+            above (#417 item 1c). Preflight gives `<label>` its own
+            `cursor: default`, which is a real declaration and beats an
+            inherited value — so the segment read `text`, the input read `text`,
+            and the micro-label between them still drew an arrow. Measured in
+            Chromium at 1440; the class list alone said the opposite.
+          */}
+          <label {...(anchored ? { htmlFor: id } : {})} className={cn(cursorClass, labelClassName)}>
             {label}
           </label>
           {/*

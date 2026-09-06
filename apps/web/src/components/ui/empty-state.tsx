@@ -18,6 +18,36 @@ export function EmptyStateGlyph(): React.ReactElement {
   );
 }
 
+/**
+ * Frame `18`'s twin-ring mark — the *search* empty state's glyph, and only it.
+ *
+ * Two outlined circles rather than `EmptyStateGlyph`'s filled-plus-dashed pair:
+ * `18` draws `1.5px solid #D5CEC2` and `1.5px dashed #D5CEC2` at `stone-400`,
+ * offset by 24px in a 62x38 box, where `19`/`20` draw a `stone-150` fill beside
+ * a solid ring in 58x36. Different marks for different states, so this is its
+ * own component rather than a variant prop nobody would find.
+ *
+ * The ladder is the frames' own: `27 Search — no results · 1024` draws the same
+ * mark at 54x33 with a 21px offset and 14px of clearance, `18` at 62x38 with 24
+ * and 20. The margin is carried here because it is part of the mark's measured
+ * geometry, and it lands on top of `EmptyState`'s uniform 12px stack gap —
+ * 12 + 2 = 14 at 1024, 12 + 8 = 20 at 1440.
+ *
+ * Replaced a 32x32 `lucide-search-x` (#417 item 2), which was an icon saying
+ * "search failed" where the frame draws the product's own empty mark.
+ */
+export function SearchEmptyGlyph(): React.ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      className="relative mb-0.5 block h-[33px] w-[54px] min-[90rem]:mb-2 min-[90rem]:h-9.5 min-[90rem]:w-[62px]"
+    >
+      <span className="absolute top-0 left-0 size-[33px] rounded-full border-[1.5px] border-stone-400 min-[90rem]:size-9.5" />
+      <span className="absolute top-0 left-[21px] size-[33px] rounded-full border-[1.5px] border-dashed border-stone-400 min-[90rem]:left-6 min-[90rem]:size-9.5" />
+    </span>
+  );
+}
+
 export interface EmptyStateProps {
   /**
    * The muted geometric glyph above the headline.

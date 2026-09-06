@@ -464,6 +464,15 @@ export function VendorProfileForm({
       avgRating: profile?.avgRating ?? 0,
       reviewCount: profile?.reviewCount ?? 0,
       startingPriceCents: null,
+      /*
+       * Same reasoning as `startingPriceCents`: the badge is a *server* answer
+       * about when this profile was created (`vendor-recency.ts`), and this
+       * screen loads no such timestamp. Drawing the pill here would put a claim
+       * on the preview that no query produced, so the preview omits it — the
+       * one thing the rail cannot mirror, and the honest way to be wrong about
+       * it is not to draw it.
+       */
+      isNew: false,
       categories: categories
         .filter((category) => form.categoryIds.includes(category.id))
         .map((category) => ({ id: category.id, name: category.name, slug: category.slug })),

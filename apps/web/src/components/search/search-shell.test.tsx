@@ -322,6 +322,75 @@ describe('SearchShell no results — frame 18', () => {
     expect(screen.getByRole('button', { name: 'Any rating' })).toBeDefined();
   });
 
+  /*
+   * #417 item 2. The app drew a 32x32 `lucide-search-x` where frame `18` draws
+   * the product's own twin-ring mark: two 38x38 circles offset 24px, one
+   * `1.5px solid #D5CEC2` and one `1.5px dashed`. An imported icon saying
+   * "search failed" on a state where nothing failed.
+   */
+  it('draws frame 18’s twin-ring mark, not a search-x icon', async () => {
+    state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
+
+    const { container } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await screen.findByRole('heading', { name: 'No photographers match both filters' });
+    const empty = container.querySelector('[data-slot="empty-state"]');
+
+    expect(empty?.querySelector('svg')).toBeNull();
+
+    const rings = [...(empty?.querySelectorAll('span.rounded-full') ?? [])].map(
+      (ring) => ring.className,
+    );
+
+    expect(rings).toHaveLength(2);
+    expect(rings.every((ring) => ring.includes('border-stone-400'))).toBe(true);
+    // One solid, one dashed — the pair is the mark.
+    expect(rings.filter((ring) => ring.includes('border-dashed'))).toHaveLength(1);
+  });
+
+  /*
+   * #417 item 2b, on the account holder's instruction. The block began under
+   * the Refine bar and left the pane empty below it, so the screen read as a
+   * page that failed to fill.
+   *
+   * The declared mechanism, because jsdom performs no layout and a geometric
+   * assertion here would pass on nothing. Three parts, and the second and third
+   * are each a defect this shipped with before it was measured:
+   *
+   * 1. an **auto margin** rather than `justify-center`, which would push the
+   *    mark out of reach on a pane too short for the block;
+   * 2. `min-h-full` against `app-pane`'s `height: 100%` — which only resolves
+   *    at `lg` and up, because `app-shell` supplies that height and is itself
+   *    `lg:`-prefixed. Hence the shell's `max-lg:min-h-*` floor and this box's
+   *    `max-lg:flex-1`;
+   * 3. the pane is a **flex column**, because below `lg` its height comes from
+   *    `flex-1` and Chrome will not resolve a child's percentage against a
+   *    flex-derived height.
+   *
+   * Measured in the browser at all five widths in `30-responsive.md`, on the
+   * shortest empty state there is (a name search with no relaxations and no
+   * band): equal space above and below at every one of them.
+   */
+  it('centres the no-results block in the results pane', async () => {
+    state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
+
+    const { container } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await screen.findByRole('heading', { name: 'No photographers match both filters' });
+    const box = container.querySelector('[data-slot="search-no-results"]');
+
+    const pane = box?.parentElement;
+
+    expect(pane?.className).toContain('app-pane');
+    // The pane can only hand its height down as a flex line.
+    expect(pane?.className).toContain('flex-col');
+    expect(pane?.className).toContain('max-lg:flex-1');
+    expect(box?.className).toContain('min-h-full');
+    expect(box?.className).toContain('max-lg:flex-1');
+    expect(box?.firstElementChild?.className).toContain('m-auto');
+    expect(box?.className).not.toContain('justify-center');
+  });
+
   it('diagnoses nothing, and offers nothing to loosen, on an unfiltered search', async () => {
     state = baseState({ category: 'photography' });
 
