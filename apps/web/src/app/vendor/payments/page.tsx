@@ -77,7 +77,7 @@ export default async function VendorPaymentsPage({
               </Banner>
             ) : (
               <Banner status="pending" title="Payouts not connected">
-                You can&rsquo;t take payment until payouts are connected. It takes about five
+                You can&apos;t take payment until payouts are connected. It takes about five
                 minutes.
               </Banner>
             )}

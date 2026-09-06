@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -279,7 +282,7 @@ describe('the rail', () => {
   it('keeps the reassurance directly above the primary action', () => {
     renderScreen();
 
-    const reassurance = screen.getByText(/You’re requesting, not paying\./);
+    const reassurance = screen.getByText(/You're requesting, not paying\./);
     const primary = screen.getByRole('button', { name: 'Continue to review' });
 
     expect(reassurance.closest('div')?.nextElementSibling?.contains(primary)).toBe(true);
@@ -555,5 +558,41 @@ describe('the request survives leaving the page', () => {
       expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(''),
     );
     expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+  });
+});
+
+/**
+ * Frame `04` draws `Start time` and `Guest count` as the same `.inp` box, side
+ * by side. The app rendered them **42.17px and 38px** — a visible step in a
+ * two-column row.
+ *
+ * `Input` declares `h-[38px]` on both and both are `border-box`, so this was
+ * never the class: Chrome gives `input[type=time]` an intrinsic minimum from
+ * its shadow content and the declared height loses to it.
+ *
+ * **A class-level assertion on the stylesheet, and it says so** — jsdom
+ * performs no layout, so a `getBoundingClientRect` here would read 0 against
+ * both versions and pass on nothing. The rendered result was measured in a real
+ * browser at 1440x900 instead: 42.17 before, **38.00 after, equal to the
+ * `number` field beside it**, read twice.
+ *
+ * Both rules are pinned because neither does anything alone — that was measured
+ * too. `appearance: none` on its own leaves 42.17, and so does a `line-height`
+ * on the edit region; the picker indicator is what carries the extra height.
+ */
+describe('frame 04 — the two fields the frame draws at one height', () => {
+  const css = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../app/globals.css'),
+    'utf8',
+  );
+
+  it('strips the UA appearance from the time field', () => {
+    expect(css).toMatch(/input\[type='time'\]\s*\{[^}]*appearance:\s*none/);
+  });
+
+  it('and removes the picker indicator, which is where the 4px lived', () => {
+    expect(css).toMatch(
+      /input\[type='time'\]::-webkit-calendar-picker-indicator\s*\{[^}]*display:\s*none/,
+    );
   });
 });

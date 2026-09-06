@@ -98,7 +98,7 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
           : `You have ${upcoming.length} ${upcoming.length === 1 ? 'booking' : 'bookings'} coming up`}
       </h1>
       <p className="mb-4 text-sm text-stone-700">
-        Every request you&rsquo;ve accepted, and how to reach the customer.
+        Every request you&apos;ve accepted, and how to reach the customer.
       </p>
 
       {upcoming.length === 0 ? (

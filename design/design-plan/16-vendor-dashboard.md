@@ -251,3 +251,42 @@ active package a previous published run had written, so it rendered
 `Publish checklist · 4 of 6`'s cheerful cousin — `6 of 6`, no banner, and none of
 the composition these frames are of. It now clears both, and the published seed
 restores both.
+
+## Frame `08`'s sidebar and its `See all N →` — ruled 2026-09-06 (#372)
+
+The Sidebar section above names eight rows and frame `08` draws the same eight.
+The app ships seven, and three of the differences are settled here rather than
+left for a fifth parity pass to re-find.
+
+**Two of the frame's rows are built.** `Messages` joins the rail — `/messages`
+exists and is linked from the site header, so #31's _a control that opens
+nothing is furniture_ rule no longer excludes it — and `Business profile` takes
+the frame's own string, **`Edit profile`**. The order follows the frame:
+Dashboard · Bookings · Messages · Availability · Packages · Edit profile ·
+Payments.
+
+**`Requests` is not built, and that is the correction.** There is no
+`/vendor/requests` route and there must not be one: this screen _is_ the
+requests surface. The acceptance lines above already say so — _"the requests
+list scrolls internally"_ and _"Every request row is actionable without
+navigation"_ — so a `Requests` row could only point back at `Dashboard`, one
+line below it.
+
+**`See all N →` is the same finding one element down, and it is not built
+either.** Frame `08` truncates its list to three rows in a fixed pane and puts
+`See all 4 →` beside `Requests waiting on you` to reach the fourth. The app's
+pane scrolls, so all four are already there, and the two candidate destinations
+are this page and `/vendor/bookings`, which lists **accepted** bookings — a link
+labelled `See all 4` landing on a page holding none of the four is worse than no
+link. The count itself is not lost: the h1 states it in the largest type on the
+screen — _"Maya, you have 4 new requests"_ — which is what _Title states the
+number_ asks for, and stating it twice on one screen is not parity.
+
+**`Portfolio` stays**, though neither the frame nor the Sidebar section draws
+it. It is a real route, and a rail that omits a live surface strands it. It sits
+beside `Edit profile`, because it is part of the storefront the vendor is
+describing.
+
+Same class as the median reply time recorded above: the frame is older than the
+product, and the rows it draws are corrected by a design pass rather than by
+building furniture to match them.

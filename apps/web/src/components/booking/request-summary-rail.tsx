@@ -175,7 +175,7 @@ export function RequestSummaryRail({
             without a clock, and a clock in this component would render one
             number on the server and another in the browser.
           */}
-          You&rsquo;re requesting, not paying. {vendor.businessName} can{' '}
+          You&apos;re requesting, not paying. {vendor.businessName} can{' '}
           {servicePackage ? 'confirm the date or decline' : 'confirm or send a quote'} — you approve
           before any card is charged.
         </p>

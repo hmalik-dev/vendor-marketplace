@@ -173,3 +173,20 @@ An auth-aware pair of strings was rejected: `global-error.tsx` renders **outside
 the Clerk provider** and cannot know who is reading, so it would need a
 signed-out default anyway, and two strings on one screen would drift. One
 destination that is true for everyone is the smaller and more honest answer.
+
+## The 500 page's banner
+
+Ruled 2026-09-06 (#372), and it is the mirror of the CTA ruling above: there the
+frame was right and the code was wrong, here the code is right and the frame is
+the outlier.
+
+Frame `16` draws the money-position strip borderless at radius 10 with its
+sentence at weight 500. Frame `26 State library` — which exists to _be_ the
+component vocabulary — draws the `Sage · settled` banner with a `sage-300`
+border at radius 12 and the sentence at weight 400, and every other banner in
+the product is that shape. **The shared `Banner` keeps its border; frame `16` is
+corrected.** The full spec and the reasoning are in `03-components.md`'s
+_Inline banners_.
+
+One thing did move toward the frames: the component computed a **14px** radius,
+which is neither frame's number. It is now 12, which is frame `26`'s.

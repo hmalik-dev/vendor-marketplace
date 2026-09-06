@@ -370,7 +370,7 @@ describe('CitySelect', () => {
     await user.type(field(), 'portl');
 
     expect(
-      await screen.findByText('We can’t reach city search right now. Try again in a moment.'),
+      await screen.findByText("We can't reach city search right now. Try again in a moment."),
     ).toBeDefined();
     expect(screen.queryByText(/No US city matches/)).toBeNull();
     // Never a blank box and never a thrown error — and the query is untouched,

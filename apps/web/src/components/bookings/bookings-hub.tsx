@@ -7,6 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { EmptyStateGlyph } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
+import { TodayLabel } from './today-label';
 import {
   applyRefinements,
   categoryNamesOf,
@@ -235,8 +236,23 @@ export function BookingsHub({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-5.5">
-      <h1 className="mb-0.5 display-heading text-[26px] text-stone-900">Your bookings</h1>
-      <p className="mb-4 text-md leading-prose text-stone-700">
+      {/*
+        Frame `07` draws the title and today's date as one baseline-aligned row,
+        not a full-width heading with nothing beside it. `items-baseline` because
+        a 26px serif and a 12.5px label share a baseline in the frame and would
+        share nothing else.
+      */}
+      <div className="mb-0.5 flex items-baseline justify-between gap-4">
+        <h1 className="display-heading text-[26px] text-stone-900">Your bookings</h1>
+        <TodayLabel serverToday={today} />
+      </div>
+      {/*
+        14px at `normal` — `text-cta` — which is what frame `07` draws. It read
+        `text-md`'s 15px on `leading-prose`'s 24px, a line box 6px taller than
+        the frame's, and that pushed the tab rule and the first month header down
+        with it.
+      */}
+      <p className="mb-4 text-cta text-stone-700">
         {summary ? (
           <>
             {summary.count} upcoming {summary.count === 1 ? 'booking' : 'bookings'}. Next up is{' '}
@@ -389,7 +405,7 @@ export function EmptyBookings(): React.ReactElement {
       <h2 className="mb-2.25 font-display text-[26px] text-stone-900">No bookings yet</h2>
       <p className="mb-5 max-w-100 text-center text-base leading-[1.65] text-stone-700">
         Every request you send will land here, grouped by month, with its status and the
-        vendor&rsquo;s replies.
+        vendor&apos;s replies.
       </p>
       <Button asChild variant="primary">
         <Link href="/search">Find a vendor</Link>

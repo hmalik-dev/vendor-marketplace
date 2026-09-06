@@ -30,8 +30,13 @@ export function NotFoundScreen(): React.ReactElement {
         404 · Not found
       </p>
 
-      <h1 className="mt-3 font-display text-display-lg tracking-[-.015em] text-stone-900">
-        This page isn&rsquo;t here
+      {/*
+        38px — frames `15` and `16` both draw the full-page error headline at
+        that size, which is what `text-display-error` records. This read
+        `display-lg`'s 34.
+      */}
+      <h1 className="mt-3 font-display text-display-error tracking-[-.015em] text-stone-900">
+        This page isn&apos;t here
       </h1>
 
       {/*

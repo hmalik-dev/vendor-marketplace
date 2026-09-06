@@ -47,7 +47,7 @@ describe('SupportScreen', () => {
     render(<SupportScreen accountEmail={null} errorContext={null} />);
 
     expect(screen.getByLabelText('Your email')).toBeDefined();
-    expect(screen.getByText('The only address we’ll use, and only to answer this.')).toBeDefined();
+    expect(screen.getByText("The only address we'll use, and only to answer this.")).toBeDefined();
     expect(screen.queryByText(/the email on your account/)).toBeNull();
   });
 
@@ -202,10 +202,10 @@ describe('SupportScreen', () => {
     expect(screen.queryByText(ERROR_CONTEXT.digest)).toBeNull();
 
     expect(
-      screen.getByText('Quote this if you follow up. It’s in the confirmation email too.'),
+      screen.getByText("Quote this if you follow up. It's in the confirmation email too."),
     ).toBeDefined();
     expect(
-      screen.getByText('There’s nothing to check back on here — the answer comes to your inbox.'),
+      screen.getByText("There's nothing to check back on here — the answer comes to your inbox."),
     ).toBeDefined();
     expect(screen.getByRole('link', { name: 'Back to browsing' })).toBeDefined();
   });
@@ -244,7 +244,7 @@ describe('SupportScreen', () => {
      * A Copy that looks like it worked and did not is worse than no Copy at
      * all — the visitor walks away believing they have the reference.
      */
-    expect(await screen.findByText(/Your browser wouldn’t let us copy it/)).toBeDefined();
+    expect(await screen.findByText(/Your browser wouldn't let us copy it/)).toBeDefined();
 
     Reflect.deleteProperty(navigator, 'clipboard');
   });
@@ -271,7 +271,7 @@ describe('SupportScreen', () => {
 
     expect(writeText).toHaveBeenCalledWith('ORL-4K7Q-P2');
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeDefined();
-    expect(screen.queryByText(/Your browser wouldn’t let us copy it/)).toBeNull();
+    expect(screen.queryByText(/Your browser wouldn't let us copy it/)).toBeNull();
 
     Reflect.deleteProperty(navigator, 'clipboard');
   });
@@ -290,10 +290,10 @@ describe('SupportScreen', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(
-      'Your message didn’t go through — our mail service rejected it',
+      "Your message didn't go through — our mail service rejected it",
     );
     // Transport, not their input — so nobody rewords a message that was fine.
-    expect(alert.textContent).toContain('it isn’t something you can fix by editing it');
+    expect(alert.textContent).toContain("it isn't something you can fix by editing it");
 
     /*
      * The reference is issued **before** the send resolves, which is what lets
@@ -322,8 +322,8 @@ describe('SupportScreen', () => {
     await sendAsVisitor();
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Your message didn’t go through');
-    expect(alert.textContent).not.toContain('We’ve logged the failure as');
+    expect(alert.textContent).toContain("Your message didn't go through");
+    expect(alert.textContent).not.toContain("We've logged the failure as");
     expect(screen.getByRole('button', { name: 'Try again' })).toBeDefined();
   });
 
@@ -433,7 +433,7 @@ describe('SupportScreen', () => {
   it('promises no thread, no status and no attachment', () => {
     render(<SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} />);
 
-    expect(screen.getByText(/doesn’t open a chat thread here/)).toBeDefined();
+    expect(screen.getByText(/doesn't open a chat thread here/)).toBeDefined();
     expect(screen.getByText('One email, no ticket to track.')).toBeDefined();
     // Not a helpdesk: there is nothing here to attach a file with.
     expect(document.querySelectorAll('input[type="file"]')).toHaveLength(0);

@@ -458,7 +458,7 @@ export function droppedTagGroupsLine(
   const named =
     labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
 
-  return `${named} filters don’t apply to ${vendorNounFor(category, 2)}, so they were cleared — the rest of your search still applies.`;
+  return `${named} filters don't apply to ${vendorNounFor(category, 2)}, so they were cleared — the rest of your search still applies.`;
 }
 
 /** The three values the search bar owns. Never rendered as Refine chips. */

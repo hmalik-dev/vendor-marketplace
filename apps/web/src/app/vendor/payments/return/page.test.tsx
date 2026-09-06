@@ -42,7 +42,7 @@ describe('VendorPaymentsReturnPage', () => {
   it('confirms success when the webhook has already landed', async () => {
     await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: true });
 
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('You’re set up');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("You're set up");
 
     const banner = screen.getByRole('status');
     expect(banner.textContent).toContain('Nothing else to do here.');
@@ -56,7 +56,7 @@ describe('VendorPaymentsReturnPage', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Stripe is still checking');
 
     const banner = screen.getByRole('status');
-    expect(banner.textContent).toContain('You don’t need to do anything.');
+    expect(banner.textContent).toContain("You don't need to do anything.");
     /*
      * Steel, never red and never gold: nothing failed, and nothing is waiting on
      * the vendor — it is waiting on Stripe. `40-states.md` does not bend here.
@@ -70,7 +70,7 @@ describe('VendorPaymentsReturnPage', () => {
     await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: false });
 
     const copy = document.body.textContent ?? '';
-    expect(copy).not.toContain('You’re set up');
+    expect(copy).not.toContain("You're set up");
     expect(copy).not.toContain('Payouts connected');
   });
 

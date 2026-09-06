@@ -652,12 +652,32 @@ describe('helper lines the frame does not draw (#152)', () => {
  * pass on set equality.
  */
 describe('the section rail matches frame 09’s nav (#360)', () => {
-  /** The rail block, ending where the legend under it begins. */
+  /**
+   * The rail block, ending where the legend under it begins.
+   *
+   * **The needle keeps the curly apostrophe, and that is not an oversight.**
+   * This searches the *frame*, and frame `09` line 641 writes
+   * `Gold dots mark what’s unfinished` — the one curly instance in the whole
+   * design contract, which `31-content-voice.md` names by hand and leaves for a
+   * design pass to correct. #372's sweep straightened every apostrophe in the
+   * app, and briefly straightened this one too: the app string is right to be
+   * straight and this needle is not the app string.
+   *
+   * It failed silently, which is the part worth guarding. `indexOf` returned
+   * -1, the slice stopped truncating, and every assertion below still passed
+   * because nothing in the rest of the frame happens to match `class="nav"`
+   * today. So the needle is asserted rather than defaulted: a slice that cannot
+   * fail is not a slice.
+   */
+  const RAIL_LEGEND = 'Gold dots mark what’s unfinished';
+
   function railBlock(): string {
     const side = editorFrame.slice(editorFrame.indexOf('<div class="side"'));
-    const legend = side.indexOf('Gold dots mark what’s unfinished');
+    const legend = side.indexOf(RAIL_LEGEND);
 
-    return side.slice(0, legend === -1 ? undefined : legend);
+    expect(legend, RAIL_LEGEND).toBeGreaterThan(-1);
+
+    return side.slice(0, legend);
   }
 
   /** The rail's items, in the order the frame draws them. */

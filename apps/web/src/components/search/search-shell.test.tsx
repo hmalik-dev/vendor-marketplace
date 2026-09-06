@@ -72,6 +72,18 @@ function emptyResult(): unknown {
   return { items: [], total: 0, page: 1, pageSize: 20, facets: { categories: [] } };
 }
 
+/**
+ * A search that found something — the only state whose heading comes from the
+ * count row rather than from an empty state.
+ *
+ * `items` is left empty on purpose: the cards are `VendorCard`'s to render and
+ * nothing here asserts them, while `total` is what decides whether the count
+ * row is drawn at all.
+ */
+function oneResult(): unknown {
+  return { items: [], total: 17, page: 1, pageSize: 20, facets: { categories: [] } };
+}
+
 describe('SearchShell loading state — frame 17', () => {
   beforeEach(() => {
     apiRequest.mockReset();
@@ -120,8 +132,24 @@ describe('SearchShell loading state — frame 17', () => {
     render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await waitFor(() => expect(announcer()?.textContent).toBe('0 vendors'));
-    // The visible count row is gone — the announcement is all there is.
-    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+
+    /*
+     * The visible count row is gone — frame `18` opens straight into the empty
+     * state — so the empty state's own headline takes the document's `<h1>`.
+     *
+     * It used to take nothing, and this test asserted that: `getByRole('heading',
+     * { level: 1 })` returned **zero** nodes at zero results and one on both the
+     * populated and the loading states, so the page lost its only level-1
+     * heading at exactly the moment the reader most needs to be told where they
+     * are. Filed by the pre-launch QA passthrough and fixed in #372.
+     *
+     * Exactly one, at every state — that is the part worth pinning, because two
+     * would be the same defect from the other side once the count row returns.
+     */
+    const headings = screen.getAllByRole('heading', { level: 1 });
+
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.textContent).toBe('No vendors listed yet');
   });
 
   it('names the query in the searching line when the customer gave one', async () => {
@@ -499,6 +527,43 @@ describe('SearchShell against a hostile URL', () => {
     expect(screen.queryByText(/^No vendors/)).toBeNull();
     expect(screen.queryByText(/match that filter/)).toBeNull();
     expect(screen.queryByText(/match all/)).toBeNull();
+  });
+
+  /*
+   * **Exactly one `<h1>`, at every state of this route** — the acceptance line
+   * the pre-launch QA passthrough added, asserted across all four rather than
+   * on the one branch it was filed against.
+   *
+   * `countRowVisible` is `isLoading || total > 0`, so the count row that
+   * carries the heading is absent on *both* the empty and the failed branches.
+   * The empty one was fixed first and the failure one was missed — a reviewer
+   * found it, and this is the shape of guard that would have caught it: a table
+   * over the states, not a case.
+   */
+  it.each([
+    ['loading', () => apiRequest.mockImplementation(neverResolves), 'Searching…'],
+    ['populated', () => apiRequest.mockResolvedValue(oneResult()), null],
+    ['empty', () => apiRequest.mockResolvedValue(emptyResult()), 'No vendors listed yet'],
+    [
+      'failed',
+      () =>
+        apiRequest.mockRejectedValue(
+          new ApiClientError(429, ERROR_CODES.RATE_LIMITED, 'Too many requests.'),
+        ),
+      'Something went wrong',
+    ],
+  ])('carries exactly one level-1 heading while %s', async (_state, arrange, heading) => {
+    arrange();
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    });
+
+    if (heading !== null) {
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toContain(heading);
+    }
   });
 
   it('renders the empty-result heading and never the failure state', async () => {
@@ -895,7 +960,7 @@ describe('a tag filter the searched category cannot answer', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          'Dietary filters don’t apply to photographers, so they were cleared — the rest of your search still applies.',
+          "Dietary filters don't apply to photographers, so they were cleared — the rest of your search still applies.",
         ),
       ).toBeDefined(),
     );
@@ -932,7 +997,7 @@ describe('a tag filter the searched category cannot answer', () => {
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
 
     expect(searches()[0]).toContain(unknown);
-    expect(screen.queryByText(/filters don’t apply/)).toBeNull();
+    expect(screen.queryByText(/filters don't apply/)).toBeNull();
   });
 
   /*

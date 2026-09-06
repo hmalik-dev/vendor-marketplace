@@ -4,6 +4,7 @@ import {
   SUPPORT_ERROR_AT_PARAM,
   SUPPORT_ERROR_DIGEST_PARAM,
   SUPPORT_ERROR_ROUTE_PARAM,
+  scrubbedRoute,
   supportLink,
 } from './support-link';
 
@@ -57,5 +58,78 @@ describe('supportLink', () => {
   it('links to the bare path when there is no digest to attach', () => {
     expect(supportLink()).toBe(SUPPORT_PATH);
     expect(supportLink({ route: '/', occurredAt: CONTEXT.occurredAt })).toBe(SUPPORT_PATH);
+  });
+});
+
+/**
+ * The route is copied off `window.location`, and not every parameter in a URL
+ * is the app's. Found by the security review of #372: Clerk puts a single-use
+ * `__clerk_ticket` on the auth routes, and a crash on exactly that URL would
+ * have carried it into a support email and stored it on the message.
+ *
+ * The query still travels, because `/search?category=x` is what says what
+ * broke. What does not travel is anything credential-shaped.
+ */
+describe('scrubbedRoute', () => {
+  it('keeps the path when there is no query at all', () => {
+    expect(scrubbedRoute('/bookings/abc/checkout', '')).toBe('/bookings/abc/checkout');
+  });
+
+  it("keeps the app's own parameters, which are the useful half", () => {
+    expect(scrubbedRoute('/search', '?category=photography&city=Austin&state=TX&page=2')).toBe(
+      '/search?category=photography&city=Austin&state=TX&page=2',
+    );
+  });
+
+  it('drops the Clerk sign-in ticket, which is the case this was written for', () => {
+    expect(scrubbedRoute('/sign-in', '?__clerk_ticket=abc.def.ghi&redirect_url=%2Fbookings')).toBe(
+      '/sign-in?redirect_url=%2Fbookings',
+    );
+  });
+
+  it.each([
+    'token',
+    'access_token',
+    'id_token',
+    'apiKey',
+    'api_key',
+    'client_secret',
+    'password',
+    'signature',
+    'credential',
+    'invite_ticket',
+    'jwt',
+    '__session',
+  ])('drops %s', (key) => {
+    expect(scrubbedRoute('/x', `?${key}=secretvalue&keep=1`)).toBe('/x?keep=1');
+  });
+
+  /*
+   * `state` is the search bar's US state filter, and it is the one legitimate
+   * parameter whose name reads like an OAuth field. Asserted explicitly,
+   * because a wider pattern would silently take the city half of every
+   * search-related crash report with it.
+   */
+  it('keeps state, which here is a filter and not an OAuth nonce', () => {
+    expect(scrubbedRoute('/search', '?state=TX')).toBe('/search?state=TX');
+  });
+
+  it('returns the bare path when every parameter was dropped', () => {
+    expect(scrubbedRoute('/sign-in', '?__clerk_ticket=abc')).toBe('/sign-in');
+  });
+
+  /*
+   * The whole reason this function exists is to feed `route`, which the support
+   * page re-validates on arrival — so a scrub that produced something the
+   * schema refuses would silently drop the context instead of carrying it.
+   */
+  it('produces a route the support page still accepts', () => {
+    const parsed = supportErrorContextSchema.safeParse({
+      digest: CONTEXT.digest,
+      route: scrubbedRoute('/search', '?category=photography&__clerk_ticket=abc'),
+      occurredAt: CONTEXT.occurredAt,
+    });
+
+    expect(parsed.success).toBe(true);
   });
 });

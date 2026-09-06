@@ -123,7 +123,7 @@ describe('ReviewForm — validation', () => {
     await user.type(screen.getByLabelText('Review'), 'Great');
     await user.click(screen.getByRole('button', { name: 'Post review' }));
 
-    expect(screen.getByText('A few more words — you’re 5 characters short')).toBeDefined();
+    expect(screen.getByText("A few more words — you're 5 characters short")).toBeDefined();
   });
 
   /* Whitespace is not content — the API trims before measuring, so this must. */
@@ -217,7 +217,7 @@ describe('ReviewForm — submitting', () => {
 
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toBe(
-        'Your review didn’t reach us. Check your connection and try again.',
+        "Your review didn't reach us. Check your connection and try again.",
       ),
     );
   });

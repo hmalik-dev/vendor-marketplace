@@ -123,7 +123,7 @@ export function FormSectionNav({ sections, className }: FormSectionNavProps): Re
         {hasBlockers ? (
           <>
             <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-gold-400" />
-            Gold dots mark what’s unfinished
+            Gold dots mark what&apos;s unfinished
           </>
         ) : (
           'Everything needed to publish is filled in.'

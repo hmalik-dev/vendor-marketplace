@@ -579,3 +579,65 @@ body:has([data-auth-screen]) > footer {
 [data-sonner-toast][data-type='error'] [data-icon] {
   color: var(--color-error-500);
 }
+
+/*
+ * Frame `16 Server error` draws its own 64px header and **no site footer and no
+ * marketplace navigation** — one route out for a reader whose page has just
+ * crashed, rather than the ordinary navigation of an application they have
+ * already watched fail. It also has to fit: with the shell up, the 500 screen
+ * measured `scrollHeight` 964 against a 900 viewport, so `Try again` sat below
+ * the fold on the one screen that exists to offer it.
+ *
+ * `error.tsx` renders *underneath* the root layout, so the header and the
+ * footer are its siblings and nothing it returns can remove them. This is the
+ * hook: `ErrorScreen` marks itself, and the shell comes down in CSS.
+ *
+ * CSS rather than a React flag on purpose. A signal published from an effect
+ * would leave the header rendered in the server HTML and remove it on
+ * hydration — a visible shift on exactly the screen that must not shift — and a
+ * signal written during render would be a module-level mutation in a concurrent
+ * tree. A `:has()` rule is correct in the first paint, needs no JavaScript, and
+ * `display: none` takes both landmarks out of the accessibility tree rather
+ * than only hiding them.
+ *
+ * The 404 is deliberately not here: frame `15`'s blurb is "the marketing shell
+ * stays, so the visitor is still inside the product". A page that is missing is
+ * not a product that is broken.
+ */
+body:has([data-error-screen]) [data-slot='site-header'],
+body:has([data-error-screen]) [data-slot='site-footer'] {
+  display: none;
+}
+
+/*
+ * Frame `04` draws `Start time` and `Guest count` as the same `.inp` box, side
+ * by side, and the app rendered them **42.17px and 38px** — a visible step in a
+ * two-column row where the frame draws one height.
+ *
+ * `Input` declares `h-[38px]` on both and both are `border-box`, so the class
+ * was never the problem: Chrome gives `input[type=time]` an intrinsic minimum
+ * from its shadow content, and `getComputedStyle` reports the used 42.17px
+ * rather than the declared 38.
+ *
+ * **Measured, both halves, because neither alone does anything.** At 1440x900
+ * on `/vendors/<slug>/request`: `appearance: none` on its own leaves 42.17, and
+ * `::-webkit-datetime-edit { line-height: 1 }` on its own leaves 42.17. The two
+ * rules below together give 38.00, equal to the `number` field beside it. The
+ * picker indicator is what carries the extra height, and `appearance: none`
+ * does not remove it.
+ *
+ * The field stays a real `<input type="time">` — typeable, validated, and a
+ * native time keypad on a phone. What goes is the UA's clock button, which
+ * frame `04` does not draw: it renders the value as a plain `.inp` reading
+ * `2:00 PM`, identical to every other field on the screen. Same argument frame
+ * `26` makes against the native date input — a browser affordance is a third
+ * palette on a screen that already has two.
+ */
+input[type='time'] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type='time']::-webkit-calendar-picker-indicator {
+  display: none;
+}

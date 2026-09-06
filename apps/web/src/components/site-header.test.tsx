@@ -158,8 +158,17 @@ describe('SiteHeader', () => {
     expect(screen.queryByRole('link', { name: 'For vendors' })).toBeNull();
   });
 
-  it('offers messages, the dashboard and the user button when signed in', async () => {
+  /*
+   * The signed-in cluster, pinned **by name** (#361). Frame `02` draws
+   * `Messages` · `Bookings` · avatar, and the drift this catches is the Text
+   * axis: the cluster read `Dashboard` for every role, which is neither the
+   * frame's word nor — for a customer — a permitted one, since
+   * `20-customer-bookings-hub.md` requires that "the word 'dashboard' appears
+   * nowhere in the UI".
+   */
+  it('offers messages, the role-named dashboard link and the user button when signed in', async () => {
     authState = 'signed-in';
+    currentRole = 'customer';
 
     render(await SiteHeader());
 
@@ -168,13 +177,56 @@ describe('SiteHeader', () => {
       'http://localhost:3000/messages',
     );
     expect(screen.getByRole('button', { name: 'Notifications' })).toBeDefined();
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: 'Bookings' })).toHaveProperty(
       'href',
       'http://localhost:3000/dashboard',
     );
     expect(screen.getByRole('button', { name: 'Open user button' })).toBeDefined();
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+  });
+
+  /*
+   * One control, three destinations — `/dashboard` resolves the role and
+   * forwards — so no single string is true for every reader. The label is
+   * therefore the role's, and it is the same word in the bar and in the drawer
+   * the bar hides it into below `sm`: two copies of that decision is how one
+   * destination ends up called two things.
+   */
+  it.each([
+    ['customer' as const, 'Bookings'],
+    ['vendor' as const, 'Dashboard'],
+    ['admin' as const, 'Admin'],
+  ])('calls the dashboard link %s -> %s', async (role, label) => {
+    authState = 'signed-in';
+    currentRole = role;
+
+    render(await SiteHeader());
+
+    /*
+     * One link, not two: the drawer that holds the same control below `sm` is a
+     * Radix dialog and renders its content only while open, so it is not in the
+     * tree here. `header-drawer.test.tsx` covers the label it is handed.
+     */
+    expect(screen.getByRole('link', { name: label })).toHaveProperty(
+      'href',
+      'http://localhost:3000/dashboard',
+    );
+  });
+
+  /*
+   * A customer must never read the word at all, on either copy of the control.
+   * The vendor rail's own first row is called `Dashboard` — frame `08` draws it
+   * — so the ban is the customer's, not the product's, and asserting it here is
+   * what keeps the two apart.
+   */
+  it('never shows a customer the word "Dashboard"', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+
+    render(await SiteHeader());
+
+    expect(document.body.textContent).not.toContain('Dashboard');
   });
 
   /*

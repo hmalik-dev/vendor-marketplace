@@ -3,6 +3,12 @@ import { cn } from '@/lib/utils';
 
 export interface BookingsSidebarProps {
   bookingCount: number;
+  /**
+   * Whether any thread has messages the customer has not read. Frame `07` draws
+   * a clay dot on the `Messages` row and nothing else — no count — so this is a
+   * boolean rather than a number the row would have to render.
+   */
+  hasUnreadMessages?: boolean;
   /** Which entry is the current page. */
   current: 'bookings' | 'profile';
 }
@@ -10,18 +16,46 @@ export interface BookingsSidebarProps {
 /**
  * The 240px sidebar of frame `07`.
  *
- * The frame also draws **Messages** and **Saved vendors**. Neither exists —
- * messaging is #8 and there is no saved-vendor feature at all — and #31's rule
- * is that a control which opens nothing is furniture. They return with the
- * surfaces they lead to rather than shipping as dead links.
+ * The frame draws four rows: **My bookings** (count) · **Messages** (unread
+ * dot) · **Saved vendors** · **My profile**.
+ *
+ * **`Messages` is now built.** It was held out under #31's rule that a control
+ * which opens nothing is furniture, because messaging did not exist; `/messages`
+ * ships and the site header already links it, so the rule has expired for this
+ * row and the frame gets its dot.
+ *
+ * **`Saved vendors` is still out, and for the same reason as before.** There is
+ * no saved-vendor feature anywhere in the product — no route, no schema, no
+ * endpoint — so the row could only be a link to a 404. It returns with the
+ * surface it leads to.
  */
 export function BookingsSidebar({
   bookingCount,
+  hasUnreadMessages = false,
   current,
 }: BookingsSidebarProps): React.ReactElement {
   const items = [
-    { key: 'bookings' as const, label: 'My bookings', href: '/bookings', count: bookingCount },
-    { key: 'profile' as const, label: 'My profile', href: '/customer/profile', count: null },
+    {
+      key: 'bookings' as const,
+      label: 'My bookings',
+      href: '/bookings',
+      count: bookingCount,
+      dot: false,
+    },
+    {
+      key: 'messages' as const,
+      label: 'Messages',
+      href: '/messages',
+      count: null,
+      dot: hasUnreadMessages,
+    },
+    {
+      key: 'profile' as const,
+      label: 'My profile',
+      href: '/customer/profile',
+      count: null,
+      dot: false,
+    },
   ];
 
   return (
@@ -46,17 +80,38 @@ export function BookingsSidebar({
               {item.count === null ? null : (
                 <span className="ml-auto text-xs text-stone-600">{item.count}</span>
               )}
+              {/*
+                The frame's 7px clay dot, right-aligned in the row. Named in the
+                accessible name rather than drawn alone: a colour-only signal is
+                the `04-laws.md` case the six laws exist for, and a screen reader
+                reaching this row would otherwise hear the same thing whether or
+                not anything was waiting.
+              */}
+              {item.dot ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="ml-auto size-1.75 shrink-0 rounded-full bg-clay-400"
+                  />
+                  <span className="sr-only">unread</span>
+                </>
+              ) : null}
             </Link>
           </li>
         ))}
       </ul>
 
+      {/*
+        11.5px body over a 12px link — frame `07` draws `font-size:11.5px` on
+        the sentence and `12px` on `Find a vendor →`, where both read `text-xs`'s
+        11. The title above is already the frame's 12.5px/600.
+      */}
       <div className="mt-auto rounded-xl bg-stone-150 p-3">
         <p className="mb-1 text-sm font-semibold text-stone-900">Booking for something new?</p>
-        <p className="mb-2.25 text-xs leading-normal text-stone-700">
+        <p className="mb-2.25 text-helper leading-normal text-stone-700">
           Search by vendor type, city and date — availability is live.
         </p>
-        <Link href="/search" className="text-xs font-semibold text-clay-500 hover:underline">
+        <Link href="/search" className="text-meta font-semibold text-clay-500 hover:underline">
           Find a vendor →
         </Link>
       </div>

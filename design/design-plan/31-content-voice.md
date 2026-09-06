@@ -27,6 +27,36 @@ already knowing what you charge…" and the implementation says **Inquiries**; t
 parity gate should read that as correct, not as drift. If a future import brings
 the British spelling back, change the string, not this rule.
 
+## Apostrophes — straight, always
+
+Ruled 2026-09-06 (#372). The product writes the **straight apostrophe** `'`
+(U+0027). Never the curly `’` (U+2019), and never `&rsquo;`.
+
+The design contract settles it and is not close: across every frame's UI
+strings the straight form appears **124 times** and the curly form **once** —
+`Gold dots mark what’s unfinished` on frame `09`, which is the drift, not the
+rule. Both error frames write it straight in their own headline copy (`15`:
+_This page isn't here_; `16`: _This wasn't anything you did_), as does frame
+`19`'s empty pane (_the vendor's replies_).
+
+The app was inconsistent in exactly the way an unruled question always
+produces: `/sign-up` and a dozen other screens wrote `&apos;`, while the 404,
+the 500 and seventeen other files wrote `&rsquo;` — the same sentence in two
+glyphs depending on who typed it.
+
+**In JSX text write `&apos;`**, which is the straight apostrophe escaped;
+ESLint's `react/no-unescaped-entities` rejects the bare character in a text
+node, and that rejection is what pushed the curly form into the codebase in the
+first place. In a TypeScript string or template literal write the character
+itself.
+
+`apostrophe-form.test.ts` is the guard: it reads every non-test source file
+under `apps/web/src` and `packages/shared/src`, strips comments, and fails on a
+curly apostrophe or an `&rsquo;` in anything that survives.
+
+Contractions are still the rule — see _Rules_ above. What is ruled here is only
+which glyph draws them.
+
 ## Voice examples
 
 | Context                        | Not this                                | This                                                                                                                                                        |

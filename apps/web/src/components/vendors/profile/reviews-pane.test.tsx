@@ -233,7 +233,7 @@ describe('ReviewsPane — showing more', () => {
 
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toBe(
-        'We couldn’t reach the server. Check your connection and try again.',
+        "We couldn't reach the server. Check your connection and try again.",
       ),
     );
   });

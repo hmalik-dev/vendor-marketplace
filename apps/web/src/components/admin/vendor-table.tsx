@@ -53,7 +53,7 @@ export function SuspensionConsequence({ subject }: { subject: string }): React.R
   return (
     <>
       Their open requests are declined and every confirmed booking in the future is cancelled and{' '}
-      <strong className="font-semibold">refunded in full</strong>, which reverses the vendor&rsquo;s
+      <strong className="font-semibold">refunded in full</strong>, which reverses the vendor&apos;s
       share out of their Stripe balance and can leave it negative. {subject} comes down. Suspension
       can be lifted, but the bookings are not restored.
     </>

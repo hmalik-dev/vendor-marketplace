@@ -8,6 +8,7 @@ import {
   CreditCard,
   Images,
   LayoutDashboard,
+  MessageSquare,
   Package,
   Store,
 } from 'lucide-react';
@@ -20,22 +21,43 @@ interface VendorNavItem {
   icon: LucideIcon;
 }
 
-/**
- * Ordered the way a vendor sets a business up: describe it, price it, show the
- * work, say when you are free, then connect the account that gets paid.
- */
 /** The one vendor route that supplies its own rail. */
 const EDITOR_PATH = '/vendor/profile/edit';
 
+/**
+ * Frame `08`'s rail, in frame `08`'s order — which is also the list
+ * `16-vendor-dashboard.md`'s *Sidebar* section names. The frame draws eight
+ * rows: Dashboard · Requests · Bookings · Messages · Availability · Packages ·
+ * Edit profile · Payments.
+ *
+ * **Two of them changed here** (#372). `Messages` is built: it was held out
+ * under #31's rule that a control which opens nothing is furniture, and
+ * `/messages` now ships and is linked from the site header, so the rule has
+ * expired for it. And `Business profile` takes the frame's own string,
+ * `Edit profile`.
+ *
+ * **`Requests` is deliberately absent**, and so is the `See all N →` link the
+ * same frame draws beside the request list. There is no `/vendor/requests`
+ * route and there must not be one: this rail's first row *is* the requests
+ * surface, and that file's acceptance says so — "the requests list scrolls
+ * internally", "Every request row is actionable without navigation". A
+ * `Requests` row could only point at `Dashboard`, one line above it. Ruled
+ * 2026-09-06 and recorded in `16-vendor-dashboard.md`.
+ *
+ * **`Portfolio` is present though no frame draws it**, beside `Edit profile`
+ * because it is part of the storefront the vendor is describing. It is a real
+ * route, and a rail that omits a live surface strands it.
+ */
 const ITEMS: readonly VendorNavItem[] = [
   { href: '/vendor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   // `16-vendor-dashboard.md` puts Bookings in the sidebar: accepting a request
   // has to lead somewhere, and this is where the vendor's committed work lives.
   { href: '/vendor/bookings', label: 'Bookings', icon: CalendarCheck },
-  { href: '/vendor/profile/edit', label: 'Business profile', icon: Store },
-  { href: '/vendor/packages', label: 'Packages', icon: Package },
-  { href: '/vendor/portfolio', label: 'Portfolio', icon: Images },
+  { href: '/messages', label: 'Messages', icon: MessageSquare },
   { href: '/vendor/availability', label: 'Availability', icon: CalendarDays },
+  { href: '/vendor/packages', label: 'Packages', icon: Package },
+  { href: '/vendor/profile/edit', label: 'Edit profile', icon: Store },
+  { href: '/vendor/portfolio', label: 'Portfolio', icon: Images },
   /*
    * `Payments`, not `Payouts`: that is the word frame `08` puts in this rail,
    * and the nav item is the frame's string even though the copy inside the

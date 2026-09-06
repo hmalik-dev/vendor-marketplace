@@ -89,7 +89,15 @@ export function Banner({
       role="status"
       data-status={status}
       className={cn(
-        'flex items-start gap-2.75 rounded-xl border px-3.75 py-3.25',
+        /*
+          `rounded-panel` — 12px. Frame `26 State library` draws every inline
+          banner at 12 and this computed `rounded-xl`'s 14, which is a number no
+          frame draws: `26` says 12 and `16 Server error` says 10. Ruled
+          2026-09-06 (#372) in `03-components.md`, which also settles why the
+          border stays — frame `16` draws its money-position strip borderless
+          and is the only frame that does.
+        */
+        'flex items-start gap-2.75 rounded-panel border px-3.75 py-3.25',
         tokens.surface,
         className,
       )}

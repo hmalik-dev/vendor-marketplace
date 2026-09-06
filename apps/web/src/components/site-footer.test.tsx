@@ -18,25 +18,38 @@ vi.mock('@clerk/nextjs', () => ({
     when === authState ? children : null,
 }));
 
+/*
+ * The footer's account link is labelled by role, the same table the header and
+ * its drawer read — so the role is mocked separately from the signed-in state
+ * above, exactly as `site-header.test.tsx` does. The two can disagree, and the
+ * label must follow the record.
+ */
+let currentRole: 'customer' | 'vendor' | 'admin' | null = null;
+
+vi.mock('@/lib/current-user', () => ({
+  readRoleForChrome: async () => currentRole,
+}));
+
 const { SiteFooter } = await import('./site-footer');
 
 describe('SiteFooter', () => {
   beforeEach(() => {
     authState = 'signed-out';
+    currentRole = null;
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it('labels the footer navigation landmark', () => {
-    render(<SiteFooter />);
+  it('labels the footer navigation landmark', async () => {
+    render(await SiteFooter());
 
     expect(screen.getByRole('navigation', { name: 'Footer' })).toBeDefined();
   });
 
-  it('carries the four columns the design calls for', () => {
-    render(<SiteFooter />);
+  it('carries the four columns the design calls for', async () => {
+    render(await SiteFooter());
 
     for (const heading of ['Browse', 'Company', 'Account']) {
       expect(screen.getByText(heading), heading).toBeDefined();
@@ -44,8 +57,8 @@ describe('SiteFooter', () => {
     expect(screen.getByText('Made for the people who make the day.')).toBeDefined();
   });
 
-  it('sends the browse column into search with a category already chosen', () => {
-    render(<SiteFooter />);
+  it('sends the browse column into search with a category already chosen', async () => {
+    render(await SiteFooter());
 
     expect(screen.getByRole('link', { name: 'Photography' })).toHaveProperty(
       'href',
@@ -64,8 +77,8 @@ describe('SiteFooter', () => {
    * against the literal list rather than the constant, so a wrong edit to the
    * constant fails here instead of being mirrored into the expectation.
    */
-  it('browses the four categories the hero jumps to, in their order', () => {
-    render(<SiteFooter />);
+  it('browses the four categories the hero jumps to, in their order', async () => {
+    render(await SiteFooter());
 
     const browse = screen.getByText('Browse').parentElement;
     expect(browse).not.toBeNull();
@@ -80,8 +93,8 @@ describe('SiteFooter', () => {
     expect(screen.queryByRole('link', { name: 'Florals' })).toBeNull();
   });
 
-  it('offers the authentication routes to signed-out visitors', () => {
-    render(<SiteFooter />);
+  it('offers the authentication routes to signed-out visitors', async () => {
+    render(await SiteFooter());
 
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveProperty(
       'href',
@@ -94,10 +107,11 @@ describe('SiteFooter', () => {
     );
   });
 
-  it('hides the authentication routes once signed in', () => {
+  it('hides the authentication routes once signed in', async () => {
     authState = 'signed-in';
+    currentRole = 'vendor';
 
-    render(<SiteFooter />);
+    render(await SiteFooter());
 
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Become a vendor' })).toBeNull();
@@ -108,15 +122,52 @@ describe('SiteFooter', () => {
   });
 
   /*
+   * The account link is one control with three destinations, and the footer is
+   * its third rendering — after the header's bar and the drawer the bar hides it
+   * into. It read `Dashboard` for everyone, so a signed-in customer met both
+   * words on the same page: `Bookings` in the bar, `Dashboard` here, for one
+   * link. #372.
+   */
+  it.each([
+    ['customer' as const, 'Bookings'],
+    ['vendor' as const, 'Dashboard'],
+    ['admin' as const, 'Admin'],
+  ])('labels the account link for a %s account', async (role, label) => {
+    authState = 'signed-in';
+    currentRole = role;
+
+    render(await SiteFooter());
+
+    expect(screen.getByRole('link', { name: label })).toHaveProperty(
+      'href',
+      'http://localhost:3000/dashboard',
+    );
+  });
+
+  /*
+   * `20-customer-bookings-hub.md`'s acceptance is "the word 'dashboard' appears
+   * nowhere in the UI", and the footer renders on every public route — so this
+   * is the surface where a customer was most likely to read it.
+   */
+  it('never shows a customer the word "Dashboard"', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+
+    render(await SiteFooter());
+
+    expect(document.body.textContent).not.toContain('Dashboard');
+  });
+
+  /*
    * #421, absorbing #420. `Contact support` is in Company rather than Account
    * because it is the one row of this footer that is true for everyone: the
    * visitor most likely to need it is the one who cannot sign in, and Account
    * is the column that changes under them.
    */
-  it('offers Contact support to signed-out and signed-in visitors alike', () => {
+  it('offers Contact support to signed-out and signed-in visitors alike', async () => {
     for (const state of ['signed-out', 'signed-in'] as const) {
       authState = state;
-      render(<SiteFooter />);
+      render(await SiteFooter());
 
       expect(screen.getByRole('link', { name: 'Contact support' }), state).toHaveProperty(
         'href',
@@ -145,9 +196,9 @@ describe('the footer Browse column and the landing hero name the same categories
     cleanup();
   });
 
-  it('renders the constant, in its order, followed by the catch-all', () => {
+  it('renders the constant, in its order, followed by the catch-all', async () => {
     authState = 'signed-out';
-    render(<SiteFooter />);
+    render(await SiteFooter());
 
     const expected = [
       ...LANDING_JUMP_CATEGORY_SLUGS.map(

@@ -112,14 +112,14 @@ export function ReviewTable({
                 row.type === 'customer_to_vendor' ? (
                   <>
                     It is removed permanently and{' '}
-                    <strong className="font-semibold">{row.vendorName}</strong>&rsquo;s public
-                    rating is recalculated from the reviews that remain. There is no undo.
+                    <strong className="font-semibold">{row.vendorName}</strong>&apos;s public rating
+                    is recalculated from the reviews that remain. There is no undo.
                   </>
                 ) : (
                   <>
-                    This is a vendor&rsquo;s private review of a customer. Deleting it recalculates{' '}
-                    <strong className="font-semibold">that customer&rsquo;s</strong> rating, not{' '}
-                    {row.vendorName}&rsquo;s. There is no undo.
+                    This is a vendor&apos;s private review of a customer. Deleting it recalculates{' '}
+                    <strong className="font-semibold">that customer&apos;s</strong> rating, not{' '}
+                    {row.vendorName}&apos;s. There is no undo.
                   </>
                 )
               }

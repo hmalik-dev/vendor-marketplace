@@ -271,6 +271,30 @@ describe('VendorCard', () => {
   });
 
   /*
+   * And it is still **sage**, which is the half of the survival that a text
+   * assertion cannot see. #358 removed the sage chip from the result grid, and
+   * frame `18` draws it on the band's cards; a deletion that took the colour
+   * while leaving the words would pass the test above and lose the one signal
+   * `40-states.md` reserves for "settled" on this screen.
+   *
+   * Both tokens, because `bg-sage-50` alone on `text-stone-700` would read as a
+   * tinted stone chip rather than a sage one.
+   */
+  it('draws that date in sage, the one colour the band is allowed', () => {
+    render(<VendorCard vendor={vendor()} freeOnDate="2026-06-14" density="compact" />);
+
+    const chip = screen.getByText('Free Jun 14');
+
+    /*
+      Word-bounded, not `toContain`: `bg-sage-50` is a prefix of `bg-sage-500`,
+      so a substring check passes on a dark sage fill under `text-sage-600` —
+      the exact colour half this test exists to protect.
+    */
+    expect(chip.className.split(/\s+/)).toContain('bg-sage-50');
+    expect(chip.className.split(/\s+/)).toContain('text-sage-600');
+  });
+
+  /*
    * D16/D17, and `40-states.md`'s Missing cover photo group: the labelled
    * hatch is a build-time device for photography the *product* lacks. A
    * published vendor's empty cover is *their* missing content, shown to
