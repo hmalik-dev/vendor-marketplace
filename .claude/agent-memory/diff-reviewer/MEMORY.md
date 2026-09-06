@@ -23,3 +23,5 @@
 - [Path guard vs URL normalization](review-checklist-guard-parses-raw-path-url-normalises.md) — `split('/')` ownership checks miss `a/<victim>/./c`; run the candidate through the write schema, then `new URL()`, and compare
 - [Viewer anchor vs the read behind it](review-checklist-viewer-anchor-vs-the-read-behind-it.md) — re-anchoring a surface on the viewer's clock without widening the server read behind it; an absent row in a sparse table is a claim, not a gap
 - [Source-guard regex truncation](review-checklist-source-guard-regex-truncation.md) — `<button\b([^>]*)>` is cut at an arrow fn's `=>`, and never matches `<Button`; mutation-test every guard
+- [Async options vs a controlled active index](review-checklist-async-options-vs-controlled-active-index.md) — dropping `filter` makes Enter commit row 0 of the _previous_ query; hang the second request and press Enter
+- [Relaxation clears half a paired filter](review-checklist-relaxation-clears-half-a-paired-filter.md) — `Anywhere` patches `city` only, leaves `state=IL`, then empties the escape list; apply the patch and re-run toSearchQuery

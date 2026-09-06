@@ -605,56 +605,39 @@ describe('GET /vendors', () => {
   });
 
   /*
-   * The City field is a select over these (#167), so what this endpoint returns
-   * is exactly what a customer is able to ask for. Two things follow, and both
-   * are asserted: an unpublished vendor's city must not be offered — choosing
-   * it would guarantee an empty grid — and city and state travel as a pair,
-   * because "Portland" alone names two places people would fly between.
+   * **`GET /vendors/cities` used to be tested here, and #384 deleted it** along
+   * with the endpoint. What replaced it is not another shape of the same list:
+   * the City field now searches `us_cities`, so the endpoint that answered
+   * "where do we have vendors" has no caller and no reason to exist. Its own
+   * tests moved to `modules/places`.
+   *
+   * What stayed behind is the half of the old design that had to keep working
+   * once any city became pickable — and it is the one thing #384 could break
+   * silently, because it fails as an *empty page*, not as an error.
    */
-  describe('GET /vendors/cities', () => {
-    async function cities(): Promise<{ city: string; state: string; vendorCount: number }[]> {
-      const response = await harness.app.inject({ method: 'GET', url: '/vendors/cities' });
+  describe('a city with nobody in it (#384)', () => {
+    it('answers 200 with no rows rather than 404 or 500', async () => {
+      await seedVendor({ user: 'user_a', businessName: 'Austin', city: 'Austin', state: 'TX' });
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/vendors?city=Springfield&state=IL',
+      });
+
       expect(response.statusCode).toBe(200);
-
-      return response.json();
-    }
-
-    it('offers only cities that have a published vendor, counted', async () => {
-      await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.', city: 'Austin' });
-      await seedVendor({ user: 'user_b', businessName: 'June Harlow', city: 'Austin' });
-      await seedVendor({
-        user: 'user_c',
-        businessName: 'Draft Studio',
-        city: 'Dallas',
-        publish: false,
-      });
-
-      expect(await cities()).toEqual([{ city: 'Austin', state: 'TX', vendorCount: 2 }]);
+      expect(response.json()).toMatchObject({ items: [], total: 0, page: 1 });
     });
 
-    it('keeps two cities of the same name apart by their state', async () => {
-      await seedVendor({
-        user: 'user_a',
-        businessName: 'Rose City Film',
-        city: 'Portland',
-        state: 'OR',
-      });
-      await seedVendor({
-        user: 'user_b',
-        businessName: 'Casco Bay Photo',
-        city: 'Portland',
-        state: 'ME',
-      });
+    it('keeps the facets block so the no-results screen can offer relaxations', async () => {
+      await seedVendor({ user: 'user_a', businessName: 'Austin', city: 'Austin', state: 'TX' });
 
-      // Two rows, not one — and ordered, so the list cannot shuffle per read.
-      expect(await cities()).toEqual([
-        { city: 'Portland', state: 'ME', vendorCount: 1 },
-        { city: 'Portland', state: 'OR', vendorCount: 1 },
-      ]);
-    });
+      const body = await search('?city=Springfield&state=IL');
 
-    it('answers with an empty list rather than failing when nobody has published', async () => {
-      expect(await cities()).toEqual([]);
+      // Frame `18` widens the query from here. An absent `facets` would leave
+      // the customer on a blank grid, which is the outcome the old inventory-fed
+      // picker existed to prevent and this one has to answer instead.
+      expect(body.facets.categories).toEqual([]);
+      expect(body.total).toBe(0);
     });
   });
 });

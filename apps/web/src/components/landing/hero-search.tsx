@@ -1,6 +1,6 @@
 'use client';
 
-import type { Category, VendorCity } from '@vendor-marketplace/shared';
+import type { Category } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { SearchBar, type SearchBarValues } from '@/components/search/search-bar';
 
@@ -9,8 +9,6 @@ const EMPTY_QUERY: SearchBarValues = { category: '', city: '', state: '', date: 
 
 export interface HeroSearchProps {
   categories: readonly Category[];
-  /** The cities that have vendors, so City can only ask a real question. */
-  cities: readonly VendorCity[];
 }
 
 /**
@@ -25,13 +23,12 @@ export interface HeroSearchProps {
  *
  * See design/design-plan/10-landing.md.
  */
-export function HeroSearch({ categories, cities }: HeroSearchProps): React.ReactElement {
+export function HeroSearch({ categories }: HeroSearchProps): React.ReactElement {
   const router = useRouter();
 
   return (
     <SearchBar
       categories={categories}
-      cities={cities}
       value={EMPTY_QUERY}
       size="hero"
       /* 18px at both narrow frames, 24 only at 1440. */

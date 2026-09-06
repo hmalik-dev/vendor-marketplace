@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import {
   categories,
   portfolioItems,
@@ -149,62 +149,27 @@ export async function findActivePackages(db: AppDatabase, vendorId: string) {
   }));
 }
 
+/*
+ * **`findVendorCities` used to live here, and #384 removed it.** Its docstring
+ * argued the case for the `City` field being fed by the inventory — *"a picker
+ * offering somewhere with nobody in it is a picker that guarantees an empty
+ * result"* — and that argument was not wrong; it was **overruled**, by the user,
+ * in as many words: *"i currently want the city dropdown to function the way
+ * airbnb's 'where' input functions. Do not preload and indicate how many
+ * vendors are in each city.. users should be able to search for any city and
+ * see the results."*
+ *
+ * The record is here rather than deleted so the next reader does not re-derive
+ * the old answer and re-add the endpoint. What the old design protected is now
+ * answered elsewhere: a place with nobody in it commits and lands on the frame
+ * `18` no-results state with relaxations, and the pair is still *chosen* rather
+ * than typed. Suggestions come from `us_cities`, which is US reference data and
+ * touches no vendor row — see `GET /places` and D32.
+ */
 export async function findPortfolio(db: AppDatabase, vendorId: string) {
   return db
     .select()
     .from(portfolioItems)
     .where(eq(portfolioItems.vendorId, vendorId))
     .orderBy(asc(portfolioItems.displayOrder), asc(portfolioItems.createdAt));
-}
-
-/**
- * Every city a customer can actually search, with how many vendors are in it.
- *
- * Derived from the published profiles themselves rather than from a list of US
- * cities: a picker offering somewhere with nobody in it is a picker that
- * guarantees an empty result, and the point of making City a select at all is
- * that it can only ask questions the platform can answer — the same rule the
- * vendor-type field already follows.
- *
- * City **and** state, always. "Springfield" names a place in thirty-odd states,
- * and a customer who picks the wrong Portland has been misled by the control
- * rather than by their own typing. Rows missing either half are dropped: half a
- * location cannot be matched against, and it is not a place a customer could
- * mean on purpose.
- */
-export async function findVendorCities(db: AppDatabase) {
-  const rows = await db
-    .select({
-      city: vendorProfiles.city,
-      state: vendorProfiles.state,
-      vendorCount: sql<number>`count(*)::int`,
-    })
-    .from(vendorProfiles)
-    .where(
-      and(
-        VISIBLE,
-        isNotNull(vendorProfiles.city),
-        isNotNull(vendorProfiles.state),
-        /*
-         * City is free text and can still be blank. State cannot: since #332 it
-         * is the `us_state` enum, so `''` is not a value the column can hold and
-         * the guard that used to sit here is unrepresentable rather than merely
-         * redundant — TypeScript rejects it outright.
-         */
-        ne(vendorProfiles.city, ''),
-      ),
-    )
-    .groupBy(vendorProfiles.city, vendorProfiles.state)
-    .orderBy(asc(vendorProfiles.city), asc(vendorProfiles.state));
-
-  /*
-   * The `NOT NULL` guard is in the query; this narrows the *type*, which
-   * Drizzle cannot do from a `where` clause. A cast would have been shorter and
-   * would also have been a lie the next reader had to check.
-   */
-  return rows.flatMap((row) =>
-    row.city === null || row.state === null
-      ? []
-      : [{ city: row.city, state: row.state, vendorCount: row.vendorCount }],
-  );
 }

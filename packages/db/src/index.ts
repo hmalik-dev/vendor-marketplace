@@ -1,7 +1,13 @@
 export * from './client.js';
 export { loadEnv } from './load-env.js';
 export * from './schema/index.js';
-export { seedCategories, seedReferenceData, seedTags, type SeedResult } from './seed.js';
+export {
+  seedCategories,
+  seedReferenceData,
+  seedTags,
+  seedUsCities,
+  type SeedResult,
+} from './seed.js';
 
 /**
  * The demo dataset's stable identifiers.

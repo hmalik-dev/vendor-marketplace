@@ -585,3 +585,26 @@ export function joinWithAnd(items: readonly string[]): string {
 
   return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
+
+/**
+ * Case- and diacritic-insensitive, whitespace-collapsed matching text.
+ *
+ * `NFD` splits an accented character into its base letter plus a combining
+ * mark, and the range strips the marks — so `José` becomes `jose` and matches
+ * a customer who typed either spelling. Both sides go through this, which is
+ * what makes it symmetric: `San Jose` finds `San José` **and** the reverse.
+ *
+ * It lives here rather than in the web app because **three processes have to
+ * agree on it** since #384: the browser's category filter, the seed that
+ * writes `us_cities.search_name`, and the API that normalises the customer's
+ * typed query before comparing the two. A second copy of this function is a
+ * city the customer can see but not find.
+ */
+export function normaliseForMatch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}

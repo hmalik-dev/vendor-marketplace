@@ -9,6 +9,21 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 
+/*
+ * `City` fetches its suggestions as the customer types since #384, so the flow
+ * test has to answer for the one place it asks. Faked at the HTTP boundary and
+ * nowhere else — the debounce, the panel and the commit are the code under
+ * test.
+ */
+vi.mock('@/lib/api-client', () => ({
+  apiRequest: (path: string) =>
+    Promise.resolve(
+      path.includes('q=aus') || path.includes('q=austin') ? [{ city: 'Austin', state: 'TX' }] : [],
+    ),
+  ApiClientError: class extends Error {},
+  ApiTimeoutError: class extends Error {},
+}));
+
 const { HeroSearch } = await import('./hero-search');
 
 const CATEGORIES: Category[] = [
@@ -21,12 +36,6 @@ const CATEGORIES: Category[] = [
     displayOrder: 1,
     isActive: true,
   },
-];
-
-/** The cities the City select offers — real places with published vendors. */
-const CITIES = [
-  { city: 'Austin', state: 'TX', vendorCount: 11 },
-  { city: 'Portland', state: 'OR', vendorCount: 3 },
 ];
 
 /*
@@ -59,7 +68,7 @@ describe('HeroSearch', () => {
 
   it('carries the three values the query is made of into /search', async () => {
     const user = userEvent.setup();
-    render(<HeroSearch categories={CATEGORIES} cities={CITIES} />);
+    render(<HeroSearch categories={CATEGORIES} />);
 
     /*
      * The whole journey, through the controls #375 rebuilt: both segments are
@@ -80,7 +89,7 @@ describe('HeroSearch', () => {
 
   it('leaves an untouched segment out of the URL rather than sending it empty', async () => {
     const user = userEvent.setup();
-    render(<HeroSearch categories={CATEGORIES} cities={CITIES} />);
+    render(<HeroSearch categories={CATEGORIES} />);
 
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
