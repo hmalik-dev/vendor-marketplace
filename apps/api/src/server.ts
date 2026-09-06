@@ -11,6 +11,7 @@ import {
 } from 'fastify-type-provider-zod';
 import { createDatabase, loadEnv } from '@vendor-marketplace/db';
 import { MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
+import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
 import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
 import type { AppDatabase } from './lib/database.js';
@@ -38,6 +39,7 @@ import { healthRoutes } from './modules/health/health.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
 import { reviewRoutes } from './modules/reviews/reviews.routes.js';
+import { supportRoutes } from './modules/support/support.routes.js';
 import { tagRoutes } from './modules/tags/tags.routes.js';
 import { uploadRoutes } from './modules/uploads/uploads.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
@@ -83,6 +85,31 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   const { env, db, storage } = options;
 
   const app = Fastify({
+    /*
+     * One hop, and only on a deployment.
+     *
+     * `request.ip` is the socket's remote address, which behind any load
+     * balancer is the *platform's* proxy — the same value for every visitor.
+     * Every per-IP rate limit then shares one bucket: `RATE_LIMIT_MAX` becomes
+     * a whole-deployment cap, and #421's six-an-hour support limit becomes six
+     * messages an hour **from everyone**, on the one page that exists to report
+     * an outage. It is invisible locally, where `pnpm dev` and `app.inject()`
+     * both supply a real per-caller address.
+     *
+     * One hop, never `true`. `trustProxy: true` walks `X-Forwarded-For` to its
+     * leftmost entry, which the caller writes, and so hands the rate-limit key
+     * straight back to whoever is being limited. Trusting only hop 0 takes the
+     * entry the immediate proxy appended — the client address as that proxy
+     * saw it, which nothing outside can forge.
+     *
+     * A predicate rather than the count `trustProxy: 1`, because this
+     * Fastify's types accept `string | boolean | string[] | TrustProxyFunction`
+     * and no number; the predicate is what the count means anyway.
+     *
+     * `false` on a laptop, because there is no proxy there: trusting a header
+     * that nothing sets would let a local request name its own address.
+     */
+    trustProxy: isDeployedRuntime() ? (_address: string, hop: number) => hop === 0 : false,
     logger: {
       level: env.LOG_LEVEL,
       // Never let a token, cookie, or webhook signature reach the log stream.
@@ -172,6 +199,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(bookingRequestRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(messagingRoutes, { allowedOrigins: allowedOrigins(env) });
   await app.register(uploadRoutes);
+  await app.register(supportRoutes, { supportEmailTo: env.SUPPORT_EMAIL_TO });
   await app.register(clerkWebhookRoutes, {
     signingSecret: env.CLERK_WEBHOOK_SECRET,
     ...options.webhooks,

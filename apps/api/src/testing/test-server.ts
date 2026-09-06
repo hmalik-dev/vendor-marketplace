@@ -58,6 +58,7 @@ export const TEST_ENV: ApiEnv = {
    */
   RESEND_API_KEY: ['re', 'not', 'used', 'by', 'the', 'suites'].join('_'),
   EMAIL_FROM: 'noreply@test.invalid',
+  SUPPORT_EMAIL_TO: 'support@test.invalid',
 };
 
 /**
@@ -89,6 +90,21 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
    * *real* routes under real contention.
    */
   database?: TDatabase;
+  /**
+   * The email gateway to run against, in place of the recording fake.
+   *
+   * The one caller is the support form's failure suite (#421). Its whole
+   * subject is what the screen does when the transport *refuses*, and a fake
+   * that throws a hand-written `Error` proves only that the code catches what
+   * the fake throws — #416 shipped a refund that had never once worked because
+   * the double was more permissive than the gateway. Injecting the real
+   * `createResendGateway` over a stubbed `fetch` puts the production transport,
+   * its status check and its error under the test instead.
+   *
+   * `harness.email` still refers to the recording fake, which such a suite
+   * simply does not read.
+   */
+  emailGateway?: EmailGateway;
 }
 
 /** A fresh in-process PGlite, migrated: the harness's default database. */
@@ -500,7 +516,7 @@ export async function createTestHarness(
       },
     },
     stripe,
-    email,
+    email: options.emailGateway ?? email,
   });
 
   return {

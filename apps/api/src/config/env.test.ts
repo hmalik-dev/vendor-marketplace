@@ -235,7 +235,35 @@ describe('parseEnv on a deployment', () => {
     'S3_SECRET_ACCESS_KEY',
     'S3_BUCKET',
     'S3_PUBLIC_URL',
+    'SUPPORT_EMAIL_TO',
   ] as const;
+
+  /*
+   * The list above is written out so the assertions below can name each row,
+   * and a written list is one a new registry row silently falls behind — which
+   * is the whole class of defect this describe block exists to catch. So it is
+   * checked against the registry rather than trusted: a per-environment row the
+   * API reads that carries a default and is missing here would otherwise be
+   * ungated, and nothing else would say so.
+   */
+  it('lists every defaulted per-environment row the API reads', () => {
+    const derived = registryKeys({
+      consumer: 'api',
+      capabilities: ['core', 'auth', 'storage', 'stripe', 'email'],
+    }).filter((key) => {
+      const variable = findVariable(key);
+      return (
+        // `NODE_ENV` is the same deliberate exception the override guard below
+        // makes: it is the signal that selects this schema, so requiring it
+        // would be circular.
+        key !== 'NODE_ENV' &&
+        variable?.environments === 'per-environment' &&
+        variable.defaultValue !== undefined
+      );
+    });
+
+    expect([...DEFAULTED].sort()).toEqual([...derived].sort());
+  });
 
   /** A deployment that supplies a real value for every one of them. */
   const DEPLOYED: NodeJS.ProcessEnv = {
@@ -248,6 +276,7 @@ describe('parseEnv on a deployment', () => {
     CLERK_WEBHOOK_ENDPOINT: 'https://api.orla.test/webhooks/clerk',
     S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
     S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+    SUPPORT_EMAIL_TO: 'support@orla.test',
   };
 
   /** `REQUIRED` with every defaulted per-environment row removed. */

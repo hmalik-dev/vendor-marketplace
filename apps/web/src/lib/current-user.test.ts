@@ -34,6 +34,7 @@ vi.mock('./api-client', async () => {
 
 const {
   getCurrentUser,
+  readIdentityForSupport,
   readRoleForChrome,
   redirectIfSignedIn,
   redirectVendorToDashboard,
@@ -498,6 +499,58 @@ describe('redirectIfSignedIn', () => {
     userId = null;
 
     await expect(redirectIfSignedIn('/bookings')).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * #421. Every other read in `current-user.ts` sends a suspended account to
+ * `/suspended` — right everywhere except here. `/suspended` renders the
+ * marketing footer, that footer carries `Contact support`, and a suspension
+ * redirect on `/support` turns the link into a loop for exactly the population
+ * a contact form is clearest for: someone arguing they were banned in error.
+ */
+describe('readIdentityForSupport', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+    redirect.mockClear();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the account when one can be read', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(CUSTOMER);
+
+    expect(await readIdentityForSupport()).toEqual(CUSTOMER);
+  });
+
+  it('returns null rather than redirecting a suspended account', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(new ApiClientError(403, 'FORBIDDEN', 'Account suspended'));
+
+    expect(await readIdentityForSupport()).toBeNull();
+    // The whole point: no navigation. The screen asks for an address instead.
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('returns null rather than failing when the API cannot be reached', async () => {
+    // The page a visitor opens *to report* that the API is unreachable must
+    // not be the page that goes down with it.
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(new Error('fetch failed'));
+
+    expect(await readIdentityForSupport()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('returns null when nobody is signed in', async () => {
+    getToken.mockResolvedValue(null);
+
+    expect(await readIdentityForSupport()).toBeNull();
     expect(redirect).not.toHaveBeenCalled();
   });
 });

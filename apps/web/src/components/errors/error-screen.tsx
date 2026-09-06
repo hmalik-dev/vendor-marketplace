@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { SUPPORT_PATH } from '@vendor-marketplace/shared';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { supportLink } from '@/lib/support-link';
 
 /**
  * Frame `16`. Shared by `error.tsx` and `global-error.tsx` so the two cannot
@@ -22,6 +25,34 @@ export interface ErrorScreenProps {
 }
 
 export function ErrorScreen({ digest, reset }: ErrorScreenProps): React.ReactElement {
+  /*
+   * The route and the moment can only be read in the browser, and this screen
+   * renders on the server too when the throw happened there — so the link
+   * starts as the bare path and gains its context on mount. Both render the
+   * same words, so nothing moves; what changes is whether the digest travels
+   * with the visitor.
+   *
+   * `window.location`, not `usePathname`: this component is shared with
+   * `global-error.tsx`, which replaces the root layout and therefore renders
+   * outside the App Router context those hooks need — the same reason
+   * `Browse vendors` below is an `<a>` rather than a `<Link>`.
+   */
+  const [href, setHref] = useState<string>(SUPPORT_PATH);
+
+  useEffect(() => {
+    setHref(
+      supportLink(
+        digest === undefined
+          ? undefined
+          : {
+              digest,
+              route: `${window.location.pathname}${window.location.search}`,
+              occurredAt: new Date().toISOString(),
+            },
+      ),
+    );
+  }, [digest]);
+
   return (
     <div className="mx-auto flex min-h-[620px] w-full max-w-3xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
       <span
@@ -101,6 +132,25 @@ export function ErrorScreen({ digest, reset }: ErrorScreenProps): React.ReactEle
           — include this if you write to us
         </p>
       ) : null}
+
+      {/*
+        Frame `16` draws this in a bespoke 64px header, which is #372's work;
+        it sits under the reference here because that is what it carries. The
+        link takes the digest, the route and the moment with it, so the visitor
+        never has to do the copying the line above asks for — which is the whole
+        argument for a form over a `mailto:` (frame `29`).
+
+        An `<a>` for the same reason as `Browse vendors`: `global-error.tsx`
+        renders this outside the App Router context `next/link` needs.
+      */}
+      <p className="mt-3 text-[12.5px]">
+        <a
+          href={href}
+          className="font-semibold text-clay-500 underline-offset-4 hover:text-clay-600 hover:underline"
+        >
+          Contact support
+        </a>
+      </p>
     </div>
   );
 }
