@@ -32,23 +32,24 @@ export function Skeleton({ className }: { className?: string }): React.ReactElem
  * blind. A skeleton's contract is with the component it becomes, and only the
  * component can settle it.
  *
- * Measured in the browser at 1440x900, both states held on screen (the search
- * request was intercepted and never resolved, because a skeleton that resolves
- * before it paints proves nothing):
+ * Measured in the browser, both states held on screen (the search request was
+ * intercepted and never resolved, because a skeleton that resolves before it
+ * paints proves nothing). Re-measured under #371, after the chip row came out of
+ * both and the monogram's clearance was gated to 1440:
  *
  * ```
- * loaded card 350.328  body 127 = 12 + 11 + 25 + 2 + 15 + 8 + 0 + 10 + 30 + 14
- * skeleton    350.328  body 127   same terms, same order
+ * 1440x900  loaded 335 x 342.3 at y 173   skeleton  identical
+ * 1024x640  loaded 317.3 x 319.6 at y 150 skeleton  identical
  * ```
  *
- * **The chip row is deliberately empty**, and that is the surprise. `VendorCard`
- * renders *no* category chip in compact — the search grid is already filtered to
- * one vendor type, so a chip would restate the query — and the availability chip
- * is never passed here either. The row is a zero-height flex container that
- * still costs its 8px `margin-top`, so it is reproduced rather than folded into
- * a magic number: if the card ever gains a chip, this is where the skeleton
- * gains one too. Frame `17` draws two chips because it draws the 1024 card,
- * which does render them.
+ * **There is no chip row, in either.** `VendorCard` renders none in compact —
+ * the search grid is already filtered to one vendor type, so a category chip
+ * would restate the query, and the availability chip is never passed here — and
+ * an empty flex container still costs its 8px `margin-top`, so reproducing it
+ * made the skeleton 8px taller than the card. The card now renders the row only
+ * when it has something to put in it, and this renders none. **If the card ever
+ * gains a chip on this grid, this is where the skeleton gains one too**, and the
+ * measurements above are how to check it.
  *
  * The bar heights are the card's own line boxes (25 / 15 / 15 / 20), which are
  * font-metric-derived rather than round because every one of those steps is
