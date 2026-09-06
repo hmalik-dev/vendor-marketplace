@@ -39,7 +39,36 @@ function scrim(mid: string, bottom: string): string {
   return `linear-gradient(200deg, rgba(35,32,28,.14) 0%, ${mid} calc(100% - ${SCRIM_MID_STOP_FROM_END_PX}px), ${bottom} 100%)`;
 }
 
-interface AuthPanel {
+/**
+ * One list, two markers. A panel addressed to a single side leads each line
+ * with a pale dot; the `both` panel replaces the dot with the name of the side,
+ * because an unlabelled list of three mixed promises reads as vague rather than
+ * as a split.
+ *
+ * A panel has exactly one of the two, so they are a union rather than two
+ * optional fields — which is what lets the render reach for the marker it has
+ * without a fallback that can never be taken.
+ */
+type GuaranteeMarkers =
+  | {
+      /** Each guarantee prefixed by the side it belongs to. */
+      sideLabels: readonly [string, string, string];
+      /** Tailwind text colour per side label, paired with `sideLabels`. */
+      sideLabelClasses: readonly [string, string, string];
+      dotClass?: never;
+    }
+  | {
+      sideLabels?: never;
+      sideLabelClasses?: never;
+      /**
+       * Frame `12b` draws the customer's dot in `sage-200` and the vendor's a
+       * step lighter, in `sage-175` — the vendor panel is the greener ground of
+       * the two, and the paler dot holds against it.
+       */
+      dotClass: string;
+    };
+
+type AuthPanel = {
   /** The photograph behind the wash — the product's own content. */
   photo: string;
   /**
@@ -54,22 +83,6 @@ interface AuthPanel {
   accentClass: string;
   body: string;
   /**
-   * Present only on the `both` panel. Each guarantee is prefixed by the side it
-   * belongs to, which is what keeps a panel addressed to everyone from reading
-   * as addressed to no one — and doubles as a preview of the choice sitting
-   * right below it in the form column.
-   */
-  sideLabels?: readonly [string, string, string];
-  /** Tailwind text colour per side label, paired with `sideLabels`. */
-  sideLabelClasses?: readonly [string, string, string];
-  /**
-   * The marker a single-side panel leads each guarantee with, where the `both`
-   * panel writes the side's name instead. Frame `12b` draws the customer's in
-   * `sage-200` and the vendor's a step lighter, in `sage-175` — the vendor
-   * panel is the greener ground of the two, and the paler dot holds against it.
-   */
-  dotClass?: string;
-  /**
    * Mechanism, not metrics: a new marketplace has no vendor count, no "events
    * booked" and no average rating worth publishing, and the last thing a
    * hesitant sign-up reads is the worst possible place for a placeholder
@@ -77,7 +90,7 @@ interface AuthPanel {
    * numbers are real — condition in design/design-plan/98-post-mvp.md.
    */
   guarantees: readonly [string, string, string];
-}
+} & GuaranteeMarkers;
 
 /**
  * The two panels are the same promise inverted: a customer is told they will
@@ -91,7 +104,7 @@ interface AuthPanel {
  * transaction and is deliberately not mirrored or negated across.
  * See design/design-plan/21-sign-up.md.
  */
-const PANELS: Record<AuthPanelRole, AuthPanel> = {
+export const AUTH_PANELS: Record<AuthPanelRole, AuthPanel> = {
   /*
    * The default. It does not pick a side, so it says what the product is and
    * then splits the promise explicitly — booking, vending, and the one line
@@ -173,17 +186,8 @@ export function AuthScreen({
   panel = 'both',
   children,
 }: AuthScreenProps): React.ReactElement {
-  const {
-    photo,
-    wash,
-    headline: proof,
-    accentClass,
-    body,
-    guarantees,
-    sideLabels,
-    sideLabelClasses,
-    dotClass,
-  } = PANELS[panel];
+  const chosen = AUTH_PANELS[panel];
+  const { photo, wash, headline: proof, accentClass, body, guarantees } = chosen;
 
   return (
     // The attribute is what globals.css keys the chrome-suppression rule off.
@@ -259,32 +263,26 @@ export function AuthScreen({
               the body a word early against the 38px headline above it. */}
           <p className="mt-3 max-w-[415px] text-md leading-relaxed text-stone-0/82">{body}</p>
 
-          {/*
-            One list, two markers. A panel addressed to a single side leads each
-            line with a pale dot; the `both` panel replaces the dot with the
-            name of the side, because an unlabelled list of three mixed promises
-            reads as vague rather than as a split.
-          */}
           <ul
             className={`mt-6.5 flex flex-col border-t border-stone-0/22 pt-5 ${
-              sideLabels ? 'max-w-105 gap-3' : 'max-w-100 gap-2.75'
+              chosen.sideLabels ? 'max-w-105 gap-3' : 'max-w-100 gap-2.75'
             }`}
           >
             {guarantees.map((guarantee, index) => (
               <li
                 key={guarantee}
-                className={`flex items-start ${sideLabels ? 'gap-2.75' : 'gap-2.5'}`}
+                className={`flex items-start ${chosen.sideLabels ? 'gap-2.75' : 'gap-2.5'}`}
               >
-                {sideLabels ? (
+                {chosen.sideLabels ? (
                   <span
-                    className={`w-16 flex-none pt-0.75 text-[9.5px] font-bold tracking-[.09em] uppercase ${sideLabelClasses?.[index] ?? ''}`}
+                    className={`w-16 flex-none pt-0.75 text-[9.5px] font-bold tracking-[.09em] uppercase ${chosen.sideLabelClasses[index]}`}
                   >
-                    {sideLabels[index]}
+                    {chosen.sideLabels[index]}
                   </span>
                 ) : (
                   <span
                     aria-hidden="true"
-                    className={`mt-1.5 size-1.75 shrink-0 rounded-full ${dotClass ?? 'bg-sage-200'}`}
+                    className={`mt-1.5 size-1.75 shrink-0 rounded-full ${chosen.dotClass}`}
                   />
                 )}
                 <span className="text-[13.5px] leading-normal text-stone-0/90">{guarantee}</span>

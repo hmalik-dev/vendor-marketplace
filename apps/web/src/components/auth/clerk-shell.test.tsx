@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CLERK_COPY, SIGN_UP_CLERK_COPY } from '@/app/clerk-copy';
+import { withoutComments } from '@/testing/source-scan';
 
 const pathname = vi.hoisted(() => ({ value: '/' }));
 const provider = vi.hoisted(() => ({
@@ -98,7 +99,9 @@ describe('ClerkShell', () => {
    */
   it('is the provider the root layout actually renders', () => {
     // Vitest runs with the package root as cwd, which is where vitest.config.ts sits.
-    const layout = readFileSync(join(process.cwd(), 'src/app/layout.tsx'), 'utf8');
+    // Comments stripped first: the layout's own prose names both components, so
+    // a commented-out `<ClerkShell>` would otherwise satisfy this.
+    const layout = withoutComments(readFileSync(join(process.cwd(), 'src/app/layout.tsx'), 'utf8'));
 
     expect(layout).toContain('<ClerkShell>');
     expect(layout).not.toContain('<ClerkProvider');

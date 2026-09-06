@@ -53,10 +53,15 @@ export const CLERK_COPY = {
  * `formButtonPrimary` has no `signUp.start` variant — it appears once, at the
  * top level of Clerk's own `en-US`, and `<SignUp />` takes no `localization`
  * prop — so putting it in `CLERK_COPY` would relabel the sign-in form too,
- * where "Create my account" is simply false. It is scoped instead by nesting a
- * second `ClerkProvider` around `<SignUp />`, which overrides the localization
- * context for that subtree and nothing else. There is no sign-in frame, so
- * Clerk's `Continue` there is uncontradicted and stays.
+ * where "Create my account" is simply false.
+ *
+ * **Nesting a second `ClerkProvider` around `<SignUp />` does not scope it**,
+ * which is the first thing anyone reaches for and is a silent no-op: Clerk's
+ * client provider opens with `if (Boolean(useClerkNextOptions())) return
+ * children`, so an inner provider drops every prop on the floor. Verified in a
+ * browser before it was verified in the source. `ClerkShell` picks the object
+ * by route instead. There is no sign-in frame, so Clerk's `Continue` there is
+ * uncontradicted and stays.
  */
 export const SIGN_UP_CLERK_COPY = {
   ...CLERK_COPY,
