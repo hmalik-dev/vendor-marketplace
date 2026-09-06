@@ -50,12 +50,25 @@ test.describe('messaging', () => {
     await composer.fill(sent);
     await customerPage.getByRole('button', { name: /^send$/i }).click();
 
-    await expect(customerPage.getByText(sent)).toBeVisible();
+    /*
+     * The **bubble**, not any node carrying the string. A delivered message
+     * appears twice — once in the thread transcript and once as the preview
+     * line on its row in the list — so a bare `getByText` is a strict-mode
+     * violation the moment the list catches up, and it reports *successful*
+     * delivery as a failure. It passed on the customer only because the local
+     * echo beat the list refresh, which makes it a race rather than a check.
+     * The transcript renders each message as a `<p>`; the list preview is a
+     * `<span>` inside the row button.
+     */
+    const bubble = (page: typeof customerPage) =>
+      page.getByRole('paragraph').filter({ hasText: sent });
+
+    await expect(bubble(customerPage)).toBeVisible();
 
     // The other side is what proves delivery rather than a local echo.
     await vendorPage.goto('/messages');
     await expect(
-      vendorPage.getByText(sent),
+      bubble(vendorPage),
       'the vendor cannot see a message the customer sent — delivery, not echo, is broken',
     ).toBeVisible({ timeout: 20_000 });
   });

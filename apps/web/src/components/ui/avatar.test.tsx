@@ -113,7 +113,7 @@ describe('Avatar', () => {
    * is the check that closes the gap, and it reads the component's own sizes
    * rather than a list written down twice.
    *
-   * Four of the six sizes are below the floor and the frames draw all four in
+   * Four of the sizes are below the floor and the frames draw all four in
    * Instrument Serif, so this is frame-versus-law. D24 rules for the law and
    * changes the face rather than the size: raising the glyph to 16px would
    * change the monogram's ratio in four frames and break their geometry.
@@ -145,7 +145,7 @@ describe('Avatar', () => {
     });
 
     expect(glyphs.filter((glyph) => glyph < SERIF_FLOOR_PX).length).toBe(4);
-    expect(glyphs.filter((glyph) => glyph >= SERIF_FLOOR_PX).length).toBe(2);
+    expect(glyphs.filter((glyph) => glyph >= SERIF_FLOOR_PX).length).toBe(3);
   });
 
   it('paints the fallback in clay or sage, never in one fixed colour', () => {
