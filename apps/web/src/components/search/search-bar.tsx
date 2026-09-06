@@ -7,6 +7,7 @@ import {
   type VendorCity,
 } from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
+import { useStableValue } from '@/lib/use-stable-value';
 import { useViewerToday } from '@/lib/use-viewer-today';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
@@ -130,12 +131,24 @@ export function SearchBar({
    */
   const today = useViewerToday('');
 
-  // The URL is the source of truth: a back-navigation has to be reflected here,
-  // not overwritten by a stale draft.
+  /*
+   * The URL is the source of truth: a back-navigation has to be reflected here,
+   * not overwritten by a stale draft.
+   *
+   * Seeded from the value's *contents*, never from the object. `SearchScreen`
+   * builds a fresh `value` on every render, so `[value]` re-ran this whenever
+   * the results landed — `setResult`, `setIsLoading` and `setSearching(false)`
+   * each fire one — and a vendor type or city chosen while the search was still
+   * in flight was reset to the URL's, with the past-date alert wiped alongside
+   * it. The customer had made a choice and had to make it again, with nothing
+   * on screen to say why (#403).
+   */
+  const seed = useStableValue(value);
+
   useEffect(() => {
-    setDraft(value);
+    setDraft(seed);
     setPastDate(false);
-  }, [value]);
+  }, [seed]);
 
   const isHero = size === 'hero';
   const isIconAction = action === 'icon';

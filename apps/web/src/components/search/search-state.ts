@@ -13,6 +13,7 @@ import {
   VENDOR_SORT_OPTIONS,
   type VendorSortOption,
 } from '@vendor-marketplace/shared';
+import { useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { z } from 'zod';
 import {
@@ -161,7 +162,7 @@ export interface ParsedSearchState {
  * local day, which the server rendering this screen cannot know, so it stays
  * in the client-only effect that already handles it.
  */
-export function parseSearchState(raw: SearchState): ParsedSearchState {
+export function parseSearchState(raw: SearchState, params?: URLSearchParams): ParsedSearchState {
   const result = searchStateSchema.safeParse(raw);
 
   /*
@@ -172,6 +173,25 @@ export function parseSearchState(raw: SearchState): ParsedSearchState {
   const dropped: DroppedSearchField[] = result.success
     ? []
     : [...new Set(result.error.issues.map((issue) => issue.path[0] as DroppedSearchField))];
+
+  /*
+   * The params the URL asked for that never reached the schema intact, merged
+   * here rather than at the caller so that **announced and cleared are the
+   * same set**. Merging only the announcement was the defect: a partly-numeric
+   * bound was named as cleared while its truncated value was still applied,
+   * which is the contradiction this whole ticket is about.
+   *
+   * The raw params are optional so the pure callers — and the tests that drive
+   * this function directly — keep working; without them only the schema
+   * judges, which is what happens on any surface that has no URL to read.
+   */
+  if (params !== undefined) {
+    for (const field of unusableSearchParams(params)) {
+      if (!dropped.includes(field)) {
+        dropped.push(field);
+      }
+    }
+  }
 
   const state: SearchState = { ...raw };
 
@@ -212,13 +232,120 @@ const DROPPED_FIELD_LABELS: Record<DroppedSearchField, string> = {
   state: 'state',
   name: 'name',
   date: 'date',
-  minPriceCents: 'price range',
-  maxPriceCents: 'price range',
+  /*
+   * The two bounds are named apart, because they are refused apart. Both read
+   * `price range` until #403, so half a rejected range — a ceiling above the
+   * cap with a floor the API accepted — announced "that price range ... was
+   * cleared" while the floor was still in the URL, still in the request, and
+   * still drawing its chip. The reader was told a filter was gone that was
+   * visibly narrowing the grid in front of them.
+   */
+  minPriceCents: 'minimum price',
+  maxPriceCents: 'maximum price',
   minRating: 'rating',
   tags: 'tags',
   sort: 'sort order',
   page: 'page',
 };
+
+/** What the pair is called when both bounds went, since that is one thing. */
+const PRICE_RANGE_LABEL = 'price range';
+
+/**
+ * The customer-facing names of the params that were dropped, in the order they
+ * were dropped, without repeats.
+ *
+ * Both bounds gone is the range gone, and is named once as the reader set it.
+ * One bound gone is not a range gone, so it keeps its own name — that is the
+ * whole point of the split above.
+ */
+function droppedLabels(dropped: readonly DroppedSearchField[]): string[] {
+  const fields = new Set(dropped);
+  const wholeRange = fields.has('minPriceCents') && fields.has('maxPriceCents');
+
+  return [
+    ...new Set(
+      dropped.map((field) =>
+        wholeRange && (field === 'minPriceCents' || field === 'maxPriceCents')
+          ? PRICE_RANGE_LABEL
+          : DROPPED_FIELD_LABELS[field],
+      ),
+    ),
+  ];
+}
+
+/** Every param the URL layer reads, in the order a notice names them. */
+const SEARCH_PARAM_FIELDS = Object.keys(searchParsers) as DroppedSearchField[];
+
+/**
+ * The text a numeric param's value must be before its parser's answer can be
+ * trusted at all.
+ *
+ * **`nuqs`'s numeric parsers are `parseInt` and `parseFloat`, which read a
+ * prefix and discard the rest.** Measured against `nuqs@2.10.1`: `'12abc'` is
+ * `12`, `'2abc'` is `2`, `'0x10'` is `16`, `'1e3'` is `1`, `'4.5xyz'` is
+ * `4.5`. Only a value with no leading digits at all — `'abc'` — answers
+ * `null`. So a partly-numeric param was neither announced nor cleared but
+ * *silently obeyed*: `?minPriceCents=12abc` drew a `$0.12` floor, sent
+ * `minPriceCents=12`, and dropped every unpriced vendor from the grid, with
+ * the live region saying nothing. `?page=2abc` is a non-numeric page — the
+ * literal wording of this ticket's acceptance — quietly served as page 2.
+ *
+ * A shape, not a round-trip of the parsed value: `String(parseInt('01'))` is
+ * `'1'`, so comparing them would announce `?page=01` as cleared while honouring
+ * it, which is the same untruth one step over. These patterns accept every
+ * form the app itself writes (`toSearchQuery` serialises with `String`), so no
+ * link this product generates can trip them.
+ */
+const RAW_NUMERIC_SHAPES: Partial<Record<DroppedSearchField, RegExp>> = {
+  minPriceCents: /^\d+$/,
+  maxPriceCents: /^\d+$/,
+  page: /^\d+$/,
+  minRating: /^\d+(?:\.\d+)?$/,
+};
+
+/**
+ * Params the URL carried that the URL layer could make nothing of.
+ *
+ * `nuqs` answers `null` for a value its parser cannot read, and each parser's
+ * default then stands in — which is right for the *value* and silent about the
+ * *ask*. `?page=abc` rendered page 1 and `?sort=evil` rendered the default
+ * order, both without a word, while `?page=2147483648` was announced as
+ * cleared: the screen named some of the params it dropped and not others, and
+ * which half you landed in depended on whether the value happened to survive
+ * as far as the schema.
+ *
+ * Numeric params are judged on their text (above) because their parser answers
+ * a number for input that is not one. Everything else is judged on the
+ * parser's own verdict, and the params whose parser cannot fail — plain
+ * strings and the tag list — reach `searchStateSchema` unchanged and are
+ * judged there.
+ *
+ * An empty value (`?sort=`) is a param that asks nothing, not one that asks
+ * something unreadable, so it is left alone — writing "that sort order isn't
+ * one we can use" over a blank would be inventing a complaint.
+ *
+ * Takes the raw params rather than reading them, so the rule is a unit test.
+ */
+export function unusableSearchParams(params: URLSearchParams): DroppedSearchField[] {
+  const unusable: DroppedSearchField[] = [];
+
+  for (const field of SEARCH_PARAM_FIELDS) {
+    const raw = params.get(field);
+
+    if (raw === null || raw === '') {
+      continue;
+    }
+
+    const shape = RAW_NUMERIC_SHAPES[field];
+
+    if (shape === undefined ? searchParsers[field].parse(raw) === null : !shape.test(raw.trim())) {
+      unusable.push(field);
+    }
+  }
+
+  return unusable;
+}
 
 /**
  * The line the screen shows when a param was cleared — `null` when none was.
@@ -234,7 +361,7 @@ export function clearedParamsLine(dropped: readonly DroppedSearchField[]): strin
     return null;
   }
 
-  const labels = [...new Set(dropped.map((field) => DROPPED_FIELD_LABELS[field]))];
+  const labels = droppedLabels(dropped);
 
   const subject =
     labels.length === 1
@@ -262,17 +389,30 @@ export function useSearchState(): UseSearchState {
   const [raw, setQuery] = useQueryStates(searchParsers, { history: 'push' });
 
   /*
+   * The raw params, alongside the parsed ones, because the two carry different
+   * information: `raw` says what each value ended up as, `searchParams` says
+   * what was asked for. A param `nuqs` could not read is already at its
+   * fallback by the time it reaches `parseSearchState`, so nothing but the URL
+   * itself can tell that it was ever there.
+   */
+  const searchParams = useSearchParams();
+
+  /*
    * Validated here rather than in the screen, because this hook is the only
    * way the URL reaches the screen. A component that reads `state` can format
    * it, compare it and query with it without checking it first — which is the
    * whole point, since the checking is what nobody remembers to do.
    *
    * Memoized on `raw`, which `useQueryStates` keeps stable while the URL is
-   * unchanged. Parsing afresh each render would hand every consumer a new
-   * object identity on renders the URL had nothing to do with — cheap in CPU,
-   * but it makes `state` unusable as an effect dependency or a `memo` prop.
+   * unchanged, and on the params object, which Next keeps stable the same way.
+   * Parsing afresh each render would hand every consumer a new object identity
+   * on renders the URL had nothing to do with — cheap in CPU, but it makes
+   * `state` unusable as an effect dependency or a `memo` prop.
    */
-  const { state, dropped } = useMemo(() => parseSearchState(raw as SearchState), [raw]);
+  const { state, dropped } = useMemo(
+    () => parseSearchState(raw as SearchState, searchParams),
+    [raw, searchParams],
+  );
 
   return {
     state,

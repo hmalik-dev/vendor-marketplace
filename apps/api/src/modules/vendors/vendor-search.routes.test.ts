@@ -325,14 +325,45 @@ describe('GET /vendors', () => {
   });
 
   /*
-   * Price matches when ANY active package falls in range, not only the
-   * cheapest: a vendor whose mid-tier is what was searched for is a real answer.
+   * The control says `Price · starting rate` and the card says `From $X`, so
+   * the filter is about that one number and not about the vendor's dearest
+   * tier. `Spread` starts at $500; a $3,000 floor is not asking for it, however
+   * expensive its top package is. This test asserted the opposite until #403 —
+   * that is the defect, not a case being given up.
    */
-  it('matches on any active package falling inside the price range', async () => {
+  it('filters on the starting rate, not on any package in range', async () => {
     await seedVendor({ user: 'user_a', businessName: 'Spread', prices: [50_000, 400_000] });
-    await seedVendor({ user: 'user_b', businessName: 'Cheap', prices: [50_000] });
+    await seedVendor({ user: 'user_b', businessName: 'Dear', prices: [320_000, 400_000] });
 
-    expect(names((await search('?minPriceCents=300000')).items)).toEqual(['Spread']);
+    expect(names((await search('?minPriceCents=300000')).items)).toEqual(['Dear']);
+  });
+
+  /*
+   * The other half of the same contract: a vendor whose starting rate is in
+   * band stays in it, however far above the ceiling their other packages go.
+   * Without this, moving the predicate onto MIN could have been written as
+   * "every package in range" and passed the test above.
+   */
+  it('keeps a vendor whose starting rate is in band but whose top tier is not', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Ladder', prices: [150_000, 900_000] });
+
+    const body = await search('?minPriceCents=100000&maxPriceCents=200000');
+    expect(names(body.items)).toEqual(['Ladder']);
+    expect(body.items[0]?.startingPriceCents).toBe(150_000);
+  });
+
+  /*
+   * A vendor with no active package has no starting rate, so no band can be
+   * true of them. They are still visible in an unfiltered search — that is the
+   * `Contact for pricing` card — which is what the second assertion holds.
+   */
+  it('excludes an unpriced vendor from every price band', async () => {
+    const unpriced = await seedVendor({ user: 'user_a', businessName: 'Unpriced' });
+    await harness.database.db.delete(servicePackages).where(eq(servicePackages.vendorId, unpriced));
+
+    expect(names((await search('?maxPriceCents=100000')).items)).toEqual([]);
+    expect(names((await search('?minPriceCents=0')).items)).toEqual([]);
+    expect(names((await search()).items)).toEqual(['Unpriced']);
   });
 
   it('applies both ends of the price range', async () => {
@@ -342,6 +373,21 @@ describe('GET /vendors', () => {
 
     const body = await search('?minPriceCents=100000&maxPriceCents=200000');
     expect(names(body.items)).toEqual(['Inside']);
+  });
+
+  /*
+   * The facet counts run through the same `filters()` builder as the page, so
+   * a price predicate that only reached one of them would leave the category
+   * list promising results the grid cannot show.
+   */
+  it('counts category facets on the starting rate too', async () => {
+    await seedVendor({ user: 'user_a', businessName: 'Spread', prices: [50_000, 400_000] });
+    await seedVendor({ user: 'user_b', businessName: 'Dear', prices: [320_000] });
+
+    const body = await search('?minPriceCents=300000');
+    expect(body.facets.categories.find((facet) => facet.categoryId === photographyId)?.count).toBe(
+      1,
+    );
   });
 
   it('rejects a price range that is inside out', async () => {

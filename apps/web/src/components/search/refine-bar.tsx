@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  centsToDollars,
+  dollarsToCents,
   formatPrice,
   TAG_CATEGORIES,
   VENDOR_SORT_OPTIONS,
@@ -10,7 +12,11 @@ import {
 } from '@vendor-marketplace/shared';
 import { useState } from 'react';
 import { TAG_CATEGORY_CHIP_LABELS, TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
-import { RangeDropdown, type RangePreset } from '@/components/ui/dropdown-range';
+import {
+  RangeDropdown,
+  type RangeDiscarded,
+  type RangePreset,
+} from '@/components/ui/dropdown-range';
 import { MultiSelectDropdown, SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import type { WireTag } from '@/lib/wire-schemas';
 import { cn } from '@/lib/utils';
@@ -165,23 +171,53 @@ function ChipClear({ label, onClear }: { label: string; onClear: () => void }): 
 /** Cents per dollar. Named, so neither direction below reads as a magic 100. */
 const CENTS_PER_DOLLAR = 100;
 
-/**
- * What the reader typed, as cents. `$1,800` and `1800` both mean 180,000.
- *
- * Digits only: a stray `$`, comma or space is what someone pasting a price
- * writes, and refusing it would be pedantry. A decimal is dropped with them —
- * nobody filters a vendor's starting rate to the cent, and a half-typed `1.` is
- * a state the field would otherwise have to render as an error.
- */
-function dollarsToCents(raw: string): number | null {
-  const digits = raw.replace(/[^\d]/g, '');
+/** A plain amount, with an optional decimal part — `1800`, `999.99`, `1.`, `.5`. */
+const AMOUNT_PATTERN = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
 
-  return digits === '' ? null : Number.parseInt(digits, 10) * CENTS_PER_DOLLAR;
+/**
+ * What the reader typed, as cents. `$1,800`, `1,800` and `1800` all mean
+ * 180,000; `999.99` means 99,999.
+ *
+ * Currency furniture is stripped — a `$`, a comma or a space is what someone
+ * pasting a price writes, and refusing it would be pedantry. **The decimal
+ * point is not furniture.** Stripping it with the rest turned `999.99` into a
+ * $99,999 floor: a filter a hundred times the one that was typed, applied with
+ * no message. A trailing `1.` is still a number and reads as `$1`, so a
+ * half-typed amount does not have to render as an error.
+ *
+ * Anything left over after that — a second dot, a letter, a bare `.` — is a
+ * value this control cannot read, and `null` is what the panel reports as
+ * discarded rather than guessing at.
+ */
+function typedAmountToCents(raw: string): number | null {
+  const cleaned = raw.replace(/[$,\s]/g, '');
+
+  if (!AMOUNT_PATTERN.test(cleaned)) {
+    return null;
+  }
+
+  /*
+   * The rounding itself is shared `dollarsToCents`, not a second copy of it:
+   * money is integer cents everywhere and one function owns the conversion
+   * (`.claude/rules/shared-contracts.md`). What is local here is the reading of
+   * a *typed string*, which nothing else in the repo does.
+   */
+  return dollarsToCents(Number(cleaned));
 }
 
-/** The stored cents back to the dollars the reader would have typed. */
-function centsToDollars(cents: number): string {
-  return String(Math.round(cents / CENTS_PER_DOLLAR));
+/**
+ * The stored cents back to the dollars the reader would have typed.
+ *
+ * Whole dollars stay whole — `$1,800` is not rendered `1800.00` — and cents
+ * appear only when there are cents to show, so re-opening the panel offers back
+ * exactly what was typed.
+ */
+function centsToTypedAmount(cents: number): string {
+  const dollars = centsToDollars(cents);
+
+  // The same whole-versus-fractional test `formatPrice` makes, so the field and
+  // the chip above it never disagree about whether there are cents to show.
+  return cents % CENTS_PER_DOLLAR === 0 ? String(dollars) : dollars.toFixed(2);
 }
 
 /**
@@ -197,6 +233,35 @@ const PRICE_PRESETS: readonly RangePreset[] = [
   { label: '$2–4k', min: 200_000, max: 400_000 },
   { label: '$4k+', min: 400_000, max: null },
 ];
+
+/**
+ * What the Price chip says it is filtering.
+ *
+ * **One bound is not a range, and the chip may not invent the other.** It read
+ * `${formatPrice(min ?? 0)} – ${max ?? PRICE_CEILING}+`, so a ceiling of $2,000
+ * on its own rendered `$0 – $2,000` — a floor the customer never set — and a
+ * floor on its own rendered `$999.99 – $10,000+`, a ceiling drawn from a
+ * constant that exists to give the slider a span, not to bound the market. Both
+ * are the same defect this ticket is named for: a control saying something
+ * other than what it filters.
+ *
+ * The vocabulary is the design's own, taken from the preset row frame `28`
+ * draws — `Under $1k`, `$4k+` — and frame `18` labels exactly this case
+ * `Under $1,200`.
+ */
+function priceChipLabel(minCents: number | null, maxCents: number | null): string {
+  if (minCents !== null && maxCents !== null) {
+    return `${formatPrice(minCents)} – ${formatPrice(maxCents)}`;
+  }
+  if (maxCents !== null) {
+    return `Under ${formatPrice(maxCents)}`;
+  }
+  if (minCents !== null) {
+    return `${formatPrice(minCents)}+`;
+  }
+
+  return 'Price';
+}
 
 export interface RefineBarProps {
   state: SearchState;
@@ -214,7 +279,7 @@ export interface RefineBarProps {
    * leave "that price range isn't one we can use" on screen over a range that
    * was subsequently accepted.
    */
-  onPriceApplied?: (discarded: boolean) => void;
+  onPriceApplied?: (discarded: RangeDiscarded) => void;
   className?: string;
 }
 
@@ -249,13 +314,7 @@ export function RefineBar({
     setOpenChip((current) => (next ? key : current === key ? null : current));
 
   const hasPrice = state.minPriceCents !== null || state.maxPriceCents !== null;
-  const priceLabel = hasPrice
-    ? `${formatPrice(state.minPriceCents ?? PRICE_FLOOR_CENTS)} – ${
-        state.maxPriceCents === null
-          ? `${formatPrice(PRICE_CEILING_CENTS)}+`
-          : formatPrice(state.maxPriceCents)
-      }`
-    : 'Price';
+  const priceLabel = priceChipLabel(state.minPriceCents, state.maxPriceCents);
 
   const ratingStep = RATING_STEPS.find((step) => step.value === state.minRating);
   const ratingLabel = state.minRating === null ? 'Rating' : (ratingStep?.label ?? 'Rating');
@@ -381,8 +440,8 @@ export function RefineBar({
               functions are the whole of the conversion.
             */
             format={formatPrice}
-            parse={dollarsToCents}
-            toEditable={centsToDollars}
+            parse={typedAmountToCents}
+            toEditable={centsToTypedAmount}
             onApply={(next, { discarded }) => {
               setState({ minPriceCents: next.min, maxPriceCents: next.max });
               onPriceApplied?.(discarded);

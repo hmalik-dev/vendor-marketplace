@@ -44,4 +44,6 @@
 - [`git push -q` trips the force-push hook](git-push-q-flag-trips-force-push-hook.md) — push with no short flags, and keep commit and push as separate calls
 - [Board rows do not all end with `|`](board-rows-lack-a-trailing-pipe.md) — `parts[-2]` silently writes into Capabilities; the board guard reports it as a bogus capability name
 - [Kill dev servers by lane port, never by name](kill-dev-servers-by-lane-port.md) — an unscoped pkill reaches every lane; it took down two mid-pass
-- [MCP Playwright cannot load storage state](mcp-playwright-cannot-load-storage-state.md) — signed-in browser verification needs a local Playwright script via `lane:exec`; never `networkidle`
+- [MCP Playwright and storage state](mcp-playwright-cannot-load-storage-state.md) — no MCP *tool* takes one, but `browser_run_code_unsafe` does; never `networkidle`
+- [Guard a delegated browser pass with a liveness watch](guard-a-delegated-browser-pass-with-a-liveness-watch.md) — a dev server that dies mid-pass makes the agent report nothing and look clean
+- [The Done row cannot ride in the code PR](the-done-row-cannot-ride-in-the-code-pr.md) — the row records the squash SHA, which does not exist until the queue merges; batch across lanes, not within one
