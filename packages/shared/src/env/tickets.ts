@@ -507,6 +507,9 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   414: ['storage'], // image references are stored keys the uploader writes
   415: ['core', 'stripe'], // states what a refund moved, and the browser pass drives a real one
   416: ['stripe'], // the refund call itself, against a real connected account
+  417: [], // search chrome — picker close, empty-state mark, `New` pill and its trigger
+  418: [], // Refine reads which tag groups apply to the searched category
+  419: [], // folds the Florals category into Decor, seed and migration
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

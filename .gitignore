@@ -130,3 +130,7 @@ skills-lock.json
 # blanket trailing rule risks re-ignoring the generated example that must stay
 # tracked.
 .vercel
+
+# Parity-review screenshots (#417). The written record is committed;
+# the PNGs are regenerable output and are not.
+parity-review/*.png
