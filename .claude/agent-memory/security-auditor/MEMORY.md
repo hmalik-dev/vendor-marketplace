@@ -43,3 +43,4 @@
 - [The deployed origin shares the dev Clerk instance](deployed-origin-shares-the-dev-clerk-instance.md) — one `E2E_BASE_URL` signs the E2E accounts, admin included, into production data; #392 made `e2e:auth` refuse to default off localhost
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live Clerk session JWTs; `FORBIDDEN_PATHS` covers the path as of #392, and no content rule ever will
 - [The public price filter is a pricing oracle](search-price-filter-is-a-pricing-oracle.md) — any-package EXISTS let a stranger binary-search a vendor's whole tier ladder; MIN only exposes the printed "From" price
+- [ClerkProvider carries no auth guarantee](clerk-provider-carries-no-auth-guarantee.md) — its server variant only adds `initialState` (needs `dynamic`) and dev keyless; `assertWebEnv` is now the sole gate on the inlined key
