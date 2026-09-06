@@ -1,12 +1,13 @@
 ---
 name: role-bounce-self-loop-admin-bookings
-description: FIXED — DASHBOARD_PATH_BY_ROLE.admin is now /admin, so the role bounce terminates; the invariant it broke (bounce destination must pass its own guard) still needs checking on every requireRole change
+description: FIXED — DASHBOARD_PATH_BY_ROLE.admin is now /admin, so the role bounce terminates; the maps moved to lib/role-routes.ts, where roleCanReach is a redirect hint and never a gate
 metadata:
   type: project
 ---
 
-**Status: fixed.** `DASHBOARD_PATH_BY_ROLE` in
-`apps/web/src/lib/current-user.ts` now reads `admin: '/admin'`, and
+**Status: fixed.** `DASHBOARD_PATH_BY_ROLE` — since #410 in
+`apps/web/src/lib/role-routes.ts`, not `current-user.ts` — now reads
+`admin: '/admin'`, and
 `apps/web/src/app/admin/layout.tsx` gates that route with
 `requireRole('admin')` — a role that passes its own destination's guard, so the
 bounce lands and stops. Re-verified 2026-09-04 against `#401`, which moved
@@ -28,10 +29,25 @@ flows in a browser with only the customer and vendor e2e accounts. Any page that
 narrows from `requireCurrentUser` + a hand check to `requireRole` newly exposes
 the admin branch.
 
+**`roleCanReach` / `ROLE_ROUTE_RULES` are a redirect hint, never a gate.** #410
+added them beside the two maps so `/after-sign-in` can _decide_ a destination
+instead of discovering it by bouncing. Audited 2026-09-05: the only non-test
+caller is `postSignInPath`, and `requireRole`, `redirectVendorToDashboard` and
+every API check are untouched. A rule missing or wrong costs a wasted hop or the
+#410 blank page — it can never admit anyone anywhere. **If a future diff ever
+consults this table to decide whether to render or return data, that is the
+finding**, because it is a regex list maintained by hand and the real answer
+lives in the local `users.role` read.
+
 **How to apply:** whenever a diff adds or changes a `requireRole` call or an
 entry in `DASHBOARD_PATH_BY_ROLE`, resolve the destination for **all three
 roles** and read the guard on each destination's own route. Also check
-`POST_SIGN_IN_PATH_BY_ROLE`, which is a separate map with a separate answer.
+`POST_SIGN_IN_PATH_BY_ROLE`, which is a separate map with a separate answer, and
+whether `ROLE_ROUTE_RULES` grew a matching rule — `role-routes.guard.test.ts`
+greps the gates out of `app/` and fails on drift in both directions, but it only
+sees literal `requireRole('<role>')` and `redirectVendorToDashboard(` under
+`app/`, so an inline `user.role !== 'admin'` check (as in
+`app/admin/vendors/export/route.ts`) is invisible to it.
 
 Related: [[validate-before-normalize-return-path]],
 [[route-handlers-do-not-inherit-layout-gates]]
