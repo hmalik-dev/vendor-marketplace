@@ -480,7 +480,39 @@ export interface CategorySeed {
    * here rather than in a column.
    */
   readonly vendorNoun: { readonly one: string; readonly many: string };
+  /**
+   * The tag groups the Refine bar may offer on a search for this category.
+   *
+   * A control that can open nothing is furniture (`01-foundations.md`), and
+   * `Dietary` on a photography search is exactly that: the four dietary tags
+   * are `Vegan`, `Vegetarian`, `Halal` and `Kosher` — diets, which only a
+   * vendor who puts food in a guest's hand can accommodate. `language` and
+   * `cultural` are universal: every vendor works in some language and knows
+   * some traditions, whatever they sell.
+   *
+   * **Here rather than in a `categories` column**, for the same reason
+   * `vendorNoun` is. The seed is the only writer either way — `seedCategories`
+   * upserts from this array and no surface in the product edits a category —
+   * so a column would buy the appearance of deploy-free editing and none of
+   * the substance, while costing a migration, a widened wire schema, and a
+   * prop threaded to a client component that only ever holds the slug out of
+   * the URL. Required rather than optional, so a twelfth category cannot
+   * forget to declare it. If the set ever does need to change without a
+   * deploy, this array is the single write point to migrate from.
+   */
+  readonly applicableTagCategories: readonly TagCategory[];
 }
+
+/**
+ * Every group but `dietary` — what a category that serves no food offers.
+ *
+ * Named rather than spelled out eleven times, so the nine categories that
+ * share this answer are visibly sharing one answer rather than nine that
+ * happen to agree.
+ */
+const NON_DIETARY_TAG_CATEGORIES: readonly TagCategory[] = TAG_CATEGORIES.filter(
+  (category) => category !== 'dietary',
+);
 
 /**
  * Names are deliberately one word: the landing grid reads as a row of nouns,
@@ -500,6 +532,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'camera',
     displayOrder: 1,
     vendorNoun: { one: 'photographer', many: 'photographers' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
     name: 'Entertainment',
@@ -509,6 +542,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'music',
     displayOrder: 2,
     vendorNoun: { one: 'entertainer', many: 'entertainers' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
     name: 'Catering',
@@ -518,6 +552,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'utensils',
     displayOrder: 3,
     vendorNoun: { one: 'caterer', many: 'caterers' },
+    applicableTagCategories: TAG_CATEGORIES,
   },
   {
     name: 'Venues',
@@ -527,6 +562,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'building-2',
     displayOrder: 4,
     vendorNoun: { one: 'venue', many: 'venues' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
     name: 'Florals',
@@ -536,6 +572,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'flower',
     displayOrder: 5,
     vendorNoun: { one: 'florist', many: 'florists' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
     name: 'Beauty',
@@ -545,6 +582,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'sparkles',
     displayOrder: 6,
     vendorNoun: { one: 'beauty pro', many: 'beauty pros' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
     name: 'Carts',
@@ -554,6 +592,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'ice-cream-cone',
     displayOrder: 7,
     vendorNoun: { one: 'cart', many: 'carts' },
+    applicableTagCategories: TAG_CATEGORIES,
   },
   {
     name: 'Decor',
@@ -563,6 +602,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'palette',
     displayOrder: 8,
     vendorNoun: { one: 'decorator', many: 'decorators' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
     name: 'Videography',
@@ -572,6 +612,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'video',
     displayOrder: 9,
     vendorNoun: { one: 'videographer', many: 'videographers' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
     name: 'Planning',
@@ -581,6 +622,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'clipboard-list',
     displayOrder: 10,
     vendorNoun: { one: 'planner', many: 'planners' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
   {
     name: 'Rentals',
@@ -590,6 +632,7 @@ export const CATEGORY_SEEDS: readonly CategorySeed[] = [
     icon: 'package',
     displayOrder: 11,
     vendorNoun: { one: 'rental supplier', many: 'rental suppliers' },
+    applicableTagCategories: NON_DIETARY_TAG_CATEGORIES,
   },
 ];
 
@@ -606,6 +649,22 @@ export function vendorNounFor(categorySlug: string | undefined, count: number): 
   }
 
   return count === 1 ? seed.vendorNoun.one : seed.vendorNoun.many;
+}
+
+/**
+ * The tag groups worth offering as filters on a search for this category.
+ *
+ * Falls back to **every** group when no category is selected or the slug is not
+ * one we seed. A search across the whole marketplace has caterers in its result
+ * set, so `Dietary` there can return something; and a slug we do not recognise
+ * has told us nothing about which filters are pointless, so hiding a control on
+ * that basis would be a guess. The narrowing is only ever made from a category
+ * we actually know.
+ */
+export function tagCategoriesFor(categorySlug: string | undefined): readonly TagCategory[] {
+  const seed = CATEGORY_SEEDS.find((category) => category.slug === categorySlug);
+
+  return seed?.applicableTagCategories ?? TAG_CATEGORIES;
 }
 
 /**
