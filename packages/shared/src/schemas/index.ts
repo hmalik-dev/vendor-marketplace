@@ -1630,6 +1630,26 @@ export const vendorCardSchema = z.object({
   reviewCount: z.int().min(0),
   /** Cheapest active package, or `null` when the vendor has none priced yet. */
   startingPriceCents: z.int().min(0).nullable(),
+  /**
+   * Whether this vendor joined recently enough to count as new.
+   *
+   * A fact about the profile, not a rendering instruction — what a consumer
+   * does with it is the consumer's business, and today the search card answers
+   * it with frame `02`'s `New` pill.
+   *
+   * **Recency, not a missing review** (#417). The card used to infer newness
+   * from `reviewCount === 0`, and the account holder ruled that wrong: an
+   * established vendor can be review-less and must not be labelled new.
+   *
+   * Answered server-side rather than derived from a timestamp on the client.
+   * The viewer has their own clock, so a boundary vendor would render one way
+   * on the server and another after hydration; the window itself is the
+   * producer's policy and currently lives in the API.
+   *
+   * Required, so a new producer of this shape has to answer the question rather
+   * than inherit `false` from an omission.
+   */
+  isNew: z.boolean(),
   categories: z.array(z.object({ id: uuidSchema, name: z.string(), slug: z.string() })),
   /** Only present when the query carried a date: the answer that was asked for. */
   availableOnDate: z.boolean().optional(),

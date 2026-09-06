@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { useModalSheet } from '@/lib/use-modal-sheet';
 import { useViewerToday } from '@/lib/use-viewer-today';
 import { Button } from '@/components/ui/button';
-import { EmptyState } from '@/components/ui/empty-state';
+import { EmptyState, SearchEmptyGlyph } from '@/components/ui/empty-state';
 import { NO_DISCARD, type RangeDiscarded } from '@/components/ui/dropdown-range';
 import { VendorCardSkeleton } from '@/components/ui/skeleton';
 import { VendorCard } from '@/components/vendors/vendor-card';
@@ -599,25 +599,44 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
             customer actually set, the sentence names the narrowest one, and
             each button loosens exactly one thing so they can see what changed.
           */
-          <>
-            <EmptyState
-              icon={<SearchX />}
-              scale="marketing"
-              headline={noResultsHeadline(state, categorySlugs)}
-              description={
-                // With nothing filtered there is no culprit to name, so it says
-                // where to go next instead of inventing a diagnosis.
-                diagnosis ?? 'Try a different vendor type or city.'
-              }
-              action={
-                <div className="flex flex-wrap items-center justify-center gap-2.5">
-                  {relaxations(state, categorySlugs).map((relaxation, index) => (
-                    <button
-                      key={relaxation.label}
-                      type="button"
-                      onClick={() => setState(relaxation.patch)}
-                      className={cn(
-                        /*
+          /*
+            **Centred in the pane, not in the viewport** (#417 item 2b), on the
+            account holder's instruction: *"for the empty search state -
+            vertically center the no results content so it doesnt read as a
+            misaligned page"*. The mark, the headline, the explanation and the
+            relaxation buttons used to begin just under the Refine bar and leave
+            the rest of the pane empty, so the screen read as a page that failed
+            to fill rather than as a considered state.
+
+            `min-h-full` against `app-pane`'s `height: 100%`, and `m-auto` on
+            the block rather than `justify-center` on the box. The two centre
+            identically while the content fits; they differ when it does not —
+            `justify-content: center` on a scroll container pushes the first
+            child's top out of reach, and an auto margin resolves to 0 instead.
+            The band below can make this taller than the pane at 1024 and under.
+
+            The header and the Refine bar are outside this box and do not move.
+          */
+          <div data-slot="search-no-results" className="flex min-h-full flex-col">
+            <div className="m-auto w-full">
+              <EmptyState
+                icon={<SearchEmptyGlyph />}
+                scale="marketing"
+                headline={noResultsHeadline(state, categorySlugs)}
+                description={
+                  // With nothing filtered there is no culprit to name, so it says
+                  // where to go next instead of inventing a diagnosis.
+                  diagnosis ?? 'Try a different vendor type or city.'
+                }
+                action={
+                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                    {relaxations(state, categorySlugs).map((relaxation, index) => (
+                      <button
+                        key={relaxation.label}
+                        type="button"
+                        onClick={() => setState(relaxation.patch)}
+                        className={cn(
+                          /*
                           Frame `18`'s own `.btnP` / `.btnS`: 13.5px/600 at a
                           10px radius, `padding:11px 20px` primary and `10px
                           20px` secondary — the secondary's 1px border makes up
@@ -628,11 +647,11 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
                           frame's padding gives ~40px, which is under the law's
                           44 for touch, and no frame draws this state narrow.
                         */
-                        'min-h-11 rounded-[10px] px-5 text-base font-semibold lg:min-h-0',
-                        // The first is the one most likely to bring results back,
-                        // so it is the primary action rather than one of a row.
-                        index === 0
-                          ? /*
+                          'min-h-11 rounded-[10px] px-5 text-base font-semibold lg:min-h-0',
+                          // The first is the one most likely to bring results back,
+                          // so it is the primary action rather than one of a row.
+                          index === 0
+                            ? /*
                               clay-400, not clay-500. `01-foundations.md` labels
                               clay-400 PRIMARY FILL and clay-500 "clay as text";
                               `03-components.md`'s Primary is `bg-clay-400`, and
@@ -640,39 +659,40 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
                               clay-400. clay-500 was a step off in the one place
                               the palette names explicitly.
                             */
-                            'bg-clay-400 py-2.75 text-stone-0 hover:bg-clay-500'
-                          : /*
+                              'bg-clay-400 py-2.75 text-stone-0 hover:bg-clay-500'
+                            : /*
                               `text-stone-800` resolved to Tailwind's built-in
                               `#292524` — the theme defines no `stone-800`, so
                               the class fell through the token layer entirely
                               and put an off-palette colour on a public page.
                               The frame's `.btnS` draws `#23201C`: stone-900.
                             */
-                            'border border-stone-300 bg-stone-0 py-2.5 text-stone-900 hover:bg-stone-100',
-                      )}
-                    >
-                      {relaxation.label}
-                    </button>
-                  ))}
-                  {refineCount > 0 ? (
-                    <button
-                      type="button"
-                      onClick={clearRefinements}
-                      className="text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
-                    >
-                      Clear all
-                    </button>
-                  ) : null}
-                </div>
-              }
-            />
-            {/*
-              Only with a date to be near. Without one the customer has not
-              asked a date question, and the band would be answering something
-              nobody said.
-            */}
-            <NearbyDatesBand date={state.date} category={state.category} city={state.city} />
-          </>
+                              'border border-stone-300 bg-stone-0 py-2.5 text-stone-900 hover:bg-stone-100',
+                        )}
+                      >
+                        {relaxation.label}
+                      </button>
+                    ))}
+                    {refineCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={clearRefinements}
+                        className="text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
+                      >
+                        Clear all
+                      </button>
+                    ) : null}
+                  </div>
+                }
+              />
+              {/*
+                Only with a date to be near. Without one the customer has not
+                asked a date question, and the band would be answering something
+                nobody said.
+              */}
+              <NearbyDatesBand date={state.date} category={state.category} city={state.city} />
+            </div>
+          </div>
         ) : (
           <div className={GRID_COLUMNS}>
             {result?.items.map((vendor) => (

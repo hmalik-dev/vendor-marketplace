@@ -165,18 +165,25 @@ describe('VendorCardSkeleton', () => {
     expect(bars[4]).toContain('h-[20px]');
   });
 
-  it('draws no chip row, because the loaded card draws none', () => {
+  it('draws no badge row, because the card a skeleton stands in for draws none', () => {
     const { container } = render(<VendorCardSkeleton />);
 
     expect(container.querySelector('.flex-wrap')).toBeNull();
     /*
-     * The card renders the row only when it has a chip to put in it, and on the
-     * search grid it never does: the category chip is compact-suppressed and the
-     * grid passes no availability date. An empty flex box still contributes its
-     * `margin-top`, so a skeleton drawing one stood 8px taller than the card it
-     * stands in for — which is the shift this state exists to prevent.
+     * The card renders the row only when it has something to put in it. On the
+     * search grid the category chip is compact-suppressed and the grid passes
+     * no availability date, so the row is absent for every established vendor —
+     * and an empty flex box still contributes its `margin-top`, which is how a
+     * skeleton drawing one stood 8px taller than the card it stands in for.
+     *
+     * **`isNew` is the one thing that can put the row back** (#417 item 3):
+     * frame `02` draws the `New` pill on a search card, so a genuinely new
+     * vendor is 8px taller than its own skeleton. That is the frame's cost, not
+     * a defect to design around — it is bounded at 8px, the grid sizes a row to
+     * its tallest card so it cannot cascade, and the alternative is reserving
+     * the space on every card for a badge most of them will never carry.
      */
-    expect(cardSource).toContain('categoryChips.length > 0 || freeDate ?');
+    expect(cardSource).toContain('categoryChips.length > 0 || freeDate || vendor.isNew ?');
     expect(cardSource).toContain(
       'const categoryChips = isCompact ? [] : vendor.categories.slice(0, 1);',
     );

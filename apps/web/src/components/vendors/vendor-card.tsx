@@ -69,6 +69,23 @@ const DATE_CHIP_FORMATTERS = {
   }),
 } as const;
 
+/**
+ * The badge row's box, at both densities.
+ *
+ * One shape, three tenants: the category chip, the sage `Free <date>` chip and
+ * frame `02`'s `New` pill all draw the same box and differ only in colour. It
+ * was written out per chip until #417 added the third copy — keyed by density
+ * here, as `DATE_CHIP_FORMATTERS` above already is, so the next frame revision
+ * to chip geometry is one edit rather than three.
+ *
+ * The compact numbers are frame `02`'s own: `10.5px/600` at a 5px radius on
+ * `3px 8px` of padding.
+ */
+const CHIP_SHAPE = {
+  compact: 'rounded-[5px] px-2 py-0.75 text-label font-semibold',
+  featured: 'rounded-md px-2.5 py-1 text-xs font-semibold',
+} as const;
+
 interface ShellProps {
   slug: string;
   className: string;
@@ -277,26 +294,44 @@ export function VendorCard({
             `02` search grid and on `04`'s rail card alike. The 12.5px in `14
             Adaptations` is the tablet and mobile size, not the desktop one.
           */}
-          <p className="mt-0.5 text-meta text-stone-600">
-            {isReviewed ? (
-              <>
-                <span aria-hidden="true">★ </span>
-                {/*
+          {/*
+            **Not rendered when it holds nothing**, the same rule the badge row
+            below follows and for the same reason: an empty `<p>` still
+            contributes its `margin-top` and a line box, so a published vendor
+            with no reviews *and* no city would have stood ~17px taller than the
+            frame draws, on a blank line. Reachable since #417 moved `New` off
+            this line — before that the branch always had a word in it.
+          */}
+          {isReviewed || location ? (
+            <p className="mt-0.5 text-meta text-stone-600">
+              {isReviewed ? (
+                <>
+                  <span aria-hidden="true">★ </span>
+                  {/*
                   One weight and one colour for the whole line. The frame sets
                   the meta line once — `font-size:12px;color:#6B6459` — and
                   draws `★ 4.9 (127) · Austin, TX` inside it with nothing
                   emphasised, so the rating is not a second treatment.
                 */}
-                {vendor.avgRating.toFixed(1)}
-                <span className="sr-only"> out of 5, from {vendor.reviewCount} reviews</span> (
-                {vendor.reviewCount}){location ? ` · ${location}` : ''}
-              </>
-            ) : (
-              // No invented numbers: an unreviewed vendor shows no rating at
-              // all rather than a 0.0 that reads as a bad one.
-              <>New{location ? ` · ${location}` : ''}</>
-            )}
-          </p>
+                  {vendor.avgRating.toFixed(1)}
+                  <span className="sr-only"> out of 5, from {vendor.reviewCount} reviews</span> (
+                  {vendor.reviewCount}){location ? ` · ${location}` : ''}
+                </>
+              ) : (
+                /*
+                No invented numbers: an unreviewed vendor shows no rating at all
+                rather than a 0.0 that reads as a bad one.
+
+                `New` used to stand in for the rating here (#417 item 3). It was
+                two mistakes in one line — it drew as plain meta text where
+                frame `02` draws a pill, and it read a *missing review* as
+                newness. The badge is its own row below now, and it answers a
+                question this line never asked.
+              */
+                location
+              )}
+            </p>
+          ) : null}
 
           {/*
             The compact card carries the availability chip alone. The search
@@ -310,25 +345,36 @@ export function VendorCard({
             the price rule that no frame draws. It put the 1024 card at 327.6px
             against the 319.6px `27 Search results — 1024` measures.
           */}
-          {categoryChips.length > 0 || freeDate ? (
+          {categoryChips.length > 0 || freeDate || vendor.isNew ? (
             <div className={cn('flex flex-wrap', isCompact ? 'mt-2 gap-1.25' : 'mt-2.5 gap-1.5')}>
+              {/*
+                Frame `02`'s `New` pill, in its own row **beside** a real rating
+                rather than in place of one: the frame draws it under
+                `★ 5.0 (17)`, so a genuinely new vendor who has already been
+                reviewed shows both facts.
+
+                `10.5px/600` at a 5px radius on `3px 8px` of padding — the
+                frame's own inline span, not its `.pill` class, which is a
+                different 10px uppercase shape. `#F0EAE1` is `stone-200` and
+                `#4A443C` is `stone-700`, exactly.
+
+                Whether it draws at all is `isNew`, which is a server answer
+                about how recently the profile was created — see the API's
+                `vendor-recency.ts` for the ruling and the window.
+              */}
+              {vendor.isNew ? (
+                <span className={cn(CHIP_SHAPE[density], 'bg-stone-200 text-stone-700')}>New</span>
+              ) : null}
               {categoryChips.map((category) => (
                 <span
                   key={category.id}
-                  className="rounded-md bg-stone-150 px-2.5 py-1 text-xs font-semibold text-stone-700"
+                  className={cn(CHIP_SHAPE[density], 'bg-stone-150 text-stone-700')}
                 >
                   {category.name}
                 </span>
               ))}
               {freeDate ? (
-                <span
-                  className={cn(
-                    'font-semibold bg-sage-50 text-sage-600',
-                    isCompact
-                      ? 'rounded-[5px] px-2 py-0.75 text-label'
-                      : 'rounded-md px-2.5 py-1 text-xs',
-                  )}
-                >
+                <span className={cn(CHIP_SHAPE[density], 'bg-sage-50 text-sage-600')}>
                   {/* Parsed as UTC: a `DATE` must never shift by a local offset. */}
                   Free {DATE_CHIP_FORMATTERS[density].format(new Date(`${freeDate}T00:00:00Z`))}
                 </span>

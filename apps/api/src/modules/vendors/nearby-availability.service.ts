@@ -37,7 +37,7 @@ export async function findNearbyAvailability(
     throw validationFailed('That date has already passed — pick today or a later one');
   }
 
-  const page = await findVendorsFreeNearby(db, query, toDateString(now));
+  const page = await findVendorsFreeNearby(db, query, toDateString(now), now);
 
   return { items: page.items, total: page.total, windowDays: query.windowDays };
 }

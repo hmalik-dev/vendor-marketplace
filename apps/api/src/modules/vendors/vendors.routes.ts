@@ -61,7 +61,12 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: vendorSearchResultSchema },
       },
     },
-    async (request) => searchPublishedVendors(app.db, request.query),
+    /*
+     * `app.clock()`, like every other date-sensitive route here: the `New`
+     * badge is a "now" answer (`vendor-recency.ts`), and a `new Date()` inside
+     * the DAO would be one this instance's clock cannot pin.
+     */
+    async (request) => searchPublishedVendors(app.db, request.query, app.clock()),
   );
 
   /**

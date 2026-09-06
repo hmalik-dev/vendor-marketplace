@@ -75,6 +75,9 @@ function renderSelect(value = ''): { onChange: ReturnType<typeof vi.fn> } {
 const trigger = (): HTMLInputElement =>
   screen.getByRole('combobox', { name: 'Vendor type' }) as HTMLInputElement;
 
+/** The segment box around the field — the label, the input and the padding. */
+const field = (): HTMLElement => trigger().closest('[data-slot="combobox-field"]') as HTMLElement;
+
 describe('CategorySelect', () => {
   it('shows the selected category, not a free-text value', () => {
     renderSelect('photography');
@@ -310,6 +313,59 @@ describe('CategorySelect', () => {
     await user.keyboard('{Enter}');
     expect(onChange).toHaveBeenCalledWith('florals');
     expect(trigger().value).toBe('Florals');
+  });
+
+  /*
+   * #417 BUG1. Committing with a **real pointer** left the panel open: the row
+   * is a `<button>`, so mousedown moved focus into the panel, and `commit`'s
+   * focus-restore then fired a genuine `focus` event on a field that opens on
+   * focus. A programmatic `.click()` never moved focus, so it never reopened —
+   * which is why the suite was green while the control was visibly broken.
+   */
+  it('closes the panel when a row is committed with a real pointer', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await user.click(await screen.findByRole('option', { name: /^Photography/ }));
+
+    expect(trigger().getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+  });
+
+  /*
+   * #417 item 1c. The `<input>` is a genuine typeable combobox and carries
+   * `cursor: text`; the box around it carried `cursor: auto`, so the micro-label
+   * and the segment's padding showed the default arrow while the value showed a
+   * caret. One control, two cursors.
+   */
+  it('carries one cursor across the whole segment', () => {
+    renderSelect('');
+
+    expect(field().className).toContain('cursor-text');
+    /*
+     * The label declares it too, rather than inheriting: Preflight gives
+     * `<label>` its own `cursor: default`, and a real declaration beats an
+     * inherited value. Measured in Chromium at 1440 — with the segment and the
+     * input both reading `text`, the micro-label between them still drew an
+     * arrow, which the class list alone said nothing about.
+     */
+    expect(screen.getByText('Vendor type').className).toContain('cursor-text');
+  });
+
+  /*
+   * …and `cursor: text` has to be true rather than decorative: clicking the
+   * segment's own padding puts a caret in the field, so the promise the cursor
+   * makes is the one the control keeps. The label already does this through
+   * `htmlFor`; the padding is what did nothing.
+   */
+  it('puts a caret in the field when the segment’s padding is clicked', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(field());
+
+    expect(document.activeElement).toBe(trigger());
   });
 
   /*

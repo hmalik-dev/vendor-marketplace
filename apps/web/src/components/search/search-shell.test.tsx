@@ -322,6 +322,57 @@ describe('SearchShell no results — frame 18', () => {
     expect(screen.getByRole('button', { name: 'Any rating' })).toBeDefined();
   });
 
+  /*
+   * #417 item 2. The app drew a 32x32 `lucide-search-x` where frame `18` draws
+   * the product's own twin-ring mark: two 38x38 circles offset 24px, one
+   * `1.5px solid #D5CEC2` and one `1.5px dashed`. An imported icon saying
+   * "search failed" on a state where nothing failed.
+   */
+  it('draws frame 18’s twin-ring mark, not a search-x icon', async () => {
+    state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
+
+    const { container } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await screen.findByRole('heading', { name: 'No photographers match both filters' });
+    const empty = container.querySelector('[data-slot="empty-state"]');
+
+    expect(empty?.querySelector('svg')).toBeNull();
+
+    const rings = [...(empty?.querySelectorAll('span.rounded-full') ?? [])].map(
+      (ring) => ring.className,
+    );
+
+    expect(rings).toHaveLength(2);
+    expect(rings.every((ring) => ring.includes('border-stone-400'))).toBe(true);
+    // One solid, one dashed — the pair is the mark.
+    expect(rings.filter((ring) => ring.includes('border-dashed'))).toHaveLength(1);
+  });
+
+  /*
+   * #417 item 2b, on the account holder's instruction. The block began under
+   * the Refine bar and left the pane empty below it, so the screen read as a
+   * page that failed to fill.
+   *
+   * The declared mechanism, because jsdom performs no layout and a geometric
+   * assertion here would pass on nothing: `min-h-full` against `app-pane`'s
+   * `height: 100%`, and an **auto margin** rather than `justify-center`, which
+   * would push the mark out of reach on a pane too short for the block. The
+   * rendered result was measured in the browser at 1440 and at 1024.
+   */
+  it('centres the no-results block in the results pane', async () => {
+    state = baseState({ category: 'photography', date: '2099-06-14', minRating: 4 });
+
+    const { container } = render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await screen.findByRole('heading', { name: 'No photographers match both filters' });
+    const box = container.querySelector('[data-slot="search-no-results"]');
+
+    expect(box?.parentElement?.className).toContain('app-pane');
+    expect(box?.className).toContain('min-h-full');
+    expect(box?.firstElementChild?.className).toContain('m-auto');
+    expect(box?.className).not.toContain('justify-center');
+  });
+
   it('diagnoses nothing, and offers nothing to loosen, on an unfiltered search', async () => {
     state = baseState({ category: 'photography' });
 

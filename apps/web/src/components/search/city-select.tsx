@@ -181,7 +181,7 @@ export function CitySelect({
       density={isHero ? 'default' : 'compact'}
       scrim={isHero}
       className={cn('flex min-w-0 flex-col rounded-full text-left', className)}
-      labelClassName={cn('cursor-text', labelClassName)}
+      labelClassName={labelClassName}
       inputClassName={(open) =>
         cn(
           'w-full min-w-0 truncate bg-transparent outline-none placeholder:text-stone-600',
