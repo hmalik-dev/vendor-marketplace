@@ -71,11 +71,53 @@ describe('Banner', () => {
   it('renders a title above the sentence when one is given', () => {
     render(
       <Banner status="settled" title="Payout connected">
-        You&rsquo;ll be paid the day after each event.
+        You&apos;ll be paid the day after each event.
       </Banner>,
     );
 
     expect(screen.getByText('Payout connected')).toBeDefined();
     expect(screen.getByText(/paid the day after each event/)).toBeDefined();
+  });
+
+  /*
+   * Frame `26 State library` is the banner's vocabulary — "build these once as
+   * components; every screen above composes from them" — and draws all four at
+   * `border-radius: 12px`, which is `--radius-panel`.
+   *
+   * This computed `rounded-xl`'s **14**, a number no frame draws: `26` says 12
+   * and `16 Server error` says 10. Ruled 2026-09-06 (#372) in
+   * `03-components.md`, corroborating the vocabulary tile over the one screen
+   * instance.
+   */
+  it('takes the state library radius, not a value between its two frames', () => {
+    render(<Banner status="settled">No payment was taken.</Banner>);
+
+    const className = screen.getByRole('status').className;
+
+    expect(className).toContain('rounded-panel');
+    expect(className).not.toContain('rounded-xl');
+  });
+
+  /*
+   * **The border is part of the banner.** Frame `16` draws its money-position
+   * strip borderless and is the only frame that does, so the ruling is that the
+   * component wins and the frame is corrected — the alternative was a bespoke
+   * variant for one screen, which is how a component library stops being one.
+   *
+   * `--color-sage-300` is named "sage banner border" in the theme, which is the
+   * corroborating evidence: the token exists for this edge.
+   */
+  it.each([
+    ['informational' as const, 'border-steel-200'],
+    ['pending' as const, 'border-gold-300'],
+    ['failed' as const, 'border-error-200'],
+    ['settled' as const, 'border-sage-300'],
+  ])('keeps the %s border frame 26 draws', (status, border) => {
+    render(<Banner status={status}>One sentence.</Banner>);
+
+    const className = screen.getByRole('status').className;
+
+    expect(className).toContain('border');
+    expect(className).toContain(border);
   });
 });

@@ -372,6 +372,38 @@ describe('seedE2eFixtures', () => {
     });
 
     /*
+     * **The same run is the empty-hub customer fixture** — the one frames `19`
+     * and `07`'s zero-state need, and the reason #359 could never drive that
+     * screen: the fixture customer's only booking is the request seeded to the
+     * fixture vendor, so clearing the vendor's requests empties the customer's
+     * hub in the same transaction. There is no second account to provision and
+     * no `E2E_*` variable to add; `pnpm db:seed:e2e:draft` produces both empty
+     * states at once.
+     *
+     * Scoped to the customer's own rows rather than to the whole table, which
+     * is what makes it a *fixture* test rather than a restatement of the one
+     * above: a later seed that keeps a request belonging to somebody else would
+     * still leave this customer's hub empty, and a change that leaves them a
+     * booking would fail here even while the table-wide count stayed at zero
+     * for the vendor.
+     */
+    it('leaves the customer account with nothing in its bookings hub', async () => {
+      const result = await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
+
+      const theirs = await database.db
+        .select()
+        .from(bookingRequests)
+        .where(eq(bookingRequests.customerId, result.customerUserId));
+
+      expect(theirs).toHaveLength(0);
+      // And the account itself is still there to sign in as — an empty hub, not
+      // a missing customer.
+      expect(
+        await database.db.select().from(users).where(eq(users.id, result.customerUserId)),
+      ).toHaveLength(1);
+    });
+
+    /*
      * The state the frame never draws, and the reason the requests are deleted
      * rather than skipped: the account is long-lived, so a draft seeded after
      * any earlier pass would otherwise be an unpublished storefront with

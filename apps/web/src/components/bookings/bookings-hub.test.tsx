@@ -163,7 +163,7 @@ describe('BookingsHub', () => {
     expect(screen.getByText('No bookings yet')).toBeDefined();
     expect(
       screen.getByText(
-        /Every request you send will land here, grouped by month, with its status and the vendor’s replies\./,
+        /Every request you send will land here, grouped by month, with its status and the vendor's replies\./,
       ),
     ).toBeDefined();
     expect(screen.getByRole('link', { name: 'Find a vendor' }).getAttribute('href')).toBe(

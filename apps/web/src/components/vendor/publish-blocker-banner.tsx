@@ -57,7 +57,7 @@ export function PublishBlockerBanner({
       className="mb-4"
       title={
         <>
-          Your profile isn&rsquo;t live yet &mdash; {blockers.length} thing
+          Your profile isn&apos;t live yet &mdash; {blockers.length} thing
           {blockers.length === 1 ? '' : 's'} left
         </>
       }

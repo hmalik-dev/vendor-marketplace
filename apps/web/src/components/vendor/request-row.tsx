@@ -354,10 +354,10 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
               a specific commitment and the dashboard may be showing four rows
               that look alike.
             */}
-            <DialogTitle>Decline {customerName}&rsquo;s request?</DialogTitle>
+            <DialogTitle>Decline {customerName}&apos;s request?</DialogTitle>
             <DialogDescription>
-              {declineConsequence(request)} You can&rsquo;t undo this or accept the request
-              afterwards. If you&rsquo;re unsure, send a quote or message them instead.
+              {declineConsequence(request)} You can&apos;t undo this or accept the request
+              afterwards. If you&apos;re unsure, send a quote or message them instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

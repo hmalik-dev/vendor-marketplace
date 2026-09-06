@@ -201,4 +201,38 @@ describe('Button — while its own action runs', () => {
       screen.getByRole('link', { name: 'Find a vendor' }).querySelector('[role=status]'),
     ).toBeNull();
   });
+
+  /*
+   * **No elevation on a filled clay button, at rest or on hover.**
+   *
+   * `03-components.md` specifies Primary as fill, text, weight, padding and
+   * radius, and states hover as `clay-500` plus `scale(1.02)` — nothing about a
+   * shadow. The frames settle it by a margin that leaves nothing to weigh: of
+   * the **112** filled clay controls drawn across the whole design contract,
+   * exactly one carries a `box-shadow`, and that one is a focus ring.
+   *
+   * Found on frame `04`'s `Continue to review` (#359) and fixed on the variant
+   * rather than at the call site, because a per-screen override would have left
+   * the same halo under every other primary action in the product. Asserted on
+   * the variant here for the same reason.
+   */
+  it('gives the primary variant no shadow, which is what every frame draws', () => {
+    render(<Button variant="primary">Send request</Button>);
+
+    const className = screen.getByRole('button', { name: 'Send request' }).className;
+
+    expect(className).toContain('bg-clay-400');
+    expect(className).not.toMatch(/(^|[\s:])shadow-/);
+  });
+
+  it.each(['secondary', 'ghost', 'ink', 'destructive'] as const)(
+    'leaves the %s variant without one either',
+    (variant) => {
+      render(<Button variant={variant}>Send request</Button>);
+
+      expect(screen.getByRole('button', { name: 'Send request' }).className).not.toMatch(
+        /(^|[\s:])shadow-/,
+      );
+    },
+  );
 });

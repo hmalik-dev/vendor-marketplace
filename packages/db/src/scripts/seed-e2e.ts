@@ -271,6 +271,13 @@ async function main(): Promise<void> {
    * the only way to render frame `27 Vendor dashboard - empty . 1024` (#371).
    * Re-running without the flag restores the published fixture, so it needs no
    * separate undo.
+   *
+   * **It is also the empty-hub customer fixture** (#372). The fixture
+   * customer's only booking is the request seeded to the fixture vendor, so
+   * clearing that vendor's requests empties `/bookings` for the customer in the
+   * same transaction — which is the state frames `19` and `07`'s zero-state
+   * need, and which #359 could not drive because it looked like it needed a
+   * second account. It does not.
    */
   const draft = process.argv.includes('--draft');
 
@@ -291,7 +298,8 @@ async function main(): Promise<void> {
     if (draft) {
       console.log(
         'Seeded the end-to-end fixtures in DRAFT: the vendor account owns an unpublished ' +
-          'storefront with no requests. Re-run without --draft to restore the published one.',
+          'storefront with no requests, and the customer account has an empty bookings hub. ' +
+          'Re-run without --draft to restore the published one.',
       );
       console.log(`  vendor profile ${result.vendorProfileId}`);
       return;

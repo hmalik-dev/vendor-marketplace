@@ -159,8 +159,8 @@ export function ReviewsPane({
     } catch (error) {
       setFailure(
         error instanceof ApiClientError
-          ? 'We couldn’t load more reviews. Try again in a moment.'
-          : 'We couldn’t reach the server. Check your connection and try again.',
+          ? "We couldn't load more reviews. Try again in a moment."
+          : "We couldn't reach the server. Check your connection and try again.",
       );
     } finally {
       setLoadingMore(false);
@@ -210,7 +210,7 @@ export function ReviewsPane({
           headline={unread ? 'Reviews are on their way' : 'No reviews yet'}
           description={
             unread
-              ? `${businessName} has ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}. We couldn’t load them just now — reload the page to try again.`
+              ? `${businessName} has ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}. We couldn't load them just now — reload the page to try again.`
               : `Every review here comes from a completed booking, so ${businessName} has none until they've worked an event.`
           }
           action={writeAction}

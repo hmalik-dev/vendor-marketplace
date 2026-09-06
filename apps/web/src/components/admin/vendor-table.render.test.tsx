@@ -23,7 +23,7 @@ describe('SuspensionConsequence', () => {
     expect(screen.getByText(/refunded in full/)).toBeDefined();
     expect(
       screen.getByText(
-        /reverses the vendor’s share out of their Stripe balance and can leave it negative/,
+        /reverses the vendor's share out of their Stripe balance and can leave it negative/,
       ),
     ).toBeDefined();
   });

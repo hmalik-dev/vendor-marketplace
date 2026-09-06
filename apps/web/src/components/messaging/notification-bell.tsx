@@ -3,6 +3,7 @@
 import { Bell } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { EmptyStateGlyph } from '@/components/ui/empty-state';
 import { useApi } from '@/lib/use-api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { wireNotificationPageSchema, type WireNotification } from '@/lib/wire-schemas';
@@ -215,7 +216,34 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
           </div>
 
           {items.length === 0 ? (
-            <p className="px-4 py-6 text-center text-base text-stone-600">No notifications yet</p>
+            /*
+              **Decided, not inherited** (#361). This was the one empty state in
+              the product that had opted out of the vocabulary by never opting
+              in: #305 made the two-circle glyph the `EmptyState` default, so
+              nine call sites gained it without being edited, and this is not a
+              call site, so no default could reach it.
+
+              It is still not one, and that is the ruling rather than an
+              omission. `40-states.md`'s empty state is written for a **pane** —
+              a 26px Instrument Serif headline, a sentence and *one primary CTA*,
+              with "the surrounding chrome stays drawn". This is a 360px popover
+              whose whole content is the list being replaced: that stack would be
+              physically larger than the notifications it stands in for, and the
+              CTA would be a second control competing with `Mark all read` in a
+              panel that has room for neither.
+
+              What the state takes from the vocabulary is the piece that scales:
+              the muted two-circle glyph, which is what makes an empty box read
+              as this product's empty state rather than as a failed fetch. The
+              sentence was already the frame's.
+            */
+            <div
+              data-slot="notification-empty"
+              className="flex flex-col items-center gap-2.5 px-4 py-6 text-center"
+            >
+              <EmptyStateGlyph />
+              <p className="text-base text-stone-600">No notifications yet</p>
+            </div>
           ) : (
             <ul className="max-h-96 overflow-y-auto">
               {items.map((item) => {

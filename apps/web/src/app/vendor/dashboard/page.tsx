@@ -201,7 +201,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         */}
         {dashboard.stripeOnboarded ? null : (
           <Banner status="pending" title="Payouts not connected" className="mb-4">
-            You can&rsquo;t take payment until payouts are connected. It takes about five minutes.{' '}
+            You can&apos;t take payment until payouts are connected. It takes about five minutes.{' '}
             <Link
               href={VENDOR_PAYMENTS_PATH}
               className="font-semibold text-clay-500 hover:underline"

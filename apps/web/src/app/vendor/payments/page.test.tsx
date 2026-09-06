@@ -56,7 +56,7 @@ describe('VendorPaymentsPage', () => {
   it('states the payout gate in the approved words, in gold', async () => {
     await renderPage({ stripeAccountId: null, stripeOnboarded: false });
 
-    const banner = screen.getByText(/You can’t take payment until payouts are connected\./);
+    const banner = screen.getByText(/You can't take payment until payouts are connected\./);
     expect(banner.textContent).toContain('It takes about five minutes.');
 
     // Gold: this is waiting on the vendor, and nothing has failed.
@@ -94,7 +94,7 @@ describe('VendorPaymentsPage', () => {
   it('shows no gate and no button once payouts are connected', async () => {
     await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: true });
 
-    expect(screen.queryByText(/You can’t take payment/)).toBeNull();
+    expect(screen.queryByText(/You can't take payment/)).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByRole('status').className).toContain('sage');
   });

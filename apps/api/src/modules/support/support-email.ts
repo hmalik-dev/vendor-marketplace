@@ -163,7 +163,7 @@ export function renderSupportConfirmation(fields: SupportEmailFields): RenderedE
     `<p style="margin:0 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6B6459;">${escapeHtml(BRAND_NAME)}</p>`,
     '<h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#23201C;">We got your message</h1>',
     '<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#4A443C;">',
-    'We&rsquo;ll reply to this address, usually within one business day. There&rsquo;s nothing to check back on &mdash; the answer comes to your inbox.</p>',
+    "We'll reply to this address, usually within one business day. There's nothing to check back on &mdash; the answer comes to your inbox.</p>",
     referenceBlock(fields.reference),
     '<p style="margin:0 0 12px;font-size:13px;color:#6B6459;">Quote this if you follow up.',
     echo ? ' Here is what you sent:</p>' : '</p>',

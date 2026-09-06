@@ -372,7 +372,7 @@ export function PackageForm({
           </div>
 
           <fieldset className="sm:col-span-2">
-            <legend className="text-sm font-medium text-stone-800">What&rsquo;s included</legend>
+            <legend className="text-sm font-medium text-stone-800">What&apos;s included</legend>
             <p className="mt-1 text-xs leading-normal text-stone-600">
               One line per thing the customer gets. Up to {MAX_INCLUSIONS}.
             </p>

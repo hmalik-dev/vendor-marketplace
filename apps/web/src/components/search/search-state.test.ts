@@ -542,13 +542,13 @@ describe('applicableTagSelection', () => {
 describe('droppedTagGroupsLine', () => {
   it('says which filter went and which vendors it does not apply to', () => {
     expect(droppedTagGroupsLine(['dietary'], 'photography')).toBe(
-      'Dietary filters don’t apply to photographers, so they were cleared — the rest of your search still applies.',
+      "Dietary filters don't apply to photographers, so they were cleared — the rest of your search still applies.",
     );
   });
 
   it('names two groups as a pair rather than stacking two sentences', () => {
     expect(droppedTagGroupsLine(['cultural', 'dietary'], 'photography')).toBe(
-      'Cultural and Dietary filters don’t apply to photographers, so they were cleared — the rest of your search still applies.',
+      "Cultural and Dietary filters don't apply to photographers, so they were cleared — the rest of your search still applies.",
     );
   });
 

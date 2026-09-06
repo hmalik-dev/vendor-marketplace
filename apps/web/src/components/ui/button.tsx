@@ -35,8 +35,23 @@ const buttonVariants = cva(
       variant: {
         // The one action the screen exists for. Clay is a fill: white text on
         // clay-400, never clay as the text colour.
+        /*
+         * **No shadow, at rest or on hover.** This carried `shadow-sm` and
+         * `hover:shadow-md`, and neither is in the design: `03-components.md`
+         * specifies Primary as `bg-clay-400 text-stone-0 font-semibold text-base
+         * px-5 py-2.5 rounded-lg` and states hover as `clay-500` plus
+         * `scale(1.02)` — nothing about elevation. The frames agree by a margin
+         * that leaves nothing to weigh: of the **112** filled clay controls
+         * drawn across the whole contract, exactly one carries a `box-shadow`,
+         * and that one is a focus ring.
+         *
+         * Found on frame `04`'s `Continue to review` (#359) and fixed here
+         * rather than there, because the button is a shared primitive and a
+         * per-call-site override would have left the same 2px halo under every
+         * other primary action in the product.
+         */
         primary:
-          'bg-clay-400 text-stone-0 shadow-sm hover:bg-clay-500 hover:shadow-md active:bg-clay-600 motion-safe:hover:scale-[1.02] motion-safe:active:scale-[.98]',
+          'bg-clay-400 text-stone-0 hover:bg-clay-500 active:bg-clay-600 motion-safe:hover:scale-[1.02] motion-safe:active:scale-[.98]',
         // The alternative.
         secondary:
           'border-stone-300 bg-stone-0 text-stone-900 hover:bg-stone-150 motion-safe:active:scale-[.98]',

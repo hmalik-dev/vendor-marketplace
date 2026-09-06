@@ -103,6 +103,21 @@ export interface EmptyStateProps {
    * `pending`, and gold is never used for a failure.
    */
   tone?: 'neutral' | 'failure';
+  /**
+   * The heading level the headline renders at. `2` everywhere but one place.
+   *
+   * `1` exists for a state that *replaces* the page's own `<h1>` rather than
+   * sitting under it. `/search` is the case: the count row carries the
+   * document's heading — `17 photographers in Austin`, or `Searching…` while a
+   * query is in flight — and frame `18` opens straight into the empty state
+   * with no count row above it, so at zero results the route rendered no level
+   * -1 heading at all. Confirmed through the accessibility tree, not
+   * `querySelector`: `getByRole('heading', { level: 1 })` returned nothing on
+   * the empty state and one node on the populated one.
+   *
+   * A number rather than a `Tag` prop, so a caller cannot pass a `<div>`.
+   */
+  headingLevel?: 1 | 2;
   className?: string;
 }
 
@@ -120,9 +135,11 @@ export function EmptyState({
   panel = false,
   scale = 'app',
   tone = 'neutral',
+  headingLevel = 2,
   className,
 }: EmptyStateProps): React.ReactElement {
   const isMarketing = scale === 'marketing';
+  const Headline = headingLevel === 1 ? 'h1' : 'h2';
 
   return (
     <div
@@ -163,7 +180,7 @@ export function EmptyState({
         backtick spans as template literals, so quoting a serif class name in a
         comment registers as a serif element with no size.
       */}
-      <h2
+      <Headline
         className={cn(
           'font-display text-stone-900',
           isMarketing ? 'text-display-empty' : 'text-display-md',
@@ -171,7 +188,7 @@ export function EmptyState({
         )}
       >
         {headline}
-      </h2>
+      </Headline>
       <p
         className={cn(
           'text-base leading-prose text-stone-700',

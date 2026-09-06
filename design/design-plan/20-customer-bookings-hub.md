@@ -111,3 +111,38 @@ Confirmed → Message + Cancel · Completed → Leave a review.
 - Event templates / suggested categories — needs real pairing data
 - Shared events with co-planners and roles
 - Budget tracking across a group of bookings
+
+## One shell, one hub — frame `19` is the empty **pane**, not a second screen
+
+Ruled 2026-09-06 (#372). Frames `07` and `19` draw two different shells around
+the same hub, and every parity pass since has re-found the disagreement because
+nothing recorded which one wins. **Frame `07`'s shell is the record; frame `19`
+is stale from the shell outward.**
+
+It is not a close call, because frame `19` contradicts _this file_ in three
+places, and this file is the specification the hub was rebuilt from:
+
+| Axis    | Frame `19` draws                                                           | This file (and frame `07`) specifies                                                                         |
+| ------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Title   | `My bookings`, with a `Nothing booked yet` sub-line                        | **`Your bookings`** — and `31-content-voice.md` approves that string by name ("Dashboard" → "Your bookings") |
+| Tabs    | `All` · `Pending` · `Confirmed` · `Past` — pill filters over **status**    | **`Upcoming` · `History` · `All`**, counted and URL-addressable in `?tab=` — the Tabs table above            |
+| Sidebar | `Booking` section label, a `Payments` row, an `Account` / `Settings` block | **My bookings · Messages · Saved vendors · My profile**, plus the "Booking for something new?" card          |
+
+`Payments` compounds it: there is no customer payments surface in MVP, so frame
+`19`'s sidebar draws a control that opens nothing — the thing #31 exists to
+forbid.
+
+**What frame `19` is still authoritative for is its pane**, and the app already
+matches it exactly: the dashed `stone-400` panel at radius 18, the 58×36
+two-circle mark, `No bookings yet` at 26px Instrument Serif, the body sentence,
+`Find a vendor`, and the `01` / `02` / `03` steps in JetBrains Mono at
+`500 10.5px` with `.1em` tracking.
+
+So the hub renders **one shell** and swaps the pane inside it, which is what the
+acceptance line above already asks for — _"Zero-state shows the sidebar prompt
+and an empty-state CTA, never a blank pane."_ A customer whose first booking
+lands does not watch the page's title, tabs and navigation change under them.
+
+**Frame `19`'s shell is corrected by a design pass, not by a ticket.** Until that
+drop lands, a parity pass over frame `19` reports the shell as an expected
+deviation and compares only the pane.

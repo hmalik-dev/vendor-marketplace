@@ -205,6 +205,48 @@ primary CTA. Never a blank pane.
 
 Never a spinner and a skeleton on the same screen.
 
+## Inline banners
+
+One per screen, at the top of the pane it concerns. Frame `26 State library`
+draws all four and is the vocabulary — _"Build these once as components; every
+screen above composes from them."_
+
+`flex` row, 16px dot flush with the first line, headline and sentence beside it:
+
+| Token    | Value                                                    |
+| -------- | -------------------------------------------------------- |
+| Surface  | the status `-50` fill with the status border (see below) |
+| Radius   | **12px** — `--radius-panel`                              |
+| Padding  | `13px 15px`                                              |
+| Dot      | 16px circle, the status `-400`                           |
+| Title    | `600 13px`, `stone-900`                                  |
+| Sentence | `400 12.5px / 1.55`, the status `-600`                   |
+
+| Status          | Surface                  | Dot         |
+| --------------- | ------------------------ | ----------- |
+| `informational` | `steel-50` / `steel-200` | `steel-600` |
+| `pending`       | `gold-50` / `gold-300`   | `gold-400`  |
+| `failed`        | `error-50` / `error-200` | `error-500` |
+| `settled`       | `sage-50` / `sage-300`   | `sage-400`  |
+
+**The border is part of the banner, and frame `16` is the exception that proves
+it.** Ruled 2026-09-06 (#372). Frame `16 Server error` draws its money-position
+strip borderless, at radius 10, with the sentence at weight 500 — and no other
+frame draws a banner that way. Frame `26`'s `Sage · settled` tile draws
+`background:#EDF0E9; border:1px solid #C9D3BE; border-radius:12px; padding:13px
+15px` with the sentence at `400 12.5px/1.55`, which is `sage-50` on `sage-300`
+exactly, and `--color-sage-300` is named "sage banner border" in the theme for
+that reason.
+
+So **the component wins and frame `16` is corrected**: one `Banner`, bordered,
+and the 500 screen composes from it like every other screen. Forking a bespoke
+borderless variant for one screen is how a component library stops being one.
+
+**The radius was the app's own miss, not the frame's.** `Banner` computed
+`rounded-xl` — 14px — which agrees with _neither_ frame: `26` draws 12 and `16`
+draws 10. Corroboration puts the vocabulary tile ahead of the single screen
+instance, so the value is **12px**, `--radius-panel`.
+
 ## Toasts
 
 Bottom-right, `bg-stone-0`, `shadow-xl`, `rounded-xl`, 4px left accent by type

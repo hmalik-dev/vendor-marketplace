@@ -48,7 +48,7 @@ describe('FormSectionNav', () => {
   it('explains what the gold dots mean while any are showing', () => {
     render(<FormSectionNav sections={SECTIONS} />);
 
-    expect(screen.getByText('Gold dots mark what’s unfinished')).toBeDefined();
+    expect(screen.getByText("Gold dots mark what's unfinished")).toBeDefined();
   });
 
   it('marks every blocking section and no others', () => {

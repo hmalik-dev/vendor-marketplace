@@ -1681,7 +1681,7 @@ describe('admin routes', () => {
        * names the reversal instead of implying the vendor is merely not paid.
        */
       expect(toVendor?.body).toBe(
-        'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.',
+        "The customer's account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.",
       );
       expect(toVendor?.body).not.toContain('Your payment');
     });

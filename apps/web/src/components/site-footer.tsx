@@ -6,6 +6,8 @@ import {
   CATEGORY_SEEDS,
   SUPPORT_PATH,
 } from '@vendor-marketplace/shared';
+import { readRoleForChrome } from '@/lib/current-user';
+import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 
 /**
@@ -47,7 +49,17 @@ const SIGNED_OUT_LINKS = [
   { href: '/sign-in', label: 'Sign in' },
 ];
 
-const SIGNED_IN_LINKS = [{ href: '/dashboard', label: 'Dashboard' }];
+/**
+ * The signed-in account link, whose **label follows the role** — the same
+ * decision the header and its drawer make, from the same table.
+ *
+ * It read `Dashboard` for everyone, which is the third copy of one control
+ * calling one destination something the other two do not: the bar says
+ * `Bookings` to a customer, and `20-customer-bookings-hub.md` requires that
+ * "the word 'dashboard' appears nowhere in the UI" on that side. The footer
+ * renders on every public route, so a signed-in customer met both words on the
+ * same page.
+ */
 
 const COLUMN_HEADING = 'text-label font-semibold tracking-label text-stone-50/55 uppercase';
 const LINK_CLASS =
@@ -83,11 +95,20 @@ function FooterLink({ href, label }: { href: string; label: string }): React.Rea
  * design/design-plan/10-landing.md — the ink band that closes every marketing
  * page. The full-height app shells hide it entirely (see `globals.css`).
  */
-export function SiteFooter(): React.ReactElement {
+export async function SiteFooter(): Promise<React.ReactElement> {
+  /*
+   * Read here rather than threaded from the layout: the footer is rendered by
+   * `PublicChrome`, a Client Component that knows the pathname and nothing
+   * about the reader. `readRoleForChrome` never throws and returns before it
+   * makes a request when signed out, so a marketing page pays nothing for it —
+   * the same contract the header relies on.
+   */
+  const dashboardLabel = DASHBOARD_LABEL_BY_ROLE[(await readRoleForChrome()) ?? 'customer'];
+
   return (
     // The split CTA above it is also ink, so the hairline is what keeps the
     // two from reading as one undifferentiated block on the landing page.
-    <footer className="border-t border-stone-0/10 bg-stone-900">
+    <footer data-slot="site-footer" className="border-t border-stone-0/10 bg-stone-900">
       {/* Same gutter ladder as the page and the header — see `page.tsx`. */}
       <div className="mx-auto w-full max-w-[1440px] px-5 py-14 lg:px-7 min-[90rem]:px-10">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
@@ -120,9 +141,7 @@ export function SiteFooter(): React.ReactElement {
                 ))}
               </Show>
               <Show when="signed-in">
-                {SIGNED_IN_LINKS.map((link) => (
-                  <FooterLink key={link.href} {...link} />
-                ))}
+                <FooterLink href="/dashboard" label={dashboardLabel} />
               </Show>
             </FooterColumn>
           </nav>

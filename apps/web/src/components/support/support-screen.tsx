@@ -129,7 +129,7 @@ function ReferenceBlock({ reference }: { reference: string }): React.ReactElemen
         </button>
       </div>
       <p className="mt-2 text-[11px] leading-[1.45] text-stone-600">
-        Quote this if you follow up. It&rsquo;s in the confirmation email too.
+        Quote this if you follow up. It&apos;s in the confirmation email too.
       </p>
       {/*
         Only when the browser refused. `role="status"` rather than an alert:
@@ -138,7 +138,7 @@ function ReferenceBlock({ reference }: { reference: string }): React.ReactElemen
       */}
       {copied === 'unavailable' ? (
         <p role="status" className="mt-2 text-[11px] leading-[1.45] text-stone-600">
-          Your browser wouldn&rsquo;t let us copy it — select the code above instead.
+          Your browser wouldn&apos;t let us copy it — select the code above instead.
         </p>
       ) : null}
     </div>
@@ -268,7 +268,7 @@ export function SupportScreen({
         <h1 className="font-display text-[23px] text-stone-900">Message sent</h1>
 
         <p className="mt-2.25 max-w-[290px] text-[13px] leading-[1.6] text-stone-700">
-          We&rsquo;ll reply to <strong className="font-semibold text-stone-900">{replyTo}</strong>,
+          We&apos;ll reply to <strong className="font-semibold text-stone-900">{replyTo}</strong>,
           usually within one business day.
         </p>
 
@@ -277,7 +277,7 @@ export function SupportScreen({
         </div>
 
         <p className="mt-4 max-w-[290px] text-[12px] leading-[1.55] text-stone-600">
-          There&rsquo;s nothing to check back on here — the answer comes to your inbox.
+          There&apos;s nothing to check back on here — the answer comes to your inbox.
         </p>
 
         <Button asChild variant="secondary" className="mt-4.5 w-full max-w-[250px] justify-center">
@@ -295,7 +295,7 @@ export function SupportScreen({
 
       <p className="mt-2.25 text-base leading-[1.65] text-stone-700">
         We reply by email, usually within one business day. This sends a message to the {BRAND_NAME}{' '}
-        team — it doesn&rsquo;t open a chat thread here.
+        team — it doesn&apos;t open a chat thread here.
       </p>
 
       {/*
@@ -317,14 +317,14 @@ export function SupportScreen({
           className="mt-5.5 rounded-[10px] border border-error-200 bg-error-50 px-3.25 py-3"
         >
           <p className="text-[12.5px] font-semibold text-clay-600">
-            Your message didn&rsquo;t go through — our mail service rejected it
+            Your message didn&apos;t go through — our mail service rejected it
           </p>
           <p className="mt-1 text-[11.5px] leading-[1.5] text-stone-700">
-            Nothing you typed is lost, and it isn&rsquo;t something you can fix by editing it.
+            Nothing you typed is lost, and it isn&apos;t something you can fix by editing it.
             {reference === null ? null : (
               <>
                 {' '}
-                We&rsquo;ve logged the failure as{' '}
+                We&apos;ve logged the failure as{' '}
                 <span className="font-mono text-[11px] select-all">{reference}</span>.
               </>
             )}
@@ -418,7 +418,7 @@ export function SupportScreen({
             readOnly={locked}
             className={cn(FIELD, 'mt-1.5')}
           />
-          <p className={HELPER}>The only address we&rsquo;ll use, and only to answer this.</p>
+          <p className={HELPER}>The only address we&apos;ll use, and only to answer this.</p>
         </div>
       ) : null}
 
@@ -445,7 +445,7 @@ export function SupportScreen({
       */}
       {accountEmail === null ? null : (
         <p className="mt-4 rounded-[10px] border border-stone-300 bg-stone-0 px-3.25 py-2.75 text-[12.5px] leading-[1.4] text-stone-700">
-          We&rsquo;ll reply to{' '}
+          We&apos;ll reply to{' '}
           <strong className="font-semibold text-stone-900">{accountEmail}</strong> — the email on
           your account.
         </p>

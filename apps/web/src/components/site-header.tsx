@@ -11,6 +11,7 @@ import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
 import { readRoleForChrome } from '@/lib/current-user';
+import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 
 /**
  * Global site header. Server Component — Clerk's control components resolve
@@ -36,13 +37,30 @@ export async function SiteHeader(): Promise<React.ReactElement> {
    */
   const [categories, role] = await Promise.all([getCategories(), readRoleForChrome()]);
 
+  /*
+   * What the signed-in `/dashboard` link is called for this reader, resolved
+   * once and given to both places that draw it — the bar and the drawer the bar
+   * hides it into below `sm`. Frame `02` draws `Bookings`, which is what a
+   * customer reads; `DASHBOARD_LABEL_BY_ROLE` carries why the other two differ.
+   *
+   * `role` is `null` only when the account record could not be read, which is
+   * the same failure that makes `/dashboard` itself bounce to sign-in. The
+   * customer label is the fallback because it is the overwhelmingly common
+   * case, and the label is cosmetic either way: the route handler resolves the
+   * role again and authorizes there.
+   */
+  const dashboardLabel = DASHBOARD_LABEL_BY_ROLE[role ?? 'customer'];
+
   return (
     // The height sits on the header, not the nav inside it, so the bottom
     // border is part of the height rather than an extra pixel — an app shell is
     // measured against `--header-height`, and one stray pixel is enough to make
     // the page scroll. The token is 64px, and 56px below `md` per
     // `30-responsive.md`; nothing here restates either number.
-    <header className="sticky top-0 z-(--z-header) box-border h-(--header-height) border-b border-stone-300 bg-stone-0">
+    <header
+      data-slot="site-header"
+      className="sticky top-0 z-(--z-header) box-border h-(--header-height) border-b border-stone-300 bg-stone-0"
+    >
       {/*
         The inset is per-route, not one number: the frames set it per screen and
         `HeaderNav` holds that choice.
@@ -150,11 +168,11 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               behind the hamburger.
             */}
             <Button variant="ghost" asChild className="max-sm:hidden">
-              <Link href="/dashboard">Dashboard</Link>
+              <Link href="/dashboard">{dashboardLabel}</Link>
             </Button>
             <NotificationBell />
             <UserButton />
-            <SignedInDrawer />
+            <SignedInDrawer dashboardLabel={dashboardLabel} />
           </Show>
         </div>
       </HeaderNav>

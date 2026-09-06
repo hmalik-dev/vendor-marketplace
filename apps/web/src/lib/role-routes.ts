@@ -25,6 +25,28 @@ export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
 };
 
 /**
+ * What the header's signed-in link is **called**, per role — beside the table
+ * that says where it goes, so the word and the destination cannot drift apart.
+ *
+ * `/dashboard` resolves the caller's role and forwards, so one control serves
+ * three destinations and no single string is true for all of them. Frame `02`
+ * draws **`Bookings`** and depicts a customer browsing search, which is exactly
+ * the reader that link takes to `/bookings`. It read `Dashboard` for everyone:
+ * wrong for the frame, and forbidden outright on the customer's side, where
+ * `20-customer-bookings-hub.md`'s acceptance is *"The word 'dashboard' appears
+ * nowhere in the UI"* — a customer has no dashboard and never did.
+ *
+ * A vendor keeps `Dashboard`, because that is the word frame `08` puts on the
+ * first row of their own rail for the same destination, and an operator gets
+ * the console's name. Each label names where the reader actually lands.
+ */
+export const DASHBOARD_LABEL_BY_ROLE: Record<UserRole, string> = {
+  customer: 'Bookings',
+  vendor: 'Dashboard',
+  admin: 'Admin',
+};
+
+/**
  * Where each role *starts* after authenticating, which is not the same question
  * as where its dashboard lives. A customer's first move is to browse vendors,
  * so sign-in drops them on the marketplace home rather than a dashboard they

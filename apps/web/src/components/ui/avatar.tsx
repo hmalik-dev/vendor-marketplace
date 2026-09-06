@@ -214,6 +214,22 @@ export function Avatar({
 }: AvatarProps): React.ReactElement {
   const pixels = AVATAR_SIZES[size];
   /*
+   * **A label is only a label while there is a name in it** (#361).
+   *
+   * `labelled` says this avatar is the only thing naming the person, so an
+   * empty `name` makes it the only thing naming them *nothing*: an `<img>` with
+   * `alt=""` that a reader skips, or an `img` role whose accessible name is the
+   * empty string, which some readers announce as bare "image". The header's own
+   * avatar shipped the sharper version of this for months — `alt="'s logo"`,
+   * a possessive with nothing in front of it, heard on every signed-in page and
+   * on both roles.
+   *
+   * The fix belongs here rather than at any one call site, because the value is
+   * what was wrong and the template was right: a blank name falls back to
+   * decorative, which is the honest description of a monogram nobody can read.
+   */
+  const named = labelled && name.trim() !== '';
+  /*
    * `className` is deliberately **not** folded in here.
    *
    * `cn` is tailwind-merge: the later of two conflicting classes wins. Folding
@@ -241,7 +257,7 @@ export function Avatar({
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
-        alt={labelled ? name : ''}
+        alt={named ? name : ''}
         width={pixels}
         height={pixels}
         className={cn(shared, 'object-cover', className)}
@@ -254,7 +270,7 @@ export function Avatar({
     <span
       // A decorative monogram is hidden outright rather than left as an unnamed
       // `img`, which a reader announces as "image" with nothing after it.
-      {...(labelled ? { role: 'img' as const, 'aria-label': name } : { 'aria-hidden': true })}
+      {...(named ? { role: 'img' as const, 'aria-label': name } : { 'aria-hidden': true })}
       data-slot="avatar-fallback"
       className={cn(
         shared,

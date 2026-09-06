@@ -207,4 +207,45 @@ describe('Avatar', () => {
     render(<Avatar name="Maya Fernandez" />);
     expect(monogram().className).not.toContain('border-stone-0');
   });
+
+  /*
+   * #361: the signed-in header shipped `alt="'s logo"` on both roles — a
+   * possessive with an empty name in front of it, read out on every signed-in
+   * page. The template was right and the value was not, so the guard belongs
+   * here, where a name that is not a name stops producing a label at all.
+   *
+   * Both branches, because an avatar is an `<img>` when there is a photograph
+   * and a monogram when there is not, and the two carry the name differently.
+   */
+  describe('a labelled avatar with no name to say', () => {
+    it.each([
+      ['', 'empty'],
+      ['   ', 'blank'],
+    ])('falls back to decorative when the name is %s (%s)', (name) => {
+      const { container } = render(<Avatar name={name} labelled />);
+
+      expect(screen.queryByRole('img')).toBeNull();
+      expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    });
+
+    it('gives a photograph an empty alt rather than a nameless one', () => {
+      const { container } = render(
+        <Avatar name="" src="https://example.test/cover.jpg" labelled />,
+      );
+
+      expect(container.querySelector('img')?.getAttribute('alt')).toBe('');
+    });
+
+    it('still names the account when there is a name', () => {
+      render(<Avatar name="Maya Fernandez" labelled />);
+
+      const labelled = screen.getByRole('img');
+      const label = labelled.getAttribute('aria-label') ?? '';
+
+      expect(label).toBe('Maya Fernandez');
+      // Never a bare possessive — the exact shape the header shipped.
+      expect(label.startsWith("'")).toBe(false);
+      expect(label.startsWith('’')).toBe(false);
+    });
+  });
 });

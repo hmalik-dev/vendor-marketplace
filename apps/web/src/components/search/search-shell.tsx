@@ -707,6 +707,16 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           <EmptyState
             icon={<SearchX />}
             tone="failure"
+            /*
+              The document's `<h1>` here too, for the same reason as the
+              zero-result branch below: `countRowVisible` is `isLoading ||
+              total > 0`, and a failed search is neither — so the count row that
+              carries the heading everywhere else is gone, and this state
+              rendered no level-1 heading at all. The empty branch was fixed
+              first and this one was missed, which is why the guard now asserts
+              *every* state rather than the one it was written for.
+            */
+            headingLevel={1}
             headline="Something went wrong"
             description="Could not load vendors just now."
           />
@@ -750,6 +760,15 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
               <EmptyState
                 icon={<SearchEmptyGlyph />}
                 scale="marketing"
+                /*
+                  The document's `<h1>` at zero results. The count row above
+                  carries it in every other state — the heading, or `Searching…`
+                  while a query is in flight — and frame `18` opens straight into
+                  this state with no count row, so `/search?tags=<no match>`
+                  rendered no level-1 heading at all while the populated and
+                  loading states each rendered one. Exactly one at every state.
+                */
+                headingLevel={1}
                 headline={noResultsHeadline(state, categorySlugs)}
                 description={
                   // With nothing filtered there is no culprit to name, so it says
@@ -801,15 +820,14 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
                         {relaxation.label}
                       </button>
                     ))}
-                    {refineCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={clearRefinements}
-                        className="text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
-                      >
-                        Clear all
-                      </button>
-                    ) : null}
+                    {/*
+                      **No fourth control.** Frame `18` draws three relaxation
+                      buttons and nothing after them; this row grew a `Clear all`
+                      link that duplicates the Refine bar's own `Clear` directly
+                      above it. Two controls doing one job on a screen whose
+                      whole promise is *one tap costs you the least* is the
+                      opposite of what the state is for, and the frame is right.
+                    */}
                   </div>
                 }
               />

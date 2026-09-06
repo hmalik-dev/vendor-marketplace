@@ -39,6 +39,18 @@ consults this table to decide whether to render or return data, that is the
 finding**, because it is a regex list maintained by hand and the real answer
 lives in the local `users.role` read.
 
+**`DASHBOARD_LABEL_BY_ROLE` is a fourth table and is purely cosmetic.** Added
+2026-09-06 (#372) beside the other three; `SiteHeader` resolves it once as
+`DASHBOARD_LABEL_BY_ROLE[role ?? 'customer']` and hands the same string to the
+bar and to `SignedInDrawer`. `role` comes from `readRoleForChrome`, which
+degrades to `null` on an unreadable record, so the word can be wrong — it can
+never be a grant. Every reader of that link goes through
+`app/dashboard/route.ts`, which re-reads `getCurrentUser()` server-side and
+redirects a signed-out caller to sign-in; the destinations
+(`/vendor/dashboard`, `/bookings`, `/admin`) each carry their own
+`requireRole`. Audited and confirmed cosmetic — do not re-report the `null →
+'Bookings'` fallback.
+
 **How to apply:** whenever a diff adds or changes a `requireRole` call or an
 entry in `DASHBOARD_PATH_BY_ROLE`, resolve the destination for **all three
 roles** and read the guard on each destination's own route. Also check

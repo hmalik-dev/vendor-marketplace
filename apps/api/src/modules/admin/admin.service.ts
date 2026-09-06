@@ -227,7 +227,7 @@ export async function setUserBanned(
    * answer anywhere. A log line is not an audit table — but it is the
    * difference between an unanswerable question and a greppable one.
    */
-  context.log.info({ actorId, targetId, isBanned }, 'Admin changed an account’s ban state');
+  context.log.info({ actorId, targetId, isBanned }, "Admin changed an account's ban state");
 
   const profile = await findVendorProfileByUserId(context.db, targetId);
 
@@ -341,7 +341,7 @@ export async function setUserBanned(
 
     const cancelled = await cancelBookingAndFreeDate(context.db, booking.id, {
       cancelledAt: now,
-      cancellationReason: 'The other party’s account was suspended',
+      cancellationReason: "The other party's account was suspended",
       /*
        * The column, not the sentence above it (#415). Both parties' screens
        * have to distinguish an operator's unwind from a customer's own
@@ -381,11 +381,11 @@ export async function setUserBanned(
         const body =
           recipient === booking.customerId
             ? refunded
-              ? 'The other party’s account was suspended. Your payment has been refunded in full.'
-              : 'The other party’s account was suspended. Nothing was charged for this booking.'
+              ? "The other party's account was suspended. Your payment has been refunded in full."
+              : "The other party's account was suspended. Nothing was charged for this booking."
             : refunded
-              ? 'The customer’s account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.'
-              : 'The customer’s account was suspended and the booking was cancelled. Nothing had been charged for it.';
+              ? "The customer's account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance."
+              : "The customer's account was suspended and the booking was cancelled. Nothing had been charged for it.";
 
         const stored = await insertNotification(context.db, {
           userId: recipient,

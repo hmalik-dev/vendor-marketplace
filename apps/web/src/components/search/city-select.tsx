@@ -158,7 +158,7 @@ export function CitySelect({
         busy
           ? 'Searching…'
           : failed
-            ? 'We can’t reach city search right now. Try again in a moment.'
+            ? "We can't reach city search right now. Try again in a moment."
             : undefined
       }
       noMatchMessage={(query) => `No US city matches “${query}”.`}

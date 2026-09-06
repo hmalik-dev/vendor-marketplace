@@ -33,11 +33,26 @@ export function SignedOutDrawer(): React.ReactElement | null {
   return <NavDrawer links={MARKETING_LINKS} hideTriggerFrom="md" />;
 }
 
-const SIGNED_IN_LINKS = [
-  { label: 'Dashboard', href: '/dashboard' },
-  { label: 'Messages', href: '/messages' },
-] as const;
+export interface SignedInDrawerProps {
+  /**
+   * What the `/dashboard` row is called for this reader.
+   *
+   * Passed in rather than resolved here: this is a Client Component and the
+   * role lives on the server, and the drawer holds the *same* control the bar
+   * hides below `sm` — so one label, resolved once, in
+   * `DASHBOARD_LABEL_BY_ROLE`. Two copies of that decision is how the bar and
+   * the drawer end up calling one destination two things.
+   */
+  dashboardLabel: string;
+}
 
-export function SignedInDrawer(): React.ReactElement {
-  return <NavDrawer links={SIGNED_IN_LINKS} />;
+export function SignedInDrawer({ dashboardLabel }: SignedInDrawerProps): React.ReactElement {
+  return (
+    <NavDrawer
+      links={[
+        { label: dashboardLabel, href: '/dashboard' },
+        { label: 'Messages', href: '/messages' },
+      ]}
+    />
+  );
 }

@@ -80,7 +80,7 @@ export function ReviewForm({
         message:
           trimmed.length === 0
             ? 'Say something about the day — at least 10 characters'
-            : `A few more words — you’re ${REVIEW_CONTENT_MIN_LENGTH - trimmed.length} characters short`,
+            : `A few more words — you're ${REVIEW_CONTENT_MIN_LENGTH - trimmed.length} characters short`,
         severity: 'blocker',
       });
     }
@@ -117,7 +117,7 @@ export function ReviewForm({
        * published. A generic line would replace a specific fix with a shrug.
        */
       setFailure(
-        userFacingError(error, 'Your review didn’t reach us. Check your connection and try again.'),
+        userFacingError(error, "Your review didn't reach us. Check your connection and try again."),
       );
     } finally {
       setSubmitting(false);

@@ -117,7 +117,16 @@ export default async function BookingsPage({
 
   return (
     <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
-      <BookingsSidebar bookingCount={entries.length} current="bookings" />
+      <BookingsSidebar
+        bookingCount={entries.length}
+        /*
+          Frame `07`'s unread dot on the `Messages` row. Read off the threads the
+          rail already fetched rather than a second request — and a boolean,
+          because the frame draws a dot and no number.
+        */
+        hasUnreadMessages={conversations.some((conversation) => conversation.unreadCount > 0)}
+        current="bookings"
+      />
       <BookingsHub
         entries={entries}
         tab={tab}

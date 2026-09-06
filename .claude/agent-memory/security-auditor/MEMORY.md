@@ -52,4 +52,5 @@
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — `replaceVendorTags`/`replaceVendorCategories` stopped self-transacting in #405; `PUT /vendor/tags` is gone on purpose
 - [The `/search` retired-category 308 rests on three invariants](search-retired-category-redirect.md) — literal prefix, `Object.hasOwn`, and no successor value that is also a key
 - [The categories cascade is single-edged, for now](categories-cascade-is-single-edged.md) — the seed fold hard-deletes the row; a second cascading FK onto `categories.id` makes that silent data loss
+- [The 500 screen hides chrome, it does not unmount it](error-screen-chrome-is-hidden-not-unmounted.md) — the header still hydrates behind `display:none`; the `?from=` echo is a closed boundary
 - [The public vendor card is the widest anonymous projection](public-vendor-card-is-the-widest-anonymous-projection.md) — the Zod serializer strips unmapped columns and 500s on a missing one; `isNew`'s recency disclosure is settled

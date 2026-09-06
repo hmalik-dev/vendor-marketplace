@@ -11,7 +11,7 @@ describe('NotFound', () => {
   it('says what happened without blaming the visitor', () => {
     render(<NotFound />);
 
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('This page isn’t here');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("This page isn't here");
     expect(screen.getByText(/Nothing is wrong with your account/)).toBeDefined();
   });
 
