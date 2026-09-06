@@ -3709,9 +3709,10 @@ two more surfaces than the ticket's title suggests.**
 the landing hero's category row (`app/page.tsx`) **and** the footer's Browse
 column, which derives from the same constant precisely so the two agree. Removing
 `florals` therefore leaves the hero and footer with three categories unless a
-fourth is chosen. **That choice is the account holder's, not the lane's** — ask
-which category takes the empty slot rather than picking one, and do not silently
-ship a row of three.
+fourth is chosen. **The account holder chose on 2026-09-06: the four become
+`photography`, `catering`, `entertainment`, `beauty`.** So `florals` leaves the
+constant and `beauty` takes the slot; the order above is the stated order. The
+hero and the footer both read the same constant, so setting it once moves both.
 
 #### Acceptance
 
@@ -3720,9 +3721,9 @@ ship a row of three.
    Asserted in a test, not read off a screen.
 2. Any vendor previously in `florals` is in the survivor, proven on seeded data.
 3. `/search?category=florals` redirects or 410s; it never renders an empty grid.
-3b. `LANDING_JUMP_CATEGORY_SLUGS` still names four categories, chosen by the
-   account holder, and the landing hero and footer Browse column both still
-   show four.
+3b. `LANDING_JUMP_CATEGORY_SLUGS` reads exactly
+   `['photography', 'catering', 'entertainment', 'beauty']`, and the landing
+   hero and footer Browse column both render those four in that order.
 4. No Post-MVP category work ships alongside it.
 
 #### Tests (required)
@@ -3751,6 +3752,71 @@ parity"*.
 - **Outbound email already works.** `apps/api/src/lib/email.ts` posts to Resend
   directly. So a support *form* is cheap to build; what is missing is a
   destination, not a transport.
+
+#### The shape, ruled 2026-09-06 after the account holder asked what to design
+
+**A form at `/support`, not a `mailto:`.** Four reasons, all grounded in what
+this repo already has:
+
+1. **It needs no published address.** A `mailto:` cannot ship until #374 rules
+   on a real monitored address, and once it ships that address is scraped. A
+   form keeps the destination in env, so the surface can ship before the
+   address is decided and the address can change without a deploy.
+2. **It captures the error reference automatically.** `app/error.tsx` shows
+   Next's `digest`, deliberately, because *"the two match"* — it is the same
+   hash written to the server log. Frame `16` tells the visitor to paste that
+   reference to support. A form carries it as a hidden field, which removes the
+   step **and** removes the common failure where they do not paste it and the
+   report is unactionable.
+3. **It already knows who is asking.** Clerk identifies a signed-in user, so
+   signed-in submitters need no email field and cannot mistype one.
+4. **The transport exists.** `apps/api/src/lib/email.ts` posts to Resend. This
+   is a new route and a new form, not new infrastructure.
+
+**What this is NOT, and must not become in MVP:** a helpdesk. No threads, no
+in-app replies, no ticket statuses, no attachments, no admin triage queue. The
+form sends an email and says so. Anything that stores and tracks conversations
+is a product of its own and belongs in the Post-MVP register.
+
+#### What needs designing — six states, per `40-states.md`
+
+The account holder is designing this, so the states are listed rather than
+assumed:
+
+1. **Default, signed out** — topic, message, and an email field (the only state
+   that has one).
+2. **Default, signed in** — no email field; say which account it will reply to,
+   so the visitor is not guessing.
+3. **Prefilled from an error** — arrived from frame `16`. The reference is shown
+   as attached context, **not** as an editable field a visitor can clear.
+4. **Submitting** — one loading idiom for the screen, per `40-states.md`.
+5. **Sent** — must hand back a reference the visitor can keep. A success state
+   that says only "thanks" leaves them nothing to follow up with.
+6. **Failed to send** — the state most often skipped, and the one that matters
+   most here: **a support form that cannot send is a dead end.** It must name
+   the cause and leave a way through, per `40-states.md`'s rule that a failure
+   states the position and offers one action.
+
+Colour semantics bind: steel is information, gold is waiting on someone, sage is
+settled, red is failure. **Red is never used for pending.**
+
+#### Entry points
+
+The footer link below, and frame `16`'s existing `Contact support` — which is
+**#372's**, still blocked on #374 for its destination. Once `/support` exists,
+that destination is a route rather than an address, which may unblock the frame
+`16` half of #372 without waiting on the address. **Check that with the account
+holder rather than assuming it.**
+
+#### Engineering notes the design does not decide
+
+- The endpoint is **public and unauthenticated in the signed-out state**, so it
+  takes rate limiting (`RATE_LIMIT_MAX` already exists) and the same untrusted-
+  text neutralisation #398 established at every free-text write boundary.
+- The destination address is env, never a literal, never in a tracked file.
+- Message length is bounded at the schema *and* checked against whatever stores
+  or sends it — #408's rule that a value the schema accepts must fit what
+  receives it.
 
 #### 1. A `Contact support` link in the footer
 
