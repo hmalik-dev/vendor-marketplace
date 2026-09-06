@@ -271,11 +271,19 @@ const FRAME_UI_CLASSES = [
  * were `text-[10.5px]` and `text-[11.5px]` — arbitrary sizes, which emit no
  * line-height and so never reached this table at all.
  *
- * `.pill` and `.card` still earn no row: the app renders both through a scale
- * step it shares with other roles.
+ * `.pill` joined them in #392, for the same reason and one step lower: it
+ * rendered through `xs`'s 11px against the frame's 10, and 11 vs 10.5 vs 10 is
+ * exactly the spread that survives a browser pass. It is mapped here as well as
+ * in `SIZE_STEP_FOR_FRAME_CLASS` below, so `--text-pill` cannot be moved off
+ * `.pill` without this file failing — a guard `frame-13-parity.test.ts`'s
+ * literal `--text-pill: 10px` cannot give, because it pins the number rather
+ * than the relationship.
+ *
+ * `.card` still earns no row: the app renders it through a scale step it shares
+ * with other roles.
  */
 const STEP_FOR_FRAME_CLASS: Array<[string, string]> = [
-  ['xs', 'pill'],
+  ['pill', 'pill'],
   ['label', 'lbl'],
   ['label', 'tl'],
   ['base', 'inp'],
@@ -367,6 +375,7 @@ describe('type scale line-height parity with the design frames', () => {
  * what guards that.
  */
 const SIZE_STEP_FOR_FRAME_CLASS: Array<[string, string]> = [
+  ['pill', 'pill'],
   ['label', 'lbl'],
   ['label', 'tl'],
   ['helper', 'tn'],

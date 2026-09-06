@@ -21,7 +21,7 @@ Copy is imperative and specific, 2–4 words: "Request booking", "Send a message
 
 ## Status pills
 
-`text-xs font-bold tracking-[.07em] uppercase px-2.5 py-1.5 rounded-full`
+`rounded-full px-2.5 py-[5px] text-pill font-bold tracking-[.07em] uppercase`
 
 | Status                      | Background  | Text        | Means                      |
 | --------------------------- | ----------- | ----------- | -------------------------- |

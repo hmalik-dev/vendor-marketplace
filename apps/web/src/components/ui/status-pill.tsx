@@ -37,7 +37,7 @@ export function StatusPill({ tone, children, className }: StatusPillProps): Reac
       data-slot="status-pill"
       data-tone={tone}
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-1.5 text-xs font-bold tracking-[.07em] uppercase',
+        'inline-flex items-center rounded-full px-2.5 py-[5px] text-pill font-bold tracking-[.07em] uppercase',
         STATUS_TONES[tone],
         className,
       )}
