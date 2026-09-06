@@ -11,7 +11,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { userFacingError } from '@/lib/user-facing-error';
 import { CELL_HELD, CELL_UNAVAILABLE } from '@/components/availability/cell-marks';
-import { buildMonth, datesBetween, monthsFrom, WEEKDAY_LABELS } from '@/lib/calendar';
+import {
+  buildMonth,
+  datesBetween,
+  describeCell,
+  monthsFrom,
+  WEEKDAY_LABELS,
+  WEEKDAY_NAMES,
+} from '@/lib/calendar';
 import { useApi } from '@/lib/use-api';
 import { useViewerToday } from '@/lib/use-viewer-today';
 import { cn } from '@/lib/utils';
@@ -476,9 +483,16 @@ export function AvailabilityCalendar({
         <div className="mt-5 grid min-h-0 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {visibleMonths.map((month) => (
             <div key={`${month.year}-${month.month}`}>
-              <h3 className="mb-2.5 font-display text-[18px] text-stone-900">
+              {/*
+                `h2`, not `h3`: the page's only `h1` is "Availability" above,
+                and these month headings came before every `h2` in the rail —
+                so the document went h1 -> h3 and a reader navigating by heading
+                was told a level had been skipped. The class list carries the
+                styling, so nothing moves.
+              */}
+              <h2 className="mb-2.5 font-display text-[18px] text-stone-900">
                 {month.label.replace(/\s\d{4}$/, '')}
-              </h3>
+              </h2>
 
               <table className="w-full table-fixed border-separate border-spacing-1">
                 <thead>
@@ -491,6 +505,16 @@ export function AvailabilityCalendar({
                         className="pb-1 text-center text-[10px] font-semibold text-stone-600"
                       >
                         <span aria-hidden="true">{weekday}</span>
+                        {/*
+                          The column's name, which it did not have.
+
+                          Its only content was the `aria-hidden` initial, so
+                          every `<th>` in the table had an empty accessible
+                          name and `scope="col"` associated each day cell with
+                          nothing. The initials stay for the eye — three of the
+                          seven are ambiguous to the ear.
+                        */}
+                        <span className="sr-only">{WEEKDAY_NAMES[index]}</span>
                       </th>
                     ))}
                   </tr>
@@ -543,7 +567,10 @@ export function AvailabilityCalendar({
                               type="button"
                               disabled={(locked && !navigates) || isSaving}
                               {...(locked ? {} : { 'aria-pressed': isSelected })}
-                              aria-label={`${date} — ${STATUS_LABELS[status]}${isPast ? ', in the past' : ''}`}
+                              aria-label={describeCell(
+                                date,
+                                `${STATUS_LABELS[status]}${isPast ? ', in the past' : ''}`,
+                              )}
                               onPointerDown={(event) => {
                                 if (locked) return;
                                 setIsDragging(true);

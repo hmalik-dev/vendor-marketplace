@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { viewerOn } from '@/testing/viewer-clock';
+import { formatAccessibleDate } from '@/lib/calendar';
 import { BookingRail } from './booking-rail';
 
 /**
@@ -69,9 +70,19 @@ async function pickPackage(label: string): Promise<void> {
   await userEvent.click(await screen.findByRole('option', { name: label }));
 }
 
+/**
+ * A day cell, found by the date in its accessible name.
+ *
+ * The name is the spoken date rather than the ISO string (#411), so this asks
+ * the component's own formatter rather than writing the format down twice.
+ */
+function cellFor(date: string): Promise<HTMLElement> {
+  return screen.findByRole('gridcell', { name: new RegExp(formatAccessibleDate(date)) });
+}
+
 async function pickDate(date: string): Promise<void> {
   await userEvent.click(screen.getByLabelText('Event date'));
-  await userEvent.click(await screen.findByRole('gridcell', { name: new RegExp(date) }));
+  await userEvent.click(await cellFor(date));
 }
 
 describe('BookingRail', () => {
@@ -397,8 +408,15 @@ describe('BookingRail', () => {
       renderRail({});
       await userEvent.click(screen.getByLabelText('Event date'));
 
-      const past = await screen.findByRole('gridcell', { name: /2026-08-05/ });
-      expect((past as HTMLButtonElement).disabled).toBe(true);
+      /*
+       * `aria-disabled`, not `disabled`. A `disabled` button is skipped by the
+       * grid's arrow keys as well as by Tab, so a day that cannot be booked
+       * could not be reached to find out why — the picker jumped over it and
+       * told nobody (#411). It is reachable and announces its state instead.
+       */
+      const past = await cellFor('2026-08-05');
+      expect(past.getAttribute('aria-disabled')).toBe('true');
+      expect((past as HTMLButtonElement).disabled).toBe(false);
       expect(screen.queryByText(/^Free on/)).toBeNull();
     });
 

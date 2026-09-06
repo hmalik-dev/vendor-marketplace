@@ -2601,7 +2601,7 @@ customer sent to `/vendor/dashboard` all hit it.
 
 ### #411: Accessibility: dialogs, calendars and composite controls are unreachable or unannounced
 
-**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Milestone:** M4.5 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core`
 **Blocked by:** None
 
 **Filed 2026-09-04 by the autonomous QA run's `/hunt-bugs` sweep.** Every finding
@@ -2651,8 +2651,176 @@ the silent-submit work #388 closed:
 
 #### Tests (required)
 
-- [ ] A landmark guard test
-- [ ] RTL tests for the lightbox focus contract and the date picker's keyboard model
+- [x] A landmark guard test
+- [x] RTL tests for the lightbox focus contract and the date picker's keyboard model
+
+#### What landed
+
+**All five acceptances.** Every item in the list above is fixed, or recorded
+below as already-fixed prose the ticket had gone stale on.
+
+**The date picker implements the grid keyboard model rather than dropping the
+role.** `role="grid"` over a flat run of 42 `gridcell` buttons is a malformed
+grid — the role owes rows — and every one of those cells was a tab stop, so
+reaching the control after the picker meant pressing Tab forty-two times while
+the arrow keys the role advertises did nothing. It now has `role="row"` week
+rows, one roving tab stop, and `ArrowLeft/Right/Up/Down`, `Home`, `End`,
+`PageUp` and `PageDown` through a single `KEY_MOVES` table. The geometry is
+unchanged to the pixel: the week rows carry the 4px column gap and the outer
+column carries the 4px row gap, which is exactly what the one `grid-cols-7
+gap-1` container did.
+
+**The unchoosable days became reachable, and that is the substance of it.** They
+carried the native `disabled` attribute, which removes an element from the arrow
+keys' reach as well as from the tab order — so a booked, blocked or past day
+could not be reached to find out *why* it could not be chosen; the grid jumped
+over it and told nobody. They now carry `aria-disabled`, announce their state,
+and the click is refused in the handler. Verified in the browser: arrowing onto
+2026-10-20 reads "Tuesday, October 20, 2026 — unavailable", and Enter on it
+leaves the picker open with nothing selected.
+
+**The lightbox's docstring was true for the first time.** It claimed focus was
+returned to the thumbnail that opened it; nothing focused the dialog, nothing
+trapped Tab and nothing restored focus, so a keyboard user tabbed the profile
+underneath the scrim. It now focuses the container on open, traps Tab in both
+directions and returns focus to the opening thumbnail. The **first** trap was
+still open at the state every viewer starts in — `diff-reviewer` caught that
+Shift+Tab from the container (`tabIndex={-1}`, so not in the sequential order)
+fell through to the browser default and landed on the last thumbnail *behind*
+the scrim. The test that missed it pressed Tab first; there is now one that
+does not.
+
+**Colour stopped being the only carrier on the read-only availability pane.**
+Free-versus-booked was sage-versus-strikethrough, with the words only in a
+`title=` — a tooltip, which is not part of a `<span>`'s accessible name, is
+unspoken by most readers and is unreachable by keyboard. Each cell now carries
+its date and state as real text. The two greys were also wrong against
+`01-foundations.md`: `stone-400` is a **border** token and measured **1.64:1**
+as text. Past days take `stone-500` (the table's sanctioned disabled tone) and
+unavailable days take `stone-600` — measured in Chrome at **5.37:1**, with free
+at 6.51:1.
+
+**Both calendars name their columns and their days.** The vendor grid's `<th>`
+elements had only an `aria-hidden` initial inside them, so every column header
+had an empty accessible name and `scope="col"` associated each day with
+nothing; they now carry the full weekday name. Every day cell in all three
+calendars reads its date as a person says it — "Tuesday, June 16, 2026 —
+Pending request" — through one shared `describeCell` in `lib/calendar.ts`
+rather than three hand-rolled concatenations.
+
+**Three nested `<main>` landmarks became `<section>`/`<div>`**, on the request
+detail, checkout and confirmed pages. **The class lists are byte-identical on
+purpose** — the gradient and sizing consequences of that nesting are #413's and
+#395's, and this ticket fixes the landmark alone.
+
+**`Avatar` is decoration by default.** Eleven of its twelve call sites write the
+name as visible text right beside it, so a reader heard the same name twice at
+every vendor card, message row, booking row and the checkout summary. It takes
+a `labelled` prop for the one site that needs it — the operations header, where
+the line beside the avatar is the operator's email and nothing else says who is
+signed in.
+
+**Also fixed:** the image-upload focus ring, which painted on the `opacity-0`
+file input filling the drop zone and so was invisible on all three photo fields
+(it is now `has-[input:focus-visible]` on the visible zone — measured as a real
+2px+4px ring on a 128x128 box); the three tag-picker `CommandInput`s, which had
+only a placeholder; `aria-pressed` on two admin filter **links**, which have no
+pressed state, now `aria-current`; and the heading skips on the vendor profile
+panes, the availability page and the search grid.
+
+**`VendorCard` took a `headingLevel` prop, and the browser is why.** Hardcoding
+`h2` fixes `/search`, where the card sits directly under the page's `h1`. But
+the storefront editor renders a preview card **before** its own `h1` in document
+order, so `h2` there opened the page one level above its title — worse than the
+skip it was fixing. The three surfaces that nest the card inside a section of
+their own pass `h3`.
+
+#### Already fixed — the ticket's prose had gone stale
+
+Verified against the tree before implementing, per "trust the repository over
+the ticket's prose":
+
+- **The admin filter search and the message composer** both already carried an
+  `aria-label`. Nothing to do.
+- **The messages send failure** already carried `role="alert"`, with a comment
+  explaining the choice.
+
+#### Five defects the reviews found that the ticket did not name, all fixed here
+
+1. **`booking-request.spec.ts` selected day cells with `:not([disabled])`** —
+   the money-path E2E. With the attribute gone that matched *every* day, the
+   month-walk never ran, and it clicked the 1st: in the past on every day but
+   one, and silently refused. Proven both ways — the spec fails with the old
+   selector and passes with `:not([aria-disabled="true"])`.
+2. **The lightbox trap was open at the state focus starts in** (above).
+3. **The search announcement was hung on the count row**, which is hidden when
+   `total` is 0 (frame `18` opens straight into the empty state) — so the live
+   region *unmounted* on the one transition that most needs speaking. It is now
+   its own always-mounted `sr-only` node whose text changes; a region added to
+   the DOM together with its first content is unreliably announced anyway.
+4. **`takeFocus` stuck `true` after a no-op `Home`/`End`.** `Home` on a Sunday
+   returns where it started, so `roving` never changed and nothing cleared the
+   flag — the next month-chevron click then yanked focus off the chevron into
+   the grid, making a second month step impossible without tabbing back.
+5. **The first message ever sent to an empty thread was swallowed.** "Have I
+   seen this thread?" was keyed off the last announced id, which an empty thread
+   has none of. The watermark is now written by the thread load itself, which is
+   the only writer that can tell history from an arrival.
+
+#### The guard was hollow, and that is recorded
+
+The landmark guard's first icon-button rule matched the opening tag with
+`/<button\b([^>]*)>/`. `[^>]*` stops at the first `>` — and `onClick={() => …}`
+puts one **inside** the opening tag, so the captured attributes were a truncated
+prefix and the "children" began with the tag's own leftover text. It passed, and
+it was defending nothing: stripping every `aria-label` in the tree made it report
+**2** offenders where a real parse finds **7**, and being case-sensitive it never
+scanned a single `<Button size="icon">`. `src/testing/source-scan.ts` now carries
+a small brace- and quote-aware `elements()` reader, the rule covers both tags,
+and a second test asserts the rule *finds* at least seven icon-only buttons — so
+a future truncation fails loudly instead of passing quietly. `diff-reviewer`
+recorded the class as
+`.claude/agent-memory/diff-reviewer/review-checklist-source-guard-regex-truncation.md`:
+mutate a source guard before trusting it.
+
+`source-scan.ts` also replaces the copy of the tree walk and the
+comment-stripping regexes that `focus-ring-guard.test.ts` was carrying; both
+guards now read the tree once instead of four times each.
+
+#### Verification
+
+**Local gate green:** `pnpm test` (2016 web tests, 5 packages), `typecheck`,
+`lint`, `build`, `format:check`, `secrets:scan:all`, and the full Playwright
+suite (15 specs).
+
+**Browser-verified 2026-09-05 at 1440x900**, driven in this session rather than
+delegated. Signed out on the storefront and `/search`; signed in as vendor,
+customer and admin through freshly minted lane storage state. The lightbox's
+whole focus contract was walked by keyboard (in, trap forwards, trap backwards,
+arrows without focus theft, Escape restoring to the opener, `body.overflow`
+restored); the picker was driven Tab -> arrows -> `End` -> `PageDown` ->
+`Enter` with no mouse; `mainCount` is **1** on every route including the three
+that had two; `aria-pressed` on a link is **0** everywhere; the admin header is
+the only `labelled` avatar. No console errors and no horizontal overflow on any
+surface.
+
+**One flagged item was a false positive**, and is recorded so it is not
+re-filed: a crude scan reported the profile editor's publish `Switch` as
+unnamed. Chromium's own name computation says it is "Visible to customers" — a
+`<button>` is a labelable element, so the adjacent `<Label htmlFor>` names it.
+
+#### Deliberately not done
+
+- **The vendor calendar's `"Available, in the past"` wording**, which reads
+  oddly on a past day with no row. It is pre-existing copy, unchanged by this
+  ticket, and `31-content-voice.md` owns the strings.
+- **Folding `checkout-screen.tsx`'s `EVENT_DAY` and `booking-card.tsx`'s
+  `CARD_DATE` into `formatAccessibleDate`** — they are the same formatter
+  options three times over, but both files belong to open tickets (#395, #413)
+  and one had a live lane in it.
+- **The layout consequences of the nested `<main>`s** — the confirmed page's
+  gradient stopping short and its clipped chip focus rings are #413's, by that
+  ticket's own words.
 
 ---
 

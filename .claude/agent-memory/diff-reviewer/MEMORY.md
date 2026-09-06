@@ -21,3 +21,4 @@
 - [Single-URL validator vs list-shaped rows](review-checklist-single-url-validator-vs-list-shape.md) — `new URL(value)` once is blind to a comma-separated `WEB_URL`; read each row's shape regex, then feed a two-entry value
 - [.dc.html tag balance](review-checklist-dc-html-tag-balance.md) — a re-cut block's surplus `</div>` evicts a frame from its `.sc`; string-sliced frame tests can't see it. Diff div counts, then diff `closest('.sc')` in Chromium
 - [Viewer anchor vs the read behind it](review-checklist-viewer-anchor-vs-the-read-behind-it.md) — re-anchoring a surface on the viewer's clock without widening the server read behind it; an absent row in a sparse table is a claim, not a gap
+- [Source-guard regex truncation](review-checklist-source-guard-regex-truncation.md) — `<button\b([^>]*)>` is cut at an arrow fn's `=>`, and never matches `<Button`; mutation-test every guard

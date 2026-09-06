@@ -37,7 +37,12 @@ export function PackagesPane({ packages, businessName }: PackagesPaneProps): Rea
           )}
         >
           <div className="flex items-baseline justify-between gap-3">
-            <h3 className="font-display text-[19px] text-stone-900">{servicePackage.name}</h3>
+            {/*
+              `h2`, for the same reason the availability pane's month headings
+              are: only the active pane is mounted, so under the profile's `h1`
+              this was the first heading on the page.
+            */}
+            <h2 className="font-display text-[19px] text-stone-900">{servicePackage.name}</h2>
             <span className="shrink-0 font-display text-[19px] text-stone-900">
               {formatPrice(servicePackage.priceCents)}
             </span>

@@ -103,7 +103,10 @@ export default async function AdminVendorsPage({
                 ? `${PATH}${adminQueryString({ q: params.q, category: params.category, city: params.city, payouts: params.payouts })}`
                 : `${PATH}${adminQueryString({ q: params.q, category: params.category, city: params.city, payouts: params.payouts, status: 'review' })}`
             }
-            aria-pressed={awaitingActive}
+            /* `aria-current`, not `aria-pressed`: this is a link, and a link
+               has no pressed state to report. `page` is the right value —
+               following it is what puts the operator on this filtered view. */
+            aria-current={awaitingActive ? 'page' : undefined}
             className={cn(
               'rounded-md px-3.5 py-2 text-sm font-semibold whitespace-nowrap',
               awaitingActive

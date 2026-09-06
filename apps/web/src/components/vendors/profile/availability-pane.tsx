@@ -1,7 +1,7 @@
 'use client';
 
 import { isPastDate, type AvailabilityStatus } from '@vendor-marketplace/shared';
-import { buildMonth, monthsFrom, WEEKDAY_LABELS } from '@/lib/calendar';
+import { buildMonth, describeCell, monthsFrom, WEEKDAY_LABELS } from '@/lib/calendar';
 import { useViewerToday } from '@/lib/use-viewer-today';
 import { cn } from '@/lib/utils';
 
@@ -46,7 +46,12 @@ export function AvailabilityPane({
       <div className="grid gap-6 sm:grid-cols-2">
         {months.map((month) => (
           <section key={month.label} aria-label={month.label}>
-            <h3 className="font-display text-[17px] text-stone-900">{month.label}</h3>
+            {/*
+              `h2`: the profile's only `h1` is the vendor's name in
+              `ProfileHeader`, and `ProfileTabs` mounts one pane at a time — so
+              on every tab but About the document went h1 -> h3.
+            */}
+            <h2 className="font-display text-[17px] text-stone-900">{month.label}</h2>
 
             <div className="mt-2 grid grid-cols-7 gap-y-1 text-center">
               {WEEKDAY_LABELS.map((label, index) => (
@@ -72,19 +77,39 @@ export function AvailabilityPane({
                 return (
                   <span
                     key={date}
-                    // The visual state is also stated in words, because colour
-                    // alone cannot carry "free" versus "booked".
-                    title={
-                      past ? undefined : unavailable ? `${date} — not available` : `${date} — free`
-                    }
                     className={cn(
                       'mx-auto flex size-7 items-center justify-center rounded-full text-[12.5px]',
-                      past && 'text-stone-400',
-                      !past && unavailable && 'text-stone-400 line-through',
+                      // `stone-500` is the foundations table's disabled/
+                      // out-of-month tone. `stone-400` is a *border* token and
+                      // was never a text colour; it read at roughly 1.7:1.
+                      past && 'text-stone-500',
+                      // A day that is not available carries meaning, so it
+                      // takes `stone-600` — the minimum for a real label —
+                      // rather than the disabled tone.
+                      !past && unavailable && 'text-stone-600 line-through',
                       !past && !unavailable && 'bg-sage-50 font-medium text-sage-600',
                     )}
                   >
                     {Number(date.slice(8, 10))}
+                    {/*
+                      The state in words, inside the cell.
+
+                      It used to be a `title=`, which is a tooltip: it is not
+                      part of the accessible name of a `<span>`, most screen
+                      readers never speak it, and no keyboard can reach it. So
+                      free-versus-booked was carried by sage-versus-strikethrough
+                      alone, which `01-foundations.md` forbids outright — and
+                      strikethrough is not exposed either.
+
+                      The date comes with it because a bare "free" in a grid of
+                      sixty cells says nothing about *which* day is free.
+                    */}
+                    <span className="sr-only">
+                      {describeCell(
+                        date,
+                        past ? 'in the past' : unavailable ? 'not available' : 'free',
+                      )}
+                    </span>
                   </span>
                 );
               })}

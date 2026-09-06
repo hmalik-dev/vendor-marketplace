@@ -82,6 +82,23 @@ describe('TagPicker', () => {
     ).toEqual(['Languages spoken', 'Cultural specialties', 'Dietary']);
   });
 
+  /*
+   * A placeholder is not an accessible name (#411): it is a fallback some
+   * readers use and others ignore, and it disappears the moment the vendor
+   * types. All three search boxes here carried nothing else, so all three read
+   * as the same unnamed field.
+   */
+  it('names each category’s search box rather than leaving it to the placeholder', async () => {
+    const user = userEvent.setup();
+    renderPicker();
+
+    await user.click(screen.getByRole('combobox', { name: 'Choose languages spoken' }));
+
+    const search = await screen.findByLabelText('Search languages spoken');
+    expect(search.getAttribute('placeholder')).toBe('Search languages spoken…');
+    expect(search.getAttribute('data-slot')).toBe('command-input');
+  });
+
   it('adds a tag as a removable pill when it is selected', async () => {
     const user = userEvent.setup();
     const picker = renderPicker();

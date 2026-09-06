@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AvailabilityStatus } from '@vendor-marketplace/shared';
+import { formatAccessibleDate } from '@/lib/calendar';
 
 const requestMock = vi.fn();
 
@@ -345,7 +346,10 @@ describe('the request survives leaving the page', () => {
   /* The only way a date reaches a draft: the picker, not a URL parameter. */
   async function pickDate(date: string): Promise<void> {
     await userEvent.click(screen.getByLabelText('Event date'));
-    await userEvent.click(await screen.findByRole('gridcell', { name: `${date} — available` }));
+    await userEvent.click(
+      // The spoken date, not the ISO string, since #411.
+      await screen.findByRole('gridcell', { name: `${formatAccessibleDate(date)} — available` }),
+    );
   }
 
   it('brings back what was typed, and says that it did', async () => {

@@ -38,7 +38,17 @@ test.describe('booking request', () => {
     const grid = customerPage.getByRole('grid', { name: 'Event date' });
     await expect(grid).toBeVisible();
 
-    const choosable = grid.locator('button[role="gridcell"]:not([disabled])');
+    /*
+     * `aria-disabled`, not `disabled` (#411).
+     *
+     * The grid took a roving tabindex, and a natively `disabled` cell is
+     * skipped by the arrow keys as well as by Tab — so a day nobody can book
+     * could not be reached to find out why. The cells now say so instead, and
+     * `:not([disabled])` would match every day in the month: the month-walk
+     * below would never run and this would click the 1st, which is in the past
+     * on every day but one and is silently refused.
+     */
+    const choosable = grid.locator('button[role="gridcell"]:not([aria-disabled="true"])');
     let months = 0;
     while ((await choosable.count()) === 0 && months < 6) {
       await customerPage.getByRole('button', { name: 'Next month' }).click();
