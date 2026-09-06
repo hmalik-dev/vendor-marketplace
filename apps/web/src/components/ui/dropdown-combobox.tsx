@@ -396,6 +396,23 @@ export function ComboboxDropdown({
       type="text"
       role="combobox"
       /*
+        **Only on the anchored mount**, and the asymmetry is the whole point.
+
+        Anchored, this field *is* the segment's control: it sits inside
+        `[data-slot=combobox-field]`, which paints the focus fill for it (see
+        `search-bar.tsx`'s `segment`), so it must not also take the base
+        `:focus-visible` ring — that is the unbordered treatment and it breaks
+        out past the pill's edge.
+
+        On the sheet mount the same element is rendered inside the portalled
+        panel below, at `<body>`, where no segment is an ancestor and nothing
+        else paints. Opting out there left the primary control of the mobile
+        search with **no keyboard indicator at all** — the characteristic
+        failure of this mechanism, and the reason `focus-indicator.spec.ts`
+        asserts a floor of one indicator as well as a ceiling.
+      */
+      {...(anchored ? { 'data-focus-own': '' } : {})}
+      /*
         Named twice on purpose, with the same string. The visible
         `<label htmlFor>` is what `04-laws.md:141` requires and is what names it
         on the anchored mount; `aria-label` is what names it inside the sheet,
@@ -549,7 +566,15 @@ export function ComboboxDropdown({
           outside the panel, so without this every click into the input
           dismisses the list it is filtering.
         */
-        <div data-slot="combobox-field" className={className}>
+        /*
+          `data-focus-fill` marks an element whose focus indicator is a fill
+          rather than a ring — the segment treatment. Nothing styles off it;
+          `e2e/focus-indicator.spec.ts` reads it, so that a control which is
+          correctly indicated by a fill is not counted as having no indicator
+          at all. Unconditional because both consumers of this component are
+          search-bar segments.
+        */
+        <div data-slot="combobox-field" data-focus-fill className={className}>
           {/*
             A real `<label htmlFor>`, not a caption span — `04-laws.md:141`:
             "Every input has a visible `<label htmlFor>`; placeholder is not a
@@ -585,6 +610,12 @@ export function ComboboxDropdown({
               aria-label={label}
               aria-expanded={open}
               aria-haspopup="listbox"
+              /*
+                The sheet's trigger stands where the input stands anchored — a
+                child of the segment — so the fill above is its whole indicator,
+                exactly as it is for the date trigger in `search-bar.tsx`.
+              */
+              data-focus-own
               className={cn('truncate text-left', inputClassName?.(open))}
             >
               {committedLabel === '' ? placeholder : committedLabel}

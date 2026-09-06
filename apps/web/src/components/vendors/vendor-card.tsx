@@ -78,7 +78,12 @@ interface ShellProps {
 /** The card as one control: the whole body is the link. */
 function LinkShell({ slug, className, children }: ShellProps): React.ReactElement {
   return (
-    <Link href={`/vendors/${slug}`} className={className}>
+    /*
+       The card paints the ring for this link — see `VendorCard` below — so the
+       link hands its own indicator over rather than drawing a second one that
+       the card's `overflow-hidden` would clip to nothing anyway.
+     */
+    <Link href={`/vendors/${slug}`} data-focus-own className={className}>
       {children}
     </Link>
   );
@@ -161,12 +166,13 @@ export function VendorCard({
           bar, where a shared bar-level ring left three segments
           indistinguishable.
         */
-        'has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-clay-400/30 has-[a:focus-visible]:ring-offset-2 has-[a:focus-visible]:ring-offset-stone-50',
+        'has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-clay-400/40 has-[a:focus-visible]:ring-offset-2 has-[a:focus-visible]:ring-offset-stone-50',
         className,
       )}
     >
       {/*
-        Suppresses the global `:focus-visible` ring that would be clipped.
+        `LinkShell` carries `data-focus-own`, which suppresses the global
+        `:focus-visible` ring that would be clipped.
 
         `preview` swaps the link for a plain block. The storefront editor's
         rail (#360) renders this card at full size so the preview cannot drift
@@ -177,7 +183,7 @@ export function VendorCard({
         site. With no `<a>` the `has-[a:focus-visible]` ring above simply never
         matches, which is correct: nothing inside a preview is focusable.
       */}
-      <Shell slug={vendor.slug} className="block focus-visible:ring-0 focus-visible:ring-offset-0">
+      <Shell slug={vendor.slug} className="block">
         {/*
           A ratio, never a fixed height. A fixed height against a fluid card
           width crops the same vendor's photo differently at every breakpoint,

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useRef, useState, type ReactNode } from 'react';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { adminQueryString } from '@/lib/admin-params';
+import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 
 export interface FilterOption {
@@ -121,6 +122,8 @@ export function FilterBar({
           maxLength={MAX_NAME_LENGTH}
           placeholder={searchPlaceholder}
           aria-label={searchPlaceholder}
+          // A bordered field owns its indicator; see `@/lib/focus`.
+          data-focus-own
           /*
             `box-content`, like every measurement in the frame file. The frame's
             `max-width:280px` is a **content** max in a content-box document, so
@@ -137,7 +140,10 @@ export function FilterBar({
             unbordered control's offset ring. The class string is the one the
             booking and customer-profile fields already use.
           */
-          className="box-content w-full max-w-70 flex-1 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900 placeholder:text-stone-600 focus-visible:border-clay-400 focus-visible:ring-3 focus-visible:ring-clay-400/15"
+          className={cn(
+            'box-content w-full max-w-70 flex-1 rounded-md border border-stone-300 bg-stone-0 px-3 py-2 text-action text-stone-900 placeholder:text-stone-600',
+            FIELD_FOCUS,
+          )}
         />
       ) : null}
       {children}

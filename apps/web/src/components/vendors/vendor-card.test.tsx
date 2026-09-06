@@ -83,12 +83,14 @@ describe('VendorCard', () => {
     // Driven by the link's focus, but drawn by the element that does the
     // clipping — `overflow:hidden` clips descendants, not its own shadow.
     expect(card?.className).toContain('has-[a:focus-visible]:ring-2');
-    expect(card?.className).toContain('has-[a:focus-visible]:ring-clay-400/30');
+    expect(card?.className).toContain('has-[a:focus-visible]:ring-clay-400/40');
     expect(card?.className).toContain('has-[a:focus-visible]:ring-offset-2');
     expect(card?.className).toContain('has-[a:focus-visible]:ring-offset-stone-50');
 
     // And the link must not draw one of its own, or it is clipped again.
-    expect(link?.className).toContain('focus-visible:ring-0');
+    // `data-focus-own` since #383; it was a hand-rolled `ring-0 ring-offset-0`,
+    // which could not reach the base rule's offset band anyway.
+    expect(link?.getAttribute('data-focus-own')).not.toBeNull();
   });
 
   it('keeps the compact search card cover at every width', () => {

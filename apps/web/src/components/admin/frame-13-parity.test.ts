@@ -543,9 +543,15 @@ describe('what the parity pass measured, kept from drifting back', () => {
      * fell through to the global `:focus-visible` and painted the *unbordered*
      * control's detached offset ring on top of a border.
      */
-    expect(filterBar).toContain(
-      'focus-visible:border-clay-400 focus-visible:ring-3 focus-visible:ring-clay-400/15',
-    );
+    /*
+     * Through `FIELD_FOCUS` since #383, so the string is written once for the
+     * whole app — the same field type rendered three different rings while
+     * every file spelled it out for itself. The pairing with `data-focus-own`
+     * is what takes the base rule off; `components/focus-ring-guard.test.ts`
+     * fails one without the other.
+     */
+    expect(filterBar).toContain('FIELD_FOCUS');
+    expect(filterBar).toContain('data-focus-own');
   });
 
   it('draws the checkbox rather than leaving the OS to', () => {

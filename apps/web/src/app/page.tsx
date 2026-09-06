@@ -399,7 +399,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 */}
                 <Link
                   href="/search"
-                  className="text-[12px] font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none min-[90rem]:text-action hover:text-clay-600 hover:underline focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50"
+                  className="text-[12px] font-semibold text-clay-500 underline-offset-4 transition-colors duration-(--duration-fast) outline-none min-[90rem]:text-action hover:text-clay-600 hover:underline"
                 >
                   {/*
                     `14 Landing tablet` shortens this to `All 11 →`; 1024 and
@@ -436,7 +436,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                         `04-laws.md` are the parity pass's only gate, so it is
                         fixed here rather than deferred.
                       */
-                      className="block h-full overflow-hidden rounded-panel bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) outline-none min-[90rem]:rounded-xl hover:shadow-hover focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 motion-safe:hover:-translate-y-0.5"
+                      className="block h-full overflow-hidden rounded-panel bg-stone-0 shadow-sm transition-[box-shadow,transform] duration-(--duration-base) outline-none min-[90rem]:rounded-xl hover:shadow-hover motion-safe:hover:-translate-y-0.5"
                     >
                       <StockPhoto
                         src={`/categories/${category.slug}.jpg`}

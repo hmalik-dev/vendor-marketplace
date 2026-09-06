@@ -166,7 +166,7 @@ export function AboutPane({
           </ul>
           <a
             href={onSeePackagesHref}
-            className="mt-2 inline-block rounded-xs text-sm font-semibold text-clay-500 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay-400"
+            className="mt-2 inline-block rounded-xs text-sm font-semibold text-clay-500 hover:underline"
           >
             See all packages →
           </a>

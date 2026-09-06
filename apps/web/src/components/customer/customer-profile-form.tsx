@@ -26,14 +26,17 @@ import { useApi } from '@/lib/use-api';
 import type { FieldIssue } from '@/lib/use-submit-validation';
 import { useUnsavedChangesGuard } from '@/lib/use-unsaved-changes-guard';
 import { wireUserSchema, type WireUser } from '@/lib/wire-schemas';
+import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 
 export interface CustomerProfileFormProps {
   user: WireUser;
 }
 
-const FIELD =
-  'h-auto w-full rounded-[10px] border border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900 focus-visible:border-clay-400 focus-visible:ring-3 focus-visible:ring-clay-400/15';
+const FIELD = cn(
+  'h-auto w-full rounded-[10px] border border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900',
+  FIELD_FOCUS,
+);
 
 const LABEL = 'mb-1.5 text-label font-semibold tracking-label text-stone-600 uppercase';
 
@@ -409,6 +412,8 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
                 id={`${fieldId}-budget`}
                 aria-haspopup="listbox"
                 aria-expanded={budgetOpen}
+                // A bordered field owns its indicator; see `@/lib/focus`.
+                data-focus-own
                 className={cn(FIELD, 'flex items-center justify-between gap-2 text-left')}
               >
                 <span className={cn('truncate', budgetTier === '' && 'text-stone-600')}>

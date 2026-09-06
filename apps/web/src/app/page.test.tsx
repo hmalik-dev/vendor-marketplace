@@ -280,7 +280,14 @@ describe('HomePage', () => {
     for (const pill of ['px-3', 'py-1.5', 'rounded-md']) {
       expect(link.className).not.toContain(pill);
     }
-    expect(link.className).toContain('focus-visible:ring-2');
+    /*
+     * #383. The ring is the base `:focus-visible` rule's, not this link's — an
+     * unbordered control writes nothing. What still matters here is that the
+     * link is *reachable*: dropping the `Button` is what dropped the ring, and
+     * a hand-rolled copy is now the regression rather than the fix.
+     */
+    expect(link.className).not.toContain('focus-visible:ring-');
+    expect(link.getAttribute('data-focus-own')).toBeNull();
   });
 
   /*
@@ -496,15 +503,7 @@ describe('the category cards are reachable by keyboard', () => {
     vi.clearAllMocks();
   });
 
-  /** The four utilities `04-laws.md` names, in the order it names them. */
-  const RING = [
-    'focus-visible:ring-2',
-    'focus-visible:ring-clay-400/30',
-    'focus-visible:ring-offset-2',
-    'focus-visible:ring-offset-stone-50',
-  ] as const;
-
-  it("gives every category card the law's focus ring", async () => {
+  it("leaves every category card to the law's own focus ring", async () => {
     const { container } = render(await HomePage());
 
     /*
@@ -520,9 +519,19 @@ describe('the category cards are reachable by keyboard', () => {
     expect(cards.length).toBeGreaterThan(0);
 
     for (const card of cards) {
-      for (const utility of RING) {
-        expect(card.className, `a category card is missing \`${utility}\``).toContain(utility);
-      }
+      /*
+       * #383. The card carried its own copy of the unbordered treatment, at
+       * `/30` where both `03-components.md` and `04-laws.md` say `/40` — the
+       * drift that made the same idiom render differently from screen to
+       * screen. The base rule in `globals.css` is that treatment now, so the
+       * card writes nothing and does not opt out of it, and
+       * `e2e/focus-indicator.spec.ts` proves the ring paints and is not clipped
+       * by the card's own `overflow-hidden`.
+       */
+      expect(card.className, 'a category card restates the base focus ring').not.toContain(
+        'focus-visible:ring-',
+      );
+      expect(card.getAttribute('data-focus-own')).toBeNull();
 
       /* Chrome's own outline must not be left as the only indicator either. */
       expect(card.className).toContain('outline-none');

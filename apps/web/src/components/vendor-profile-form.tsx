@@ -36,6 +36,7 @@ import {
   problemFromValidationIssues,
   type ProfileSaveProblem,
 } from '@/lib/vendor-profile-issues';
+import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 import { US_STATE_OPTIONS, usStateName } from '@/lib/us-states';
 import {
@@ -287,8 +288,10 @@ const PUBLISH_BLOCKER_FORM_KEYS = [
  * 44px below `lg` where the input method is a finger, 38px above it — the same
  * ladder every other control on the form takes.
  */
-const FORM_SELECT_TRIGGER =
-  'mt-1.5 flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-stone-0 px-[13px] text-base text-stone-900 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 sm:h-[38px]';
+const FORM_SELECT_TRIGGER = cn(
+  'mt-1.5 flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-stone-0 px-[13px] text-base text-stone-900 outline-none aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 sm:h-[38px]',
+  FIELD_FOCUS,
+);
 
 /**
  * The vendor's business profile, used for both first-time onboarding and later
@@ -883,6 +886,8 @@ export function VendorProfileForm({
                         id="state"
                         aria-haspopup="listbox"
                         aria-expanded={openSelect === 'state'}
+                        // A bordered field owns its indicator; see `@/lib/focus`.
+                        data-focus-own
                         className={cn(FORM_SELECT_TRIGGER, form.state === '' && 'text-stone-600')}
                         {...errorProps(validation.issueFor('state'))}
                       >
@@ -966,6 +971,8 @@ export function VendorProfileForm({
                         id="responseTime"
                         aria-haspopup="listbox"
                         aria-expanded={openSelect === 'responseTime'}
+                        // A bordered field owns its indicator; see `@/lib/focus`.
+                        data-focus-own
                         {...errorProps(validation.issueFor('responseTime'), 'responseTime-help')}
                         className={cn(
                           FORM_SELECT_TRIGGER,

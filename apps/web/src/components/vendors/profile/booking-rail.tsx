@@ -18,6 +18,7 @@ import { ApiClientError } from '@/lib/api-client';
 import { signInPathReturningTo } from '@/lib/return-path';
 import { useApi } from '@/lib/use-api';
 import { useViewerToday } from '@/lib/use-viewer-today';
+import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 
 export interface BookingRailProps {
@@ -246,6 +247,8 @@ export function BookingRail({
             id={`${fieldId}-bar-date`}
             aria-haspopup="dialog"
             aria-expanded={barDateOpen}
+            // A bordered field owns its indicator; see `@/lib/focus`.
+            data-focus-own
             className={`${BAR_FIELD} flex max-w-[180px] flex-1 items-center justify-between gap-2 text-left`}
           >
             <span className={cn('truncate', eventDate === '' && 'text-stone-600')}>
@@ -392,6 +395,8 @@ export function BookingRail({
                     id={`${fieldId}-date`}
                     aria-haspopup="dialog"
                     aria-expanded={dateOpen}
+                    // A bordered field owns its indicator; see `@/lib/focus`.
+                    data-focus-own
                     className={`${FIELD} flex items-center justify-between gap-2 text-left`}
                   >
                     <span className={cn('truncate', eventDate === '' && 'text-stone-600')}>
@@ -413,6 +418,8 @@ export function BookingRail({
                 max={MAX_GUEST_COUNT}
                 value={guestCount}
                 onChange={(event) => setGuestCount(event.target.value)}
+                // A bordered field owns its indicator; see `@/lib/focus`.
+                data-focus-own
                 className={FIELD}
               />
             </div>
@@ -448,6 +455,8 @@ export function BookingRail({
                     id={`${fieldId}-package`}
                     aria-haspopup="listbox"
                     aria-expanded={packageOpen}
+                    // A bordered field owns its indicator; see `@/lib/focus`.
+                    data-focus-own
                     className={`${FIELD} flex items-center justify-between gap-2 text-left`}
                   >
                     <span className="truncate">
@@ -551,8 +560,18 @@ export function BookingRail({
  * calendar sub-control and lands on 39.5 — 1.5px taller than the `Guests`
  * input beside it, which reads as a misaligned pair on the frame's shared row.
  */
-const FIELD_BOX =
-  'h-[38px] w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-stone-900';
+const FIELD_BOX = cn(
+  'h-[38px] w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-stone-900',
+  /*
+   * #383. These three are standalone bordered fields — they carry their own
+   * `border-stone-300` — so they take the bordered treatment, not the base
+   * rule's detached offset ring. They were hand-rolled rather than built from
+   * `ui/input.tsx`, which is why the sweep's primitive conversion did not reach
+   * them: a parity pass measured `border-top-color` staying `stone-300` under a
+   * `stone-50` offset band on all three.
+   */
+  FIELD_FOCUS,
+);
 
 /*
  * The type step is deliberately **not** in `FIELD_BOX`.

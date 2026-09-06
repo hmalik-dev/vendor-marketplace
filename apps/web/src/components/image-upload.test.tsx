@@ -134,7 +134,7 @@ describe('ImageUpload', () => {
 
     expect(input?.className).toContain('opacity-0');
     expect(zone?.className).toContain('has-[input:focus-visible]:ring-2');
-    expect(zone?.className).toContain('has-[input:focus-visible]:ring-clay-400/30');
+    expect(zone?.className).toContain('has-[input:focus-visible]:ring-clay-400/40');
     // The zone clips the uploaded image; a ring is a box-shadow drawn outside
     // the border box, so its own `overflow-hidden` does not cut it.
     expect(zone?.className).toContain('overflow-hidden');

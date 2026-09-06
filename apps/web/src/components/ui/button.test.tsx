@@ -91,12 +91,21 @@ describe('Button', () => {
     expect(button.className).not.toContain('bg-clay-400');
   });
 
-  it('focuses to the warm clay glow, never the browser default', () => {
+  /*
+   * #383. A button is an *unbordered control*, and the base `:focus-visible`
+   * rule in `globals.css` **is** that treatment — so the primitive writes
+   * nothing and cannot write it wrong. It carried its own copy, at `/30` where
+   * the law says `/40`, which is precisely the drift this is now asserting
+   * against: `app/focus-ring.test.ts` owns the one declaration, and
+   * `e2e/focus-indicator.spec.ts` proves it paints on a real button.
+   */
+  it('leaves the focus ring to the base rule rather than restating it', () => {
     render(<Button>Send request</Button>);
 
     const button = screen.getByRole('button', { name: 'Send request' });
-    expect(button.className).toContain('focus-visible:ring-clay-400/30');
-    expect(button.className).toContain('focus-visible:ring-offset-2');
+    expect(button.className).not.toContain('focus-visible:ring-');
+    expect(button.className).not.toContain('data-focus-own');
+    // Chrome's blue is still refused here, before focus is ever involved.
     expect(button.className).toContain('outline-none');
   });
 

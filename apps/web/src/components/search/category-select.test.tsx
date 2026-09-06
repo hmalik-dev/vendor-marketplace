@@ -424,7 +424,7 @@ describe('CategorySelect', () => {
    * bar's halo was the only focus signal and said nothing about which
    * segment was active.
    */
-  it('tints the field while it holds focus, so the segment is identifiable', () => {
+  it('fills the field while it holds focus, so the segment is identifiable', () => {
     render(
       <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
     );
@@ -434,10 +434,21 @@ describe('CategorySelect', () => {
      * on the input **inside** the segment rather than on the segment itself, so
      * the treatment reads one level out — the same way `search-bar.tsx`'s
      * `segment` does it for City and Event date.
+     *
+     * A `stone-200` fill and a clay label, and **nothing else**: that is the
+     * whole segment treatment in `03-components.md` § Inputs. It was a
+     * `clay-400/10` tint plus an inset ring, under a bar-level halo, under the
+     * base rule's outward ring on the input — four indicators for one focus
+     * (#383).
      */
     const field = screen.getByRole('combobox', { name: 'Vendor type' }).parentElement;
-    expect(field?.className).toContain('has-[:focus-visible]:bg-clay-400/10');
-    expect(field?.className).toContain('has-[:focus-visible]:inset-ring-2');
+    expect(field?.className).toContain('has-[:focus-visible]:bg-stone-200');
+    expect(field?.className).not.toContain('inset-ring');
+    expect(field?.className).not.toContain('has-[:focus-visible]:ring-');
+    expect(field?.className).toContain('group/segment');
+
+    const label = screen.getByText('Vendor type');
+    expect(label.className).toContain('group-has-[:focus-visible]/segment:text-clay-600');
   });
 
   /*

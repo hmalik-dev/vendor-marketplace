@@ -158,7 +158,7 @@ export function ReviewForm({
               key={value}
               className={cn(
                 'flex size-11 cursor-pointer items-center justify-center rounded-md text-[26px] transition-colors',
-                'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-clay-400/30 has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-stone-50',
+                'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-clay-400/40 has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-stone-50',
                 rating !== null && value <= rating ? 'text-gold-400' : 'text-stone-400',
               )}
             >
@@ -180,6 +180,8 @@ export function ReviewForm({
                  * be ignored.
                  */
                 aria-describedby={ratingIssue ? `${fieldId}-rating-error` : undefined}
+                /* The label above rings for this radio; it does not ring itself. */
+                data-focus-own
                 className="sr-only"
               />
               <span aria-hidden="true">{rating !== null && value <= rating ? '★' : '☆'}</span>

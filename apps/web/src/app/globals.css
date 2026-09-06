@@ -169,9 +169,34 @@ body:has([data-auth-screen]) > footer {
    * The focus ring is the product's, not the browser's. Declared once here so
    * no component has to remember it, and so a component that forgets still
    * lands on clay rather than on Chrome's blue.
+   *
+   * **This rule is exactly one of the three treatments** in
+   * `design/design-plan/03-components.md` § Inputs — the *unbordered control*
+   * one, at the `/40` both that file and `04-laws.md` state. It is not a floor
+   * under the other two, because a floor cannot be turned off: Tailwind's
+   * `ring-*` and `inset-ring-*` write **different** custom properties, and
+   * `outline` is a different CSS property again, so a component reaching for
+   * either painted its own indicator *and* this one. Worse, `ring-offset-*` is
+   * a third property, so even a component writing plain `ring-3` kept this
+   * rule's offset band and rendered three concentric edges.
+   *
+   * So a component that owns its indicator says so, once, with
+   * `data-focus-own` — and this rule steps aside entirely. That is the single
+   * escape hatch replacing the three hand-rolled `ring-0 ring-offset-0`
+   * overrides that each discovered the problem separately. It is enforced:
+   * `components/focus-ring-guard.test.ts` fails any file that declares a focus
+   * indicator without it.
    */
-  :focus-visible {
-    @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
+  :focus-visible:not([data-focus-own]) {
+    @apply ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50 outline-none;
+  }
+  /*
+   * Opting out of the ring is not opting into Chrome's blue. A component that
+   * restores an outline of its own re-declares the style with
+   * `focus-visible:outline-solid`, which is a utility and beats this.
+   */
+  [data-focus-own]:focus-visible {
+    @apply outline-none;
   }
   body {
     @apply bg-background text-foreground;
@@ -210,8 +235,9 @@ body:has([data-auth-screen]) > footer {
  * Two corrections, both on the Access axis:
  *
  * 1. The product's focus ring. Clerk drew a single 4px clay at 50% alpha with
- *    no offset layer, where `04-laws.md` asks for 2px at 30% over a 2px
- *    stone-50 offset.
+ *    no offset layer, where `04-laws.md:167` asks for 2px at **40%** over a 2px
+ *    stone-50 offset. (It said 30% here until #383, quoting the superseded law
+ *    three lines above the rule that has to implement the current one.)
  * 2. A 44x44 hit area. Clerk renders the trigger at 28x28. Only the target
  *    grows — the avatar keeps the size Clerk gives it, so the control still
  *    looks the way the frames draw it.
@@ -221,7 +247,7 @@ body:has([data-auth-screen]) > footer {
 }
 
 .cl-userButtonTrigger:focus-visible {
-  @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
+  @apply ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50 outline-none;
 }
 
 /*
@@ -335,9 +361,8 @@ body:has([data-auth-screen]) > footer {
  * base rule; only the ones it styles need this.
  *
  * Clerk draws a single 4px clay at 50% alpha with no offset layer, where
- * `04-laws.md` asks for 2px at 30% over a 2px stone-50 offset.
+ * `04-laws.md:167` asks for 2px at 40% over a 2px stone-50 offset.
  */
-[data-auth-screen] .cl-formFieldInput.cl-formFieldInput:focus-visible,
 [data-auth-screen] .cl-formButtonPrimary.cl-formButtonPrimary:focus-visible,
 [data-auth-screen]
   .cl-formFieldInputShowPasswordButton.cl-formFieldInputShowPasswordButton:focus-visible {
@@ -359,7 +384,32 @@ body:has([data-auth-screen]) > footer {
    * already enough to win: an unlayered declaration beats any layered one
    * regardless of specificity, which is why this sits outside `@layer base`.
    */
-  @apply ring-2 ring-clay-400/30 ring-offset-2 ring-offset-stone-50 outline-none;
+  @apply ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50 outline-none;
+}
+
+/*
+ * #383. The text fields are the *bordered field* treatment, not the unbordered
+ * one the two buttons above take: `border-clay-400` plus a tight `ring-3` at
+ * `/15` and **no offset band**. `03-components.md` § Inputs is explicit that a
+ * field which already has an edge to darken does not also get a detached ring
+ * — that reads as browser chrome — and these are the only text inputs in the
+ * product that were still taking the offset ring.
+ *
+ * Doubled class and unlayered for the same reasons as the rule above.
+ */
+[data-auth-screen] .cl-formFieldInput.cl-formFieldInput:focus-visible {
+  /*
+   * `ring-offset-0` is load-bearing, and it is the whole mechanism of #383 in
+   * one line. Clerk's nodes are not ours, so they cannot carry
+   * `data-focus-own` — the base rule still applies to them, and `ring-offset-*`
+   * is a different custom property from `ring-*`. Overriding the ring alone
+   * left the base rule's 2px `stone-50` band underneath it, and the field
+   * rendered the bordered treatment's tight ring pushed two pixels off the
+   * control: three concentric edges, which is the defect this ticket is about.
+   * Measured in Chromium — `box-shadow` read `stone-50 0 0 0 2px` then
+   * `clay/0.15 0 0 0 5px` before this was added.
+   */
+  @apply border-clay-400 ring-3 ring-clay-400/15 ring-offset-0 outline-none;
 }
 
 /*

@@ -201,7 +201,7 @@ function MonthNavButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex size-11 shrink-0 items-center justify-center rounded-sm text-action text-stone-600 outline-none transition-colors duration-(--duration-fast) hover:text-stone-900 focus-visible:ring-2 focus-visible:ring-clay-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-50 disabled:pointer-events-none disabled:opacity-50"
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-sm text-action text-stone-600 outline-none transition-colors duration-(--duration-fast) hover:text-stone-900 disabled:pointer-events-none disabled:opacity-50"
     >
       <span aria-hidden="true">{glyph}</span>
     </button>

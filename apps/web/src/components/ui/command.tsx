@@ -71,11 +71,14 @@ function CommandInput({
         search icon in the addon and clipping against the popover's rounded
         edge.
       */}
-      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! has-[[data-slot=command-input]:focus-visible]:border-ring has-[[data-slot=command-input]:focus-visible]:ring-3 has-[[data-slot=command-input]:focus-visible]:ring-ring/50 *:data-[slot=input-group-addon]:pl-2!">
+      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! has-[[data-slot=command-input]:focus-visible]:border-clay-400 has-[[data-slot=command-input]:focus-visible]:ring-3 has-[[data-slot=command-input]:focus-visible]:ring-clay-400/15 *:data-[slot=input-group-addon]:pl-2!">
         <CommandPrimitive.Input
           data-slot="command-input"
+          // The group above paints for this input; a hand-rolled
+          // `ring-0 ring-offset-0` until #383 gave the app one mechanism.
+          data-focus-own
           className={cn(
-            'w-full text-sm outline-hidden focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50',
+            'w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
             className,
           )}
           {...props}
