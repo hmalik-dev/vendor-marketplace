@@ -254,6 +254,17 @@ async function walk(page: Page, settled?: string): Promise<Stop[]> {
     }
 
     /*
+     * Next.js's dev overlay mounts a `<nextjs-portal>` custom element that takes
+     * a keyboard stop of its own and styles nothing. It is not the product's
+     * markup and does not exist in a production build, so it is skipped rather
+     * than reported — while the Tab that reached it still counts toward the
+     * walk, because the stop is genuinely there in dev.
+     */
+    if (stop.where.startsWith('nextjs-portal')) {
+      continue;
+    }
+
+    /*
      * The segment fill is a `transition-colors` property, so a stop read in the
      * same tick as the Tab can legitimately show none of it yet. Only the
      * *empty* reading is re-taken, which costs one wait per genuinely
@@ -446,14 +457,12 @@ test.describe('one focus indicator per keyboard stop', () => {
     const segment = page.locator('input[data-slot="combobox-input"]').first();
     await segment.focus();
 
-    const stop = await readStop(page);
-
-    expect(stop?.indicators ?? ['not focused']).toEqual([]);
-
     /*
      * The colour itself, not a boolean about it. Settling on `field === target`
      * returns the moment two mid-ramp samples agree, which they do immediately
-     * — both are `false`. The raw value is what actually stops moving.
+     * — both are `false`. The raw value is what actually stops moving, and it
+     * has to stop before the stop below is read: sampled in the same tick as
+     * the focus, the fill reads `rgba(239, 233, 224, 0.004)`.
      */
     const filled = await settledStyle(page, () =>
       segment.evaluate((element) => {
@@ -476,5 +485,16 @@ test.describe('one focus indicator per keyboard stop', () => {
 
     // "…and a clay label" — `clay-600`, the token for text on a tinted surface.
     expect(labelColour).toBe('rgb(142, 63, 32)');
+
+    /*
+     * And the fill is the *whole* indicator: one, and it is the fill. Not zero
+     * — a segment that painted nothing would be as wrong as one that painted a
+     * ring, and this control is the one the mobile sheet mount got wrong.
+     */
+    const stop = await readStop(page);
+
+    expect(stop?.indicators ?? ['not focused']).toHaveLength(1);
+    expect(stop?.indicators[0]).toContain('fill on');
+    expect(stop?.indicators[0]).toContain('rgb(239, 233, 224)');
   });
 });
