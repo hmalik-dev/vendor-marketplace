@@ -7,6 +7,7 @@ import {
   BYTES_PER_MB,
   MAX_UPLOAD_BYTES,
   MIN_UPLOAD_IMAGE_WIDTH,
+  SINGLE_UPLOAD_CONSTRAINT_LINE,
 } from '@vendor-marketplace/shared';
 
 import { isUpstreamErrorShape } from '@/lib/user-facing-error';
@@ -174,7 +175,13 @@ export function connectionFailure(): UploadFailure {
   };
 }
 
-const CONSTRAINT_FIX = `${ACCEPTED_IMAGE_LABEL} · under ${MAX_UPLOAD_MB} MB · at least ${MIN_UPLOAD_IMAGE_WIDTH}px wide.`;
+/*
+ * The single-image contract, from the shared constant the hint above the
+ * chooser reads. Retyped here it drifted from that hint by an "each" and a
+ * batch clause, which is the disagreement `SINGLE_UPLOAD_CONSTRAINT_LINE`
+ * exists to close; only the sentence-ending period is added.
+ */
+const CONSTRAINT_FIX = `${SINGLE_UPLOAD_CONSTRAINT_LINE}.`;
 
 /**
  * A refusal the server sent, put into words the reader can act on.

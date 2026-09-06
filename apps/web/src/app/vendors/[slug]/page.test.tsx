@@ -41,6 +41,18 @@ vi.mock('@/lib/vendor-data', () => ({
   getPublicVendorReviews: (slug: string) => getPublicVendorReviews(slug),
 }));
 
+/*
+ * The page reads *which role* is reading — a public read that degrades to
+ * `null` — to decide whether the rail offers its two CTAs at all (#412).
+ * Mocked so a role can be named; the real function needs Clerk and a running
+ * API.
+ */
+const readRoleForChrome = vi.fn();
+
+vi.mock('@/lib/current-user', () => ({
+  readRoleForChrome: () => readRoleForChrome(),
+}));
+
 const { default: VendorProfilePage } = await import('./page.js');
 
 /**
@@ -75,6 +87,7 @@ const VENDOR = {
 };
 
 beforeEach(() => {
+  readRoleForChrome.mockResolvedValue(null);
   getPublicVendorProfile.mockResolvedValue(VENDOR);
   getPublicVendorAvailability.mockResolvedValue([]);
   getPublicVendorReviews.mockResolvedValue({ items: [], total: 0, summary: null, viewer: null });
@@ -269,5 +282,44 @@ describe('a private availability note', () => {
     // The projection did reach the page — otherwise this asserts nothing.
     expect(propStrings(tree)).toContain('2099-06-20');
     expect(propStrings(tree)).not.toContain(NOTE);
+  });
+});
+
+/**
+ * #412's sixth finding, at the page rather than at the rail.
+ *
+ * `BookingRail` decides nothing about roles — it renders what `canBook` says —
+ * so this is the assertion that the page asks the right question. Both CTAs
+ * are `requireRole('customer')` at the API, and a vendor was being offered
+ * them anyway, including on their own storefront.
+ */
+describe('who the storefront offers its CTAs to', () => {
+  const CANNOT = 'Only a customer account can book or message a vendor.';
+
+  it('offers them to a signed-out visitor, and to a read that degraded to null', async () => {
+    const container = await renderPage();
+
+    expect(container.textContent).toContain('Request booking');
+    expect(container.textContent).toContain('Send a message');
+    expect(container.textContent).not.toContain(CANNOT);
+  });
+
+  it('offers them to a customer', async () => {
+    readRoleForChrome.mockResolvedValue('customer');
+
+    const container = await renderPage();
+
+    expect(container.textContent).toContain('Request booking');
+    expect(container.textContent).toContain('Send a message');
+  });
+
+  it.each(['vendor', 'admin'])('offers neither to a %s, and says why', async (role) => {
+    readRoleForChrome.mockResolvedValue(role);
+
+    const container = await renderPage();
+
+    expect(container.textContent).not.toContain('Request booking');
+    expect(container.textContent).not.toContain('Send a message');
+    expect(container.textContent).toContain(CANNOT);
   });
 });

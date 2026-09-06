@@ -238,6 +238,40 @@ describe('validation', () => {
       ),
     ).toBeDefined();
   });
+
+  /**
+   * #412's first finding, on the form that actually creates a booking. The
+   * profile's guest *preferences* truncated `2.7` to 2; this form did the same
+   * thing and sent the 2 to the vendor as the size of their event. `type=
+   * "number"` hands the string through intact and `Number.parseInt` reads only
+   * its prefix, so every check here passed on a number nobody typed.
+   */
+  it('refuses a decimal rather than sending its prefix', async () => {
+    renderScreen();
+
+    await chooseEventType();
+    await userEvent.type(screen.getByLabelText('Guest count'), '2.7');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+
+    expect(screen.getByText('Enter how many people are coming, as a whole number.')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Send request' })).toBeNull();
+  });
+
+  /*
+   * `1e21` used to be sent as **1**. It is a number above the ceiling, so the
+   * ceiling sentence is the true one — what matters is that it is refused
+   * rather than truncated to a size nobody typed.
+   */
+  it.each(['1e21', '100001'])('names the platform ceiling for %s', async (typed) => {
+    renderScreen();
+
+    await chooseEventType();
+    await userEvent.type(screen.getByLabelText('Guest count'), typed);
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+
+    expect(screen.getByText('That is more than 100,000 guests.')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Send request' })).toBeNull();
+  });
 });
 
 describe('the rail', () => {

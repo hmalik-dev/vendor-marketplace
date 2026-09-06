@@ -100,6 +100,7 @@ describe('BookingRail', () => {
         reviewCount={0}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -130,6 +131,7 @@ describe('BookingRail', () => {
         reviewCount={127}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -146,6 +148,7 @@ describe('BookingRail', () => {
         reviewCount={0}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -179,6 +182,7 @@ describe('BookingRail', () => {
           reviewCount={0}
           serverToday={viewerOn('2026-01-01')}
           calendar={{}}
+          canBook
         />,
       );
     }
@@ -275,6 +279,7 @@ describe('BookingRail', () => {
         reviewCount={0}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -293,6 +298,7 @@ describe('BookingRail', () => {
         reviewCount={0}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -310,6 +316,7 @@ describe('BookingRail', () => {
         reviewCount={0}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -330,6 +337,7 @@ describe('BookingRail', () => {
         reviewCount={0}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -348,6 +356,7 @@ describe('BookingRail', () => {
         reviewCount={0}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -370,6 +379,7 @@ describe('BookingRail', () => {
           reviewCount={127}
           serverToday={viewerOn('2026-08-10')}
           calendar={calendar}
+          canBook
         />,
       );
     }
@@ -434,6 +444,7 @@ describe('BookingRail', () => {
           reviewCount={127}
           serverToday={viewerOn('2026-08-29')}
           calendar={{}}
+          canBook
         />,
       );
 
@@ -470,6 +481,7 @@ describe('the From qualifier', () => {
         reviewCount={127}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
   }
@@ -501,6 +513,7 @@ describe('the From qualifier', () => {
         reviewCount={127}
         serverToday={viewerOn('2026-01-01')}
         calendar={{}}
+        canBook
       />,
     );
 
@@ -527,5 +540,63 @@ describe('the From qualifier', () => {
 
     expect(within(rail()).getByText('$3,900')).toBeDefined();
     expect(within(rail()).getByText('From').className).toContain('invisible');
+  });
+});
+
+/**
+ * #412's sixth finding. Both CTAs are `requireRole('customer')` at the API, but
+ * only one of them said so: `Send a message` printed a refusal while `Request
+ * booking` was a `<Link>` whose destination bounced silently to the vendor
+ * dashboard — one account, one page, two answers. A vendor's own storefront
+ * offered the pair against themselves.
+ *
+ * `canBook` is the page's answer for both, so neither is offered to an account
+ * that cannot use it. #31: a control either does something or says why it
+ * cannot; two that cannot are replaced by the sentence.
+ */
+describe('an account that cannot book', () => {
+  function renderFor(canBook: boolean): void {
+    render(
+      <BookingRail
+        businessName="Kessler & Co."
+        slug="kessler-and-co"
+        startingPriceCents={175_000}
+        packages={[servicePackage()]}
+        reviewCount={0}
+        serverToday={viewerOn('2026-01-01')}
+        calendar={{}}
+        canBook={canBook}
+      />,
+    );
+  }
+
+  it('offers neither CTA, in the rail or the bottom bar', () => {
+    renderFor(false);
+
+    expect(screen.queryByRole('link', { name: 'Request booking' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send a message' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
+  });
+
+  it('says why, in the same words in both compositions', () => {
+    renderFor(false);
+
+    const line = 'Only a customer account can book or message a vendor.';
+    expect(within(rail()).getByText(line)).toBeDefined();
+    expect(within(screen.getByRole('region')).getByText(line)).toBeDefined();
+  });
+
+  it('drops the charge reassurance, which only reads beside a CTA', () => {
+    renderFor(false);
+
+    expect(screen.queryByText(/confirms the date first/)).toBeNull();
+  });
+
+  it('offers both to an account that can, which is the default', () => {
+    renderFor(true);
+
+    expect(within(rail()).getByRole('link', { name: 'Request booking' })).toBeDefined();
+    expect(within(rail()).getByRole('button', { name: 'Send a message' })).toBeDefined();
+    expect(screen.queryByText(/Only a customer account/)).toBeNull();
   });
 });
