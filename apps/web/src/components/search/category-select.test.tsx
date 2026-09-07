@@ -53,14 +53,17 @@ const CATEGORIES: Category[] = [
   category('5', 'Wedding films', 5),
 ];
 
-function renderSelect(value = ''): { onChange: ReturnType<typeof vi.fn> } {
+function renderSelect(
+  value = '',
+  size: 'compact' | 'hero' = 'compact',
+): { onChange: ReturnType<typeof vi.fn> } {
   const onChange = vi.fn();
   render(
     <CategorySelect
       categories={CATEGORIES}
       value={value}
       onChange={onChange}
-      size="compact"
+      size={size}
       id="vendor-type"
     />,
   );
@@ -497,11 +500,17 @@ describe('CategorySelect', () => {
      * base rule's outward ring on the input — four indicators for one focus
      * (#383).
      */
-    const field = screen.getByRole('combobox', { name: 'Vendor type' }).parentElement;
-    expect(field?.className).toContain('has-[:focus-visible]:bg-stone-200');
-    expect(field?.className).not.toContain('inset-ring');
-    expect(field?.className).not.toContain('has-[:focus-visible]:ring-');
-    expect(field?.className).toContain('group/segment');
+    /*
+     * The segment box by its `data-slot`, not by `parentElement`. #426 put the
+     * value and its caret in a row of their own, so the field is two levels out
+     * — and a positional locator silently read the row's classes instead, which
+     * is a test passing on the wrong element rather than failing.
+     */
+    const box = field();
+    expect(box.className).toContain('has-[:focus-visible]:bg-stone-200');
+    expect(box.className).not.toContain('inset-ring');
+    expect(box.className).not.toContain('has-[:focus-visible]:ring-');
+    expect(box.className).toContain('group/segment');
 
     const label = screen.getByText('Vendor type');
     expect(label.className).toContain('group-has-[:focus-visible]/segment:text-clay-600');
@@ -550,5 +559,142 @@ describe('CategorySelect', () => {
     expect(field.className).toContain('text-clay-600');
     // The layering that silently won at 1440 — never emitted alongside the win.
     expect(field.className).not.toContain('lg:font-normal');
+  });
+});
+
+/*
+ * The disclosure caret — #426, which reverses D25 for this control and for no
+ * other. Frames `01 Landing` and `02 Search` both draw `▾` on the vendor-type
+ * segment and `28 Dropdown open — hero` draws `▴` on the open one.
+ *
+ * `app/dropdown-caret.test.ts` is the other half of this: it holds the override
+ * everywhere else and proves this file is the only exemption. What is asserted
+ * here is what the customer actually gets — a rendered glyph that flips, and a
+ * screen reader that never hears it.
+ */
+describe('CategorySelect — the disclosure caret (#426)', () => {
+  /** The caret, found by what it draws rather than by a class or a position. */
+  const caret = (): HTMLElement => {
+    const found = [...field().querySelectorAll('span')].filter((span) =>
+      /[▾▴]/.test(span.textContent ?? ''),
+    );
+
+    expect(found).toHaveLength(1);
+
+    return found[0] as HTMLElement;
+  };
+
+  it('draws `▾` beside the value when the panel is closed', () => {
+    renderSelect('photography');
+
+    expect(caret().textContent).toBe('▾');
+  });
+
+  it('flips to `▴` while the panel is open, and back when it closes', async () => {
+    const user = userEvent.setup();
+    renderSelect('photography');
+
+    expect(caret().textContent).toBe('▾');
+
+    await user.click(trigger());
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
+
+    expect(caret().textContent).toBe('▴');
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('false'));
+
+    expect(caret().textContent).toBe('▾');
+  });
+
+  /*
+   * D25 found two chips announcing "All categories black down-pointing small
+   * triangle, button" because the glyph sat in a template literal inside the
+   * control. The caret is a sibling of the field and `aria-hidden`, so the
+   * accessible name is the label and nothing else, in both states.
+   */
+  it('is hidden from assistive technology and never part of the accessible name', async () => {
+    const user = userEvent.setup();
+    renderSelect('photography');
+
+    expect(caret().getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByRole('combobox', { name: 'Vendor type' })).toBe(trigger());
+
+    await user.click(trigger());
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
+
+    // Still exactly `Vendor type` — a name carrying `▾` would not match this.
+    expect(screen.getByRole('combobox', { name: 'Vendor type' })).toBe(trigger());
+    expect(caret().getAttribute('aria-hidden')).toBe('true');
+  });
+
+  /*
+   * **Both signals, which is #426's recorded ruling.** `42-dropdowns.md` states
+   * the open state as "the value turning clay and the caret flipping", and
+   * frame `28` draws both. They say different things — the caret is the
+   * affordance, the clay value is the state — and dropping the clay would also
+   * have left this segment signalling open differently from City, which draws
+   * no caret in any frame and is out of scope.
+   *
+   * jsdom has no layout, so this is a class-level assertion: the rendered
+   * colour is verified by the browser parity pass, not here.
+   */
+  it('turns clay with the value when open, and is stone-600 at rest', async () => {
+    const user = userEvent.setup();
+    renderSelect('photography');
+
+    expect(caret().className).toContain('text-stone-600');
+    expect(caret().className).not.toContain('text-clay-600');
+
+    await user.click(trigger());
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
+
+    expect(caret().className).toContain('text-clay-600');
+    expect(caret().className).not.toContain('text-stone-600');
+    // The other half of the pair — kept, not traded away.
+    expect(trigger().className).toContain('font-semibold');
+    expect(trigger().className).toContain('text-clay-600');
+  });
+
+  /*
+   * The frames' size ladder, per density. Read at every width each bar is drawn
+   * at: hero 11px at 390, 9px at 768, 10px at 1024, 11px at 1440; compact 9px.
+   */
+  /*
+   * The caret is the element that *looks* like the thing you click to open the
+   * list, so it has to be. It is `aria-hidden` and not a control of its own —
+   * the click focuses the field, and `openOnFocus` does the rest, which is the
+   * same path the segment's padding has always taken.
+   *
+   * It was broken by this ticket's own first draft: the field's mousedown guard
+   * read `event.target !== event.currentTarget`, and the new row made every
+   * click below the box somebody else's.
+   */
+  it('opens the panel when the caret itself is clicked', async () => {
+    const user = userEvent.setup();
+    renderSelect('photography');
+
+    expect(trigger().getAttribute('aria-expanded')).toBe('false');
+
+    await user.click(caret());
+
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
+    expect(caret().textContent).toBe('▴');
+  });
+
+  it('carries the compact bar’s 9px, per frame `02`', () => {
+    renderSelect('photography');
+
+    expect(caret().className).toContain('text-[9px]');
+    expect(caret().className).not.toContain('lg:text-[10px]');
+  });
+
+  it('carries the hero ladder — 11 / 9 / 10 / 11 across the four widths', () => {
+    renderSelect('photography', 'hero');
+
+    expect(caret().className).toContain('text-[11px]');
+    expect(caret().className).toContain('sm:text-[9px]');
+    expect(caret().className).toContain('lg:text-[10px]');
+    expect(caret().className).toContain('min-[90rem]:text-[11px]');
   });
 });

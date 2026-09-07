@@ -89,7 +89,7 @@ makes the results grid flicker and re-sort under the user's hand.
 - **Scrim:** hero and mobile only, where the dropdown is the page's subject. **Never** in the compact header — results must stay readable behind it.
 - **Empty body**: one row of `stone-600` copy saying so plus a single action, never a blank panel. The example used to be _"a city with no vendors in that category"_ and **#384 retired it** — a city with no vendors is not an empty panel any more, it is a suggestion that commits and lands on frame `18`. City's empty bodies are now a typed string no US place matches, a request still in flight, and a request that failed; all three carry `Search anywhere` as the action.
 
-## The `▾` in the frames is a recorded override, not a miss
+## The `▾` in the frames is a recorded override, not a miss — except on the vendor-type picker
 
 D25 (2026-08-31) removed the unicode caret from every trigger in the app, as a
 user override of this file and of the frames — the one place where code leads the
@@ -97,6 +97,23 @@ contract. **The frames still draw `▾` and they are not going to stop**:
 `frame-13-parity.test.ts` asserts frame `13` contains `Category ▾`, `City ▾` and
 `Payouts ▾`, and inverts its own app-side assertion rather than deleting it,
 precisely so the override stays visible from both sides.
+
+**#426 reverses it for one control (2026-09-06).** The account holder asked for
+the caret back on the **vendor-type picker**, on the landing hero and on
+`/search` — one component, `CategorySelect`, that both surfaces mount. There the
+app now draws what frames `01`, `02` and `28` draw: `▾` in `stone-600` closed,
+flipping to `▴` in `clay-600` open, `aria-hidden` and never part of the
+accessible name. `clay-600` rather than frame `28`'s `#B4552F`, because
+`01-foundations.md` makes `clay-400` a fill and never text on cream.
+
+The **open state on the field** above is therefore live again as written — the
+value turns clay _and_ the caret flips. Both, not one: the caret is the
+affordance and the clay value is the state. `City` draws no caret in any frame
+and keeps the clay value alone.
+
+The other thirteen sites keep D25, and `app/dropdown-caret.test.ts` is narrowed
+rather than deleted so they stay that way — it exempts exactly one named file and
+fails if the exemption list grows.
 
 A parity pass that files "the app draws no caret where the frame does" is
 re-finding a decision. It has now been filed **four** times — #228, #338, and

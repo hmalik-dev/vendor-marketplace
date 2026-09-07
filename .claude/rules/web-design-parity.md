@@ -44,9 +44,29 @@ attribute. Ruled 2026-09-04 (D30); the worked example is in `04-laws.md`.
 
 **Where a ruling has already overruled a frame, the frame is the record of what
 was overruled.** Do not file it again. Live overrides: sub-16px avatar monograms
-render Instrument Sans though the frames draw serif (D24); no trigger draws the
-`▾` the frames draw (D25); and `01-foundations.md` records two colour values as
-accepted deviations. The caret has been re-filed four times.
+render Instrument Sans though the frames draw serif (D24); **no trigger draws the
+`▾` the frames draw except the vendor-type picker** (D25, amended by #426 on
+2026-09-06); and `01-foundations.md` records two colour values as accepted
+deviations. The caret has been re-filed four times.
+
+**The caret exception, both ways round (#426).** The account holder asked for it
+back on the vendor-type segment of the landing hero and of `/search` — one
+control, `CategorySelect`, which both surfaces mount. So a parity pass reads it
+in **two** directions, and only one of them is a finding:
+
+- On frames `01 Landing`, `02 Search` and `28 Dropdown open — hero`, the caret is
+  **expected** and its absence is a real defect. It is `▾` closed in `stone-600`
+  and `▴` open in `clay-600` — `clay-600` and not frame `28`'s `#B4552F`, because
+  `clay-400` is a fill and never text on cream.
+- On the other thirteen sites, the frames draw a caret and the app must not.
+  That is still D25 and still not a finding. `app/dropdown-caret.test.ts`
+  enforces it and exempts exactly one file.
+
+**The open state is both signals, deliberately.** The value turns
+`font-semibold text-clay-600` **and** the caret flips — `42-dropdowns.md` states
+it that way and frame `28` draws both. A pass that reports one of them as
+redundant is re-opening a ruling. City draws no caret in any frame and correctly
+has none; it signals open through the clay value alone.
 
 **Six more overrides, ruled 2026-09-06 (#372).** The parity close-out ended
 these; a pass that re-finds one is looking at the record of a decision, not at
