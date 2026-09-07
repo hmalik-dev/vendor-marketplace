@@ -75,3 +75,17 @@ still applies.
 rebasing.** `gh pr update-branch <n>` does exactly this from the remote side and
 is the one-command version. Rebase is only for a branch that has never been
 pushed.
+
+**`DIRTY` and `BEHIND` need different tools, and they arrive in that order.**
+Lane 431 added this and it is the part that is easy to get wrong:
+`gh pr update-branch` **only fast-forwards** — it cannot resolve a content
+conflict. So a `DIRTY` PR needs a **local merge** of `origin/main` with the
+conflict resolved by hand; only once it is `BEHIND` is `update-branch` the right
+tool. Reaching for `update-branch` on a `DIRTY` PR does nothing and looks like
+the command failing.
+
+**And the free-rebase exception:** a lane whose branch has **never been pushed**
+(`git ls-remote origin refs/heads/<branch>` empty) can rebase safely, because
+there is no remote history to rewrite. That is worth spending deliberately —
+rebase once, immediately before the first push, onto the final state rather than
+twice. After the first push, the merge-only rule applies for good.
