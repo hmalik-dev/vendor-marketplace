@@ -899,6 +899,50 @@ does not draw, and correctly files it. `dropdown-caret.test.ts` states the overr
 check, and `frame-13-parity.test.ts` inverts its own `toContain('▾')` rather than deleting
 it, keeping the frame half intact because the frame really does still draw one.
 
+#### Amended 2026-09-06 by #426 — the caret comes back on the vendor-type picker, and only there
+
+**The account holder reversed this ruling for one control**, verbatim: *"lets add a caret to
+the vendor type per the design - both to landing and browser - i removed it before but want
+it back."* Recorded here rather than as a new decision, because a reader arriving at D25
+has to be able to tell which way it currently points; a second entry elsewhere is how an
+override gets re-found, which is the failure this decision was written to stop.
+
+**Thirteen of the fourteen sites are unchanged.** `▾` returns to `CategorySelect` alone —
+the landing hero and `/search` mount the same `search-bar.tsx`, so the two surfaces the
+instruction names are one control and one change. On frames `01 Landing` and `02 Search`
+this **restores** frame fidelity; everywhere else D25 stands and the frames are still
+overruled.
+
+**`dropdown-caret.test.ts` is narrowed, not deleted.** It now exempts exactly one named file
+and asserts that the list is one file long, that the path really resolves inside the scanned
+tree, and — from the other side — that the exempt file draws both glyphs and draws them only
+inside an `aria-hidden` span. Deleting the guard was the obvious move and the wrong one: the
+glyph has crept back twice on its own, and an unenforced override is what let it.
+`frame-13-parity.test.ts` is untouched — its inverted assertion is about the **admin** filter
+bar, which #426 does not reach.
+
+**Both open-state signals stay, and this is the part D25 left open.** D25 gave three triggers
+`font-semibold text-clay-600` on the value *because* the caret had been their only visible
+open signal. With the caret back on one of them the question was whether that is now doubled
+signalling. It is not, and the contract already says so: `42-dropdowns.md` states the open
+state as *"the value turning clay **and** the caret flipping"*, and frame `28 Dropdown open
+— hero` draws exactly both — `Photography` at 600 weight in clay beside `▴`. They say
+different things. The caret is the affordance — this opens a list, and here is which way it
+is currently pointing; the clay value is the state. Dropping the clay would also have left
+the hero's two comboboxes announcing "open" in two different languages inside one pill,
+since **City draws no caret in any frame** and is out of #426's scope: both segments turn
+their value clay, and only the one the frames draw a caret on has one.
+
+**The caret is `aria-hidden` and is not part of any accessible name.** It is a sibling of the
+field, not text inside it — the specific defect D25 found, where two chips announced *"All
+categories black down-pointing small triangle, button"*. The open state still reaches
+assistive technology through `aria-expanded`, which every trigger has carried throughout.
+
+**`clay-600` open, not the frame's `#B4552F`.** Frame `28` draws the open caret in
+`clay-400`, which `01-foundations.md` forbids as text on cream; the value beside it was
+resolved to `clay-600` the same way by D25's own sweep, and two different clays inside one
+segment would be the drift rather than the fidelity.
+
 ---
 
 ### D26: The Hatch Is an Editor Primitive; the Labelled `Placeholder` Is Retired — *2026-08-31*

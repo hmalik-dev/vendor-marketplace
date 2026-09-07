@@ -442,8 +442,16 @@ describe('SearchBar — pill and circle discipline', () => {
     expect(date.className).toContain('focus-visible:bg-stone-200');
     expect(date.getAttribute('data-focus-own')).not.toBeNull();
 
+    /*
+     * `closest`, not `parentElement`. Since #426 the vendor-type field wraps
+     * its value and its caret in a row, so the segment box is two levels out
+     * there and one level out on City — and a positional locator answered with
+     * whichever element happened to sit in between.
+     */
     for (const name of ['City', 'Vendor type']) {
-      const segment = screen.getByRole('combobox', { name }).parentElement;
+      const segment = screen
+        .getByRole('combobox', { name })
+        .closest('[data-slot="combobox-field"]');
       expect(segment?.className).toContain('has-[:focus-visible]:bg-stone-200');
       expect(segment?.className).not.toContain('inset-ring');
     }

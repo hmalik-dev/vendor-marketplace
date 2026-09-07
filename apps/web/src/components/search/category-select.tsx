@@ -207,13 +207,31 @@ export function CategorySelect({
         /* `.lbl` is 10.5px and only `01 Landing` takes it unmodified. */
         isHero ? 'text-[9.5px] min-[90rem]:text-label' : 'text-[9.5px]',
       )}
+      /*
+        The frame's row: the value, then the caret, `justify-between`.
+
+        Gap and right inset per frame, and the inset ladder is the one that was
+        already on the input — 10px at 768 (`14 Landing tablet`) and 1024
+        (`27 Landing — 1024`), 14px at 1440 (`01 Landing`); 10px in the compact
+        bar (`02 Search`). The gaps are the frames' too: 8 / 8 / 10 on the hero,
+        6 in the compact bar.
+      */
+      trailingRowClassName={
+        isHero ? 'gap-2 pr-2.5 min-[90rem]:gap-2.5 min-[90rem]:pr-3.5' : 'gap-1.5 pr-2.5'
+      }
+      trailing={(open) => <DisclosureCaret open={open} size={isHero ? 'hero' : 'compact'} />}
       inputClassName={(open) =>
         cn(
           'w-full min-w-0 truncate bg-transparent outline-none placeholder:text-stone-600',
           /* Matches `SearchBar`'s own ladder — the two must agree, they sit
              side by side in the same pill. */
           isHero ? 'text-[14px] lg:text-[13.5px] min-[90rem]:text-md' : 'text-[13.5px]',
-          isHero ? 'gap-2 pr-2.5 lg:mt-0.25 min-[90rem]:mt-0.5 min-[90rem]:pr-3.5' : 'pr-2.5',
+          /*
+            The row's own gap and right inset moved onto `trailingRowClassName`
+            with #426 — they are the geometry *between* the value and the caret,
+            and a `gap` on an `<input>` never did anything at all.
+          */
+          isHero && 'lg:mt-0.25 min-[90rem]:mt-0.5',
           /*
             Open state, resolved here in JS rather than layered as classes.
             D25 removed the caret that used to carry it, and #373 then found
@@ -230,5 +248,83 @@ export function CategorySelect({
         )
       }
     />
+  );
+}
+
+/**
+ * The disclosure caret — **the one place in this app that draws it (#426)**.
+ *
+ * D25 took `▾` off fourteen triggers as a user override of the frames. #426 is
+ * the account holder reversing that **for this control on these two surfaces**,
+ * verbatim: *"lets add a caret to the vendor type per the design - both to
+ * landing and browser - i removed it before but want it back."* The other twelve
+ * sites keep the override, and `app/dropdown-caret.test.ts` still fails if the
+ * glyph appears in any file but this one.
+ *
+ * So this is not a parity fix that got missed: on frames `01 Landing` and
+ * `02 Search` it **restores** fidelity, and everywhere else D25 still stands.
+ *
+ * **It flips, and both signals stay.** `42-dropdowns.md` states the open state
+ * in writing — *"the value turning clay and the caret flipping"* — and frame
+ * `28 Dropdown open — hero` draws exactly that: `Photography` at 600 weight in
+ * clay **and** `▴` beside it. So the `font-semibold text-clay-600` D25 gave the
+ * value is kept rather than traded away; the two say different things. The
+ * caret is the affordance (this opens a list, and here is which way), the clay
+ * value is the state (it is open now). Dropping the clay would also have left
+ * this segment and City — which draws no caret in any frame and is out of
+ * #426's scope — signalling open in two different languages inside one bar.
+ *
+ * **Never part of an accessible name.** `aria-hidden`, and a sibling of the
+ * field rather than text inside it. D25 found two chips whose glyph was in a
+ * template literal *inside the button*, so a screen reader announced *"All
+ * categories black down-pointing small triangle, button"*. The open state
+ * reaches assistive technology through `aria-expanded`, which the field has
+ * carried throughout.
+ */
+const CARETS = { closed: '▾', open: '▴' } as const;
+
+function DisclosureCaret({
+  open,
+  size,
+}: {
+  open: boolean;
+  size: 'hero' | 'compact';
+}): React.ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        /*
+          `flex-none` per `27 Landing — 1024`, which is the one frame that says
+          it — the caret must not be the thing that gives up width when "Any
+          vendor type" is long. `leading-none` so an 11px glyph does not carry a
+          20px line box and grow the row it is centred in.
+        */
+        'flex-none leading-none',
+        /*
+          Frame sizes, read at every width the bar is drawn at: hero 11px at 390
+          (`14 Landing mobile`), 9px at 768, 10px at 1024, 11px at 1440; compact
+          9px at 1440 (`02 Search`). Mobile-first, so the base step is the 390
+          value and `sm:` starts the desktop ladder — a `max-sm:` override would
+          be the same specificity as the `sm:` one and settle on source order.
+        */
+        size === 'hero'
+          ? 'text-[11px] sm:text-[9px] lg:text-[10px] min-[90rem]:text-[11px]'
+          : 'text-[9px]',
+        /*
+          `stone-600` closed, in every frame that draws it, whether the value
+          beside it is placeholder `stone-600` or a chosen `stone-900`. Open, it
+          takes the value's own colour.
+
+          `clay-600` rather than the `#B4552F` frame `28` draws: `clay-400` is a
+          fill and never text on cream — `01-foundations.md` — and the value it
+          sits beside already resolved that the same way in D25's sweep. Two
+          clays in one segment would be the drift, not the fidelity.
+        */
+        open ? 'text-clay-600' : 'text-stone-600',
+      )}
+    >
+      {open ? CARETS.open : CARETS.closed}
+    </span>
   );
 }

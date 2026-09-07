@@ -166,6 +166,26 @@ export interface ComboboxDropdownProps {
    * would put both classes in the string again and let the stylesheet decide.
    */
   inputClassName?: (open: boolean) => string;
+  /**
+   * A trailing element on the **value's own row** — today, the disclosure caret
+   * the vendor-type picker draws (#426).
+   *
+   * A function of the open state for the same reason `inputClassName` is one:
+   * the caret flips `▾` to `▴` and changes colour when the panel opens, and
+   * resolving that here rather than as two competing utility classes is what
+   * stops the responsive-variant-wins bug #373 fixed.
+   *
+   * Absent by default, and the field's markup is then exactly what it was —
+   * `CitySelect` draws no caret in any frame, so it passes nothing and gains no
+   * wrapper element.
+   */
+  trailing?: (open: boolean) => ReactNode;
+  /**
+   * Geometry of the row holding the value and `trailing` — the gap between them
+   * and the row's own right inset, both of which the frames measure per
+   * breakpoint. Meaningless without `trailing`, because there is no row.
+   */
+  trailingRowClassName?: string;
   /** Rendered after the input inside the field — the bar's own furniture. */
   children?: ReactNode;
 }
@@ -197,6 +217,8 @@ export function ComboboxDropdown({
   className,
   labelClassName,
   inputClassName,
+  trailing,
+  trailingRowClassName,
   children,
 }: ComboboxDropdownProps): React.ReactElement {
   const listId = useId();
@@ -639,21 +661,57 @@ export function ComboboxDropdown({
           */
           className={cn(cursorClass, className)}
           /*
-            The segment's own padding is part of the field, so clicking it
-            focuses the input rather than doing nothing. Only a click that
-            landed on this box itself: the label already focuses through
-            `htmlFor`, and the input handles its own. `preventDefault` keeps the
-            browser from moving focus somewhere else after this.
+            The segment's own chrome is part of the field, so clicking it
+            focuses the input rather than doing nothing. Everything that is not
+            a control of its own: the box, the value row, and the caret sitting
+            in it. `preventDefault` keeps the browser from moving focus
+            somewhere else after this.
+
+            **Not `event.target !== event.currentTarget`**, which is what this
+            was. #426 put the value and its caret in a row of their own, and
+            that test reads any click below the box as somebody else's — so the
+            caret, the one element in the segment that *looks* like the thing
+            you click to open the list, did nothing at all. The exclusions are
+            named instead: the input handles its own clicks, the label already
+            focuses through `htmlFor`, and the sheet's button opens the sheet.
           */
           onMouseDown={
             anchored
               ? (event) => {
-                  if (event.target !== event.currentTarget) {
+                  /*
+                    Bounded by `currentTarget`, because `closest` does not stop
+                    at this box — it walks the whole ancestor chain. Nothing
+                    above the segment is a `label` or a `button` today, so the
+                    unbounded form is correct *by accident of the layout*: mount
+                    this field inside one and every click in the segment would
+                    short-circuit, including on the box itself, and click-to-
+                    focus would die with the padding test still green.
+                  */
+                  const control = (event.target as HTMLElement).closest('input, button, label');
+
+                  if (control && event.currentTarget.contains(control)) {
                     return;
                   }
 
                   event.preventDefault();
                   inputRef.current?.focus();
+
+                  /*
+                    **`focus()` is not enough**, and the input's own `onClick`
+                    above already says why: focus that is *already* in the field
+                    fires no `focus` event, so the opener no-ops. That is the
+                    ordinary state after `Escape` or a keyboard commit — the
+                    customer changing their mind about a category — and it left
+                    the caret, the one glyph in the segment that looks like the
+                    thing you click to open the list, doing nothing.
+
+                    Opens and never toggles, matching that handler exactly: a
+                    toggle here closed the panel on the click that placed the
+                    caret, which is why `triggerMode="anchor"` gave Radix's up.
+                  */
+                  if (openOnFocus) {
+                    setOpen(true);
+                  }
                 }
               : undefined
           }
@@ -693,25 +751,34 @@ export function ComboboxDropdown({
             breakpoint the trigger is a plain button showing the committed
             value, and the input lives in the sheet alone.
           */}
-          {anchored ? (
-            input
-          ) : (
-            <button
-              type="button"
-              aria-label={label}
-              aria-expanded={open}
-              aria-haspopup="listbox"
-              /*
-                The sheet's trigger stands where the input stands anchored — a
-                child of the segment — so the fill above is its whole indicator,
-                exactly as it is for the date trigger in `search-bar.tsx`.
-              */
-              data-focus-own
-              className={cn('truncate text-left', inputClassName?.(open))}
-            >
-              {committedLabel === '' ? placeholder : committedLabel}
-            </button>
-          )}
+          {/*
+            The value, and — on a field that draws one — the caret beside it on
+            the value's own row (#426).
+
+            Both mounts are inside it, because the frames draw the caret on the
+            stacked mobile card as well as on the desktop bar.
+          */}
+          <ValueRow trailing={trailing} open={open} className={trailingRowClassName}>
+            {anchored ? (
+              input
+            ) : (
+              <button
+                type="button"
+                aria-label={label}
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                /*
+                  The sheet's trigger stands where the input stands anchored — a
+                  child of the segment — so the fill above is its whole indicator,
+                  exactly as it is for the date trigger in `search-bar.tsx`.
+                */
+                data-focus-own
+                className={cn('truncate text-left', inputClassName?.(open))}
+              >
+                {committedLabel === '' ? placeholder : committedLabel}
+              </button>
+            )}
+          </ValueRow>
           {children}
           {/*
             **Outside the panel, on purpose.** A live region has to be in the
@@ -744,6 +811,41 @@ export function ComboboxDropdown({
       {list}
       <PanelOverflowNote hidden={beyondLimit} />
     </Dropdown>
+  );
+}
+
+/**
+ * The value and its caret on one row — or, with no caret, the value unwrapped.
+ *
+ * Two different trees rather than one tree with an extra class, and that is the
+ * point: a field passing no `trailing` keeps exactly the markup it had, so
+ * `CitySelect` and the geometry assertions written against it are untouched by
+ * #426.
+ *
+ * `items-center` and `justify-between` are the frame's, which draws this row the
+ * same way at every width; the gap and the right inset are per-breakpoint
+ * measurements and belong to the caller, through `className`.
+ */
+function ValueRow({
+  trailing,
+  open,
+  className,
+  children,
+}: {
+  trailing?: (open: boolean) => ReactNode;
+  open: boolean;
+  className?: string;
+  children: ReactNode;
+}): React.ReactElement {
+  if (trailing === undefined) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className={cn('flex min-w-0 items-center justify-between', className)}>
+      {children}
+      {trailing(open)}
+    </div>
   );
 }
 
