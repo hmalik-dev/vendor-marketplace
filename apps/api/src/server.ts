@@ -15,6 +15,7 @@ import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
 import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
 import type { AppDatabase } from './lib/database.js';
+import { redactLogRecord, serializeError } from './lib/log-error-serializer.js';
 import { redactQueryValues } from './lib/log-redaction.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import type { EmailGateway } from './lib/email.js';
@@ -139,7 +140,30 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
         'req.headers["svix-signature"]',
         'req.headers["stripe-signature"]',
       ],
+      formatters: {
+        /*
+         * The same withholding for an error logged under any other name (#445).
+         *
+         * A serialiser is bound to one key, so `err` below covers
+         * `log.error({ err })` and nothing else — `log.error({ failure })`
+         * reaches the stream by a path it never sees. pino runs this over the
+         * whole record before any serialiser, which is what makes the guard
+         * hold whatever a future author calls the field.
+         */
+        log: redactLogRecord,
+      },
       serializers: {
+        /*
+         * The failed statement, with every value bound to it withheld (#445).
+         *
+         * pino's own serialiser over a sanitised error: `redact` above is
+         * path-based on `req.headers.*` and cannot reach a property hanging
+         * off a serialised error, and a failed query arrives carrying every
+         * bound parameter in both its `message` and an own `params` property.
+         * One serialiser here covers every `log.*({ err })` in the API,
+         * including the ones nobody has written yet.
+         */
+        err: serializeError,
         /*
          * The request line, with every query value redacted (#215).
          *
