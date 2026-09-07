@@ -248,9 +248,19 @@ the silent-submit work #388 closed:
 storefront, each of which tells the reader something untrue. |
 | **429** | **Legal acceptance is vendor-only and records a version, not the document — close both** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 on the account holder's instruction**, after auditing what #427 shipped: *"it is essential that we have an appropriate tracker of ToS and any other vendor agreement tracked."* **The table is good and is not the problem** — `legal_acceptances` is immutable by a database trigger (not a DAO convention), copies `accepted_by_name` and `business_name` so a later rename cannot rewrite history, captures `ip`, `user_agent` and a timezone-aware `accepted_at`, and its immutability is proven by attempting the update and delete. **Three holes.** (1) **`vendor_id` is `NOT NULL`**, so only a vendor can be recorded — a customer accepting the Terms of Service at sign-up has nowhere to go, and `terms_of_service` sits in the enum with **nothing anywhere writing it**, exactly as `disputed` did before #425. (2) **Nothing records what the document said** — only a version string, while the copy is placeholder markdown explicitly planned for replacement, so editing `terms.md` without bumping the version silently makes every existing row attest to text that no longer exists. (3) **Nothing is affirmatively accepted** — the flow is browsewrap, so the row attests to a `Continue` press. Ruled 2026-09-07: *"explicit checkbox"* and SHA-256 to pin the version. Because `sign-up-form.tsx` renders Clerk's prebuilt `<SignUp>`, the clickwrap gate goes **after** authentication — a first-sign-in interstitial on `/after-sign-in`, which every account traverses however it was created, writing the `users` row and the acceptance in one transaction. **Not in scope, already built:** the stale-version blocker (`hasCurrentVendorAgreement`) and the privacy disclosure of the IP capture |
 | **430** | **Closing band and footer: stack the band, and drop both centred measures** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 with a design revision.** `design/delta-band/` — `CLOSING-BAND-PROMPT.md` and `Orla-Closing-Band.html`. **This revises what #428 shipped rather than replacing it**: the band is already vendor-only, already signed-out-only, already free of pricing figures, and already points both controls at one destination. **What changes is the composition.** The band becomes **stacked, not columned** — the pitch spans a top line and the three steps run full-width beneath as `repeat(3, 1fr)` — and **both the band and the footer stop centring an inner measure and sit flush to the page's 40px gutter**. #428 deliberately chose `max-w-[1160px] mx-auto` and left a comment defending it as *"the frame's own measure"*; **that reasoning is now overruled by a newer frame** and the comment must be corrected rather than left contradicting the code. Also: serif 33px→35px, the vertical rule between columns becomes a full-width horizontal one, the button moves after the link so the strongest element sits at the outer edge, and the footer's compensating `border-top` goes because the `#1C1916` ground replaces it |
+| **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. |
+| **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. |
+| **433** | **A deleted account keeps a live, bookable storefront** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation. This is a defect, not a gap.** `softDeleteUserByClerkId` sets `users.deleted_at` and stops. `vendor_profiles.is_deleted` is read as a visibility filter by four DAOs and **written by nothing outside seed scripts** — so a vendor who deletes their Clerk identity keeps a published profile that stays searchable, bookable and payable. The ban flow unpublishes; deletion does not. |
+| **434** | **Admin action log: every mutation records who did it** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** There is no audit table. Two `log.info` lines exist — `admin.service.ts:235` for ban, `:629` for review deletion — and the other three mutating routes are never passed the acting admin's id at all: `updateTag(app.db, …)`, `resolveTagSuggestion(context(), …)` and `resolveDispute(context(), …)` all take no actor. A surface whose entire purpose is acting on other people's accounts and money keeps no queryable record of who did what. A precondition for #435, #438 and #440. |
+| **435** | **Graduated moderation: unpublish, hide and reinstate without banning** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Ban is the only moderation action and it is nuclear — it declines every open request, cancels and **fully refunds** every confirmed booking, and unpublishes the storefront. There is no lever between "nothing" and that: `vendor_profiles.is_published` has no admin writer, and `reviews.is_public` exists, defaults `true` and is written by **nothing but seed scripts**, so a review can only be permanently deleted. `reviews.service.ts` says so itself — *"there is nowhere to queue to until #15 builds admin"* — and #15 shipped without the queue. |
+| **436** | **Reporting and message visibility for trust and safety** | P3 | M6 | **P1 High** | **Backlog** | — | **#434** (an action log to write reads and dispositions to) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Nothing in the product can report anything — no listing report, no message report, no photo report, no user report; grepping report/flag/abuse across the API returns nothing. The only inbound channel is a rate-limited public email form. And `/conversations` is participant-only with no admin read, so a harassment complaint arrives by email naming a thread the operator cannot open. |
+| **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
+| **438** | **Data rights: export, account closure, and the legal acceptance record** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#434** (closure and export are logged actions) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Neither privacy-policy promise is backed by anything: the text says *"ask us for a copy of what we hold"* and *"to close your account, ask us through Contact support"*, and there is no export endpoint, no admin-initiated deletion, and no screen. Deletion happens only if the user deletes themselves in Clerk. Separately, `legal_acceptances` is the platform's evidence a vendor agreed to the 12% and the 72-hour hold — immutable, IP and UA captured, three DB triggers — and no operator can read it. |
+| **439** | **Transactional email delivery is invisible** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Fourteen notification types fire and forget; failures are logged and dropped at `notification-email.ts:200`. The `notifications` table records the in-app bell only — no `sentAt`, no failure reason, no provider id. *"Was the customer actually told their booking was cancelled?"* is unanswerable from the console, from the database, or from anywhere but a log search. |
+| **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #429 and #430 were filed: 5 rows — 3 Backlog and 2 `Deferred — needs a human`.** Startable now: **#429** and **#430**. #370 is still blocked behind #362, and #362 and #374 need the account holder. **Nothing here is startable unattended.** #427 was the last one that was, and it landed: the three legal pages the footer has been linking to since #428 now resolve, the vendor agreement gates payouts and checkout, and the refund schedule at checkout renders what `calculateRefund` will actually pay. #370 waits on #362; #362 and #374 both need the account holder — provider-console actions and the operative legal wording respectively — so **the board now needs a human before it needs another lane**. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after the Admin Panel section was filed: 15 rows — 12 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and nine of the ten are startable unattended today (**#431**, **#432**, **#433**, **#434**, **#435**, **#437**, **#439** with no blocker, **#436** and **#438** behind **#434**), alongside **#429** and **#430**. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **The board is no longer waiting on a human before it can use another lane** — that was true on 2026-09-07 morning with 5 rows and is not true now. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1283,3 +1293,858 @@ keeps its own `border-t`** — that is a different rule and stays.
       visitor**, not just the default — the regression this ticket could cause is
       showing a vendor pitch to someone who cannot act on it.
 - [ ] The no-pricing-figure check searches rendered output, not source.
+
+## Admin Panel — filed 2026-09-07
+
+Ten tickets from one investigation of the operations console, end to end: what
+frame `13` and #15 actually built, what the domain holds, and what an operator
+cannot do about it. The finding common to all ten is this: **the admin panel is
+a competent read console with one write action, and it cannot close the loop on
+any exception path.** Seven screens, fifteen routes, nine of them reads. Of the
+six mutating routes, five have UI; the sixth — dispute resolution, the one that
+unfreezes a vendor's money — has none.
+
+**Do not re-derive the inventory.** What exists is: `/admin` (Overview,
+metrics + four charts), `/admin/vendors` (filters, facets, CSV export, ban and
+bulk-ban), `/admin/customers`, `/admin/bookings` (status + `refund-stuck`
+flag), `/admin/payments`, `/admin/reviews` (delete), `/admin/tags` (suggestion
+queue + tag edit). The reads are genuinely good — URL-driven filters, real
+facets, dropped-parameter announcements, no invented numbers — and none of these
+tickets should rebuild them.
+
+**Scope law for all ten: `98-post-mvp.md` still binds.** Cohort and retention
+analytics, automated flag triage, vendor quality scoring and bulk messaging to
+vendor segments are Post-MVP and **no ticket here may implement them**. Equally
+binding the other way: **D4** (one role per account, immutable — no ticket adds
+role switching), **D3** (cancellation tiers fixed platform-wide), **D31** (a
+cancellation is a full unwind), **D35** (the 72-hour payout hold is fixed). Any
+ticket that finds itself wanting an exception to one of those has found #440,
+not a licence.
+
+### #431: Operations case console — every dispute, however it arrives, and its resolution
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe` `email`
+**Blocked by:** None
+
+#### The state today
+
+Three mechanisms that are one job, and none of them meet:
+
+1. **The customer's report.** `POST /support/messages` is public and
+   unauthenticated. When it carries a `bookingId`, `sendSupportMessage`
+   orchestrates `placeDisputeHold` (`payments.service.ts:1089`), which moves the
+   booking `confirmed | completed` → `disputed`, writes `dispute_reason`, and
+   sends the report to `SUPPORT_EMAIL_TO`. **The message is never stored** —
+   `support.routes.ts` says so deliberately: *"this creates nothing addressable
+   … one email, no ticket to track."*
+2. **The hold.** `payouts.dao.ts` excludes `disputed` from the 15-minute release
+   sweep, so the vendor's transfer is frozen from that moment.
+3. **The resolution.** `PUT /admin/bookings/:bookingId/dispute` takes an outcome
+   of `vendor` or `customer` and calls `resolveDispute`. It is the **only** thaw.
+   It has **no client function, no button, no screen** — `admin-data.ts` holds
+   nine GETs and no mutations.
+
+So the reason lives in an inbox, the hold lives in a column no admin schema
+exposes, and the resolution lives in an endpoint with no UI. An operator can
+filter `/admin/bookings?status=disputed` and see a pill; they cannot see why,
+and they cannot act.
+
+Separately, **`charge.dispute.*` is not among the handled Stripe events**
+(`webhooks/stripe.routes.ts` handles `payment_intent.succeeded`,
+`account.updated`, `capability.updated`, `v2.core.account.*`). A network-level
+chargeback lands in the Stripe Dashboard and the `bookings` row never learns —
+so the platform can be debited for a booking the console still reports as paid.
+
+#### What to build
+
+**1. A `support_cases` table and the report that writes it.** Persist what
+`sendSupportMessage` currently only emails: sender (user id where there is one,
+plus the reply-to address), subject/body, the generated reference
+(`ORL-4K7Q-P2` shape, already produced — reuse it as the case's public id), the
+`bookingId` where one was given, `createdAt`, and a disposition
+(`open | resolved`, with resolver and resolved-at once #434 lands). **The email
+still sends** — this is a record beside it, not a replacement, and a failure to
+write the row must not lose the email or strand the hold. Keep
+`liftDisputeHold`'s existing compensation: if the report cannot be sent, the
+hold comes back off.
+
+**2. Chargebacks arrive as cases too.** Handle `charge.dispute.created`,
+`charge.dispute.closed` and `charge.dispute.funds_reinstated`. On `created`,
+open a case linked to the booking and place the same hold (through
+`placeDisputeHold`'s primitive, not a second writer) so a chargeback cannot pay
+out underneath the platform. On close, record the network's outcome on the case
+— **do not** auto-resolve the booking; Stripe's outcome and the platform's
+disposition are different facts and an operator reconciles them. Signature
+verification and idempotency follow the existing handler exactly; a replayed
+event must not double-hold or double-open.
+
+**3. `/admin/cases` — the queue.** List: reference, who, subject, linked booking
+(or —), age, status. Filter by open/resolved and by has-booking. Default to
+open, oldest first — the age of the oldest open case is the number that matters,
+because it is money someone is not being paid.
+
+**4. `/admin/cases/[id]` — the case, and where it is resolved.** The message
+body in full; the sender and their role; the linked booking with **everything
+`adminBookingRowSchema` currently omits** — total, fee, payout, `paid_at`,
+`dispute_reason`, `cancelled_by`, `refund_amount_cents`, `payout_released_at`,
+and the chargeback's Stripe id where there is one. Then the two-position
+control: **resolve for the vendor** (hold lifts, booking returns to `confirmed`
+or `completed` per `completedAt`, payout resumes on the next sweep) or **resolve
+for the customer** (refund and cancel, `cancelled_by = 'admin'`). Both go through
+`ConfirmAction` naming the consequence in money, per `22-admin.md`; both call the
+**existing** `resolveDispute` — do not write a second money path.
+
+**5. A count in the rail.** `AdminNav` already carries a `reviewCount` badge;
+open cases get the same treatment, and for a better reason. Read it the cheap
+way the layout already documents (`pageSize=1` for the `total`), not through
+`/admin/metrics`.
+
+#### Acceptance
+
+1. A support message with a `bookingId` places the hold **and** writes a case
+   row; the case carries the same reference the sender was shown.
+2. A support message without a `bookingId` writes a case and places no hold.
+3. If the email fails, the hold is lifted and the case records the failure —
+   the existing compensation still holds with a row in play.
+4. `charge.dispute.created` opens a case, places the hold, and is idempotent
+   under a replayed event.
+5. `/admin/cases` lists open cases oldest first and is reachable from the rail
+   with an open count.
+6. `/admin/cases/[id]` shows the message and every money field named above.
+7. Resolving for the vendor lifts the hold and the next sweep pays out;
+   resolving for the customer refunds and cancels with `cancelled_by = 'admin'`.
+8. Both resolutions are refused on a booking that is not `disputed`, with the
+   409 the service already raises rather than a 500.
+9. Non-admins get 403 from every new route **before** validation — the
+   `requireRoleBeforeValidation` rule this plugin documents, not `preHandler`.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] The chargeback replay asserted against the real webhook harness, not a
+      unit stub.
+- [ ] A resolution asserted end to end against the Stripe test-mode connected
+      account the E2E seed provisions (#387) — the refund path must be driven,
+      not mocked, because the 402 it used to hide behind is the exact failure.
+- [ ] Browser-verified at both auth states; a customer typing `/admin/cases` is
+      bounced, not shown a shell of 403s.
+
+### #432: Payout health — failed transfers, retries, and why Stripe stopped a vendor
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
+**Blocked by:** None
+
+#### The state today
+
+**Two columns are written and read by nothing.** The release sweep
+(`payouts.service.ts`, every 15 minutes) increments
+`bookings.payout_attempts` and writes `bookings.payout_failure_reason` on every
+failed transfer (`payouts.dao.ts:213`), clearing the reason on success. Grep
+both across the repo: the only readers are the sweep's own ordering
+(`orderBy(asc(bookings.payoutAttempts), …)`) and its logger. **No screen, no
+API response, and no alert reads either.** A vendor whose transfer fails on
+every one of ninety-six daily attempts is owed money that nobody is told about.
+
+`adminPaymentRowSchema` carries `totalAmountCents`, `platformFeeCents`,
+`vendorPayoutCents`, `stripePaymentIntentId`, `paidAt` and `status` — and no
+payout state at all. The Payments screen therefore shows a booking whose money
+reached the platform and never reached the vendor identically to one that
+settled.
+
+**And the vendor-side story is a boolean.** `vendor_profiles.stripe_onboarded`
+is set by `isOnboarded(status)` — true iff `stripe_transfers` **and** `payouts`
+capabilities are both active. When Stripe revokes one, `applyAccountStatusChange`
+flips it false and that is the entire record. `isMissingPayoutsOnly` already
+distinguishes the half-restricted case and only logs a warning. The operator's
+filter says "No payouts yet" for a vendor who has never onboarded and for one
+Stripe restricted this morning, with no reason and nowhere to go.
+
+#### What to build
+
+**1. Payout state on the payments surface.** Add to the admin payment row:
+`payoutReleasedAt`, `payoutAttempts`, `payoutFailureReason`, `stripeTransferId`,
+and a derived payout state. **Derive it with `payoutStatusOf`** — the one
+derivation #423 wrote for exactly this, already used by `booking-report.ts` and
+`dashboard.service.ts`. A fourth copy of "what is held" is how these come to
+disagree; that is written down twice in `dashboard.dao.ts` already.
+
+**2. A failing-payout filter and a row flag**, shaped like the `refund-stuck`
+flag the Bookings screen already carries — marked on every row, not only inside
+the filter, because the failure #415 fixed was precisely a state you had to know
+about to find. A payout is failing when `payout_attempts > 0` and
+`payout_released_at is null`.
+
+**3. A retry.** `PUT /admin/bookings/:bookingId/payout/retry`, admin-only,
+which re-enters the **existing** sweep path for one booking rather than
+reimplementing the transfer. **D36 binds: the idempotency key is versioned by
+the attempt**, so a retry increments `payout_attempts` and mints a new key —
+reusing the key replays Stripe's cached failure and the operator learns nothing.
+Refuse on a booking that is `cancelled`, `disputed`, or already released, and say
+which.
+
+**4. Stripe account state, with the reason.** Persist what the webhook already
+reads: the disabled reason and the outstanding requirements from the connected
+account, alongside `stripe_onboarded`. Surface them on the vendor row's detail
+(#437 builds the view; this ticket supplies the data and may land its own
+panel first). **Read-only.** An operator must not be able to flip
+`stripe_onboarded` by hand — D29's constraint (`stripe_onboarded = false OR
+stripe_account_id IS NOT NULL`) and the capability read are what make the column
+true, and a manual override makes it a guess. Link out to the Stripe Dashboard
+for the account instead.
+
+**5. A Live-vendor payout alert on the Overview.** One count — vendors whose
+payouts are blocked, and bookings whose transfers are failing — sitting where
+the four metric cards already are. A number that leads to the filtered list;
+`page.tsx` already documents that a card leading nowhere is furniture.
+
+#### Acceptance
+
+1. The admin payment row carries payout state derived by `payoutStatusOf`, not
+   by a new local test.
+2. A booking with `payout_attempts > 0` and no release is flagged on its row and
+   findable by filter.
+3. The retry mints a new idempotency key versioned by the attempt (D36) and is
+   refused with a specific message on cancelled, disputed and released bookings.
+4. A vendor Stripe has restricted shows the disabled reason and the outstanding
+   requirements; a vendor who never onboarded shows neither and reads
+   differently.
+5. Nothing in the console writes `stripe_onboarded`.
+6. The Overview carries a payout-health count that links to the filtered list.
+7. Every new number is a query result at request time — the no-invented-numbers
+   law.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] The retry asserted against a Stripe failure that is **cached** under the
+      old key — the D36 regression is invisible to a test that only asserts a
+      success.
+- [ ] A restricted account asserted through the real `account.updated` webhook
+      payload shape, not a hand-built row.
+
+### #433: A deleted account keeps a live, bookable storefront
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+#### The defect
+
+`softDeleteUserByClerkId` (`users.dao.ts:97`) sets `users.deleted_at` and
+`updated_at`, and stops. It is called from one place — the Clerk `user.deleted`
+webhook (`webhooks/clerk.service.ts:64`).
+
+`vendor_profiles.is_deleted` is the column four DAOs use to decide a storefront
+is visible — `vendor-profile.dao.ts:21`, `vendor-search.dao.ts:29`,
+`nearby-availability.dao.ts:24`, `messaging.dao.ts:389`, all as
+`isPublished = true AND isDeleted = false`. **Nothing in `apps/api` or
+`packages/db` outside the seed scripts ever writes it.** Grep it: every hit is a
+read.
+
+And no visibility predicate anywhere joins `users.deleted_at` or
+`users.is_banned` — the vendor DAOs never reference either.
+
+So a vendor who deletes their Clerk identity keeps a published, searchable,
+bookable profile. A customer can send them a request and pay for a booking
+against an account that can never sign in to answer it. The ban flow gets this
+right (it unpublishes); deletion does not.
+
+#### What to build
+
+**1. Deletion retires the storefront.** Extend the `user.deleted` path so a
+vendor's profile is retired in the **same transaction** as the user row —
+`is_deleted = true` and `is_published = false`. Both, not either: `is_deleted`
+is the tombstone every read already checks, and leaving `is_published` true
+would make an un-delete republish silently.
+
+**2. Deletion leaves the marketplace in a consistent state, exactly as a ban
+does.** `setUserBanned` already argues this at length and it is the same
+argument: nobody should be waiting on an account that can no longer answer. Open
+booking requests are declined, future confirmed bookings are cancelled and
+**refunded in full**, and the money moves before the row does. **Reuse
+`setUserBanned`'s unwind rather than writing a second one** — extract the shared
+path if it needs a seam. A refund Stripe refuses must surface the same
+`refundsFailed` signal a ban does, because the resulting state is identical: a
+confirmed booking on an account nobody can reach.
+
+**3. Belt and braces on the read side.** Add `users.deleted_at is null` to the
+`VISIBLE` predicate the vendor DAOs share, so a profile whose retirement failed
+still cannot be booked. One predicate, defined once, imported — not four copies.
+
+**4. The console can see it.** A retired vendor must be distinguishable in
+`/admin/vendors` from a paused one. `deriveVendorStatus` reads three columns
+today (`isBanned`, `isPublished`, `stripeOnboarded`) and has four states; a
+retired account is a fifth fact and the derivation should name it rather than
+letting it read as `review`. Extend `ADMIN_VENDOR_STATUSES` and the filter with
+it.
+
+#### Acceptance
+
+1. A `user.deleted` webhook for a vendor sets `is_deleted = true` and
+   `is_published = false` on their profile, transactionally with the user row.
+2. That vendor's slug 404s, and they are absent from search, nearby-availability
+   and the messaging vendor read.
+3. Open requests are declined and future confirmed bookings are cancelled and
+   refunded in full; a refused refund is reported the way a ban reports it.
+4. The unwind is `setUserBanned`'s code path, not a second implementation.
+5. A profile with `is_deleted = false` whose user row is soft-deleted is still
+   invisible on every public read.
+6. `/admin/vendors` distinguishes a retired account from a paused one, and can
+   filter to it.
+7. The webhook is idempotent — a replayed `user.deleted` does not re-refund.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, **watched failing first** — this is a bug fix, so
+      the failing test is the evidence the defect was real.
+- [ ] The replay asserted, because a double refund is the way this fix hurts.
+- [ ] Verified with a differently shaped check than a grep for `is_deleted`: a
+      driven read of the public profile route, not a source scan.
+
+### #434: Admin action log — every mutation records who did it
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+#### The state today
+
+There is no audit table. The whole record of operator action is two log lines:
+
+- `admin.service.ts:235` — `{ actorId, targetId, isBanned }`, "Admin changed an
+  account's ban state"
+- `admin.service.ts:629` — `{ actorId, reviewId }`, "Admin deleted a review"
+
+and the comment beside the first says the quiet part: *"A log line is not an
+audit table."*
+
+The other three mutating routes never learn who called them.
+`updateTag(app.db, request.params.tagId, request.body)` takes a database handle.
+`resolveTagSuggestion(context(), …)` and `resolveDispute(context(), …)` take a
+context with no actor in it. The route handlers have `request.auth` in scope and
+throw it away.
+
+For a plugin whose own docstring says *"these read and write other people's
+accounts by design"*, that is the accountability gap under everything else in
+this section — #435 adds reversible moderation, #438 adds data deletion and
+export, #440 may add money movement, and none of them should ship into a surface
+with no record of who acted.
+
+#### What to build
+
+**1. An append-only `admin_actions` table.** Actor user id, action (a narrow
+enum, not free text), subject type and id, a JSON detail payload for what
+actually changed, and `createdAt`. **Immutable the way `legal_acceptances` is
+immutable** — `0029_sad_storm.sql` already establishes the pattern with
+`no_update` / `no_delete` / `no_truncate` triggers, and this table wants the same
+three for the same reason. Copy the pattern, do not invent a second one.
+
+**2. Every mutating admin route writes one.** Ban, unban, review deletion, tag
+update, tag-suggestion resolution, dispute resolution. `resolveDispute`,
+`updateTag` and `resolveTagSuggestion` all need the actor threaded in —
+`assertRole(request.auth, ['admin']).id` is what the ban routes already pass, so
+the shape exists.
+
+**3. It is written in the same transaction as the change where the change is
+transactional, and never swallows it where it is not.** A ban has already moved
+money by the time it finishes; the file's `bestEffortAnnouncement` rule
+(#408) exists for exactly this and the log write must follow it — a failed audit
+write must not 500 an operation the operator cannot repeat. Log the failure
+loudly instead.
+
+**4. A read surface.** `/admin/activity` — actor, action, subject, when, with a
+filter by actor and by subject. It is also the answer to "what did the console
+do to this account", so a subject filter is what makes it useful rather than a
+firehose.
+
+**5. What must not be logged.** No message bodies, no review content beyond an
+id, no email addresses beyond the ids that resolve to them, no card or Stripe
+secrets. The detail payload records *what changed*, not the content of what was
+moderated — a moderation log that quotes the abuse is a second copy of it.
+
+#### Acceptance
+
+1. All six mutating admin routes write exactly one action row on success and
+   none on a refused call.
+2. The table refuses `UPDATE`, `DELETE` and `TRUNCATE` at the database level.
+3. A failed log write never fails the operation that had already committed, and
+   is logged as an error.
+4. `/admin/activity` filters by actor and by subject.
+5. No row contains a message body, review text, or any credential.
+6. Non-admins get 403 before validation.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] The immutability asserted against the real Postgres, not PGlite, if the
+      triggers need it — `pnpm test:contention` is the precedent for a test that
+      needs the Docker database.
+- [ ] A test that a refused mutation (409, 403) writes no row.
+
+### #435: Graduated moderation — unpublish, hide and reinstate without banning
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+#### The state today
+
+**Ban is the only moderation action, and it is irreversible in substance.**
+`setUserBanned` declines every open booking request, cancels **and fully
+refunds** every confirmed booking, and unpublishes the storefront. Unbanning
+does not restore any of it — the console's own dialog says so: *"the bookings
+cancelled by the suspension are not restored."* So the response to a vendor with
+one bad photo, an unverified claim in a bio, or a single abusive review is either
+nothing or the destruction of their live business.
+
+There is no lever between:
+
+- **`vendor_profiles.is_published`** has no admin writer at all. The only way the
+  console can take a storefront down is to ban the account.
+- **`reviews.is_public`** exists in the schema, defaults `true`, and is written
+  by **nothing but `seed-demo.ts` and `seed-marketing.ts`**. The console's only
+  review action is `DELETE /admin/reviews/:reviewId` — permanent, with a rating
+  recalculation, no hide, no appeal, no reinstate.
+- **`service_packages.is_active`** and portfolio items have no admin path.
+- The review profanity filter (`reviews.service.ts`) refuses a submission at the
+  door and says why it has to: *"Real moderation is a queue with a human at the
+  end of it, and there is nowhere to queue to until #15 builds admin."* #15
+  shipped. The queue did not.
+
+#### What to build
+
+**1. Unpublish and republish a storefront.**
+`PUT /admin/vendors/:vendorId/publish` with a boolean, admin-only, writing
+`is_published`. **This is not a ban and must not behave like one** — no requests
+declined, no bookings cancelled, no refunds. The storefront comes off search and
+its slug 404s; the vendor's existing bookings stand and their dashboard still
+works. Say that in the confirmation dialog, in the same register as the
+suspension copy, because an operator who confuses the two destroys a business by
+mistake.
+
+**2. Hide and unhide a review.** `PUT /admin/reviews/:reviewId/visibility`,
+writing `is_public`. Hidden reviews leave the public profile and **are excluded
+from the rating**, which means the same recomputation `deleteReviewAndRecalculate`
+already performs — reach it, do not reimplement it, for the reason that file
+already gives. Unhiding restores both. Deletion stays, for content that must not
+persist at all; hiding becomes the default action and deletion the escalation.
+
+**3. `is_public` becomes real on the read side.** It is currently honoured in
+exactly one place (`customers.dao.ts:119`). Every public review read — the vendor
+profile, the profile's review list, the rating aggregate — must respect it, or
+hiding a review moves it off one surface and leaves it on three.
+
+**4. Deactivate a package and remove a portfolio item.** `service_packages`
+already has `is_active` and the portfolio already has a delete; both need an
+admin-side route and both are reversible for packages, permanent for a removed
+image (the R2 object goes with it — follow whatever the vendor-side delete
+already does, and do not leave an orphan).
+
+**5. Everything here writes an action row (#434) and shows the current state in
+the console.** A reversible action nobody can see the history of is not
+reversible in practice.
+
+#### Acceptance
+
+1. Unpublishing a storefront takes it off search and 404s its slug, and cancels
+   nothing, declines nothing and refunds nothing.
+2. Republishing restores it.
+3. The unpublish dialog cannot be confused with the suspend dialog — asserted on
+   the copy, because that is the whole risk.
+4. Hiding a review removes it from every public read and from the rating; the
+   rating matches what a deletion would have produced.
+5. Unhiding restores the review and the rating.
+6. `is_public = false` is honoured by the vendor profile, the profile review
+   list and the aggregate — asserted on each, not on the DAO.
+7. A deactivated package disappears from the storefront and from the "From"
+   price, and can be reactivated.
+8. Every action writes an `admin_actions` row.
+9. No moderation action here bans, refunds, or touches a booking.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 4's rating asserted against the number
+      `deleteReviewAndRecalculate` produces for the same set — two paths, one
+      answer.
+- [ ] Acceptance 6 driven, not grepped: the review must be absent from rendered
+      output, per the source-grep-guard failure this repo has already hit.
+
+### #436: Reporting and message visibility for trust and safety
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
+**Blocked by:** #434 — a read of someone's private messages is the action that most needs a log
+
+#### The state today
+
+**Nothing in the product can report anything.** Grep `report`, `flag` and
+`abuse` across `apps/api/src` and `packages/db/src`: there is no listing report,
+no message report, no photo report, no user report, and no table to hold one.
+The single inbound channel is `POST /support/messages` — a public form, rate
+limited to six an hour, whose output is an email.
+
+**And the operator cannot read the thing being reported.** `/conversations` and
+`/conversations/:id/messages` are participant-only; the admin plugin has no
+messaging route. A complaint that a vendor is soliciting off-platform payment,
+or harassing a customer, arrives as prose in an inbox naming a conversation
+nobody with authority can open. The operator's options are to believe it or not.
+
+#### What to build
+
+**1. A report control on the surfaces that need one.** A vendor profile, a
+review, a message thread, and a portfolio image. Authenticated, one shape, one
+table: reporter, subject type and id, a reason from a short enum, optional free
+text, `createdAt`, disposition. Rate limited like the support form and for the
+same reason.
+
+**2. Reports land in the case queue #431 builds.** Not a second inbox. A report
+is a case with a different origin, and an operator working two queues works
+neither.
+
+**3. Scoped, logged message access.** `GET /admin/conversations/:id/messages`,
+admin-only, **reachable only from a case that names that conversation** — not a
+free browse of every thread in the marketplace. Every read writes an
+`admin_actions` row naming the conversation and the case (which is why #434 is a
+prerequisite rather than a nicety). No admin write into a thread: the operator
+reads, then acts through moderation or through support, and never posts as a
+participant.
+
+**4. Say so in the privacy policy.** `apps/web/content/legal/privacy.md`
+currently makes no claim that staff can read messages. If they can — and to
+moderate, they must — the document says so, in the placeholder register #374
+already establishes, flagged for the account holder's review rather than
+invented as binding text.
+
+#### Acceptance
+
+1. A signed-in user can report a vendor, a review, a thread and a portfolio
+   image; a signed-out one cannot.
+2. A report opens a case in the #431 queue with its subject resolvable to the
+   real row.
+3. Reports are rate limited per account, and the limit is stated to the user
+   when it bites — a lane 429 must not render as the 500 page.
+4. `GET /admin/conversations/:id/messages` is admin-only, refuses a conversation
+   no open case names, and writes an action row on every successful read.
+5. There is no admin route that writes a message.
+6. The privacy policy states the access, marked as placeholder wording.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 4's refusal asserted for a conversation whose case is
+      **resolved**, not only for one with no case at all.
+- [ ] The action row asserted for a read, which is the assertion most likely to
+      be forgotten because the read succeeds without it.
+
+### #437: Admin detail views, and the entities the console cannot see
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+#### The state today
+
+**Seven list screens and zero detail screens.** There is no
+`/admin/vendors/[id]`, no `/admin/bookings/[id]`, no `/admin/customers/[id]`.
+`design/design-plan/22-admin.md` specifies *"detail views: card-based groupings
+with prominent actions"* under MVP, and none were built. Frame `13` draws the
+Vendors list and an ellipsis menu per row; the menu today holds exactly one item.
+
+The cost is measurable in columns. Across all five admin row schemas, none of
+these is exposed anywhere: `bookings.refund_amount_cents`,
+`cancellation_reason`, `cancelled_by`, `dispute_reason`, `completed_at`,
+`payout_released_at`, `payout_model`; `users.banned_at`, `deleted_at`;
+`vendor_profiles.stripe_account_id`, `response_time_hours`, `service_radius_km`.
+The vendor list searches by email and never displays it.
+
+**And whole entities are absent from the console entirely:**
+
+| Absent | Why it matters |
+| --- | --- |
+| `booking_requests` | **The entire pre-payment funnel.** Six statuses — pending, quoted, accepted, declined, expired, cancelled — and the operator cannot see one of them. Expiry is lazy (evaluated on read, never swept), so "how many requests died waiting" is unanswerable. |
+| `service_packages` | What a vendor actually sells, and the "From" price on every storefront. |
+| `portfolio_items` | The images the platform publishes on a vendor's behalf. |
+| `availability` | Why a date is refused, and whether a lock is stale. |
+| `notifications` | What the platform told someone, and whether they read it. |
+| `categories` | `is_active` and `display_order` are seed-only; the plan's §7 matrix already grants admin CRUD, and the nav says "Categories & tags" while the screen manages tags alone. |
+
+The plan's own authorization matrix (§7) grants admin read on booking requests,
+bookings, availability and conversations, and CRUD on categories, packages and
+portfolios. None of it exists.
+
+#### What to build
+
+**1. Detail views for vendor, customer and booking**, per `22-admin.md` —
+card-based groupings, every column named above, and the row's actions promoted
+into the view rather than duplicated. The vendor detail is where #432's Stripe
+state and #435's publish control land; the booking detail is where the money
+story is finally legible in one place.
+
+**2. `/admin/requests`** — the pre-payment funnel, filterable by all six
+statuses, showing vendor, customer, event date, quoted price, and time to
+expiry. This is the first surface that can answer where the funnel leaks, and it
+needs no new state: the rows are already there.
+
+**3. Packages, portfolio and availability on the vendor detail**, read-only here
+(#435 owns the moderation actions on them). Availability shows which locks are
+`booked` / `pending` and what holds them.
+
+**4. Category management.** `is_active` and `display_order`, the same shape the
+tag table already implements — that screen is the template, and reusing it is
+what makes "Categories & tags" true.
+
+**5. Notifications on the customer and vendor detail** — what was sent, when, and
+whether it was read. The email half of that question is #439's.
+
+**Frame `13` is the parity target for the list screens and must not regress.**
+The detail views have no frame; build them in the console's established
+vocabulary — `AdminSurface`, `DataTable`, `StatusPill`, `ConfirmAction` — and do
+not invent a second visual language. Where the frame draws an ellipsis menu with
+one item, a detail link is the second.
+
+#### Acceptance
+
+1. Vendor, customer and booking detail views exist and expose every column named
+   in the table above.
+2. `/admin/requests` lists booking requests filterable by all six statuses.
+3. A request past `expires_at` reads as expired on this screen, matching what a
+   participant's own read would show — one derivation, not a second.
+4. The vendor detail shows packages, portfolio and availability.
+5. Categories can be deactivated and reordered, and a deactivated category
+   leaves search facets.
+6. Every new screen uses the existing admin component vocabulary.
+7. Frame `13`'s list screens are unchanged — parity re-verified at 1440x900.
+8. Every number is a request-time query result.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 3 asserted against the participant read's own answer for the
+      same row, so the two cannot drift.
+- [ ] Acceptance 7 is a parity pass, screenshotted, not an assertion that
+      nothing was edited.
+
+### #438: Data rights — export, account closure, and the legal acceptance record
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
+**Blocked by:** #434 — a closure and an export are the two most consequential logged actions
+
+#### The state today
+
+**The privacy policy makes two promises the product cannot keep.**
+`apps/web/content/legal/privacy.md` tells the reader to *"ask us for a copy of
+what we hold"* and that *"to close your account, ask us through Contact
+support"*. There is no export endpoint, no admin-initiated deletion path, and no
+screen behind either. The only deletion that exists happens if the user deletes
+their own Clerk identity, which fires the webhook — and #433 documents what that
+currently fails to do.
+
+So a subject-access request arrives at `SUPPORT_EMAIL_TO` and the operator's
+only recourse is a manual database query. A closure request is worse: the
+operator cannot perform it at all without a privileged write, which is precisely
+the thing #15's admin plugin exists to make unnecessary.
+
+**And the platform's own evidence is unreadable.** `legal_acceptances` records
+that a vendor accepted the vendor agreement — document, version, timestamp,
+accepting user, name, business name, IP, user agent — and is immutable at the
+database level (three triggers in `0029_sad_storm.sql`). It is the record that
+answers "did this vendor agree to the 12% and the 72-hour hold". No operator can
+read it. (#429 is open and orthogonal: acceptances are vendor-only, and no
+customer terms acceptance is recorded at all. **Do not implement #429 here** —
+this ticket surfaces what the record holds, whatever #429 makes it hold.)
+
+#### What to build
+
+**1. Export.** `POST /admin/users/:userId/export`, admin-only, producing a
+machine-readable archive of what the platform holds for one person: their user
+row, vendor profile if any, bookings and booking requests, reviews written and
+received, messages, notifications, legal acceptances, and payment records with
+Stripe ids. **Redact what belongs to the counterparty** — the other side's email
+and phone are not the subject's data — and say in the export what was withheld
+and why. Delivery follows the privacy policy's own claim; if that is by email,
+the link expires.
+
+**2. Operator-initiated closure.** `POST /admin/users/:userId/close`, which does
+what #433 makes the deletion path do — retire the storefront, decline open
+requests, cancel and fully refund future confirmed bookings — and soft-deletes
+the user row. **It must reuse #433's path**, not fork it, so closure by request
+and closure by Clerk converge on one behaviour. It does **not** hard-delete: the
+privacy policy already states payment and booking records persist for tax and
+counterparty reasons, and `legal_acceptances` cannot be deleted at all — the
+`ON DELETE CASCADE` on its foreign keys would fire the `no_delete` trigger and
+refuse the whole transaction. That is correct, and the ticket should verify it
+rather than work around it.
+
+**3. Legal acceptances on the console.** Visible on the vendor detail (#437) and
+by user: which document, which version, when, by whom, from what address. It is
+read-only by construction — the triggers see to that — and the surface should
+say so.
+
+**4. Retention, stated once.** The privacy policy claims records are kept; the
+console should show a closed account's retained data rather than pretending the
+account is gone. An operator asked "what do you still hold about me" needs the
+same answer the export gives.
+
+#### Acceptance
+
+1. An export produces every category named above for one user and withholds
+   counterparty contact details, naming what it withheld.
+2. An export of a user with no vendor profile, no bookings and no reviews
+   succeeds and is not an error.
+3. Closure runs #433's unwind — same code path, asserted — and soft-deletes the
+   user.
+4. Closure of a vendor retires the storefront; their slug 404s.
+5. A hard delete of a user with a legal acceptance is refused by the database,
+   and the console never attempts one.
+6. Legal acceptances are readable per vendor and per user, read-only.
+7. Both actions write an `admin_actions` row.
+8. Every claim the privacy policy makes about access and closure is now true of
+   the product — asserted against the rendered document, in the shape #427's
+   tests already use.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 5 asserted against the real Postgres triggers.
+- [ ] Acceptance 8 reads the rendered legal page, not the Markdown source.
+- [ ] An export asserted to contain **no** credential, no Stripe secret, and no
+      other user's email.
+
+### #439: Transactional email delivery is invisible
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
+**Blocked by:** None
+
+#### The state today
+
+Fourteen notification types are defined (`NOTIFICATION_TYPES`) and the platform
+sends mail for most of them — new request, quoted, accepted, declined, expired,
+cancelled, booking confirmed, completed, cancelled, new review, payout sent,
+Stripe onboarding complete, tag suggestion approved. Every send is fire and
+forget: `notification-email.ts:194` catches, `:200` logs an error, and execution
+continues — correctly, because a failed email must not fail the booking. But
+nothing records that it happened.
+
+The `notifications` table holds the **in-app bell only** — `userId`, `type`,
+`title`, `body`, `data`, `readAt`, `createdAt`. There is no `sentAt`, no
+failure reason, no provider message id, no bounce.
+
+So *"was the customer actually told their booking was cancelled?"* cannot be
+answered from the console, from the database, or from anywhere but a log search
+against a process that may have rotated. On the surface where an operator is
+mediating a dispute (#431) about whether someone was informed, that is the
+question they will be asked.
+
+#### What to build
+
+**1. A delivery record per send.** Recipient user id, address, notification
+type, the related entity id, `sentAt`, outcome, provider message id, and the
+failure reason on a failure. One row per attempt, so a retry is visible as a
+retry. Write it **beside** the send, under the same best-effort rule the file
+already follows — a failure to record must never fail the operation, and must
+never fail the email.
+
+**2. Resend's delivery events.** Handle the provider's webhook for delivered,
+bounced and complained, keyed by the message id, so the record reflects what
+actually happened rather than what was attempted. Signature-verified like the
+Stripe and Clerk handlers, and idempotent under replay. If the account holder has
+not configured the webhook, the record still holds attempts — the ticket must not
+depend on it.
+
+**3. On the console.** Delivery history on the customer and vendor detail views
+(#437), and on the booking detail — the emails that booking generated, in order.
+Plus a bounced-address signal on the account, because an address that bounces
+means every future notification to that person is lost silently.
+
+**4. What must not be stored.** The rendered body. The record is metadata — who,
+what type, when, what outcome — and a copy of every email the platform ever sent
+is a liability, not an audit trail.
+
+#### Acceptance
+
+1. Every transactional send writes a delivery record, including a failed one.
+2. A failure to write the record does not fail the send or the operation.
+3. A provider delivery event updates the matching record and is idempotent under
+   replay.
+4. The absence of a configured provider webhook does not break sending or
+   recording.
+5. Delivery history appears on the customer, vendor and booking detail views.
+6. A bounced address is visible on the account.
+7. No record contains a rendered email body.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 2 asserted by making the record write throw — the regression is
+      an operation that now 500s because its bookkeeping failed.
+- [ ] Acceptance 3's replay asserted against the real webhook harness.
+
+### #440: Operator-initiated refunds and credits
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Deferred — needs a human | **Capabilities:** `core` `auth` `stripe`
+**Blocked by:** The account holder — whether an operator may move money outside D3, D31 and D35, and on what authority
+
+#### Why this is deferred rather than Backlog
+
+Money only moves on three rails today, and every one of them is decided by a
+rule rather than by a person:
+
+- a **ban** refunds every future confirmed booking in full
+  (`setUserBanned`, and deliberately full rather than D3's tiers — *"the
+  platform is removing a party from a transaction the other side did nothing
+  wrong in"*);
+- a **customer cancellation** refunds on **D3**'s fixed tiers — 100% at or
+  before 48 hours, 50% after;
+- a **dispute resolved for the customer** refunds and cancels.
+
+There is no partial refund, no goodwill credit, no fee waiver and no correction
+of a mistaken charge. So every off-script case — a vendor who delivered half of
+what was booked, a duplicate charge, a customer owed something for a platform
+error — is settled by hand in the Stripe Dashboard, after which the `bookings`
+row disagrees with the money and every admin screen reports the disagreement as
+fact.
+
+**Building this decides policy, which is why it cannot start.** Four recorded
+decisions define the money rules and an operator lever is a fourth path none of
+them contemplates:
+
+- **D3** — cancellation tiers are fixed platform-wide, not vendor-configurable
+  and with no admin override.
+- **D31** — a cancellation is a full unwind: Stripe refund with
+  `reverse_transfer` and `refund_application_fee`, the vendor's balance may go
+  negative, and there is no admin exemption to partial refunds.
+- **D35** — the payout hold is 72 hours after the event, with no override.
+- **D37** — under separate charges, every proportional split must be written
+  down.
+
+A partial refund contradicts D31's shape directly. A goodwill credit needs a
+funding answer — platform or vendor — that no decision supplies. A fee waiver
+changes what D37 requires to be written down.
+
+#### What the account holder needs to decide
+
+1. **May an operator move money outside the three rails at all?** If no, this
+   ticket closes and the Stripe Dashboard remains the escape hatch — in which
+   case #431's case detail should link out to it and say plainly that the
+   console does not reconcile what happens there.
+2. **If yes: partial refund, goodwill credit, fee waiver — which of the three?**
+   They have different funding and different tax consequences.
+3. **Who pays?** A refund beyond what the customer is owed under D3 comes out of
+   the platform's fee, the vendor's payout, or both, and the split has to be
+   stated before it can be written down (D37).
+4. **What authority is required?** A single admin, or two? The role model is
+   flat — **D4** gives one immutable role per account — so a second-approver
+   requirement is itself a new decision.
+5. **What does the customer and the vendor get told?** Every existing money
+   movement sends mail; an operator-initiated one needs its own copy or it is a
+   silent adjustment to someone's bank account.
+
+#### What to build once decided
+
+Record the answer as a **new decision entry** in
+`.claude/plans/vendor-marketplace-decisions.md` first — that is the deliverable
+that unblocks this row. Then the lever itself: admin-only, on the booking
+detail (#437), through the existing payment service rather than a second money
+path, versioning its idempotency key by attempt (**D36** — `request_log_url` is
+the tell that a cached failure is being replayed), writing an `admin_actions`
+row (#434), and notifying both parties.
+
+**Do not build any part of this before the decision exists.** A money path
+implemented against a guessed policy is the one kind of code in this repository
+that cannot be corrected by a later ticket.
