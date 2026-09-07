@@ -1664,6 +1664,24 @@ timezone arithmetic beyond what `#409` already settled. Business-day logic buys
 very little here and costs a class of bug the product has already been bitten by
 once.
 
+**The zero point is midnight UTC on the event date — the same instant
+`calculateRefund` measures its 48-hour cutoff from.** Added 2026-09-06 after
+#423's lane surfaced that this ruling's wording decided it implicitly. Measuring
+instead from *"the moment the event date stops being anybody's today"* — the
+timezone-safe reading `#409` established for a different question — would make 72
+hours behave as roughly **five days**, because that instant is already up to 36
+hours past the date itself. Both readings are defensible; they are not the same
+number, and a ruling that does not say which is a ruling that will be
+re-litigated.
+
+Chosen because it keeps the product to **one zero point for both money
+deadlines**: a customer's refund cutoff and a vendor's release are measured from
+the same instant, so "48 hours before, 72 hours after" is true in one arithmetic
+rather than two. The timezone spread is still covered with room — the latest an
+event day can end anywhere on Earth is 36 hours after that midnight, leaving a
+day and a half of margin — and #423 carries a test asserting exactly that, so the
+margin is a measured fact rather than an assumption.
+
 **What this does not fix, and no window would:** a deliverable that arrives after
 the event — a photographer's gallery weeks later. No release window covers that,
 because the event has genuinely happened and the vendor has genuinely turned up.
