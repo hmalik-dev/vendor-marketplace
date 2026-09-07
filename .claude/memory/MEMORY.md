@@ -60,3 +60,4 @@
 - [`rebase --continue` blames conflicts for unstaged changes](rebase-continue-blames-conflicts-for-unstaged-changes.md) — a review agent writing to `.claude/agent-memory/` mid-rebase stalls it with a message about conflicts that are not there
 - [`next dev` hits EMFILE with many lanes](next-dev-hits-emfile-with-many-lanes.md) — every page 500s while the API is fine; build and `next start` for a browser pass
 - [A lane web build must be made under the lane env](a-lane-web-build-must-be-made-under-the-lane-env.md) — `API_URL` server-side and `NEXT_PUBLIC_API_URL` inlined at build time; the CSP's port is the tell
+- [The E2E seed tops up, it does not reset](e2e-seed-tops-up-it-does-not-reset.md) — after a destructive pass a lane needs lane:down + lane:up, not a re-seed

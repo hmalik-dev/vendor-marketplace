@@ -89,3 +89,20 @@ the command failing.
 there is no remote history to rewrite. That is worth spending deliberately —
 rebase once, immediately before the first push, onto the final state rather than
 twice. After the first push, the merge-only rule applies for good.
+
+**Scope the teardown diff to what the branch touched — 2026-09-07.** After a
+squash merge `git branch -d` refuses ("not fully merged") because the branch's
+own commits never appear in `main`. The obvious next check, an **unscoped**
+`git diff origin/main <branch>`, is **misleading in the dangerous direction**:
+lane 432 ran it and it was *not* empty — it showed a tracker close and a rules
+commit that had landed on `main` *after* the branch was cut. Read as "the branch
+still holds unmerged work", that argues for keeping a branch that is fully
+absorbed.
+
+The check that answers the actual question is **scoped to the paths the branch
+touched**: `git diff --stat origin/main <branch> -- apps packages`. Empty there
+means the content landed. Only then force the delete.
+
+`-D` on a lane whose PR was **dequeued** rather than merged destroys the only
+copy of that work, which is why the check has to be the one that can fail.
+
