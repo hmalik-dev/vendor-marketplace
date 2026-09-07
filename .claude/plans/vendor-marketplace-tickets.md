@@ -263,6 +263,7 @@ storefront, each of which tells the reader something untrue. |
 | **450** | **A closed account vanishes from the only screen it can be reached from** | P3 | M6 | **P1 High** | **Backlog** | — | **#438** — the closure it describes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 by lane #438's `diff-reviewer`**, which correctly declined to fix it in scope: the defect is in an **existing** surface's query. `/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`) and closure sets `deleted_at` — while `/admin/users/[userId]`, the data-rights page carrying the export, the retained counts and the legal acceptance record, is reachable **from that table and by direct URL and nowhere else**. So closing an account removes the page needed to audit the closure. **It is worst exactly when it matters**: a subject-access request, a regulator, or a dispute about whether closure did what was promised all arrive *after* the closure and none come with the uuid in hand. Fix with a deliberate way to ask for closed accounts — not by dropping the predicate, which correctly makes live accounts the default. |
 | **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **#438** — the closure it describes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. Decide *and state* whether the address is burned — the privacy policy says an account can be closed, not that the address is gone. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
+| **452** | **Every role bounce off `/admin` costs a failed `https` request** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #432's browser pass.** A customer or vendor sent to `/admin` lands correctly on their own dashboard, but the browser first logs `GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR` and `Failed to load resource` before falling back to `http`. `current-user.ts:111` issues a **relative** `redirect(DASHBOARD_PATH_BY_ROLE[user.role])`, so the scheme is being inferred downstream rather than chosen. The outcome is right, which is why nobody has noticed: the cost is one wasted round trip and a console error on every denial, and a console that is never clean is one nobody reads. Neither `current-user.ts` nor `middleware.ts` was touched by #432. |
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #432 landed: 19 rows — 15 Backlog, 3 `Deferred — needs a human`, and **#431 still sitting here as `Done`** with its detail section, which `db539991` marked but did not move to the archive. Left for #431's own session rather than swept by a passing lane: a row moved by somebody else is how two copies of one ticket come to exist.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`) and #432 (`1e899ae1`) have all landed** — so **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -1413,6 +1414,68 @@ way the layout already documents (`pageSize=1` for the `total`), not through
       not mocked, because the 402 it used to hide behind is the exact failure.
 - [ ] Browser-verified at both auth states; a customer typing `/admin/cases` is
       bounced, not shown a shell of 403s.
+
+### #452: Every role bounce off `/admin` costs a failed `https` request
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+#### What was seen
+
+Driving the role matrix for #432 on a plain-http dev server, every denial off an
+admin route produced two console errors before landing correctly:
+
+```
+GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR
+Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR
+```
+
+Then the browser fell back and landed on `http://localhost:3016/bookings`, which
+is the right destination. Reproduced for both a customer and a vendor session, on
+`/admin`, `/admin/payments`, `/admin/payments?flag=payout-failing` and
+`/admin/vendors` — eight bounces, eight pairs of errors.
+
+#### Where it comes from
+
+`apps/web/src/lib/current-user.ts:111` issues a **relative** redirect:
+
+```ts
+redirect(DASHBOARD_PATH_BY_ROLE[user.role]);
+```
+
+Nothing there names a scheme, so one is being inferred further down — by Next's
+redirect handling, by the proxy, or by a forwarded-proto header that says
+`https` on a server that is not serving it. **Finding which is the first task**,
+because the fix differs: an inferred `x-forwarded-proto` is configuration, and a
+redirect resolved against a canonical origin is code.
+
+#### Why it is worth fixing despite the outcome being right
+
+The user-visible behaviour is correct, so this is not a defect anyone will
+report. It costs one failed request per denial and it puts a permanent error in
+the console — and a console with a standing error in it is one nobody reads,
+which is what this repository has spent the day learning to care about. It also
+means the redirect's scheme is decided by something other than the application,
+which will be wrong in the other direction the first time a deployment terminates
+TLS somewhere unexpected.
+
+#### Acceptance
+
+1. A customer and a vendor bounced off every `/admin/*` route land on their own
+   dashboard with **no** `net::ERR_SSL_PROTOCOL_ERROR` and no failed request.
+2. The same holds on a deployment serving `https`, so the fix is not "hardcode
+   `http`" — whatever chooses the scheme is derived from the environment, per
+   `packages/shared/src/env/deployment.ts`, or the redirect stays relative and
+   the thing inferring the scheme is corrected instead.
+3. The scheme is not decided in two places. Whichever layer owns it, the other
+   defers rather than agreeing by coincidence.
+
+#### Tests (required)
+
+- [ ] A test that fails before and passes after, asserting the redirect's
+      `Location` for a role-denied request on a plain-http origin.
+- [ ] The deployed branch asserted too — a redirect that is right on a laptop
+      and wrong behind TLS is the same bug facing the other way.
 
 ### #435: Graduated moderation — unpublish, hide and reinstate without banning
 
