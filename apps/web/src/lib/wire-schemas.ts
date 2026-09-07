@@ -24,6 +24,7 @@ import {
   streamTicketSchema,
   tagSchema,
   userSchema,
+  adminActivityRowSchema,
   adminBookingRowSchema,
   adminCustomerRowSchema,
   adminMetricsSchema,
@@ -423,6 +424,21 @@ export const wireAdminTagRowSchema = adminTagRowSchema.extend({ createdAt: z.coe
 export type WireAdminTagRow = z.infer<typeof wireAdminTagRowSchema>;
 export const wireAdminTagListSchema = z.object({ items: z.array(wireAdminTagRowSchema) });
 export type WireAdminTagList = z.infer<typeof wireAdminTagListSchema>;
+
+/**
+ * The action log (#434).
+ *
+ * `createdAt` is the coercion `.claude/rules/web-route-boundaries.md` asks for
+ * on every `z.date()` that crosses the wire — and here it is the only column
+ * the screen sorts and prints, so a missing coercion would 500 the page for any
+ * console that has ever done anything, rather than only for some rows.
+ */
+export const wireAdminActivityRowSchema = adminActivityRowSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireAdminActivityRow = z.infer<typeof wireAdminActivityRowSchema>;
+export const wireAdminActivityPageSchema = paginatedSchema(wireAdminActivityRowSchema);
+export type WireAdminActivityPage = z.infer<typeof wireAdminActivityPageSchema>;
 
 /** No dates on the wire: every series point is already a `YYYY-MM-DD` string. */
 export const wireAdminMetricsSchema = adminMetricsSchema;

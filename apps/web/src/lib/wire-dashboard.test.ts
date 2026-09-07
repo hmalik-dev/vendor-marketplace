@@ -1,7 +1,7 @@
-import { vendorDashboardSchema } from '@vendor-marketplace/shared';
+import { adminActivityRowSchema, vendorDashboardSchema } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { wireVendorDashboardSchema } from './wire-schemas';
+import { wireAdminActivityRowSchema, wireVendorDashboardSchema } from './wire-schemas';
 
 /**
  * The vendor dashboard as it really arrives: JSON, every `Date` an ISO string.
@@ -80,7 +80,24 @@ function dateFields(schema: z.ZodType, path: string[] = []): string[] {
    * one; a date nested in an array needs both halves extended, and this list is
    * what forces that to be noticed.
    */
-  const LEAVES = ['string', 'number', 'int', 'boolean', 'enum', 'literal', 'null', 'array'];
+  const LEAVES = [
+    'string',
+    'number',
+    'int',
+    'boolean',
+    'enum',
+    'literal',
+    'null',
+    'array',
+    /*
+     * `record` is a leaf here, and that is a claim about this codebase rather
+     * than about Zod. The one record on a response schema is
+     * `adminActionDetailSchema` (#434), whose value type is a union of scalars —
+     * so no date can hide in it. A record of objects would need recursing into,
+     * and adding one is the moment to revisit this line.
+     */
+    'record',
+  ];
 
   if (!LEAVES.includes(def.type)) {
     throw new Error(
@@ -145,5 +162,70 @@ describe('the vendor dashboard at the wire boundary', () => {
     const withUnion = z.object({ when: z.union([z.date(), z.string()]) });
 
     expect(() => dateFields(withUnion)).toThrow(/cannot see inside a "union"/);
+  });
+});
+
+/**
+ * The action log at the wire boundary — the second response this walker covers.
+ *
+ * Here because `.claude/rules/web-route-boundaries.md` asks for the walker to be
+ * extended to the next schema rather than for another paragraph to be written,
+ * and because `/admin/activity` is a screen where #423's failure mode would be
+ * total rather than conditional: `createdAt` is on **every** row, so a missing
+ * coercion 500s the page for any console that has ever done anything, and
+ * renders perfectly only while the log is empty. The empty log is exactly the
+ * state a first browser pass finds it in.
+ */
+const ACTIVITY_ROW = {
+  id: '11111111-1111-4111-8111-111111111111',
+  actorId: '22222222-2222-4222-8222-222222222222',
+  actorName: 'Dana Okafor',
+  action: 'user_banned' as const,
+  subjectType: 'user' as const,
+  subjectId: '33333333-3333-4333-8333-333333333333',
+  detail: { refundsIssued: 2, refundsFailed: 0, profileUnpublished: true },
+  createdAt: '2026-09-07T11:31:00.000Z',
+};
+
+describe('the admin action log at the wire boundary', () => {
+  it('parses a row that carries every field, dates and all', () => {
+    const parsed = wireAdminActivityRowSchema.parse(ACTIVITY_ROW);
+
+    expect(parsed.createdAt).toEqual(new Date('2026-09-07T11:31:00.000Z'));
+    expect(parsed.actorName).toBe('Dana Okafor');
+    expect(parsed.action).toBe('user_banned');
+  });
+
+  /**
+   * The detail payload survives the round trip **as scalars**, not flattened to
+   * strings — the console prints `refundsIssued 2`, and a `2` that arrived as
+   * `"2"` would render identically while being a different value to anything
+   * that later counts it.
+   */
+  it('keeps the detail payload typed rather than stringified', () => {
+    const parsed = wireAdminActivityRowSchema.parse(
+      JSON.parse(JSON.stringify(ACTIVITY_ROW)) as unknown,
+    );
+
+    expect(parsed.detail).toEqual({
+      refundsIssued: 2,
+      refundsFailed: 0,
+      profileUnpublished: true,
+    });
+  });
+
+  it('coerces every date the row can carry', () => {
+    const shared = dateFields(adminActivityRowSchema);
+    expect(shared).toEqual(['createdAt']);
+
+    const stringified = JSON.parse(JSON.stringify(ACTIVITY_ROW)) as unknown;
+    const parsed = wireAdminActivityRowSchema.parse(stringified) as Record<string, unknown>;
+
+    for (const field of shared) {
+      expect(
+        parsed[field],
+        `${field} arrived as ${typeof parsed[field]}, not a Date`,
+      ).toBeInstanceOf(Date);
+    }
   });
 });

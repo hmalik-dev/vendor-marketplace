@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createTestDatabase, type TestDatabase } from './testing/test-db.js';
+import { createTestDatabase, refusalOf, type TestDatabase } from './testing/test-db.js';
 import { legalAcceptances } from './schema/index.js';
 
 /**
@@ -17,19 +17,6 @@ const USER = '44444444-4444-4444-8444-444444444444';
 const VENDOR = '55555555-5555-4555-8555-555555555555';
 
 let testDb: TestDatabase;
-
-/** What Postgres itself said, not what Drizzle echoed back. See #381's test. */
-async function refusalOf(statement: string): Promise<string> {
-  try {
-    await testDb.db.execute(sql.raw(statement));
-  } catch (error) {
-    const cause = (error as { cause?: unknown }).cause;
-
-    return cause instanceof Error ? cause.message : String(cause ?? error);
-  }
-
-  throw new Error(`Expected this to be refused, but it succeeded:\n${statement}`);
-}
 
 async function acceptanceCount(): Promise<number> {
   const result = await testDb.db.execute(
@@ -74,6 +61,7 @@ describe('legal_acceptances is append-only', () => {
 
   it('refuses an update', async () => {
     const message = await refusalOf(
+      testDb.db,
       `UPDATE legal_acceptances SET version = 'v9.9' WHERE vendor_id = '${VENDOR}'`,
     );
 
@@ -82,7 +70,10 @@ describe('legal_acceptances is append-only', () => {
   });
 
   it('refuses a delete', async () => {
-    const message = await refusalOf(`DELETE FROM legal_acceptances WHERE vendor_id = '${VENDOR}'`);
+    const message = await refusalOf(
+      testDb.db,
+      `DELETE FROM legal_acceptances WHERE vendor_id = '${VENDOR}'`,
+    );
 
     expect(message).toContain('append-only');
     expect(message).toContain('DELETE');
@@ -94,7 +85,7 @@ describe('legal_acceptances is append-only', () => {
    * by exactly the person this rule is written about.
    */
   it('refuses a truncate', async () => {
-    const message = await refusalOf('TRUNCATE legal_acceptances');
+    const message = await refusalOf(testDb.db, 'TRUNCATE legal_acceptances');
 
     expect(message).toContain('append-only');
     expect(message).toContain('TRUNCATE');
@@ -121,7 +112,7 @@ describe('legal_acceptances is append-only', () => {
     await testDb.db.execute(sql.raw('SET search_path = evil, public'));
 
     try {
-      const message = await refusalOf('DELETE FROM public.legal_acceptances');
+      const message = await refusalOf(testDb.db, 'DELETE FROM public.legal_acceptances');
 
       expect(message).toContain('append-only');
     } finally {

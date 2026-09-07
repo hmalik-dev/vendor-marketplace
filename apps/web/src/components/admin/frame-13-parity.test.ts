@@ -296,7 +296,7 @@ describe('the table', () => {
    * scrollWidth 425`.
    *
    * So a table's own cells may truncate from `md` up and not below it. Every
-   * such class in the six tables must carry a breakpoint.
+   * such class in the seven tables must carry a breakpoint.
    */
   it('lets no table cell truncate below the card breakpoint', () => {
     // Numbered rather than named groups: this package targets below ES2018.
@@ -306,6 +306,7 @@ describe('the table', () => {
     // itself: its truncation lives on the grid branch, which `md:` already
     // gates as a whole.
     const columnSources = [
+      'src/components/admin/activity-table.tsx',
       'src/components/admin/review-table.tsx',
       'src/components/admin/tag-table.tsx',
       'src/components/admin/vendor-table.tsx',
@@ -313,7 +314,7 @@ describe('the table', () => {
       'src/app/admin/customers/page.tsx',
       'src/app/admin/payments/page.tsx',
     ];
-    expect(columnSources).toHaveLength(6);
+    expect(columnSources).toHaveLength(7);
 
     for (const path of columnSources) {
       // Comments discuss these classes by name; only the code declares them.

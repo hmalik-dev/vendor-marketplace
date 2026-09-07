@@ -7,6 +7,8 @@ import {
   stripBidiControls,
 } from '../utils/index.js';
 import {
+  ADMIN_ACTION_SUBJECTS,
+  ADMIN_ACTIONS,
   ADMIN_PAGE_SIZE,
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
@@ -2478,3 +2480,70 @@ export const adminTagSuggestionResultSchema = z.object({
   tag: tagSchema.nullable(),
 });
 export type AdminTagSuggestionResult = z.infer<typeof adminTagSuggestionResultSchema>;
+
+// --- Admin action log (#434) -----------------------------------------------
+
+export const adminActionSchema = z.enum(ADMIN_ACTIONS);
+export const adminActionSubjectSchema = z.enum(ADMIN_ACTION_SUBJECTS);
+
+/**
+ * What actually changed, as a **flat map of scalars**.
+ *
+ * Flat and scalar on purpose, and the constraint is the point rather than a
+ * simplification: the type makes it unwritable to nest an entity in here, and
+ * nesting an entity is exactly how a moderation log becomes a second copy of
+ * the thing it moderated. A review deletion records the review's id, never its
+ * text; a ban records how many refunds moved, never a card. See the table's own
+ * doc comment for the full rule.
+ */
+export const adminActionDetailSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.number(), z.boolean(), z.null()]),
+);
+export type AdminActionDetail = z.infer<typeof adminActionDetailSchema>;
+
+/** One row of `/admin/activity`. */
+export const adminActivityRowSchema = z.object({
+  id: uuidSchema,
+  actorId: uuidSchema,
+  /**
+   * The operator's name, resolved through a join at read time rather than
+   * frozen on the row.
+   *
+   * The opposite choice from `legal_acceptances.accepted_by_name`, and for the
+   * opposite reason: that table freezes the name because it is evidence of who
+   * signed what, while this one answers "who is doing this" for an operator
+   * looking at the console today. The **id** is the record; the name is how it
+   * is read.
+   *
+   * Never absent, and by construction rather than by luck: the only way the
+   * actor is gone is the cascade that erased their account, and that took this
+   * row with it.
+   */
+  actorName: z.string(),
+  action: adminActionSchema,
+  subjectType: adminActionSubjectSchema,
+  subjectId: uuidSchema,
+  detail: adminActionDetailSchema,
+  createdAt: z.date(),
+});
+export type AdminActivityRow = z.infer<typeof adminActivityRowSchema>;
+
+/**
+ * The activity feed's filters.
+ *
+ * `actor` and `subject` are the two the ticket names, and they are the two an
+ * operator actually asks for: "what did this operator do" and "what did the
+ * console do to this account". `action` narrows the firehose further and costs
+ * nothing, since the column is already an enum.
+ */
+export const adminActivityQuerySchema = z.object({
+  ...adminPaginationShape,
+  actor: uuidSchema.optional(),
+  subject: uuidSchema.optional(),
+  action: adminActionSchema.optional(),
+});
+export type AdminActivityQuery = z.infer<typeof adminActivityQuerySchema>;
+
+export const adminActivityPageSchema = paginatedSchema(adminActivityRowSchema);
+export type AdminActivityPage = z.infer<typeof adminActivityPageSchema>;

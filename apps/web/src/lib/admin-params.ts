@@ -1,4 +1,4 @@
-import { MAX_NAME_LENGTH, MAX_PAGE } from '@vendor-marketplace/shared';
+import { MAX_NAME_LENGTH, MAX_PAGE, uuidSchema } from '@vendor-marketplace/shared';
 
 /**
  * The `/admin` route boundary.
@@ -64,6 +64,33 @@ export function pageNumber(value: RawParam): number {
   }
 
   return parsed;
+}
+
+/**
+ * A uuid, or nothing.
+ *
+ * The console's two identity filters — `?actor=` and `?subject=` on the action
+ * log — take an id rather than a member of a closed vocabulary, so `oneOf` has
+ * nothing to check them against. Anything that is not a uuid is **dropped**,
+ * the way every other unusable filter is: the API validates the same shape and
+ * would answer 400, which is the 500 page for a URL anyone can paste.
+ *
+ * **`uuidSchema`, not a regex of our own.** It is the same schema
+ * `adminActivityQuerySchema` validates these two parameters with on the API
+ * side, so the two ends of one filter cannot disagree about what a uuid is. A
+ * hand-rolled pattern here already did disagree — it rejected the all-zero and
+ * all-`f` ids that `z.uuid()` accepts, so the screen would have dropped a value
+ * the API would have taken and then told the operator, wrongly, that it was
+ * "not a value this list can filter by".
+ *
+ * Shape only. Whether the id names anything is the query's answer, and an id
+ * that matches nothing renders an empty list rather than an error — the same
+ * outcome as a filter that excludes everything, which is what it is.
+ */
+export function uuidParam(value: RawParam): string | undefined {
+  const parsed = uuidSchema.safeParse(first(value));
+
+  return parsed.success ? parsed.data : undefined;
 }
 
 /**

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_NAME_LENGTH, MAX_PAGE } from '@vendor-marketplace/shared';
-import { boundedText, droppedFiltersLine, droppedKeys, oneOf, pageNumber } from './admin-params';
+import {
+  boundedText,
+  droppedFiltersLine,
+  droppedKeys,
+  oneOf,
+  pageNumber,
+  uuidParam,
+} from './admin-params';
 
 describe('oneOf', () => {
   it('returns the value when it is in the vocabulary', () => {
@@ -126,5 +133,63 @@ describe('every console screen can say what it ignored', () => {
     // `page` is narrowed by `pageNumber`, which always yields a number — it is
     // not a filter and must never appear in the line.
     expect(droppedKeys({ page: 'abc' }, { status: undefined })).toEqual([]);
+  });
+});
+
+/**
+ * The action log's two identity filters (#434).
+ *
+ * These are the only console filters that take an id rather than a member of a
+ * closed vocabulary, so `oneOf` cannot narrow them and `uuidParam` is the whole
+ * guard. The defect it exists to stop: `?actor=nonsense` forwarded to an API
+ * that validates `z.uuid()`, which answers 400 — and an unhandled 400 in a
+ * Server Component is the 500 page, for a URL anyone can paste into Slack.
+ */
+describe('uuidParam', () => {
+  const REAL = '3f8b1c2e-1c4a-4b7d-9f2e-0a1b2c3d4e5f';
+
+  it('returns a well-formed uuid unchanged', () => {
+    expect(uuidParam(REAL)).toBe(REAL);
+  });
+
+  it.each([
+    ['nonsense', 'not-a-uuid'],
+    ['an empty string', ''],
+    ['a bare number', '12345'],
+    ['a uuid missing a group', '3f8b1c2e-1c4a-4b7d-9f2e'],
+    ['a uuid with a non-hex character', '3f8b1c2e-1c4a-4b7d-9f2e-0a1b2c3d4e5g'],
+    ['a long paste', 'A'.repeat(300)],
+    ['a SQL fragment', "' OR 1=1 --"],
+  ])('drops %s', (_label, value) => {
+    expect(uuidParam(value)).toBeUndefined();
+  });
+
+  it('drops a missing parameter', () => {
+    expect(uuidParam(undefined)).toBeUndefined();
+  });
+
+  /*
+   * `?actor=a&actor=b` arrives as an array. Typing the prop as `string` is how
+   * this becomes a `TypeError` during the server render — see `RawParam`.
+   */
+  it('reads the first value of a repeated parameter', () => {
+    expect(uuidParam([REAL, 'nonsense'])).toBe(REAL);
+    expect(uuidParam(['nonsense', REAL])).toBeUndefined();
+  });
+
+  /*
+   * The reason this defers to the shared `uuidSchema` rather than carrying a
+   * regex of its own: a hand-rolled pattern rejected these two, which
+   * `z.uuid()` accepts. The screen would then have dropped a value the API
+   * would have taken, and told the operator — wrongly — that it was not
+   * something this list can filter by.
+   */
+  it('accepts the edge uuids the API accepts', () => {
+    expect(uuidParam('00000000-0000-0000-0000-000000000000')).toBe(
+      '00000000-0000-0000-0000-000000000000',
+    );
+    expect(uuidParam('ffffffff-ffff-ffff-ffff-ffffffffffff')).toBe(
+      'ffffffff-ffff-ffff-ffff-ffffffffffff',
+    );
   });
 });

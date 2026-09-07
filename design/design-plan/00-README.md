@@ -88,10 +88,12 @@ forward. That is the actual finding — not which five.
 | `/admin/payments`         | **Exempt — derived.** As `/admin/customers`.                                                                                                                                                                                                                                                               |
 | `/admin/reviews`          | **Exempt — derived.** As `/admin/customers`.                                                                                                                                                                                                                                                               |
 | `/admin/tags`             | **Exempt — derived.** The moderation queue is a card list rather than a table, because each decision carries a note field and three actions and a 44px row is not where a form goes. `22-admin.md`'s "detail views — card-based groupings with the actions prominent" is the rule it is built to.          |
+| `/admin/activity`         | **Exempt — derived.** As `/admin/customers` — frame `13`'s table over `admin_actions` (#434). The one composition difference is that no row carries an action, which is not a deviation to correct: the table is append-only in the database, so a control here would offer something Postgres refuses.    |
 
 Four exempt, four to draw, one already framed and mis-recorded — plus, since
-`#15`, the seven console routes above: one framed by `13 Admin` and six
-**derived** from it.
+`#15`, the eight console routes above: one framed by `13 Admin` and seven
+**derived** from it. `/admin/activity` is the eighth, added by `#434`; the rail
+that reaches it is ruled in `22-admin.md` rather than drawn by frame `13`.
 
 **"Derived" is a third outcome and it is deliberately narrow.** It means the
 screen's composition is defined by a frame elsewhere in the bundle plus a written

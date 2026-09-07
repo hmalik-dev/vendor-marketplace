@@ -8,6 +8,7 @@ import {
   wireAdminCustomerPageSchema,
   wireAdminMetricsSchema,
   wireAdminPaymentPageSchema,
+  wireAdminActivityPageSchema,
   wireAdminReviewPageSchema,
   wireAdminTagListSchema,
   wireAdminTagSuggestionPageSchema,
@@ -17,6 +18,7 @@ import {
   type WireAdminCustomerPage,
   type WireAdminMetrics,
   type WireAdminPaymentPage,
+  type WireAdminActivityPage,
   type WireAdminReviewPage,
   type WireAdminTagList,
   type WireAdminTagSuggestionPage,
@@ -117,6 +119,10 @@ export async function getAdminReviews(query: string): Promise<WireAdminReviewPag
 
 export async function getAdminTagSuggestions(query: string): Promise<WireAdminTagSuggestionPage> {
   return adminRead(`/admin/tag-suggestions${query}`, wireAdminTagSuggestionPageSchema);
+}
+
+export async function getAdminActivity(query: string): Promise<WireAdminActivityPage> {
+  return adminRead(`/admin/activity${query}`, wireAdminActivityPageSchema);
 }
 
 export async function getAdminTags(): Promise<WireAdminTagList> {

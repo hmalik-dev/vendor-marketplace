@@ -64,25 +64,6 @@ pushing both. Finish by checking `git rev-list --left-right --count
 main...origin/main` reads `0 0`. Encoded in `~/.claude/skills/ticket/references/workflow.md`
 section 7 and the status-record rules in `~/.claude/orchestration-policy.md`.
 
-## There is no merge queue, and that is the ruling — restated 2026-09-07
-
-`gh api repos/{owner}/{repo}/rulesets` returns `[]` and the GraphQL `mergeQueue`
-is `null`, because protection here is **classic**, not a ruleset: a required
-`Typecheck, lint, build, test` check, `strict: true`, linear history, no force
-pushes. CI has no `merge_group:` trigger either.
-
-`~/.claude/skills/orchestrate` step 1 reads the empty ruleset list as "lanes can
-break the default branch — **stop here**". **That is a false stop in this repo.**
-The user's standing ruling is that we merge directly to `main`; the queue was
-never wanted. Do not raise it as a preflight blocker again, and do not propose
-adding one.
-
-What the absence actually costs is real and is already handled elsewhere: with
-`strict: true` every merge makes the other lanes' PRs `BEHIND`, so landing is
-serialised by hand rather than by a queue — see
-[[main-pushes-dequeue-parallel-lane-prs]] for holding and releasing peers around
-a merge.
-
 **How to apply:**
 
 - The gate, in order, every invoke: watch CI green → merge `origin/main` into the

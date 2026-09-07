@@ -8,7 +8,15 @@ Scannability beats airiness; the whitespace moves to the gutters.
 The header inverts to `stone-900` with a translucent "Admin" chip — an
 unmistakable signal you're on the ops side of the product. Sidebar 210px:
 Overview · Vendors · Customers · Bookings · Payments · Reviews (count) ·
-Categories & tags.
+Categories & tags · Activity.
+
+**Activity is an eighth row and frame `13` draws seven — ruled 2026-09-07
+(#434).** The frame yields, the same direction D30 settled: this file is the
+spec, and an operations console whose whole surface acts on other people's
+accounts needs its own record reachable from the rail rather than only by typing
+a URL. It sits **last** because it is the only item that is not a working
+surface — nothing on it is acted on, it is what the other seven leave behind.
+The rail already scrolls at every viewport, so the row costs no composition.
 
 ## Table
 
@@ -49,6 +57,16 @@ Paused (stone).
 **Overview** — four metric cards, then line charts for bookings and revenue
 (Recharts). Colour-coded by meaning: revenue gold, bookings clay, users steel,
 completion sage.
+
+**Activity** — the console's own record (#434). The same table as `13 Admin`
+over `admin_actions`: When · Operator · Action · Subject · What changed. Its
+Refine bar carries one dropdown, Action, because the other two filters are ids
+rather than vocabulary — the Operator and Subject cells are links that filter by
+themselves, which is what makes "what else did this operator do" and "what else
+happened to this account" one click from any row rather than a dropdown of every
+uuid the platform holds. **No row carries an action**, and that is not an
+omission: the table is append-only in the database, so a control here would
+offer something Postgres refuses.
 
 **Detail views** — card-based groupings with the actions prominent. Every
 destructive action goes through an AlertDialog naming the consequence.

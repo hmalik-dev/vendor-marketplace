@@ -1,6 +1,6 @@
 ---
 name: diverged-lane-branch-needs-a-new-name
-description: "REWRITTEN history needs a new branch name; merely BEHIND does not — give auto-merge a few minutes, then `gh pr update-branch`. Check which failure you have before renaming"
+description: "REWRITTEN history needs a new branch name; merely BEHIND does not — auto-merge resolves that one itself. Check which failure you have before renaming"
 metadata:
   type: feedback
 ---
@@ -9,28 +9,13 @@ metadata:
 
 | Symptom | What happened | Remedy |
 | --- | --- | --- |
-| PR reads `BEHIND`, push still fast-forwards | main moved under you | **Wait a few minutes; if it has not cleared, `gh pr update-branch <n>`.** Same branch, same PR, no force push, no manifest drift |
+| PR reads `BEHIND`, push still fast-forwards | main moved under you | **Do nothing.** GitHub's auto-merge merges main into the branch as an ordinary merge commit — same branch, same PR, no force push, no manifest drift |
 | Push rejected as non-fast-forward | your history was **rewritten** (rebase, or a branch recreated by a post-merge push) | push a new branch name |
 
 Renaming a merely-behind branch drifts the manifest for no reason at all.
 Verified 2026-09-05 landing #416: it was put `BEHIND` twice, by `a583200` and
 `cc7bc2a`, and auto-merge cleared both on its own as `f3a39fd`. The branch, the
 PR and the manifest were untouched throughout.
-
-**But "do nothing" is not reliable, corrected 2026-09-07 landing #430.** PR #134
-went `BEHIND` when main moved three commits under it, with the required check
-already green and auto-merge armed as `SQUASH`. It sat there **thirty minutes**
-and did not self-clear; `gh pr update-branch 134` cleared it in one call and the
-PR merged as `aac9b3b` shortly after. So the remedy is still not a rename and
-still not a force-push — but it is not passive either. **Give it a few minutes,
-then run `gh pr update-branch`.** It merges the base in, which a squash collapses
-anyway, so it is neither force-pushing nor merging your own PR.
-
-The tell that you are waiting on nothing: `mergeStateStatus` is `BEHIND` while
-`gh pr checks` shows the required check passing. Expect `BLOCKED` then
-`UNSTABLE` after the update — `UNSTABLE` is the red Vercel deploy check, which is
-not required (see [[vercel-deploy-check-always-fails]]) and does not stop the
-merge.
 
 The rest of this memory is the **rewritten** case.
 

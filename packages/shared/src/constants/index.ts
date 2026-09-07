@@ -1014,6 +1014,47 @@ export const RESOLVE_DISPUTE_OUTCOMES = ['vendor', 'customer'] as const;
 export type DisputeOutcome = (typeof RESOLVE_DISPUTE_OUTCOMES)[number];
 
 /**
+ * Every mutation the operations console can make, one member per route (#434).
+ *
+ * A **closed enum rather than free text**, because the whole point of the log
+ * is that it can be counted and filtered: "how many accounts did we suspend
+ * last week" is answerable over an enum and guesswork over a sentence somebody
+ * typed. A new mutating admin route adds a member here, and the `pgEnum` it
+ * feeds refuses the row until it does.
+ *
+ * Named after what happened, not after the function that did it: `updateTag`
+ * may be renamed, and the rows it already wrote must still mean the same thing.
+ */
+export const ADMIN_ACTIONS = [
+  'user_banned',
+  'user_unbanned',
+  'review_deleted',
+  'tag_updated',
+  'tag_suggestion_resolved',
+  'dispute_resolved',
+] as const;
+export type AdminAction = (typeof ADMIN_ACTIONS)[number];
+
+/**
+ * What an action was taken *on* — the other half of the subject filter.
+ *
+ * The pair `(subject_type, subject_id)` rather than five nullable foreign keys.
+ * An audit row must survive the thing it is about being deleted — a review
+ * deletion whose row cascaded away with the review would erase the only record
+ * that the deletion happened — so these ids deliberately carry **no foreign
+ * key**. That is also why the type has to be stored: a bare uuid does not say
+ * which table it came from.
+ */
+export const ADMIN_ACTION_SUBJECTS = [
+  'user',
+  'review',
+  'tag',
+  'tag_suggestion',
+  'booking',
+] as const;
+export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
+
+/**
  * Days in the dashboard's `This week` strip.
  *
  * Seven, and **rolling from today** rather than snapped to a calendar week:

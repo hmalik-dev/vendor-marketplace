@@ -13,6 +13,13 @@ export interface AdminNavProps {
  * The order frame `13 Admin` draws, which is also the order an operator works
  * in: the shape of the platform first, then the two sides of it, then what they
  * transacted, then what they said, then the vocabulary that files it all.
+ *
+ * **Activity is an eighth row the frame does not draw**, added with #434 and
+ * ruled into `22-admin.md`'s rail, which is the spec the frame answers to — the
+ * same direction D30 settled when the frame and that file disagreed about the
+ * row count. It sits last because it is the only item that is not a working
+ * surface: nothing here is acted on, it is what the other seven leave behind.
+ * The rail scrolls (`lg:overflow-y-auto`), so an eighth row costs nothing.
  */
 const ITEMS = [
   { href: '/admin', label: 'Overview' },
@@ -22,6 +29,7 @@ const ITEMS = [
   { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/reviews', label: 'Reviews' },
   { href: '/admin/tags', label: 'Categories & tags' },
+  { href: '/admin/activity', label: 'Activity' },
 ] as const;
 
 /**

@@ -1,4 +1,5 @@
 import {
+  adminActions,
   availability,
   bookingRequests,
   bookings,
@@ -270,12 +271,21 @@ describe('payouts', () => {
    * users table is wiped after every test, so this runs per test rather than
    * once.
    */
-  async function signInAsAdmin(): Promise<void> {
+  /** Returns the operator's own id, which #434's action rows are keyed by. */
+  async function signInAsAdmin(): Promise<string> {
     expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
       .where(eq(users.clerkUserId, ADMIN));
+
+    const rows = await harness.database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.clerkUserId, ADMIN))
+      .limit(1);
+
+    return rows[0]!.id;
   }
 
   afterEach(async () => {
@@ -293,6 +303,11 @@ describe('payouts', () => {
     await harness.database.db.delete(bookingRequests);
     await harness.database.db.delete(availability);
     await harness.database.db.delete(vendorProfiles);
+    /*
+     * `admin_actions` refuses a direct DELETE while the operator it names still
+     * exists (#434), and lets the cascade through when the account itself is
+     * erased — so this line is what clears the log between tests.
+     */
     await harness.database.db.delete(users);
   });
 
@@ -719,6 +734,71 @@ describe('payouts', () => {
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe('That booking has no open report to resolve');
+      // #434: a refused call records nothing. There was no ruling to record.
+      expect(await harness.database.db.select().from(adminActions)).toHaveLength(0);
+    });
+
+    /**
+     * #434 — the sixth mutating route, recorded here rather than in
+     * `admin.activity.routes.test.ts` because a disputed, paid booking is this
+     * file's fixture and rebuilding it beside the log would be a second copy of
+     * two hundred lines.
+     *
+     * The ruling is the thing worth recording: it decides who keeps the money,
+     * and until now `resolveDispute` was never told which operator made it.
+     */
+    it('records which operator ruled, and the money the ruling moved', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      await report(paid.id, CUSTOMER);
+      clockNow = AFTER_RELEASE;
+
+      const actorId = await signInAsAdmin();
+      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+        outcome: 'customer',
+      });
+
+      expect(resolved.statusCode).toBe(200);
+      const rows = await harness.database.db.select().from(adminActions);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        actorId,
+        action: 'dispute_resolved',
+        subjectType: 'booking',
+        subjectId: paid.id,
+      });
+      /*
+       * The full refund, as a figure rather than as prose. "Was this one
+       * refunded, and how much" is the question an operator brings back to the
+       * log months later, and the booking row it would otherwise be read from
+       * is the one a later closure may take away.
+       */
+      expect(rows[0]?.detail).toEqual({
+        outcome: 'customer',
+        status: 'cancelled',
+        refundAmountCents: PRICE_CENTS,
+      });
+    });
+
+    /** The vendor's side records the same way, with no money moved. */
+    it('records a ruling in the vendor favour as the lift it is', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      await report(paid.id, CUSTOMER);
+
+      await signInAsAdmin();
+      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+        outcome: 'vendor',
+      });
+
+      expect(resolved.statusCode).toBe(200);
+      const rows = await harness.database.db.select().from(adminActions);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.detail).toEqual({
+        outcome: 'vendor',
+        status: 'confirmed',
+        refundAmountCents: null,
+      });
     });
 
     /**

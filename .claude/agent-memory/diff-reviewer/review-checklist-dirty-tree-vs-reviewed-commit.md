@@ -67,5 +67,14 @@ real fix to a real defect in the staged diff (an ABA race in the compensating
 unwind), so the right report is "this is in the staged diff, and an unstaged fix
 for it is already in the tree" — not silence, and not a claim it is unaddressed.
 
+**A peer agent's _memory_ write can fail the commit gate (#434).** Mid-review a
+security-auditor lane dropped a new file into
+`.claude/agent-memory/security-auditor/`, and `pnpm format:check` — which
+globs `**/*.md` — went red on a path nowhere near the diff. `git status` had
+been clean of it at the first call. So: run `pnpm format:check` late rather than
+early, and when it fires, check whether the offending path is in
+`git diff origin/main...HEAD --name-only` before reporting it as the lane's.
+Report it either way — it blocks their commit — but say whose it is.
+
 Related: [[review-checklist-source-grep-substring-collisions]],
 [[review-checklist-controlled-index-drops-the-selection-seed]]
