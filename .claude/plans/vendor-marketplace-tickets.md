@@ -247,7 +247,6 @@ the silent-submit work #388 closed:
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
 | **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Done** | `worktree-431` | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. **Landed 2026-09-07 as `54fa7e64` (PR #143).** `support_cases` is one queue for both doors — the customer's report and the card network's chargeback — with `/admin/cases` open-and-oldest-first and `/admin/cases/[id]` carrying the money fields and the two-position control, which calls the `resolveDispute` that already existed. Review found two defects that would have shipped: a chargeback on a **future-dated** event placed no hold, so the sweep paid the vendor on the event date with the dispute live (`RELEASABLE_STATUSES` includes `confirmed`) — fixed at the primitive with a required `DisputeHoldOrigin`, skipping only the refusal that is advice for a customer; and a failed case insert put the support message body and the sender's address into the log through `DrizzleQueryError`'s bound params, reachable on demand because `freeText()` lets `U+0000` through. **#436 lands its reports here as a third `origin` member, not a second queue.** |
-| **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. |
 | **435** | **Graduated moderation: unpublish, hide and reinstate without banning** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Ban is the only moderation action and it is nuclear — it declines every open request, cancels and **fully refunds** every confirmed booking, and unpublishes the storefront. There is no lever between "nothing" and that: `vendor_profiles.is_published` has no admin writer, and `reviews.is_public` exists, defaults `true` and is written by **nothing but seed scripts**, so a review can only be permanently deleted. `reviews.service.ts` says so itself — *"there is nowhere to queue to until #15 builds admin"* — and #15 shipped without the queue. |
 | **436** | **Reporting and message visibility for trust and safety** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Nothing in the product can report anything — no listing report, no message report, no photo report, no user report; grepping report/flag/abuse across the API returns nothing. The only inbound channel is a rate-limited public email form. And `/conversations` is participant-only with no admin read, so a harassment complaint arrives by email naming a thread the operator cannot open. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **#435** — the two share six files (`admin.routes.ts`, `admin.service.ts`, `admin.dao.ts`, `vendor-table.tsx`, `admin-data.ts`, `schemas/index.ts`) and this one reads the states #435 writes | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
@@ -265,7 +264,7 @@ storefront, each of which tells the reader something untrue. |
 | **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **#438** — the closure it describes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. Decide *and state* whether the address is burned — the privacy policy says an account can be closed, not that the address is gone. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #441 landed: 18 rows — 15 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`) and #441 (`1b8435f3`) have all landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #432 landed: 19 rows — 15 Backlog, 3 `Deferred — needs a human`, and **#431 still sitting here as `Done`** with its detail section, which `db539991` marked but did not move to the archive. Left for #431's own session rather than swept by a passing lane: a row moved by somebody else is how two copies of one ticket come to exist.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`) and #432 (`1e899ae1`) have all landed** — so **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1414,107 +1413,6 @@ way the layout already documents (`pageSize=1` for the `total`), not through
       not mocked, because the 402 it used to hide behind is the exact failure.
 - [ ] Browser-verified at both auth states; a customer typing `/admin/cases` is
       bounced, not shown a shell of 403s.
-
-### #432: Payout health — failed transfers, retries, and why Stripe stopped a vendor
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
-**Blocked by:** None
-
-#### The state today
-
-**Two columns are written and read by nothing.** The release sweep
-(`payouts.service.ts`, every 15 minutes) increments
-`bookings.payout_attempts` and writes `bookings.payout_failure_reason` on every
-failed transfer (`payouts.dao.ts:213`), clearing the reason on success. Grep
-both across the repo: the only readers are the sweep's own ordering
-(`orderBy(asc(bookings.payoutAttempts), …)`) and its logger. **No screen, no
-API response, and no alert reads either.** A vendor whose transfer fails on
-every one of ninety-six daily attempts is owed money that nobody is told about.
-
-`adminPaymentRowSchema` carries `totalAmountCents`, `platformFeeCents`,
-`vendorPayoutCents`, `stripePaymentIntentId`, `paidAt` and `status` — and no
-payout state at all. The Payments screen therefore shows a booking whose money
-reached the platform and never reached the vendor identically to one that
-settled.
-
-**And the vendor-side story is a boolean.** `vendor_profiles.stripe_onboarded`
-is set by `isOnboarded(status)` — true iff `stripe_transfers` **and** `payouts`
-capabilities are both active. When Stripe revokes one, `applyAccountStatusChange`
-flips it false and that is the entire record. `isMissingPayoutsOnly` already
-distinguishes the half-restricted case and only logs a warning. The operator's
-filter says "No payouts yet" for a vendor who has never onboarded and for one
-Stripe restricted this morning, with no reason and nowhere to go.
-
-#### What to build
-
-**1. Payout state on the payments surface.** Add to the admin payment row:
-`payoutReleasedAt`, `payoutAttempts`, `payoutFailureReason`, `stripeTransferId`,
-and a derived payout state. **Derive it with `payoutStatusOf`** — the one
-derivation #423 wrote for exactly this, already used by `booking-report.ts` and
-`dashboard.service.ts`. A fourth copy of "what is held" is how these come to
-disagree; that is written down twice in `dashboard.dao.ts` already.
-
-**2. A failing-payout filter and a row flag**, shaped like the `refund-stuck`
-flag the Bookings screen already carries — marked on every row, not only inside
-the filter, because the failure #415 fixed was precisely a state you had to know
-about to find. A payout is failing when `payout_attempts > 0` and
-`payout_released_at is null`.
-
-**3. A retry.** `PUT /admin/bookings/:bookingId/payout/retry`, admin-only,
-which re-enters the **existing** sweep path for one booking rather than
-reimplementing the transfer. **D36 binds: the idempotency key is versioned by
-the attempt**, so a retry increments `payout_attempts` and mints a new key —
-reusing the key replays Stripe's cached failure and the operator learns nothing.
-Refuse on a booking that is `cancelled`, `disputed`, or already released, and say
-which.
-
-**4. Stripe account state, with the reason.** Persist what the webhook already
-reads: the disabled reason and the outstanding requirements from the connected
-account, alongside `stripe_onboarded`. Surface them on the vendor row's detail
-(#437 builds the view; this ticket supplies the data and may land its own
-panel first). **Read-only.** An operator must not be able to flip
-`stripe_onboarded` by hand — D29's constraint (`stripe_onboarded = false OR
-stripe_account_id IS NOT NULL`) and the capability read are what make the column
-true, and a manual override makes it a guess. Link out to the Stripe Dashboard
-for the account instead.
-
-**5. A Live-vendor payout alert on the Overview.** One count — vendors whose
-payouts are blocked, and bookings whose transfers are failing — sitting where
-the four metric cards already are. A number that leads to the filtered list;
-`page.tsx` already documents that a card leading nowhere is furniture.
-
-#### Acceptance
-
-1. The admin payment row carries payout state derived by `payoutStatusOf`, not
-   by a new local test.
-2. A booking with `payout_attempts > 0` and no release is flagged on its row and
-   findable by filter.
-3. The retry mints a new idempotency key versioned by the attempt (D36) and is
-   refused with a specific message on cancelled, disputed and released bookings.
-4. **Ruled 2026-09-07: data-complete here, view deferred to #437.** The Vendors
-   table is frame `13`'s seven columns and `frame-13-parity.test.ts` asserts the
-   grid template, so an eighth column would break the parity gate #392 owns —
-   a design-contract change, which a ticket may not make. So this ticket
-   **supplies and tests** `stripeAccountId`, `stripeDisabledReason` and
-   `stripeRequirementsDue` on `adminVendorRowSchema`, written only by the
-   account webhook, and #437 draws them on the vendor detail view. A vendor
-   Stripe has restricted must be distinguishable in the *data* from one who
-   never onboarded; that distinction becoming visible is #437's acceptance, not
-   this one's. (Same call #438 made in declining to add a vendor-table link for
-   the same reason.)
-5. Nothing in the console writes `stripe_onboarded`.
-6. The Overview carries a payout-health count that links to the filtered list.
-7. Every new number is a query result at request time — the no-invented-numbers
-   law.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] The retry asserted against a Stripe failure that is **cached** under the
-      old key — the D36 regression is invisible to a test that only asserts a
-      success.
-- [ ] A restricted account asserted through the real `account.updated` webhook
-      payload shape, not a hand-built row.
 
 ### #435: Graduated moderation — unpublish, hide and reinstate without banning
 
