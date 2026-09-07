@@ -1628,9 +1628,31 @@ this section — #435 adds reversible moderation, #438 adds data deletion and
 export, #440 may add money movement, and none of them should ship into a surface
 with no record of who acted.
 
+#### Amended 2026-09-07 while lanes were in flight: **the table already exists.**
+
+Lane 435 hit this ticket's absence head-on — its own acceptance 8 is *"every
+action writes an `admin_actions` row"*, and the board recorded no dependency
+because the filing missed it. Rather than stall, 435 built the **minimal** table
+(`actor`, `action`, `target_type`, `target_id`, jsonb `detail`, `created_at`), a
+`recordAdminAction` DAO in `apps/api/src/modules/admin/admin-actions.dao.ts`, a
+`packages/db` schema file, and writes on its own five moderation actions. It
+lands first.
+
+**So this ticket extends; it does not create.** Do not write a `CREATE TABLE`
+migration, and do not build a parallel table — reconcile 435's column shape and
+add to it if it is short. What remains here is still most of the work:
+
+- **the immutability triggers**, which 435 did **not** add and acceptance 2
+  requires — `no_update` / `no_delete` / `no_truncate`, copying
+  `packages/db/drizzle/0029_sad_storm.sql`. An ALTER-shaped migration;
+- **the other six mutating routes**, including threading the actor through
+  `resolveDispute`, `updateTag` and `resolveTagSuggestion`, which take none today;
+- **`/admin/activity`**, the read surface;
+- the **best-effort rule** (#408) and the **content prohibition**.
+
 #### What to build
 
-**1. An append-only `admin_actions` table.** Actor user id, action (a narrow
+**1. The `admin_actions` table — extended, not created (see the amendment above).** Actor user id, action (a narrow
 enum, not free text), subject type and id, a JSON detail payload for what
 actually changed, and `createdAt`. **Immutable the way `legal_acceptances` is
 immutable** — `0029_sad_storm.sql` already establishes the pattern with
@@ -1888,9 +1910,17 @@ statuses, showing vendor, customer, event date, quoted price, and time to
 expiry. This is the first surface that can answer where the funnel leaks, and it
 needs no new state: the rows are already there.
 
-**3. Packages, portfolio and availability on the vendor detail**, read-only here
-(#435 owns the moderation actions on them). Availability shows which locks are
-`booked` / `pending` and what holds them.
+**3. Packages, portfolio and availability on the vendor detail.** Availability
+shows which locks are `booked` / `pending` and what holds them.
+
+**Two routes are already built and have no surface — wire them up here, do not
+rebuild them.** #435 shipped `PUT /admin/packages/:packageId/active` and
+`DELETE /admin/portfolio-items/:itemId` guarded, audited and tested, but
+deliberately did **not** invent a mini detail view for them, because that view is
+this ticket's scope and would have been superseded on arrival. So the vendor
+detail is where a vendor's packages and photos are finally listed and acted on.
+Storefront publish/unpublish and review hide/unhide already reached the existing
+list screens under #435 and need nothing here.
 
 **4. Category management.** `is_active` and `display_order`, the same shape the
 tag table already implements — that screen is the template, and reusing it is
