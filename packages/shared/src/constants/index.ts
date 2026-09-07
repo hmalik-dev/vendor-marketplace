@@ -1119,6 +1119,7 @@ export const ADMIN_ACTIONS = [
   'tag_updated',
   'tag_suggestion_resolved',
   'dispute_resolved',
+  'support_case_resolved',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1138,6 +1139,7 @@ export const ADMIN_ACTION_SUBJECTS = [
   'tag',
   'tag_suggestion',
   'booking',
+  'support_case',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
 

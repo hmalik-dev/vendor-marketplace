@@ -11,8 +11,14 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EmailGateway } from '../../lib/email.js';
 import { AppError, termsRequiredError, unauthorized, validationFailed } from '../../lib/errors.js';
+import {
+  heldByChargeback,
+  openSupportCase,
+  recordCaseSendFailure,
+} from '../cases/cases.service.js';
 import { findUserEmail } from '../notifications/notification-email.dao.js';
 import {
+  AlreadyHeldError,
   announceDisputeHold,
   disputeHoldAudience,
   liftDisputeHold,
@@ -28,13 +34,21 @@ import {
 } from './support-email.js';
 
 /**
- * One support message, sent as one email, with nothing stored.
+ * One support message, sent as one email, **and recorded beside it** (#431).
  *
- * There is deliberately no table here. A row would be a ticket, a ticket needs
- * a status, and a status needs somewhere to read it — which is the helpdesk
- * this feature is scoped explicitly not to be. The reference below is the
- * message's handle, and the only durable copies of a message are the two
- * inboxes it lands in.
+ * This file used to say there was deliberately no table: a row would be a
+ * ticket, a ticket needs a status, and a status needs somewhere to read it. That
+ * reasoning was right about the shape and wrong about the destination. A report
+ * carrying a `bookingId` freezes a vendor's payout, and the complaint that
+ * justifies the freeze lived only in an inbox while the hold lived in a column
+ * no admin surface exposed — so an operator could see that money was frozen and
+ * not why. The somewhere-to-read-it is `/admin/cases`, and the status is two
+ * members rather than a helpdesk's workflow.
+ *
+ * **The email is still the delivery and the row is still not it.** The send is
+ * what a human triages; the row is what the console lists. A failure to write
+ * the row therefore never costs the send, and never strands the hold — see
+ * `openSupportCase`, and the ordering `sendSupportMessage` states below.
  */
 
 export interface SupportDeps {
@@ -160,7 +174,44 @@ async function placeReportHold(
     throw gated ? termsRequiredError() : unauthorized('Sign in to report a problem with a booking');
   }
 
-  return placeDisputeHold(deps.bookings, auth, input.bookingId, input.message, now);
+  try {
+    return await placeDisputeHold(
+      deps.bookings,
+      auth,
+      input.bookingId,
+      input.message,
+      now,
+      'customer',
+    );
+  } catch (error) {
+    /*
+     * **The booking is already held — and only one kind of hold lets this send
+     * through.**
+     *
+     * #425 refuses a second report on purpose: a duplicate complaint about a
+     * dispute already open is a second email a human triages for nothing, and
+     * `payouts.routes.test.ts` pins both halves of that ("refuses a second
+     * report while one is open, and sends no second message"). That rule was
+     * written when the customer's own report was the only thing that could set
+     * `disputed`, and it stays exactly as it was for that case.
+     *
+     * #431 broke its premise rather than its reasoning: a chargeback sets
+     * `disputed` too. Then the refusal tells somebody who filed nothing *"you
+     * have already reported a problem with this booking"* and — because this
+     * runs before the send — delivers their message nowhere, locking them out of
+     * support for the one booking they most need to discuss. So the pass-through
+     * is exactly as wide as the case this ticket broke, and no wider.
+     *
+     * `null` is the same answer a report with no `bookingId` gives, and means
+     * the same downstream: no hold was placed here, so there is none to unwind
+     * if the send fails. The case still records the booking.
+     */
+    if (error instanceof AlreadyHeldError && (await heldByChargeback(deps, input.bookingId))) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 /**
@@ -265,6 +316,29 @@ export async function sendSupportMessage(
 
   const audience = await readAudience(deps, held, reference);
 
+  /*
+   * **The row goes in here**, after every refusal that can still turn this send
+   * away and before the send itself.
+   *
+   * Earlier would file cases for reports that were never sent — a caller with no
+   * session reporting a booking, a hold the booking's own state refuses — and
+   * the queue would fill with rows describing nothing. Later, after the send,
+   * would leave the failure path with nothing to record the failure *on*, which
+   * is the one state an operator has to chase rather than work.
+   *
+   * `openSupportCase` swallows its own failure by design. That is the ticket's
+   * rule in one line: a row that could not be written must not lose the email or
+   * strand the hold.
+   */
+  const supportCase = await openSupportCase(deps, {
+    reference,
+    topic: input.topic,
+    message: input.message,
+    senderUserId: auth?.id ?? null,
+    senderEmail: replyTo,
+    bookingId: input.bookingId ?? null,
+  });
+
   const fields = {
     reference,
     topic: input.topic,
@@ -296,6 +370,16 @@ export async function sendSupportMessage(
 
     if (held) {
       await unwindReportHold(deps, held, reference);
+    }
+
+    /*
+     * After the unwind, not before: the hold coming back off is what the
+     * customer's next attempt depends on, and the case row is a note for an
+     * operator. Both are best-effort and neither may displace the 502 below,
+     * which is the failure the sender is actually owed.
+     */
+    if (supportCase) {
+      await recordCaseSendFailure(deps, supportCase, now);
     }
 
     throw new AppError(

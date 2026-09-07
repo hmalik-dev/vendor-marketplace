@@ -252,7 +252,6 @@ storefront, each of which tells the reader something untrue. |
 | **436** | **Reporting and message visibility for trust and safety** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Nothing in the product can report anything — no listing report, no message report, no photo report, no user report; grepping report/flag/abuse across the API returns nothing. The only inbound channel is a rate-limited public email form. And `/conversations` is participant-only with no admin read, so a harassment complaint arrives by email naming a thread the operator cannot open. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **#435** — the two share six files (`admin.routes.ts`, `admin.service.ts`, `admin.dao.ts`, `vendor-table.tsx`, `admin-data.ts`, `schemas/index.ts`) and this one reads the states #435 writes | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
 | **438** | **Data rights: export, account closure, and the legal acceptance record** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Neither privacy-policy promise is backed by anything: the text says *"ask us for a copy of what we hold"* and *"to close your account, ask us through Contact support"*, and there is no export endpoint, no admin-initiated deletion, and no screen. Deletion happens only if the user deletes themselves in Clerk. Separately, `legal_acceptances` is the platform's evidence a vendor agreed to the 12% and the 72-hour hold — immutable, IP and UA captured, three DB triggers — and no operator can read it. |
-| **439** | **Transactional email delivery is invisible** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Fourteen notification types fire and forget; failures are logged and dropped at `notification-email.ts:200`. The `notifications` table records the in-app bell only — no `sentAt`, no failure reason, no provider id. *"Was the customer actually told their booking was cancelled?"* is unanswerable from the console, from the database, or from anywhere but a log search. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
 | **442** | **A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder: does a second acceptance of a version already held mean one row or two?** | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. The obvious fix — a unique index on `(accepted_by_user_id, document, version)` — **overturns #427's ruling** that a second acceptance of a held version *is* a second row, on the grounds that *"I accepted it twice"* is a true statement about what happened; `legal-acceptance-immutability.test.ts` asserts exactly that today. So the race cannot be closed without first deciding what the record is claiming, which is a product question, not a lane's. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 | **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
@@ -264,7 +263,7 @@ storefront, each of which tells the reader something untrue. |
 | **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #441 landed: 16 rows — 13 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`) and #433 (`ad1b179`) have both landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#439** and **#442** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #441 landed: 18 rows — 15 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`) and #441 (`1b8435f3`) have all landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1900,75 +1899,6 @@ same answer the export gives.
 - [ ] Acceptance 8 reads the rendered legal page, not the Markdown source.
 - [ ] An export asserted to contain **no** credential, no Stripe secret, and no
       other user's email.
-
-### #439: Transactional email delivery is invisible
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
-**Blocked by:** None
-
-#### The state today
-
-Fourteen notification types are defined (`NOTIFICATION_TYPES`) and the platform
-sends mail for most of them — new request, quoted, accepted, declined, expired,
-cancelled, booking confirmed, completed, cancelled, new review, payout sent,
-Stripe onboarding complete, tag suggestion approved. Every send is fire and
-forget: `notification-email.ts:194` catches, `:200` logs an error, and execution
-continues — correctly, because a failed email must not fail the booking. But
-nothing records that it happened.
-
-The `notifications` table holds the **in-app bell only** — `userId`, `type`,
-`title`, `body`, `data`, `readAt`, `createdAt`. There is no `sentAt`, no
-failure reason, no provider message id, no bounce.
-
-So *"was the customer actually told their booking was cancelled?"* cannot be
-answered from the console, from the database, or from anywhere but a log search
-against a process that may have rotated. On the surface where an operator is
-mediating a dispute (#431) about whether someone was informed, that is the
-question they will be asked.
-
-#### What to build
-
-**1. A delivery record per send.** Recipient user id, address, notification
-type, the related entity id, `sentAt`, outcome, provider message id, and the
-failure reason on a failure. One row per attempt, so a retry is visible as a
-retry. Write it **beside** the send, under the same best-effort rule the file
-already follows — a failure to record must never fail the operation, and must
-never fail the email.
-
-**2. Resend's delivery events.** Handle the provider's webhook for delivered,
-bounced and complained, keyed by the message id, so the record reflects what
-actually happened rather than what was attempted. Signature-verified like the
-Stripe and Clerk handlers, and idempotent under replay. If the account holder has
-not configured the webhook, the record still holds attempts — the ticket must not
-depend on it.
-
-**3. On the console.** Delivery history on the customer and vendor detail views
-(#437), and on the booking detail — the emails that booking generated, in order.
-Plus a bounced-address signal on the account, because an address that bounces
-means every future notification to that person is lost silently.
-
-**4. What must not be stored.** The rendered body. The record is metadata — who,
-what type, when, what outcome — and a copy of every email the platform ever sent
-is a liability, not an audit trail.
-
-#### Acceptance
-
-1. Every transactional send writes a delivery record, including a failed one.
-2. A failure to write the record does not fail the send or the operation.
-3. A provider delivery event updates the matching record and is idempotent under
-   replay.
-4. The absence of a configured provider webhook does not break sending or
-   recording.
-5. Delivery history appears on the customer, vendor and booking detail views.
-6. A bounced address is visible on the account.
-7. No record contains a rendered email body.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] Acceptance 2 asserted by making the record write throw — the regression is
-      an operation that now 500s because its bookkeeping failed.
-- [ ] Acceptance 3's replay asserted against the real webhook harness.
 
 ### #440: Operator-initiated refunds and credits
 

@@ -16,6 +16,9 @@ import {
   PAYOUT_MODELS,
   PRICE_TYPES,
   REVIEW_TYPES,
+  SUPPORT_CASE_ORIGINS,
+  SUPPORT_CASE_STATUSES,
+  SUPPORT_TOPICS,
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
   US_STATE_CODES,
@@ -80,6 +83,9 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'email_delivery_outcome', values: EMAIL_DELIVERY_OUTCOMES },
     { enumName: 'email_delivery_entity', values: EMAIL_DELIVERY_ENTITIES },
     { enumName: 'us_state', values: US_STATE_CODES },
+    { enumName: 'support_case_origin', values: SUPPORT_CASE_ORIGINS },
+    { enumName: 'support_case_status', values: SUPPORT_CASE_STATUSES },
+    { enumName: 'support_topic', values: SUPPORT_TOPICS },
   ];
 
   it.each(cases)(

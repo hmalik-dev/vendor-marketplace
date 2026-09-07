@@ -1066,7 +1066,9 @@ export async function findOwnBookingForReport(
  * - **Before the event**, there is nothing to report yet and cancelling is the
  *   right move — it comes with a refund tier and frees the date. Refused with
  *   the same universally-future test `completeBooking` uses, so a customer east
- *   of UTC is not told their event has not happened when it has.
+ *   of UTC is not told their event has not happened when it has. **This one is
+ *   the customer's alone** — see `DisputeHoldOrigin`: it is advice about what
+ *   they should do instead, and a card network's chargeback is not asking.
  * - **After the release**, the money is already with the vendor and a hold has
  *   nothing left to hold. #423 acceptance 11 offered a choice here and this
  *   takes the refusal: routing it into the post-release refund path would let a
@@ -1086,12 +1088,93 @@ export async function findOwnBookingForReport(
  * orchestrator: `sendSupportMessage`, which places it, sends the report, and
  * takes the hold back if it cannot.
  */
+/**
+ * The one `placeDisputeHold` refusal that is **retryable** (#431).
+ *
+ * Every other refusal it makes is a fact about the booking that will still
+ * be true in a minute — the event has not happened, the payout has already
+ * gone, the status cannot be disputed. This one means only that the row moved
+ * between the read and the write, and the same request would very likely
+ * succeed on a second attempt.
+ *
+ * A **type** rather than a message a caller matches on, because the caller
+ * that needs to tell them apart is the chargeback webhook: it records the
+ * permanent refusals on the operator's case and answers 200, and doing that
+ * to a lost optimistic lock would file a retryable failure as a settled fact
+ * and stop Stripe ever retrying it. Matching on the prose would have worked
+ * until somebody edited the prose. The wire shape is unchanged: it is still a
+ * 409 `CONFLICT` with the same sentence.
+ */
+export class StaleBookingError extends AppError {}
+
+/**
+ * Who is disputing — and therefore **which of the hold's refusals apply**.
+ *
+ * Not a flag to loosen a check. Two of `placeDisputeHold`'s three refusals are
+ * facts about the money and hold for everybody: a booking whose payout has
+ * already been transferred cannot be frozen, and one that is `cancelled` or
+ * already `disputed` has nothing to freeze. The third is different in kind — it
+ * is a judgement about **what a customer should do instead**, and it is the one
+ * that has to know who is asking.
+ *
+ * - `customer` — the report form. Before the event there is nothing to report
+ *   yet and cancelling is the right move: it comes with a refund tier and frees
+ *   the date. That refusal is the product's advice and it stays.
+ * - `network` — a chargeback (#431). A card network does not take advice. The
+ *   money is at the platform, the customer's bank has claimed it back, and the
+ *   sweep will otherwise pay the vendor the moment the event date passes —
+ *   `RELEASABLE_STATUSES` includes `confirmed`, so a booking left unheld because
+ *   its event was three months out is paid out on schedule with the chargeback
+ *   still live. That is the exact loss #423's hold-until-the-event design
+ *   exists to prevent, arriving through the one door that had opted out of it.
+ *
+ * **The consequence, stated rather than discovered later.** Before this,
+ * `disputed` implied the event had happened, because this was its only writer
+ * and it refused a future one. It no longer does, and the two pre-event
+ * consumers see the difference:
+ *
+ * - `NOT_CANCELLABLE.disputed` refuses the customer's self-serve cancellation on
+ *   a future booking a chargeback has frozen. **That is correct, and not a
+ *   regression to fix.** They have already claimed the money back through their
+ *   bank; letting them cancel on D3's tiers as well would refund one charge
+ *   twice from a platform that has been debited once. The vendor's date stays
+ *   blocked until an operator rules, which is the cost of a live chargeback
+ *   rather than a defect in handling one.
+ * - A second report from the customer on that booking is **not** refused.
+ *   `AlreadyHeldError` below exists for exactly that case, because the
+ *   alternative locked them out of support for the one booking they most needed
+ *   to talk about.
+ */
+export type DisputeHoldOrigin = 'customer' | 'network';
+
+/**
+ * The booking is already on hold, so there is nothing for this caller to place.
+ *
+ * **Not a failure, and that is the point.** It used to be refused with
+ * `NOT_DISPUTABLE.disputed` — *"You have already reported a problem with this
+ * booking"* — which `sendSupportMessage` raises **before** the send, so the
+ * message was never delivered. After #431 a chargeback can place the hold, and
+ * then that sentence is told to a customer who filed nothing through the product
+ * and who is now unable to reach support about that booking at all. The person
+ * most likely to need the support form is the one who cannot get through, which
+ * is the whole reason the route is public.
+ *
+ * A type rather than a message the caller matches on, for the same reason
+ * `StaleBookingError` is one: the copy will be edited and a prose match would
+ * not follow it.
+ */
+export class AlreadyHeldError extends AppError {}
+
 export async function placeDisputeHold(
   context: BookingContext,
   user: AuthenticatedUser,
   bookingId: string,
   reason: string | undefined,
   now: Date,
+  /** See `DisputeHoldOrigin`. Required rather than defaulted: a hold placed on
+   *  the wrong rule set is a payout that moves when it should not, and a
+   *  default is exactly the code no call site reads. */
+  origin: DisputeHoldOrigin,
 ): Promise<BookingRow> {
   const { booking, side } = await participantIn(context, user, bookingId);
 
@@ -1099,11 +1182,21 @@ export async function placeDisputeHold(
     throw forbidden('Only the customer can report a problem with a booking');
   }
 
+  if (booking.status === 'disputed') {
+    /*
+     * Distinguished from the other undisputable statuses because it is the one
+     * that means "already done" rather than "cannot be done" — see
+     * `AlreadyHeldError`. A second report on a held booking is a second message
+     * to send, not a refusal to hand the sender.
+     */
+    throw new AlreadyHeldError(409, ERROR_CODES.CONFLICT, NOT_DISPUTABLE.disputed);
+  }
+
   if (booking.status !== 'confirmed' && booking.status !== 'completed') {
     throw conflict(NOT_DISPUTABLE[booking.status]);
   }
 
-  if (isUniversallyFutureDate(booking.eventDate, now)) {
+  if (origin === 'customer' && isUniversallyFutureDate(booking.eventDate, now)) {
     throw conflict('That event has not happened yet — cancel the booking instead');
   }
 
@@ -1137,7 +1230,11 @@ export async function placeDisputeHold(
   );
 
   if (!held) {
-    throw conflict('That booking changed while you were reporting it');
+    throw new StaleBookingError(
+      409,
+      ERROR_CODES.CONFLICT,
+      'That booking changed while you were reporting it',
+    );
   }
 
   return held;

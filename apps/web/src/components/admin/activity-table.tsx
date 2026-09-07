@@ -40,6 +40,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   tag_updated: 'Edited a tag',
   tag_suggestion_resolved: 'Resolved a tag suggestion',
   dispute_resolved: 'Resolved a report',
+  support_case_resolved: 'Closed a case',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */
@@ -49,6 +50,7 @@ const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
   tag: 'Tag',
   tag_suggestion: 'Suggestion',
   booking: 'Booking',
+  support_case: 'Case',
 };
 
 /**

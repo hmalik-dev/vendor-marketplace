@@ -5,6 +5,9 @@ import {
   adminBanResultSchema,
   adminBookingPageSchema,
   adminBookingQuerySchema,
+  adminCaseDetailSchema,
+  adminCasePageSchema,
+  adminCaseQuerySchema,
   adminCustomerPageSchema,
   adminCustomerQuerySchema,
   adminMetricsSchema,
@@ -27,6 +30,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
+import { listCases, readCase, resolveCase } from '../cases/cases.service.js';
 import {
   deleteReview,
   listActivity,
@@ -52,6 +56,7 @@ const reviewParamsSchema = z.object({ reviewId: z.uuid() });
 const suggestionParamsSchema = z.object({ suggestionId: z.uuid() });
 const tagParamsSchema = z.object({ tagId: z.uuid() });
 const bookingParamsSchema = z.object({ bookingId: z.uuid() });
+const caseParamsSchema = z.object({ caseId: z.uuid() });
 
 /**
  * The operations control plane (#15).
@@ -325,5 +330,60 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       },
     },
     async (request) => listActivity(app.db, request.query),
+  );
+
+  /**
+   * The case queue (#431) — every dispute, however it arrived.
+   *
+   * A privileged read twice over: the rows carry what customers wrote to
+   * support, and the detail below carries the money on the booking under
+   * dispute. Both are `adminOnly` on `onRequest` like everything else in this
+   * plugin, so a wrong-role caller is refused **before** validation and never
+   * learns the filter vocabulary from a 400.
+   *
+   * The service lives in `modules/cases/` rather than here: the table's other
+   * two writers are the public support route and the Stripe webhook, and neither
+   * is an admin operation. This plugin is where an operator reaches it.
+   */
+  app.get(
+    '/admin/cases',
+    {
+      onRequest: adminOnly,
+      schema: { querystring: adminCaseQuerySchema, response: { 200: adminCasePageSchema } },
+    },
+    async (request) => listCases(app.db, request.query),
+  );
+
+  app.get(
+    '/admin/cases/:caseId',
+    {
+      onRequest: adminOnly,
+      schema: { params: caseParamsSchema, response: { 200: adminCaseDetailSchema } },
+    },
+    async (request) => readCase(app.db, request.params.caseId),
+  );
+
+  /**
+   * Closes a case that has no money riding on it.
+   *
+   * **Not the dispute control.** A case whose booking is still `disputed` is
+   * refused here with a 409 naming the right lever, because closing the
+   * complaint while the payout it froze stays frozen is the exact state this
+   * ticket exists to end. `PUT /admin/bookings/:bookingId/dispute` above is the
+   * one that moves money, and it closes the case as part of the ruling.
+   */
+  app.put(
+    '/admin/cases/:caseId/resolve',
+    {
+      onRequest: adminOnly,
+      schema: { params: caseParamsSchema, response: { 200: adminCaseDetailSchema } },
+    },
+    async (request) =>
+      resolveCase(
+        { db: app.db, log: request.log },
+        assertRole(request.auth, ['admin']).id,
+        request.params.caseId,
+        app.clock(),
+      ),
   );
 };

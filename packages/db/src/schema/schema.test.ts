@@ -34,6 +34,7 @@ const EXPECTED_TABLES = [
   'portfolio_items',
   'reviews',
   'service_packages',
+  'support_cases',
   'tag_suggestions',
   'tags',
   'us_cities',

@@ -23,6 +23,19 @@ export interface FilterSelectProps {
   action: string;
   /** The filters already applied, so choosing one does not clear the others. */
   carried: Record<string, string | undefined>;
+  /**
+   * Whether to offer the `Any <label>` choice that clears this filter. Defaults
+   * to `true`, which is right for every filter whose absence means "no filter".
+   *
+   * `/admin/cases` is the exception and needed one: its `status` is the only
+   * admin query with a **server-side default** (`open`, because the queue exists
+   * to show what is waiting), so clearing the parameter does not widen the list
+   * — it lands back on open. The option was therefore a control that read as a
+   * reset and did nothing. Suppressing it is honest; removing the default would
+   * mean a bare `/admin/cases`, which is what the rail links to, listing every
+   * case ever filed.
+   */
+  allowAny?: boolean;
 }
 
 /**
@@ -46,6 +59,7 @@ export function FilterSelect({
   value,
   action,
   carried,
+  allowAny = true,
 }: FilterSelectProps): React.ReactElement {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -56,7 +70,9 @@ export function FilterSelect({
       open={open}
       onOpenChange={setOpen}
       label={label}
-      options={[{ value: '', label: `Any ${label.toLowerCase()}` }, ...options]}
+      options={
+        allowAny ? [{ value: '', label: `Any ${label.toLowerCase()}` }, ...options] : options
+      }
       value={value || null}
       onChange={(next) => {
         setOpen(false);
