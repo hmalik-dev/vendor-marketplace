@@ -112,6 +112,37 @@ succeed. The frame cannot arbitrate this — the retired state postdates it. A
 parity pass reporting the missing control on that row is reading the record of a
 decision, not drift.
 
+**Three from the site footer (#441, ruled 2026-09-07).** The footer's only
+frame is the closing-band bundle under `design/delta-band/`, which draws it
+twice. All three of these are decisions, not drift:
+
+- **The column micro-labels render 600 weight / 0.05em**, where that bundle's
+  `.lbl` says 500 / 0.07em. `.lbl` is one shared primitive and **three** other
+  bundles define it at 600 / 0.05em — the screens document, `delta-legal` and
+  `contact-support`. One frame against three corroborating siblings is D30, and
+  `--tracking-label` is global, so building the outlier would restyle every
+  micro-label in the product.
+- **The footer wordmark renders 27.2px**, where the frame draws 25px.
+  `WORDMARK_SIZE_RATIO` is 1.60 D. The frames draw three ratios — D=15 → 23,
+  D=17 → 25, D=20 → 32 — so no single one satisfies them, and there is no
+  `WORDMARK_SIZES` table to hold them the way `WORDMARK_GAPS` holds the gaps.
+  Minting one is **#118's**.
+- **The admin header's operator line renders `stone-480`** (`#d8d0c2`), where
+  frame `13` draws `#D5CEC2` — which is `stone-400`'s hex. That is the frame
+  naming a colour rather than a role: `stone-400` is a **border** value, drawn
+  on a light ground at thirty-nine sites and as text on ink at none. The two
+  steps are three units apart, so the line renders as it did and only its
+  meaning changed. The wider class is **#447**.
+
+**The logo mark paints a 19px outline circle where a delta frame draws 17
+(#449, filed 2026-09-07).** Not yet ruled — but **do not re-file it**. The
+screens document ships no `*` reset, so it is content-box, which is what #250
+measured; every delta bundle sets `* { box-sizing: border-box; }`, so those draw
+the mark as two equal footprints. `logo.tsx` follows #250. Overturning that moves
+the mark on the desktop header, the auth panel, the favicon and the app icon, so
+it is a design adjudication rather than a parity fix. **Grep `box-sizing` in the
+specific bundle a pass is reading before arguing about any bordered box in it.**
+
 **The Florals category no longer exists (#419, ruled 2026-09-06).** It was
 folded into `Decor`, so the taxonomy is ten categories and three frames now
 draw a category the product does not have. All three are overruled, not drift:
