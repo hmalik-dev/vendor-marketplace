@@ -246,7 +246,6 @@ the silent-submit work #388 closed:
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
-| **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Done** | `worktree-431` | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. **Landed 2026-09-07 as `54fa7e64` (PR #143).** `support_cases` is one queue for both doors — the customer's report and the card network's chargeback — with `/admin/cases` open-and-oldest-first and `/admin/cases/[id]` carrying the money fields and the two-position control, which calls the `resolveDispute` that already existed. Review found two defects that would have shipped: a chargeback on a **future-dated** event placed no hold, so the sweep paid the vendor on the event date with the dispute live (`RELEASABLE_STATUSES` includes `confirmed`) — fixed at the primitive with a required `DisputeHoldOrigin`, skipping only the refusal that is advice for a customer; and a failed case insert put the support message body and the sender's address into the log through `DrizzleQueryError`'s bound params, reachable on demand because `freeText()` lets `U+0000` through. **#436 lands its reports here as a third `origin` member, not a second queue.** |
 | **435** | **Graduated moderation: unpublish, hide and reinstate without banning** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Ban is the only moderation action and it is nuclear — it declines every open request, cancels and **fully refunds** every confirmed booking, and unpublishes the storefront. There is no lever between "nothing" and that: `vendor_profiles.is_published` has no admin writer, and `reviews.is_public` exists, defaults `true` and is written by **nothing but seed scripts**, so a review can only be permanently deleted. `reviews.service.ts` says so itself — *"there is nowhere to queue to until #15 builds admin"* — and #15 shipped without the queue. |
 | **436** | **Reporting and message visibility for trust and safety** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Nothing in the product can report anything — no listing report, no message report, no photo report, no user report; grepping report/flag/abuse across the API returns nothing. The only inbound channel is a rate-limited public email form. And `/conversations` is participant-only with no admin read, so a harassment complaint arrives by email naming a thread the operator cannot open. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **#435** — the two share six files (`admin.routes.ts`, `admin.service.ts`, `admin.dao.ts`, `vendor-table.tsx`, `admin-data.ts`, `schemas/index.ts`) and this one reads the states #435 writes | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
@@ -265,7 +264,7 @@ storefront, each of which tells the reader something untrue. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 | **452** | **Every role bounce off `/admin` costs a failed `https` request** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #432's browser pass.** A customer or vendor sent to `/admin` lands correctly on their own dashboard, but the browser first logs `GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR` and `Failed to load resource` before falling back to `http`. `current-user.ts:111` issues a **relative** `redirect(DASHBOARD_PATH_BY_ROLE[user.role])`, so the scheme is being inferred downstream rather than chosen. The outcome is right, which is why nobody has noticed: the cost is one wasted round trip and a console error on every denial, and a console that is never clean is one nobody reads. Neither `current-user.ts` nor `middleware.ts` was touched by #432. |
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #432 landed: 19 rows — 15 Backlog, 3 `Deferred — needs a human`, and **#431 still sitting here as `Done`** with its detail section, which `db539991` marked but did not move to the archive. Left for #431's own session rather than swept by a passing lane: a row moved by somebody else is how two copies of one ticket come to exist.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`) and #432 (`1e899ae1`) have all landed** — so **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #452 was filed and #431 was closed out: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #431's row and detail section are now **deleted**, per the rule above — `db539991` marked it `Done` but did not remove it, and lane 432 correctly declined to sweep another ticket's row on its way past rather than risk one ticket existing in two places. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`) and #432 (`1e899ae1`) have all landed** — so **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1306,114 +1305,6 @@ role switching), **D3** (cancellation tiers fixed platform-wide), **D31** (a
 cancellation is a full unwind), **D35** (the 72-hour payout hold is fixed). Any
 ticket that finds itself wanting an exception to one of those has found #440,
 not a licence.
-
-### #431: Operations case console — every dispute, however it arrives, and its resolution
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Done | **Capabilities:** `core` `auth` `stripe` `email`
-**Blocked by:** None
-
-#### The state today
-
-Three mechanisms that are one job, and none of them meet:
-
-1. **The customer's report.** `POST /support/messages` is public and
-   unauthenticated. When it carries a `bookingId`, `sendSupportMessage`
-   orchestrates `placeDisputeHold` (`payments.service.ts:1089`), which moves the
-   booking `confirmed | completed` → `disputed`, writes `dispute_reason`, and
-   sends the report to `SUPPORT_EMAIL_TO`. **The message is never stored** —
-   `support.routes.ts` says so deliberately: *"this creates nothing addressable
-   … one email, no ticket to track."*
-2. **The hold.** `payouts.dao.ts` excludes `disputed` from the 15-minute release
-   sweep, so the vendor's transfer is frozen from that moment.
-3. **The resolution.** `PUT /admin/bookings/:bookingId/dispute` takes an outcome
-   of `vendor` or `customer` and calls `resolveDispute`. It is the **only** thaw.
-   It has **no client function, no button, no screen** — `admin-data.ts` holds
-   nine GETs and no mutations.
-
-So the reason lives in an inbox, the hold lives in a column no admin schema
-exposes, and the resolution lives in an endpoint with no UI. An operator can
-filter `/admin/bookings?status=disputed` and see a pill; they cannot see why,
-and they cannot act.
-
-Separately, **`charge.dispute.*` is not among the handled Stripe events**
-(`webhooks/stripe.routes.ts` handles `payment_intent.succeeded`,
-`account.updated`, `capability.updated`, `v2.core.account.*`). A network-level
-chargeback lands in the Stripe Dashboard and the `bookings` row never learns —
-so the platform can be debited for a booking the console still reports as paid.
-
-#### What to build
-
-**1. A `support_cases` table and the report that writes it.** Persist what
-`sendSupportMessage` currently only emails: sender (user id where there is one,
-plus the reply-to address), subject/body, the generated reference
-(`ORL-4K7Q-P2` shape, already produced — reuse it as the case's public id), the
-`bookingId` where one was given, `createdAt`, and a disposition
-(`open | resolved`, with resolver and resolved-at once #434 lands). **The email
-still sends** — this is a record beside it, not a replacement, and a failure to
-write the row must not lose the email or strand the hold. Keep
-`liftDisputeHold`'s existing compensation: if the report cannot be sent, the
-hold comes back off.
-
-**2. Chargebacks arrive as cases too.** Handle `charge.dispute.created`,
-`charge.dispute.closed` and `charge.dispute.funds_reinstated`. On `created`,
-open a case linked to the booking and place the same hold (through
-`placeDisputeHold`'s primitive, not a second writer) so a chargeback cannot pay
-out underneath the platform. On close, record the network's outcome on the case
-— **do not** auto-resolve the booking; Stripe's outcome and the platform's
-disposition are different facts and an operator reconciles them. Signature
-verification and idempotency follow the existing handler exactly; a replayed
-event must not double-hold or double-open.
-
-**3. `/admin/cases` — the queue.** List: reference, who, subject, linked booking
-(or —), age, status. Filter by open/resolved and by has-booking. Default to
-open, oldest first — the age of the oldest open case is the number that matters,
-because it is money someone is not being paid.
-
-**4. `/admin/cases/[id]` — the case, and where it is resolved.** The message
-body in full; the sender and their role; the linked booking with **everything
-`adminBookingRowSchema` currently omits** — total, fee, payout, `paid_at`,
-`dispute_reason`, `cancelled_by`, `refund_amount_cents`, `payout_released_at`,
-and the chargeback's Stripe id where there is one. Then the two-position
-control: **resolve for the vendor** (hold lifts, booking returns to `confirmed`
-or `completed` per `completedAt`, payout resumes on the next sweep) or **resolve
-for the customer** (refund and cancel, `cancelled_by = 'admin'`). Both go through
-`ConfirmAction` naming the consequence in money, per `22-admin.md`; both call the
-**existing** `resolveDispute` — do not write a second money path.
-
-**5. A count in the rail.** `AdminNav` already carries a `reviewCount` badge;
-open cases get the same treatment, and for a better reason. Read it the cheap
-way the layout already documents (`pageSize=1` for the `total`), not through
-`/admin/metrics`.
-
-#### Acceptance
-
-1. A support message with a `bookingId` places the hold **and** writes a case
-   row; the case carries the same reference the sender was shown.
-2. A support message without a `bookingId` writes a case and places no hold.
-3. If the email fails, the hold is lifted and the case records the failure —
-   the existing compensation still holds with a row in play.
-4. `charge.dispute.created` opens a case, places the hold, and is idempotent
-   under a replayed event.
-5. `/admin/cases` lists open cases oldest first and is reachable from the rail
-   with an open count.
-6. `/admin/cases/[id]` shows the message and every money field named above.
-7. Resolving for the vendor lifts the hold and the next sweep pays out;
-   resolving for the customer refunds and cancels with `cancelled_by = 'admin'`.
-8. Both resolutions are refused on a booking that is not `disputed`, with the
-   409 the service already raises rather than a 500.
-9. Non-admins get 403 from every new route **before** validation — the
-   `requireRoleBeforeValidation` rule this plugin documents, not `preHandler`.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] The chargeback replay asserted against the real webhook harness, not a
-      unit stub.
-- [ ] A resolution asserted end to end against the Stripe test-mode connected
-      account the E2E seed provisions (#387) — the refund path must be driven,
-      not mocked, because the 402 it used to hide behind is the exact failure.
-- [ ] Browser-verified at both auth states; a customer typing `/admin/cases` is
-      bounced, not shown a shell of 403s.
 
 ### #452: Every role bounce off `/admin` costs a failed `https` request
 
