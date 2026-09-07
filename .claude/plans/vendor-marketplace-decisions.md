@@ -899,6 +899,50 @@ does not draw, and correctly files it. `dropdown-caret.test.ts` states the overr
 check, and `frame-13-parity.test.ts` inverts its own `toContain('▾')` rather than deleting
 it, keeping the frame half intact because the frame really does still draw one.
 
+#### Amended 2026-09-06 by #426 — the caret comes back on the vendor-type picker, and only there
+
+**The account holder reversed this ruling for one control**, verbatim: *"lets add a caret to
+the vendor type per the design - both to landing and browser - i removed it before but want
+it back."* Recorded here rather than as a new decision, because a reader arriving at D25
+has to be able to tell which way it currently points; a second entry elsewhere is how an
+override gets re-found, which is the failure this decision was written to stop.
+
+**Thirteen of the fourteen sites are unchanged.** `▾` returns to `CategorySelect` alone —
+the landing hero and `/search` mount the same `search-bar.tsx`, so the two surfaces the
+instruction names are one control and one change. On frames `01 Landing` and `02 Search`
+this **restores** frame fidelity; everywhere else D25 stands and the frames are still
+overruled.
+
+**`dropdown-caret.test.ts` is narrowed, not deleted.** It now exempts exactly one named file
+and asserts that the list is one file long, that the path really resolves inside the scanned
+tree, and — from the other side — that the exempt file draws both glyphs and draws them only
+inside an `aria-hidden` span. Deleting the guard was the obvious move and the wrong one: the
+glyph has crept back twice on its own, and an unenforced override is what let it.
+`frame-13-parity.test.ts` is untouched — its inverted assertion is about the **admin** filter
+bar, which #426 does not reach.
+
+**Both open-state signals stay, and this is the part D25 left open.** D25 gave three triggers
+`font-semibold text-clay-600` on the value *because* the caret had been their only visible
+open signal. With the caret back on one of them the question was whether that is now doubled
+signalling. It is not, and the contract already says so: `42-dropdowns.md` states the open
+state as *"the value turning clay **and** the caret flipping"*, and frame `28 Dropdown open
+— hero` draws exactly both — `Photography` at 600 weight in clay beside `▴`. They say
+different things. The caret is the affordance — this opens a list, and here is which way it
+is currently pointing; the clay value is the state. Dropping the clay would also have left
+the hero's two comboboxes announcing "open" in two different languages inside one pill,
+since **City draws no caret in any frame** and is out of #426's scope: both segments turn
+their value clay, and only the one the frames draw a caret on has one.
+
+**The caret is `aria-hidden` and is not part of any accessible name.** It is a sibling of the
+field, not text inside it — the specific defect D25 found, where two chips announced *"All
+categories black down-pointing small triangle, button"*. The open state still reaches
+assistive technology through `aria-expanded`, which every trigger has carried throughout.
+
+**`clay-600` open, not the frame's `#B4552F`.** Frame `28` draws the open caret in
+`clay-400`, which `01-foundations.md` forbids as text on cream; the value beside it was
+resolved to `clay-600` the same way by D25's own sweep, and two different clays inside one
+segment would be the drift rather than the fidelity.
+
 ---
 
 ### D26: The Hatch Is an Editor Primitive; the Labelled `Placeholder` Is Retired — *2026-08-31*
@@ -1622,3 +1666,73 @@ outside a clipping ancestor that cannot scroll to reveal it. That second check f
 `/messages` conversation rows: `w-full` inside a scrolling `<ul>`, so every row's ring had
 **0px** of horizontal slack and painted entirely outside the list. Same class as the vendor
 card in #73, and invisible to every class-list assertion in the repository.
+
+### D32: The Payout Hold Is 72 Hours After the Event — *2026-09-06*
+
+**`PAYOUT_RELEASE_HOURS = 72`.** The account holder asked for a hold long enough
+that a customer can dispute and pause the release, and delegated the number:
+*"i like the payout time that allows time for customers to potentially dispute
+and pause the release of payment till then. So factor that in into payout time -
+using your best recommended judgment."*
+
+**Airbnb releases about 24 hours after check-in, and that is not the right
+comparison.** An Airbnb guest is on-site for days — they have already had the
+service, and the chance to raise a problem, long before the payout runs. An Orla
+event is a **single day**. The customer's entire experience and the release
+window are the same short period, so the 24-hour equivalent here is far tighter
+than Airbnb's, not the same.
+
+**Three reasons for 72 rather than 48:**
+
+1. **Events cluster on weekends.** 48 hours after a Saturday evening event lands
+   on Monday evening; after a Sunday event, Tuesday evening. 72 guarantees a full
+   working weekday between the event and the release for a Friday, Saturday or
+   Sunday event, which is when a customer can actually reach anyone.
+2. **It protects the vendor, not only the customer** — this is the argument that
+   decided it. Under **D31** a dispute *after* release is a transfer reversal that
+   can push a vendor who has already been paid out into a **negative balance**.
+   Before release there is nothing to reverse and a refund is clean. So every
+   dispute the window pulls forward is one that cannot produce the ugliest
+   failure in the money path. A longer hold is not a cost to the vendor; it is
+   insurance for them.
+3. **It is still competitive.** Total customer-to-vendor exposure on a single-day
+   service at 72 hours is comparable to Airbnb's on a multi-night stay, where the
+   guest has already been on-site for days before the 24-hour clock starts.
+
+**Not 7 days.** Vendors are small businesses and cash flow is real. Beyond about
+three days the dispute rate stops improving materially and the delay becomes a
+competitive disadvantage rather than a safeguard.
+
+**Calendar hours, not business days.** One constant, no holiday calendar, no
+timezone arithmetic beyond what `#409` already settled. Business-day logic buys
+very little here and costs a class of bug the product has already been bitten by
+once.
+
+**The zero point is midnight UTC on the event date — the same instant
+`calculateRefund` measures its 48-hour cutoff from.** Added 2026-09-06 after
+#423's lane surfaced that this ruling's wording decided it implicitly. Measuring
+instead from *"the moment the event date stops being anybody's today"* — the
+timezone-safe reading `#409` established for a different question — would make 72
+hours behave as roughly **five days**, because that instant is already up to 36
+hours past the date itself. Both readings are defensible; they are not the same
+number, and a ruling that does not say which is a ruling that will be
+re-litigated.
+
+Chosen because it keeps the product to **one zero point for both money
+deadlines**: a customer's refund cutoff and a vendor's release are measured from
+the same instant, so "48 hours before, 72 hours after" is true in one arithmetic
+rather than two. The timezone spread is still covered with room — the latest an
+event day can end anywhere on Earth is 36 hours after that midnight, leaving a
+day and a half of margin — and #423 carries a test asserting exactly that, so the
+margin is a measured fact rather than an assumption.
+
+**What this does not fix, and no window would:** a deliverable that arrives after
+the event — a photographer's gallery weeks later. No release window covers that,
+because the event has genuinely happened and the vendor has genuinely turned up.
+That case is the dispute path's (#425), and a dispute raised after release uses
+D31's unwind. Stated here so nobody widens the window trying to solve it.
+
+**Where it is read:** one constant, three surfaces — the vendor agreement's
+four-terms panel, the accepted-state strip, and `/terms` section 4 (#427) — plus
+the release job and the vendor dashboard's pending-payout date (#423, #424).
+**No surface hardcodes the interval.**

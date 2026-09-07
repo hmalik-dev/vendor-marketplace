@@ -21,6 +21,7 @@ import type { WirePortfolioItem } from '@/lib/wire-schemas';
 import { UploadTile } from '@/components/uploads/upload-tile';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { FallbackImage } from '@/components/ui/fallback-image';
 import {
   Dialog,
   DialogContent,
@@ -392,13 +393,15 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
                 )}
               >
                 <div className="relative">
-                  {/* A plain <img>: user uploads on an origin that changes between
-                    environments, so next/image would need per-env remote patterns. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.thumbnailUrl ?? item.imageUrl ?? ''}
+                  {/* A plain image: user uploads on an origin that changes between
+                    environments, so next/image would need per-env remote patterns.
+                    The tile's 4:3 box is on the shared class, so a photograph
+                    whose object has gone leaves the grid exactly as it was. */}
+                  <FallbackImage
+                    src={item.thumbnailUrl ?? item.imageUrl}
                     alt={item.caption ?? ''}
-                    className="aspect-[4/3] w-full cursor-grab object-cover"
+                    className="aspect-[4/3] w-full cursor-grab"
+                    imageClassName="object-cover"
                   />
                   {/*
                   The cover is a designation on a tile, never a second upload

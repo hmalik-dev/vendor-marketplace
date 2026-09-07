@@ -1,5 +1,6 @@
 import type { Tag } from '@vendor-marketplace/shared';
 import { Avatar } from '@/components/ui/avatar';
+import { FallbackImage } from '@/components/ui/fallback-image';
 import { cn } from '@/lib/utils';
 
 /** How many tag chips are drawn before the rest collapse into "+N more". */
@@ -226,21 +227,25 @@ export function ProfileHeader({
             data-testid="profile-cover"
             className="aspect-[3/2] w-full shrink-0 bg-stone-250 md:aspect-auto md:w-[268px] lg:w-[280px] min-[90rem]:w-[300px]"
           >
-            {coverImageUrl ? (
-              // The vendor's own photograph on a bucket host `next/image` would
-              // need configured per vendor.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={coverImageUrl} alt="" className="block size-full object-cover" />
-            ) : (
-              /*
-                The image ground and nothing else. The word "cover" set in a
-                micro-label was addressed to whoever built the page rather than
-                to the customer reading it — the same ruling the search card
-                takes (D16/D17). The vendor fixes this in the storefront
-                editor, #360.
-              */
-              <div data-slot="coverless" className="size-full bg-stone-250" />
-            )}
+            {/*
+              The vendor's own photograph on a bucket host `next/image` would
+              need configured per vendor — and, absent or failed, the image
+              ground and nothing else. The word "cover" set in a micro-label was
+              addressed to whoever built the page rather than to the customer
+              reading it — the same ruling the search card takes (D16/D17). The
+              vendor fixes this in the storefront editor, #360.
+
+              Failure lands in the same place as absence (#422): the wrapper
+              already paints `stone-250`, so a block over it is the same colour,
+              and what changes is that a 404'd key no longer draws a broken
+              glyph on top of the ground.
+            */}
+            <FallbackImage
+              src={coverImageUrl}
+              alt=""
+              className="block size-full"
+              imageClassName="object-cover"
+            />
           </div>
         </div>
 

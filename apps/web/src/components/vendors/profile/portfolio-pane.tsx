@@ -4,6 +4,7 @@ import type { WirePortfolioItem } from '@/lib/wire-schemas';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FallbackImage } from '@/components/ui/fallback-image';
 
 export interface PortfolioPaneProps {
   /*
@@ -174,11 +175,22 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
               className="block w-full cursor-zoom-in overflow-hidden rounded-xl"
               aria-label={item.caption ?? `Open image ${index + 1} of ${items.length}`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.thumbnailUrl ?? item.imageUrl ?? ''}
+              {/*
+                A masonry tile takes its height from the photograph's own
+                ratio, so a fallback that only said `w-full` would be a
+                zero-height box — the failure `web-design-parity.md` names
+                outright. The block therefore states 4:3, the ratio the
+                vendor's own portfolio manager draws its tiles at; the
+                photograph keeps its natural one.
+              */}
+              <FallbackImage
+                src={item.thumbnailUrl ?? item.imageUrl}
                 alt={item.caption ?? ''}
-                className="w-full bg-stone-200 object-cover transition-transform duration-(--duration-base) motion-safe:hover:scale-[1.02]"
+                className="w-full transition-transform duration-(--duration-base) motion-safe:hover:scale-[1.02]"
+                /* `bg-stone-200` is the *photograph's* ground while it loads;
+                   the block has its own, ruled at `stone-250`. */
+                imageClassName="bg-stone-200 object-cover"
+                fallbackClassName="aspect-[4/3]"
               />
             </button>
           </li>
@@ -233,12 +245,19 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
             </>
           ) : null}
 
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={open.imageUrl ?? ''}
+          {/*
+            The lightbox has no box of its own — the photograph sizes it — so
+            the fallback states one rather than collapsing the dialog to
+            nothing. `object-contain` is the photograph's business, not the
+            block's.
+          */}
+          <FallbackImage
+            src={open.imageUrl}
             alt={open.caption ?? ''}
             onClick={(event) => event.stopPropagation()}
-            className="max-h-full max-w-full rounded-lg object-contain"
+            className="max-h-full max-w-full rounded-lg"
+            imageClassName="object-contain"
+            fallbackClassName="aspect-[4/3] w-full max-w-[640px]"
           />
         </div>
       ) : null}

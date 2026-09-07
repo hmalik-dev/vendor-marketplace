@@ -29,3 +29,4 @@
 - [Relaxation clears half a paired filter](review-checklist-relaxation-clears-half-a-paired-filter.md) — `Anywhere` patches `city` only, leaves `state=IL`, then empties the escape list; apply the patch and re-run toSearchQuery
 - [isDirty gate locks the escape hatch](review-checklist-isdirty-gate-locks-the-escape-hatch.md) — clear a `min(2)` field: the form is dirty AND unsavable, so the switch gated on `!isDirty` never re-enables. Presence is not usability
 - [Ceiling counted over a stale lookup](review-checklist-ceiling-counted-over-a-stale-lookup.md) — fixing the add side leaves `categoryOf(id)` undercounting ids the selection outran; render with an id absent from `allTags` and fill the category
+- [focus()-opener is dead when already focused](review-checklist-focus-opener-dead-when-already-focused.md) — a new affordance in `combobox-field` opens via `inputRef.focus()`; after Escape or a keyboard commit that fires nothing. Drive open→Escape→click

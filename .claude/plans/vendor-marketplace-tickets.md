@@ -246,13 +246,14 @@ the silent-submit work #388 closed:
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
-| **422** | **One image fallback, everywhere — a broken image must degrade the way an absent one does** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `storage` | **Filed 2026-09-06 on the account holder's instruction**, verbatim: *"there should always be a fallback image for a broken or blank image no matter where - card, profile pic, etc. anywhere pictures are used"*. **The design already exists and is ruled** — D17 and D18, drawn in frame `26 State library`: a **neutral tone block** at `stone-250 #ece6dc`, the image's exact dimensions and the container's radius, nothing inside it. The token is already minted. **What is missing is the failure half.** The app handles *absent* — a published vendor with no `coverImageUrl` gets the block — but **nothing anywhere handles a load failure**: `grep onError` across `avatar.tsx`, `stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx` and `portfolio-pane.tsx` returns nothing. A URL that exists and 404s, a bucket that is down, or a category card whose file was never shipped all render a browser-broken-image glyph on a public page. **The hatch is not the answer** — `03-components.md` and D17 both forbid it on a live surface. One shared mechanism, applied at every site that renders an image |
 | **423** | **Hold the money until the event has happened — separate charges and transfers, a dated release, and a dispute hold** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-06 on the account holder's ruling.** Today checkout is a **destination charge**: `transfer_data.destination` splits the money the instant the card succeeds, so a vendor booked for an event in March is paid in January and `createRecipientAccount` sets no payout schedule. **Replaces it with separate charges and transfers**, the Airbnb model adapted to single-day events: the customer pays into **Orla's** balance, and a scheduled job transfers the vendor's share **a fixed window after the event date** — not when anyone clicks a button. **The release is keyed to the date, never to a party's action:** the vendor is the one who benefits from marking a booking complete, so it proves nothing, and a vendor who forgets would strand the money forever. **A customer complaint pauses the release** — `disputed` already exists in `BOOKING_STATUSES` and is unused. **This also simplifies refunds:** before release nothing has been transferred, so a cancellation is a plain refund with no `reverse_transfer` and no way to push a vendor negative, which is the consequence D31 had to accept. **This is the money path — the bar is that every test drives the real state machine, not a mock that agrees with itself.** #416 shipped a refund that had never once worked, for months, because the double was more permissive than the gateway |
 | **424** | **Vendor dashboard: a pending payout with a real date, and an honest held state** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** — it owns the release date, the held state and the API read this surface renders | `core` `stripe` | **Filed 2026-09-06 on the account holder's instruction**, split out of #423 so the money mechanics and the surface that reports them are separate reviewable units. The dashboard's payout line reads **`Paid out after each event`** — a dateless sentence chosen in #308 precisely because there was no payout schedule to read a date from. **#423 creates one.** This ticket replaces the sentence with a real amount and a real date, and says so when a dispute is holding it. **Every number here is read from the booking row at request time** — the amount is the stored `vendorPayoutCents`, never a recomputed fee, and the date is derived from the event date and `PAYOUT_RELEASE_HOURS`. **A payout figure that disagrees with what Stripe moves is worse than no figure at all**, which is why this carries the same testing bar as #423 rather than a lighter one |
 | **425** | **A customer has no way to report a problem with a booking** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** (owns the `disputed` hold and the release window a report has to land inside) | `core` | **Filed 2026-09-06 on the account holder's instruction.** Measured first: **nothing in the web app lets a customer raise anything about a booking** — no dispute control, no `Report a problem`, no route — and **nothing anywhere writes `disputed`**, which appears only in read predicates in `customers.dao.ts` and `dashboard.dao.ts`. So the status #423 uses as its payout hold has no way to be reached by the person it exists for. Adds the entry point on the customer's booking, routed to **`/support` prefilled with that booking's context** — the pattern #421 already built for frame `16`, where an error's digest travels in `searchParams` and renders as attached, non-editable context. **The report is what places the hold**, so this is on the money path and carries the same testing bar: a report that silently fails to hold a payout is worse than no button |
+| **427** | **Legal and money surfaces — the three static pages, the vendor agreement step, and the refund schedule at checkout** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#423** for the two claims that depend on it: `/terms` section 4 describes the hold-until-event mechanism, and the payout interval must read #423's constant rather than a second one | `core` `auth` `stripe` | **Filed 2026-09-06 with a full design.** The account holder supplied `design/delta-legal/` — `Orla-Legal-Surfaces.html` (frames **31, 32, 33**) and `LEGAL-SURFACES-PROMPT.md` — and asked for one ticket. **Frames 31-33 are NOT in `Orla - Screens.dc.html`**, which ends at 28, so the parity gate reads the delta bundle. Builds: a `LegalPage` reading layout that does not exist yet (the page scrolls, not a pane; 660px measure; 15px/1.85 prose), `/terms`, `/privacy` and `/cookies`, a sticky jump rail, a footer legal line, the **vendor agreement as step 3 of 5 in onboarding** with an immutable acceptance record, and the **refund schedule resolved into real dates and amounts above the pay control**. **THE SCHEDULE IN THE DESIGN CONTRADICTS THE CODE and must not ship as drawn** — see the detail section; the design says so itself |
+| **428** | **Landing: a vendor-only closing band for signed-out visitors, a signed-in customer landing, and the footer** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-06 with a design.** `design/LANDING-BAND-CHANGE-PROMPT.md` and `design/Orla-Screens-all.html` **section 30, `Landing — full page, scrolled out`**, which draws the signed-out and signed-in pages side by side. **Four changes, one scope: the landing closing band, the signed-in variant of `/`, and the footer.** Roles are exclusive and that decides routing — a signed-in **vendor** hitting `/` redirects to `/dashboard` and never sees the marketing page; a **customer** stays and gets the signed-in variant. **Confirmed already true for sign-in itself:** `POST_SIGN_IN_PATH_BY_ROLE` maps `customer: '/'` and `vendor: /vendor/dashboard`, so the new work is the `/` redirect and the header logo target, not the sign-in path. The closing band becomes **vendor-only and signed-out-only**, with **no pricing figures** — deliberately removed, see the detail. **`/for-vendors` is a new page this depends on**; if it is not built here, both controls fall back to `/sign-up?role=vendor` with a named TODO |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #423-#425 were filed: 7 rows — 5 Backlog and 2 `Deferred — needs a human`.** Startable now: **#422** and **#423**. #424 and #425 both wait on #423, which owns the release date and the `disputed` hold they read; #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #426 landed and #428 was filed: 8 rows — 6 Backlog and 2 `Deferred — needs a human`.** Startable now: **#428**. #423 is in flight, and #424, #425 and #427 all wait on it — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. Startable now: **#423**. #424, #425 and #427 all wait on #423 — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1011,83 +1012,6 @@ is **correct as built** — frame `02` draws `$500 – $3,200 ▾` for a range a
 header submit's `ring-offset-0` is deliberate and tracked under #306/#73, now
 re-reported six times by successive passes.
 
-### #422: One image fallback, everywhere — a broken image must degrade the way an absent one does
-
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
-**Blocked by:** None
-
-**Filed 2026-09-06 on the account holder's instruction**, verbatim: *"there
-should always be a fallback image for a broken or blank image no matter where -
-card, profile pic, etc. anywhere pictures are used"*.
-
-#### The design is already ruled — do not invent one
-
-**D17 and D18, drawn in frame `26 State library`.** A **neutral tone block**:
-
-- `stone-250` **`#ece6dc`** — already minted in `packages/config/tailwind/theme.css`,
-  commented *"image ground — behind every cover, and a coverless one"*;
-- the image's **exact dimensions** and the container's own radius;
-- **nothing inside it.** No hatch, no monospace label, no upload prompt, no icon.
-
-**The hatch is explicitly forbidden here.** `03-components.md` and `40-states.md`
-both say so: it is a build-time device for photography *the product* lacks, and
-showing it on a live surface reads as an unfinished product rather than an
-unfinished profile. *"The person reading is not the person who can fix it."*
-
-The avatar has its own ruled fallback and it is **not** this block:
-`--color-clay-150 #eadccb` behind a monogram, in Instrument Sans below the 16px
-serif floor (D24). Keep that; do not replace avatars with tone blocks.
-
-#### What is actually missing — the failure half
-
-The **absent** case is handled: a published vendor with no `coverImageUrl` gets
-the block, per D17.
-
-The **failure** case is handled nowhere. `grep onError` across `avatar.tsx`,
-`stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx` and
-`portfolio-pane.tsx` returns **nothing**. So today:
-
-- a stored key whose object is gone renders the browser's broken-image glyph;
-- an R2 outage renders it on every card at once;
-- `StockPhoto` is a `next/image` with no fallback, so a category file that was
-  never shipped is a broken front door — **found 2026-09-06** when `carts` had
-  no art, and guarded since by `landing-category-art.test.ts`.
-
-**An absent image and a failed one look identical to the person reading.** They
-must therefore land in the same place.
-
-#### Where it has to apply
-
-Every site that renders an image. At filing these were `avatar.tsx`,
-`stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx`, `portfolio-pane.tsx`,
-`photo-cluster.tsx`, `image-upload.tsx`, `portfolio-manager.tsx`,
-`bookings-hub.tsx` and `request-summary-rail.tsx` — **re-grep rather than trust
-that list**, and prefer one shared mechanism over ten call sites each remembering
-to handle it.
-
-Note the two rendering paths differ and both need covering: `next/image` (the
-stock and category art) and plain `<img>` (bucket content, which skips
-`next/image` deliberately because the host changes between environments).
-
-#### Acceptance
-
-1. An image that fails to load renders the ruled fallback for its kind — tone
-   block for covers and card art, monogram for avatars — not a browser glyph.
-2. An absent image and a failed one are indistinguishable to the reader.
-3. The fallback holds the element's exact dimensions, so nothing reflows when a
-   load fails.
-4. No hatch and no developer-facing label on any public surface.
-5. One shared mechanism; a new image site inherits it without opting in.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, each watched failing first.
-- [ ] **Drive an actual load failure**, not a nulled prop. A test that passes a
-      missing `src` proves the *absent* path, which already works — point a real
-      `src` at something that 404s. The whole defect is that the two paths differ.
-- [ ] Assert extent alongside the fallback: a tone block on a zero-height box has
-      passed on nothing (`web-design-parity.md`).
-
 ### #423: Hold the money until the event has happened — separate charges and transfers, a dated release, and a dispute hold
 
 **Milestone:** M4.5 | **Phase:** P1.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `stripe`
@@ -1178,7 +1102,11 @@ delete the unwind — a booking cancelled after release still needs it.
   `payout_released_at`, or a small enum) rather than inferring it from
   `stripeTransferId` being non-null, so a failed transfer is distinguishable
   from one never attempted.
-- `PAYOUT_RELEASE_HOURS` as a named constant beside the refund tiers.
+- `PAYOUT_RELEASE_HOURS` as a named constant beside the refund tiers. **D32
+  sets it to `72`** — three days after the event date, calendar hours not
+  business days. It is a constant so the release job, the dispute window, the
+  vendor agreement, `/terms` and the dashboard's pending date all move
+  together; **no surface hardcodes an interval**.
 
 #### Acceptance
 
@@ -1270,11 +1198,19 @@ machine rather than asserted against a mock.
 
 #### Rulings the account holder still owes, if they surface
 
-- **`PAYOUT_RELEASE_HOURS`** — 24 or 48. Airbnb uses ~24 after check-in.
+- ~~**`PAYOUT_RELEASE_HOURS`**~~ — **RULED 2026-09-06 as D32: `72`.** Not a
+  number to pick. Airbnb's ~24h is measured from *check-in* on a multi-night
+  stay, where the guest has had the service for days before the clock starts; a
+  single-day event has no such head start. 72 also guarantees a working weekday
+  between a Friday/Saturday/Sunday event and its release. **The reason it is not
+  48**: under D31 a dispute *after* release is a transfer reversal that can push
+  a vendor negative, and before release it is a clean refund — so the extra day
+  protects the vendor from the worst failure in this path, not just the
+  customer. Calendar hours, not business days. Read D32 before changing it.
 - **Whether Orla holding customer funds** raises a compliance question in the
   jurisdictions it operates in. Separate charges and transfers is a standard,
   supported Connect pattern, but the platform becomes responsible for negative
-  balances. Flag it; do not decide it in code.
+  balances. **Still open — flag it; do not decide it in code.**
 
 ### #424: Vendor dashboard — a pending payout with a real date, and an honest held state
 
@@ -1412,3 +1348,347 @@ made.
       admin, signed out.
 - [ ] A browser pass driving the entry point through to the placed hold, and a
       check that #423's release job then skips that booking.
+
+### #427: Legal and money surfaces — three pages, the vendor agreement step, and the refund schedule at checkout
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
+**Blocked by:** **#423**, for the two claims that depend on it.
+
+**Filed 2026-09-06 with a full design**, supplied by the account holder, who
+asked for one ticket covering all of it.
+
+#### Where the design is
+
+`design/delta-legal/` — `Orla-Legal-Surfaces.html` (**frames 31, 32, 33**) and
+`LEGAL-SURFACES-PROMPT.md`, which is the spec and is unusually specific about
+measurements. **Frames 31-33 are not in `design/Orla - Screens.dc.html`**, which
+ends at `28 Dropdown variants`, so the parity gate for this ticket reads the
+delta bundle. Same six axes, same 1440x900, and the literal strings are the
+design.
+
+The prompt is written as three sequential prompts. **They are one ticket here at
+the account holder's request**, but the prompt's own ordering holds: the reading
+layout first, because it is the only part introducing new primitives.
+
+#### ⚠️ The refund schedule in the design contradicts the code
+
+**This is the one thing that must not ship as drawn.** The design's checkout block
+states: full refund 30+ days out · 50% in a middle window · **non-refundable**
+from a boundary date.
+
+The code enforces something different, and simpler:
+
+- `FULL_REFUND_CUTOFF_HOURS = 48` — full refund up to 48 hours before the event;
+- `LATE_CANCELLATION_REFUND_RATE = 0.5` — 50% inside that;
+- **there is no non-refundable tier at all.**
+
+`LEGAL-SURFACES-PROMPT.md` says so itself: *"The schedule itself is a guess. 30
+days / 50% / non-refundable is a plausible events-industry default, not something
+in the plan."*
+
+**#374 names this exact failure as the one that loses a dispute:** *"A policy that
+promises something the code does not do is the one failure mode here that creates
+a dispute the platform loses."* So either the constants change to match the
+design, or the block renders the constants. **Do not ship a checkout block whose
+numbers the refund code will not honour**, and do not resolve it by quietly
+editing the design.
+
+#### Dependencies on #423
+
+- `/terms` section 4 carries **the hold-until-event mechanism**. That mechanism is
+  #423's, and until it lands the section would describe behaviour the product does
+  not have.
+- **Payout timing must read one constant.** The design says *"Event + 2 days"* in
+  three places and asks for a single config value; #423 introduces
+  `PAYOUT_RELEASE_HOURS`. Use that one — do not add a second.
+
+#### What to build
+
+**1. `LegalPage` layout** — new, and unlike every other screen: **the page
+scrolls, not a pane.** 660px measure, 52px top padding, prose **15px/1.85** in
+`stone-800 #3A352E` (explicitly *not* the app's 13.5px body), numbered Instrument
+Serif 24px headings, a required last-updated line, `text-wrap: pretty`.
+**Section numbers are load-bearing** — Stripe, vendors and support cite them.
+
+**2. Jump rail** — 212px sticky column, `IntersectionObserver` for the active
+section, **rendered only at 6+ top-level sections**. `/terms` and `/privacy` get
+it; `/cookies` must not render an empty column. **Heading slugs are public URLs
+people paste into email** — stable, never counter-generated.
+
+**3. Three content blocks and no more** — emphasis panel, data table (reuse the
+admin idiom), sage note.
+
+**4. The three pages.** `/terms` 11 sections; `/privacy` with the data map table
+whose rows are the real stack (Stripe, Clerk, R2, Orla); `/cookies` deliberately
+thin. **No consent banner, modal or stored consent state** — I verified this
+independently on 2026-09-06: the tree sets no cookies of its own and loads no
+analytics, gtag, PostHog, Segment or Hotjar. A banner would be theatre.
+
+**5. Copy lives in `content/legal/*.md`** with the last-updated date in
+frontmatter, read by the page. **It is placeholder copy, not reviewed legal
+text** — ship it as such, trivially replaceable.
+
+**6. Footer** — a thin bottom line under the existing grid, `Terms · Privacy ·
+Cookies` left, `© Orla 2026` right. **Not a fifth column.**
+
+**7. Vendor agreement — step 3 of 5 in onboarding, not a page.** The order is
+deliberate: it precedes Stripe Connect so commission and payout timing are agreed
+before a payout rail exists. Four-terms display panel, full agreement clipped to
+150px with expand-in-place (**no modal, no navigation** — onboarding state must
+survive), accept checkbox **naming the business**, disabled until ticked.
+
+**8. Acceptance is an immutable record.** One row per acceptance —
+`vendor_id`, `document`, `version`, `accepted_at`, `accepted_by_user_id`,
+`accepted_by_name`, `business_name`, `ip`, `user_agent`. **No updates, no
+deletes.** A new version adds a row. The PDF renders the stored version, not the
+current one.
+
+**9. Refund schedule at checkout** — between the summary card and the pay button,
+**resolved into this booking's real dates and amounts**, not abstract percentages.
+Same component later reused on the confirmation screen and, in the customer hub,
+showing **only the row that applies today**.
+
+#### Acceptance
+
+1. `/terms`, `/privacy`, `/cookies` render under `LegalPage` and match frames
+   31-33 on all six axes at 1440x900.
+2. The jump rail appears on `/terms` and `/privacy` and **not** on `/cookies`,
+   which re-centres its measure rather than leaving an empty column.
+3. Heading ids are stable and derived from the heading text; a test pins at least
+   `#cancellations-and-refunds`.
+4. Copy is read from `content/legal/*.md` and the displayed date comes from
+   frontmatter — changing the date requires no JSX edit.
+5. The footer legal line appears on every page carrying the footer, as a line and
+   not a column.
+6. **No cookie consent mechanism exists anywhere** — asserted, not just absent.
+7. Vendor agreement is step 3 of 5, before Stripe Connect, with the step rail
+   showing `Step 3 of 5`.
+8. `Accept and continue` is disabled until the checkbox is ticked, and the
+   checkbox label names the business.
+9. Accepting writes exactly one immutable row; a second acceptance of the same
+   version does not overwrite the first.
+10. A vendor cannot take payments until accepted.
+11. An out-of-date accepted version raises the dashboard blocker banner.
+12. The checkout block renders **computed dates and amounts** from
+    `booking.eventDate` and the booking total — asserted on specific values.
+13. **The checkout block's tiers equal what `calculateRefund` would actually
+    return** for the same booking. This is the acceptance that prevents the
+    dispute #374 warns about.
+14. **No page, panel or email states a non-refundable window**, because none
+    exists. Asserted by searching the rendered copy, not by reading it.
+15. Every number in the legal copy — 12%, 48 hours, 50%, 7 days, the payout
+    interval — **resolves from the constant, not from a literal in the
+    markdown**. A test changes a constant and asserts the rendered page follows.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing before and passing after.
+- [ ] **AC 13 is the one that matters most**: assert the rendered schedule against
+      the refund function's own output, not against a hardcoded expectation. If
+      they can disagree, they eventually will.
+- [ ] **AC 15 is how the copy stays true after this ticket.** A page that hardcodes
+      "12%" in markdown is correct today and wrong the first time the rate moves.
+      The test that proves it: change the constant, re-render, assert the page
+      changed with it.
+- [ ] Immutability tested by attempting an update and a delete, not by inspecting
+      the schema.
+- [ ] Authorisation on the agreement step per role: the vendor it belongs to,
+      another vendor, a customer, admin, signed out.
+
+#### The copy is placeholder — these facts are not
+
+**Ruled 2026-09-06.** The account holder gave explicit authority to make the copy
+match the mechanics rather than ship the design's placeholder wording: *"the
+terms design text is currently a placeholder — what we discussed is the concrete
+and you have authority to ensure the text matches what we discussed."*
+
+**Still not reviewed legal text.** It ships from `content/legal/*.md` as
+replaceable placeholder, and that has not changed. What has changed is that
+**every factual claim in it must now be true of this codebase**, and a sentence
+that contradicts the table below is a defect, not a wording preference.
+
+| Claim the copy may make | Value | Source of truth |
+| --- | --- | --- |
+| Platform commission | **12%** | `DEFAULT_PLATFORM_FEE_RATE = 0.12` |
+| Full refund | cancel **48 hours or more** before the event | `FULL_REFUND_CUTOFF_HOURS = 48` |
+| Late cancellation | **50%** refunded | `LATE_CANCELLATION_REFUND_RATE = 0.5` |
+| Non-refundable window | **there is none** | no such tier exists in the code |
+| Vendor cancels | customer refunded in full, no commission retained | D31 |
+| Refund after payout release | full unwind — vendor returns their share, Orla returns its commission | D31 |
+| Money before the event | held by **Orla**, not the vendor | #423 |
+| Release trigger | a fixed window **after the event date** — never a vendor action | #423 |
+| Payout interval | **72 hours after the event date** — `PAYOUT_RELEASE_HOURS`, one constant, three render sites | **D32** |
+| Unanswered request | expires after **7 days** | `BOOKING_REQUEST_EXPIRY_DAYS = 7` |
+| A dispute | **pauses** the payout release | #423 / #425 |
+
+**Three of the design's open questions are now closed by that ruling:**
+
+1. **The refund schedule is the code's, not the design's.** `30 days / 50% /
+   non-refundable` does not ship. The tiers are **48 hours / 50%**, and there is
+   **no non-refundable window** — so the checkout block has three rows and a
+   vendor-cancels row, not four tiers ending in "non-refundable".
+2. **Platform-wide, not per-vendor.** The tiers are constants today and stay
+   constants. Per-vendor policy is Post-MVP: it would grow a profile field, need
+   referencing from the agreement, and belong on the search card.
+3. **The "non-refundable releases the full amount" question is moot** — there is
+   no non-refundable tier for it to be about.
+
+**Two remain genuinely open and must not be answered silently:**
+
+- ~~**`PAYOUT_RELEASE_HOURS` itself.**~~ **RULED 2026-09-06 as D32: `72` hours**
+  — three days, calendar not business. The design's *"Event + 2 days"* is
+  superseded; **every surface reads the constant** and none states an interval of
+  its own. The four-terms panel's `Event + 2 days` becomes the value D32 sets.
+- **Whether Orla holding customer funds** raises a compliance question in the
+  jurisdictions it operates in. Flag it; do not decide it in code.
+
+**Cut, not asked:** the design's *"repeated cancellations can end your listing"*.
+Nothing in the plan describes an enforcement process, and a threat that cannot be
+executed is worse than silence. Remove the sentence.
+
+#### Section-level consequences of the above
+
+- **`/terms` section 4** describes the hold: the customer pays Orla, Orla holds
+  the money, and the vendor is paid a fixed window after the event date. It states
+  the **12%**. It must not describe payment as reaching the vendor at checkout,
+  which is what happens today and what #423 changes.
+- **`/terms` section 5** defers the schedule to checkout by reference and
+  **restates no numbers** — that is already in the design and it is right, because
+  two copies drift.
+- **The vendor agreement's four-terms panel** takes its commission and payout
+  timing from the same constants, not from prose written beside them.
+
+### #428: Landing — a vendor-only closing band for signed-out visitors, a signed-in customer landing, and the footer
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-06 with a design.** `design/LANDING-BAND-CHANGE-PROMPT.md` is the
+spec; the frames are in **`design/Orla-Screens-all.html`, section 30 — `Landing —
+full page, scrolled out`**, which draws the signed-out and signed-in pages side by
+side with the band's notes.
+
+**Scope is the landing closing band, the signed-in variant of `/`, and the
+footer. Nothing else.** The prompt says so twice and means it: *"Every other
+screen, component and token is correct as built — do not touch, refactor,
+'improve', or reformat anything outside this scope."*
+
+#### Read this before opening the new design file
+
+**`Orla-Screens-all.html` is a bundled page, not plain HTML.** Its frames carry
+`data-screen-label` as before, but **escaped inside a JavaScript string**
+(`\"01 Landing\"`, `/` for `/`). So the grep every previous ticket used —
+`data-screen-label="01 Landing"` — **finds nothing**, and a lane concluding the
+frame is missing would be wrong. Open it in a browser, or unescape before
+searching.
+
+**The old file is still present and still referenced.** The prompt's own header
+points at `Orla - Screens.dc.html`, and **30 files reference it** — `CLAUDE.md`,
+eleven `design-plan/` specs, five agent memories, `playwright.config.ts` and the
+tracker. The account holder has said it may be removed. **Removing it is not part
+of this ticket**: it is a repo-wide rename touching every one of those
+references, and doing it inside a landing change would bury it. File it or do it
+separately, deliberately.
+
+#### Change 1 — Roles are exclusive, and that decides who sees `/`
+
+- A signed-in **vendor** at `/` is redirected to `/dashboard`; the marketing
+  landing never renders for them, and **the header logo points at `/dashboard`**
+  for a vendor.
+- A signed-in **customer** stays on `/` and gets the signed-in variant.
+- A signed-out visitor gets the page as built, with Change 2's band.
+
+**Already true, verified 2026-09-06 — do not rebuild it:**
+`POST_SIGN_IN_PATH_BY_ROLE` in `apps/web/src/lib/role-routes.ts` maps
+`customer: '/'` and `vendor: DASHBOARD_PATH_BY_ROLE.vendor`, and `postSignInPath`
+honours a safe `returnTo` over both. **The new work is the redirect for a vendor
+who reaches `/` some other way**, plus the logo target.
+
+**Do not add a role switcher** or any affordance implying one account holds both
+roles. A customer who wants to sell needs a separate account.
+
+#### Change 2 — The closing band is vendor-only, and signed-out only
+
+Replaces today's two-column customer/vendor fork with a **single vendor band**.
+The reasoning, recorded so it does not drift back: *the customer half was
+redundant — the hero is a live search bar, so a button whose only job is to
+scroll you back to it earns nothing.*
+
+Composition, copy and the three numbered mechanism steps are specified exactly in
+the prompt. Build from it.
+
+**No pricing figures in this band — deliberately removed, do not reintroduce.**
+Two structural reasons, both worth keeping: commission is a *conversion* number,
+not an acquisition one, and **customers read this same page** — *"Orla takes 12%"*
+invites a customer to conclude a vendor charges more here than direct, which is
+backwards and undercuts the *No service fee* trust item three sections above. The
+commission belongs on `/for-vendors` and in the vendor agreement (**#427**).
+
+**`/for-vendors` is a new page this change depends on.** Both band controls and
+the nav's *For vendors* link point there. Today they drop a vendor into a signup
+form, so a vendor first learns the commission at step 3 of onboarding — after
+creating an account. **If the page is not built in this pass, point both at
+`/sign-up?role=vendor` and leave a TODO naming `/for-vendors`. Do not invent a
+different destination.**
+
+#### Change 3 — The signed-in landing
+
+**The hero is unchanged.** Do not re-cut it.
+
+**Add** a 60px status strip between header and hero, derived from **real data**:
+sage dot for the next booking, gold dot for a request waiting. `40-states.md`
+colour law applies — sage is settled, gold is waiting on someone. **Render only
+the items that exist, and omit the strip entirely** when there are neither.
+
+**Remove for signed-in customers:** *How it works* (explains a process they have
+completed), *Featured vendors*, and the closing band.
+
+**Keep the trust band** — a deliberate reversal of an earlier note that cut it —
+with copy **resolved against the customer's actual booking**, falling back to the
+generic signed-out copy when there is none.
+
+**How the page ends matters:** with the closing band gone the trust band is the
+last block, and the ramp is hero gradient → `#F8F5EF` → `#F4F0E8` trust band →
+`#1C1916` footer. **Keep the trust band on `#F4F0E8`** so the footer arrives as
+the bottom of a ramp rather than a hard cut.
+
+#### Change 4 — Footer, every page, both auth states
+
+Ground drops `#23201C` → **`#1C1916`** so it recedes beneath the band rather than
+reading as one 400px dark mass. Micro-labels **`#8C8375`** — *"Do not use anything
+darker — `#7A7266` was tried and fails contrast at 10.5px."* Account column
+differs by auth state; **drop `Dashboard` when signed out** — a visitor has no
+dashboard.
+
+**The legal row is the same row #427 adds.** If #427 has landed first, leave it.
+Coordinate rather than building it twice, and **not a fifth column.**
+
+#### Acceptance
+
+1. A signed-in vendor reaching `/` lands on `/dashboard` and never renders the
+   marketing page; their header logo points at `/dashboard`.
+2. A signed-in customer gets the signed-in variant; a signed-out visitor gets the
+   band.
+3. The closing band renders for **signed-out visitors only**, is vendor-only, and
+   contains **no pricing figure** — asserted by searching the rendered output.
+4. Both band controls and the nav link share one destination, and it is
+   `/for-vendors` or the documented fallback — never two different targets.
+5. The status strip derives from real data, omits absent items, and disappears
+   entirely with no bookings and no open requests.
+6. *How it works*, *Featured vendors* and the closing band are absent for a
+   signed-in customer; the trust band is present and is the last content block.
+7. Trust-band copy resolves against the customer's booking and falls back
+   cleanly when there is none.
+8. Footer ground, label colour and account column match per auth state, and the
+   legal row exists exactly once.
+9. Section 30 matches on all six axes at 1440x900, both states.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing first.
+- [ ] **Both auth states driven in a browser** — this ticket is defined by the
+      difference between them, so a signed-out-only pass proves half of it.
+- [ ] The no-pricing-figure assertion searches rendered output rather than
+      reading the source, because the figure could arrive through a constant.
+- [ ] Contrast asserted on the new footer values — the prompt names `#7A7266` as
+      already tried and failing at 10.5px.

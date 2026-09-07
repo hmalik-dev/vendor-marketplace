@@ -329,3 +329,45 @@ describe('ImageUpload, when the server refuses the upload', () => {
     expect(document.body.textContent).not.toContain('10.0.0.4');
   });
 });
+
+/*
+ * #422's exception, held to what it claims.
+ *
+ * `image-sites.test.ts` whitelists this file because the upload preview is the
+ * *evidence a vendor's own upload arrived* — a silent tone block there would
+ * tell them it worked. That reasoning covers an upload in flight and nothing
+ * else, and `src` is the vendor's **saved** photograph on first render: a 404
+ * on a stored object used to be swallowed outright, leaving this one zone
+ * drawing the browser glyph while the same photo's card drew the tone block.
+ * Found by `diff-reviewer`.
+ *
+ * The zone's own empty state is the ruled answer here rather than a tone
+ * block: this is the surface where the photograph can actually be replaced.
+ */
+describe('ImageUpload, when a saved photograph no longer resolves', () => {
+  it('falls back to the empty zone rather than a broken-image glyph', async () => {
+    render(<Controlled initialValue="vendor-profile/abc.jpg" />);
+
+    fireEvent.error(await shownPreview());
+
+    await waitFor(() => {
+      expect(document.querySelector('img')).toBeNull();
+    });
+    expect(screen.getByText('Drop a photo or browse')).toBeDefined();
+  });
+
+  it('invites a replacement rather than reporting an upload failure', async () => {
+    render(<Controlled initialValue="vendor-profile/abc.jpg" />);
+
+    fireEvent.error(await shownPreview());
+
+    /*
+     * `previewFailure()` is about an upload that did not settle. Nothing was
+     * uploaded here, so saying so would be a false account of what happened.
+     */
+    await waitFor(() => {
+      expect(document.querySelector('img')).toBeNull();
+    });
+    expect(screen.queryByText(/upload/i)).toBeNull();
+  });
+});

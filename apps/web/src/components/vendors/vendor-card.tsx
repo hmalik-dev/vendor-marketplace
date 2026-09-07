@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatPrice, type VendorCard as VendorCardData } from '@vendor-marketplace/shared';
 import { Avatar } from '@/components/ui/avatar';
+import { FallbackImage } from '@/components/ui/fallback-image';
 import { cn } from '@/lib/utils';
 
 /**
@@ -226,33 +227,32 @@ export function VendorCard({
             isCompact ? null : 'sm:max-lg:hidden',
           )}
         >
-          {vendor.coverImageUrl ? (
-            // A vendor's own photograph, from a bucket next/image is not
-            // configured per-host for.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={vendor.coverImageUrl}
-              alt=""
-              className="size-full object-cover transition-transform duration-(--duration-slow) motion-safe:group-hover/card:scale-[1.03]"
-            />
-          ) : (
-            /*
-              A published vendor with no cover gets the image ground and
-              nothing else — no hatch, no label, nothing addressed to a
-              developer. The labelled `Placeholder` is a build-time device for
-              photography the *product* lacks; this is *their* missing content
-              shown to *their* customers, and the place to fix it is the
-              storefront editor (#360), not the page the customer reads.
+          {/*
+            A vendor's own photograph, from a bucket next/image is not
+            configured per-host for — and, when there is none *or it fails to
+            load*, the image ground and nothing else: no hatch, no label,
+            nothing addressed to a developer. The labelled `Placeholder` is a
+            build-time device for photography the *product* lacks; this is
+            *their* missing content shown to *their* customers, and the place
+            to fix it is the storefront editor (#360), not the page the
+            customer reads.
 
-              D16/D17, and `40-states.md`'s Missing cover photo group, which
-              draws this block beside the hatch and marks the hatch
-              "never on a public page".
-            */
-            <div
-              data-slot="coverless"
-              className="size-full bg-stone-250 transition-transform duration-(--duration-slow) motion-safe:group-hover/card:scale-[1.03]"
-            />
-          )}
+            D16/D17, and `40-states.md`'s Missing cover photo group, which
+            draws this block beside the hatch and marks the hatch
+            "never on a public page". The failure half is #422: a stored key
+            whose object is gone used to draw the browser's broken-image glyph
+            here, on a public page, while a vendor who never uploaded one got
+            the block.
+
+            The hover transform is on `className` rather than either branch, so
+            the card animates identically whichever one is showing.
+          */}
+          <FallbackImage
+            src={vendor.coverImageUrl}
+            alt=""
+            className="size-full transition-transform duration-(--duration-slow) motion-safe:group-hover/card:scale-[1.03]"
+            imageClassName="object-cover"
+          />
         </div>
 
         <div className={cn('relative', isCompact ? 'px-3.5 pt-3 pb-3.5' : 'px-4 pt-3.5 pb-4')}>

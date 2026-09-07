@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { VendorCard as VendorCardData } from '@vendor-marketplace/shared';
 import { Avatar } from '@/components/ui/avatar';
+import { FallbackImage } from '@/components/ui/fallback-image';
 import { VendorCard } from '@/components/vendors/vendor-card';
 import { cn } from '@/lib/utils';
 
@@ -139,12 +140,18 @@ function ProfilePlacement({ vendor }: { vendor: VendorCardData }): React.ReactEl
         this preview is showing the vendor what a customer will see.
       */}
       <div className="aspect-3/2 overflow-hidden bg-stone-250">
-        {vendor.coverImageUrl === null ? null : (
-          // The vendor's own upload, from a bucket next/image has no per-host
-          // configuration for.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={vendor.coverImageUrl} alt="" className="size-full object-cover" />
-        )}
+        {/*
+          The vendor's own upload, from a bucket next/image has no per-host
+          configuration for. The wrapper above already paints the coverless
+          ground, so the block is the same colour over it — what it removes is
+          the broken glyph a 404'd key drew on top of that ground (#422).
+        */}
+        <FallbackImage
+          src={vendor.coverImageUrl}
+          alt=""
+          className="size-full"
+          imageClassName="object-cover"
+        />
       </div>
       <div className="px-3.5 pb-3.5">
         {/*

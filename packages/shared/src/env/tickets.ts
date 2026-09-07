@@ -516,6 +516,9 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   423: ['stripe'], // funds held on the platform, released on a date, dispute can hold
   424: ['stripe'], // vendor dashboard reads the pending payout and its release date
   425: [], // customer reports a booking problem, which places the payout hold
+  426: [], // caret returns to the vendor-type picker on landing and search
+  427: ['auth', 'stripe'], // legal pages, vendor agreement step, refund schedule at checkout
+  428: ['auth'], // landing band signed-out only, signed-in customer landing, footer
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

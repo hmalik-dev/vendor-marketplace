@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WirePortfolioItem } from '@/lib/wire-schemas';
@@ -159,5 +159,52 @@ describe('PortfolioPane lightbox', () => {
     // The image changed and focus stayed on the arrow the viewer is pressing.
     expect(lightbox().getAttribute('aria-label')).toBe('Photograph 2');
     expect(document.activeElement).toBe(next);
+  });
+});
+
+/*
+ * #422. A masonry tile takes its height from the photograph's own ratio, so a
+ * failed load left the browser's broken-image glyph in a box the grid had
+ * already sized around. The block replaces it *and* states a ratio — a tone
+ * block on a zero-height box has replaced nothing (`web-design-parity.md`).
+ *
+ * jsdom fetches nothing, so `fireEvent.error` stands in for the browser's own
+ * event; `e2e/image-fallback.spec.ts` drives a real 404 in Chromium.
+ */
+describe('PortfolioPane image failure', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('replaces a tile whose photograph 404s with a tone block that has extent', () => {
+    const { container } = render(<PortfolioPane items={items(3)} businessName="Kessler & Co." />);
+
+    fireEvent.error(container.querySelector('img[src*="1-thumb.jpg"]')!);
+
+    const block = container.querySelector('[data-slot="image-fallback"]');
+
+    expect(container.querySelector('img[src*="1-thumb.jpg"]')).toBeNull();
+    expect(block?.className).toContain('bg-stone-250');
+    expect(block?.className).toContain('aspect-[4/3]');
+    expect(block?.textContent).toBe('');
+    /* Only the failed tile is replaced. */
+    expect(container.querySelectorAll('[data-slot="image-fallback"]')).toHaveLength(1);
+    expect(container.querySelectorAll('img')).toHaveLength(2);
+  });
+
+  it('replaces a lightbox photograph that fails with a block of stated extent', async () => {
+    render(<PortfolioPane items={items(1)} businessName="Kessler & Co." />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Photograph 1' }));
+
+    const dialog = screen.getByRole('dialog');
+
+    fireEvent.error(dialog.querySelector('img')!);
+
+    const block = dialog.querySelector('[data-slot="image-fallback"]');
+
+    expect(dialog.querySelector('img')).toBeNull();
+    expect(block?.className).toContain('bg-stone-250');
+    expect(block?.className).toContain('aspect-[4/3]');
   });
 });
