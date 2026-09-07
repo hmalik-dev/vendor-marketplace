@@ -2496,20 +2496,37 @@ process.
 Setting `PORT` over the lane env is the workaround a lane can apply today; those
 two are the actual fix.
 
-#### The preflight assertion, on both axes
+#### The preflight assertion — two checks, at two different times
 
 #435's suggestion, and it is the right home: *"the lane's web app resolves the
-lane's API"* is exactly the class of thing `preflight` exists to assert. It must
-check **both** axes, because the build-time half is independent — a build not
-made through `lane:exec` bakes `localhost:4000` into the bundle and the CSP
-whatever the server env says. #441 measured precisely that: `connect-src` naming
-4000 while SSR correctly resolved 4021. The CSP half is one `curl -sI`.
+lane's API"* is exactly the class of thing `preflight` exists to assert. But it
+is **two questions, not one**, and they are answerable at different moments by
+different means. Both were asked today.
 
-A discriminating probe is required, not a liveness check. #435's first attempt
-proved nothing because both checkouts run `seed-demo` with deterministic ids, so
-the same vendor exists at the same rating in both databases — a check that
-passes on both sides of the question it was asked. The probe has to be an answer
-only one database can give.
+**1. The file shape, at `lane:up`** — *was this lane ever wired correctly?*
+Does `.env.lane` carry `API_URL` at all? Two greps against `.env.lane` and the
+root `.env`, no server, no network. This is what actually settled lane 441: the
+file either has the line or it does not, and unlike anything driven through a
+browser it **cannot be confounded by a starved box**, a cold compile or an
+expired session. Cheapest and most decisive, and it catches the defect before a
+single command runs against the lane.
+
+**2. The resolved origin, at `lane:exec`** — *is this running lane wired
+correctly?* Does the CSP `connect-src` name the lane's API? One `curl -sI`
+against the lane's web port. This is the only one that catches the **build-time**
+half, which is independent of the file: a build not made through `lane:exec`
+bakes `localhost:4000` into the bundle and the CSP whatever the server env says.
+#441 measured exactly that — `connect-src` naming 4000 while SSR correctly
+resolved 4021, on the same server, in the same second.
+
+**A liveness check is not either of them**, and this is where #435's first
+attempt went wrong: it reported that `/vendors/thistle-and-fern` rendered at 4.5
+through its web server as proof the wiring was right. Both checkouts run
+`seed-demo` with deterministic ids, so the **same vendor exists at the same
+rating in both databases** — a check that passes on both sides of the question it
+was asked. The replacement was a discriminating probe: slugs that exist in only
+one database. Whatever this assertion ends up driving, it has to be an answer
+only one of the two can give.
 
 #### Note for anyone regenerating
 
