@@ -533,6 +533,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   440: ['auth', 'stripe'], // operator-initiated refunds and credits — needs a decision first
   441: [], // footer against the newer frame; stone-400 read as text on an ink ground
   442: ['auth'], // check-then-insert race in acceptTerms — needs a ruling on repeat acceptances
+  443: ['auth'], // frame 13 parity residue, incl. two access findings
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

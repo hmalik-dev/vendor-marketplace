@@ -256,6 +256,7 @@ storefront, each of which tells the reader something untrue. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
 | **441** | **The site footer against the newer frame, and the ink-ground text ramp used as a border** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #430's parity pass**, which measured the footer against `design/delta-band/Orla-Closing-Band.html` — a frame #428 never saw, so none of this is a regression. **Nine layout, style and font deviations**: inner padding `py-14` (56px) where the frame draws 40px top and bottom; the column grid is four equal quarters where the frame draws `1.5fr 1fr 1fr 1fr` (419/280/280/280), which puts `Browse` at x=390 against the frame's ≈493; gap 40px vs 34px; the footer wordmark at 32px vs 25px, and its logo mark `29x20` with **unequal** circles (20px filled, 22px outer) where the frame draws `26x17` with two equal 17px circles — so `logo.tsx:50`'s comment that `marketingFooter` is *"absent from every frame"* is now stale, this frame draws it twice; `Contact support` renders `#B8AF9F`/400 where the frame singles it out at `#F8F5EF`/600; link columns 13.5px vs 13px; tagline 13.5px/1.6 vs 13px/1.5; micro-labels at 600 weight and .05em vs 500 and .07em. **And the mechanism #430 fixed in the band, in the two places it survives**: the legal row's hairline is `border-stone-0/10` where the frame draws `rgba(248,245,239,.1)` — `stone-50`, the other end of the ramp — and **`admin-header.tsx:64`** sets `text-stone-400` as text on frame `13`'s inverted `#23201C` ground. `stone-400` is a **border** value: it is drawn on a light ground at thirty-nine sites across the frames and as text on ink at none. `stone-480` (`#d8d0c2`) was added to the ink-ground text ramp in `aac9b3b` and is the token both should read. That is the only admin instance, which is why it rides here rather than in #431–#440 — the ramp is the defect, not the surface. **One access finding with no other checker**: the footer logo link is `88x32`, twelve pixels under `04-laws.md`'s 44px minimum; its `aria-label` is present and correct. **Not in scope**: the `Florals` mismatch in the Browse column is the ruled #419 override, and the band itself is done (#430, `aac9b3b`). |
 | **442** | **A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder: does a second acceptance of a version already held mean one row or two?** | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. The obvious fix — a unique index on `(accepted_by_user_id, document, version)` — **overturns #427's ruling** that a second acceptance of a held version *is* a second row, on the grounds that *"I accepted it twice"* is a true statement about what happened; `legal-acceptance-immutability.test.ts` asserts exactly that today. So the race cannot be closed without first deciding what the record is claiming, which is a product question, not a lane's. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
+| **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #433 landed: 13 rows — 10 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`) and #433 (`ad1b179`) have both landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#439**, **#441** and **#442** are startable unattended today. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
@@ -2098,3 +2099,78 @@ append-only evidence table because the question was never asked.
 - [ ] Both writers covered, in separate cases.
 - [ ] A version-bump case, so the fix is shown not to have closed the door on
       legitimate re-acceptance.
+
+### #443: Frame `13`'s parity residue, including two access findings nothing else checks
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-07 from #433's parity pass**, which returned **MATCH on all six
+axes** for the change it was verifying and correctly declined to attribute these
+six to itself. They are pre-existing drift on the admin console, batched by
+surface rather than filed as six rows.
+
+**Two of them are access findings, and that is why this is not a cosmetic
+ticket.** `web-design-parity.md` says the parity pass is the *only* gate on the
+six accessibility laws in `04-laws.md` and the contrast table in
+`01-foundations.md` — nothing else in this repository verifies either. So an
+access finding that is not filed does not get caught somewhere else later; it
+simply evaporates with the session that found it.
+
+#### The six
+
+**Access — fix these first:**
+
+1. **The search field has an `aria-label` but no visible `<label>`.** A visible
+   label is the requirement; an `aria-label` satisfies a screen reader and leaves
+   a sighted user with a bare box whose purpose is carried only by placeholder
+   text that disappears on focus.
+2. **The row checkbox is 22x44.** `04-laws.md` sets a 44px minimum target and the
+   horizontal axis is half that. The row is already 44px tall, so this is a
+   width fix, not a layout change.
+
+**Style and type:**
+
+3. **The header is 1px short** of the frame.
+4. **The wordmark renders 24px against the frame's 23px.**
+5. **The four filter dropdowns carry a 2px horizontal padding asymmetry** — a
+   vestige of the caret D25 removed. Correct the padding; **do not restore the
+   caret**. D25 has been re-filed four times and `dropdown-caret.test.ts`
+   enforces its absence everywhere except the one exempt file.
+
+**Content:**
+
+6. **The filtered empty state has no CTA.** Every other empty state in the
+   console offers the way out; this one states the condition and stops.
+
+#### Corroborate before building
+
+**D30 binds.** The frames are trustworthy as composition, not as arithmetic, and
+every number above is transcribed from one pass. Read frame `13` at the widths
+either side before changing a measurement — a value disagreeing with both
+neighbours is the middle frame being wrong, not a ladder step.
+
+**Read the live-overrides list in `.claude/rules/web-design-parity.md` first.**
+Frame `13` currently carries three: the `Florals` sample data in its table rows
+and filter pill (#419), the missing `···` on a retired vendor's row (#433), and
+the fourth `Status` dropdown, whose growth #433 measured as acceptable —
+`Export CSV` lands at x=1347.1 against the frame's 1348.1, so the right anchor
+held. None of those is a finding.
+
+#### Acceptance
+
+1. The search field has a visible `<label>`, and the empty state offers a way out.
+2. The row checkbox meets the 44px minimum on both axes.
+3. Header height, wordmark size and dropdown padding match the frame, each value
+   corroborated against the neighbouring widths before it is changed.
+4. The caret is still absent from all four dropdowns — asserted, because
+   "correct the padding" is one edit away from restoring it.
+5. Frame `13` still matches on all six axes at 1440x900, with the three live
+   overrides untouched.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] The two access findings asserted against rendered output, not source — a
+      `className` substring check is not a measurement of a hit area.
+- [ ] The parity pass delegated to `parity-checker`, not eyeballed.

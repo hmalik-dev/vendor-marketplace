@@ -75,10 +75,14 @@ drift.
 - **The notification bell stays.** Frame `02` draws no bell in the signed-in
   cluster; the app has one with real behaviour behind it. The account holder
   ruled _"notification bell is fine as is"_ — the frame predates the feature.
-- **`StatusPill` keeps its sizing.** Frame `13`'s `.pill` is `700 10px` /
-  `5px 10px`; the component computes `700 11px` / `6px 10px`. Ruled _"status
-  pill is fine as is"_ — it is a shared primitive and no frame is worth
-  re-measuring every other pill for.
+- ~~**`StatusPill` keeps its sizing.**~~ **Retired 2026-09-07 — the difference
+  is gone.** This excepted the component computing `700 11px` / `6px 10px`
+  against frame `13`'s `700 10px` / `5px 10px`. It now computes the frame's
+  values exactly: `text-pill` resolves to `10px` (`theme.css:157`), with
+  `py-[5px]`, `px-2.5` and `font-bold`. **An override describing a difference
+  that no longer exists is worse than none** — it sends the next pass hunting
+  for something that is not there. Verified against the component and the token
+  before removal, not taken on report.
 - **The app writes "they".** Frame `04` writes _"the more **she** knows"_.
   Vendor gender is unknown at render time. Ruled _"Pronouns are fine as is..
   the frame is just literally design."_
@@ -99,6 +103,14 @@ drift.
   exist — narrowest first, and the first button is the one the diagnosis names.
   The frame's surviving price-before-date order is an artefact of a filter that
   was removed.
+
+**A retired vendor's row draws no `···` control (#433, ruled 2026-09-07).**
+Frame `13` draws the row-actions control in all fifteen rows. A retired account
+correctly has none: `setUserBanned` answers 404 on a soft-deleted user, so the
+control would open a destructive confirmation dialog for an action that cannot
+succeed. The frame cannot arbitrate this — the retired state postdates it. A
+parity pass reporting the missing control on that row is reading the record of a
+decision, not drift.
 
 **The Florals category no longer exists (#419, ruled 2026-09-06).** It was
 folded into `Decor`, so the taxonomy is ten categories and three frames now
