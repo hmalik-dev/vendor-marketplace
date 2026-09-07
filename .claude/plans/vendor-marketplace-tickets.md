@@ -250,9 +250,11 @@ storefront, each of which tells the reader something untrue. |
 | **423** | **Hold the money until the event has happened — separate charges and transfers, a dated release, and a dispute hold** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-06 on the account holder's ruling.** Today checkout is a **destination charge**: `transfer_data.destination` splits the money the instant the card succeeds, so a vendor booked for an event in March is paid in January and `createRecipientAccount` sets no payout schedule. **Replaces it with separate charges and transfers**, the Airbnb model adapted to single-day events: the customer pays into **Orla's** balance, and a scheduled job transfers the vendor's share **a fixed window after the event date** — not when anyone clicks a button. **The release is keyed to the date, never to a party's action:** the vendor is the one who benefits from marking a booking complete, so it proves nothing, and a vendor who forgets would strand the money forever. **A customer complaint pauses the release** — `disputed` already exists in `BOOKING_STATUSES` and is unused. **This also simplifies refunds:** before release nothing has been transferred, so a cancellation is a plain refund with no `reverse_transfer` and no way to push a vendor negative, which is the consequence D31 had to accept. **This is the money path — the bar is that every test drives the real state machine, not a mock that agrees with itself.** #416 shipped a refund that had never once worked, for months, because the double was more permissive than the gateway |
 | **424** | **Vendor dashboard: a pending payout with a real date, and an honest held state** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** — it owns the release date, the held state and the API read this surface renders | `core` `stripe` | **Filed 2026-09-06 on the account holder's instruction**, split out of #423 so the money mechanics and the surface that reports them are separate reviewable units. The dashboard's payout line reads **`Paid out after each event`** — a dateless sentence chosen in #308 precisely because there was no payout schedule to read a date from. **#423 creates one.** This ticket replaces the sentence with a real amount and a real date, and says so when a dispute is holding it. **Every number here is read from the booking row at request time** — the amount is the stored `vendorPayoutCents`, never a recomputed fee, and the date is derived from the event date and `PAYOUT_RELEASE_HOURS`. **A payout figure that disagrees with what Stripe moves is worse than no figure at all**, which is why this carries the same testing bar as #423 rather than a lighter one |
 | **425** | **A customer has no way to report a problem with a booking** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** (owns the `disputed` hold and the release window a report has to land inside) | `core` | **Filed 2026-09-06 on the account holder's instruction.** Measured first: **nothing in the web app lets a customer raise anything about a booking** — no dispute control, no `Report a problem`, no route — and **nothing anywhere writes `disputed`**, which appears only in read predicates in `customers.dao.ts` and `dashboard.dao.ts`. So the status #423 uses as its payout hold has no way to be reached by the person it exists for. Adds the entry point on the customer's booking, routed to **`/support` prefilled with that booking's context** — the pattern #421 already built for frame `16`, where an error's digest travels in `searchParams` and renders as attached, non-editable context. **The report is what places the hold**, so this is on the money path and carries the same testing bar: a report that silently fails to hold a payout is worse than no button |
+| **426** | **Put the caret back on the vendor-type picker — landing and search only** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the account holder's instruction**, verbatim: *"lets add a caret to the vendor type per the design - both to landing and browser - i removed it before but want it back"*. **This partially reverses D25**, which is the account holder's own override from 2026-08-31 removing `▾` from fourteen trigger sites — so it is a ruling changing, not a parity finding, and the reversal has to be recorded as deliberately as the original was. Frames `01 Landing` and `02 Search` both draw the caret, so this restores frame fidelity on those two. **Scope is the vendor-type picker on those two surfaces only** — the other twelve sites keep the override. **`dropdown-caret.test.ts` will go red and must be NARROWED, not deleted**: it is the assertion that stopped the caret returning after it came back twice as #228 and #338, and deleting it would let the glyph creep back to all fourteen. **Also decide the open-state signal**: D25 gave three triggers `font-semibold text-clay-600` on the value *because* they lost the caret as their only visible open signal — with the caret back, keeping both may be doubled signalling |
+| **427** | **Legal and money surfaces — the three static pages, the vendor agreement step, and the refund schedule at checkout** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#423** for the two claims that depend on it: `/terms` section 4 describes the hold-until-event mechanism, and the payout interval must read #423's constant rather than a second one | `core` `auth` `stripe` | **Filed 2026-09-06 with a full design.** The account holder supplied `design/delta-legal/` — `Orla-Legal-Surfaces.html` (frames **31, 32, 33**) and `LEGAL-SURFACES-PROMPT.md` — and asked for one ticket. **Frames 31-33 are NOT in `Orla - Screens.dc.html`**, which ends at 28, so the parity gate reads the delta bundle. Builds: a `LegalPage` reading layout that does not exist yet (the page scrolls, not a pane; 660px measure; 15px/1.85 prose), `/terms`, `/privacy` and `/cookies`, a sticky jump rail, a footer legal line, the **vendor agreement as step 3 of 5 in onboarding** with an immutable acceptance record, and the **refund schedule resolved into real dates and amounts above the pay control**. **THE SCHEDULE IN THE DESIGN CONTRADICTS THE CODE and must not ship as drawn** — see the detail section; the design says so itself |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #423-#425 were filed: 7 rows — 5 Backlog and 2 `Deferred — needs a human`.** Startable now: **#422** and **#423**. #424 and #425 both wait on #423, which owns the release date and the `disputed` hold they read; #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #426 and #427 were filed: 9 rows — 7 Backlog and 2 `Deferred — needs a human`.** Startable now: **#422**, **#423** and **#426**. #424, #425 and #427 all wait on #423 — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1412,3 +1414,226 @@ made.
       admin, signed out.
 - [ ] A browser pass driving the entry point through to the placed hold, and a
       check that #423's release job then skips that booking.
+
+### #426: Put the caret back on the vendor-type picker — landing and search only
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-06 on the account holder's instruction:** *"lets add a caret to
+the vendor type per the design - both to landing and browser - i removed it
+before but want it back."*
+
+#### This reverses a standing ruling, and that is the point
+
+**D25 (2026-08-31) is the account holder's own override** removing `▾` from
+fourteen trigger sites, against frames that draw it and against
+`42-dropdowns.md` which specifies it in writing. So this is **a ruling changing,
+not a parity finding**, and it must be recorded as deliberately as the original
+was — otherwise the next reader cannot tell which way the decision currently
+points.
+
+Frames `01 Landing` and `02 Search` both draw the caret, so on these two
+surfaces the reversal **restores frame fidelity** rather than departing from it.
+
+#### Scope — two surfaces, one control
+
+The **vendor-type picker** on the landing hero and on `/search`. Both mount the
+same `search-bar.tsx`, so this is one change reaching two pages — verified by
+import during #417.
+
+**The other twelve sites keep D25's override.** Do not sweep the caret back
+across the app.
+
+#### The guard must be narrowed, not deleted
+
+`apps/web/src/app/dropdown-caret.test.ts` asserts the absence of the two unicode
+glyphs **anywhere in rendered source**, and it will go red. It exists because the
+caret came back twice on its own — as **#228** and again as **#338** — when a
+parity pass read the frame, saw a caret the app did not draw, and correctly filed
+it.
+
+**Deleting that test would let the glyph creep back to all fourteen sites.**
+Narrow it to exempt the vendor-type trigger and keep it enforcing everywhere
+else. `frame-13-parity.test.ts` inverts its own `toContain('▾')` for the same
+reason — check whether it is affected.
+
+#### Decide the open-state signal
+
+D25 recorded a consequence this reversal reopens: three triggers — the hero's
+vendor-type and city segments, and the compact bar's date — **drew their open
+state through the caret alone**, and with it gone they rendered byte-identically
+open and closed. The sweep gave them `font-semibold text-clay-600` on the value
+instead.
+
+With the caret back on vendor-type, **keeping both may be doubled signalling.**
+Rule it: caret alone, clay value alone, or both. Say which and why. Note the city
+segment is *not* in this ticket's scope, so whatever is decided must not leave the
+two segments inconsistent with each other without saying so.
+
+#### Acceptance
+
+1. The vendor-type picker draws the caret on the landing hero and on `/search`,
+   matching frames `01` and `02`.
+2. No other trigger gains one.
+3. `dropdown-caret.test.ts` still fails if a caret appears on any of the twelve
+   sites D25 cleared.
+4. The open-state signal is ruled, applied, and recorded.
+5. The caret is `aria-hidden` and never part of an accessible name — D25 found
+   two chips announcing *"black down-pointing small triangle"*.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] **D25 amended in `vendor-marketplace-decisions.md`, and the override list in
+      `.claude/rules/web-design-parity.md` updated.** That file currently tells
+      every parity pass the caret is deliberately absent and has been re-filed
+      four times. Leaving it stale would make the next pass remove this work.
+
+### #427: Legal and money surfaces — three pages, the vendor agreement step, and the refund schedule at checkout
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
+**Blocked by:** **#423**, for the two claims that depend on it.
+
+**Filed 2026-09-06 with a full design**, supplied by the account holder, who
+asked for one ticket covering all of it.
+
+#### Where the design is
+
+`design/delta-legal/` — `Orla-Legal-Surfaces.html` (**frames 31, 32, 33**) and
+`LEGAL-SURFACES-PROMPT.md`, which is the spec and is unusually specific about
+measurements. **Frames 31-33 are not in `design/Orla - Screens.dc.html`**, which
+ends at `28 Dropdown variants`, so the parity gate for this ticket reads the
+delta bundle. Same six axes, same 1440x900, and the literal strings are the
+design.
+
+The prompt is written as three sequential prompts. **They are one ticket here at
+the account holder's request**, but the prompt's own ordering holds: the reading
+layout first, because it is the only part introducing new primitives.
+
+#### ⚠️ The refund schedule in the design contradicts the code
+
+**This is the one thing that must not ship as drawn.** The design's checkout block
+states: full refund 30+ days out · 50% in a middle window · **non-refundable**
+from a boundary date.
+
+The code enforces something different, and simpler:
+
+- `FULL_REFUND_CUTOFF_HOURS = 48` — full refund up to 48 hours before the event;
+- `LATE_CANCELLATION_REFUND_RATE = 0.5` — 50% inside that;
+- **there is no non-refundable tier at all.**
+
+`LEGAL-SURFACES-PROMPT.md` says so itself: *"The schedule itself is a guess. 30
+days / 50% / non-refundable is a plausible events-industry default, not something
+in the plan."*
+
+**#374 names this exact failure as the one that loses a dispute:** *"A policy that
+promises something the code does not do is the one failure mode here that creates
+a dispute the platform loses."* So either the constants change to match the
+design, or the block renders the constants. **Do not ship a checkout block whose
+numbers the refund code will not honour**, and do not resolve it by quietly
+editing the design.
+
+#### Dependencies on #423
+
+- `/terms` section 4 carries **the hold-until-event mechanism**. That mechanism is
+  #423's, and until it lands the section would describe behaviour the product does
+  not have.
+- **Payout timing must read one constant.** The design says *"Event + 2 days"* in
+  three places and asks for a single config value; #423 introduces
+  `PAYOUT_RELEASE_HOURS`. Use that one — do not add a second.
+
+#### What to build
+
+**1. `LegalPage` layout** — new, and unlike every other screen: **the page
+scrolls, not a pane.** 660px measure, 52px top padding, prose **15px/1.85** in
+`stone-800 #3A352E` (explicitly *not* the app's 13.5px body), numbered Instrument
+Serif 24px headings, a required last-updated line, `text-wrap: pretty`.
+**Section numbers are load-bearing** — Stripe, vendors and support cite them.
+
+**2. Jump rail** — 212px sticky column, `IntersectionObserver` for the active
+section, **rendered only at 6+ top-level sections**. `/terms` and `/privacy` get
+it; `/cookies` must not render an empty column. **Heading slugs are public URLs
+people paste into email** — stable, never counter-generated.
+
+**3. Three content blocks and no more** — emphasis panel, data table (reuse the
+admin idiom), sage note.
+
+**4. The three pages.** `/terms` 11 sections; `/privacy` with the data map table
+whose rows are the real stack (Stripe, Clerk, R2, Orla); `/cookies` deliberately
+thin. **No consent banner, modal or stored consent state** — I verified this
+independently on 2026-09-06: the tree sets no cookies of its own and loads no
+analytics, gtag, PostHog, Segment or Hotjar. A banner would be theatre.
+
+**5. Copy lives in `content/legal/*.md`** with the last-updated date in
+frontmatter, read by the page. **It is placeholder copy, not reviewed legal
+text** — ship it as such, trivially replaceable.
+
+**6. Footer** — a thin bottom line under the existing grid, `Terms · Privacy ·
+Cookies` left, `© Orla 2026` right. **Not a fifth column.**
+
+**7. Vendor agreement — step 3 of 5 in onboarding, not a page.** The order is
+deliberate: it precedes Stripe Connect so commission and payout timing are agreed
+before a payout rail exists. Four-terms display panel, full agreement clipped to
+150px with expand-in-place (**no modal, no navigation** — onboarding state must
+survive), accept checkbox **naming the business**, disabled until ticked.
+
+**8. Acceptance is an immutable record.** One row per acceptance —
+`vendor_id`, `document`, `version`, `accepted_at`, `accepted_by_user_id`,
+`accepted_by_name`, `business_name`, `ip`, `user_agent`. **No updates, no
+deletes.** A new version adds a row. The PDF renders the stored version, not the
+current one.
+
+**9. Refund schedule at checkout** — between the summary card and the pay button,
+**resolved into this booking's real dates and amounts**, not abstract percentages.
+Same component later reused on the confirmation screen and, in the customer hub,
+showing **only the row that applies today**.
+
+#### Acceptance
+
+1. `/terms`, `/privacy`, `/cookies` render under `LegalPage` and match frames
+   31-33 on all six axes at 1440x900.
+2. The jump rail appears on `/terms` and `/privacy` and **not** on `/cookies`,
+   which re-centres its measure rather than leaving an empty column.
+3. Heading ids are stable and derived from the heading text; a test pins at least
+   `#cancellations-and-refunds`.
+4. Copy is read from `content/legal/*.md` and the displayed date comes from
+   frontmatter — changing the date requires no JSX edit.
+5. The footer legal line appears on every page carrying the footer, as a line and
+   not a column.
+6. **No cookie consent mechanism exists anywhere** — asserted, not just absent.
+7. Vendor agreement is step 3 of 5, before Stripe Connect, with the step rail
+   showing `Step 3 of 5`.
+8. `Accept and continue` is disabled until the checkbox is ticked, and the
+   checkbox label names the business.
+9. Accepting writes exactly one immutable row; a second acceptance of the same
+   version does not overwrite the first.
+10. A vendor cannot take payments until accepted.
+11. An out-of-date accepted version raises the dashboard blocker banner.
+12. The checkout block renders **computed dates and amounts** from
+    `booking.eventDate` and the booking total — asserted on specific values.
+13. **The checkout block's tiers equal what `calculateRefund` would actually
+    return** for the same booking. This is the acceptance that prevents the
+    dispute #374 warns about.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing before and passing after.
+- [ ] **AC 13 is the one that matters most**: assert the rendered schedule against
+      the refund function's own output, not against a hardcoded expectation. If
+      they can disagree, they eventually will.
+- [ ] Immutability tested by attempting an update and a delete, not by inspecting
+      the schema.
+- [ ] Authorisation on the agreement step per role: the vendor it belongs to,
+      another vendor, a customer, admin, signed out.
+
+#### Open questions the design itself raises — do not answer silently
+
+- **The refund schedule**: platform-wide or per-vendor? Per-vendor grows a field
+  on the profile editor, must be referenced by the agreement, and probably belongs
+  on the search card. This changes three screens.
+- **Does "non-refundable" release the full amount to the vendor**, or does Orla
+  waive commission on a cancelled booking? The 12% depends on the answer.
+- **Cancellation enforcement**: the design says *"repeated cancellations can end
+  your listing"*, which implies a process nothing in the plan describes. **Cut the
+  sentence rather than shipping a threat that cannot be executed.**
