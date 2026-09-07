@@ -6,6 +6,7 @@ import { storageCheck } from './storage.js';
 import { webhookCheck } from './webhooks.js';
 import { browserCheck } from './browser.js';
 import { portsCheck } from './ports.js';
+import { laneCheck } from './lane.js';
 
 /** Every check, in the order the ticket's check table lists them. */
 export const CHECKS: readonly Check[] = [
@@ -16,4 +17,5 @@ export const CHECKS: readonly Check[] = [
   webhookCheck,
   browserCheck,
   portsCheck,
+  laneCheck,
 ];
