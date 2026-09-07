@@ -1,4 +1,7 @@
+'use client';
+
 import Image from 'next/image';
+import { ImageFallback, useImageFailure } from '@/components/ui/fallback-image';
 import { cn } from '@/lib/utils';
 
 /**
@@ -33,11 +36,39 @@ export function StockPhoto({
   sizes,
   priority = false,
 }: StockPhotoProps): React.ReactElement {
+  /*
+   * The `next/image` half of the shared fallback (#422). It is a separate
+   * adapter from `FallbackImage` because the element genuinely differs, but it
+   * consumes the same `useImageFailure` and paints the same `ImageFallback`, so
+   * a category card whose photograph was never shipped degrades exactly the way
+   * a coverless vendor card does rather than into a broken-image glyph on the
+   * front door. Found for real on 2026-09-06, when `carts` had no art.
+   *
+   * `landing-category-art.test.ts` still guards that the files are there — this
+   * is the safety net under it, not a licence to ship without the photograph.
+   */
+  const failure = useImageFailure(src);
+
   return (
     // `overflow-hidden` is what makes the caller's radius clip the photograph;
     // the stone fill is what shows while it loads, so the shape is never blank.
     <div className={cn('relative overflow-hidden bg-stone-150', className)}>
-      <Image src={src} alt="" fill sizes={sizes} priority={priority} className="object-cover" />
+      {failure.failed ? (
+        // `absolute inset-0` is what `fill` gave the photograph, so the block
+        // holds the caller's box exactly and nothing reflows.
+        <ImageFallback className="absolute inset-0" />
+      ) : (
+        <Image
+          ref={failure.ref}
+          src={src}
+          alt=""
+          fill
+          sizes={sizes}
+          priority={priority}
+          onError={failure.onError}
+          className="object-cover"
+        />
+      )}
     </div>
   );
 }

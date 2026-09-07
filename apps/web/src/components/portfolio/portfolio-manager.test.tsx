@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UploadQueue } from '@/lib/use-upload-queue';
@@ -238,5 +238,46 @@ describe('PortfolioManager reorder while uploading', () => {
     for (const node of draggables) {
       expect(node.getAttribute('draggable')).toBe('false');
     }
+  });
+});
+
+/*
+ * #422 on the vendor's own gallery. A tile whose stored object has gone is
+ * exactly the case a vendor most needs to see plainly — and it used to be the
+ * browser's broken-image glyph, which reads as the *page* being broken rather
+ * than the photograph.
+ *
+ * jsdom fetches nothing, so `fireEvent.error` stands in for the browser's own
+ * event; `e2e/image-fallback.spec.ts` drives a real 404 in Chromium.
+ */
+describe('PortfolioManager image failure', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('replaces a tile whose photograph fails with the tone block, at the tile box', () => {
+    const items: WirePortfolioItem[] = [
+      {
+        id: 'item-1',
+        vendorId: 'vendor-1',
+        caption: 'Ceremony',
+        displayOrder: 0,
+        imageUrl: 'https://example.test/gone-full.jpg',
+        thumbnailUrl: 'https://example.test/gone-thumb.jpg',
+        createdAt: new Date('2026-06-14T00:00:00Z'),
+      },
+    ];
+
+    const { container } = render(<PortfolioManager initialItems={items} />);
+
+    fireEvent.error(container.querySelector('img[src*="gone-thumb.jpg"]')!);
+
+    const block = container.querySelector('[data-slot="image-fallback"]');
+
+    expect(container.querySelector('img[src*="gone-thumb.jpg"]')).toBeNull();
+    expect(block?.className).toContain('bg-stone-250');
+    /* The tile's own 4:3 box, so the grid does not reflow around the failure. */
+    expect(block?.className).toContain('aspect-[4/3]');
+    expect(block?.textContent).toBe('');
   });
 });

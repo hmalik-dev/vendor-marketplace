@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Avatar, AVATAR_SIZES, avatarToneIndex, initialsFor, SERIF_FLOOR_PX } from './avatar';
 
@@ -247,5 +247,70 @@ describe('Avatar', () => {
       expect(label.startsWith("'")).toBe(false);
       expect(label.startsWith('’')).toBe(false);
     });
+  });
+});
+
+/*
+ * #422, and the half of it that is specifically *not* the tone block.
+ *
+ * D24 rules the avatar's fallback separately: `clay-150`/`sage-100` behind a
+ * monogram, never the `stone-250` cover ground. Before this, a vendor whose
+ * stored photograph was gone got the browser's broken-image glyph while a
+ * vendor who never uploaded one got these initials — two situations the person
+ * reading cannot tell apart, rendered two different ways.
+ *
+ * jsdom fetches nothing, so `fireEvent.error` stands in for the browser's own
+ * event; `e2e/image-fallback.spec.ts` drives a real 404 in Chromium.
+ */
+describe('Avatar image failure', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('falls back to the monogram, not the cover tone block', () => {
+    const { container } = render(
+      <Avatar name="Maya Fernandez" src="https://example.test/gone.jpg" size="xl" />,
+    );
+
+    fireEvent.error(container.querySelector('img')!);
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('MF')).toBeDefined();
+    expect(container.querySelector('[data-slot="image-fallback"]')).toBeNull();
+    expect(container.querySelector('[data-slot="avatar-fallback"]')).not.toBeNull();
+  });
+
+  it('renders a failed photograph exactly as it renders an absent one', () => {
+    const failed = render(<Avatar name="Maya Fernandez" src="https://example.test/gone.jpg" />);
+    fireEvent.error(failed.container.querySelector('img')!);
+    const failedHtml = failed.container.innerHTML;
+    cleanup();
+
+    const absent = render(<Avatar name="Maya Fernandez" src={null} />);
+
+    expect(failedHtml).toBe(absent.container.innerHTML);
+  });
+
+  it('holds the avatar box, so a failure does not move the row it sits in', () => {
+    const { container } = render(
+      <Avatar name="Maya Fernandez" src="https://example.test/gone.jpg" size="lg" />,
+    );
+
+    fireEvent.error(container.querySelector('img')!);
+
+    const monogram = container.querySelector('[data-slot="avatar-fallback"]') as HTMLElement;
+
+    expect(monogram.style.width).toBe(`${AVATAR_SIZES.lg}px`);
+    expect(monogram.style.height).toBe(`${AVATAR_SIZES.lg}px`);
+  });
+
+  it('keeps a labelled avatar named after its photograph fails', () => {
+    const { container } = render(
+      <Avatar name="Maya Fernandez" src="https://example.test/gone.jpg" labelled />,
+    );
+
+    fireEvent.error(container.querySelector('img')!);
+
+    expect(screen.getByRole('img', { name: 'Maya Fernandez' })).toBeDefined();
   });
 });

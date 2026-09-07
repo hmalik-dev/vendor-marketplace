@@ -5,6 +5,7 @@ import type { FieldIssue } from '@/lib/use-submit-validation';
 import { formatPrice } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { FallbackImage } from '@/components/ui/fallback-image';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -78,16 +79,22 @@ export function RequestSummaryRail({
       className="overflow-hidden rounded-[18px] bg-stone-0 shadow-[0_2px_10px_rgba(35,32,28,.06)]"
     >
       <div className="flex items-center gap-3 border-b border-stone-200 px-4.5 py-4">
-        {vendor.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- remote CDN host is not in the image config yet (#47)
-          <img
-            src={vendor.avatarUrl}
-            alt=""
-            className="size-14.5 shrink-0 rounded-xl object-cover"
-          />
-        ) : (
-          <span aria-hidden="true" className="size-14.5 shrink-0 rounded-xl bg-stone-150" />
-        )}
+        {/*
+          The remote CDN host is not in the image config yet (#47), so this
+          stays a plain image. Its absent state is the rail's own `stone-150`
+          swatch rather than the D17 ground, and a *failed* load now lands on
+          that same swatch (#422) instead of a broken glyph beside the price
+          the customer is about to commit to.
+        */}
+        <FallbackImage
+          src={vendor.avatarUrl}
+          alt=""
+          className="size-14.5 shrink-0 rounded-xl"
+          imageClassName="object-cover"
+          fallback={
+            <span aria-hidden="true" className="size-14.5 shrink-0 rounded-xl bg-stone-150" />
+          }
+        />
         <div className="min-w-0">
           <p className="truncate font-display text-[19px] text-stone-900">{vendor.businessName}</p>
           <p className="mt-0.5 text-sm text-stone-600">

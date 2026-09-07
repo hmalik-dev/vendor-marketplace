@@ -1,0 +1,76 @@
+import { cleanup, fireEvent, render } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { RequestSummaryRail } from './request-summary-rail';
+
+/*
+ * #422 on the rail the customer reads while committing to a price. A vendor
+ * avatar whose stored object has gone drew the browser's broken-image glyph
+ * directly beside the total — the one place on the site where "something here
+ * is broken" costs the most.
+ *
+ * The rail's absent state is its own `stone-150` swatch rather than the D17
+ * cover ground, and it stays that: what changes is that a *failed* load now
+ * lands on the same swatch instead of a glyph.
+ *
+ * jsdom fetches nothing, so `fireEvent.error` stands in for the browser's own
+ * event; `e2e/image-fallback.spec.ts` drives a real 404 in Chromium.
+ */
+afterEach(() => {
+  cleanup();
+});
+
+function renderRail(avatarUrl: string | null) {
+  return render(
+    <RequestSummaryRail
+      vendor={{
+        businessName: 'Kessler & Co.',
+        avatarUrl,
+        avgRating: 4.9,
+        reviewCount: 127,
+        categoryName: 'Photography',
+      }}
+      servicePackage={{
+        name: 'Full day',
+        priceCents: 145_000,
+        inclusions: ['8 hours', '400 edited photographs'],
+        durationHours: 8,
+      }}
+      customDetails=""
+      onCustomDetailsChange={vi.fn()}
+      customDetailsId="brief"
+      customDetailsIssue={null}
+      primaryLabel="Continue to review"
+      onPrimary={vi.fn()}
+      submitting={false}
+      blockerCount={0}
+      askHref="/vendors/kessler-co"
+    />,
+  );
+}
+
+describe('RequestSummaryRail vendor avatar', () => {
+  it('falls back to the rail swatch when the avatar fails to load', () => {
+    const { container } = renderRail('https://example.test/gone.jpg');
+
+    fireEvent.error(container.querySelector('img[src*="gone.jpg"]')!);
+
+    const swatch = container.querySelector('span[aria-hidden="true"].size-14\\.5');
+
+    expect(container.querySelector('img[src*="gone.jpg"]')).toBeNull();
+    expect(swatch).not.toBeNull();
+    expect(swatch?.className).toContain('bg-stone-150');
+    /* The 58px box and its radius are held, so the identity row does not jump. */
+    expect(swatch?.className).toContain('rounded-xl');
+    /* Not the cover tone block: this slot is an avatar, ruled separately. */
+    expect(container.querySelector('[data-slot="image-fallback"]')).toBeNull();
+  });
+
+  it('renders a failed avatar exactly as it renders an absent one', () => {
+    const failed = renderRail('https://example.test/gone.jpg');
+    fireEvent.error(failed.container.querySelector('img[src*="gone.jpg"]')!);
+    const failedHtml = failed.container.innerHTML;
+    cleanup();
+
+    expect(renderRail(null).container.innerHTML).toBe(failedHtml);
+  });
+});
