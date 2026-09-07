@@ -246,9 +246,11 @@ the silent-submit work #388 closed:
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
+| **429** | **Legal acceptance is vendor-only and records a version, not the document — close both** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 on the account holder's instruction**, after auditing what #427 shipped: *"it is essential that we have an appropriate tracker of ToS and any other vendor agreement tracked."* **The table is good and is not the problem** — `legal_acceptances` is immutable by a database trigger (not a DAO convention), copies `accepted_by_name` and `business_name` so a later rename cannot rewrite history, captures `ip`, `user_agent` and a timezone-aware `accepted_at`, and its immutability is proven by attempting the update and delete. **Two holes.** (1) **`vendor_id` is `NOT NULL`**, so only a vendor can be recorded — a customer accepting the Terms of Service at sign-up has nowhere to go, and `terms_of_service` sits in the enum with **nothing anywhere writing it**, exactly as `disputed` did before #425. (2) **Nothing records what the document said** — only a version string, while the copy is placeholder markdown explicitly planned for replacement, so editing `terms.md` without bumping the version silently makes every existing row attest to text that no longer exists. **Not in scope, already built:** the stale-version blocker (`hasCurrentVendorAgreement`) and the privacy disclosure of the IP capture |
+| **430** | **Closing band and footer: stack the band, and drop both centred measures** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 with a design revision.** `design/delta-band/` — `CLOSING-BAND-PROMPT.md` and `Orla-Closing-Band.html`. **This revises what #428 shipped rather than replacing it**: the band is already vendor-only, already signed-out-only, already free of pricing figures, and already points both controls at one destination. **What changes is the composition.** The band becomes **stacked, not columned** — the pitch spans a top line and the three steps run full-width beneath as `repeat(3, 1fr)` — and **both the band and the footer stop centring an inner measure and sit flush to the page's 40px gutter**. #428 deliberately chose `max-w-[1160px] mx-auto` and left a comment defending it as *"the frame's own measure"*; **that reasoning is now overruled by a newer frame** and the comment must be corrected rather than left contradicting the code. Also: serif 33px→35px, the vertical rule between columns becomes a full-width horizontal one, the button moves after the link so the strongest element sits at the outer edge, and the footer's compensating `border-top` goes because the `#1C1916` ground replaces it |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #427 landed and its row was deleted: 3 rows — 1 Backlog and 2 `Deferred — needs a human`.** **Nothing here is startable unattended.** #427 was the last one that was, and it landed: the three legal pages the footer has been linking to since #428 now resolve, the vendor agreement gates payouts and checkout, and the refund schedule at checkout renders what `calculateRefund` will actually pay. #370 waits on #362; #362 and #374 both need the account holder — provider-console actions and the operative legal wording respectively — so **the board now needs a human before it needs another lane**. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #429 and #430 were filed: 5 rows — 3 Backlog and 2 `Deferred — needs a human`.** Startable now: **#429** and **#430**. #370 is still blocked behind #362, and #362 and #374 need the account holder. **Nothing here is startable unattended.** #427 was the last one that was, and it landed: the three legal pages the footer has been linking to since #428 now resolve, the vendor agreement gates payouts and checkout, and the refund schedule at checkout renders what `calculateRefund` will actually pay. #370 waits on #362; #362 and #374 both need the account holder — provider-console actions and the operative legal wording respectively — so **the board now needs a human before it needs another lane**. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1006,3 +1008,221 @@ is **correct as built** — frame `02` draws `$500 – $3,200 ▾` for a range a
 `4★ & up ✕` for a single value, and `refine-bar.tsx` documents why — and the
 header submit's `ring-offset-0` is deliberate and tracked under #306/#73, now
 re-reported six times by successive passes.
+
+### #429: Legal acceptance is vendor-only and records a version, not the document — close both
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-07 on the account holder's instruction**, after auditing what
+#427 shipped: *"is there a tracker for users that accept the terms… we need to
+safely store that for legal purposes… 1 ticket that is best handling
+appropriately for legal purposes."*
+
+#### Read this first: the table is good, and most of it is not the problem
+
+`legal_acceptances` (#427) is better built than an audit usually finds, and
+**none of the following is to be changed**:
+
+- **Immutability is enforced by a database trigger**, not by a DAO that happens
+  to have no update method — and `legal-acceptance-immutability.test.ts` proves
+  it by *attempting* the update and the delete rather than reading the DDL.
+- `accepted_by_name` and `business_name` are **deliberate copies, not joins**, so
+  a vendor who renames their business cannot thereby rewrite who accepted what on
+  whose behalf.
+- `ip`, `user_agent`, and a timezone-aware `accepted_at` are already captured.
+- **The privacy policy already discloses the IP and browser capture** —
+  `privacy.md` names it explicitly, in the right terms.
+- **The stale-version blocker already exists**: `hasCurrentVendorAgreement` reads
+  false when a vendor's accepted version is behind `CURRENT_VENDOR_AGREEMENT_VERSION`,
+  and `acceptAgreement` refuses a version that is not current.
+
+**Do not rebuild any of that.** Two things are genuinely missing.
+
+#### Hole 1 — only a vendor can be recorded
+
+`vendor_id` is `NOT NULL` with a foreign key to `vendor_profiles`. So:
+
+- **A customer accepting the Terms of Service at sign-up has nowhere to be
+  recorded**, and that is the acceptance every single user of the product makes.
+- `terms_of_service` is already in `LEGAL_ACCEPTANCE_DOCUMENTS` and in the
+  `legal_document` enum, and **nothing anywhere writes it** — an unused enum
+  value, exactly the shape `disputed` had before #425 gave it a writer.
+
+**The fix is a shape change, and the invariant has to survive it.** The row's
+subject becomes the **user**, with the vendor profile optional context:
+
+- `accepted_by_user_id` already exists and is already `NOT NULL` — it is the real
+  subject and should be the anchor.
+- `vendor_id` becomes **nullable**, set for a vendor-agreement acceptance and
+  null for a customer's Terms acceptance.
+- `business_name` is likewise not meaningful for a customer; make it nullable
+  rather than writing an empty string, which would be a claim rather than an
+  absence.
+- **The immutability trigger must be re-examined, not assumed.** Its current rule
+  allows the one delete that cascades from removing the vendor. With the anchor
+  moving to the user, the equivalent rule is "removable only when the *user* it
+  is about is erased" — verify what the existing trigger does under a nullable
+  `vendor_id`, and extend the test rather than trusting it still holds.
+
+**Where the Terms acceptance is written:** first sign-in, where the `users` row
+is created — `insertUserIfAbsent`, reached from `users.service.ts`. That is the
+one place every account passes through exactly once, and the same place the role
+is resolved from Clerk.
+
+#### Hole 2 — the record says which version, not what it said
+
+The row stores `version: 'v1.0'`. That is a **label, not the text.**
+
+The copy lives in `apps/web/content/legal/*.md` and is **explicitly placeholder
+that will be replaced** — #427 shipped it that way on purpose. So an edit to
+`terms.md` that does not bump the version leaves every existing acceptance row
+attesting to text that no longer exists, and nothing can reconstruct what was on
+screen when the person clicked.
+
+**Store a `document_sha256`** — the hash of the rendered document as served —
+alongside the version. Version says *which* one; the hash proves *which bytes*.
+It is small, it is immutable with the rest of the row, and it is the difference
+between "they accepted v1.0" and "they accepted this".
+
+**Two decisions to take deliberately and record:**
+
+1. **Hash the markdown source, or the rendered text?** The source is what is
+   version-controlled and diffable; the rendered text is what the person actually
+   read. Say which and why.
+2. **What happens when the file changes without a version bump.** The honest
+   options are to fail the build, or to derive the version from the hash so it
+   cannot drift. A silent mismatch is the one outcome that must not be possible —
+   it is the exact failure this column exists to make visible.
+
+#### Also worth capturing while the row is being changed
+
+- **The acceptance method** — an explicit checkbox versus continuing through a
+  flow. It is what distinguishes clickwrap from browsewrap if acceptance is ever
+  contested, and it is one column.
+
+#### Acceptance
+
+1. A customer accepting the Terms at sign-up writes exactly one immutable row,
+   with `document = 'terms_of_service'`, the version, the hash, `ip`,
+   `user_agent` and a timezone-aware timestamp.
+2. `vendor_id` is null on that row and set on a vendor-agreement row; neither
+   case writes a placeholder value for a field it does not have.
+3. Every existing vendor-agreement row still reads correctly after the migration
+   — asserted against seeded rows, not inferred from the DDL.
+4. **Immutability still holds after the shape change**, proven by attempting an
+   update and a delete, including the nullable-`vendor_id` case.
+5. A second sign-in does **not** write a second Terms row; re-acceptance happens
+   only when the version changes.
+6. Raising the Terms version makes the next acceptance add a row rather than
+   replace one, and the earlier row still answers "what did I agree to".
+7. `document_sha256` matches the document served, and a changed file without a
+   version bump is impossible or fails loudly — whichever was ruled.
+8. The acceptance method is recorded.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing first.
+- [ ] **Immutability re-proven by attempting mutation**, not by reading the
+      schema — the existing test's approach, extended to the new shape. This is
+      the property the whole table exists for.
+- [ ] A test that **changes the markdown and asserts the hash no longer matches**,
+      so the drift this column is for is demonstrably caught.
+- [ ] Sign-in twice; assert one row.
+- [ ] Migration applied against seeded data carrying existing acceptances.
+
+#### Explicitly out of scope
+
+The operative legal wording (**#374**), the stale-version blocker and the privacy
+disclosure — all three already exist or belong elsewhere. This ticket is about
+**what is recorded**, not what the documents say.
+
+### #430: Closing band and footer — stack the band, and drop both centred measures
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 with a design revision** supplied by the account holder:
+`design/delta-band/CLOSING-BAND-PROMPT.md` and `Orla-Closing-Band.html`, drawn
+at 1440.
+
+#### This is a revision of #428, not a rebuild — read what is already true
+
+**Do not redo any of this.** #428 (`bc3948a`) already shipped, and the new prompt
+restates it because it was written as a standalone brief:
+
+- the band is already **vendor-only** — the two-audience fork is gone;
+- it already renders for **signed-out visitors only**;
+- it already carries **no pricing figures**;
+- both controls already share **one destination** (`VENDOR_ENTRY_PATH`), so
+  neither can drift from the other;
+- the footer already has its **legal row** and its `#1C1916` ground;
+- a signed-in vendor is already redirected off `/`.
+
+Re-implementing any of that is how a revision becomes a regression.
+
+#### What actually changes
+
+**1. The band stacks.** Today it is two columns — a pitch on the left capped at
+`max-w-110`, and the steps in a right-hand column separated by a vertical
+`sm:border-l`. It becomes:
+
+- a **top line** (`flex`, `align-items: flex-end`, `justify-content:
+  space-between`): the pitch on the left at `max-width: 600px`, and on the right
+  the text link **then** the button — button last, so the strongest element sits
+  at the band's outer edge;
+- a **full-width horizontal rule**, `1px rgba(248,245,239,.14)`, `38px` above and
+  `32px` below — replacing the vertical divider;
+- the three steps beneath as `grid-template-columns: repeat(3, 1fr)`, `gap: 52px`.
+
+Stated reason, worth keeping: a two-column version left roughly 500px of dead ink
+on the right.
+
+**2. Both centred measures go.** This is the part that contradicts a recorded
+decision, so take it deliberately:
+
+- The band currently wraps its contents in `mx-auto ... max-w-[1160px]`, and
+  `page.tsx` carries a comment defending it — the two blocks *"left uncapped sit
+  at opposite edges with 300px of ink between them and stop reading as one
+  band. 1160 is the frame's own measure."*
+- The footer does the same with `mx-auto w-full max-w-[1440px]`.
+
+**The newer frame overrules both**: contents sit **flush to the page's 40px
+gutter**, because every block above the band is left-aligned to that gutter and a
+centred column here reads as an unexplained shift. **Correct that comment rather
+than leaving it** — a comment that argues against the code it sits above is worse
+than none, and this one is specific and persuasive enough to get the change
+reverted by the next reader. Note the stacked layout also removes the condition
+the old reasoning described: there are no longer two blocks to hold together.
+
+**3. Measured values.** Serif `33px → 35px/1.12`; body `14px/1.7`; step circles
+`22px → 23px` with a `1px rgba(248,245,239,.28)` border and JetBrains Mono `11px`;
+step title `14.5px/600`, body `13px/1.65`. Take these off the frame, not off this
+list — and per `web-design-parity.md`, corroborate any value against the widths
+either side before building it.
+
+**4. The footer's compensating `border-top` goes.** It existed to separate two
+masses of the same ink; the `#1C1916` ground now does that job. **The legal row
+keeps its own `border-t`** — that is a different rule and stays.
+
+#### Acceptance
+
+1. The band is stacked: pitch and controls on one line, a full-width rule, then
+   three steps in a 3-column grid.
+2. The link precedes the button, and the button is the outermost element.
+3. Neither the band nor the footer centres an inner measure; both are flush to
+   the 40px gutter, and this holds at every width in `30-responsive.md`.
+4. The `page.tsx` comment defending `1160` is corrected, not orphaned.
+5. The footer's compensating `border-top` is gone and the legal row's own border
+   remains.
+6. Still vendor-only, still signed-out-only, still no pricing figure — asserted,
+   because these are the properties a recomposition is most likely to drop.
+7. Matches `Orla-Closing-Band.html` on all six axes at 1440x900.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] **Acceptance 6 asserted against a signed-in customer and a signed-out
+      visitor**, not just the default — the regression this ticket could cause is
+      showing a vendor pitch to someone who cannot act on it.
+- [ ] The no-pricing-figure check searches rendered output, not source.

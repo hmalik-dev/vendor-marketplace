@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orla — closing band + footer</title>
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#E9E6DF"/><rect x="34" y="70" width="132" height="40" rx="4" fill="#23201C"/><rect x="34" y="112" width="132" height="30" rx="4" fill="#1C1916"/><rect x="44" y="80" width="52" height="6" rx="3" fill="#F8F5EF"/><rect x="44" y="92" width="70" height="4" rx="2" fill="#8C8375"/><rect x="126" y="80" width="30" height="11" rx="4" fill="#FFFDF9"/><circle cx="96" cy="42" r="13" fill="#B4552F"/><circle cx="111" cy="42" r="13" fill="none" stroke="#23201C" stroke-width="1.7"/></svg>
+</template>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #E9E6DF; font-family: 'Instrument Sans', sans-serif; padding: 40px; }
+  a { color: #A34A28; }
+  a:hover { color: #8E3F20; }
+  .lbl { font: 500 10.5px 'Instrument Sans', sans-serif; letter-spacing: .07em; text-transform: uppercase; color: #6B6459; }
+  .bp { font: 500 11px 'JetBrains Mono', monospace; letter-spacing: .04em; text-transform: uppercase; color: #6B6459; margin-bottom: 9px; }
+  .tn { font: 400 12px/1.7 'Instrument Sans', sans-serif; color: #6B6459; margin-top: 10px; max-width: 1440px; text-wrap: pretty; }
+  .tile { background: #FBF8F3; border: 1px solid #E4DDD1; border-radius: 12px; padding: 15px 17px; }
+  .tl { font: 600 12.5px 'Instrument Sans', sans-serif; color: #23201C; margin-bottom: 6px; }
+  .frame { width: 1440px; background: #F8F5EF; border: 1px solid rgba(35,32,28,.14); border-radius: 14px; overflow: hidden; box-shadow: 0 18px 50px rgba(35,32,28,.09); }
+</style>
+</head>
+<body>
+
+<div style="width:1440px;margin:0 auto 30px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:13px">
+<div style="position:relative;width:29px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div>
+<span style="font-family:'Instrument Serif',serif;font-size:32px;color:#23201C">Orla</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-left:8px">Closing band &amp; footer</span>
+</div>
+<div style="max-width:900px;font:400 13.5px/1.7 'Instrument Sans',sans-serif;color:#4A443C">The dark band above the footer on <span style="font-family:'JetBrains Mono',monospace;font-size:12px">/</span>, and the footer itself. Extracted from the screens document so it can be built on its own. The band replaces a two-column customer/vendor fork; it is <strong style="font-weight:600">vendor-only</strong> and renders for <strong style="font-weight:600">signed-out visitors only</strong>.</div>
+</div>
+
+<div style="width:1440px;margin:0 auto">
+<div class="bp">1440 · signed out <span style="opacity:.6">— the only state the band has</span></div>
+<div class="frame">
+
+<div style="padding:0 40px;height:64px;display:flex;align-items:center;justify-content:space-between;background:#FFFDF9;border-bottom:1px solid #E4DDD1">
+<div style="display:flex;align-items:center;gap:34px">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:24px;color:#23201C">Orla</span></div>
+<div style="display:flex;gap:24px;font-size:13.5px;font-weight:500;color:#4A443C"><span>Browse</span><span>How it works</span><span>For vendors</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:16px"><span style="font-size:13px;font-weight:500;color:#4A443C">Sign in</span><span style="font-size:12.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:9px 17px;border-radius:999px">Sign up</span></div>
+</div>
+
+<div style="padding:44px 40px;background:#F4F0E8;display:flex;align-items:center;justify-content:center;gap:12px">
+<span class="lbl">Trust band ends the page here</span>
+<span style="font:400 12.5px 'Instrument Sans',sans-serif;color:#8A8275">&mdash; shown only for context; not in scope</span>
+</div>
+
+<div style="padding:60px 40px;background:#23201C">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:60px">
+<div style="max-width:600px">
+<div style="font-family:'Instrument Serif',serif;font-size:35px;line-height:1.12;color:#F8F5EF;margin-bottom:13px">Booking events yourself?</div>
+<div style="font:400 14px/1.7 'Instrument Sans',sans-serif;color:#D8D0C2">Publish your prices and your open dates, and take bookings without the phone tag. You are paid through Stripe after the event.</div>
+</div>
+<div style="display:flex;align-items:center;gap:20px;flex:none;padding-bottom:3px">
+<span style="font-size:13.5px;font-weight:600;color:#F8F5EF">See how payouts work</span>
+<span style="font-size:13.5px;font-weight:600;color:#23201C;background:#FFFDF9;padding:12px 22px;border-radius:9px;display:inline-block">Start taking bookings</span>
+</div>
+</div>
+<div style="height:1px;background:rgba(248,245,239,.14);margin:38px 0 32px"></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:52px">
+<div style="display:flex;gap:14px;align-items:flex-start">
+<div style="width:23px;height:23px;border-radius:50%;border:1px solid rgba(248,245,239,.28);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px;font:500 11px 'JetBrains Mono',monospace;color:#D8D0C2">1</div>
+<div><div style="font:600 14.5px 'Instrument Sans',sans-serif;color:#F8F5EF;margin-bottom:4px">Publish your prices</div><div style="font:400 13px/1.65 'Instrument Sans',sans-serif;color:#A79D8C">What you charge, in the open. Orla adds nothing on top of it.</div></div>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-start">
+<div style="width:23px;height:23px;border-radius:50%;border:1px solid rgba(248,245,239,.28);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px;font:500 11px 'JetBrains Mono',monospace;color:#D8D0C2">2</div>
+<div><div style="font:600 14.5px 'Instrument Sans',sans-serif;color:#F8F5EF;margin-bottom:4px">Set your open dates</div><div style="font:400 13px/1.65 'Instrument Sans',sans-serif;color:#A79D8C">Customers only ever request a date you have actually left free.</div></div>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-start">
+<div style="width:23px;height:23px;border-radius:50%;border:1px solid rgba(248,245,239,.28);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px;font:500 11px 'JetBrains Mono',monospace;color:#D8D0C2">3</div>
+<div><div style="font:600 14.5px 'Instrument Sans',sans-serif;color:#F8F5EF;margin-bottom:4px">Get paid after the event</div><div style="font:400 13px/1.65 'Instrument Sans',sans-serif;color:#A79D8C">The payment is held from booking until the event is done, then released through Stripe.</div></div>
+</div>
+</div>
+</div>
+
+<div style="padding:40px;background:#1C1916">
+<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:34px">
+<div>
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="position:relative;width:26px;height:17px"><div style="position:absolute;left:0;top:0;width:17px;height:17px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:17px;height:17px;border-radius:50%;border:1.3px solid #F8F5EF"></div></div><span style="font-family:'Instrument Serif',serif;font-size:25px;color:#F8F5EF">Orla</span></div>
+<div style="font:400 13px/1.5 'Instrument Sans',sans-serif;color:#8C8375">Made for the people who make the day.</div>
+</div>
+<div>
+<div class="lbl" style="color:#8C8375;margin-bottom:14px">Browse</div>
+<div style="display:flex;flex-direction:column;gap:11px;font-size:13px;color:#B8AF9F"><span>Photography</span><span>Florals</span><span>Catering</span><span>Entertainment</span><span>All vendors</span></div>
+</div>
+<div>
+<div class="lbl" style="color:#8C8375;margin-bottom:14px">Company</div>
+<div style="display:flex;flex-direction:column;gap:11px;font-size:13px;color:#B8AF9F"><span>How it works</span><span>For vendors</span><span style="font-weight:600;color:#F8F5EF">Contact support</span></div>
+</div>
+<div>
+<div class="lbl" style="color:#8C8375;margin-bottom:14px">Account</div>
+<div style="display:flex;flex-direction:column;gap:11px;font-size:13px;color:#B8AF9F"><span>Sign in</span><span>Sign up</span></div>
+</div>
+</div>
+<div style="margin-top:26px;padding-top:16px;border-top:1px solid rgba(248,245,239,.1);display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;gap:18px;font:400 12px 'Instrument Sans',sans-serif;color:#8C8375"><span>Terms</span><span>Privacy</span><span>Cookies</span></div>
+<span style="font:400 12px 'Instrument Sans',sans-serif;color:#8C8375">&copy; Orla 2026</span>
+</div>
+</div>
+
+</div>
+<div class="tn">Both controls point at <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">/for-vendors</span>, which does not exist yet &mdash; today the nav link and this button both deep-link into <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">/sign-up?role=vendor</span>, so a vendor first meets the commission at step 3 of onboarding, after making an account. That page is where the 12% belongs.</div>
+</div>
+
+<div style="width:1440px;margin:30px auto 0">
+<div class="bp">Signed in &mdash; the band is not rendered</div>
+<div class="frame" style="background:#FBF8F3">
+<div style="padding:44px 40px;background:#F4F0E8;display:flex;align-items:center;justify-content:center;gap:12px">
+<span class="lbl">Trust band ends the page here</span>
+</div>
+<div style="padding:40px;background:#1C1916">
+<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:34px">
+<div>
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="position:relative;width:26px;height:17px"><div style="position:absolute;left:0;top:0;width:17px;height:17px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:17px;height:17px;border-radius:50%;border:1.3px solid #F8F5EF"></div></div><span style="font-family:'Instrument Serif',serif;font-size:25px;color:#F8F5EF">Orla</span></div>
+<div style="font:400 13px/1.5 'Instrument Sans',sans-serif;color:#8C8375">Made for the people who make the day.</div>
+</div>
+<div>
+<div class="lbl" style="color:#8C8375;margin-bottom:14px">Browse</div>
+<div style="display:flex;flex-direction:column;gap:11px;font-size:13px;color:#B8AF9F"><span>Photography</span><span>Florals</span><span>Catering</span><span>Entertainment</span><span>All vendors</span></div>
+</div>
+<div>
+<div class="lbl" style="color:#8C8375;margin-bottom:14px">Company</div>
+<div style="display:flex;flex-direction:column;gap:11px;font-size:13px;color:#B8AF9F"><span>How it works</span><span>For vendors</span><span style="font-weight:600;color:#F8F5EF">Contact support</span></div>
+</div>
+<div>
+<div class="lbl" style="color:#8C8375;margin-bottom:14px">Account</div>
+<div style="display:flex;flex-direction:column;gap:11px;font-size:13px;color:#B8AF9F"><span>My bookings</span><span>Messages</span><span>Settings</span><span>Sign out</span></div>
+</div>
+</div>
+<div style="margin-top:26px;padding-top:16px;border-top:1px solid rgba(248,245,239,.1);display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;gap:18px;font:400 12px 'Instrument Sans',sans-serif;color:#8C8375"><span>Terms</span><span>Privacy</span><span>Cookies</span></div>
+<span style="font:400 12px 'Instrument Sans',sans-serif;color:#8C8375">&copy; Orla 2026</span>
+</div>
+</div>
+</div>
+<div class="tn">A signed-in customer cannot act on a vendor pitch &mdash; one account cannot be both roles &mdash; so the trust band runs straight into the footer. A signed-in vendor never reaches this page at all; they are redirected to <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">/dashboard</span>. Account column swaps Sign in / Sign up for the customer&rsquo;s own links.</div>
+</div>
+
+<div style="width:1440px;margin:26px auto 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+<div class="tile"><div class="tl">Why the two-audience fork went</div><div class="tn" style="margin-top:0">The customer half pointed at <strong style="font-weight:600;color:#4A443C">Find a vendor</strong> &mdash; a button whose only job was scrolling back up to the hero&rsquo;s live search bar. The vendor half said <em>Go to your dashboard</em> to a visitor with no dashboard. What replaces both is vendor-only, and it is the page&rsquo;s only supply-side entry besides one nav link.</div></div>
+<div class="tile"><div class="tl">Stacked, not columned &mdash; and flush left</div><div class="tn" style="margin-top:0">A left-aligned two-column version left roughly 500px of dead ink on the right. Pitch and controls hold the top line edge to edge, a hairline crosses the <strong style="font-weight:600;color:#4A443C">full</strong> width, and the steps run as equal thirds. No centred inner column anywhere &mdash; the band and footer sit on the same <strong style="font-weight:600;color:#4A443C">40px gutter</strong> as every block above them.</div></div>
+<div class="tile"><div class="tl" style="color:#A8321E">No pricing figures here</div><div class="tn" style="margin-top:0">An earlier pass had <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">12%</span>, <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">$0 to list</span> and the payout interval as display numerals. Commission is a <em>conversion</em> number, and with no room to frame it the first money fact a vendor meets is what gets deducted. Worse, <strong style="font-weight:600;color:#4A443C">customers read this page too</strong> &mdash; &ldquo;Orla takes 12%&rdquo; suggests a vendor costs more here than direct, undercutting <em>No service fee</em> above.</div></div>
+</div>
+
+<div style="width:1440px;margin:14px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+<div class="tile"><div class="tl">The footer drops one step of ink</div><div class="tn" style="margin-top:0">Band <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">#23201C</span>, footer <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">#1C1916</span>. Two masses of the same ink split by a hairline read as one ~400px dark region; a step down lets the band be the last piece of <em>content</em> and the footer be furniture. One new ink value, no new hue &mdash; and the old compensating <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">border-top</span> comes off. Muted text steps <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">#A79D8C</span> on the band to <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">#8C8375</span> on the footer; micro-labels are <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">#8C8375</span> at 4.68:1 (<span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">#7A7266</span> was tried and fails).</div></div>
+<div class="tile"><div class="tl">Legal row, not a fifth column</div><div class="tn" style="margin-top:0">Terms &middot; Privacy &middot; Cookies and the copyright sit on a thin line under the grid, behind a <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">rgba(248,245,239,.1)</span> hairline. A fifth column would give three legal links the same visual weight as Browse. <strong style="font-weight:600;color:#4A443C">Dashboard is dropped</strong> from the signed-out Account column &mdash; a visitor has no dashboard &mdash; and the signed-in column carries My bookings &middot; Messages &middot; Settings &middot; Sign out instead.</div></div>
+</div>
+
+</body>
+</html>
