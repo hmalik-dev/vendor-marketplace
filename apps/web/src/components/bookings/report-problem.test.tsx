@@ -80,7 +80,17 @@ describe('ReportProblem', () => {
     expect(screen.getByRole('link', { name: 'Contact support' }).getAttribute('href')).toBe(
       SUPPORT_PATH,
     );
-    expect(screen.getByText(/has been paid for this booking/)).toBeDefined();
+    /*
+     * Two assertions, because the copy has one job in each half. It must still
+     * state that the money has gone — dropping that would leave a customer
+     * expecting a hold that cannot happen — and it must lead with the offer,
+     * which is the part that was wrong before and the part a future edit would
+     * lose first.
+     */
+    const body = screen.getByText(/payment for this booking has already gone out/);
+
+    expect(body.textContent).toContain("Sunlit Studio's payment for this booking");
+    expect(body.textContent?.startsWith('Something still not right?')).toBe(true);
   });
 
   /*

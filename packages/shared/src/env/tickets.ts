@@ -521,6 +521,16 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   428: ['auth'], // landing band signed-out only, signed-in customer landing, footer
   429: ['auth'], // legal acceptance records the user and the document hash
   430: [], // closing band stacks, band and footer go flush to the gutter
+  431: ['auth', 'email', 'stripe'], // support cases, dispute holds, chargebacks, resolution UI
+  432: ['auth', 'stripe'], // payout failures, transfer retry, Stripe account restriction state
+  433: ['auth'], // a deleted Clerk identity must retire the storefront it leaves behind
+  434: ['auth'], // append-only admin action log, actor threaded through every mutation
+  435: ['auth'], // unpublish a storefront, hide a review, deactivate a package
+  436: ['auth', 'email'], // in-product reporting and case-scoped message reads
+  437: ['auth'], // admin detail views, booking requests, packages, portfolio, categories
+  438: ['auth', 'email'], // data export, operator closure, legal acceptance record
+  439: ['auth', 'email'], // transactional email delivery records and provider events
+  440: ['auth', 'stripe'], // operator-initiated refunds and credits — needs a decision first
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
