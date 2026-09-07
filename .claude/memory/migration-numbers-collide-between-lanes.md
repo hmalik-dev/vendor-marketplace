@@ -30,4 +30,16 @@ The resolution, done on 2026-09-05 when #408 and #415 both claimed 0025:
    which replay the whole migration set against a fresh PGlite. Compiling proves
    nothing here.
 
+**The number belongs to landing order, not to reservation (#434, 2026-09-07).**
+An orchestrating session told me to take 0031 and leave 0030 for a lane that had
+generated it but had not landed. That inverts the rule. Landed `main` was still
+at `0029`, so `db:generate` against the landed snapshot emitted `0030` — and
+taking anything else would have meant hand-authoring the number, which is the
+one move this memory forbids. Drizzle numbers sequentially from the journal, so
+there is no clean way to emit `0031` with `0030` absent anyway.
+
+**Whoever lands first takes the next number; everyone behind them regenerates.**
+A reserved-but-unlanded number is not taken. Say so rather than complying — the
+instruction was a slip, and it was withdrawn once the arithmetic was laid out.
+
 Related: [[ticket-worktree-merge-immediately]], [[main-pushes-dequeue-parallel-lane-prs]].

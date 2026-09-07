@@ -19,13 +19,29 @@ it as a failed check sends the next reader hunting a defect in a diff that does
 not have one. Three sessions independently flagged it as a possible regression
 on one night.
 
+**The two checks are not interchangeable, corrected 2026-09-07 (#434).** This
+memory said "CI and the deploy check" in one breath, and acting on that costs a
+round trip: **branch protection gates the merge on the `Typecheck, lint, build,
+test` check, so that one has to be waited on.** `gh pr merge --squash` is
+refused outright while it is pending — "the base branch policy prohibits the
+merge" — and goes through on its own the moment it reports SUCCESS, **with the
+Vercel check still red**. So Vercel is ignorable exactly as described below;
+the CI job is not, because it is the thing standing between a green branch and
+a merged one.
+
+**`--admin` is not the way round it.** It is what `gh` suggests and it is
+blocked by the permission classifier, correctly — it bypasses branch protection
+rather than satisfying it. Wait for the one check, then merge plainly.
+
 **How to apply:**
 
 - Land work on the strength of the **local** gate, which is the real evidence
   here: `pnpm test --force` (`--force` because tracker markdown is not in the
   turbo hash and a cached green is not a green), `pnpm typecheck`, `pnpm lint`,
   `pnpm format`, plus the browser pass.
-- Do not hold a merge, a report, or a session waiting for a remote check.
+- Then wait for `Typecheck, lint, build, test` **by name** and merge when it is
+  SUCCESS. Never wait on Vercel, and never read its red as a finding.
+- Do not hold a report or a session waiting for the deploy check.
 - If a watcher is armed at all, match the **specific** required check by name
   rather than "any failing check" — a watcher matching any red abandons a
   healthy merge the moment the deploy check goes down. That exact mistake is
