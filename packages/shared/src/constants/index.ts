@@ -915,14 +915,18 @@ export const MONEY_COPY = {
    * commission or a fee on a vendor surface is a Post-MVP leak — see the guard
    * in `no-vendor-fee-language.test.ts`.
    *
-   * **This is an interim string and #300 owns replacing it.** Frame `08` draws
-   * this line as `Next payout Jun 18` — a real payout date, not a statement
-   * about the arrangement — so the shipped copy was wrong twice over: a
-   * Post-MVP fee claim *and* off-frame. Removing the claim is #308's to do;
-   * stating the date is not, because there is no payout schedule to read one
-   * from until #10, and a date the platform invents is exactly what the
-   * no-invented-numbers rule forbids. So this says something true and
-   * dateless in the meantime, and frame `08`'s Text axis stays open.
+   * **This stopped being the interim string and became the fallback (#424).**
+   * Frame `08` draws the line as `Next payout Jun 18` — a real date, not a
+   * statement about the arrangement — and #308 could not ship one, because
+   * there was no payout schedule to read a date from and a date the platform
+   * invents is exactly what the no-invented-numbers rule forbids. So this said
+   * something true and dateless instead, and the frame's Text axis stayed open.
+   *
+   * #423 created the schedule and #424 renders it, so the axis is closed and
+   * the date is derived from `payoutReleaseAt` rather than written here. This
+   * string is what the dashboard falls back to when a vendor is owed nothing:
+   * there is no next payout to date, and the mechanism is still true. Keep it
+   * dateless — a date belongs to the surface that read one, not to a constant.
    */
   vendorPayout: 'Paid out after each event',
 } as const;
@@ -984,6 +988,19 @@ export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
  */
 export const PAYOUT_STATUSES = ['pending', 'held', 'released'] as const;
 export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
+
+/**
+ * The booking statuses that hold a payout — the other half of the pair
+ * `RELEASABLE_STATUSES` opens.
+ *
+ * A list of one, and a list rather than a literal because the fact "`disputed`
+ * means the money is stuck" has to be stated exactly once. `payoutStatusOf`
+ * tests membership in it, and the vendor dashboard **selects** on it: a second
+ * hold status added to the classifier but not to the selector would drop those
+ * rows out of the vendor's owed figure entirely — the money would simply stop
+ * being mentioned, which is a worse failure than mislabelling it (#424).
+ */
+export const HELD_PAYOUT_STATUSES = ['disputed'] as const;
 
 /**
  * Which way an operator settled a reported problem.

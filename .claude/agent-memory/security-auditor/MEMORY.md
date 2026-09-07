@@ -38,7 +38,7 @@
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
 - [Drizzle query errors log every bound parameter](drizzle-query-errors-log-bound-parameters.md) — `Failed query: … params: …` is in the message and pino emits it; pre-existing and accepted, check what the statement binds before escalating
 - [The background queue carries no session](background-work-queue-carries-no-session.md) — `app.background` re-derives its recipient from the notification row; a second caller must not close over `request.auth` or a `tx`
-- [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — per-request verified in react 19.2.8; `/vendors/[slug]` is dynamic only via SiteHeader's `auth()`
+- [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — per-request verified in react 19.2.8; `/` now renders a customer's booking amount and still declares no `force-dynamic`
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor; the prop degrades to the most permissive answer on purpose
 - [The deployed origin shares the dev Clerk instance](deployed-origin-shares-the-dev-clerk-instance.md) — one `E2E_BASE_URL` signs the E2E accounts, admin included, into production data; #392 made `e2e:auth` refuse to default off localhost
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live Clerk session JWTs; `FORBIDDEN_PATHS` covers the path as of #392, and no content rule ever will
@@ -56,5 +56,6 @@
 - [The public vendor card is the widest anonymous projection](public-vendor-card-is-the-widest-anonymous-projection.md) — the Zod serializer strips unmapped columns and 500s on a missing one; `isNew`'s recency disclosure is settled
 - [D31's proportional split is now our arithmetic](refund-proportionality-is-now-ours-to-state.md) — Stripe used to state the vendor's retained half; the pre-release cancel path states nobody's
 - [The payout sweep is a second money mover](payout-sweep-is-a-second-money-mover.md) — it takes a row lock the cancel and dispute paths do not, and their guards key on `status` alone
+- [`payoutOwedClauses` is shared with the sweep](payout-owed-clauses-is-shared-with-the-sweep.md) — since #424 one predicate serves the vendor's read and the `FOR UPDATE` claim that transfers; widening it widens Stripe
 - [Legacy destination rows are guarded in one place](legacy-destination-rows-guarded-in-one-place.md) — `refundAndUnwind` refuses them; the ban unwind and the deploy window do not
 - [The support form is a public route that moves money](support-report-is-a-public-route-that-moves-money.md) — a `bookingId` on the unauthenticated send freezes a payout; the guards are in `placeDisputeHold`, not the route

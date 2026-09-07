@@ -132,11 +132,38 @@ Category names are one word. A two-word name means it's really two categories.
 
 ## Below the fold
 
-1. **Featured vendors** — 4 vendor cards + "View all vendors →" ghost link.
-2. **How it works** — 3 steps on `stone-100`, full-bleed. Large Serif numerals in `clay-200`, heading, one line each: Discover / Book / Celebrate.
-3. **Trust** — 3 signals with sage glyphs: reviews only from bookings that actually happened · payment held until the event · no service fee. This section does the work the stats band would have done.
-4. **Split CTA** — full-bleed `stone-900`; left for customers, right for vendors.
-5. **Footer** — `stone-900`, cream text, 4 columns, logo, "Made for the people who make the day."
+Corrected against frame **`30 Landing full page`** and its signed-in twin, which
+supersede items 4 and 5 as they were first written (#428). The route now has two
+compositions, and the column says which reader gets each.
+
+| #   | Section                                                                                                                                                                                              | Signed out              | Signed in (customer)                                                                                          |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 1   | **Featured vendors** — 4 vendor cards + "View all vendors →" ghost link                                                                                                                              | yes                     | **no** — a catalogue teaser for somebody who has not searched yet                                             |
+| 2   | **How it works** — 3 steps on `stone-100`, full-bleed. Large Serif numerals in `clay-200`, heading, one line each: Discover / Book / Celebrate                                                       | yes                     | **no** — it explains a process this reader has completed                                                      |
+| 3   | **Trust** — 3 signals with sage glyphs: reviews only from bookings that actually happened · payment held until the event · no service fee. This section does the work the stats band would have done | yes, on the page ground | yes, on `stone-100`, **and it is the ending** — copy resolved against the reader's own booking, payment first |
+| 4   | **Closing band** — full-bleed `stone-900`, vendor-only: headline, one paragraph, a cream primary and a text link at one destination, beside three numbered mechanism steps                           | yes                     | **no** — a customer cannot act on a vendor pitch                                                              |
+| 5   | **Footer** — `stone-950`, 4 columns and a legal row, logo, "Made for the people who make the day."                                                                                                   | yes                     | yes, with the Account column naming their own surfaces                                                        |
+
+**A `60px` status strip sits above the hero for a signed-in customer**, between
+the header and the gradient: the next confirmed booking in sage, the requests
+still waiting on a vendor in gold, `All bookings →` on the right. It renders only
+the items that exist and is absent entirely when there are none. The hero itself
+is identical in both compositions.
+
+**The closing band was a two-column fork and is not one now.** The customer half
+was redundant — the hero is a live search bar, so a button whose only job is to
+scroll back up to it earns nothing — and the vendor half is the page's only
+supply-side entry besides one nav link. **No pricing figures in it**: commission
+is a conversion number rather than an acquisition one, and customers read this
+same page, where a stated percentage invites exactly the wrong conclusion about
+what a vendor charges here. It belongs on `/for-vendors` and in the vendor
+agreement.
+
+**The footer drops one ink step, to `stone-950`.** The band above it is
+`stone-900`, and two masses of the same ink separated by a hairline read as one
+400px dark region — so the value is what separates them and the rule comes off
+with it. That also makes the ending a ramp: hero gradient → `stone-50` →
+`stone-100` trust → `stone-950` footer, each step darker than the last.
 
 ## Metrics — deferred post-MVP
 

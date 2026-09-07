@@ -281,12 +281,21 @@ export type WireCustomerProfile = z.infer<typeof wireCustomerProfileSchema>;
  * than its JSON.
  */
 export const wireVendorDashboardSchema = vendorDashboardSchema.extend({
-  nextPayout: vendorDashboardSchema.shape.nextPayout
-    .unwrap()
-    .extend({
-      releaseAt: z.coerce.date(),
-    })
-    .nullable(),
+  /*
+   * `nextReleaseAt` is a `z.date()` on the wire, so it arrives as an ISO string
+   * and must be coerced back here. #423 shipped the same trap one field over:
+   * the dashboard 500'd for every vendor who was owed a payout and rendered
+   * fine for everyone else, with the whole local gate green, because the only
+   * fixture exercising it had the field absent. `.claude/rules/
+   * web-route-boundaries.md` carries the rule; the tests below it carry a
+   * fixture that has money in it.
+   */
+  payouts: vendorDashboardSchema.shape.payouts.extend({
+    next: vendorDashboardSchema.shape.payouts.shape.next
+      .unwrap()
+      .extend({ releaseAt: z.coerce.date() })
+      .nullable(),
+  }),
 });
 export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
 

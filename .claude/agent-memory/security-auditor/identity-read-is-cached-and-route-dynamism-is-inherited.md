@@ -28,6 +28,24 @@ because the root layout renders `SiteHeader`, which calls `readRoleForChrome()`
 → Clerk `auth()` → `headers()`, and a dynamic API anywhere in the route's server
 tree opts the whole route out of the Full Route Cache.
 
+**t428 escalated the stake on `/`.** `apps/web/src/app/page.tsx` now reads the
+signed-in customer's own rows (`getOwnBookingRequests` / `getOwnBookings`) and
+renders the soonest confirmed booking's **vendor name, event date and paid
+amount** into the landing HTML — both in `StatusStrip`'s client props and in the
+trust band's `trustCopyFor` copy. What a mis-cache of `/` would publish stopped
+being a boolean. `/` still declares no `dynamic`; it inherits it from its own
+`redirectVendorToDashboard()` → `auth()` at the top of `HomePage`, and from
+`SiteHeader`. Twelve peer routes that render per-user data
+(`/bookings`, `/bookings/[requestId]`, `/messages`, `/vendor/*`,
+`/admin/layout`) all declare `force-dynamic`; `/` is the outlier.
+
+Note that **`readIdentityOnPublicRoute` and `readRoleForChrome` swallow
+`DynamicServerError`** along with everything else that is not a navigation
+signal. Next 15.5 still bails out correctly — `headers()` marks the work store
+before it throws, so a userland catch does not restore staticness — but that is
+a framework implementation detail this route is resting on, not a guarantee it
+states.
+
 **How to apply:** if a change ever makes `SiteHeader` static, moves it out of
 the root layout, or adds `generateStaticParams`/`revalidate`/PPR to a page that
 renders per-viewer content, that page's HTML becomes shareable between visitors

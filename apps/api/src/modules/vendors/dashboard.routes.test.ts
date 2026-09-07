@@ -9,9 +9,17 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { addDays, parseDateString, toDateString } from '@vendor-marketplace/shared';
-import { eq } from 'drizzle-orm';
+import {
+  addDays,
+  parseDateString,
+  payoutDueThroughDate,
+  payoutReleaseAt,
+  toDateString,
+  type BookingStatus,
+} from '@vendor-marketplace/shared';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { findDuePayoutBookingIds } from '../payments/payouts.dao.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
@@ -28,14 +36,18 @@ interface DashboardBody {
   isPublished: boolean;
   publishBlockers: string[];
   bookingWindow: { date: string; status: string }[];
-  nextPayout: {
-    bookingId: string;
-    eventDate: string;
-    customerFirstName: string;
-    vendorPayoutCents: number;
-    releaseAt: string;
-    status: string;
-  } | null;
+  payouts: {
+    pendingCents: number;
+    pendingCount: number;
+    next: {
+      cents: number;
+      customerFirstName: string;
+      releaseAt: string;
+      isDue: boolean;
+    } | null;
+    heldCents: number;
+    heldCount: number;
+  };
 }
 
 describe('/vendor/dashboard', () => {
@@ -202,7 +214,8 @@ describe('/vendor/dashboard', () => {
     expect(body.reviewCount).toBe(0);
     // Not 0 — nobody has asked, so there is no rate to report.
     expect(body.responseRate).toBeNull();
-    expect(body.nextPayout).toBeNull();
+    expect(body.payouts.next).toBeNull();
+    expect(body.payouts.pendingCents).toBe(0);
     /*
      * Nine days from *yesterday*, every one of them open — the calendar is
      * sparse, so a vendor with no rows still gets a full window rather than a
@@ -287,6 +300,10 @@ describe('/vendor/dashboard', () => {
       totalAmountCents: 145_000,
       platformFeeCents: 17_400,
       vendorPayoutCents: 127_600,
+      // Not the column's `'destination'` default: that model paid the vendor as
+      // the card succeeded, so the sweep owes it nothing and the payout figures
+      // below would be asserting against money that never moves again.
+      payoutModel: 'separate',
       paidAt: new Date(),
     });
 
@@ -296,11 +313,13 @@ describe('/vendor/dashboard', () => {
     expect(body.bookingsThisMonth).toBe(1);
     // The payout share again, this time as the *next* one owed — the amount is
     // real, so the card never has to invent it.
-    expect(body.nextPayout).toMatchObject({
-      eventDate: dayFrom(0),
+    expect(body.payouts.next).toMatchObject({
       customerFirstName: 'Test',
-      vendorPayoutCents: 127_600,
+      cents: 127_600,
+      releaseAt: payoutReleaseAt(dayFrom(0))?.toISOString(),
     });
+    expect(body.payouts.pendingCents).toBe(127_600);
+    expect(body.payouts.pendingCount).toBe(1);
   });
 
   /*
@@ -411,30 +430,43 @@ describe('/vendor/dashboard', () => {
   });
 
   describe('the next payout', () => {
-    /** A confirmed booking `offset` days out, worth `payoutCents` to the vendor. */
+    /**
+     * A confirmed booking `offset` days out, worth `payoutCents` to the vendor.
+     *
+     * `payoutModel: 'separate'` and not the column default. The default is
+     * `'destination'`, the pre-#423 charge that paid the vendor as the card
+     * succeeded — a row the sweep will never transfer, so a fixture carrying it
+     * would let every assertion below pass against money that does not move.
+     */
     async function book(
       vendorId: string,
       requestId: string,
       offset: number,
       payoutCents: number,
-      status: 'confirmed' | 'cancelled' = 'confirmed',
-    ): Promise<void> {
+      status: BookingStatus = 'confirmed',
+    ): Promise<string> {
       const customer = await harness.database.db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.clerkUserId, CUSTOMER));
 
-      await harness.database.db.insert(bookings).values({
-        requestId,
-        customerId: customer[0]!.id,
-        vendorId,
-        eventDate: dayFrom(offset),
-        totalAmountCents: payoutCents + 1_000,
-        platformFeeCents: 1_000,
-        vendorPayoutCents: payoutCents,
-        status,
-        paidAt: new Date(),
-      });
+      const [row] = await harness.database.db
+        .insert(bookings)
+        .values({
+          requestId,
+          customerId: customer[0]!.id,
+          vendorId,
+          eventDate: dayFrom(offset),
+          totalAmountCents: payoutCents + 1_000,
+          platformFeeCents: 1_000,
+          vendorPayoutCents: payoutCents,
+          status,
+          payoutModel: 'separate',
+          paidAt: new Date(),
+        })
+        .returning({ id: bookings.id });
+
+      return row!.id;
     }
 
     it('names the soonest upcoming event, not the largest', async () => {
@@ -447,13 +479,23 @@ describe('/vendor/dashboard', () => {
       await book(vendorId, far, 40, 900_000);
       await book(vendorId, near, 10, 50_000);
 
-      const payout = ((await read()).json() as DashboardBody).nextPayout;
+      const { next } = ((await read()).json() as DashboardBody).payouts;
 
-      expect(payout?.vendorPayoutCents).toBe(50_000);
-      expect(payout?.eventDate).toBe(dayFrom(10));
+      expect(next?.cents).toBe(50_000);
+      expect(next?.releaseAt).toBe(payoutReleaseAt(dayFrom(10))?.toISOString());
     });
 
-    it('ignores a cancelled booking, which is money that is not coming', async () => {
+    /*
+     * The reversal D37 made, asserted from both sides.
+     *
+     * This used to read "ignores a cancelled booking, which is money that is
+     * not coming". `vendor_payout_cents` no longer means what was agreed; it
+     * means what is still owed, and a cancellation inside D3's cutoff rewrites
+     * it down to the share the vendor keeps for a date they held and lost
+     * (D31). The sweep pays that residual on the original schedule, so ignoring
+     * it would hide a real transfer on the screen a vendor plans around.
+     */
+    it('still owes a cancelled booking its retained share', async () => {
       const vendorId = await createProfile();
       const packageId = await addPackage();
       await publish(vendorId);
@@ -463,7 +505,48 @@ describe('/vendor/dashboard', () => {
       await book(vendorId, cancelled, 10, 50_000, 'cancelled');
       await book(vendorId, live, 40, 900_000);
 
-      expect(((await read()).json() as DashboardBody).nextPayout?.vendorPayoutCents).toBe(900_000);
+      const body = (await read()).json() as DashboardBody;
+      expect(body.payouts.next?.cents).toBe(50_000);
+      expect(body.payouts.pendingCents).toBe(950_000);
+    });
+
+    /* The other side: a full refund writes zero, and zero is not owed. */
+    it('ignores a fully refunded cancellation, which is excluded by its amount', async () => {
+      const vendorId = await createProfile();
+      const packageId = await addPackage();
+      await publish(vendorId);
+      const refunded = await request(vendorId, packageId, 10);
+      const live = await request(vendorId, packageId, 40);
+
+      await book(vendorId, refunded, 10, 0, 'cancelled');
+      await book(vendorId, live, 40, 900_000);
+
+      const body = (await read()).json() as DashboardBody;
+      expect(body.payouts.next?.cents).toBe(900_000);
+      expect(body.payouts.pendingCents).toBe(900_000);
+      expect(body.payouts.pendingCount).toBe(1);
+    });
+
+    /*
+     * A destination charge split the money as the card succeeded, so the vendor
+     * already holds their share and the sweep will never transfer it. Naming it
+     * here would be the dashboard promising a transfer that cannot happen.
+     */
+    it('ignores a legacy destination-charge booking', async () => {
+      const vendorId = await createProfile();
+      const packageId = await addPackage();
+      await publish(vendorId);
+      const legacy = await request(vendorId, packageId, 10);
+
+      const bookingId = await book(vendorId, legacy, 10, 50_000);
+      await harness.database.db
+        .update(bookings)
+        .set({ payoutModel: 'destination' })
+        .where(eq(bookings.id, bookingId));
+
+      const body = (await read()).json() as DashboardBody;
+      expect(body.payouts.next).toBeNull();
+      expect(body.payouts.pendingCents).toBe(0);
     });
 
     /**
@@ -484,9 +567,11 @@ describe('/vendor/dashboard', () => {
 
       await book(vendorId, past, -5, 50_000);
 
-      const payout = ((await read()).json() as DashboardBody).nextPayout;
-      expect(payout?.vendorPayoutCents).toBe(50_000);
-      expect(payout?.status).toBe('pending');
+      const { next } = ((await read()).json() as DashboardBody).payouts;
+      expect(next?.cents).toBe(50_000);
+      /* Its window closed while the transfer had not run, so the card must not
+       * point forwards at a date already behind us. */
+      expect(next?.isDue).toBe(true);
     });
 
     /* And nothing at all once the transfer has been made. */
@@ -502,7 +587,234 @@ describe('/vendor/dashboard', () => {
         .set({ payoutReleasedAt: new Date(), stripeTransferId: 'tr_test_released' })
         .where(eq(bookings.vendorId, vendorId));
 
-      expect(((await read()).json() as DashboardBody).nextPayout).toBeNull();
+      expect(((await read()).json() as DashboardBody).payouts.next).toBeNull();
+    });
+
+    /*
+     * The summed figure and its date — #424.
+     *
+     * Every assertion here names a number. A payout line a vendor plans around
+     * is the one place `toBeTruthy()` would hide the whole defect: a figure
+     * that exists and is wrong reads exactly like a figure that is right.
+     */
+    describe('the pending total', () => {
+      it('sums every payout still owed, and dates the soonest of them', async () => {
+        const vendorId = await createProfile();
+        const packageId = await addPackage();
+        await publish(vendorId);
+        const near = await request(vendorId, packageId, 10);
+        const far = await request(vendorId, packageId, 40);
+
+        await book(vendorId, near, 10, 50_000);
+        await book(vendorId, far, 40, 900_000);
+
+        const { payouts } = (await read()).json() as DashboardBody;
+
+        expect(payouts.pendingCents).toBe(950_000);
+        expect(payouts.pendingCount).toBe(2);
+        /*
+         * Asserted against `payoutReleaseAt` rather than a written-out
+         * timestamp, and D35 is never restated as a literal here: the point of
+         * the acceptance is that the date shown is the date paid on, and a test
+         * carrying its own copy of the interval would keep passing while the
+         * two drifted apart.
+         */
+        expect(payouts.heldCents).toBe(0);
+        expect(payouts.heldCount).toBe(0);
+        /*
+         * **`next` is the soonest booking alone, not the total.** $500 pays out
+         * on its date and $9,000 thirty days later, so a response pairing
+         * `950_000` with the earlier date would promise the whole sum then —
+         * the figure-versus-transfer disagreement acceptance 7 forbids.
+         *
+         * The date is asserted against `payoutReleaseAt` rather than a
+         * written-out timestamp, and D35's interval is never restated here: the
+         * point is that the date shown is the date paid on, and a test carrying
+         * its own copy of the interval would keep passing while the two drifted
+         * apart.
+         */
+        expect(payouts.next).toMatchObject({
+          cents: 50_000,
+          customerFirstName: 'Test',
+          releaseAt: payoutReleaseAt(dayFrom(10))?.toISOString(),
+          isDue: false,
+        });
+      });
+
+      /*
+       * A held payout with an earlier event is not the next payout. It has no
+       * release date at all, so letting it supply one would date the pending
+       * figure from money that is frozen.
+       */
+      it('never lets a held booking be the next payout', async () => {
+        const vendorId = await createProfile();
+        const packageId = await addPackage();
+        await publish(vendorId);
+        const held = await request(vendorId, packageId, 10);
+        const live = await request(vendorId, packageId, 40);
+
+        await book(vendorId, held, 10, 50_000, 'disputed');
+        await book(vendorId, live, 40, 900_000);
+
+        const { payouts } = (await read()).json() as DashboardBody;
+
+        expect(payouts.pendingCount).toBe(1);
+        expect(payouts.next?.cents).toBe(900_000);
+        expect(payouts.next?.releaseAt).toBe(payoutReleaseAt(dayFrom(40))?.toISOString());
+      });
+
+      /* Not `0` with a date beside it, and not a date carried over from money
+       * already sent — a vendor with nothing owed is owed nothing, undated. */
+      it('has no figure and no date for a vendor with nothing owed', async () => {
+        await createProfile();
+
+        const { payouts } = (await read()).json() as DashboardBody;
+
+        expect(payouts.pendingCents).toBe(0);
+        expect(payouts.pendingCount).toBe(0);
+        expect(payouts.next).toBeNull();
+        expect(payouts.heldCents).toBe(0);
+      });
+
+      /*
+       * A dispute is a hold, not a failure and not an absence. The money is
+       * still owed, so it is reported — but it has no known release date, so it
+       * must not supply one, and it must not be added to the figure the sweep
+       * is about to send.
+       */
+      it('reports a disputed payout as held, and never as the next release', async () => {
+        const vendorId = await createProfile();
+        const packageId = await addPackage();
+        await publish(vendorId);
+        const held = await request(vendorId, packageId, 10);
+        const live = await request(vendorId, packageId, 40);
+
+        await book(vendorId, held, 10, 50_000, 'disputed');
+        await book(vendorId, live, 40, 900_000);
+
+        const { payouts } = (await read()).json() as DashboardBody;
+
+        expect(payouts.pendingCents).toBe(900_000);
+        expect(payouts.pendingCount).toBe(1);
+        expect(payouts.heldCents).toBe(50_000);
+        expect(payouts.heldCount).toBe(1);
+        // The held booking's event is 30 days sooner and still supplies no date.
+        expect(payouts.next?.releaseAt).toBe(payoutReleaseAt(dayFrom(40))?.toISOString());
+      });
+
+      it('leaves nothing pending once every payout is held', async () => {
+        const vendorId = await createProfile();
+        const packageId = await addPackage();
+        await publish(vendorId);
+        const held = await request(vendorId, packageId, 10);
+
+        await book(vendorId, held, 10, 50_000, 'disputed');
+
+        const { payouts } = (await read()).json() as DashboardBody;
+
+        expect(payouts.pendingCents).toBe(0);
+        expect(payouts.next).toBeNull();
+        expect(payouts.heldCents).toBe(50_000);
+      });
+
+      it('drops a released payout out of the figure on the next read', async () => {
+        const vendorId = await createProfile();
+        const packageId = await addPackage();
+        await publish(vendorId);
+        const released = await request(vendorId, packageId, 10);
+        const live = await request(vendorId, packageId, 40);
+
+        const releasedId = await book(vendorId, released, 10, 50_000);
+        await book(vendorId, live, 40, 900_000);
+
+        expect(((await read()).json() as DashboardBody).payouts.pendingCents).toBe(950_000);
+
+        await harness.database.db
+          .update(bookings)
+          .set({ payoutReleasedAt: new Date(), stripeTransferId: 'tr_test_released' })
+          .where(eq(bookings.id, releasedId));
+
+        const { payouts } = (await read()).json() as DashboardBody;
+        expect(payouts.pendingCents).toBe(900_000);
+        expect(payouts.pendingCount).toBe(1);
+        expect(payouts.next?.releaseAt).toBe(payoutReleaseAt(dayFrom(40))?.toISOString());
+      });
+
+      /**
+       * **Acceptance 7 — the one that matters.**
+       *
+       * The figure a vendor is shown is compared against what the release sweep
+       * would actually transfer for the same rows, by asking the sweep's own
+       * query. Two numbers that can disagree eventually will, and the disagree-
+       * ment would surface as a vendor being told they were owed money that
+       * never arrived.
+       *
+       * Every event is in the past so the sweep's date bound admits all of
+       * them; the dashboard drops that bound precisely because a payout whose
+       * window is still open is owed too, and the assertion below would be
+       * vacuous if none of these rows were due.
+       */
+      it('shows exactly what the release sweep would transfer for the same rows', async () => {
+        const vendorId = await createProfile();
+        const packageId = await addPackage();
+        await publish(vendorId);
+        const first = await request(vendorId, packageId, 10);
+        const second = await request(vendorId, packageId, 20);
+        const third = await request(vendorId, packageId, 30);
+        const fourth = await request(vendorId, packageId, 40);
+
+        // Owed, and due: a confirmed booking and a cancellation's retained share.
+        await book(vendorId, first, -20, 127_600);
+        await book(vendorId, second, -15, 31_900, 'cancelled');
+        // Not owed: a dispute holds one, and a full refund zeroed the other.
+        await book(vendorId, third, -12, 50_000, 'disputed');
+        await book(vendorId, fourth, -11, 0, 'cancelled');
+
+        const dueIds = await findDuePayoutBookingIds(
+          harness.database.db,
+          payoutDueThroughDate(new Date()),
+          100,
+        );
+        const dueRows = await harness.database.db
+          .select({ cents: bookings.vendorPayoutCents })
+          .from(bookings)
+          .where(inArray(bookings.id, dueIds));
+        const sweepCents = dueRows.reduce((total, row) => total + row.cents, 0);
+
+        const { payouts } = (await read()).json() as DashboardBody;
+
+        expect(sweepCents).toBe(159_500);
+        expect(payouts.pendingCents).toBe(sweepCents);
+        expect(payouts.pendingCount).toBe(dueIds.length);
+        expect(payouts.heldCents).toBe(50_000);
+      });
+
+      /**
+       * The rate-change case, tested by making the stored split disagree with
+       * every rate rather than by moving the rate.
+       *
+       * `vendor_payout_cents` is settled at the commission in force when the
+       * card succeeded, so a booking written under an old rate must still show
+       * that amount. Changing an env var and re-reading would prove nothing — a
+       * surface that recomputed from a rate loaded once at boot would pass it.
+       * This row's fee is a flat $10 against a $1,286 total, a split no
+       * percentage rate produces, so **only** reading the stored column yields
+       * the expected number: a recomputation at any rate lands somewhere else.
+       */
+      it('reports the stored payout, not a split any commission rate produces', async () => {
+        const vendorId = await createProfile();
+        const packageId = await addPackage();
+        await publish(vendorId);
+        const early = await request(vendorId, packageId, 10);
+
+        // `book` writes total = payout + 1_000 and a 1_000 fee: 0.78%, which is
+        // neither the current rate nor any rate this product would set.
+        await book(vendorId, early, 10, 127_600);
+
+        const { payouts } = (await read()).json() as DashboardBody;
+        expect(payouts.pendingCents).toBe(127_600);
+        expect(payouts.pendingCount).toBe(1);
+      });
     });
   });
 

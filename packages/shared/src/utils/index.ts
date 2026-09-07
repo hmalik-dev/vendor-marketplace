@@ -2,6 +2,7 @@ import {
   BOOKING_REQUEST_EXPIRY_DAYS,
   DEFAULT_PLATFORM_FEE_RATE,
   FULL_REFUND_CUTOFF_HOURS,
+  HELD_PAYOUT_STATUSES,
   LATE_CANCELLATION_REFUND_RATE,
   MAX_EVENT_DATE_MONTHS_AHEAD,
   MAX_SLUG_LENGTH,
@@ -494,7 +495,12 @@ export function payoutStatusOf(
     return 'released';
   }
 
-  return booking.status === 'disputed' ? 'held' : 'pending';
+  /*
+   * Membership in `HELD_PAYOUT_STATUSES`, not `=== 'disputed'`. The list is
+   * what the vendor dashboard selects on too, so a hold status added to one and
+   * not the other cannot happen.
+   */
+  return HELD_PAYOUT_STATUSES.some((held) => held === booking.status) ? 'held' : 'pending';
 }
 
 /**

@@ -75,6 +75,30 @@ describe('SiteHeader', () => {
     );
   });
 
+  /*
+   * Roles are exclusive, and that decides where "home" is. `/` is a catalogue
+   * of other vendors and `redirectVendorToDashboard` sends a vendor straight
+   * back out of it, so a wordmark pointing there makes the one control every
+   * screen carries a round trip through a redirect. A customer's home is the
+   * marketplace, and an admin renders it too. Frame `30`.
+   */
+  it.each([
+    ['vendor' as const, '/dashboard'],
+    ['customer' as const, '/'],
+    ['admin' as const, '/'],
+    [null, '/'],
+  ])('points the wordmark at home as a %s reads it', async (role, href) => {
+    authState = role === null ? 'signed-out' : 'signed-in';
+    currentRole = role;
+
+    render(await SiteHeader());
+
+    expect(screen.getByRole('link', { name: BRAND_NAME })).toHaveProperty(
+      'href',
+      `http://localhost:3000${href}`,
+    );
+  });
+
   it('labels the primary navigation landmark', async () => {
     render(await SiteHeader());
 
