@@ -1,4 +1,5 @@
 import { kmToMiles, type ServicePackage } from '@vendor-marketplace/shared';
+import { ReportDialog } from '@/components/reports/report-dialog';
 import { cn } from '@/lib/utils';
 
 /** The frame draws three included lines; a fourth would push the CTA off. */
@@ -12,6 +13,10 @@ export interface AboutPaneProps {
   /** The vendor's active packages, cheapest first is not assumed. */
   packages: readonly ServicePackage[];
   onSeePackagesHref: string;
+  /** The storefront's own id — what a report about it names (#436). */
+  vendorProfileId: string;
+  /** Reporting is authenticated, so a signed-out reader is sent to sign-in. */
+  signedIn: boolean;
 }
 
 /**
@@ -74,6 +79,8 @@ export function AboutPane({
   serviceRadiusKm,
   packages,
   onSeePackagesHref,
+  vendorProfileId,
+  signedIn,
 }: AboutPaneProps): React.ReactElement {
   const tiles: Array<{ label: string; value: string }> = [];
 
@@ -172,6 +179,25 @@ export function AboutPane({
           </a>
         </section>
       ) : null}
+
+      {/*
+        The report control, last and quiet (#436).
+
+        Frame `03` draws no such control — it predates in-product reporting —
+        so this is an expected deviation rather than drift, and it is placed
+        where it costs the composition least: after everything the frame does
+        draw, in the muted 12.5px the rest of the pane's secondary text uses.
+        A design pass rules on where it belongs; a ticket does not move the
+        frame.
+      */}
+      <div className="mt-6">
+        <ReportDialog
+          subjectType="vendor_profile"
+          subjectId={vendorProfileId}
+          subjectNoun="this profile"
+          signedIn={signedIn}
+        />
+      </div>
     </div>
   );
 }

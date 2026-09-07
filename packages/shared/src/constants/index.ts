@@ -1120,6 +1120,19 @@ export const ADMIN_ACTIONS = [
   'tag_suggestion_resolved',
   'dispute_resolved',
   'support_case_resolved',
+  /**
+   * A read, and the one read in the console that is logged (#436).
+   *
+   * Every other member here is a mutation, which is what the docstring above
+   * says the enum is for. This one is here anyway because reading somebody's
+   * private messages is the action that most needs a record: it changes
+   * nothing and it is the most invasive thing an operator can do. The route
+   * that writes it refuses any conversation no **open** case names, so the row
+   * always has a case to point at, and it is written in the same transaction
+   * as the read rather than best-effort — a read that could not be logged did
+   * not happen.
+   */
+  'conversation_messages_read',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1140,6 +1153,7 @@ export const ADMIN_ACTION_SUBJECTS = [
   'tag_suggestion',
   'booking',
   'support_case',
+  'conversation',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
 
@@ -1187,6 +1201,17 @@ export const AVAILABILITY_MONTHS_AHEAD = 12;
 export const MAX_EVENT_DATE_MONTHS_AHEAD = AVAILABILITY_MONTHS_AHEAD * 2;
 
 export const MESSAGE_MAX_LENGTH = 5_000;
+
+/**
+ * A thread page. Larger than the default list page: a conversation is read in
+ * bulk rather than skimmed.
+ *
+ * In shared because two routes now page the same rows — the participant's
+ * `/conversations/:id/messages` and the console's case-scoped read of a
+ * reported thread (#436) — and a second copy of the number is how an operator
+ * comes to see a different slice of a thread than the people in it.
+ */
+export const MESSAGE_PAGE_SIZE = 50;
 
 /** Largest guest count accepted anywhere a party size is captured. */
 export const MAX_GUEST_COUNT = 100_000;

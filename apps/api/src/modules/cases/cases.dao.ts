@@ -11,6 +11,8 @@ import {
 import type {
   AdminCaseQuery,
   BookingStatus,
+  ReportReason,
+  ReportSubject,
   SupportCaseOrigin,
   SupportCaseStatus,
   SupportTopic,
@@ -40,6 +42,10 @@ export interface SupportCaseProjection {
   senderLastName: string | null;
   senderEmail: string | null;
   bookingId: string | null;
+  /** What an in-product report is about; `null` on the other two origins (#436). */
+  subjectType: ReportSubject | null;
+  subjectId: string | null;
+  reportReason: ReportReason | null;
   createdAt: Date;
 }
 
@@ -73,6 +79,9 @@ const CASE_SELECTION = {
   senderLastName: users.lastName,
   senderEmail: supportCases.senderEmail,
   bookingId: supportCases.bookingId,
+  subjectType: supportCases.subjectType,
+  subjectId: supportCases.subjectId,
+  reportReason: supportCases.reportReason,
   createdAt: supportCases.createdAt,
 } as const;
 
@@ -292,6 +301,43 @@ export async function insertSupportCase(
  * their message nowhere. This is the narrowest signal that separates the two,
  * so the original rule survives untouched for the case it was written for.
  */
+/**
+ * The **open** case that authorises reading one conversation (#436).
+ *
+ * This one query is the whole of the scope on `GET /admin/conversations/:id/messages`:
+ * no open case naming the thread, no read. It is deliberately not
+ * `findSupportCaseById` plus a check — an operator holds a case id and could
+ * pass any conversation id beside it, so the grant is looked up *from the
+ * conversation* and the case comes back as the answer rather than as an input.
+ *
+ * `status = 'open'` is load-bearing rather than tidy. A resolved case is a
+ * finished job, and leaving its grant standing would turn every report ever
+ * filed into a permanent key to that thread — the free browse the ticket exists
+ * to refuse, arriving one closed case at a time.
+ *
+ * Oldest first, so a thread with two reports against it names the case that has
+ * been waiting longest, which is the same order the queue itself is worked in.
+ */
+export async function findOpenCaseForConversation(
+  db: AppDatabase,
+  conversationId: string,
+): Promise<{ id: string; reference: string } | null> {
+  const rows = await db
+    .select({ id: supportCases.id, reference: supportCases.reference })
+    .from(supportCases)
+    .where(
+      and(
+        eq(supportCases.status, 'open'),
+        eq(supportCases.subjectType, 'conversation'),
+        eq(supportCases.subjectId, conversationId),
+      ),
+    )
+    .orderBy(asc(supportCases.createdAt))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
 export async function findOpenChargebackCase(
   db: AppDatabase,
   bookingId: string,

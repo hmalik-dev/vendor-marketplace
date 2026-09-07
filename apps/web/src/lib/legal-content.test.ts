@@ -17,9 +17,23 @@ import { legalDocument, legalMarkdownSource } from './legal-content';
 import { legalDocumentText, parseLegalMarkdown } from './legal-markdown';
 
 describe('legal content', () => {
-  it('loads all three documents with a frontmatter date', () => {
+  /**
+   * Per document, not one date for all three.
+   *
+   * The page says the date at its top is the date of the version you are
+   * reading, so a document that changes moves its own date and the others do
+   * not — which a single shared literal made impossible to express. #436's
+   * message-access clause was the first edit to prove it.
+   */
+  it('loads all three documents with their own frontmatter date', () => {
+    const dates: Record<(typeof LEGAL_DOCUMENT_SLUGS)[number], string> = {
+      terms: '2026-06-04',
+      privacy: '2026-09-07',
+      cookies: '2026-06-04',
+    };
+
     for (const slug of LEGAL_DOCUMENT_SLUGS) {
-      expect([slug, legalDocument(slug).lastUpdated]).toEqual([slug, '2026-06-04']);
+      expect([slug, legalDocument(slug).lastUpdated]).toEqual([slug, dates[slug]]);
     }
   });
 

@@ -1,5 +1,6 @@
 import {
   conversationSummarySchema,
+  MESSAGE_PAGE_SIZE,
   notificationItemSchema,
   openConversationSchema,
   openedConversationSchema,
@@ -49,8 +50,6 @@ export function readStreamTicket(url: string): string | null {
 const conversationParamsSchema = z.object({ conversationId: uuidSchema });
 const notificationParamsSchema = z.object({ notificationId: uuidSchema });
 
-/** A thread page. Larger than the default: a conversation is read in bulk. */
-const MESSAGE_PAGE_SIZE = 50;
 const NOTIFICATION_PAGE_SIZE = 20;
 
 /** Kept well under any proxy's idle timeout, which is what drops a stream. */

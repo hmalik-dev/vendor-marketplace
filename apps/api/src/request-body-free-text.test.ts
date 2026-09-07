@@ -220,8 +220,9 @@ describe('free text on a request body', () => {
     // the customer's free text now reaches `dispute_reason` through
     // `supportMessageSchema.message`, which is still counted here; 22 since
     // #427 added `acceptVendorAgreementSchema`; 23 since #429 added
-    // `acceptTermsSchema`.
-    expect(names).toHaveLength(23);
+    // `acceptTermsSchema`; 24 since #436 added `createReportSchema`, whose
+    // `detail` is free text a stranger types about somebody else.
+    expect(names).toHaveLength(24);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 

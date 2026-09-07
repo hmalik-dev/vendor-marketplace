@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { formatPrice, uuidSchema } from '@vendor-marketplace/shared';
+import { formatPrice, REPORT_SUBJECT_LABELS, uuidSchema } from '@vendor-marketplace/shared';
+import { CaseConversation } from '@/components/admin/case-conversation';
 import { CaseResolution } from '@/components/admin/case-resolution';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
@@ -183,6 +184,28 @@ export default async function AdminCasePage({
             </p>
           ) : null}
         </Card>
+
+        {supportCase.subjectType && supportCase.subjectId ? (
+          <Card title="What was reported">
+            <Field
+              label={REPORT_SUBJECT_LABELS[supportCase.subjectType]}
+              value={supportCase.subjectId}
+              mono
+            />
+            {/*
+              The thread's own card, and only for a thread. The other three
+              subjects are already public — a storefront, a review, a published
+              photograph — and the case links nothing an operator cannot
+              already open. A conversation is the one that needs a grant, so it
+              is the one that gets a control.
+            */}
+            {supportCase.subjectType === 'conversation' ? (
+              <div className="mt-3.5">
+                <CaseConversation conversationId={supportCase.subjectId} />
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
 
         {supportCase.stripeDisputeId ? (
           <Card title="The chargeback">

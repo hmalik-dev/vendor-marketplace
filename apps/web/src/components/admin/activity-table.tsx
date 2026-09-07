@@ -41,6 +41,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   tag_suggestion_resolved: 'Resolved a tag suggestion',
   dispute_resolved: 'Resolved a report',
   support_case_resolved: 'Closed a case',
+  conversation_messages_read: 'Read a reported thread',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */
@@ -51,6 +52,7 @@ const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
   tag_suggestion: 'Suggestion',
   booking: 'Booking',
   support_case: 'Case',
+  conversation: 'Thread',
 };
 
 /**

@@ -42,7 +42,7 @@ function payload(overrides: Partial<WireVendorReviewsPage> = {}): WireVendorRevi
   };
 }
 
-const BASE = { slug: 'june-harlow', businessName: 'June Harlow' };
+const BASE = { slug: 'june-harlow', businessName: 'June Harlow', signedIn: true };
 
 describe('ReviewsPane — the summary', () => {
   it('renders the average, the count and the five-bar distribution', () => {

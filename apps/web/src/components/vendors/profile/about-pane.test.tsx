@@ -22,6 +22,8 @@ function servicePackage(priceCents: number, inclusions: readonly string[]): Serv
 }
 
 const BASE = {
+  vendorProfileId: '5a4d0f6e-6ef0-4e1e-9d0b-2b47b3f0c111',
+  signedIn: true,
   bio: 'Ten years photographing weddings across central Texas.',
   yearsInBusiness: null,
   completedEventCount: 0,

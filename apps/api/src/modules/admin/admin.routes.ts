@@ -8,6 +8,8 @@ import {
   adminCaseDetailSchema,
   adminCasePageSchema,
   adminCaseQuerySchema,
+  adminConversationMessagesSchema,
+  adminConversationQuerySchema,
   adminCustomerPageSchema,
   adminCustomerQuerySchema,
   adminMetricsSchema,
@@ -30,7 +32,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
-import { listCases, readCase, resolveCase } from '../cases/cases.service.js';
+import { listCases, readCase, readCaseConversation, resolveCase } from '../cases/cases.service.js';
 import {
   deleteReview,
   listActivity,
@@ -57,6 +59,7 @@ const suggestionParamsSchema = z.object({ suggestionId: z.uuid() });
 const tagParamsSchema = z.object({ tagId: z.uuid() });
 const bookingParamsSchema = z.object({ bookingId: z.uuid() });
 const caseParamsSchema = z.object({ caseId: z.uuid() });
+const adminConversationParamsSchema = z.object({ conversationId: z.uuid() });
 
 /**
  * The operations control plane (#15).
@@ -372,6 +375,41 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    * ticket exists to end. `PUT /admin/bookings/:bookingId/dispute` above is the
    * one that moves money, and it closes the case as part of the ruling.
    */
+  /**
+   * The messages on a reported thread (#436).
+   *
+   * **A read, scoped by a case, and logged.** `readCaseConversation` refuses
+   * every conversation no *open* case names, so this is not a browse of every
+   * thread in the marketplace — it is the report's own evidence, reachable
+   * while the report is being worked and not afterwards. Each successful read
+   * writes an `admin_actions` row in the same transaction, which is why #434
+   * was this ticket's prerequisite rather than a nicety.
+   *
+   * **There is no `POST` beside it, deliberately.** The operator reads and then
+   * acts through moderation or through support; nothing in this console posts
+   * into a thread, because a participant is a party to the conversation and an
+   * operator is not.
+   */
+  app.get(
+    '/admin/conversations/:conversationId/messages',
+    {
+      onRequest: adminOnly,
+      schema: {
+        params: adminConversationParamsSchema,
+        querystring: adminConversationQuerySchema,
+        response: { 200: adminConversationMessagesSchema },
+      },
+    },
+    async (request) =>
+      readCaseConversation(
+        { db: app.db, log: request.log },
+        assertRole(request.auth, ['admin']).id,
+        request.params.conversationId,
+        request.query.page,
+        request.query.pageSize,
+      ),
+  );
+
   app.put(
     '/admin/cases/:caseId/resolve',
     {
