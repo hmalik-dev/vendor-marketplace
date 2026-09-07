@@ -355,6 +355,13 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
                 button would put a destructive dialog in front of an operator
                 for an action the API answers 404 — `setUserBanned` looks the
                 target up with `findUserById`, which filters `deleted_at`.
+
+                **This is a deliberate composition difference from frame `13`,
+                which draws the `···` in all fifteen rows.** The frame cannot
+                arbitrate it: `retired` postdates the frame, so there is no
+                drawn state to match, and matching the frame here would mean
+                drawing a control that cannot do anything. Recorded rather than
+                left for a parity pass to re-find and file.
               */
               if (row.status === 'retired') {
                 return null;
