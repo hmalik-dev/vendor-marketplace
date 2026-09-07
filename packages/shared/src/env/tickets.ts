@@ -548,6 +548,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   455: ['auth'], // the Apply filters submit clears the filter and no pointer reaches it
   456: ['auth'], // two moderation labels disagree with the frame that now draws them
   457: ['auth'], // a moderation hold the moderated vendor cannot lift
+  458: ['auth'], // a vendor is offered a Report control on their own storefront
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
