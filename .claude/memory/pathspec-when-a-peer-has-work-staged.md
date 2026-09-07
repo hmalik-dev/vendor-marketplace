@@ -1,6 +1,6 @@
 ---
 name: pathspec-when-a-peer-has-work-staged
-description: When another session has changes staged, use a pathspec on both add and commit or you silently commit their work under your message
+description: In a shared checkout pathspec both add and commit unconditionally — a clean git status does not mean a peer will not stage before your commit
 metadata:
   type: feedback
 ---
@@ -25,9 +25,23 @@ and that would have put the peer's tracker and registry edits into a docs commit
 they never wrote and never reviewed. It would have looked entirely normal: the
 right author, the listed files plus two more, tests green, nothing to notice.
 
-**How to apply:** check `git status --porcelain` for staged (`M ` in column 1)
-paths you do not own before committing. If any exist, pathspec both commands and
-tell the peer the moment you are clean, since they are blocked until you are.
+**How to apply: pathspec the commit unconditionally in a shared checkout.** Do
+not make it conditional on what `git status` showed, because that check does not
+close the window — it is a read, and the peer stages after it.
+
+Second instance, 2026-09-07, landing #431: `git status --short` in the shared
+checkout was **clean**, so nothing suggested a peer was mid-commit. Between that
+read and `git commit -F <message>` moments later, the orchestrating session
+staged a `.claude/memory/` file it had just written, and the plain commit swept
+it in. It surfaced only because the commit reported "2 files changed" where one
+was staged, and that number was the *only* tell — the tree was clean, the hook
+was satisfied, formatting passed, and the file was a plausible neighbour of the
+one being committed.
+
+So the check is still worth doing, but as information rather than as the guard:
+if it shows staged paths you do not own, tell the peer the moment you are clean,
+since they are blocked until you are. The pathspec on `commit` is what actually
+holds, and it costs nothing when there is no peer.
 
 This is the narrow exception to [[adhoc-work-single-commit]], which says to sweep
 the tree together and is right for *modified* files a peer left lying around. It
