@@ -6,6 +6,8 @@ import {
   toDateString,
 } from '@vendor-marketplace/shared';
 import type {
+  AdminActivityPage,
+  AdminActivityQuery,
   AdminBanResult,
   AdminBookingPage,
   AdminBookingQuery,
@@ -27,6 +29,8 @@ import type {
   AdminVendorQuery,
   AdminVendorRow,
   AdminVendorStatus,
+  Booking,
+  DisputeOutcome,
   FieldErrorDetails,
   ResolveTagSuggestion,
   TagCategory,
@@ -44,8 +48,10 @@ import { insertNotification } from '../messaging/messaging.dao.js';
 import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
 import { deleteReviewAndRecalculate } from '../reviews/reviews.dao.js';
 import { normalizeTagName } from '../tags/tags.service.js';
+import { resolveDispute } from '../payments/payments.service.js';
 import {
   assignTagToVendor,
+  countAdminActions,
   countAdminBookings,
   countAdminCustomers,
   countAdminPayments,
@@ -54,6 +60,7 @@ import {
   countAdminVendors,
   countVendorsHoldingTag,
   declineOpenRequests,
+  findAdminActions,
   findAdminBookings,
   findAdminCustomers,
   findAdminMetricSeries,
@@ -73,10 +80,12 @@ import {
   findVendorFilterFacets,
   findVendorProfileByUserId,
   findVendorProfileIdByUserId,
+  insertAdminAction,
   insertTag,
   resolveTagSuggestionRow,
   setBanned,
   updateTagRow,
+  type AdminActionRecord,
   type AdminTagSuggestionProjection,
   type AdminVendorFilters,
   type AdminVendorProjection,
@@ -108,6 +117,84 @@ export interface AdminContext {
    * drifted, and threading them separately is how that happens.
    */
   mail: NotificationEmailDeps;
+}
+
+// --- The action log (#434) -------------------------------------------------
+
+/**
+ * Writes the audit row, and never lets it undo the work it records.
+ *
+ * **The rule, in one line: best-effort if and only if the operation has already
+ * committed an irreversible effect outside Postgres. Otherwise the row rides
+ * the transaction.**
+ *
+ * That is deliberately a test a future author can apply rather than a judgement
+ * they have to make, and exactly two call sites meet it — `setUserBanned`'s ban
+ * path, which has refunded cards through Stripe, and `resolveBookingDispute`,
+ * which has moved the money one way or the other. Both would answer 500 on work
+ * whose retry re-enters a half-applied state, so a failed audit write there is
+ * loud in the logs and invisible to the caller. It is also the **last** thing
+ * each of them does, so a row exists only where the change really happened.
+ *
+ * Every other writer — the unban, the review deletion, the three tag paths —
+ * hands its own transaction to `insertAdminAction`, so the row and the change
+ * it describes commit or roll back together and a failed log write leaves an
+ * operation the operator can simply repeat.
+ *
+ * Built **on** `bestEffortNotice` rather than beside it. The two started as the
+ * same try/catch-and-log body forty lines apart, which is precisely how #408's
+ * rule became a special case the first time.
+ */
+async function recordAdminActionBestEffort(
+  context: AdminContext,
+  record: AdminActionRecord,
+): Promise<void> {
+  await bestEffortNotice(
+    context,
+    {
+      actorId: record.actorId,
+      action: record.action,
+      subjectType: record.subjectType,
+      subjectId: record.subjectId,
+    },
+    () => insertAdminAction(context.db, record),
+    'The admin operation succeeded but its action could not be logged',
+  );
+}
+
+/**
+ * The activity feed — "who did what, to whom, and when".
+ *
+ * Filtered by actor and by subject, which are the two questions it exists to
+ * answer: "what has this operator been doing" and "what did the console do to
+ * this account". Without the second it is a firehose rather than a record.
+ */
+export async function listActivity(
+  db: AppDatabase,
+  query: AdminActivityQuery,
+): Promise<AdminActivityPage> {
+  const offset = offsetOf(query);
+  /* `AdminActivityQuery` already carries the three filter fields the DAO reads. */
+  const [rows, total] = await Promise.all([
+    findAdminActions(db, query, query.pageSize, offset),
+    countAdminActions(db, query),
+  ]);
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      actorId: row.actorId,
+      actorName: fullName(row.actorFirstName, row.actorLastName),
+      action: row.action,
+      subjectType: row.subjectType,
+      subjectId: row.subjectId,
+      detail: row.detail,
+      createdAt: row.createdAt,
+    })),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+  };
 }
 
 /**
@@ -227,10 +314,14 @@ export async function setUserBanned(
   }
 
   /*
-   * Who, not just what. `users.banned_at` records when an account was suspended
-   * and nothing records by whom, so "which operator suspended this" had no
-   * answer anywhere. A log line is not an audit table — but it is the
-   * difference between an unanswerable question and a greppable one.
+   * The log line, kept beside the audit row rather than replaced by it.
+   *
+   * It used to be the whole record, and the comment here said so — "a log line
+   * is not an audit table". It is one now (#434): the row this function writes
+   * before it returns is what answers "which operator suspended this account",
+   * queryably and for ever. This stays because the two answer different
+   * questions — the row is the record, and this is what an operator greps while
+   * a ban is still in flight, before any of the work below has committed.
    */
   context.log.info({ actorId, targetId, isBanned }, "Admin changed an account's ban state");
 
@@ -242,13 +333,30 @@ export async function setUserBanned(
      * account is not the same as reinstating a listing, and the operator does not
      * decide when a vendor is ready to trade again.
      */
-    const { profileUnpublished } = await setBanned(
-      context.db,
-      targetId,
-      profile?.id ?? null,
-      false,
-      now,
-    );
+    /*
+     * The unban and its audit row commit together.
+     *
+     * Nothing outside Postgres has happened on this path — no refund, no
+     * cancellation, only the flag — so it does not meet the best-effort rule
+     * above, and it should not use it. `setBanned` opens a transaction of its
+     * own; passing this one in makes that a savepoint inside it, so a failed
+     * audit write rolls the reinstatement back to a state the operator can
+     * simply repeat, rather than leaving an account quietly unbanned with no
+     * record of who did it.
+     */
+    const { profileUnpublished } = await context.db.transaction(async (tx) => {
+      const result = await setBanned(tx, targetId, profile?.id ?? null, false, now);
+
+      await insertAdminAction(tx, {
+        actorId,
+        action: 'user_unbanned',
+        subjectType: 'user',
+        subjectId: targetId,
+        detail: { profileUnpublished: result.profileUnpublished },
+      });
+
+      return result;
+    });
 
     return {
       userId: targetId,
@@ -424,52 +532,57 @@ export async function setUserBanned(
     const refunded = booking.stripePaymentIntentId !== null;
 
     for (const recipient of recipients) {
-      await bestEffortNotice(context, { bookingId: booking.id, recipient }, async () => {
-        const body =
-          recipient === booking.customerId
-            ? refunded
-              ? "The other party's account was suspended. Your payment has been refunded in full."
-              : "The other party's account was suspended. Nothing was charged for this booking."
-            : refunded
-              ? "The customer's account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance."
-              : "The customer's account was suspended and the booking was cancelled. Nothing had been charged for it.";
+      await bestEffortNotice(
+        context,
+        { bookingId: booking.id, recipient },
+        async () => {
+          const body =
+            recipient === booking.customerId
+              ? refunded
+                ? "The other party's account was suspended. Your payment has been refunded in full."
+                : "The other party's account was suspended. Nothing was charged for this booking."
+              : refunded
+                ? "The customer's account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance."
+                : "The customer's account was suspended and the booking was cancelled. Nothing had been charged for it.";
 
-        const stored = await insertNotification(context.db, {
-          userId: recipient,
-          type: 'booking_cancelled',
-          title: 'A booking was cancelled',
-          body,
-          data: { bookingId: booking.id },
-        });
-
-        if (stored) {
-          context.hub.publish(recipient, {
-            type: 'new_notification',
-            notification: {
-              id: stored.id,
-              type: stored.type,
-              title: stored.title,
-              body: stored.body,
-              href: '/bookings',
-              isRead: false,
-              createdAt: stored.createdAt,
-            },
+          const stored = await insertNotification(context.db, {
+            userId: recipient,
+            type: 'booking_cancelled',
+            title: 'A booking was cancelled',
+            body,
+            data: { bookingId: booking.id },
           });
 
-          /*
-           * Per recipient, which is the point. One shared string here once told a
-           * vendor their payment had been refunded — they had not paid, and on an
-           * unpaid booking nothing was refunded at all. The email carries the
-           * body written for *this* reader, so both parties read the same refund
-           * figure and neither reads the other's.
-           */
-          queueNotificationEmail(
-            context.mail,
-            stored,
-            recipient === booking.customerId ? 'customer' : 'vendor',
-          );
-        }
-      });
+          if (stored) {
+            context.hub.publish(recipient, {
+              type: 'new_notification',
+              notification: {
+                id: stored.id,
+                type: stored.type,
+                title: stored.title,
+                body: stored.body,
+                href: '/bookings',
+                isRead: false,
+                createdAt: stored.createdAt,
+              },
+            });
+
+            /*
+             * Per recipient, which is the point. One shared string here once told a
+             * vendor their payment had been refunded — they had not paid, and on an
+             * unpaid booking nothing was refunded at all. The email carries the
+             * body written for *this* reader, so both parties read the same refund
+             * figure and neither reads the other's.
+             */
+            queueNotificationEmail(
+              context.mail,
+              stored,
+              recipient === booking.customerId ? 'customer' : 'vendor',
+            );
+          }
+        },
+        'The operation succeeded but its notification could not be recorded',
+      );
     }
   }
 
@@ -487,6 +600,31 @@ export async function setUserBanned(
     now,
   );
 
+  /*
+   * Last, and best-effort. Everything above has already happened — cards
+   * refunded, bookings cancelled, the account suspended — so a row exists only
+   * where the ban really landed, and a database that refused the row must not
+   * turn a completed ban into a 500 the operator would retry against a
+   * half-applied one.
+   *
+   * `refundsFailed` is in the payload because it is the number that needs a
+   * human (#400): a ban carrying one left money with Stripe and a booking still
+   * standing, and the log is where that is found again later.
+   */
+  await recordAdminActionBestEffort(context, {
+    actorId,
+    action: 'user_banned',
+    subjectType: 'user',
+    subjectId: targetId,
+    detail: {
+      requestsDeclined,
+      bookingsCancelled,
+      refundsIssued,
+      refundsFailed,
+      profileUnpublished,
+    },
+  });
+
   return {
     userId: targetId,
     isBanned: true,
@@ -496,6 +634,52 @@ export async function setUserBanned(
     refundsFailed,
     profileUnpublished,
   };
+}
+
+/**
+ * An operator settles a reported problem, and the console records that they did.
+ *
+ * A thin wrapper over `payments.service.ts`'s `resolveDispute` rather than an
+ * `actorId` parameter threaded into it, and the direction of the dependency is
+ * the whole reason. The money is the payments module's to move and this is the
+ * admin module's log; teaching `resolveDispute` to write an `admin_actions` row
+ * would make `payments` import the admin DAO, which is backwards — a customer
+ * cancelling a booking runs most of that same code and has no operator to
+ * record. The actor stops here, where every caller is an operator by
+ * construction.
+ *
+ * Best-effort logging, and this is the case that most needs it: by the time it
+ * returns, either the hold has been lifted or the card has been refunded in
+ * full. There is no retry that does either of those a second time safely.
+ */
+export async function resolveBookingDispute(
+  context: AdminContext,
+  actorId: string,
+  bookingId: string,
+  outcome: DisputeOutcome,
+  now: Date,
+): Promise<Booking> {
+  const booking = await resolveDispute(context, bookingId, outcome, now);
+
+  await recordAdminActionBestEffort(context, {
+    actorId,
+    action: 'dispute_resolved',
+    subjectType: 'booking',
+    subjectId: bookingId,
+    /*
+     * Which way it went, and the money that moved with it. `refundAmountCents`
+     * is what an operator asks the log for later — "was this one refunded, and
+     * how much" — and it is a figure the platform computed, not content a user
+     * wrote.
+     */
+    detail: {
+      outcome,
+      status: booking.status,
+      refundAmountCents: booking.refundAmountCents ?? null,
+    },
+  });
+
+  return booking;
 }
 
 export async function listCustomers(
@@ -619,13 +803,39 @@ export async function deleteReview(
   actorId: string,
   reviewId: string,
 ): Promise<void> {
-  const deleted = await deleteReviewAndRecalculate(context.db, reviewId);
+  /*
+   * The deletion and its audit row commit together.
+   *
+   * Nothing outside Postgres happens here, so the best-effort rule does not
+   * apply — and this is the path where riding the transaction is worth the
+   * most. A row deleted with no record of who deleted it is unrecoverable in
+   * both directions: the review is gone and so is the reason. Rolling both back
+   * leaves the operator a button that still works.
+   *
+   * `deleteReviewAndRecalculate` opens a transaction of its own to re-derive
+   * the rating; passing this one in nests it as a savepoint, so the rating and
+   * the audit row share the deletion's fate.
+   *
+   * The id and nothing else in `detail`. The review's text is exactly what a
+   * moderation log must not keep a second copy of.
+   */
+  await context.db.transaction(async (tx) => {
+    const deleted = await deleteReviewAndRecalculate(tx, reviewId);
 
-  if (!deleted) {
-    throw notFound('No review with that id');
-  }
+    if (!deleted) {
+      throw notFound('No review with that id');
+    }
 
-  // Same reason as the ban: a deleted review otherwise leaves no trace at all.
+    await insertAdminAction(tx, {
+      actorId,
+      action: 'review_deleted',
+      subjectType: 'review',
+      subjectId: reviewId,
+      detail: {},
+    });
+  });
+
+  // Greppable while it happens; the row above is the record that survives.
   context.log.info({ actorId, reviewId }, 'Admin deleted a review');
 }
 
@@ -690,19 +900,23 @@ function tagSlug(category: TagCategory, name: string): string {
  * `bestEffortAnnouncement` in the booking-request service and `bestEffortNotice`
  * in payments; #408 added it there and left these two, which is exactly how a
  * rule becomes a special case.
+ *
+ * The message became a parameter with #434, which gave this a second kind of
+ * caller: the audit write follows the identical rule for a sharper reason, and
+ * a second copy of this body — which is what it started as — would have been
+ * the same drift again, one ticket later. It is the **last** parameter so the
+ * two notification callers keep the shape they already had.
  */
 async function bestEffortNotice(
   context: AdminContext,
   subject: Record<string, string>,
   work: () => Promise<void>,
+  message: string,
 ): Promise<void> {
   try {
     await work();
   } catch (error) {
-    context.log.error(
-      { ...subject, err: error },
-      'The operation succeeded but its notification could not be recorded',
-    );
+    context.log.error({ ...subject, err: error }, message);
   }
 }
 
@@ -712,33 +926,38 @@ async function notifyVendorOfTag(
   title: string,
   body: string,
 ): Promise<void> {
-  await bestEffortNotice(context, { userId }, async () => {
-    const stored = await insertNotification(context.db, {
-      userId,
-      type: 'tag_suggestion_approved',
-      title,
-      body,
-      data: {},
-    });
-
-    if (stored) {
-      context.hub.publish(userId, {
-        type: 'new_notification',
-        notification: {
-          id: stored.id,
-          type: stored.type,
-          title: stored.title,
-          body: stored.body,
-          href: '/vendor/profile/edit',
-          isRead: false,
-          createdAt: stored.createdAt,
-        },
+  await bestEffortNotice(
+    context,
+    { userId },
+    async () => {
+      const stored = await insertNotification(context.db, {
+        userId,
+        type: 'tag_suggestion_approved',
+        title,
+        body,
+        data: {},
       });
 
-      // Always the vendor: a tag suggestion is theirs, and so is the surface.
-      queueNotificationEmail(context.mail, stored, 'vendor');
-    }
-  });
+      if (stored) {
+        context.hub.publish(userId, {
+          type: 'new_notification',
+          notification: {
+            id: stored.id,
+            type: stored.type,
+            title: stored.title,
+            body: stored.body,
+            href: '/vendor/profile/edit',
+            isRead: false,
+            createdAt: stored.createdAt,
+          },
+        });
+
+        // Always the vendor: a tag suggestion is theirs, and so is the surface.
+        queueNotificationEmail(context.mail, stored, 'vendor');
+      }
+    },
+    'The operation succeeded but its notification could not be recorded',
+  );
 }
 
 /**
@@ -753,6 +972,7 @@ async function notifyVendorOfTag(
  */
 export async function resolveTagSuggestion(
   context: AdminContext,
+  actorId: string,
   suggestionId: string,
   input: ResolveTagSuggestion,
   now: Date,
@@ -770,17 +990,38 @@ export async function resolveTagSuggestion(
   const suggesterProfileId = await findVendorProfileIdByUserId(context.db, suggestion.vendorId);
 
   if (input.action === 'reject') {
-    const resolved = await resolveTagSuggestionRow(context.db, {
-      suggestionId,
-      status: 'rejected',
-      resolvedTagId: null,
-      adminNote: input.adminNote,
-      resolvedAt: now,
-    });
+    await context.db.transaction(async (tx) => {
+      const resolved = await resolveTagSuggestionRow(tx, {
+        suggestionId,
+        status: 'rejected',
+        resolvedTagId: null,
+        adminNote: input.adminNote,
+        resolvedAt: now,
+      });
 
-    if (!resolved) {
-      throw conflict('That suggestion has already been resolved');
-    }
+      if (!resolved) {
+        /*
+         * Another operator got there first. Throwing inside the transaction is
+         * what keeps the audit row from recording a decision that did not
+         * happen — the same reason the approve path below throws inside its own.
+         */
+        throw conflict('That suggestion has already been resolved');
+      }
+
+      await insertAdminAction(tx, {
+        actorId,
+        action: 'tag_suggestion_resolved',
+        subjectType: 'tag_suggestion',
+        subjectId: suggestionId,
+        /*
+         * The disposition, never the note. `adminNote` is free text an operator
+         * typed and it is already stored on the suggestion itself; copying it
+         * here would put user-supplied prose into the audit table for no reader
+         * who cannot follow `subjectId` to the original.
+         */
+        detail: { outcome: 'rejected' },
+      });
+    });
 
     /*
      * No notification, by design. The queue records why; telling a vendor their
@@ -806,21 +1047,38 @@ export async function resolveTagSuggestion(
       } satisfies FieldErrorDetails);
     }
 
-    const resolved = await resolveTagSuggestionRow(context.db, {
-      suggestionId,
-      status: 'approved',
-      resolvedTagId: target.id,
-      adminNote: input.adminNote ?? `Merged with ${target.name}`,
-      resolvedAt: now,
+    /*
+     * Three writes, one transaction — the resolution, the vendor's new tag, and
+     * the audit row. They were two loose statements before the log arrived, and
+     * `.claude/rules/db-schema.md` asks for multi-statement mutations to be
+     * atomic; a suggestion resolved without the tag it promised the vendor is
+     * the failure that leaves behind.
+     */
+    await context.db.transaction(async (tx) => {
+      const resolved = await resolveTagSuggestionRow(tx, {
+        suggestionId,
+        status: 'approved',
+        resolvedTagId: target.id,
+        adminNote: input.adminNote ?? `Merged with ${target.name}`,
+        resolvedAt: now,
+      });
+
+      if (!resolved) {
+        throw conflict('That suggestion has already been resolved');
+      }
+
+      if (suggesterProfileId) {
+        await assignTagToVendor(tx, suggesterProfileId, target.id);
+      }
+
+      await insertAdminAction(tx, {
+        actorId,
+        action: 'tag_suggestion_resolved',
+        subjectType: 'tag_suggestion',
+        subjectId: suggestionId,
+        detail: { outcome: 'merged', tagId: target.id },
+      });
     });
-
-    if (!resolved) {
-      throw conflict('That suggestion has already been resolved');
-    }
-
-    if (suggesterProfileId) {
-      await assignTagToVendor(context.db, suggesterProfileId, target.id);
-    }
 
     await notifyVendorOfTag(
       context,
@@ -847,6 +1105,7 @@ export async function resolveTagSuggestion(
   if (sameName) {
     return resolveTagSuggestion(
       context,
+      actorId,
       suggestionId,
       /*
        * The note travels. Approving a duplicate is still a decision, and the
@@ -898,6 +1157,14 @@ export async function resolveTagSuggestion(
       await assignTagToVendor(tx, suggesterProfileId, tag.id);
     }
 
+    await insertAdminAction(tx, {
+      actorId,
+      action: 'tag_suggestion_resolved',
+      subjectType: 'tag_suggestion',
+      subjectId: suggestionId,
+      detail: { outcome: 'approved', tagId: tag.id },
+    });
+
     return tag;
   });
 
@@ -938,10 +1205,12 @@ export async function listTags(db: AppDatabase): Promise<AdminTagList> {
  * offered and stops filtering search.
  */
 export async function updateTag(
-  db: AppDatabase,
+  context: AdminContext,
+  actorId: string,
   tagId: string,
   input: UpdateTag,
 ): Promise<AdminTagRow> {
+  const { db } = context;
   const existing = await findTagById(db, tagId);
 
   if (!existing) {
@@ -991,14 +1260,65 @@ export async function updateTag(
   }
 
   if (Object.keys(patch).length === 0) {
+    /*
+     * Nothing changed, so nothing is logged — deliberately, and it is the one
+     * place the log departs from "one row per successful mutating call".
+     *
+     * This branch answers 200 with the tag exactly as it already was: the
+     * request named no field that reached `patch` — either nothing at all, or a
+     * `name` identical to the one on the row, which is the only field that
+     * self-excludes. Recording it would file a `tag_updated` row whose detail is
+     * empty
+     * and whose meaning is "an operator opened the rename box and pressed
+     * save", which is noise in the one table whose value is that every row in
+     * it means something happened.
+     */
     return { ...existing, vendorCount: await countVendorsHoldingTag(db, tagId) };
   }
 
-  const updated = await updateTagRow(db, tagId, patch);
+  /*
+   * The change and its audit row commit together (#434).
+   *
+   * This one can afford the transaction where the ban and the dispute cannot:
+   * nothing outside Postgres has moved, so a failed log write rolls the rename
+   * back to a state the operator can simply retry — which is strictly better
+   * than a renamed tag nobody is recorded as having renamed.
+   *
+   * The payload names what changed rather than restating the whole tag: `patch`
+   * holds exactly the fields this call touched, and its values are the tag's own
+   * vocabulary, never user-generated content from elsewhere.
+   */
+  const updated = await db.transaction(async (tx) => {
+    const row = await updateTagRow(tx, tagId, patch);
 
-  if (!updated) {
-    throw notFound('No tag with that id');
-  }
+    if (!row) {
+      throw notFound('No tag with that id');
+    }
+
+    /*
+     * Derived from `patch` rather than re-listed field by field, so a fourth
+     * updatable tag field cannot be added and silently left out of the one
+     * table whose value is that it records what changed.
+     *
+     * `slug` is dropped because it is derived from `name` and says nothing
+     * `name` does not; `previousName` is added because "what it was" is the
+     * half a diff needs and the row would otherwise only carry "what it is".
+     */
+    const { slug: _slug, ...changed } = patch;
+
+    await insertAdminAction(tx, {
+      actorId,
+      action: 'tag_updated',
+      subjectType: 'tag',
+      subjectId: tagId,
+      detail: {
+        ...changed,
+        ...(patch.name === undefined ? {} : { previousName: existing.name }),
+      },
+    });
+
+    return row;
+  });
 
   return { ...updated, vendorCount: await countVendorsHoldingTag(db, tagId) };
 }

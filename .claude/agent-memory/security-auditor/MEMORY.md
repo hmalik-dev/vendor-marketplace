@@ -62,3 +62,4 @@
 - [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — fine as a rate-limit bucket, unbounded text against `varchar(45)` when persisted as evidence
 - [The no-cookie claim rests on one regex list](no-cookie-consent-claim-rests-on-a-source-scan.md) — the cookie-write scan matches a shape Next 15 makes impossible and misses the reachable ones
 - [The support form is a public route that moves money](support-report-is-a-public-route-that-moves-money.md) — a `bookingId` on the unauthenticated send freezes a payout; the guards are in `placeDisputeHold`, not the route
+- [The admin action log is trigger-immutable](admin-action-log-is-trigger-immutable.md) — UPDATE/DELETE/TRUNCATE all raise; the one cascade exception needs a hard `users` delete no product path performs

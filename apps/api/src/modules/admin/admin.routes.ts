@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import {
+  adminActivityPageSchema,
+  adminActivityQuerySchema,
   adminBanResultSchema,
   adminBookingPageSchema,
   adminBookingQuerySchema,
@@ -27,6 +29,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import {
   deleteReview,
+  listActivity,
   listBookings,
   listCustomers,
   listPayments,
@@ -36,12 +39,12 @@ import {
   listVendors,
   readMetrics,
   readVendorFacets,
+  resolveBookingDispute,
   resolveTagSuggestion,
   setUserBanned,
   updateTag,
   type AdminContext,
 } from './admin.service.js';
-import { resolveDispute } from '../payments/payments.service.js';
 
 const userParamsSchema = z.object({ userId: z.uuid() });
 const reviewParamsSchema = z.object({ reviewId: z.uuid() });
@@ -147,8 +150,9 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    * and every route in this file is `admin` and nothing else — a dispute
    * resolution exposed on a customer- or vendor-guarded plugin would let one
    * party to the disagreement decide it. The money it moves is still
-   * `payments.service.ts`'s: `resolveDispute` is the same function, called with
-   * this plugin's context.
+   * `payments.service.ts`'s: `resolveBookingDispute` is a wrapper that calls
+   * the same function with this plugin's context, and adds the one thing only
+   * this plugin knows — which operator ruled (#434).
    *
    * Deliberately not a case-management product. The hold needs an off switch
    * with two positions and it has one; the admin surfaces that already exist
@@ -165,7 +169,13 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       },
     },
     async (request) =>
-      resolveDispute(context(), request.params.bookingId, request.body.outcome, app.clock()),
+      resolveBookingDispute(
+        context(),
+        assertRole(request.auth, ['admin']).id,
+        request.params.bookingId,
+        request.body.outcome,
+        app.clock(),
+      ),
   );
 
   app.get(
@@ -270,7 +280,13 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       },
     },
     async (request) =>
-      resolveTagSuggestion(context(), request.params.suggestionId, request.body, app.clock()),
+      resolveTagSuggestion(
+        context(),
+        assertRole(request.auth, ['admin']).id,
+        request.params.suggestionId,
+        request.body,
+        app.clock(),
+      ),
   );
 
   app.get(
@@ -289,6 +305,36 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         response: { 200: adminTagRowSchema },
       },
     },
-    async (request) => updateTag(app.db, request.params.tagId, request.body),
+    async (request) =>
+      updateTag(
+        context(),
+        assertRole(request.auth, ['admin']).id,
+        request.params.tagId,
+        request.body,
+      ),
+  );
+
+  /**
+   * What the console has done, and who did it (#434).
+   *
+   * A read of `admin_actions`, which every mutating route above writes to. The
+   * subject filter is what makes it usable rather than a firehose: it is the
+   * answer to "what did the console do to this account", which is the question
+   * an operator actually arrives with.
+   *
+   * `admin` like everything else here, and pointedly so — the log records
+   * actions taken on other people's accounts, so reading it is itself a
+   * privileged read.
+   */
+  app.get(
+    '/admin/activity',
+    {
+      onRequest: adminOnly,
+      schema: {
+        querystring: adminActivityQuerySchema,
+        response: { 200: adminActivityPageSchema },
+      },
+    },
+    async (request) => listActivity(app.db, request.query),
   );
 };

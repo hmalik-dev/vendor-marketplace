@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from 'drizzle
 import { alias } from 'drizzle-orm/pg-core';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
+  adminActions,
   bookingRequests,
   bookings,
   categories,
@@ -17,6 +18,9 @@ import {
   type UserRow,
 } from '@vendor-marketplace/db/schema';
 import type {
+  AdminAction,
+  AdminActionDetail,
+  AdminActionSubject,
   AdminBookingFlag,
   AdminPayoutFilter,
   AdminVendorStatus,
@@ -1199,4 +1203,153 @@ export async function findAdminMetricSeries(
   ]);
 
   return { revenueByDay, bookingsByDay, signupsByDay, completedByDay };
+}
+
+// --- Action log (#434) -----------------------------------------------------
+
+/** One row of the activity feed, with the actor's name already resolved. */
+export interface AdminActionProjection {
+  id: string;
+  actorId: string;
+  actorFirstName: string;
+  actorLastName: string;
+  action: AdminAction;
+  subjectType: AdminActionSubject;
+  subjectId: string;
+  detail: AdminActionDetail;
+  createdAt: Date;
+}
+
+export interface AdminActionFilters {
+  actor?: string | undefined;
+  subject?: string | undefined;
+  action?: AdminAction | undefined;
+}
+
+/**
+ * One audit row, before it is written.
+ *
+ * **Deliberately narrower than `NewAdminActionRow`**, which is what
+ * `$inferInsert` gives and which would also let a caller supply `id` and
+ * `created_at`. The triggers do not validate those — they only refuse changes
+ * *after* the fact — so a writer that set `created_at` could file a
+ * permanently backdated row into a table nobody can correct. The type is what
+ * makes that unwritable; there is no other guard, and there cannot be.
+ */
+export interface AdminActionRecord {
+  actorId: string;
+  action: AdminAction;
+  subjectType: AdminActionSubject;
+  subjectId: string;
+  /**
+   * What changed — **never what was moderated**.
+   *
+   * Ids, counts, flags and enum members only. No message body, no review text,
+   * no email address, no Stripe or card secret: a moderation log that quotes
+   * the abuse is a second copy of the abuse, kept for longer and read by more
+   * people. `admin-actions.ts` carries the full rule.
+   */
+  detail: AdminActionDetail;
+}
+
+/**
+ * Writes one audit row.
+ *
+ * Takes an executor rather than the application database so a caller whose
+ * change is transactional can pass its transaction and have the two commit or
+ * roll back together — which is what every writer but the ban and the dispute
+ * does. See `recordAdminActionBestEffort` in the service for the rule.
+ *
+ * There is no update and no delete beside it, and there never will be: the
+ * table's triggers refuse both, so a companion here would be a method that
+ * cannot work.
+ */
+export async function insertAdminAction(tx: AppDatabase, values: AdminActionRecord): Promise<void> {
+  await tx.insert(adminActions).values(values);
+}
+
+/** `WHERE` for the activity feed. `undefined` when nothing was filtered. */
+function actionFilterCondition(filters: AdminActionFilters): SQL | undefined {
+  const conditions: SQL[] = [];
+
+  if (filters.actor) {
+    conditions.push(eq(adminActions.actorId, filters.actor));
+  }
+
+  if (filters.subject) {
+    conditions.push(eq(adminActions.subjectId, filters.subject));
+  }
+
+  if (filters.action) {
+    conditions.push(eq(adminActions.action, filters.action));
+  }
+
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
+/**
+ * A page of the activity feed, newest first.
+ *
+ * `innerJoin` on the actor rather than a left join, and it can never drop a
+ * row: the only way an actor is missing is the cascade that erased their
+ * account, which took these rows with it. A left join would add a null branch
+ * for a state that cannot be observed.
+ */
+export async function findAdminActions(
+  db: AppDatabase,
+  filters: AdminActionFilters,
+  limit: number,
+  offset: number,
+): Promise<AdminActionProjection[]> {
+  return (
+    db
+      .select({
+        id: adminActions.id,
+        actorId: adminActions.actorId,
+        actorFirstName: users.firstName,
+        actorLastName: users.lastName,
+        action: adminActions.action,
+        subjectType: adminActions.subjectType,
+        subjectId: adminActions.subjectId,
+        detail: adminActions.detail,
+        createdAt: adminActions.createdAt,
+      })
+      .from(adminActions)
+      .innerJoin(users, eq(users.id, adminActions.actorId))
+      .where(actionFilterCondition(filters))
+      /*
+       * **`nulls last` is load-bearing, not noise.**
+       *
+       * Drizzle's index builder emits `DESC NULLS LAST`, and Drizzle's `desc()`
+       * expression emits a bare `DESC` — which Postgres reads as `NULLS FIRST`.
+       * Those are different pathkeys, and Postgres does not special-case a
+       * `NOT NULL` column, so `desc(adminActions.createdAt)` cannot use any index
+       * on this table: every page became a top-N heapsort over the whole log.
+       * Measured at 50k rows, the unfiltered page read 624 buffers that way and
+       * 13 this way; the actor-filtered page, 626 against 14.
+       *
+       * `id` is the tiebreak that makes the page window stable when two rows
+       * share a timestamp — without it, `LIMIT/OFFSET` can repeat or skip a row
+       * between pages. It is not in the indexes, so it costs an incremental sort
+       * within each timestamp group, which is free at a page of 15.
+       */
+      .orderBy(
+        sql`${adminActions.createdAt} desc nulls last`,
+        sql`${adminActions.id} desc nulls last`,
+      )
+      .limit(limit)
+      .offset(offset)
+  );
+}
+
+export async function countAdminActions(
+  db: AppDatabase,
+  filters: AdminActionFilters,
+): Promise<number> {
+  const rows = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(adminActions)
+    .where(actionFilterCondition(filters));
+
+  return rows?.[0]?.total ?? 0;
 }

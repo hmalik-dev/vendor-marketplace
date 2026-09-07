@@ -2,6 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  ADMIN_ACTION_SUBJECTS,
+  ADMIN_ACTIONS,
   AVAILABILITY_STATUSES,
   BOOKING_CANCELLED_BY,
   BOOKING_REQUEST_STATUSES,
@@ -69,6 +71,8 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'tag_suggestion_status', values: TAG_SUGGESTION_STATUSES },
     { enumName: 'payout_model', values: PAYOUT_MODELS },
     { enumName: 'legal_document', values: LEGAL_ACCEPTANCE_DOCUMENTS },
+    { enumName: 'admin_action', values: ADMIN_ACTIONS },
+    { enumName: 'admin_action_subject', values: ADMIN_ACTION_SUBJECTS },
     { enumName: 'us_state', values: US_STATE_CODES },
   ];
 

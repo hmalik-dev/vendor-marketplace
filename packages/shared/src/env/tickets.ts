@@ -531,7 +531,6 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   438: ['auth', 'email'], // data export, operator closure, legal acceptance record
   439: ['auth', 'email'], // transactional email delivery records and provider events
   440: ['auth', 'stripe'], // operator-initiated refunds and credits — needs a decision first
-  441: [], // footer against the newer frame; stone-400 read as text on an ink ground
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

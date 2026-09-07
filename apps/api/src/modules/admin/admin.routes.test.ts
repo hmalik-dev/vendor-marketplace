@@ -214,6 +214,12 @@ describe('admin routes', () => {
       { method: 'GET', url: '/admin/tag-suggestions' },
       { method: 'PUT', url: `/admin/tag-suggestions/${NIL}` },
       { method: 'GET', url: '/admin/tags' },
+      /*
+       * #434. The action log records what the console did to other people's
+       * accounts, so reading it is itself a privileged read — an operator's
+       * whole history is exactly what a stranger must not be able to walk.
+       */
+      { method: 'GET', url: '/admin/activity' },
       { method: 'PUT', url: `/admin/tags/${NIL}` },
       { method: 'PUT', url: `/admin/users/${NIL}/ban` },
       { method: 'PUT', url: `/admin/users/${NIL}/unban` },
