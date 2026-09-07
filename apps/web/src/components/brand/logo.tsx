@@ -37,6 +37,7 @@ const WORDMARK_GAP_RATIO = 0.6;
  * | -- | ---- | ----- | ----------------------------- |
  * | 14 | 9px  | 0.643 | 10 frames (3 more draw 8px)   |
  * | 15 | 9px  | 0.600 | 22 frames — the desktop header |
+ * | 17 | 10px | 0.588 | the footer, drawn twice (#441) |
  * | 18 | 10px | 0.556 | 3 frames                      |
  * | 19 | 10px | 0.526 | `12 Sign up` — the auth panel  |
  *
@@ -47,10 +48,22 @@ const WORDMARK_GAP_RATIO = 0.6;
  * fraction is what the unmeasured ones fall back to.
  *
  * D=14 draws 9px in ten frames against 8px in three, so the majority is taken.
- * D=20 (`marketingFooter`) is absent from every frame and is left to the ratio,
- * which lands on the 12px the design file's own cover chrome draws.
+ *
+ * D=17 (`marketingFooter`) was measured for #441. It was read as absent from
+ * every frame and left to the ratio at D=20 — which the closing-band frame in
+ * `design/delta-band/` corrected. That frame draws the footer lockup **twice**,
+ * once signed out and once signed in, and both draw two equal 17px circles
+ * offset by 8px in a 26px box, 10px from a 25px wordmark. Two identical
+ * instances is the corroboration D30 asks for, and the ratio's 10.2 rounds to
+ * the 10 they draw.
  */
-const WORDMARK_GAPS: Partial<Record<number, number>> = { 14: 9, 15: 9, 18: 10, 19: 10 };
+export const WORDMARK_GAPS: Partial<Record<number, number>> = {
+  14: 9,
+  15: 9,
+  17: 10,
+  18: 10,
+  19: 10,
+};
 
 /** The gap for a diameter: the frames' number where there is one. */
 function wordmarkGap(size: number): number {
@@ -75,7 +88,19 @@ export const LOGO_SIZES = {
   desktopHeader: 15,
   mobileHeader: 14,
   authPanel: 19,
-  marketingFooter: 20,
+  /*
+   * 17, not the 20 it carried until #441 — see `WORDMARK_GAPS` above for the
+   * frame that measures it.
+   *
+   * The wordmark still derives from `WORDMARK_SIZE_RATIO`, so it renders 27.2px
+   * against the frame's 25. The honest reason that is deferred rather than
+   * fixed is not that 1.60 D is a law — it is that there is no `WORDMARK_SIZES`
+   * table. The frames draw three ratios (D=15 → 23px, D=17 → 25px, the cover
+   * chrome's D=20 → 32px), so no single one satisfies them, which is the same
+   * argument `WORDMARK_GAPS` exists to answer for the gap. Minting the size
+   * equivalent is #118's, not this ticket's.
+   */
+  marketingFooter: 17,
   appIcon: 24,
   favicon: 16,
 } as const;
@@ -151,6 +176,21 @@ export function Logo({
           pixel per edge, exactly as it does in the frame — whose 22px box holds
           ink out to 23px. The box stays 1.45 D so the wordmark gap keeps
           measuring from the same place.
+
+          **The delta bundles disagree, and #441 did not adjudicate it.**
+          the screens document has no `*` reset — its `box-sizing` hits are
+          33 inline opt-ins — which is what #250 measured. Every delta bundle
+          opens with `* { box-sizing: border-box }`, so the closing-band frame
+          draws the footer mark as two *equal footprints*: a 17px outline circle
+          with its 1.3px stroke inside, beside a 17px disc. This renders 19px
+          against that 17, and 2px low, at every diameter.
+
+          Left alone deliberately. `box-content` is #250's ruling, taken from
+          the screens document and measured there; overturning it would move the
+          mark on every surface in the product — header, auth panel, favicon,
+          app icon — on the authority of one bundle. That is a design pass, and
+          it is filed. A parity read of `design/delta-band/` will measure 19
+          against 17 here and is looking at this, not at drift.
         */}
         <span
           data-testid="logo-mark-stroke"

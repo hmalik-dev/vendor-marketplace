@@ -8,6 +8,7 @@ import {
   SUPPORT_PATH,
 } from '@vendor-marketplace/shared';
 import type { UserRole } from '@vendor-marketplace/shared';
+import { cn } from '@/lib/utils';
 import { readRoleForChrome } from '@/lib/current-user';
 import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
@@ -26,6 +27,14 @@ const BROWSE_LINKS = [
   { href: '/search', label: 'All vendors' },
 ];
 
+/** One row of a footer column. */
+interface FooterLinkSpec {
+  href: string;
+  label: string;
+  /** Drawn at the hover weight and value at rest — see `COMPANY_LINKS`. */
+  emphasis?: boolean;
+}
+
 /**
  * The vendor links carry `?role=vendor` — see design/design-plan/21-sign-up.md.
  *
@@ -37,7 +46,15 @@ const BROWSE_LINKS = [
  */
 const COMPANY_LINKS = [
   { href: '/sign-up?role=vendor', label: 'For vendors' },
-  { href: SUPPORT_PATH, label: 'Contact support' },
+  /*
+   * `emphasis` is the frame singling this row out, not a decoration: both
+   * footers in the closing-band frame in `design/delta-band/` draw every link at
+   * `400 stone-520` and this one alone at `600 stone-50` — the resting state of
+   * every other link's hover. It is the row a stuck reader needs, and the only
+   * one in the footer that is a way *out* of a problem rather than a way
+   * further in.
+   */
+  { href: SUPPORT_PATH, label: 'Contact support', emphasis: true },
 ];
 
 /**
@@ -99,7 +116,7 @@ const SIGNED_OUT_LINKS = [
  * customer-and-vendor surfaces; an admin has neither, and offering them rows
  * that bounce would be worse than a short column.
  */
-const ACCOUNT_LINKS_BY_ROLE: Record<UserRole, readonly { href: string; label: string }[]> = {
+const ACCOUNT_LINKS_BY_ROLE: Record<UserRole, readonly FooterLinkSpec[]> = {
   customer: [
     { href: '/bookings', label: 'My bookings' },
     { href: '/messages', label: 'Messages' },
@@ -146,10 +163,41 @@ function copyrightYear(): number {
  * label may not go darker than `stone-560`.
  */
 const COLUMN_HEADING = 'text-label font-semibold tracking-label text-stone-560 uppercase';
+/*
+ * `text-action`, not `text-base` (#441). The frame draws the link columns and
+ * the tagline at 13px, which is the `action` step — the size the frames give a
+ * navigation action that is not a form control — where `base` is 13.5px.
+ *
+ * The micro-labels deliberately keep `text-label`'s 600 weight and 0.05em
+ * tracking, against this frame's `500`/`0.07em`. `.lbl` is one shared
+ * primitive, and **three** other bundles define it at 600/0.05em — the screens
+ * document, `delta-legal` and `contact-support`. One frame against three
+ * corroborating siblings is the outlier D30 describes, not a ladder step, and
+ * `--tracking-label` is global. Raised as a frame correction, not built.
+ *
+ * **The size is set on the list, not on the link.** A row's height is its
+ * `li`'s own line box, and an inline child does not shrink it: with `13px` on
+ * the anchor alone the `ul` and `li` still computed `16px`/`normal`, so every
+ * row was a 20px box holding a 16px anchor. The 11px gap was right and the
+ * pitch was 31px against the frame's 27, which made the footer 25px taller than
+ * it draws and left the legal row's copyright 1.5px off the links' baseline.
+ * The frame sets its size on the container for exactly this reason.
+ */
 const LINK_CLASS =
-  'text-base text-stone-520 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline';
+  'text-stone-520 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline';
+/**
+ * The frame's resting treatment for the one link it emphasises.
+ *
+ * Merged with `cn` rather than concatenated: `text-stone-50` and
+ * `LINK_CLASS`'s `text-stone-520` are the same utility, and a class string's
+ * order does not decide which wins — the generated stylesheet's does. Written
+ * as `${LINK_CLASS} ${LINK_EMPHASIS_CLASS}` the row rendered at 600 weight in
+ * the *unemphasised* colour, which is the half of the frame's distinction that
+ * carries no meaning on its own.
+ */
+const LINK_EMPHASIS_CLASS = 'font-semibold text-stone-50';
 const LEGAL_CLASS =
-  'text-meta text-stone-560 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline';
+  'text-stone-560 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline';
 
 function FooterColumn({
   heading,
@@ -161,15 +209,15 @@ function FooterColumn({
   return (
     <div>
       <p className={COLUMN_HEADING}>{heading}</p>
-      <ul className="mt-3.5 flex flex-col gap-2.5">{children}</ul>
+      <ul className="mt-3.5 flex flex-col gap-2.75 text-action">{children}</ul>
     </div>
   );
 }
 
-function FooterLink({ href, label }: { href: string; label: string }): React.ReactElement {
+function FooterLink({ href, label, emphasis }: FooterLinkSpec): React.ReactElement {
   return (
     <li>
-      <Link href={href} className={LINK_CLASS}>
+      <Link href={href} className={cn(LINK_CLASS, emphasis && LINK_EMPHASIS_CLASS)}>
         {label}
       </Link>
     </li>
@@ -221,18 +269,45 @@ export async function SiteFooter(): Promise<React.ReactElement> {
      */
     <footer data-slot="site-footer" className="bg-stone-950">
       {/* Same gutter ladder as the page and the header — see `page.tsx`. */}
-      <div className="mx-auto w-full max-w-[1440px] px-5 py-14 lg:px-7 min-[90rem]:px-10">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="lg:pr-10">
-            <Link href="/" className="inline-block transition-opacity hover:opacity-80">
+      <div className="mx-auto w-full max-w-[1440px] px-5 py-10 lg:px-7 min-[90rem]:px-10">
+        {/*
+          `1.5fr 1fr 1fr 1fr` at 34px, not four quarters at 40px (#441).
+
+          The brand column is wider than a link column because it holds a
+          lockup and a sentence, and both footers in the frame draw it that
+          way: at 1440 the ladder is 419/280/280/280 and `Browse` opens at
+          x=493, where four quarters put it at 390. The `nav` spans the last
+          three, and its own three columns are equal at the same 34px — which
+          reproduces the outer ratio exactly, because 3fr plus two gaps is what
+          the span is worth.
+        */}
+        <div className="grid gap-8.5 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
+          <div>
+            {/*
+              `min-h-11` and the negative margin that pays for it: the lockup
+              is 27px tall, and `04-laws.md` puts a 44x44 floor under a control
+              whose accessible name comes from an `aria-label` rather than from
+              text. It is grown the way Clerk's trigger is (`hit-area.test.ts`)
+              — the target changes, the mark does not — and `-my-2` keeps the
+              tagline where the frame draws it, 12px below.
+
+              `min-w-11` changes nothing today: the wordmark already makes this
+              link ~83px wide. It is the other half of a floor stated as 44x44,
+              and it is what would still hold if this lockup ever dropped its
+              wordmark for `variant="mark"`.
+            */}
+            <Link
+              href="/"
+              className="-my-2 inline-flex min-h-11 min-w-11 items-center transition-opacity hover:opacity-80"
+            >
               <Logo size={LOGO_SIZES.marketingFooter} tone="dark" />
             </Link>
-            <p className="mt-3.5 max-w-64 text-base leading-prose text-stone-560">
+            <p className="mt-3 max-w-64 text-action leading-normal text-stone-560">
               {BRAND_TAGLINE}
             </p>
           </div>
 
-          <nav aria-label="Footer" className="grid gap-10 sm:grid-cols-3 lg:col-span-3">
+          <nav aria-label="Footer" className="grid gap-8.5 sm:grid-cols-3 lg:col-span-3">
             <FooterColumn heading="Browse">
               {BROWSE_LINKS.map((link) => (
                 <FooterLink key={link.href} {...link} />
@@ -265,7 +340,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
                     not a button wrapping a button.
                   */}
                   <SignOutButton>
-                    <button type="button" className={`${LINK_CLASS} cursor-pointer text-left`}>
+                    <button type="button" className={cn(LINK_CLASS, 'cursor-pointer text-left')}>
                       Sign out
                     </button>
                   </SignOutButton>
@@ -281,12 +356,18 @@ export async function SiteFooter(): Promise<React.ReactElement> {
           Frame `30` draws it under the grid at 26px, over a 16px-padded rule
           that is the only hairline left in this footer now that the top border
           has gone.
+
+          `stone-50/10`, not `stone-0/10` (#441). The frame draws
+          `rgba(248,245,239,.1)`, which is `stone-50` — the page background, one
+          end of the same ramp the text on this ground reads from. `stone-0` is
+          `#fffdf9`, a surface value, and at 10% over `stone-950` the two land
+          close enough that the wrong one had survived since #428.
         */}
         <div
           data-slot="footer-legal"
-          className="mt-6.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-stone-0/10 pt-4"
+          className="mt-6.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-stone-50/10 pt-4"
         >
-          <ul className="flex gap-4.5">
+          <ul className="flex gap-4.5 text-meta">
             {LEGAL_LINKS.map((link) => (
               <li key={link.href}>
                 <Link href={link.href} className={LEGAL_CLASS}>
