@@ -3,14 +3,26 @@ import {
   availability,
   bookingRequests,
   bookings,
+  legalAcceptances,
   servicePackages,
   vendorProfiles,
   type BookingRow,
   type NewBookingRow,
 } from '@vendor-marketplace/db/schema';
 import { refreshCustomerBookingCounts } from '@vendor-marketplace/db';
-import type { BookingCancelledBy } from '@vendor-marketplace/shared';
+import {
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  type BookingCancelledBy,
+  type LegalAcceptanceDocument,
+} from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+
+/**
+ * Typed rather than written into the SQL as a bare string, so a rename of the
+ * enum member is a compile error here instead of an `EXISTS` that silently
+ * matches nothing and refuses every charge.
+ */
+const VENDOR_AGREEMENT: LegalAcceptanceDocument = 'vendor_agreement';
 
 /**
  * Everything the checkout needs about one accepted request, in one read.
@@ -46,6 +58,16 @@ export interface PayableRequestRow {
   vendorAvatarUrl: string | null;
   vendorStripeAccountId: string | null;
   vendorStripeOnboarded: boolean;
+  /**
+   * Whether the vendor holds the **current** vendor agreement.
+   *
+   * Travels with the row for the same reason the two Stripe columns do: the
+   * charge must be refused without it, and a second read would leave a window
+   * in which the answer changed. An `EXISTS` rather than a join, because the
+   * table is append-only and a vendor can hold several rows — a join would
+   * multiply the request row by however many times they have accepted.
+   */
+  vendorHoldsCurrentAgreement: boolean;
 }
 
 export async function findPayableRequest(
@@ -74,6 +96,12 @@ export async function findPayableRequest(
       vendorAvatarUrl: vendorProfiles.profileImageUrl,
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
+      vendorHoldsCurrentAgreement: sql<boolean>`EXISTS (
+        SELECT 1 FROM ${legalAcceptances}
+        WHERE ${legalAcceptances.vendorId} = ${vendorProfiles.id}
+          AND ${legalAcceptances.document} = ${VENDOR_AGREEMENT}
+          AND ${legalAcceptances.version} = ${CURRENT_VENDOR_AGREEMENT_VERSION}
+      )`,
     })
     .from(bookingRequests)
     .innerJoin(vendorProfiles, eq(bookingRequests.vendorId, vendorProfiles.id))

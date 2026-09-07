@@ -8,7 +8,12 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { addDays, payoutReleaseAt, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  payoutReleaseAt,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -102,6 +107,17 @@ describe('payouts', () => {
       .update(vendorProfiles)
       .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: VENDOR_ACCOUNT })
       .where(eq(vendorProfiles.id, vendorId));
+
+    /*
+     * A vendor cannot take payment until they hold the current vendor
+     * agreement (#427), so a fixture that skips this is a vendor checkout
+     * correctly refuses. Accepted through the real route rather than inserted,
+     * because that is how a vendor reaches this state.
+     */
+    const accepted = await inject('POST', '/vendor/agreement/accept', VENDOR, {
+      version: CURRENT_VENDOR_AGREEMENT_VERSION,
+    });
+    expect(accepted.statusCode).toBe(200);
 
     return { vendorId, packageId: created.json().id };
   }

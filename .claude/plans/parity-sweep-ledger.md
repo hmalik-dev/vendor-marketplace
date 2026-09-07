@@ -25,6 +25,16 @@ browser alongside the live screen; compare, never recall.
 > row below is read against those two files. Everything else about the gate is
 > unchanged: 1440x900, all six axes, and the literal strings are the design.
 
+> **Frames `31`–`33` are the others.** They were supplied as a bundle (#427) and
+> live in `design/delta-legal/` — `Orla-Legal-Surfaces.html` plus
+> `LEGAL-SURFACES-PROMPT.md`, which is their spec; there is no
+> `design-plan/31-*.md` for them either. `Orla - Screens.dc.html` ends at
+> `28 Dropdown variants`, so a pass over any of the five rows below reads the
+> delta bundle instead. **One number on those frames does not ship**: the
+> checkout block's `30 days / 50% / non-refundable` schedule contradicts
+> `calculateRefund`, the prompt says so itself, and the code's tiers are what is
+> drawn (#427, and #374 for why).
+
 | # | Frame | Live route | Auth | Viewport | Status | Tickets |
 |---|-------|-----------|------|----------|--------|---------|
 | 1 | 01 Landing | `/` | guest | 1440x900 | **FAIL (8)** | #82–#89 |
@@ -68,6 +78,11 @@ browser alongside the live screen; compare, never recall.
 | 39 | 28 Dropdown open — hero | `/ (hero search)` | guest | 1440x900 | todo | #167 |
 | 40 | 28 Dropdown variants | `all select surfaces` | guest | 1440x900 | todo | #167 |
 | 41 | 29 Contact support | `/support` | guest + customer | 1440x900 | todo | #421 |
+| 42 | 31 Terms of Service | `/terms` | guest + customer | 1440x900 | todo | #427 |
+| 43 | 31 Privacy Policy | `/privacy` | guest + customer | 1440x900 | todo | #427 |
+| 44 | 31 Cookie notice | `/cookies` | guest + customer | 1440x900 | todo | #427 |
+| 45 | 32 Vendor agreement | `/vendor/agreement` | vendor | 1440x900 | todo | #427 |
+| 46 | 33 Refund schedule at checkout | `/bookings/[requestId]/checkout` | customer | 1440x900 | todo | #427 |
 
 ## Findings log
 

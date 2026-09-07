@@ -7,6 +7,7 @@ import {
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
+  LEGAL_ACCEPTANCE_DOCUMENTS,
   PAYOUT_MODELS,
   PRICE_TYPES,
   REVIEW_TYPES,
@@ -67,6 +68,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'price_type', values: PRICE_TYPES },
     { enumName: 'tag_suggestion_status', values: TAG_SUGGESTION_STATUSES },
     { enumName: 'payout_model', values: PAYOUT_MODELS },
+    { enumName: 'legal_document', values: LEGAL_ACCEPTANCE_DOCUMENTS },
     { enumName: 'us_state', values: US_STATE_CODES },
   ];
 

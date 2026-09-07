@@ -215,8 +215,9 @@ describe('free text on a request body', () => {
     // Pinned, not a floor: a change that halved discovery would pass a floor.
     // 19 since #405 removed `PUT /vendor/tags` and its `setVendorTagsSchema`;
     // 20 since #421 added `supportMessageSchema`; 22 since #423 added
-    // `disputeBookingSchema` and `resolveDisputeSchema`.
-    expect(names).toHaveLength(22);
+    // `disputeBookingSchema` and `resolveDisputeSchema`; 23 since #427 added
+    // `acceptVendorAgreementSchema`.
+    expect(names).toHaveLength(23);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 
@@ -255,6 +256,12 @@ describe('free text on a request body', () => {
    */
   it('leaves only the format-constrained fields untested', () => {
     expect(probeRequestBodies().skipped).toEqual([
+      /*
+       * #427's agreement version. Not prose either: `v1.0`, pinned by a
+       * pattern, and the service refuses anything but the version in force. A
+       * bidi control cannot survive the regex, let alone reach the record.
+       */
+      'acceptVendorAgreementSchema.version',
       'createBookingRequestSchema.eventDate',
       'createBookingRequestSchema.eventStartTime',
       /*

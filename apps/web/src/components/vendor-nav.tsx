@@ -6,6 +6,7 @@ import {
   CalendarCheck,
   CalendarDays,
   CreditCard,
+  FileText,
   Images,
   LayoutDashboard,
   MessageSquare,
@@ -13,6 +14,7 @@ import {
   Store,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { VENDOR_AGREEMENT_PATH } from '@vendor-marketplace/shared';
 import { cn } from '@/lib/utils';
 
 interface VendorNavItem {
@@ -58,6 +60,14 @@ const ITEMS: readonly VendorNavItem[] = [
   { href: '/vendor/packages', label: 'Packages', icon: Package },
   { href: '/vendor/profile/edit', label: 'Edit profile', icon: Store },
   { href: '/vendor/portfolio', label: 'Portfolio', icon: Images },
+  /*
+   * `Legal` — the vendor agreement, and the record of having accepted it.
+   * No frame draws this row, for the same reason `Portfolio` has none: frame
+   * `08` predates the surface. It is a live route that gates the vendor's
+   * payments, and a rail that omits it strands the one screen a vendor has to
+   * reach before step 4.
+   */
+  { href: VENDOR_AGREEMENT_PATH, label: 'Legal', icon: FileText },
   /*
    * `Payments`, not `Payouts`: that is the word frame `08` puts in this rail,
    * and the nav item is the frame's string even though the copy inside the

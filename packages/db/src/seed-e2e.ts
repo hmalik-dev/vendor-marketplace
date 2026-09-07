@@ -1,5 +1,6 @@
 import {
   BOOKING_REQUEST_EXPIRY_DAYS,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
   EVENT_TYPES,
   type EventType,
   parseDurationHours,
@@ -12,6 +13,7 @@ import {
   availability,
   bookingRequests,
   categories,
+  legalAcceptances,
   servicePackages,
   users,
   vendorCategories,
@@ -217,6 +219,7 @@ export async function seedE2eFixtures<
       draft,
     });
     await attachCategory(tx, vendorProfileId);
+    await ensureAgreementAccepted(tx, vendorProfileId, vendorUserId, input.vendor);
 
     if (draft) {
       /*
@@ -457,6 +460,66 @@ async function openPublishBlockers(tx: Tx, vendorProfileId: string): Promise<voi
     .update(servicePackages)
     .set({ isActive: false, updatedAt: sql`now()` })
     .where(eq(servicePackages.vendorId, vendorProfileId));
+}
+
+/**
+ * Gives the fixture vendor the current vendor agreement, so checkout resolves.
+ *
+ * **Without it the E2E vendor cannot be paid at all.** #427 refuses a charge
+ * against a vendor who does not hold the version in force — the agreement is
+ * what the commission and the payout timing are agreed under — so a fixture
+ * that skipped this would stop every browser pass one click short of the money
+ * path, which is the failure #387 already fixed once for the connected account.
+ *
+ * Written only when it is missing, and never rewritten: the table is
+ * append-only and the database refuses an update outright, so a re-run of the
+ * seed must not try. A row for a *superseded* version is left exactly where it
+ * is and a row for the current one is added beside it, which is the same thing
+ * a real vendor re-accepting does.
+ */
+async function ensureAgreementAccepted(
+  tx: Tx,
+  vendorProfileId: string,
+  vendorUserId: string,
+  vendor: E2eAccount,
+): Promise<void> {
+  const [held] = await tx
+    .select({ id: legalAcceptances.id })
+    .from(legalAcceptances)
+    .where(
+      and(
+        eq(legalAcceptances.vendorId, vendorProfileId),
+        eq(legalAcceptances.document, 'vendor_agreement'),
+        eq(legalAcceptances.version, CURRENT_VENDOR_AGREEMENT_VERSION),
+      ),
+    )
+    .limit(1);
+
+  if (held) {
+    return;
+  }
+
+  const [profile] = await tx
+    .select({ businessName: vendorProfiles.businessName })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.id, vendorProfileId))
+    .limit(1);
+
+  await tx.insert(legalAcceptances).values({
+    vendorId: vendorProfileId,
+    document: 'vendor_agreement',
+    version: CURRENT_VENDOR_AGREEMENT_VERSION,
+    acceptedByUserId: vendorUserId,
+    acceptedByName: `${vendor.firstName} ${vendor.lastName}`.trim() || vendor.email,
+    businessName: profile?.businessName ?? 'E2E Test Studio',
+    /*
+     * No address and no agent: this acceptance was made by a seed, not by a
+     * person at a browser, and inventing either would put a fabricated fact
+     * into the one table whose value is that it is not fabricated.
+     */
+    ip: null,
+    userAgent: null,
+  });
 }
 
 /** Files the fixture vendor under one category, so search can return them. */

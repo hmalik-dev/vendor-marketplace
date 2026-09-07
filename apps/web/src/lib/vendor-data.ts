@@ -29,6 +29,8 @@ import {
   type WireVendorReviewsPage,
   type WireVendorPayoutStatus,
   wireVendorPayoutStatusSchema,
+  type WireVendorAgreementStatus,
+  wireVendorAgreementStatusSchema,
 } from './wire-schemas';
 
 /**
@@ -462,6 +464,36 @@ export async function getPayoutStatus(): Promise<WireVendorPayoutStatus | null> 
   try {
     return await apiRequest('/vendor/stripe/status', {
       schema: wireVendorPayoutStatusSchema,
+      token,
+    });
+  } catch (error) {
+    if (!(error instanceof ApiClientError)) {
+      throw error;
+    }
+
+    if (error.statusCode === 404) {
+      return null;
+    }
+
+    rethrowUnlessSessionFailure(error, signInPath);
+  }
+}
+
+/**
+ * The vendor agreement's state — what step 3 of onboarding renders, and what
+ * the dashboard's blocker banner reads.
+ *
+ * `null` for a vendor with no profile yet, the same shape and for the same
+ * reason as `getPayoutStatus` above: there is no agreement state before there
+ * is a business to accept on behalf of, and that is the onboarding case rather
+ * than a failure.
+ */
+export async function getAgreementStatus(): Promise<WireVendorAgreementStatus | null> {
+  const { token, signInPath } = await vendorSession();
+
+  try {
+    return await apiRequest('/vendor/agreement', {
+      schema: wireVendorAgreementStatusSchema,
       token,
     });
   } catch (error) {

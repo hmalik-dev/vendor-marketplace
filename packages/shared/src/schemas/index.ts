@@ -66,6 +66,7 @@ import {
   VENDOR_SORT_OPTIONS,
   PUBLISH_BLOCKER_KEYS,
 } from '../constants/index.js';
+import { LEGAL_ACCEPTANCE_DOCUMENTS } from '../constants/legal.js';
 import {
   MAX_SUPPORT_ERROR_DIGEST_LENGTH,
   MAX_SUPPORT_ERROR_ROUTE_LENGTH,
@@ -1176,6 +1177,66 @@ export const vendorPayoutStatusSchema = vendorProfileSchema.pick({
 });
 
 export type VendorPayoutStatus = z.infer<typeof vendorPayoutStatusSchema>;
+
+// --- The vendor agreement --------------------------------------------------
+
+/** One acceptance, as the agreements table on the accepted state draws it. */
+export const legalAcceptanceSchema = z.object({
+  document: z.enum(LEGAL_ACCEPTANCE_DOCUMENTS),
+  version: z.string().min(1).max(20),
+  acceptedAt: z.coerce.date(),
+  /** The person, as their name stood when they accepted. */
+  acceptedByName: z.string().min(1).max(200),
+  /** The business it was accepted on behalf of, as it stood then. */
+  businessName: z.string().min(1).max(200),
+});
+export type LegalAcceptance = z.infer<typeof legalAcceptanceSchema>;
+
+/**
+ * Everything the vendor agreement step and its accepted state read.
+ *
+ * `current` is the version this vendor must hold, and `accepted` is the newest
+ * row they actually hold — **separately**, because "accepted, but a version
+ * behind" is a real state with its own screen: the dashboard carries a blocker
+ * banner and the step re-opens. One boolean could not express it.
+ *
+ * `businessName` is the profile's, not the client's: the checkbox names the
+ * business a vendor is accepting on behalf of, and a name the browser supplied
+ * would be a name the vendor chose for the record.
+ */
+export const vendorAgreementStatusSchema = z.object({
+  current: z.string().min(1).max(20),
+  businessName: z.string().min(1).max(200),
+  /** `null` until this vendor has accepted anything at all. */
+  accepted: legalAcceptanceSchema.nullable(),
+  /** True only when `accepted` is the current version. Gates payment. */
+  isCurrent: z.boolean(),
+  /** Every acceptance this vendor holds, newest first. */
+  history: z.array(legalAcceptanceSchema),
+});
+export type VendorAgreementStatus = z.infer<typeof vendorAgreementStatusSchema>;
+
+/**
+ * What a vendor sends to accept.
+ *
+ * The version is echoed back rather than assumed, so a tab left open across a
+ * new release cannot record acceptance of a document the vendor never read —
+ * the route answers 409 and the step re-renders with the version in force.
+ */
+export const acceptVendorAgreementSchema = z.object({
+  /*
+   * A version string, not prose: `v1.0`. Constrained by format rather than
+   * only by length because it is echoed straight into an immutable legal
+   * record, and the shape of that value is not something a client gets to
+   * decide. The service still refuses anything that is not the version in
+   * force — this is what stops a malformed one reaching it at all.
+   */
+  version: z
+    .string()
+    .regex(/^v\d{1,3}\.\d{1,3}$/, 'A version looks like v1.0')
+    .max(20),
+});
+export type AcceptVendorAgreement = z.infer<typeof acceptVendorAgreementSchema>;
 
 /** What `POST /vendor/stripe/connect` answers: where to send the vendor next. */
 export const stripeOnboardingLinkSchema = z.object({

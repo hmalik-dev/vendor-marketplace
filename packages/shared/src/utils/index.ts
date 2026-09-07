@@ -184,6 +184,92 @@ export function calculateRefund(
   };
 }
 
+/** One window of the cancellation schedule, as the checkout block draws it. */
+export interface RefundScheduleRow {
+  /**
+   * `full` and `late` are the two tiers `calculateRefund` implements; `release`
+   * is not a refund tier at all but the moment the money stops being the
+   * platform's to refund, because it has been paid out (D35); `vendor-cancels`
+   * is D31's rule, which no clock reaches.
+   */
+  kind: 'full' | 'late' | 'release' | 'vendor-cancels';
+  /**
+   * The first instant this row governs, inclusive — `null` for a row that is
+   * not a window on the clock. Rows are contiguous and half-open: `from` up to
+   * but excluding the next row's `from`.
+   */
+  from: Date | null;
+  /**
+   * What a cancellation inside this window returns, or `null` where the row
+   * makes no refund claim. **Never a rate and never a phrase** — the whole
+   * point of the block is that the customer does not do the arithmetic.
+   */
+  refundCents: number | null;
+}
+
+/**
+ * The cancellation schedule for one booking, resolved into that booking's own
+ * instants and amounts.
+ *
+ * **Every refund figure here comes back out of `calculateRefund`**, called at
+ * an instant inside the window it labels, rather than being recomputed from
+ * the rate. That is deliberate and it is acceptance 13 of #427: a block that
+ * derives the tiers independently is a second implementation of the refund
+ * policy, and when the two disagree the customer is holding the screenshot.
+ * `refund-schedule.test.ts` samples every row against the function again.
+ *
+ * **There is no non-refundable tier**, because the code has none. The design
+ * drew `30 days / 50% / non-refundable` and said in its own prompt that the
+ * schedule was a guess; the constants are `FULL_REFUND_CUTOFF_HOURS` and
+ * `LATE_CANCELLATION_REFUND_RATE`, and those are what ship. #374: "a policy
+ * that promises something the code does not do is the one failure mode here
+ * that creates a dispute the platform loses".
+ *
+ * `null` for a date string the parser rejects, matching `payoutReleaseAt`.
+ */
+export function refundSchedule(
+  totalCents: number,
+  eventDate: string,
+): readonly RefundScheduleRow[] | null {
+  const eventStart = parseDateString(eventDate);
+
+  if (eventStart === null) {
+    return null;
+  }
+
+  /*
+   * The instant the full-refund window closes. `calculateRefund` is inclusive
+   * at the cutoff — `hoursUntilEvent >= FULL_REFUND_CUTOFF_HOURS` — so the late
+   * window opens one millisecond later, and the rows below stay a partition of
+   * the timeline rather than two intervals that overlap at a point.
+   */
+  const cutoff = new Date(eventStart.getTime() - FULL_REFUND_CUTOFF_HOURS * MS_PER_HOUR);
+  const lateFrom = new Date(cutoff.getTime() + 1);
+  const releaseAt = new Date(eventStart.getTime() + PAYOUT_RELEASE_HOURS * MS_PER_HOUR);
+
+  return [
+    {
+      kind: 'full',
+      from: null,
+      refundCents: calculateRefund(totalCents, eventDate, cutoff).refundCents,
+    },
+    {
+      kind: 'late',
+      from: lateFrom,
+      refundCents: calculateRefund(totalCents, eventDate, lateFrom).refundCents,
+    },
+    /*
+     * Not a refund claim, which is why `refundCents` is null rather than a
+     * third number. It is where the customer's money goes: #423 holds the
+     * payment until the event and releases it `PAYOUT_RELEASE_HOURS` later, so
+     * this is the last row on which a cancellation is still a plain refund
+     * rather than an unwind an operator has to drive (D31).
+     */
+    { kind: 'release', from: releaseAt, refundCents: null },
+    { kind: 'vendor-cancels', from: null, refundCents: totalCents },
+  ];
+}
+
 export interface FeeBreakdown {
   totalCents: number;
   platformFeeCents: number;

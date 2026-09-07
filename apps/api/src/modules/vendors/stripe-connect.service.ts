@@ -5,9 +5,11 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { AppDatabase } from '../../lib/database.js';
-import { notFound } from '../../lib/errors.js';
+import { conflict, notFound } from '../../lib/errors.js';
 import { isMissingPayoutsOnly, isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
 import { findUserById } from '../users/users.dao.js';
+import { findAcceptances } from './legal-agreement.dao.js';
+import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import {
   claimStripeAccountId,
   findVendorProfileByStripeAccountId,
@@ -51,6 +53,24 @@ export async function startPayoutOnboarding(
   const vendor = await findVendorProfileByUserId(deps.db, userId);
   if (!vendor) {
     throw notFound('You have not created a vendor profile yet');
+  }
+
+  /*
+   * **Step 3 before step 4, enforced rather than drawn.**
+   *
+   * The vendor agreement precedes Stripe Connect because the commission and
+   * the payout timing are agreed before a payout rail exists to implement them
+   * — #427, frame `32`. Until this refused it, that ordering was a rail on a
+   * screen and nothing else: a vendor could complete Connect first and end up
+   * exactly where the ordering exists to prevent, holding a verified account
+   * attached to a listing nobody can pay, having handed over bank details
+   * without being told what the platform keeps.
+   *
+   * A 409 rather than a 403: nothing is wrong with the caller, there is a step
+   * outstanding, and the message names it.
+   */
+  if (!holdsCurrentAgreement(await findAcceptances(deps.db, vendor.id))) {
+    throw conflict('Accept the vendor agreement before connecting payouts');
   }
 
   let accountId = vendor.stripeAccountId;

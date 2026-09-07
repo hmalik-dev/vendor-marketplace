@@ -140,6 +140,27 @@ async function requirePayableByCustomer(
     );
   }
 
+  /*
+   * The vendor agreement is what the platform pays a vendor *under*: it is
+   * where the commission and the payout timing are agreed, and it is the
+   * document a vendor would be shown if they later disputed either. A charge
+   * taken against a vendor who has not accepted the version in force is money
+   * moved under terms nobody agreed to — so the same 402 the missing Connect
+   * account earns, for the same reason, and in the same place, so the pay
+   * route and the reconciliation read cannot disagree about it.
+   *
+   * The customer's message is deliberately the same string either way. Which of
+   * the two the vendor has not done is the vendor's business, and a customer
+   * cannot act on the difference.
+   */
+  if (!row.vendorHoldsCurrentAgreement) {
+    throw new AppError(
+      402,
+      ERROR_CODES.PAYMENT_REQUIRED,
+      `${row.vendorBusinessName} cannot take payment yet`,
+    );
+  }
+
   return row;
 }
 

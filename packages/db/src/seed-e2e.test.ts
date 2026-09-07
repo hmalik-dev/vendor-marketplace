@@ -1,4 +1,4 @@
-import { EVENT_TYPES } from '@vendor-marketplace/shared';
+import { CURRENT_VENDOR_AGREEMENT_VERSION, EVENT_TYPES } from '@vendor-marketplace/shared';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { seedReferenceData } from './seed.js';
@@ -11,6 +11,7 @@ import {
 import {
   availability,
   bookingRequests,
+  legalAcceptances,
   servicePackages,
   users,
   vendorCategories,
@@ -217,6 +218,44 @@ describe('seedE2eFixtures', () => {
       .where(eq(vendorProfiles.id, result.vendorProfileId));
 
     expect(profile?.stripeOnboarded).toBe(true);
+  });
+
+  /**
+   * The payout gate is not the only one a charge passes. #427 refuses a charge
+   * against a vendor who does not hold the current agreement, so a fixture that
+   * seeded a connected account and skipped this would stop a browser pass one
+   * click short of the money path — the same failure #387 fixed for the
+   * account id.
+   */
+  it('gives the vendor the current agreement, so checkout is not blocked either', async () => {
+    const result = published(await seedE2eFixtures(database.db, INPUT));
+
+    const rows = await database.db
+      .select()
+      .from(legalAcceptances)
+      .where(eq(legalAcceptances.vendorId, result.vendorProfileId));
+
+    expect(rows).toHaveLength(1);
+    expect({ document: rows[0]?.document, version: rows[0]?.version }).toEqual({
+      document: 'vendor_agreement',
+      version: CURRENT_VENDOR_AGREEMENT_VERSION,
+    });
+  });
+
+  /**
+   * The table is append-only and the database refuses an update, so a second
+   * run must not attempt one — it holds what it already has.
+   */
+  it('does not write a second acceptance of the same version on a re-run', async () => {
+    const result = published(await seedE2eFixtures(database.db, INPUT));
+    await seedE2eFixtures(database.db, INPUT);
+
+    const rows = await database.db
+      .select()
+      .from(legalAcceptances)
+      .where(eq(legalAcceptances.vendorId, result.vendorProfileId));
+
+    expect(rows).toHaveLength(1);
   });
 
   it('can leave the payout gate closed, for a run that wants to drive it', async () => {

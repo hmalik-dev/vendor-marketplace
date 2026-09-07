@@ -12,6 +12,7 @@ import {
   paginatedSchema,
   sendMessageResultSchema,
   vendorDashboardSchema,
+  vendorAgreementStatusSchema,
   vendorPayoutStatusSchema,
   portfolioItemSchema,
   nearbyAvailabilityResultSchema,
@@ -280,6 +281,17 @@ export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
 /** The vendor's payout state — plain JSON, so the shared schema stands as-is. */
 export const wireVendorPayoutStatusSchema = vendorPayoutStatusSchema;
 export type WireVendorPayoutStatus = z.infer<typeof wireVendorPayoutStatusSchema>;
+
+/**
+ * The vendor agreement's state.
+ *
+ * The shared schema stands as-is because `acceptedAt` is already
+ * `z.coerce.date()` there — a `z.date()` over the wire is a string the parser
+ * refuses, and that failure renders as a 500 on the one screen a vendor cannot
+ * take payment without.
+ */
+export const wireVendorAgreementStatusSchema = vendorAgreementStatusSchema;
+export type WireVendorAgreementStatus = z.infer<typeof wireVendorAgreementStatusSchema>;
 
 /** Messaging, as JSON — every timestamp coerced back at the boundary. */
 export const wireConversationSchema = conversationSummarySchema.extend({

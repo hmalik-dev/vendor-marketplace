@@ -9,5 +9,6 @@ export * from './availability.js';
 export * from './bookings.js';
 export * from './messaging.js';
 export * from './reviews.js';
+export * from './legal-acceptances.js';
 export * from './notifications.js';
 export * from './us-cities.js';

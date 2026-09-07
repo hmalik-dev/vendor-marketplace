@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { BRAND_NAME, payoutReleaseAt } from '@vendor-marketplace/shared';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CheckoutScreen } from './checkout-screen';
@@ -169,15 +170,63 @@ describe('CheckoutScreen', () => {
     expect(pay.textContent).not.toBe('Pay');
   });
 
-  it('answers the cancellation objection in sentences, not a policy link', () => {
+  /*
+   * Frame `33`. The cancellation objection is answered in the rail, resolved
+   * into this booking's own dates and amounts rather than in two sentences
+   * quoting the constants. `refund-schedule-block.test.tsx` is where the
+   * schedule is pinned against `calculateRefund`; this asserts the screen
+   * mounts it and that the figures are this booking's.
+   */
+  it("answers the cancellation objection with the booking's own dates and amounts", () => {
     render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
 
-    expect(screen.getByRole('heading', { name: 'If plans change' })).toBeDefined();
+    expect(screen.getByRole('heading', { name: /If plans change/ })).toBeDefined();
+    expect(screen.getByText('Before June 12')).toBeDefined();
+    expect(screen.getByText(/\$1,450 back/)).toBeDefined();
+    expect(screen.getByText('From June 12')).toBeDefined();
+    expect(screen.getByText(/\$725 back/)).toBeDefined();
+  });
+
+  /** Acceptance 14: no page, panel or email states a window that does not exist. */
+  it('states no non-refundable window, because the code has none', () => {
+    const { container } = render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+
+    expect(container.textContent?.toLowerCase()).not.toContain('non-refundable');
+  });
+
+  /**
+   * The summary line and the schedule's release row are two sentences about
+   * one payment, on one screen, three elements apart. They named two different
+   * days once — the line said the event date because that is the *trigger*,
+   * while the release fires `PAYOUT_RELEASE_HOURS` after it — and two release
+   * dates for one payment is exactly the drift this ticket exists to close.
+   */
+  it('names one release date, and it is the one the schedule names', () => {
+    render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+
+    const release = payoutReleaseAt('2027-06-14');
+    const day = new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(release as Date);
+
+    expect(day).toBe('June 17');
     expect(
       screen.getByText(
-        /Cancel more than 48 hours before June 14 and you're refunded in full\. Inside 48 hours, half is refunded/,
+        `Held by ${BRAND_NAME} until June 14, then released to Kessler & Co. on June 17.`,
       ),
     ).toBeDefined();
+    // Two sentences, one date: the summary line and the schedule's release row.
+    expect(screen.getAllByText(/released to Kessler & Co\. on June 17/)).toHaveLength(2);
+    // And the wrong day appears nowhere: the event date is the hold's end.
+    expect(screen.queryByText(/released to Kessler & Co\. on June 14/)).toBeNull();
+  });
+
+  it('references the schedule above the button rather than a page', () => {
+    render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+
+    expect(screen.getByText(/and the refund schedule above/)).toBeDefined();
   });
 
   it('goes to the confirmation once the charge clears', async () => {

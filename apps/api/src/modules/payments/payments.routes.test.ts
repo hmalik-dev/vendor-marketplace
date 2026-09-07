@@ -10,6 +10,7 @@ import {
 } from '@vendor-marketplace/db/schema';
 import {
   addDays,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
   DEFAULT_PLATFORM_FEE_RATE,
   ERROR_CODES,
   toDateString,
@@ -61,7 +62,9 @@ describe('payments', () => {
   }
 
   /** A published, payout-ready vendor with one package. */
-  async function createVendor(): Promise<{ vendorId: string; packageId: string }> {
+  async function createVendor(
+    acceptsAgreement = true,
+  ): Promise<{ vendorId: string; packageId: string }> {
     const profile = await inject('POST', '/vendor/profile', VENDOR, {
       businessName: 'Sunlit Studio',
       categoryIds: [photographyId],
@@ -87,12 +90,27 @@ describe('payments', () => {
       .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
       .where(eq(vendorProfiles.id, vendorId));
 
+    /*
+     * A vendor cannot take payment until they hold the current vendor
+     * agreement (#427), so a fixture that skips this is a vendor checkout
+     * correctly refuses. Accepted through the real route rather than inserted,
+     * because that is how a vendor reaches this state — and optional, so the
+     * refusal has a fixture of its own rather than being simulated by editing
+     * a row the database will not let anybody edit.
+     */
+    if (acceptsAgreement) {
+      const accepted = await inject('POST', '/vendor/agreement/accept', VENDOR, {
+        version: CURRENT_VENDOR_AGREEMENT_VERSION,
+      });
+      expect(accepted.statusCode).toBe(200);
+    }
+
     return { vendorId, packageId: created.json().id };
   }
 
   /** A request the vendor has accepted — the only state checkout opens on. */
-  async function acceptedRequest(eventDate = EVENT_DATE): Promise<string> {
-    const { vendorId, packageId } = await createVendor();
+  async function acceptedRequest(eventDate = EVENT_DATE, acceptsAgreement = true): Promise<string> {
+    const { vendorId, packageId } = await createVendor(acceptsAgreement);
 
     const request = await inject('POST', '/booking-requests', CUSTOMER, {
       vendorId,
@@ -328,6 +346,32 @@ describe('payments', () => {
 
       expect(response.statusCode).toBe(402);
       expect(response.json().error).toBe(ERROR_CODES.PAYMENT_REQUIRED);
+    });
+
+    /**
+     * Acceptance 10 of #427. The vendor agreement is what the platform pays a
+     * vendor **under** — the commission and the payout timing are agreed there
+     * — so a charge taken against a vendor who has not accepted the version in
+     * force is money moved under terms nobody agreed to.
+     *
+     * The customer's message is deliberately the one a missing Connect account
+     * earns. Which of the two the vendor has not done is the vendor's business,
+     * and a customer cannot act on the difference.
+     */
+    it('refuses to charge for a vendor who has not accepted the current agreement', async () => {
+      const requestId = await acceptedRequest(EVENT_DATE, false);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(402);
+      expect(response.json().error).toBe(ERROR_CODES.PAYMENT_REQUIRED);
+      expect(response.json().message).toContain('Sunlit Studio');
+      // No intent was opened, so nothing has to be cleaned up at Stripe.
+      expect(harness.stripe.paymentIntents.size).toBe(0);
     });
 
     it('refuses a request nobody has accepted', async () => {

@@ -32,3 +32,4 @@
 - [Ceiling counted over a stale lookup](review-checklist-ceiling-counted-over-a-stale-lookup.md) — fixing the add side leaves `categoryOf(id)` undercounting ids the selection outran; render with an id absent from `allTags` and fill the category
 - [focus()-opener is dead when already focused](review-checklist-focus-opener-dead-when-already-focused.md) — a new affordance in `combobox-field` opens via `inputRef.focus()`; after Escape or a keyboard commit that fires nothing. Drive open→Escape→click
 - [Universal boundary vs a viewer countdown](review-checklist-universal-boundary-vs-viewer-countdown.md) — `isUniversallyPastDate` keeps yesterday, so `days <= 0 → 'today'` labels a past date today; probe yesterday's row and diff the sibling surface
+- [plpgsql trigger without SET search_path](review-checklist-plpgsql-trigger-without-search-path.md) — a shadow `evil.users` flips the discriminator and every "immutable" row deletes; TRUNCATE never fires a row trigger
