@@ -262,6 +262,9 @@ storefront, each of which tells the reader something untrue. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 | **452** | **Every role bounce off `/admin` costs a failed `https` request** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #432's browser pass.** A customer or vendor sent to `/admin` lands correctly on their own dashboard, but the browser first logs `GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR` and `Failed to load resource` before falling back to `http`. `current-user.ts:111` issues a **relative** `redirect(DASHBOARD_PATH_BY_ROLE[user.role])`, so the scheme is being inferred downstream rather than chosen. The outcome is right, which is why nobody has noticed: the cost is one wasted round trip and a console error on every denial, and a console that is never clean is one nobody reads. Neither `current-user.ts` nor `middleware.ts` was touched by #432. |
 | **454** | **Land the admin design delta — the drawn frames for every unframed console screen** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — the frames arrived 2026-09-07 and this row is what consumes them | `core` `auth` | **Filed 2026-09-07. The account holder supplied `design/delta-admin/` in answer to #453**, which asked for frames and per `design-is-a-contract-not-code` deliberately did not attempt them — so **#453 is closed by that delivery**, not by this row. The bundle is **three patterns, two drawn frames and one ruling**: **A** rules that the four list routes reuse frame `13`'s table verbatim and gives their column grids, defaults, colour and empty behaviour; **B** draws one detail frame on `/admin/vendors/[id]` settling card order, label/value typography, long-field wrapping and where destructive actions may sit; **C** draws `/admin/cases/[caseId]` in full, including the two-position resolve control and its `ConfirmAction`. **This row takes the surfaces already on `main`** — the rail order, `/admin/activity`, `/admin/cases`, and a parity pass over `/admin/cases/[caseId]` and `/admin/users/[userId]` — plus the contract reconciliation and the **filtered-empty pattern**, which is a new shared component and closes one of #443's six findings. **#437 is unblocked by this filing** and builds the five routes that do not exist yet against Pattern B. **The rail change is an *order* change, not a count change** — the bundle reasons from a stale brief of eight rows, but `22-admin.md` already gave Cases a row (#431) and the app renders nine; what actually moves is Cases, from between `Payments` and `Reviews` to directly after `Bookings`, overturning #431. **Three design questions must be answered before the parts that depend on them are built**, and the third is about money: the drawn Actions card says `Suspend vendor` **holds payouts** where the implementation **refunds in full** per D31/#416, and a frame in the repository saying one thing beside code doing the other will be read by the next lane as the spec. |
+| **455** | **The `Apply filters` button clears the filter it should apply, and no pointer can reach it** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #435's browser pass, reproduced twice.** On `/admin/reviews` the Direction select auto-applies on change (`?type=vendor_to_customer`, 14 rows, all "The customer"). Activating the `sr-only` submit **navigates to `/admin/reviews` with no query at all** — 15 rows, mixed directions — so the control named "Apply filters" is the one control that discards them. It is also pointer-intercepted by the Direction combobox, so a mouse cannot reach it. That button exists for the keyboard and no-JS path, which means it fails **precisely** the users it was added for and nobody else, and they have no workaround because the auto-apply it shadows is a JS change event. Not cosmetic: the filter bar is the only way to narrow six admin tables. |
+| **456** | **Two moderation labels disagree with the frame that now draws them** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#454** (the frames land with it) | `core` `auth` | **Filed 2026-09-07 by #435, against its own surface.** #435 shipped `Unpublish storefront` and `Suspend account` before any frame drew the vendor detail view; `design/delta-admin/Orla-Admin-Views.html` then arrived naming them **`Unpublish profile`** and **`Suspend vendor`** in the Actions card. `web-design-parity.md` is explicit that "same composition with reworded copy has failed too", so this is a text-parity defect rather than a preference. The *descriptions* already agree — both say existing bookings stand and the vendor keeps their dashboard — so this is two labels, in `vendor-table.tsx` and their four assertions. **Do not fix before #454 lands** or the frame is not yet in the repository to match. See design question 3 in #454 before touching the suspend copy: the card also says suspend "holds payouts" where the code refunds in full, and that is unresolved. |
+| **457** | **A moderation hold the moderated vendor cannot lift** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#454** (the vendor detail Actions card is where the control lives) | `core` `auth` | **Filed 2026-09-07 by #435's security audit.** #435 shipped unpublish and package deactivation, and both write columns **the vendor also writes**: `PUT /vendor/profile` accepts `isPublished: true` checking only `publishBlockers`, and `PUT /vendor/packages/:id` accepts `isActive`. There is no hold column on `vendor_profiles` or `service_packages`, so an operator takes a storefront down for a policy violation and the vendor puts it back from their own dashboard seconds later — no block, no notification, nothing but an `admin_actions` row. #435's acceptance 1 was corrected to say it is advisory; **ban remains the only enforcing lever until this lands.** Review hiding and portfolio removal are unaffected and do hold. Carries the unapproved review-moderation copy as a dependency: `Hide review` / `Unhide review` / `Delete review` appear in no frame and in no voice file — the admin delta covers the vendor detail card and says nothing about reviews. |
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #435 landed and #454 was filed: 18 rows — 15 Backlog and 3 `Deferred — needs a human`.** #438's row and detail section are **deleted** by its own lane, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`) and #435 (`d83d374b`) have all landed** — so **#436**, **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -2580,3 +2583,172 @@ Two, and both are cheap to answer and expensive to guess:
       for `/admin/activity` and `/admin/cases`. Six axes.
 - [ ] Browser: both list screens at a filtered-empty state, and the case detail
       driven to **both** resolve confirms without pressing either.
+
+### #455: The `Apply filters` button clears the filter it should apply, and no pointer can reach it
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+#### What happens
+
+On `/admin/reviews`, choosing a Direction auto-applies it — the select fires a
+change event and the page navigates to `?type=vendor_to_customer`, showing 14
+rows all reading "The customer". Activating the **`Apply filters`** submit then
+navigates to `/admin/reviews` **with no query string**, showing 15 rows of mixed
+direction. Reproduced twice.
+
+So the control whose name promises to apply the filters is the only control that
+discards them.
+
+#### Why it is P1 rather than cosmetic
+
+That button is `sr-only` until focused. It exists for the **keyboard and no-JS
+path** — the auto-apply it shadows is a JS `change` handler, which those users do
+not get. So the defect fails precisely the users the button was added for, and
+they have no workaround: the filter bar is the only way to narrow six admin
+tables, and for them it now clears instead of filtering.
+
+It is also **pointer-intercepted** by the Direction combobox, so a mouse cannot
+activate it at all — which is why it survived: every sighted mouse test passes.
+
+#### What to build
+
+The submit must apply the same query the change handler builds, and must be
+reachable. Fix both halves, and add a test that activates the **button** rather
+than firing the select's change event — a test that only exercises the JS path
+cannot fail on this.
+
+#### Tests (required)
+
+- [ ] Activating the submit with a Direction chosen lands on the filtered query,
+      asserted on the resulting rows and not only on the URL.
+- [ ] The submit is hit-testable at 1440x900 — `elementFromPoint` at its centre
+      returns the button, not the combobox.
+- [ ] The keyboard path end to end: focus the select, choose, tab to the submit,
+      activate, and assert the narrowed table.
+
+### #456: Two moderation labels disagree with the frame that now draws them
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** #454 — the frames land with it
+
+#### The mismatch
+
+| Shipped by #435 | Drawn by `design/delta-admin/Orla-Admin-Views.html` |
+| --- | --- |
+| `Unpublish storefront` | **`Unpublish profile`** |
+| `Suspend account` | **`Suspend vendor`** |
+
+#### Why this is a defect and not a preference
+
+`web-design-parity.md`: *"Same composition with reworded copy has failed too —
+the words **are** the design."* The frame is the acceptance criterion.
+
+**The sequencing is the excuse and also the lesson.** #435 wrote these strings
+when no frame drew the vendor detail view and `31-content-voice.md` recorded
+nothing for them; the lane deliberately refused to add them to the voice file
+itself, because a ticket writes code and a design pass edits the plan. The frame
+arrived afterwards. Nothing was done wrong — the strings simply predate their
+own contract, and now that it exists they have to match it.
+
+The **descriptions** already agree in substance: #435's unpublish copy says open
+requests stand, confirmed bookings stand, no refund is issued and the vendor can
+still sign in; the card says existing bookings stand and the vendor keeps their
+dashboard. Same promise. This ticket is the two labels and the four assertions
+that pin them.
+
+#### Read this before touching the suspend copy
+
+The same card describes **Suspend vendor** as *"Unpublishes, cancels 2 pending
+requests and **holds payouts**"*, where the implemented ban cancels and **refunds
+in full**, reversing the vendor's share out of their Stripe balance (D31/#416).
+That contradiction is **design question 3 in #454** and is not settled. Change the
+label here; do not change what the dialog promises about money until it is.
+
+#### Tests (required)
+
+- [ ] The menu item, dialog title and confirm label all read the frame's word —
+      one verb per action, asserted across all of them.
+- [ ] The existing "cannot be confused with the suspend dialog" assertions still
+      hold with the new labels.
+
+### #457: A moderation hold the moderated vendor cannot lift
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** #454 — the vendor detail Actions card is where the control lives
+
+#### The state today
+
+**#435's two reversible levers are advisory, and the party they are used against
+is the one who can undo them.**
+
+- `vendor_profiles.is_published` is written by `PUT /admin/vendors/:vendorId/publish`
+  **and** by the vendor's own `PUT /vendor/profile`, which accepts
+  `isPublished: true` checking only `publishBlockers`.
+- `service_packages.is_active` is written by `PUT /admin/packages/:packageId/active`
+  **and** by the vendor's own `PUT /vendor/packages/:id`.
+
+There is no hold column on either table. So: an operator unpublishes a storefront
+for an unverified claim in a bio; the vendor opens their dashboard, clicks
+Publish, and is back on search. Nothing refuses them, nothing tells the operator,
+and the only record is the `admin_actions` row saying the operator once
+unpublished it.
+
+Review hiding and portfolio removal are **not** affected and need nothing here:
+nothing outside the admin plugin writes `reviews.is_public`, and a removed
+photo's object is gone.
+
+Found by the security audit on #435's own lane, before it shipped — not by a
+vendor.
+
+#### What to build
+
+**1. A hold column on both tables.** `moderation_hold boolean not null default
+false` on `vendor_profiles` and `service_packages`. Set by the #435 admin routes;
+**cleared only by an admin**, never by the vendor and never as a side effect of
+any vendor write.
+
+**2. The vendor's own paths refuse while it is set.** `updateVendorProfile`'s
+`isPublished` branch and `updateServicePackage`'s `isActive` branch answer **403**
+while the hold stands — not a silent no-op, and not a validation error.
+
+**3. The refusal copy is not this ticket's to invent, and neither is the review
+vocabulary it inherits.** `31-content-voice.md` has no register for a moderation
+refusal; the nearest approved rows are the publish blocker and the payout gate,
+both about something the vendor can go and fix, which this is not. Separately,
+#435's review actions — `Hide review`, `Unhide review`, `Delete review` — appear
+in **no frame and no voice file**: the admin delta covers the vendor detail card
+and says nothing about reviews. **Both need a design pass before this ships.**
+
+**4. Setting and clearing are logged admin actions**, extending #434's enum
+rather than starting a second list.
+
+**5. The console shows it.** A held vendor must be distinguishable in
+`/admin/vendors` from one merely unpublished, or an operator cannot tell whether
+a storefront is down because it was moderated or because the vendor took it down
+themselves — which is the same ambiguity #435's republish dialog currently warns
+about in prose.
+
+#### Acceptance
+
+1. With the hold set, `PUT /vendor/profile` with `isPublished: true` answers 403
+   and the storefront stays off search — asserted **as the vendor**, not as an admin.
+2. With the hold set, `PUT /vendor/packages/:id` with `isActive: true` answers 403.
+3. An admin clearing the hold restores the vendor's ability to publish.
+4. The hold survives a **full profile save** that does not mention `isPublished`.
+5. Setting and clearing each write an `admin_actions` row naming the actor.
+6. A held vendor is distinguishable from an unpublished one in `/admin/vendors`.
+7. Nothing here bans, refunds or touches a booking — #435's invariant, asserted
+   the same way.
+8. #435's acceptance 1 is restored to enforcement wording, since this is the
+   ticket that makes it true.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 4 driven as a realistic **whole-profile** save: the vendor editor
+      sends every field, and a patch-shaped fixture omitting `isPublished` would
+      pass while the real form clears the hold.
+- [ ] Acceptances 1 and 2 asserted on the status code **and the resulting public
+      surface**. The bug this fixes is a write that succeeded, so a test reading
+      only the API's answer would have passed against the broken version.
