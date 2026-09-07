@@ -350,6 +350,10 @@ export interface BanAffectedBooking {
   vendorUserId: string;
   totalAmountCents: number;
   stripePaymentIntentId: string | null;
+  /** The three `isLegacyDestinationPayout` reads — see the select below. */
+  status: BookingStatus;
+  payoutReleasedAt: Date | null;
+  stripeTransferId: string | null;
 }
 
 export async function findConfirmedBookingsToUnwind(
@@ -381,6 +385,18 @@ export async function findConfirmedBookingsToUnwind(
       vendorUserId: vendorProfiles.userId,
       totalAmountCents: bookings.totalAmountCents,
       stripePaymentIntentId: bookings.stripePaymentIntentId,
+      /*
+       * The pair that identifies a pre-#423 destination charge (#423). Without
+       * them the ban loop could not tell a legacy row — whose vendor Stripe
+       * already paid, and whose refund therefore reverses nothing — from a
+       * modern one, and would have refunded the customer in full while the
+       * vendor kept their share. `isLegacyDestinationPayout` reads exactly these
+       * two, so they travel with the row rather than being fetched per booking
+       * inside a loop already paying for a Stripe call.
+       */
+      status: bookings.status,
+      payoutReleasedAt: bookings.payoutReleasedAt,
+      stripeTransferId: bookings.stripeTransferId,
     })
     .from(bookings)
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { bookings, vendorProfiles } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -13,10 +13,18 @@ import type { AppDatabase } from '../../lib/database.js';
  * date decides. Both sides of it are therefore releasable, and the release
  * predicate below is the one place in the codebase where that is enforced.
  *
- * `disputed` is excluded: it is the hold. `cancelled` is excluded: the money
- * has gone back to the customer.
+ * **`cancelled` is in it too, and only `vendor_payout_cents > 0` separates the
+ * two cases.** A cancellation inside D3's 48-hour cutoff refunds half and
+ * leaves the vendor the same proportion of their share (D31) — money they are
+ * owed for a date they held and lost. Under the destination charge that share
+ * was already in their balance; here it is still Orla's to send, so the
+ * cancellation writes the residual down and the sweep pays it on the original
+ * schedule. A full refund writes `0`, and a zero payout is excluded by the
+ * predicate rather than by the status.
+ *
+ * `disputed` is the one exclusion: it is the hold.
  */
-export const RELEASABLE_STATUSES = ['confirmed', 'completed'] as const;
+export const RELEASABLE_STATUSES = ['confirmed', 'completed', 'cancelled'] as const;
 
 /**
  * A booking that is owed its transfer, with the account the money goes to.
@@ -66,10 +74,22 @@ export async function findDuePayoutBookingIds(
       and(
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
         isNull(bookings.payoutReleasedAt),
+        eq(bookings.payoutModel, 'separate'),
+        gt(bookings.vendorPayoutCents, 0),
         lte(bookings.eventDate, dueThroughDate),
       ),
     )
-    .orderBy(asc(bookings.eventDate))
+    /*
+     * Fewest failures first, then oldest event.
+     *
+     * `event_date` alone would let a hundred permanently stuck payouts — vendors
+     * whose Connect account lost the `transfers` capability, say — occupy the
+     * whole batch on every run, oldest first, so no healthy payout behind them
+     * is ever attempted. Silently, and forever, because a failure leaves the row
+     * releasable by design. Ordering by attempts first keeps a stuck row being
+     * retried without letting it starve the queue.
+     */
+    .orderBy(asc(bookings.payoutAttempts), asc(bookings.eventDate))
     .limit(limit);
 
   return rows.map((row) => row.id);
@@ -119,6 +139,8 @@ export async function claimReleasableBooking(
         eq(bookings.id, bookingId),
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
         isNull(bookings.payoutReleasedAt),
+        eq(bookings.payoutModel, 'separate'),
+        gt(bookings.vendorPayoutCents, 0),
         lte(bookings.eventDate, dueThroughDate),
       ),
     )

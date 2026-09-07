@@ -88,7 +88,7 @@ export interface StripeConnectGateway {
    * balance, with nothing to say it happened. Asking first turns that from
    * unrecoverable into self-healing.
    */
-  findTransfer(transferGroup: string): Promise<{ transferId: string; amountCents: number } | null>;
+  findTransfer(transferGroup: string): Promise<StripeTransferSnapshot | null>;
 
   /**
    * Claws a share of a transfer back out of the vendor's connected account.
@@ -186,6 +186,21 @@ export interface CreateTransferInput {
   destinationAccountId: string;
   /** `transferGroupFor(requestId)` — ties the transfer back to its charge. */
   transferGroup: string;
+}
+
+/** A transfer as the unwind paths need to read it back. */
+export interface StripeTransferSnapshot {
+  transferId: string;
+  amountCents: number;
+  /**
+   * How much of it has already been reversed.
+   *
+   * The half `findRefund` has no equivalent of on the transfer, and the reason
+   * `reverseOutstanding` exists: past Stripe's 24-hour idempotency window a
+   * repeated cancellation would send a *second* full reversal, which Stripe
+   * refuses as an over-reversal and which then wedges the booking.
+   */
+  reversedCents: number;
 }
 
 export interface ReverseTransferInput {
@@ -725,8 +740,16 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
          * for a repeated key for 24 hours, so a double-submitted checkout — or
          * a retry after a dropped response — reaches the same intent rather
          * than minting a second one against the same booking.
+         *
+         * `_separate` is the parameters' version, not decoration, and it is
+         * the same discipline the refund keys carry. Stripe refuses a key
+         * replayed with *different* parameters, and #423 removed
+         * `application_fee_amount` and `transfer_data` from this very request —
+         * so a checkout opened in the 24 hours before the deploy and reopened
+         * after would have been answered `idempotency_error` and 500'd, on the
+         * one screen where that costs a booking.
          */
-        { idempotencyKey: `pay_${input.requestId}` },
+        { idempotencyKey: `pay_${input.requestId}_separate` },
       );
 
       return toSnapshot(intent);
@@ -748,7 +771,13 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
       const { data } = await stripe.transfers.list({ transfer_group: transferGroup, limit: 10 });
       const transfer = data[0];
 
-      return transfer ? { transferId: transfer.id, amountCents: transfer.amount } : null;
+      return transfer
+        ? {
+            transferId: transfer.id,
+            amountCents: transfer.amount,
+            reversedCents: transfer.amount_reversed,
+          }
+        : null;
     },
 
     async reverseTransfer(input) {

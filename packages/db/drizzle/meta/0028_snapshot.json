@@ -1,5 +1,5 @@
 {
-  "id": "363048ac-5ea2-4db5-aad0-6b9c356f6e9b",
+  "id": "f405ed06-26fc-4ff7-8674-d74c7c6d15dc",
   "prevId": "8e7a27f3-5920-4d20-8db6-37c775fb3371",
   "version": "7",
   "dialect": "postgresql",
@@ -1672,6 +1672,14 @@
           "primaryKey": false,
           "notNull": true
         },
+        "payout_model": {
+          "name": "payout_model",
+          "type": "payout_model",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'destination'"
+        },
         "status": {
           "name": "status",
           "type": "booking_status",
@@ -1826,7 +1834,7 @@
             }
           ],
           "isUnique": false,
-          "where": "\"bookings\".\"payout_released_at\" is null and \"bookings\".\"status\" <> 'cancelled'",
+          "where": "\"bookings\".\"payout_released_at\" is null and \"bookings\".\"payout_model\" = 'separate' and \"bookings\".\"vendor_payout_cents\" > 0",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2551,6 +2559,14 @@
         "mid_range",
         "premium",
         "luxury"
+      ]
+    },
+    "public.payout_model": {
+      "name": "payout_model",
+      "schema": "public",
+      "values": [
+        "destination",
+        "separate"
       ]
     },
     "public.price_type": {

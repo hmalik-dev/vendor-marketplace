@@ -12,7 +12,12 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { bookingCancelledByEnum, bookingRequestStatusEnum, bookingStatusEnum } from './enums.js';
+import {
+  bookingCancelledByEnum,
+  bookingRequestStatusEnum,
+  bookingStatusEnum,
+  payoutModelEnum,
+} from './enums.js';
 import { servicePackages } from './service-packages.js';
 import { users } from './users.js';
 import { vendorProfiles } from './vendor-profiles.js';
@@ -138,7 +143,31 @@ export const bookings = pgTable(
     totalAmountCents: integer('total_amount_cents').notNull(),
     /** Platform commission at the rate in force when payment succeeded. */
     platformFeeCents: integer('platform_fee_cents').notNull(),
+    /**
+     * What the vendor is still owed, in cents.
+     *
+     * The split settled at payment, and it stays that figure for the life of an
+     * ordinary booking. **A cancellation before the payout is released rewrites
+     * it to the share the vendor keeps** — the proportion of the total that was
+     * *not* refunded (D31, D3's tiers). Under the destination charge that share
+     * was already in the vendor's balance and Stripe reversed only the refunded
+     * proportion; under separate charges nobody holds it but Orla, so the
+     * amount still owed has to be written down or it is silently kept by the
+     * platform. A full refund writes `0`, and the sweep ignores a zero payout.
+     */
     vendorPayoutCents: integer('vendor_payout_cents').notNull(),
+    /**
+     * How this booking's money was arranged when it was paid.
+     *
+     * **`destination` is the default, and that is the load-bearing part.** Every
+     * row written before #423 was a destination charge, and so is every row the
+     * old image writes during the deploy window between the migration and the
+     * new code serving — neither sets this column, so both identify themselves
+     * without the backfill having to reach them. Only the sweep's own model
+     * releases: `separate` is written by `recordSuccessfulPayment` and by
+     * nothing else.
+     */
+    payoutModel: payoutModelEnum('payout_model').notNull().default('destination'),
     status: bookingStatusEnum('status').notNull().default('confirmed'),
     stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
     /**
@@ -238,7 +267,9 @@ export const bookings = pgTable(
      */
     index('bookings_payout_due_idx')
       .on(table.eventDate)
-      .where(sql`${table.payoutReleasedAt} is null and ${table.status} <> 'cancelled'`),
+      .where(
+        sql`${table.payoutReleasedAt} is null and ${table.payoutModel} = 'separate' and ${table.vendorPayoutCents} > 0`,
+      ),
   ],
 );
 

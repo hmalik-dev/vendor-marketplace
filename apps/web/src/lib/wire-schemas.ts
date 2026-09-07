@@ -254,8 +254,27 @@ export const wireCustomerProfileSchema = z.discriminatedUnion('visibility', [
 ]);
 export type WireCustomerProfile = z.infer<typeof wireCustomerProfileSchema>;
 
-/** The vendor dashboard's figures. No date fields, so no coercion is needed. */
-export const wireVendorDashboardSchema = vendorDashboardSchema;
+/**
+ * The vendor dashboard's figures, with the payout's release date coerced back
+ * from JSON.
+ *
+ * This said *"No date fields, so no coercion is needed"* and stood as the
+ * shared schema unchanged — true until #423 gave `nextPayout` a `releaseAt`,
+ * and false the moment it did. A `z.date()` against the string JSON actually
+ * carries fails `safeParse`, so `api-client` threw and the vendor's home screen
+ * died for **every vendor who was owed a payout** — while rendering fine for
+ * everyone owed nothing, which is why nothing caught it: `tsc` infers `Date`
+ * either side of the wire, and the route suite reads the response object rather
+ * than its JSON.
+ */
+export const wireVendorDashboardSchema = vendorDashboardSchema.extend({
+  nextPayout: vendorDashboardSchema.shape.nextPayout
+    .unwrap()
+    .extend({
+      releaseAt: z.coerce.date(),
+    })
+    .nullable(),
+});
 export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
 
 /** The vendor's payout state — plain JSON, so the shared schema stands as-is. */

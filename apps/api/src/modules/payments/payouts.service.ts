@@ -50,11 +50,11 @@ export interface PayoutSweepResult {
  *    the row's end state.
  * 2. The predicate is re-read inside that lock. A cancellation or a dispute
  *    that committed between the id scan and the claim wins.
- * 3. `payout_${bookingId}` as the Stripe idempotency key, and `findTransfer`
- *    before sending. The transfer goes out inside the transaction that claims
- *    the booking, so a commit that never lands leaves the money moved and the
- *    row unchanged; the key catches that retry for a day and the lookup catches
- *    it forever.
+ * 3. `payout_${bookingId}_${attempt}` as the Stripe idempotency key, and
+ *    `findTransfer` before sending. The transfer goes out inside the
+ *    transaction that claims the booking, so a commit that never lands leaves
+ *    the money moved and the row unchanged; the key catches that retry for a
+ *    day and the lookup catches it forever.
  *
  * One booking at a time, deliberately. The set is a rolling handful, each item
  * holds a row lock across a network call, and money is the wrong place to buy
@@ -97,7 +97,19 @@ async function releaseOnePayout(
   dueThroughDate: string,
   now: Date,
 ): Promise<keyof PayoutSweepResult> {
-  return context.db.transaction(async (tx) => {
+  /*
+   * The failure is recorded **after** the transaction rather than inside it.
+   *
+   * Writing it in place looked right and was not: if the write that *failed*
+   * was `recordPayoutRelease` itself, the Postgres transaction is already
+   * aborted, so the failure write throws `current transaction is aborted` —
+   * which escapes the callback, escapes this function, and abandons every
+   * remaining booking in the batch for the next quarter of an hour. That is the
+   * exact outcome the catch block was written to prevent.
+   */
+  let failure: string | null = null;
+
+  const outcome = await context.db.transaction(async (tx) => {
     const booking = await claimReleasableBooking(tx, bookingId, dueThroughDate);
 
     if (!booking) {
@@ -112,11 +124,8 @@ async function releaseOnePayout(
      * never moves and never complains.
      */
     if (!booking.vendorStripeOnboarded || !booking.vendorStripeAccountId) {
-      await recordPayoutFailure(
-        tx,
-        bookingId,
-        'The vendor is not set up to receive payouts yet, so the transfer could not be made',
-      );
+      failure =
+        'The vendor is not set up to receive payouts yet, so the transfer could not be made';
       context.log.warn(
         { bookingId, vendorId: booking.vendorId },
         'Payout held: vendor not onboarded',
@@ -168,20 +177,31 @@ async function releaseOnePayout(
       return 'released';
     } catch (error) {
       /*
-       * Caught rather than thrown, so the *failure record* commits under the
-       * lock this transaction is holding. Rethrowing would roll the attempt
-       * back with it and leave the booking indistinguishable from one nobody
-       * has reached — and a payout failing silently every quarter of an hour
-       * forever is the state acceptance 7 exists to forbid.
-       *
-       * One failure must not abandon the rest of the sweep either, which is why
-       * this does not escape to `releaseDuePayouts`.
+       * Caught rather than thrown, so the attempt is recorded and the booking
+       * is left releasable — a payout failing silently every quarter of an hour
+       * forever is the state acceptance 7 exists to forbid. One failure must
+       * not abandon the rest of the sweep either, which is why this does not
+       * escape to `releaseDuePayouts`.
        */
-      const reason = error instanceof Error ? error.message : String(error);
-      await recordPayoutFailure(tx, bookingId, reason);
+      failure = error instanceof Error ? error.message : String(error);
       context.log.error({ bookingId, err: error }, 'Payout transfer failed and will be retried');
 
       return 'failed';
     }
   });
+
+  if (failure !== null) {
+    /*
+     * Its own failure is not allowed to abandon the sweep either — a booking
+     * whose attempt could not even be recorded is retried next run exactly as
+     * one whose attempt was.
+     */
+    try {
+      await recordPayoutFailure(context.db, bookingId, failure);
+    } catch (error) {
+      context.log.error({ bookingId, err: error }, 'Could not record a failed payout attempt');
+    }
+  }
+
+  return outcome;
 }

@@ -49,6 +49,7 @@ import {
   MIN_BOOKING_AMOUNT_CENTS,
   NOTIFICATION_TYPES,
   PAYOUT_STATUSES,
+  RESOLVE_DISPUTE_OUTCOMES,
   PRICE_TYPES,
   REVIEW_CONTENT_MAX_LENGTH,
   REVIEW_CONTENT_MIN_LENGTH,
@@ -1000,9 +1001,6 @@ export const disputeBookingSchema = z.object({
   reason: freeText().max(1_000).optional(),
 });
 export type DisputeBookingInput = z.infer<typeof disputeBookingSchema>;
-
-/** How an operator settled a reported problem — see `resolveDispute`. */
-export const RESOLVE_DISPUTE_OUTCOMES = ['vendor', 'customer'] as const;
 
 export const resolveDisputeSchema = z.object({
   /**

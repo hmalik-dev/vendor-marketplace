@@ -461,6 +461,32 @@ describe('payouts', () => {
       expect((await currentBooking()).stripeTransferId).toBe(orphan.transferId);
     });
 
+    /**
+     * The deploy window, and the demo seed, in one predicate.
+     *
+     * `payout_model` defaults to `destination` and only `recordSuccessfulPayment`
+     * writes `separate`, so a booking written by the **old image** between the
+     * migration and the new code serving identifies itself — the backfill cannot
+     * reach those rows, because they do not exist when it runs. Without this
+     * guard the sweep would transfer a share Stripe had already paid.
+     *
+     * `seed-demo.ts` is the same shape and the reason this is not theoretical:
+     * it writes past-dated `completed` bookings with a fake `tr_demo_…`, and any
+     * environment that had run it would have had the sweep chasing every one of
+     * them against Stripe every quarter of an hour, forever.
+     */
+    it('never touches a booking paid under the destination-charge model', async () => {
+      const paid = await paidBooking();
+      await harness.database.db
+        .update(bookings)
+        .set({ payoutModel: 'destination' })
+        .where(eq(bookings.id, paid.id));
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+    });
+
     it('never touches a cancelled booking', async () => {
       const paid = await paidBooking();
       await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
@@ -726,6 +752,81 @@ describe('payouts', () => {
       expect(harness.stripe.refunds).toHaveLength(1);
       expect(harness.stripe.reversals).toEqual([]);
       expect(harness.stripe.transfers).toEqual([]);
+    });
+
+    /**
+     * #423 acceptance 14, and the half that nearly shipped inverted.
+     *
+     * Inside D3's 48-hour cutoff half the total comes back and the vendor keeps
+     * the same proportion of their share — "the split survives the 50% tier"
+     * (D31). Under the destination charge that needed no code: the money was
+     * already in the vendor's balance and Stripe reversed only the refunded
+     * part. Under separate charges **nobody holds that share but Orla**, and a
+     * cancelled booking is one the sweep ignores — so writing the residual down
+     * is the whole of the difference between the vendor being paid and the
+     * platform quietly keeping it.
+     */
+    it('still owes the vendor their share after a late cancellation, and pays it', async () => {
+      const paid = await paidBooking();
+      // Inside the cutoff: the event is tomorrow.
+      clockNow = addDays(new Date(`${EVENT_DATE}T00:00:00Z`), -1);
+
+      const response = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().refundCents).toBe(PRICE_CENTS / 2);
+      expect(harness.stripe.reversals).toEqual([]);
+
+      const cancelled = await currentBooking();
+      expect(cancelled.status).toBe('cancelled');
+      expect(cancelled.vendorPayoutCents).toBe(EXPECTED_PAYOUT_CENTS / 2);
+
+      // And the sweep pays that residual on the original schedule.
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(harness.stripe.transfers[0]?.amountCents).toBe(EXPECTED_PAYOUT_CENTS / 2);
+    });
+
+    /* A full refund leaves nothing owed, and the sweep must never pay it. */
+    it('owes the vendor nothing after a full refund', async () => {
+      const paid = await paidBooking();
+
+      await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+
+      expect((await currentBooking()).vendorPayoutCents).toBe(0);
+
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+    });
+
+    /**
+     * Past Stripe's 24-hour idempotency window, a repeated cancellation is a
+     * *fresh* reversal request — and Stripe refuses an over-reversal, which
+     * would then wedge the booking: refunded, uncancellable, still holding the
+     * date. `reverseOutstanding` asks what is already reversed, exactly as
+     * `findRefund` asks what is already refunded.
+     */
+    it('does not reverse twice when a released cancellation is retried', async () => {
+      const released = await releasedBooking();
+      await inject('PUT', `/customer/bookings/${released.id}/cancel`, CUSTOMER, {});
+      expect(harness.stripe.reversals).toHaveLength(1);
+
+      // The state a failed row write leaves: money moved, booking still live.
+      await harness.database.db
+        .update(bookings)
+        .set({ status: 'confirmed', cancelledAt: null, refundAmountCents: null })
+        .where(eq(bookings.id, released.id));
+      // ...and the key Stripe has since forgotten.
+      harness.stripe.reversals.length = 0;
+
+      const retry = await inject('PUT', `/customer/bookings/${released.id}/cancel`, CUSTOMER, {});
+
+      expect(retry.statusCode).toBe(200);
+      // No second reversal: the transfer is already fully reversed.
+      expect(harness.stripe.reversals).toEqual([]);
+      expect((await currentBooking()).status).toBe('cancelled');
     });
 
     /* #423 acceptance 14 — `refundAmountCents` records what actually moved. */

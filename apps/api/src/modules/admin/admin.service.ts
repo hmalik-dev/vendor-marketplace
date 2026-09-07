@@ -1,5 +1,10 @@
 import type { FastifyBaseLogger } from 'fastify';
-import { addDays, generateSlug, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  generateSlug,
+  isLegacyDestinationPayout,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import type {
   AdminBanResult,
   AdminBookingPage,
@@ -276,6 +281,28 @@ export async function setUserBanned(
      */
     let refundedCents: number | null = null;
 
+    /*
+     * A pre-#423 destination charge is refused here for the same reason
+     * `refundAndUnwind` refuses it: Stripe split that charge as the card
+     * succeeded, so the vendor already holds their share, and this path's
+     * refund no longer carries `reverse_transfer` — it would return the
+     * customer's money and claw back nothing.
+     *
+     * The old comment here reasoned that "a ban cannot reach a booking that has
+     * been transferred" because it only unwinds *future* events. That is true
+     * of the new model and false of the old one: `0028`'s backfill marks every
+     * legacy row released regardless of its event date, so a legacy booking for
+     * an event next month is exactly the row this loop selects.
+     */
+    if (isLegacyDestinationPayout(booking)) {
+      context.log.error(
+        { bookingId: booking.id },
+        'Skipped a legacy destination-charge booking during a ban; it needs an operator refund',
+      );
+      refundsFailed += 1;
+      continue;
+    }
+
     if (booking.stripePaymentIntentId) {
       try {
         /*
@@ -362,6 +389,14 @@ export async function setUserBanned(
        */
       cancelledBy: 'admin',
       refundAmountCents: refundedCents,
+      /*
+       * A ban refunds in **full**, so the vendor keeps nothing and the payout
+       * sweep must never pay this booking out. Stating it rather than leaving
+       * `vendor_payout_cents` at the figure settled at payment is what stops
+       * the row staying releasable after the money went back to the customer.
+       */
+      vendorPayoutCents: 0,
+      disputeReason: null,
     });
 
     if (!cancelled) {

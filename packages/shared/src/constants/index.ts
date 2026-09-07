@@ -237,6 +237,30 @@ export const BOOKING_STATUSES = ['confirmed', 'completed', 'cancelled', 'dispute
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
 /**
+ * How a booking's money was arranged at the moment it was paid — **written
+ * down rather than inferred, because the two are unwound differently and a row
+ * cannot be asked afterwards which one it was.**
+ *
+ * `destination`: the pre-#423 destination charge. Stripe split the money as the
+ * card succeeded, so the vendor already holds their share, there is no transfer
+ * object, and a refund had to carry `reverse_transfer`. Nothing writes this any
+ * more; it is the column's **default**, which is the point.
+ *
+ * `separate`: separate charges and transfers. The whole amount sits in Orla's
+ * balance until the payout sweep moves the vendor's share.
+ *
+ * The default is what closes the deploy window. Migrations run in Railway's
+ * `preDeployCommand`, so the old image keeps serving until the new one is
+ * healthy — every checkout completing in between is a destination charge that
+ * the backfill has already been and gone past. Defaulting to `destination` and
+ * having only the new code write `separate` means those rows identify
+ * themselves, instead of looking to the sweep like unpaid new-model bookings
+ * and being transferred a second time.
+ */
+export const PAYOUT_MODELS = ['destination', 'separate'] as const;
+export type PayoutModel = (typeof PAYOUT_MODELS)[number];
+
+/**
  * Who ended a booking, recorded rather than inferred.
  *
  * A cancelled booking reaches the customer's screen by two routes that read
@@ -960,6 +984,17 @@ export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
  */
 export const PAYOUT_STATUSES = ['pending', 'held', 'released'] as const;
 export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
+
+/**
+ * Which way an operator settled a reported problem.
+ *
+ * Here rather than beside its Zod schema because `.claude/rules/shared-contracts.md`
+ * has one home for a domain vocabulary, and `resolveDispute`'s parameter type
+ * is derived from this rather than re-spelled as a literal union — which the
+ * same rule calls a defect even when the two currently match.
+ */
+export const RESOLVE_DISPUTE_OUTCOMES = ['vendor', 'customer'] as const;
+export type DisputeOutcome = (typeof RESOLVE_DISPUTE_OUTCOMES)[number];
 
 /**
  * Days in the dashboard's `This week` strip.

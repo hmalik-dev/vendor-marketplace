@@ -11,6 +11,7 @@ import {
   type BookingWithContext,
   type CancelledBooking,
   type CheckoutIntent,
+  type DisputeOutcome,
 } from '@vendor-marketplace/shared';
 import type { BookingRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
@@ -25,6 +26,7 @@ import { AppError, conflict, forbidden, notFound, validationFailed } from '../..
 import {
   PAYMENT_INTENT_SUCCEEDED,
   reversalAmountCents,
+  transferGroupFor,
   type PaymentIntentSnapshot,
   type StripeConnectGateway,
 } from '../../lib/stripe.js';
@@ -312,6 +314,14 @@ export async function recordSuccessfulPayment(
       platformFeeCents,
       vendorPayoutCents,
       status: 'confirmed',
+      /*
+       * The only place `separate` is ever written, which is what makes the
+       * column's `destination` default load-bearing: a booking recorded by the
+       * *old* image during the deploy window is a destination charge Stripe has
+       * already split, and it identifies itself by never having been through
+       * this line.
+       */
+      payoutModel: 'separate',
       stripePaymentIntentId: intent.id,
       paidAt: new Date(),
     },
@@ -702,7 +712,7 @@ async function refundAndUnwind(
    * Stripe on a retry — the path nobody is watching.
    */
   keyPrefix: 'cancel' | 'dispute',
-): Promise<{ refundId: string; amountCents: number }> {
+): Promise<UnwoundRefund> {
   if (!booking.stripePaymentIntentId) {
     throw new AppError(
       500,
@@ -771,27 +781,94 @@ async function refundAndUnwind(
     }));
 
   /*
-   * The unwind, and only when there is a transfer to unwind. A booking still
-   * inside its payout window has `stripe_transfer_id` null — the money never
-   * left Orla — so there is nothing to reverse and nobody to carry negative.
+   * The share the vendor keeps — the proportion of the total that was *not*
+   * refunded, which at D3's 50% tier is half their payout and at the full tier
+   * is nothing.
+   *
+   * Under the destination charge this needed no code: the money was already in
+   * the vendor's balance and Stripe reversed only the refunded proportion, so
+   * "the split survives the 50% tier" (D31) happened by itself. Under separate
+   * charges **nobody holds that share but Orla**, so it has to be either paid
+   * or written down — and a cancelled booking the sweep ignores would have made
+   * the platform quietly keep it. Which of the two happens depends on whether
+   * the payout has gone out yet.
    */
-  if (booking.stripeTransferId) {
-    const reverseCents = reversalAmountCents({
+  const retainedPayoutCents =
+    booking.vendorPayoutCents -
+    reversalAmountCents({
       totalAmountCents: booking.totalAmountCents,
       vendorPayoutCents: booking.vendorPayoutCents,
       refundCents: refund.amountCents,
     });
 
-    if (reverseCents > 0) {
-      await context.stripe.reverseTransfer({
-        transferId: booking.stripeTransferId,
-        amountCents: reverseCents,
-        idempotencyKey: `${keyPrefix}_${booking.id}_reversal`,
-      });
-    }
+  /*
+   * After the release: the vendor has the whole payout, so the refunded
+   * proportion is clawed back and they keep the rest where it already is.
+   *
+   * Before it: nothing was transferred, there is nothing to reverse and nobody
+   * to carry negative — which is the cost D31 had to accept, now confined to
+   * bookings cancelled after their event. The caller writes `retainedPayoutCents`
+   * back to the row so the sweep still pays it out on the original schedule.
+   */
+  if (booking.stripeTransferId) {
+    await reverseOutstanding(context, booking, {
+      target: booking.vendorPayoutCents - retainedPayoutCents,
+      idempotencyKey: `${keyPrefix}_${booking.id}_reversal`,
+    });
   }
 
-  return refund;
+  return { ...refund, retainedPayoutCents };
+}
+
+/** A refund, and what of the vendor's share survives it. */
+interface UnwoundRefund {
+  refundId: string;
+  amountCents: number;
+  /**
+   * The vendor's remaining claim after the refund — already reversed out of
+   * their balance when the payout had gone out, still owed by Orla when it had
+   * not.
+   */
+  retainedPayoutCents: number;
+}
+
+/**
+ * Reverses only what has not been reversed already.
+ *
+ * The idempotency key guards a concurrent or near-simultaneous retry, and
+ * Stripe forgets it after 24 hours — the same 24-hour hole `findRefund` exists
+ * to cover on the refund. The reversal had no equivalent, and the state is
+ * reachable: a post-release cancellation that reverses and then fails to write
+ * the row leaves a `confirmed` booking the customer cancels again tomorrow.
+ * `findRefund` correctly returns the first refund, but a second reversal is a
+ * *fresh* request past the window, and Stripe refuses it as an over-reversal —
+ * the rule `refusedReversalParams` models. That error escapes, and the booking
+ * can then never be cancelled at all: refunded, still holding the date.
+ *
+ * Asking what is already reversed turns that into a no-op, exactly as asking
+ * what is already refunded does.
+ */
+async function reverseOutstanding(
+  context: BookingContext,
+  booking: BookingRow,
+  reversal: { target: number; idempotencyKey: string },
+): Promise<void> {
+  if (reversal.target <= 0 || !booking.stripeTransferId) {
+    return;
+  }
+
+  const transfer = await context.stripe.findTransfer(transferGroupFor(booking.requestId));
+  const outstanding = reversal.target - (transfer?.reversedCents ?? 0);
+
+  if (outstanding <= 0) {
+    return;
+  }
+
+  await context.stripe.reverseTransfer({
+    transferId: booking.stripeTransferId,
+    amountCents: outstanding,
+    idempotencyKey: reversal.idempotencyKey,
+  });
 }
 
 /**
@@ -820,20 +897,33 @@ export async function cancelBooking(
 
   const refund = await refundAndUnwind(context, booking, quote.refundCents, 'cancel');
 
-  const cancelled = await cancelBookingAndFreeDate(context.db, bookingId, {
-    cancelledAt: now,
-    cancellationReason: reason ?? null,
-    /*
-     * Written down rather than left to be inferred (#415). The customer's own
-     * screen has to say who ended the booking and what came back, and neither
-     * fact survives on the row otherwise: `cancellation_reason` is the
-     * customer's free text here and an operator's sentence on the ban path, so
-     * telling the two apart meant string-matching a copy edit, and the refund
-     * figure existed only in this response.
-     */
-    cancelledBy: 'customer',
-    refundAmountCents: refund.amountCents,
-  });
+  const cancelled = await cancelBookingAndFreeDate(
+    context.db,
+    bookingId,
+    {
+      cancelledAt: now,
+      cancellationReason: reason ?? null,
+      /*
+       * Written down rather than left to be inferred (#415). The customer's own
+       * screen has to say who ended the booking and what came back, and neither
+       * fact survives on the row otherwise: `cancellation_reason` is the
+       * customer's free text here and an operator's sentence on the ban path, so
+       * telling the two apart meant string-matching a copy edit, and the refund
+       * figure existed only in this response.
+       */
+      cancelledBy: 'customer',
+      refundAmountCents: refund.amountCents,
+      /*
+       * What the vendor keeps. Zero at the full-refund tier; half their share
+       * inside the 48-hour cutoff, which the sweep pays out on the original
+       * schedule rather than the platform quietly keeping it (D31, D3).
+       */
+      vendorPayoutCents: refund.retainedPayoutCents,
+      disputeReason: null,
+    },
+    'confirmed',
+    booking.payoutReleasedAt,
+  );
 
   if (!cancelled) {
     /*
@@ -937,10 +1027,21 @@ export async function raiseDispute(
    * A `completed` booking going on hold changes that figure, and a dispute
    * writer of its own would have been the fourth booking writer to forget.
    */
-  const held = await applyBookingTransition(context.db, bookingId, booking.status, {
-    status: 'disputed',
-    disputeReason: reason ?? null,
-  });
+  const held = await applyBookingTransition(
+    context.db,
+    bookingId,
+    booking.status,
+    { status: 'disputed', disputeReason: reason ?? null },
+    /*
+     * The payout state the refusal above was decided on, re-asserted at write
+     * time. `participantIn` reads without a lock, and the sweep changes
+     * `payout_released_at` without changing `status` — so a hold placed while a
+     * sweep was mid-transfer would otherwise land on a booking that had just
+     * been paid out, which is precisely the state the guard exists to prevent
+     * and which `resolveDispute` would then unwind by reversing a live transfer.
+     */
+    booking.payoutReleasedAt,
+  );
 
   if (!held) {
     throw conflict('That booking changed while you were reporting it');
@@ -966,9 +1067,6 @@ export async function raiseDispute(
 
   return toBookingView(held);
 }
-
-/** Which way an operator settled a reported problem. */
-export type DisputeOutcome = 'vendor' | 'customer';
 
 /**
  * An operator settles the complaint, and the money follows.
@@ -1048,8 +1146,12 @@ export async function resolveDispute(
       cancellationReason: "Resolved in the customer's favour after a reported problem",
       cancelledBy: 'admin',
       refundAmountCents: refund.amountCents,
+      // A full refund, so the vendor keeps nothing and the sweep never pays it.
+      vendorPayoutCents: refund.retainedPayoutCents,
+      disputeReason: null,
     },
     'disputed',
+    booking.payoutReleasedAt,
   );
 
   if (!cancelled) {
