@@ -411,8 +411,17 @@ export type WireAdminBookingRow = z.infer<typeof wireAdminBookingRowSchema>;
 export const wireAdminBookingPageSchema = paginatedSchema(wireAdminBookingRowSchema);
 export type WireAdminBookingPage = z.infer<typeof wireAdminBookingPageSchema>;
 
+/**
+ * Two dates, and `payoutReleasedAt` is the one that is new (#432).
+ *
+ * `.claude/rules/web-route-boundaries.md` is explicit that a `z.date()` added
+ * to a response schema without its `z.coerce.date()` here 500s the page —
+ * conditionally, for the rows that carry a value, with the whole local gate
+ * green. #423 shipped exactly that on the vendor dashboard.
+ */
 export const wireAdminPaymentRowSchema = adminPaymentRowSchema.extend({
   paidAt: z.coerce.date().nullable(),
+  payoutReleasedAt: z.coerce.date().nullable(),
 });
 export type WireAdminPaymentRow = z.infer<typeof wireAdminPaymentRowSchema>;
 export const wireAdminPaymentPageSchema = paginatedSchema(wireAdminPaymentRowSchema);

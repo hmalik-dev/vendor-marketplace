@@ -597,6 +597,34 @@ export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
 }
 
 /**
+ * What `isPayoutFailing` needs: the two columns that distinguish a transfer
+ * that was tried and did not land from one nobody has reached.
+ */
+export type PayoutFailureSubject = Pick<PayoutSubject, 'payoutReleasedAt'> & {
+  payoutAttempts: number;
+};
+
+/**
+ * A transfer that has been attempted and has not landed (#432).
+ *
+ * **Deliberately not a fourth `PayoutStatus`.** `payoutStatusOf` omits `failed`
+ * on purpose: a failed transfer is retried every quarter of an hour and
+ * self-heals, so surfacing it to a *vendor* would alarm them about something
+ * already in hand. An operator is the one reader who has to know, and this is
+ * the fact they need — beside the shared status rather than as a rival reading
+ * of it.
+ *
+ * Here rather than in the console because the operations table computes the
+ * same thing in SQL (`admin.dao.ts`'s `payoutFailing`), and a list that
+ * *filtered* on one definition while its rows displayed another is precisely
+ * the divergence `dashboard.dao.ts` documents. One definition, stated twice in
+ * the two languages that have to ask it, with each pointing at the other.
+ */
+export function isPayoutFailing(booking: PayoutFailureSubject): boolean {
+  return booking.payoutAttempts > 0 && booking.payoutReleasedAt === null;
+}
+
+/**
  * True for a booking paid by the **destination charge** this product used
  * before #423 — released, with no transfer object to show for it.
  *

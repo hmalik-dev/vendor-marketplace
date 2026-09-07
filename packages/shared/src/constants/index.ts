@@ -1120,6 +1120,7 @@ export const ADMIN_ACTIONS = [
   'tag_suggestion_resolved',
   'dispute_resolved',
   'support_case_resolved',
+  'payout_retried',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 

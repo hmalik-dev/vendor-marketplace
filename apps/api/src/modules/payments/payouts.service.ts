@@ -1,4 +1,8 @@
-import { PAYOUT_RELEASE_HOURS, payoutDueThroughDate } from '@vendor-marketplace/shared';
+import {
+  PAYOUT_RELEASE_HOURS,
+  payoutDueThroughDate,
+  type BookingStatus,
+} from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import type { FastifyBaseLogger } from 'fastify';
 import { conflict, notFound } from '../../lib/errors.js';
@@ -94,6 +98,13 @@ export async function releaseDuePayouts(
  */
 export interface PayoutRetryResult {
   outcome: 'released' | 'failed' | 'busy';
+  /**
+   * The booking's status as it stands after the attempt, so the caller derives
+   * the payout state with `payoutStatusOf` instead of assuming one. It is
+   * always a status the refusals above let through today — but a caller that
+   * hard-coded `confirmed` would be quietly wrong the day another one is.
+   */
+  status: BookingStatus;
   payoutAttempts: number;
   payoutFailureReason: string | null;
   payoutReleasedAt: Date | null;
@@ -147,6 +158,7 @@ export async function retryPayoutRelease(
      * here because something else is attempting it right now.
      */
     outcome: outcome === 'skipped' ? 'busy' : outcome,
+    status: after.status,
     payoutAttempts: after.payoutAttempts,
     payoutFailureReason: after.payoutFailureReason,
     payoutReleasedAt: after.payoutReleasedAt,

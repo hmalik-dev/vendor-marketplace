@@ -1,7 +1,15 @@
-import { adminActivityRowSchema, vendorDashboardSchema } from '@vendor-marketplace/shared';
+import {
+  adminActivityRowSchema,
+  adminPaymentRowSchema,
+  vendorDashboardSchema,
+} from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { wireAdminActivityRowSchema, wireVendorDashboardSchema } from './wire-schemas';
+import {
+  wireAdminActivityRowSchema,
+  wireAdminPaymentRowSchema,
+  wireVendorDashboardSchema,
+} from './wire-schemas';
 
 /**
  * The vendor dashboard as it really arrives: JSON, every `Date` an ISO string.
@@ -220,6 +228,76 @@ describe('the admin action log at the wire boundary', () => {
 
     const stringified = JSON.parse(JSON.stringify(ACTIVITY_ROW)) as unknown;
     const parsed = wireAdminActivityRowSchema.parse(stringified) as Record<string, unknown>;
+
+    for (const field of shared) {
+      expect(
+        parsed[field],
+        `${field} arrived as ${typeof parsed[field]}, not a Date`,
+      ).toBeInstanceOf(Date);
+    }
+  });
+});
+
+/**
+ * The payments row at the wire boundary — the third response this walker covers.
+ *
+ * #432 added `payoutReleasedAt` to `adminPaymentRowSchema`, which is #423's
+ * failure in the same shape and with the same blind spot: the field is null on
+ * every payout that has not gone out, so a console driven against a fresh
+ * fixture parses cleanly and the screen 500s the moment one booking settles.
+ * The fixture below is therefore a **released** payout, because an absent
+ * nullable field proves nothing about the field.
+ */
+const RELEASED_PAYMENT = {
+  bookingId: '44444444-4444-4444-8444-444444444444',
+  status: 'completed' as const,
+  totalAmountCents: 145_000,
+  platformFeeCents: 17_400,
+  vendorPayoutCents: 127_600,
+  stripePaymentIntentId: 'pi_test_1',
+  vendorName: 'Sunlit Studio',
+  vendorSlug: 'sunlit-studio',
+  customerName: 'Anjali Rao',
+  paidAt: '2026-05-01T00:00:00.000Z',
+  payoutStatus: 'released' as const,
+  payoutReleasedAt: '2026-06-05T00:00:00.000Z',
+  payoutAttempts: 2,
+  payoutFailureReason: null,
+  stripeTransferId: 'tr_test_1',
+  payoutFailing: false,
+};
+
+describe('the admin payments row at the wire boundary', () => {
+  it('parses a released payout, dates and all', () => {
+    const parsed = wireAdminPaymentRowSchema.parse(RELEASED_PAYMENT);
+
+    expect(parsed.payoutReleasedAt).toEqual(new Date('2026-06-05T00:00:00.000Z'));
+    expect(parsed.paidAt).toEqual(new Date('2026-05-01T00:00:00.000Z'));
+    expect(parsed.payoutStatus).toBe('released');
+    expect(parsed.payoutAttempts).toBe(2);
+  });
+
+  it('parses a failing payout, which carries neither date', () => {
+    const parsed = wireAdminPaymentRowSchema.parse({
+      ...RELEASED_PAYMENT,
+      payoutStatus: 'pending' as const,
+      payoutReleasedAt: null,
+      payoutFailureReason: 'Stripe refused the transfer',
+      stripeTransferId: null,
+      payoutFailing: true,
+    });
+
+    expect(parsed.payoutReleasedAt).toBeNull();
+    expect(parsed.payoutFailing).toBe(true);
+    expect(parsed.payoutFailureReason).toBe('Stripe refused the transfer');
+  });
+
+  it('coerces every date the row can carry', () => {
+    const shared = dateFields(adminPaymentRowSchema);
+    expect(shared).toEqual(['paidAt', 'payoutReleasedAt']);
+
+    const stringified = JSON.parse(JSON.stringify(RELEASED_PAYMENT)) as unknown;
+    const parsed = wireAdminPaymentRowSchema.parse(stringified) as Record<string, unknown>;
 
     for (const field of shared) {
       expect(
