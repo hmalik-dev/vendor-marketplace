@@ -2516,18 +2516,24 @@ export const adminMetricsSchema = z.object({
    */
   reviewsCount: z.int(),
   /**
-   * Vendors with money owed to them that Stripe will not let the platform send:
-   * a published vendor who is not onboarded and has at least one booking whose
-   * transfer is still outstanding (#432).
+   * Bookings the sweep still owes and has already tried — `payoutFailingClauses`,
+   * the same expression the Payments filter composes (#432).
+   */
+  payoutsFailingBookingsCount: z.int(),
+  /**
+   * How many **vendors** those bookings belong to: `count(distinct vendor_id)`
+   * over that same set, not a wider one.
    *
-   * Not "vendors who are not onboarded" — most of those have never taken a
-   * booking and are nobody's emergency. The count leads to the Vendors list
-   * filtered to `Payouts: not connected`, and `page.tsx` already records that a
-   * card leading nowhere is furniture.
+   * Two readings of one set, deliberately, so the alert and the list it links
+   * to cannot describe different rows. Counting blocked vendors over the whole
+   * *owed* set and pointing them at `Payouts: not connected` was the first
+   * shape of this and it lied by arithmetic — "1 vendor is owed money we cannot
+   * send", clicked, and every vendor who never finished onboarding, with
+   * nothing marking the one. A vendor whose money is genuinely stuck arrives
+   * here within a sweep interval anyway, because a blocked account is a failed
+   * transfer as soon as the sweep reaches it.
    */
   payoutsBlockedVendorsCount: z.int(),
-  /** Bookings whose transfer has been tried and has not landed. */
-  payoutsFailingBookingsCount: z.int(),
   /** Colour-coded in the UI by meaning: revenue gold, bookings clay, users steel, completion sage. */
   revenueByDay: z.array(adminMetricPointSchema),
   bookingsByDay: z.array(adminMetricPointSchema),

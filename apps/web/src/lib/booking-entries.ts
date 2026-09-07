@@ -4,6 +4,7 @@ import {
   formatPrice,
   type BookingStatus,
   type EventType,
+  type PayoutStatus,
 } from '@vendor-marketplace/shared';
 import type { StatusTone } from '@/components/ui/status-pill';
 import type { WireBooking, WireBookingRequest } from './wire-schemas';
@@ -86,6 +87,39 @@ export const BOOKING_PRESENTATION: Record<
   cancelled: { label: 'Cancelled', tone: 'inert', settled: true },
   disputed: { label: 'Disputed', tone: 'failed', settled: true },
 };
+
+/**
+ * How a payout state is worded and toned on the console (#432).
+ *
+ * Here rather than in `payment-table.tsx` for a reason that is not tidiness:
+ * that module is `'use client'`, and **every export of a client module is
+ * replaced by a client reference on the server**. The Payments *page* is a
+ * Server Component and needs the failing label for its filter option, so
+ * importing it from there hands the page a proxy rather than a string. It
+ * survives today only because the value is passed straight into another client
+ * component, which resolves it back — and breaks the moment anyone renders it
+ * on the server, such as folding it into the empty-state copy on the same page.
+ *
+ * `held` earns `needsYou` rather than `failed`: a dispute hold is deliberate
+ * and correct, and painting it as a failure would tell an operator to fix
+ * something that is working.
+ */
+export const PAYOUT_PRESENTATION: Record<PayoutStatus, { label: string; tone: StatusTone }> = {
+  pending: { label: 'Awaiting release', tone: 'pending' },
+  held: { label: 'Held', tone: 'needsYou' },
+  released: { label: 'Released', tone: 'confirmed' },
+};
+
+/**
+ * The failing flag's words, in one place so the filter option on the page and
+ * the pill on the row cannot drift — the same reason the Bookings screen keeps
+ * `REFUND_STUCK_LABEL` beside both of its uses.
+ *
+ * Not a member of `PAYOUT_PRESENTATION`: `isPayoutFailing` is a flag *beside*
+ * the three shared states rather than a fourth one, and giving it a slot in
+ * that map would make it look like a `PayoutStatus` the API can return.
+ */
+export const PAYOUT_FAILING_LABEL = 'Transfer failing';
 
 function occasionOf(eventType: string | null): string | null {
   if (!eventType) {

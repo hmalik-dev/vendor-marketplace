@@ -1,7 +1,8 @@
 import { ADMIN_PAYMENT_FLAGS, formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
-import { PaymentTable, PAYOUT_FAILING_LABEL } from '@/components/admin/payment-table';
+import { PaymentTable } from '@/components/admin/payment-table';
+import { PAYOUT_FAILING_LABEL } from '@/lib/booking-entries';
 import { getAdminPayments } from '@/lib/admin-data';
 import {
   adminQueryString,

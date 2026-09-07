@@ -290,16 +290,26 @@ export const bookings = pgTable(
      * platform has ever taken, and both queries run on every view of the
      * Payments screen. Without it each is a sequential scan plus a sort of the
      * whole table, on the one screen an operator opens *because* money is
-     * stuck. Ordered by `paid_at desc` because that is the order the list
-     * renders in, so the sort comes off the index rather than out of memory.
+     * stuck.
+     *
+     * **`nullsFirst` is not a preference, it is what makes the sort usable.**
+     * Drizzle's `desc(bookings.paidAt)` renders as a bare `ORDER BY paid_at
+     * DESC`, and Postgres defaults `DESC` to `NULLS FIRST` — so an index built
+     * `DESC NULLS LAST` does not match that ordering and the planner sorts in
+     * memory anyway, silently, while the index still serves the filter. The
+     * two have to be spelled the same way. `paid_at is not null` joins the
+     * predicate as well, because the query carries it and a partial index that
+     * indexes rows the query excludes is larger for nothing.
      *
      * Deliberately not an index for the unfiltered list, which shares neither
      * the predicate nor the selectivity — that one wants a plain `paid_at`
      * index and is nothing this ticket changed.
      */
     index('bookings_payout_failing_idx')
-      .on(table.paidAt.desc())
-      .where(sql`${table.payoutReleasedAt} is null and ${table.payoutAttempts} > 0`),
+      .on(table.paidAt.desc().nullsFirst())
+      .where(
+        sql`${table.paidAt} is not null and ${table.payoutReleasedAt} is null and ${table.payoutAttempts} > 0`,
+      ),
   ],
 );
 

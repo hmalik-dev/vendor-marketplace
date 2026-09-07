@@ -3,14 +3,18 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { formatPrice, type PayoutStatus } from '@vendor-marketplace/shared';
+import { formatPrice } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
 import { Banner, type BannerStatus } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
-import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
+import { StatusPill } from '@/components/ui/status-pill';
+import {
+  BOOKING_PRESENTATION,
+  PAYOUT_FAILING_LABEL,
+  PAYOUT_PRESENTATION,
+} from '@/lib/booking-entries';
 import { useApi } from '@/lib/use-api';
 import {
   wireAdminPayoutRetryResultSchema,
@@ -26,32 +30,33 @@ const PAID_AT = new Intl.DateTimeFormat('en-US', {
 });
 
 /**
- * The three payout states, in the shared pill vocabulary — no fourth colour.
+ * Whether this row's payout can be forced by hand.
  *
- * `held` earns `needsYou` rather than `failed`: a dispute hold is deliberate
- * and correct, and painting it as a failure would tell an operator to fix
- * something that is working. The failing case is the separate flag below,
- * because it is a different fact — see `payoutFailing`.
+ * A cancelled booking's residual is genuinely owed and genuinely failing, so
+ * the row keeps its flag — but the service refuses to release it on an
+ * operator's say-so, because D31 rewrote the amount after the fact and the
+ * scheduled sweep is what pays it. A button whose only outcome is a 409
+ * teaches an operator to distrust the whole column.
  */
-const PAYOUT_PILLS: Record<PayoutStatus, { tone: StatusTone; label: string }> = {
-  pending: { tone: 'pending', label: 'Awaiting release' },
-  held: { tone: 'needsYou', label: 'Held' },
-  released: { tone: 'confirmed', label: 'Released' },
-};
-
-/** The one flag's words, so the filter option and the row pill cannot drift. */
-export const PAYOUT_FAILING_LABEL = 'Transfer failing';
+export function canRetryPayout(row: WireAdminPaymentRow): boolean {
+  return row.payoutFailing && row.status !== 'cancelled';
+}
 
 /**
  * What a retry answered, in the operator's words — and in the banner tone the
  * outcome earns, rather than one neutral grey for all three.
  *
- * A `failed` retry is a successful *request*: the attempt was made, recorded and
- * counted. The outcome is the whole point of pressing the button, so it is
+ * A `failed` retry is a successful *request*: the attempt was made, recorded
+ * and counted. The outcome is the whole point of pressing the button, so it is
  * reported rather than swallowed — an operator shown a closed dialog and an
  * unchanged row has learned nothing, which is the state #432 opens with.
+ *
+ * **Every branch names the vendor.** The filter exists to put several failing
+ * rows on screen at once, so "Stripe refused it again" is a sentence about no
+ * particular row — and it would still be sitting there, reading as the answer,
+ * if the next retry threw before `setNotice` ran.
  */
-function retryNotice(
+export function retryNotice(
   row: WireAdminPaymentRow,
   result: WireAdminPayoutRetryResult,
 ): { status: BannerStatus; message: string } {
@@ -76,20 +81,22 @@ function retryNotice(
   if (result.payoutStatus === 'held') {
     return {
       status: 'pending',
-      message: 'A problem was reported on this booking, so the payout is on hold.',
+      message: `A problem was reported on ${row.vendorName}'s booking, so the payout is on hold.`,
     };
   }
 
   if (result.outcome === 'busy') {
     return {
       status: 'informational',
-      message: 'The scheduled release is already working this payout. Check back in a few minutes.',
+      message: `The scheduled release is already working ${row.vendorName}'s payout. Check back in a few minutes.`,
     };
   }
 
   return {
     status: 'failed',
-    message: `Stripe refused it again: ${result.payoutFailureReason ?? 'no reason given'}. That is attempt ${result.payoutAttempts}.`,
+    message: `Stripe refused ${row.vendorName}'s transfer again: ${
+      result.payoutFailureReason ?? 'no reason given'
+    }. That is attempt ${result.payoutAttempts}.`,
   };
 }
 
@@ -113,6 +120,15 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
   const [notice, setNotice] = useState<ReturnType<typeof retryNotice> | null>(null);
 
   async function retry(row: WireAdminPaymentRow): Promise<void> {
+    /*
+     * Cleared first, so a previous row's answer cannot be read as this one's.
+     * `ConfirmAction` holds its dialog open when the call throws, and the
+     * `setNotice` below never runs on that path — which would otherwise leave
+     * the last banner standing above a table the operator has just acted on
+     * again, naming a different vendor.
+     */
+    setNotice(null);
+
     const result = await call(`/admin/bookings/${row.bookingId}/payout/retry`, {
       method: 'PUT',
       schema: wireAdminPayoutRetryResultSchema,
@@ -151,17 +167,17 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
               </Link>
             ),
           },
-          { key: 'customer', width: '1fr', header: 'Customer', cell: (row) => row.customerName },
+          { key: 'customer', width: '1.2fr', header: 'Customer', cell: (row) => row.customerName },
           {
             key: 'total',
-            width: '.8fr',
+            width: '.9fr',
             header: 'Total',
             className: 'font-mono',
             cell: (row) => formatPrice(row.totalAmountCents),
           },
           {
             key: 'fee',
-            width: '.7fr',
+            width: '.8fr',
             header: 'Fee',
             className: 'font-mono',
             cell: (row) => formatPrice(row.platformFeeCents),
@@ -197,7 +213,7 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
           },
           {
             key: 'payoutState',
-            width: '1.3fr',
+            width: '1.8fr',
             header: 'Payout state',
             /*
               The column this screen did not have (#432): a booking whose money
@@ -206,60 +222,51 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
               under the filter, for the same reason the Bookings table draws
               `refund-stuck` everywhere — the failure #415 fixed was a state you
               had to already know about in order to find.
+
+              **The retry lives in this cell rather than in a column of its
+              own.** A ninth column cost the money columns width they need:
+              `DataTable`'s grid floors at a measured 739px below `lg`, and
+              spending a tenth of that pool on a control shown on two rows in
+              six left `Fee` too narrow for `$1,450.00` in `font-mono`. The
+              control belongs to this state anyway — it is only ever offered
+              where the pill beside it is red.
             */
             cell: (row) =>
               row.payoutFailing ? (
                 <span className="flex flex-col items-start gap-1">
-                  <StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>
+                  <span className="flex items-center gap-2">
+                    <StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>
+                    {canRetryPayout(row) ? (
+                      <ConfirmAction
+                        trigger={
+                          <Button variant="secondary" size="sm">
+                            Retry payout
+                          </Button>
+                        }
+                        title="Retry this payout?"
+                        description={
+                          <>
+                            Another attempt will be made to send{' '}
+                            {formatPrice(row.vendorPayoutCents)} to {row.vendorName}. It is a fresh
+                            request rather than a repeat of the last one, so Stripe answers it anew.
+                            The scheduled release keeps retrying either way — this only asks now.
+                          </>
+                        }
+                        confirmLabel="Retry payout"
+                        onConfirm={() => retry(row)}
+                      />
+                    ) : null}
+                  </span>
                   <span className="text-meta text-stone-600">
                     {row.payoutAttempts} {row.payoutAttempts === 1 ? 'attempt' : 'attempts'}
                     {row.payoutFailureReason ? ` · ${row.payoutFailureReason}` : ''}
                   </span>
                 </span>
               ) : (
-                <StatusPill tone={PAYOUT_PILLS[row.payoutStatus].tone}>
-                  {PAYOUT_PILLS[row.payoutStatus].label}
+                <StatusPill tone={PAYOUT_PRESENTATION[row.payoutStatus].tone}>
+                  {PAYOUT_PRESENTATION[row.payoutStatus].label}
                 </StatusPill>
               ),
-          },
-          {
-            key: 'retry',
-            width: '110px',
-            header: '',
-            /*
-              Offered only where it can do something. The API refuses a
-              released, disputed or cancelled payout with a specific message,
-              and a button that exists to be refused teaches an operator to
-              distrust the whole column.
-            */
-            /*
-              Not on a cancelled booking. Its residual is genuinely owed and
-              genuinely failing, so the row keeps the flag — but the service
-              refuses to force it by hand (D31 rewrote the amount after the
-              fact), and a button whose only outcome is a 409 teaches an
-              operator to distrust the whole column.
-            */
-            cell: (row) =>
-              row.payoutFailing && row.status !== 'cancelled' ? (
-                <ConfirmAction
-                  trigger={
-                    <Button variant="secondary" size="sm">
-                      Retry payout
-                    </Button>
-                  }
-                  title="Retry this payout?"
-                  description={
-                    <>
-                      Another attempt will be made to send {formatPrice(row.vendorPayoutCents)} to{' '}
-                      {row.vendorName}. It is a fresh request rather than a repeat of the last one,
-                      so Stripe answers it anew. The scheduled release keeps retrying either way —
-                      this only asks now.
-                    </>
-                  }
-                  confirmLabel="Retry payout"
-                  onConfirm={() => retry(row)}
-                />
-              ) : null,
           },
         ]}
       />
