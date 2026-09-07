@@ -1,11 +1,29 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { users, type NewUserRow, type UserRow } from '@vendor-marketplace/db/schema';
+import { and, eq, exists, isNull, sql } from 'drizzle-orm';
+import {
+  legalAcceptances,
+  users,
+  type NewUserRow,
+  type UserRow,
+} from '@vendor-marketplace/db/schema';
+import type { LegalAcceptanceDocument } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /** Live users only — a Clerk-deleted identity must not resolve to a session. */
 const notDeleted = isNull(users.deletedAt);
 
-export async function findUserByClerkId(
+/**
+ * The row for a Clerk subject **including a retired one**.
+ *
+ * Almost nothing wants this — `findUserByClerkId` below hides a retired row on
+ * purpose, and is what every caller should reach for. The two exceptions are
+ * the acceptance gate and the acceptance itself, which have to tell "no account
+ * yet" from "account erased": since #429 the absence of a row means "has not
+ * accepted, send them to the interstitial", and a Clerk-deleted identity
+ * offered that interstitial would try to bring its erased account back, where
+ * `insertUserIfAbsent` collides on `clerk_user_id`. A retired identity keeps
+ * getting the 401 it always got.
+ */
+export async function findUserByClerkIdIncludingRetired(
   db: AppDatabase,
   clerkUserId: string,
 ): Promise<UserRow | null> {
@@ -13,10 +31,69 @@ export async function findUserByClerkId(
     return null;
   }
 
+  const rows = await db.select().from(users).where(eq(users.clerkUserId, clerkUserId)).limit(1);
+
+  return rows?.[0] ?? null;
+}
+
+/**
+ * The live row for a Clerk subject.
+ *
+ * Derived from the wide read rather than repeating it with one extra `where`
+ * clause: two query builders differing only by `notDeleted` are two places for
+ * the rule to be edited out of, and the rule is what stops a deleted identity
+ * resolving to a session.
+ */
+export async function findUserByClerkId(
+  db: AppDatabase,
+  clerkUserId: string,
+): Promise<UserRow | null> {
+  const row = await findUserByClerkIdIncludingRetired(db, clerkUserId);
+
+  return row?.deletedAt ? null : row;
+}
+
+/**
+ * Everything the session gate needs, in **one** round trip: the row behind a
+ * Clerk subject, and whether that account holds `version` of `document`.
+ *
+ * The acceptance check used to be a second query, and it ran on every
+ * authenticated request — so against a hosted Postgres it was a whole extra
+ * network round trip on the hot path, for a boolean. As a correlated `EXISTS`
+ * it is evaluated for the single outer row and short-circuits on the first
+ * match, which costs a fraction of a millisecond of planner work instead.
+ *
+ * Retired rows are included for the reason `findUserByClerkIdIncludingRetired`
+ * gives: the gate has to answer "erased" differently from "not accepted yet".
+ */
+export async function findSessionSubject(
+  db: AppDatabase,
+  clerkUserId: string,
+  document: LegalAcceptanceDocument,
+  version: string,
+): Promise<{ user: UserRow; holdsDocument: boolean } | null> {
+  if (!clerkUserId) {
+    return null;
+  }
+
   const rows = await db
-    .select()
+    .select({
+      user: users,
+      holdsDocument: sql<boolean>`${exists(
+        db
+          .select({ one: sql`1` })
+          .from(legalAcceptances)
+          .where(
+            and(
+              eq(legalAcceptances.acceptedByUserId, users.id),
+              eq(legalAcceptances.document, document),
+              eq(legalAcceptances.version, version),
+            ),
+          ),
+      )}`,
+    })
     .from(users)
-    .where(and(eq(users.clerkUserId, clerkUserId), notDeleted))
+    .where(eq(users.clerkUserId, clerkUserId))
     .limit(1);
 
   return rows?.[0] ?? null;

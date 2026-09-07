@@ -1,8 +1,11 @@
 import {
   BOOKING_REQUEST_EXPIRY_DAYS,
+  CURRENT_TERMS_VERSION,
   CURRENT_VENDOR_AGREEMENT_VERSION,
   EVENT_TYPES,
   type EventType,
+  legalDocumentSha256,
+  type LegalAcceptanceDocument,
   parseDurationHours,
   toDateString,
 } from '@vendor-marketplace/shared';
@@ -212,6 +215,19 @@ export async function seedE2eFixtures<
      * fixture is the failure mode this transaction exists to prevent.
      */
     const adminUserId = input.admin ? await upsertAccount(tx, input.admin, 'admin') : undefined;
+
+    /*
+     * Every account, before anything else it owns. The acceptance gate (#429)
+     * refuses every authenticated route to an account that does not hold the
+     * current Terms, so without these rows a seeded fixture signs in and reaches
+     * nothing — the vendor's storefront, the customer's bookings and the admin
+     * console alike.
+     */
+    await ensureTermsAccepted(tx, vendorUserId, input.vendor);
+    await ensureTermsAccepted(tx, customerUserId, input.customer);
+    if (adminUserId !== undefined && input.admin) {
+      await ensureTermsAccepted(tx, adminUserId, input.admin);
+    }
 
     const vendorProfileId = await ensureProfile(tx, vendorUserId, {
       stripeAccountId,
@@ -463,34 +479,51 @@ async function openPublishBlockers(tx: Tx, vendorProfileId: string): Promise<voi
 }
 
 /**
- * Gives the fixture vendor the current vendor agreement, so checkout resolves.
+ * Gives a fixture account an acceptance it needs to be usable, once.
  *
- * **Without it the E2E vendor cannot be paid at all.** #427 refuses a charge
- * against a vendor who does not hold the version in force — the agreement is
- * what the commission and the payout timing are agreed under — so a fixture
- * that skipped this would stop every browser pass one click short of the money
- * path, which is the failure #387 already fixed once for the connected account.
+ * Two of them exist and they gate different things:
+ *
+ * - **The Terms of Service**, for every account. Since #429 the acceptance gate
+ *   holds any session whose account does not hold `CURRENT_TERMS_VERSION` at the
+ *   first-sign-in interstitial and answers every other route `TERMS_REQUIRED`.
+ *   Without this row a seeded account can sign in and reach nothing, which reads
+ *   exactly like the ticket under test being broken.
+ * - **The vendor agreement**, for the vendor. #427 refuses a charge against a
+ *   vendor who does not hold the version in force — the agreement is what the
+ *   commission and the payout timing are agreed under — so a fixture that
+ *   skipped it would stop every browser pass one click short of the money path,
+ *   which is the failure #387 already fixed once for the connected account.
  *
  * Written only when it is missing, and never rewritten: the table is
  * append-only and the database refuses an update outright, so a re-run of the
  * seed must not try. A row for a *superseded* version is left exactly where it
  * is and a row for the current one is added beside it, which is the same thing
- * a real vendor re-accepting does.
+ * a real account re-accepting does.
+ *
+ * **The method is `seed_fixture`, not `clickwrap_checkbox`.** Nobody ticked a
+ * box here, and labelling a seeded row as though somebody did would put a
+ * fabricated act into the one table whose whole value is that it is true.
  */
-async function ensureAgreementAccepted(
+async function ensureAcceptance(
   tx: Tx,
-  vendorProfileId: string,
-  vendorUserId: string,
-  vendor: E2eAccount,
+  params: {
+    userId: string;
+    document: LegalAcceptanceDocument;
+    version: string;
+    vendorId: string | null;
+    /** Resolved only when a row is actually written — see the early return. */
+    businessName: () => Promise<string | null>;
+    acceptedByName: string;
+  },
 ): Promise<void> {
   const [held] = await tx
     .select({ id: legalAcceptances.id })
     .from(legalAcceptances)
     .where(
       and(
-        eq(legalAcceptances.vendorId, vendorProfileId),
-        eq(legalAcceptances.document, 'vendor_agreement'),
-        eq(legalAcceptances.version, CURRENT_VENDOR_AGREEMENT_VERSION),
+        eq(legalAcceptances.acceptedByUserId, params.userId),
+        eq(legalAcceptances.document, params.document),
+        eq(legalAcceptances.version, params.version),
       ),
     )
     .limit(1);
@@ -499,19 +532,15 @@ async function ensureAgreementAccepted(
     return;
   }
 
-  const [profile] = await tx
-    .select({ businessName: vendorProfiles.businessName })
-    .from(vendorProfiles)
-    .where(eq(vendorProfiles.id, vendorProfileId))
-    .limit(1);
-
   await tx.insert(legalAcceptances).values({
-    vendorId: vendorProfileId,
-    document: 'vendor_agreement',
-    version: CURRENT_VENDOR_AGREEMENT_VERSION,
-    acceptedByUserId: vendorUserId,
-    acceptedByName: `${vendor.firstName} ${vendor.lastName}`.trim() || vendor.email,
-    businessName: profile?.businessName ?? 'E2E Test Studio',
+    vendorId: params.vendorId,
+    document: params.document,
+    version: params.version,
+    documentSha256: legalDocumentSha256(params.document),
+    acceptanceMethod: 'seed_fixture',
+    acceptedByUserId: params.userId,
+    acceptedByName: params.acceptedByName,
+    businessName: await params.businessName(),
     /*
      * No address and no agent: this acceptance was made by a seed, not by a
      * person at a browser, and inventing either would put a fabricated fact
@@ -519,6 +548,52 @@ async function ensureAgreementAccepted(
      */
     ip: null,
     userAgent: null,
+  });
+}
+
+/** How a fixture account's name is frozen onto the row it accepts with. */
+function acceptedByName(account: E2eAccount): string {
+  return `${account.firstName} ${account.lastName}`.trim() || account.email;
+}
+
+/** The Terms of Service acceptance every seeded account needs to be usable. */
+async function ensureTermsAccepted(tx: Tx, userId: string, account: E2eAccount): Promise<void> {
+  await ensureAcceptance(tx, {
+    userId,
+    document: 'terms_of_service',
+    version: CURRENT_TERMS_VERSION,
+    vendorId: null,
+    businessName: async () => null,
+    acceptedByName: acceptedByName(account),
+  });
+}
+
+async function ensureAgreementAccepted(
+  tx: Tx,
+  vendorProfileId: string,
+  vendorUserId: string,
+  vendor: E2eAccount,
+): Promise<void> {
+  await ensureAcceptance(tx, {
+    userId: vendorUserId,
+    document: 'vendor_agreement',
+    version: CURRENT_VENDOR_AGREEMENT_VERSION,
+    vendorId: vendorProfileId,
+    /*
+     * Lazy, so a re-seed that already holds the agreement does not pay for a
+     * profile read it will discard — the early return in `ensureAcceptance`
+     * fires first.
+     */
+    businessName: async () => {
+      const [profile] = await tx
+        .select({ businessName: vendorProfiles.businessName })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorProfileId))
+        .limit(1);
+
+      return profile?.businessName ?? 'E2E Test Studio';
+    },
+    acceptedByName: acceptedByName(vendor),
   });
 }
 

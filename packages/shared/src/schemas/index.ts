@@ -69,6 +69,7 @@ import {
   PUBLISH_BLOCKER_KEYS,
 } from '../constants/index.js';
 import { LEGAL_ACCEPTANCE_DOCUMENTS } from '../constants/legal.js';
+import { LEGAL_DOCUMENT_SHA256_LENGTH } from '../constants/legal-manifest.js';
 import {
   MAX_SUPPORT_ERROR_DIGEST_LENGTH,
   MAX_SUPPORT_ERROR_ROUTE_LENGTH,
@@ -1184,6 +1185,19 @@ export type VendorPayoutStatus = z.infer<typeof vendorPayoutStatusSchema>;
 
 // --- The vendor agreement --------------------------------------------------
 
+/**
+ * A version string, not prose: `v1.0`.
+ *
+ * Constrained by format rather than only by length because it is echoed
+ * straight into an immutable legal record, and the shape of that value is not
+ * something a client gets to decide. The services still refuse anything that is
+ * not the version in force — this is what stops a malformed one reaching them.
+ */
+const legalVersionSchema = z
+  .string()
+  .regex(/^v\d{1,3}\.\d{1,3}$/, 'A version looks like v1.0')
+  .max(20);
+
 /** One acceptance, as the agreements table on the accepted state draws it. */
 export const legalAcceptanceSchema = z.object({
   document: z.enum(LEGAL_ACCEPTANCE_DOCUMENTS),
@@ -1191,8 +1205,11 @@ export const legalAcceptanceSchema = z.object({
   acceptedAt: z.coerce.date(),
   /** The person, as their name stood when they accepted. */
   acceptedByName: z.string().min(1).max(200),
-  /** The business it was accepted on behalf of, as it stood then. */
-  businessName: z.string().min(1).max(200),
+  /**
+   * The business it was accepted on behalf of, as it stood then — `null` on a
+   * Terms acceptance, which is made on nobody's behalf (#429).
+   */
+  businessName: z.string().min(1).max(200).nullable(),
 });
 export type LegalAcceptance = z.infer<typeof legalAcceptanceSchema>;
 
@@ -1228,19 +1245,42 @@ export type VendorAgreementStatus = z.infer<typeof vendorAgreementStatusSchema>;
  * the route answers 409 and the step re-renders with the version in force.
  */
 export const acceptVendorAgreementSchema = z.object({
-  /*
-   * A version string, not prose: `v1.0`. Constrained by format rather than
-   * only by length because it is echoed straight into an immutable legal
-   * record, and the shape of that value is not something a client gets to
-   * decide. The service still refuses anything that is not the version in
-   * force — this is what stops a malformed one reaching it at all.
-   */
-  version: z
-    .string()
-    .regex(/^v\d{1,3}\.\d{1,3}$/, 'A version looks like v1.0')
-    .max(20),
+  version: legalVersionSchema,
 });
 export type AcceptVendorAgreement = z.infer<typeof acceptVendorAgreementSchema>;
+
+// --- The Terms of Service acceptance gate ----------------------------------
+
+/**
+ * What the first-sign-in acceptance gate reads.
+ *
+ * `documentSha256` is the hash of the Terms as served, so the interstitial and
+ * the row it will write cannot be looking at different bytes.
+ */
+export const termsAcceptanceStatusSchema = z.object({
+  current: legalVersionSchema,
+  documentSha256: z.string().length(LEGAL_DOCUMENT_SHA256_LENGTH),
+  /** Whether this account holds `current`. False is the gated state. */
+  accepted: z.boolean(),
+  /** When they accepted `current`, or `null` while they have not. */
+  acceptedAt: z.coerce.date().nullable(),
+});
+export type TermsAcceptanceStatus = z.infer<typeof termsAcceptanceStatusSchema>;
+
+/**
+ * What the interstitial sends.
+ *
+ * **`accepted` is the affirmative act, on the wire.** The box starts unticked
+ * and the submit is disabled until it is ticked, but a disabled button is a
+ * courtesy to the reader rather than a rule — so the value travels and the
+ * service refuses anything but `true`. A record that says somebody accepted
+ * because a request arrived is browsewrap wearing a checkbox.
+ */
+export const acceptTermsSchema = z.object({
+  version: legalVersionSchema,
+  accepted: z.boolean(),
+});
+export type AcceptTerms = z.infer<typeof acceptTermsSchema>;
 
 /** What `POST /vendor/stripe/connect` answers: where to send the vendor next. */
 export const stripeOnboardingLinkSchema = z.object({

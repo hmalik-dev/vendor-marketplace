@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { ApiClientError } from '@/lib/api-client';
 import { getCurrentUser } from '@/lib/current-user';
 import { RETURN_PATH_PARAM } from '@/lib/return-path';
 import { postSignInPath } from '@/lib/role-routes';
+import { signedInFailurePath } from '@/lib/terms-gate';
 
 /**
  * Neutral landing spot after sign-in and sign-up. Clerk redirects here without
@@ -43,11 +43,20 @@ export async function GET(request: Request): Promise<NextResponse> {
     const user = await getCurrentUser();
     target = user ? postSignInPath(user.role, returnTo) : '/sign-in';
   } catch (error) {
-    if (error instanceof ApiClientError && error.statusCode === 403) {
-      target = '/suspended';
-    } else {
+    /*
+     * The two refusals a signed-in caller can meet, in the order that
+     * distinguishes them: the acceptance gate is a 403 too, and it is not a
+     * suspension — it is cleared in one click, and this handler must not tell a
+     * new account it has been banned. The destination travels with it, so the
+     * link still lands where it was pointed once the box is ticked.
+     */
+    const refused = signedInFailurePath(error, returnTo);
+
+    if (refused === null) {
       throw error;
     }
+
+    target = refused;
   }
 
   return NextResponse.redirect(new URL(target, request.url));

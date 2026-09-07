@@ -21,7 +21,7 @@ Four companies hold something between them, and it is worth knowing which holds 
 
 The account details you type in, the profile a vendor publishes, the requests and bookings you make, and the messages you send through the thread. Nothing else — there is no tracking pixel building a second profile of you in the background.
 
-One exception, and it is worth naming: when a vendor accepts a legal document, we record the moment, the person, the business, the version accepted, **the IP address the acceptance came from and the browser that sent it**. That is the record of an agreement rather than a profile of a person, and it is the one thing here we cannot later edit or remove — see _Your rights_.
+One exception, and it is worth naming: when you accept a legal document — these Terms when you first sign in, and the vendor agreement if you are a vendor — we record the moment, the person, the business where there is one, the version accepted, a fingerprint of the exact text you were shown, **the IP address the acceptance came from and the browser that sent it**. That is the record of an agreement rather than a profile of a person, and it is the one thing here we cannot later edit or remove — see _Your rights_.
 
 ## Why we are allowed to hold it
 
@@ -33,11 +33,11 @@ A vendor sees the requests and bookings addressed to them, and the messages you 
 
 ## How long we keep it
 
-Messages and bookings stay for as long as the account does. Payment records outlive the account where the law requires it. Uploaded files are deleted when you delete them, and a closed account's profile stops being public immediately.
+Messages and bookings stay for as long as the account does. Payment records outlive the account where the law requires it. Uploaded files are deleted when you delete them, and a closed account's profile stops being public immediately. Your record of accepting a legal document — including the address and browser it names — outlives the account too; see _Your rights_.
 
 ## Your rights
 
-Ask us for a copy of what we hold, ask us to correct it, or ask us to delete it. Two things survive that, and we would rather say so than pretend otherwise: the payment records the law makes us keep, and a vendor's record of having accepted a legal document — that one is deliberately not editable and not removable, because a record of an agreement that either side can change afterwards is worth nothing to either side. Closing the vendor account removes it along with everything else. Requests go through Contact support.
+Ask us for a copy of what we hold, ask us to correct it, or ask us to delete it. Two things survive that, and we would rather say so than pretend otherwise: the payment records the law makes us keep, and your record of having accepted a legal document. That record is deliberately not editable and not removable, because an agreement either side can change afterwards is worth nothing to either side — and **closing your account does not remove it**, including the address and browser it names. What closing does remove is everything else. Requests go through Contact support.
 
 ## Security
 

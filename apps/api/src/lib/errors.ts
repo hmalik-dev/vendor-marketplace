@@ -28,6 +28,18 @@ export function forbidden(message = 'You do not have access to this resource'): 
   return new AppError(403, ERROR_CODES.FORBIDDEN, message);
 }
 
+/**
+ * The session is real; the account has not accepted the current Terms.
+ *
+ * A 403 rather than a 401 because the caller has proved who they are, and its
+ * own code rather than `FORBIDDEN` because the two are opposite instructions to
+ * the frontend: a `FORBIDDEN` is terminal and sends the reader to `/suspended`,
+ * while this is a gate they clear themselves in one click.
+ */
+export function termsRequiredError(message = 'Accept the Terms of Service to continue.'): AppError {
+  return new AppError(403, ERROR_CODES.TERMS_REQUIRED, message);
+}
+
 export function notFound(message = 'Resource not found'): AppError {
   return new AppError(404, ERROR_CODES.NOT_FOUND, message);
 }

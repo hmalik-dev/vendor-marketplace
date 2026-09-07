@@ -161,6 +161,55 @@ describe('a suspended account', () => {
   });
 });
 
+/**
+ * #429 — an account that has not accepted the current Terms. The API refuses
+ * every one of these reads with `TERMS_REQUIRED`, and each module has to send
+ * the reader to the interstitial rather than to `/suspended` (which would say
+ * their account was banned) or to an empty list (which would say nothing is
+ * waiting on them).
+ *
+ * **Enumerated over every read, deliberately.** Five of these modules degrade a
+ * failed read to `[]` one line below the branch under test, so a dropped call
+ * costs no test anywhere else: the surface simply renders as empty. That is the
+ * same class of silent loss this file was written for.
+ */
+describe('an account that has not accepted the Terms', () => {
+  beforeEach(() => {
+    token = 'session-token';
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, ERROR_CODES.TERMS_REQUIRED, 'Accept the Terms of Service.'),
+    );
+  });
+
+  it.each(PROTECTED_READS)('sends %s to the acceptance gate', async (_name, read) => {
+    expect(await redirectTargetOf(read)).toBe(
+      '/accept-terms?returnTo=%2Fvendor%2Fpackages%3Ffilter%3Dactive',
+    );
+  });
+
+  /*
+   * The destination travels, like it does for a lapsed session. It is asserted
+   * on its own as well as in the sweep above because it is the half most easily
+   * lost: `redirectIfTermsRequired` resolves the path itself, and a call site
+   * that passed `null` instead would still redirect — just to nowhere useful.
+   */
+  it('carries the screen the reader was on', async () => {
+    requestPath = '/bookings/abc?package=1';
+
+    expect(await redirectTargetOf(getOwnBookingRequests)).toBe(
+      '/accept-terms?returnTo=%2Fbookings%2Fabc%3Fpackage%3D1',
+    );
+  });
+
+  /*
+   * And it is not `/suspended`. Both refusals are 403; only the code separates
+   * them, and getting this backwards tells every new account it was banned.
+   */
+  it('is not mistaken for a suspension', async () => {
+    expect(await redirectTargetOf(getOwnPackages)).not.toBe('/suspended');
+  });
+});
+
 /*
  * The 404-means-empty branches are the onboarding case, not a failure, and the
  * session rework must not have turned them into redirects.

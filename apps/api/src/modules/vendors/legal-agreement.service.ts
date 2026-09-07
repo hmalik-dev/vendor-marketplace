@@ -1,14 +1,21 @@
 import {
   CURRENT_VENDOR_AGREEMENT_VERSION,
+  legalDocumentSha256,
   type LegalAcceptance,
   type VendorAgreementStatus,
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, notFound } from '../../lib/errors.js';
+import type { AcceptanceContext } from '../legal/terms.service.js';
 import { findUserById } from '../users/users.dao.js';
+import { displayName } from '../users/users.service.js';
 import { findVendorProfileByUserId } from './vendors.dao.js';
-import { findAcceptances, insertAcceptance } from './legal-agreement.dao.js';
+import {
+  findAcceptancesByUser,
+  findLatestAcceptance,
+  insertAcceptance,
+} from '../legal/legal-acceptance.dao.js';
 
 /**
  * The vendor agreement — step 3 of vendor onboarding, and the only legal
@@ -21,13 +28,6 @@ import { findAcceptances, insertAcceptance } from './legal-agreement.dao.js';
  * refusal at step 4 would leave a verified Connect account attached to a
  * listing nobody can pay.
  */
-
-/** What the browser sent, for the record rather than for any decision. */
-export interface AcceptanceContext {
-  /** The caller's address as the proxy reported it, or `null`. */
-  ip: string | null;
-  userAgent: string | null;
-}
 
 function toAcceptance(row: LegalAcceptanceRow): LegalAcceptance {
   return {
@@ -42,16 +42,14 @@ function toAcceptance(row: LegalAcceptanceRow): LegalAcceptance {
 /**
  * Whether this vendor holds the current agreement.
  *
- * Read from the newest **vendor agreement** row rather than from the newest row
- * of any kind: the table also carries terms-of-service acceptances, and a
- * vendor who accepted the terms yesterday has not thereby accepted the
- * agreement.
+ * Asked of the newest **vendor agreement** row rather than of the newest row of
+ * any kind: the table also carries terms-of-service acceptances, and a vendor
+ * who accepted the Terms yesterday has not thereby accepted the agreement.
  */
-export function holdsCurrentAgreement(rows: readonly LegalAcceptanceRow[]): boolean {
-  return rows.some(
-    (row) =>
-      row.document === 'vendor_agreement' && row.version === CURRENT_VENDOR_AGREEMENT_VERSION,
-  );
+export async function holdsCurrentAgreement(db: AppDatabase, userId: string): Promise<boolean> {
+  const latest = await findLatestAcceptance(db, userId, 'vendor_agreement');
+
+  return latest?.version === CURRENT_VENDOR_AGREEMENT_VERSION;
 }
 
 export async function readAgreementStatus(
@@ -64,14 +62,14 @@ export async function readAgreementStatus(
     throw notFound('You have not created a vendor profile yet');
   }
 
-  const rows = await findAcceptances(db, vendor.id);
+  const rows = await findAcceptancesByUser(db, userId);
   const latest = rows.find((row) => row.document === 'vendor_agreement') ?? null;
 
   return {
     current: CURRENT_VENDOR_AGREEMENT_VERSION,
     businessName: vendor.businessName,
     accepted: latest ? toAcceptance(latest) : null,
-    isCurrent: holdsCurrentAgreement(rows),
+    isCurrent: latest?.version === CURRENT_VENDOR_AGREEMENT_VERSION,
     history: rows.map(toAcceptance),
   };
 }
@@ -125,9 +123,7 @@ export async function acceptVendorAgreement(
    * held adds no answer to it. A **new** version still adds its row, which is
    * the case the append-only rule exists for.
    */
-  const held = await findAcceptances(db, vendor.id);
-
-  if (holdsCurrentAgreement(held)) {
+  if (await holdsCurrentAgreement(db, userId)) {
     return readAgreementStatus(db, userId);
   }
 
@@ -135,8 +131,22 @@ export async function acceptVendorAgreement(
     vendorId: vendor.id,
     document: 'vendor_agreement',
     version,
+    /*
+     * The bytes, beside the label. The version says which agreement; this says
+     * which text — and `vendor-agreement.md` is placeholder copy that will be
+     * replaced, so without it an edit that skipped a version bump would leave
+     * every existing row attesting to something that no longer exists.
+     */
+    documentSha256: legalDocumentSha256('vendor_agreement'),
+    /*
+     * An unticked box the vendor ticked, naming their business, with the
+     * agreement expanded in place beside it — this step has always been
+     * clickwrap. Recorded so a later flow that accepts some other way is
+     * distinguishable from it.
+     */
+    acceptanceMethod: 'clickwrap_checkbox',
     acceptedByUserId: userId,
-    acceptedByName: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email,
+    acceptedByName: displayName(user),
     businessName: vendor.businessName,
     ip: context.ip,
     userAgent: context.userAgent,

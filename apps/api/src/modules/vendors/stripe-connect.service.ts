@@ -8,7 +8,6 @@ import type { AppDatabase } from '../../lib/database.js';
 import { conflict, notFound } from '../../lib/errors.js';
 import { isMissingPayoutsOnly, isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
 import { findUserById } from '../users/users.dao.js';
-import { findAcceptances } from './legal-agreement.dao.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import {
   claimStripeAccountId,
@@ -69,7 +68,7 @@ export async function startPayoutOnboarding(
    * A 409 rather than a 403: nothing is wrong with the caller, there is a step
    * outstanding, and the message names it.
    */
-  if (!holdsCurrentAgreement(await findAcceptances(deps.db, vendor.id))) {
+  if (!(await holdsCurrentAgreement(deps.db, vendor.userId))) {
     throw conflict('Accept the vendor agreement before connecting payouts');
   }
 

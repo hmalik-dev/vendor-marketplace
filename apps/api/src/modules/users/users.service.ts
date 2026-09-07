@@ -9,12 +9,7 @@ import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { forbidden, notFound, unauthorized } from '../../lib/errors.js';
 import { assertOwnedImageRefs } from '../../lib/storage.js';
-import {
-  findUserByClerkId,
-  findUserById,
-  insertUserIfAbsent,
-  updateUserById,
-} from './users.dao.js';
+import { findUserById, insertUserIfAbsent, updateUserById } from './users.dao.js';
 
 /** The subset of a Clerk identity the local `users` row mirrors. */
 export interface ClerkUserSnapshot {
@@ -72,15 +67,11 @@ export function mirroredClerkName(value: string): string {
 }
 
 /**
- * Creates the local row for a Clerk identity if it is not there yet. Both the
- * `user.created` webhook and the user's own first authenticated request land
- * here, so the insert tolerates the loser of that race.
+ * A Clerk identity as the local row records it — normalised, and stated once,
+ * so `normalizeRole` and `mirroredClerkName` cannot be forgotten by a caller.
  */
-export async function syncUserFromClerk(
-  db: AppDatabase,
-  snapshot: ClerkUserSnapshot,
-): Promise<UserRow | null> {
-  const values: NewUserRow = {
+function toNewUserRow(snapshot: ClerkUserSnapshot): NewUserRow {
+  return {
     clerkUserId: snapshot.clerkUserId,
     email: snapshot.email,
     role: normalizeRole(snapshot.roleHint),
@@ -88,27 +79,37 @@ export async function syncUserFromClerk(
     lastName: mirroredClerkName(snapshot.lastName),
     avatarUrl: snapshot.avatarUrl,
   };
-
-  return insertUserIfAbsent(db, values);
 }
 
 /**
- * Resolves a verified Clerk subject to a local user, lazily creating the row
- * when the webhook has not landed yet. `loadSnapshot` is only called on that
- * cold path, so the common case stays a single indexed lookup.
+ * How a person's name is frozen onto a record that can never be edited.
+ *
+ * The email is the fallback because a Clerk account can genuinely have no name,
+ * and a blank in `legal_acceptances.accepted_by_name` would say nobody
+ * accepted. Stated once because three writers freeze it — the Terms gate, the
+ * vendor agreement and the E2E fixture — onto rows the database refuses to
+ * update, so two spellings would be two versions of who a person is with no
+ * test able to notice.
  */
-export async function resolveUserByClerkId(
-  db: AppDatabase,
-  clerkUserId: string,
-  loadSnapshot: () => Promise<ClerkUserSnapshot>,
-): Promise<UserRow | null> {
-  const existing = await findUserByClerkId(db, clerkUserId);
-  if (existing) {
-    return existing;
-  }
+export function displayName(user: Pick<UserRow, 'firstName' | 'lastName' | 'email'>): string {
+  return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
+}
 
-  const snapshot = await loadSnapshot();
-  return syncUserFromClerk(db, snapshot);
+/**
+ * Creates the local row for a Clerk identity if it is not there yet. Both the
+ * `user.created` webhook and the acceptance gate land here, so the insert
+ * tolerates the loser of that race — and it accepts a transaction, which is how
+ * the gate writes the account and its acceptance as one act.
+ *
+ * **A row this writes is not yet a usable account.** Since #429 the gate reads
+ * `legal_acceptances`, not this table, so a webhook-created row with no
+ * acceptance is held at the interstitial exactly like an account that has none.
+ */
+export async function syncUserFromClerk(
+  db: AppDatabase,
+  snapshot: ClerkUserSnapshot,
+): Promise<UserRow | null> {
+  return insertUserIfAbsent(db, toNewUserRow(snapshot));
 }
 
 /**

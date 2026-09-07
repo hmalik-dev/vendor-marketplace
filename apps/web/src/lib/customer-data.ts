@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
+import { redirectIfTermsRequired } from './terms-gate';
 import {
   wireBookingListSchema,
   wireBookingRequestListSchema,
@@ -50,6 +51,14 @@ async function degradeToEmpty<T>(read: () => Promise<T[]>): Promise<T[]> {
     if (error instanceof ApiClientError && error.statusCode === 401) {
       redirect(await signInPathReturningHere());
     }
+    /*
+     * Nor is an un-accepted account an empty queue. The acceptance gate (#429)
+     * answers every read 403 `TERMS_REQUIRED` until the box is ticked, and
+     * degrading that to `[]` would make this surface say nothing is waiting
+     * when the reader is simply not through the gate yet — the same claim the
+     * 401 branch above exists to stop it making.
+     */
+    await redirectIfTermsRequired(error);
 
     return [];
   }

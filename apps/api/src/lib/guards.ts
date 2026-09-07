@@ -1,7 +1,29 @@
-import type { onRequestAsyncHookHandler, preHandlerAsyncHookHandler } from 'fastify';
+import type {
+  FastifyRequest,
+  onRequestAsyncHookHandler,
+  preHandlerAsyncHookHandler,
+} from 'fastify';
 import type { UserRole } from '@vendor-marketplace/shared';
-import { forbidden, unauthorized } from './errors.js';
-import type { AuthenticatedUser } from '../plugins/clerk-auth.js';
+import { forbidden, termsRequiredError, unauthorized } from './errors.js';
+import type { AuthenticatedUser, ClerkIdentity } from '../plugins/clerk-auth.js';
+
+/**
+ * The acceptance gate, checked by every guard before it decides anything else.
+ *
+ * The auth plugin leaves `auth` null for two very different reasons — nobody is
+ * signed in, or somebody is signed in and has not accepted the current Terms —
+ * and only this distinguishes them. Reporting the second as a 401 would send an
+ * account that is one click from usable back to sign-in, where signing in again
+ * changes nothing; reporting it as a plain 403 would send them to `/suspended`.
+ *
+ * It is checked **before** the role, because a gated session has no role
+ * decision to make: the local row it would be read from may not exist yet.
+ */
+function assertTermsAccepted(request: FastifyRequest): void {
+  if (request.termsRequired) {
+    throw termsRequiredError();
+  }
+}
 
 /**
  * Reads the caller resolved by the auth plugin, or fails the request with 401.
@@ -39,8 +61,39 @@ export function assertRole(
   return user;
 }
 
+/**
+ * Route guard: a verified Clerk session, whether or not it has a local account.
+ *
+ * **Only the acceptance gate's own routes use this.** Every other guarded route
+ * requires an account that has accepted the current Terms, and an account is
+ * created by the acceptance itself — so the two routes that read and write that
+ * acceptance are the only ones that can be reached before one exists. Reaching
+ * for this anywhere else would put a route behind the gate's own exception and
+ * outside the gate.
+ *
+ * It is an `onRequest` guard because both routes take a body or would otherwise
+ * answer a caller with no session by describing their payload.
+ */
+export const requireClerkSubject: onRequestAsyncHookHandler = async (request) => {
+  clerkSubject(request.clerkIdentity);
+};
+
+/**
+ * Narrows the identity `requireClerkSubject` has already established, the way
+ * `authenticated` narrows `request.auth` after `requireAuth`. Both live here so
+ * a route cannot pick its own refusal for the same condition.
+ */
+export function clerkSubject(identity: ClerkIdentity | null): ClerkIdentity {
+  if (!identity) {
+    throw unauthorized();
+  }
+
+  return identity;
+}
+
 /** Route guard: any authenticated user. */
 export const requireAuth: preHandlerAsyncHookHandler = async (request) => {
+  assertTermsAccepted(request);
   authenticated(request.auth);
 };
 
@@ -63,12 +116,14 @@ export const requireAuth: preHandlerAsyncHookHandler = async (request) => {
  * clearer stack for a benefit only this class of route gets.
  */
 export const requireAuthBeforeValidation: onRequestAsyncHookHandler = async (request) => {
+  assertTermsAccepted(request);
   authenticated(request.auth);
 };
 
 /** Route guard factory: an authenticated user holding one of `roles`. */
 export function requireRole(...roles: readonly UserRole[]): preHandlerAsyncHookHandler {
   return async (request) => {
+    assertTermsAccepted(request);
     assertRole(request.auth, roles);
   };
 }
@@ -94,6 +149,7 @@ export function requireRoleBeforeValidation(
   ...roles: readonly UserRole[]
 ): onRequestAsyncHookHandler {
   return async (request) => {
+    assertTermsAccepted(request);
     assertRole(request.auth, roles);
   };
 }
