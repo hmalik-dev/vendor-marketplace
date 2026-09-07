@@ -71,6 +71,7 @@
 - [`support_cases` is the first durable copy of a complaint](support-cases-is-the-first-durable-copy-of-a-complaint.md) — the admin routes are gated and the chargeback actor is sound; audit the public writer's failure branch
 - [The staff read of a private thread is one `support_cases` row](conversation-read-grant-is-an-open-case-row.md) — the admin guard is settled; audit any new writer of `subject_type='conversation'`, since no FK or CHECK constrains it
 - [`freeText()` lets NUL through](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — Postgres raises 22021, so a caller picks when a user-text insert fails and which branch runs
+- [TLS headers key on the build-time origin](tls-headers-key-on-build-time-origin.md) — `headers()` is baked into routes-manifest at build; `deploymentOrigin` passes an explicit `http://` through and outranks WEB_URL
 - [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — `ApiClientError` carries the 200, so `userFacingError`'s 5xx filter never fires and a landed transfer reports as failed
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking in full with an empty `closeBlockers`; copy that says "refunds nothing" is true of one side only
 - [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #435’s unpublish and deactivate write the vendor’s own columns; only ban and review-hide stick

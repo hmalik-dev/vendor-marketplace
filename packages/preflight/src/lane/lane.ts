@@ -11,7 +11,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { runCommand } from '../exec.js';
 import { ENV_FILES } from '../context.js';
-import { childEnv, LANE_ENV_FILE, parseLaneEnv, renderLaneEnv } from './env.js';
+import { laneChildEnv, LANE_ENV_FILE, parseLaneEnv, renderLaneEnv } from './env.js';
 import {
   claimManifest,
   type LaneManifest,
@@ -85,10 +85,15 @@ export function parseLaneArgs(argv: readonly string[]): LaneCommand {
  * This is the opposite of dotenv's precedence, deliberately: a lane launched
  * from a shell that had already sourced the root `.env` would otherwise bind
  * the shared ports and silently lose its isolation.
+ *
+ * `command` is what the child is about to run, and it decides only which port
+ * `PORT` names — see `laneChildEnv`. The callers that pass none are the ones
+ * that serve nothing: install, build, migrate and seed.
  */
 export function laneEnvFor(
   worktreePath: string,
   base: NodeJS.ProcessEnv = process.env,
+  command: readonly string[] = [],
 ): NodeJS.ProcessEnv {
   const file = path.join(worktreePath, LANE_ENV_FILE);
 
@@ -96,7 +101,7 @@ export function laneEnvFor(
     throw new Error(`No ${LANE_ENV_FILE} in ${worktreePath}. Run \`pnpm lane:up <ticket>\` first.`);
   }
 
-  return childEnv(base, readFileSync(file, 'utf8'));
+  return laneChildEnv(base, readFileSync(file, 'utf8'), command);
 }
 
 /** Owner read/write only: the lane env file holds a live connection string. */
@@ -195,6 +200,12 @@ function ensureLaneEnv(
  * Compares the fields rather than the rendered text, so the check needs no
  * base `DATABASE_URL` of its own — only the lane database name, which the
  * manifest already carries.
+ *
+ * **Every origin the file writes is compared, not just the ports.** Comparing a
+ * subset makes a file written by an older version of this tooling "agree", so a
+ * long-running lane resumes onto it forever and never takes the fix: #448 found
+ * lanes still missing `API_URL` — and therefore still rendering server-side
+ * against whatever answered :4000 — after it had been added here.
  */
 function laneEnvAgreesWith(file: string, manifest: LaneManifest): boolean {
   if (!existsSync(file)) {
@@ -202,11 +213,14 @@ function laneEnvAgreesWith(file: string, manifest: LaneManifest): boolean {
   }
 
   const values = parseLaneEnv(readFileSync(file, 'utf8'));
+  const api = `http://localhost:${manifest.apiPort}`;
 
   return (
     values.PORT === String(manifest.apiPort) &&
     values.WEB_PORT === String(manifest.webPort) &&
-    values.NEXT_PUBLIC_API_URL === `http://localhost:${manifest.apiPort}` &&
+    values.NEXT_PUBLIC_API_URL === api &&
+    values.API_URL === api &&
+    values.WEB_URL === `http://localhost:${manifest.webPort}` &&
     (values.DATABASE_URL ?? '').endsWith(`/${manifest.database}`)
   );
 }

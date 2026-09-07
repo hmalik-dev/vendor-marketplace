@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { childEnv, parseLaneEnv, renderLaneEnv } from './env.js';
+import { childEnv, laneChildEnv, parseLaneEnv, renderLaneEnv } from './env.js';
 import type { LaneManifest } from './manifest.js';
 
 const manifest: LaneManifest = {
@@ -80,5 +80,57 @@ describe('childEnv', () => {
 
   it('preserves inherited variables the lane file does not mention', () => {
     expect(childEnv({ HOME: '/home/dev' }, 'PORT=4007').HOME).toBe('/home/dev');
+  });
+});
+
+/**
+ * `PORT` in the lane file is the **API's** port, and `lane:exec` handed it to
+ * every child. `next start` reads `PORT`, so a lane's web app bound the lane's
+ * API port: the web port refused connections and read as a broken app, while
+ * the API port served the app and read as a correct one. Neither direction says
+ * anything is wrong. `next dev` escaped only because `apps/web`'s dev script
+ * passes `--port $WEB_PORT` explicitly, which is a property of one script
+ * rather than of the lane.
+ */
+describe('laneChildEnv', () => {
+  const contents = renderLaneEnv(manifest, databaseUrl);
+
+  it('gives a command that serves the web app the lane web port', () => {
+    const web = ['pnpm', '--filter', '@vendor-marketplace/web', 'start'];
+    expect(laneChildEnv({}, contents, web).PORT).toBe('3007');
+    expect(laneChildEnv({}, contents, ['pnpm', '-C', 'apps/web', 'start']).PORT).toBe('3007');
+    expect(laneChildEnv({}, contents, ['npx', 'next', 'start']).PORT).toBe('3007');
+    expect(laneChildEnv({}, contents, ['node_modules/.bin/next', 'start']).PORT).toBe('3007');
+  });
+
+  it('leaves the API port in place for the API', () => {
+    const api = ['pnpm', '--filter', '@vendor-marketplace/api', 'start'];
+    expect(laneChildEnv({}, contents, api).PORT).toBe('4007');
+  });
+
+  /*
+   * A root `pnpm dev` or `pnpm build` fans out across both apps, and the only
+   * process in that fan-out reading `PORT` is the API — `apps/web`'s dev script
+   * passes its own `--port`. Re-pointing `PORT` there would move the API onto
+   * the web port, which is the same defect in the other direction.
+   */
+  it('leaves the API port in place for a command that runs both apps', () => {
+    expect(laneChildEnv({}, contents, ['pnpm', 'dev']).PORT).toBe('4007');
+    expect(laneChildEnv({}, contents, ['pnpm', 'build']).PORT).toBe('4007');
+
+    const both = ['turbo', 'run', 'start', '--filter=./apps/web', '--filter=./apps/api'];
+    expect(laneChildEnv({}, contents, both).PORT).toBe('4007');
+  });
+
+  it('overrides only PORT, leaving every other lane value alone', () => {
+    const child = laneChildEnv({ HOME: '/home/dev' }, contents, ['npx', 'next', 'start']);
+    expect(child.WEB_PORT).toBe('3007');
+    expect(child.API_URL).toBe('http://localhost:4007');
+    expect(child.DATABASE_URL).toBe(databaseUrl);
+    expect(child.HOME).toBe('/home/dev');
+  });
+
+  it('still lets the lane file win over an inherited PORT', () => {
+    expect(laneChildEnv({ PORT: '4000' }, contents, ['pnpm', 'dev']).PORT).toBe('4007');
   });
 });

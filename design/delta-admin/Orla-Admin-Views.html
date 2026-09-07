@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orla — Admin views (delta)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E9E6DF;font-family:'Instrument Sans',system-ui,sans-serif}
+a{color:#A34A28}a:hover{color:#8E3F20}
+.sc{padding:0 48px 58px}
+.sc-h{display:flex;align-items:baseline;gap:12px;margin:0 0 14px;flex-wrap:wrap}
+.sc-n{font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.1em;padding:4px 8px;background:#23201C;color:#F8F5EF;border-radius:4px}
+.sc-t{font:600 14px/1.2 'Instrument Sans',sans-serif;color:#23201C}
+.sc-d{font:400 12.5px/1.45 'Instrument Sans',sans-serif;color:#6B6459;max-width:880px}
+.sc-mvp{font:700 9.5px 'Instrument Sans',sans-serif;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:#EDF0E9;color:#4B5940}
+.sc-new{font:700 9.5px 'Instrument Sans',sans-serif;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:#F7E7E0;color:#8E3F20}
+.fr{width:1440px;height:900px;background:#F8F5EF;border:1px solid rgba(35,32,28,.12);border-radius:12px;overflow:hidden;box-shadow:0 6px 28px rgba(35,32,28,.13);display:flex;flex-direction:column;position:relative}
+.hd{height:64px;flex:none;background:#23201C;border-bottom:1px solid #3A342E;display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+.side{width:210px;flex:none;background:#FFFDF9;border-right:1px solid #E4DDD1;display:flex;flex-direction:column;padding:16px 12px}
+.nav{display:flex;align-items:center;gap:10px;padding:0 12px;height:34px;border-radius:9px;font-size:13.5px;font-weight:500;color:#4A443C}
+.navA{background:#F7E7E0;color:#8E3F20;font-weight:600;box-shadow:inset 3px 0 0 #B4552F}
+.bdg{margin-left:auto;font-size:11px;font-weight:700;color:#FFFDF9;background:#B4552F;padding:1px 7px;border-radius:999px}
+.pill{font:700 10px 'Instrument Sans',sans-serif;letter-spacing:.07em;text-transform:uppercase;padding:5px 10px;border-radius:999px;display:inline-block}
+.h2{font-family:'Instrument Serif',serif;font-size:23px;color:#23201C;letter-spacing:-.01em}
+.stat{font-size:12.5px;color:#6B6459}
+.bp{font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#4A443C;background:#DFDACF;border-radius:4px;padding:4px 8px;display:inline-block;margin-bottom:8px}
+.tile{background:#FFFDF9;border-radius:14px;border:1px solid #E4DDD1;padding:16px}
+.tl{font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459;margin-bottom:12px}
+.tn{font:400 11.5px/1.55 'Instrument Sans',sans-serif;color:#6B6459;margin-top:10px}
+.mono{font-family:'JetBrains Mono',monospace}
+/* admin detail card */
+.ac{background:#FFFDF9;border:1px solid #E4DDD1;border-radius:12px;overflow:hidden}
+.ach{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;background:#F4F0E8;border-bottom:1px solid #E4DDD1;font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459}
+.kv{display:grid;grid-template-columns:150px minmax(0,1fr);gap:6px 16px;padding:12px 16px;font-size:13px;color:#23201C;align-items:baseline}
+.k{font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459;padding-top:2px}
+.v{font-size:13px;color:#23201C;overflow-wrap:anywhere}
+.vm{font-family:'JetBrains Mono',monospace;font-size:12px;color:#23201C;overflow-wrap:anywhere}
+.dz{font-size:13px;color:#C9C1B5}
+.btnP{font-size:12.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:9px 16px;border-radius:9px;display:inline-block}
+.btnS{font-size:12.5px;font-weight:600;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;padding:8px 16px;border-radius:9px;display:inline-block}
+.btnD{font-size:12.5px;font-weight:600;color:#B23A30;background:#FFFDF9;border:1px solid #E8CFCA;padding:8px 16px;border-radius:9px;display:inline-block}
+.thr{display:grid;grid-template-columns:22px 1.6fr 1.1fr 1fr .7fr .8fr .9fr 70px;gap:12px;padding:10px 16px;border-bottom:1px solid #E4DDD1;background:#F4F0E8;font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459;align-items:center}
+.fbtn{font-size:12.5px;font-weight:600;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;padding:8px 14px;border-radius:8px;display:inline-block}
+.fbtnA{font-size:12.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:8px 14px;border-radius:8px;display:inline-block}
+</style>
+</head>
+<body>
+
+<div style="padding:44px 48px 26px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="position:relative;width:29px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:32px;color:#23201C">Orla</span><span class="mono" style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-left:8px">Admin views — delta to frame 13 and 22-admin.md</span></div>
+<div style="max-width:900px;font:400 13.5px/1.7 'Instrument Sans',sans-serif;color:#4A443C">Three patterns, in the order they were asked for. <strong style="font-weight:600">A</strong> is a ruling — column grids, defaults and empty behaviour for four list routes that reuse frame 13's table verbatim. <strong style="font-weight:600">B</strong> is one drawn detail frame that settles card order, label/value typography, long-field wrapping and where destructive actions sit; the other three detail routes are given as card orders against it. <strong style="font-weight:600">C</strong> is the case detail, drawn in full, including the resolve control and its ConfirmAction.</div>
+<div style="max-width:900px;margin-top:14px;background:#F5EEDC;border-radius:12px;padding:13px 16px;font:400 12.5px/1.65 'Instrument Sans',sans-serif;color:#4A443C"><strong style="font-weight:600">One contradiction in the brief, resolved here.</strong> The nav is described as eight rows ending in Activity, but Cases is also said to carry a count badge — and Cases is not in the eight. A badge on a row that doesn't exist can't be drawn, so the rail is <strong style="font-weight:600">nine rows</strong>: Cases sits directly after Bookings, where the work arrives. Badges on Cases (open count) and Reviews (pending count) only. <strong style="font-weight:600">/admin/requests</strong> has no rail row either — it is a tab inside Bookings (<em>Bookings · Requests</em>), because a request is a booking before it exists and operators reach it while looking at bookings.</div>
+<div style="max-width:900px;margin-top:12px;font:400 12.5px/1.65 'Instrument Sans',sans-serif;color:#4A443C">Colour is held to 40-states: <span style="color:#3D6A8C;font-weight:600">steel</span> information · <span style="color:#7A5A12;font-weight:600">gold</span> waiting on someone · <span style="color:#B23A30;font-weight:600">red</span> failed · <span style="color:#4B5940;font-weight:600">sage</span> settled. So <em>pending</em> and <em>quoted</em> are gold, <em>expired</em> is stone (nothing failed — a clock ran out), <em>declined</em> and <em>cancelled</em> are stone, and red is reserved for payout failure, chargeback and refusal.</div>
+</div>
+
+<!-- ============ PATTERN A ============ -->
+<div class="sc">
+<div class="sc-h"><span class="sc-n">A</span><span class="sc-t">List routes — ruling</span><span class="sc-mvp">MVP</span><span class="sc-d">Four routes, no new frame: frame 13's shell, filter bar, fixed header, 44px zebra rows and pill vocabulary are reused unchanged. What follows is what differs — columns, default sort, and what each does when there is nothing to show.</span></div>
+
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;max-width:1440px">
+
+<div class="tile">
+<div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:12.5px;color:#23201C;font-weight:500">/admin/activity</span><span class="pill" style="background:#EEF3FA;color:#3D6A8C">Read only</span></div>
+<div class="tn" style="margin-top:8px">A ledger, not a queue. No checkbox column, no overflow menu, no bulk bar — the row does nothing when clicked except open the subject. Removing the two action columns is what makes it read as a log.</div>
+<div style="margin-top:12px;border-top:1px solid #E4DDD1;padding-top:10px;font-size:12.5px;color:#4A443C;line-height:1.9">
+<div><span class="k">Columns</span></div>
+<div class="mono" style="font-size:11.5px;color:#23201C">Actor 1.2fr · Action 1fr · Subject 1.6fr · When .9fr</div>
+<div style="margin-top:6px">Subject is <em>type + id</em> in one cell — <span class="mono" style="font-size:11.5px">booking · BKG-8821</span> — type in stone-600, id in mono stone-900, so the eye sorts by type down the column.</div>
+<div style="margin-top:6px"><strong style="font-weight:600">Default:</strong> newest first. <strong style="font-weight:600">Filters:</strong> Actor ▾, Subject type ▾, date range. No search.</div>
+<div style="margin-top:6px">Timestamps absolute to the minute (<span class="mono" style="font-size:11.5px">7 Sep 2026, 14:02</span>), never "2h ago" — an audit trail that rounds is not an audit trail.</div>
+</div>
+</div>
+
+<div class="tile">
+<div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:12.5px;color:#23201C;font-weight:500">/admin/cases</span><span class="pill" style="background:#F5EEDC;color:#7A5A12">Badged</span></div>
+<div class="tn" style="margin-top:8px">The one list with a rail badge that counts. Default filter <em>open</em>, sorted <em>oldest first</em> — the top row is the case that has been waiting longest, which is the only ordering an operator can defend.</div>
+<div style="margin-top:12px;border-top:1px solid #E4DDD1;padding-top:10px;font-size:12.5px;color:#4A443C;line-height:1.9">
+<div><span class="k">Columns</span></div>
+<div class="mono" style="font-size:11.5px;color:#23201C">Reference .9fr · Sender 1.2fr · Subject 1.8fr · Booking .9fr · Age .6fr · Status .8fr</div>
+<div style="margin-top:6px">Reference is mono (<span class="mono" style="font-size:11.5px">ORL-4K7Q-P2</span>) and is the row's link. Unlinked booking renders <span class="dz">—</span> in stone-500, never blank.</div>
+<div style="margin-top:6px"><strong style="font-weight:600">Age</strong> is the pressure column: stone under 24h, <span style="color:#7A5A12;font-weight:600">gold</span> at 24h+, <span style="color:#B23A30;font-weight:600">red</span> at 72h+ — red here means the SLA failed, not that the case did.</div>
+<div style="margin-top:6px">Status pills: Open (gold) · Resolved (sage). Two, and no more.</div>
+</div>
+</div>
+
+<div class="tile">
+<div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:12.5px;color:#23201C;font-weight:500">/admin/requests</span><span class="pill" style="background:#EFE9E0;color:#6B6459">Tab of Bookings</span></div>
+<div class="tn" style="margin-top:8px">Six statuses is too many for six pills side by side, so the filter bar carries a <em>segmented</em> control of three groups — Live (pending, quoted) · Closed (accepted, declined) · Lapsed (expired, cancelled) — with the exact status still shown per row.</div>
+<div style="margin-top:12px;border-top:1px solid #E4DDD1;padding-top:10px;font-size:12.5px;color:#4A443C;line-height:1.9">
+<div><span class="k">Columns</span></div>
+<div class="mono" style="font-size:11.5px;color:#23201C">Vendor 1.4fr · Customer 1.2fr · Event date 1fr · Quoted .8fr · Expires .9fr · Status .9fr</div>
+<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+<span class="pill" style="background:#F5EEDC;color:#7A5A12">Pending</span><span class="pill" style="background:#F5EEDC;color:#7A5A12">Quoted</span><span class="pill" style="background:#EDF0E9;color:#4B5940">Accepted</span><span class="pill" style="background:#EFE9E0;color:#6B6459">Declined</span><span class="pill" style="background:#EFE9E0;color:#6B6459">Expired</span><span class="pill" style="background:#EFE9E0;color:#6B6459">Cancelled</span>
+</div>
+<div style="margin-top:8px"><strong style="font-weight:600">Expires</strong> counts down only while pending or quoted (<span class="mono" style="font-size:11.5px">6h 20m</span>, gold under 12h); on the other four it prints the resolution date in stone-600. A dead countdown is a lie.</div>
+<div style="margin-top:6px">Quoted price right-aligned, tabular numerals; unquoted rows <span class="dz">—</span>.</div>
+</div>
+</div>
+
+<div class="tile">
+<div style="display:flex;align-items:baseline;gap:10px"><span class="mono" style="font-size:12.5px;color:#23201C;font-weight:500">/admin/categories</span><span class="pill" style="background:#EFE9E0;color:#6B6459">Editable rows</span></div>
+<div class="tn" style="margin-top:8px">The existing tag table verbatim, with two differences: rows are drag-ordered, and the toggle writes on release with no save button.</div>
+<div style="margin-top:12px;border-top:1px solid #E4DDD1;padding-top:10px;font-size:12.5px;color:#4A443C;line-height:1.9">
+<div><span class="k">Columns</span></div>
+<div class="mono" style="font-size:11.5px;color:#23201C">⠿ 22px · Name 1.6fr · Slug 1.4fr · Active 80px · Order 80px · ··· 70px</div>
+<div style="margin-top:6px">Slug in mono stone-600 — it is an identifier, and typography should say so before the operator reads it.</div>
+<div style="margin-top:6px">Order is the drag handle's number, right-aligned, and is <em>display order</em>, not an id; it renumbers on drop with a steel toast — <span style="color:#3D6A8C">Order saved</span>.</div>
+<div style="margin-top:6px">Deactivating a category with live vendors opens ConfirmAction naming the count: <em>14 vendors are listed under Florals. They stay live and stay searchable, but Florals disappears from browse.</em></div>
+</div>
+</div>
+
+</div>
+
+<!-- states -->
+<div style="max-width:1440px;margin-top:22px">
+<div class="bp">Empty and filtered-empty — 1194 × 300 content area</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+
+<div style="background:#F8F5EF;border:1px solid rgba(35,32,28,.12);border-radius:12px;padding:18px 20px 20px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px"><div class="h2">Cases</div><span class="stat">0 open · 0 resolved</span></div>
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px"><div style="flex:1;max-width:280px;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:8px;padding:8px 12px;font-size:13px;color:#C9C1B5">Search reference or sender…</div><span class="fbtnA">Open (0)</span><span class="fbtn">Resolved (0)</span></div>
+<div style="background:#FFFDF9;border:1px solid #E4DDD1;border-radius:12px;padding:44px 24px;text-align:center">
+<div style="width:34px;height:22px;position:relative;margin:0 auto 14px;opacity:.5"><div style="position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:#E4E9DE"></div><div style="position:absolute;left:11px;top:0;width:22px;height:22px;border-radius:50%;border:1.4px solid #C9C1B5"></div></div>
+<div style="font-family:'Instrument Serif',serif;font-size:21px;color:#23201C">Nothing is disputed</div>
+<div style="font-size:13px;color:#6B6459;margin-top:6px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6">No open cases and none resolved yet. Cases arrive here from a support message, a chargeback, or a report on a booking.</div>
+</div>
+<div class="tn" style="margin-top:10px"><strong style="font-weight:600">True empty.</strong> No button — there is nothing an operator should do to create a case. The copy's whole job is to say where cases come from, so silence reads as calm rather than broken.</div>
+</div>
+
+<div style="background:#F8F5EF;border:1px solid rgba(35,32,28,.12);border-radius:12px;padding:18px 20px 20px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px"><div class="h2">Cases</div><span class="stat">23 open · 2 match these filters</span></div>
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px"><div style="flex:1;max-width:280px;background:#FFFDF9;border:1px solid #E4DDD1;border-radius:8px;padding:8px 12px;font-size:13px;color:#23201C">kessler</div><span class="fbtnA">Resolved (0)</span><span class="fbtn" style="border-color:#B4552F;color:#8E3F20;background:#F7E7E0">Chargeback ✕</span><span class="fbtn" style="border-color:#B4552F;color:#8E3F20;background:#F7E7E0">Last 7 days ✕</span></div>
+<div style="background:#FFFDF9;border:1px solid #E4DDD1;border-radius:12px;padding:34px 24px;text-align:center">
+<div style="font-family:'Instrument Serif',serif;font-size:21px;color:#23201C">No resolved chargeback cases for “kessler” in the last 7 days</div>
+<div style="font-size:13px;color:#6B6459;margin-top:6px">Three filters are narrowing this. Widening any one of them finds something:</div>
+<div style="display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap">
+<span class="btnP">Open cases instead (4)</span>
+<span class="btnS">Any origin (2)</span>
+<span class="btnS">All time (9)</span>
+<span class="btnS" style="border:0;background:none;color:#A34A28;padding-left:6px">Clear all filters</span>
+</div>
+</div>
+<div class="tn" style="margin-top:10px"><strong style="font-weight:600">Filtered-empty — closes #443.</strong> Every way out is <em>counted</em>: each button drops exactly one filter and says how many rows that would reveal, so the operator picks the widening that pays rather than clearing everything and starting over. A zero-count route is never offered as a button. The heading recites the filters in the words the operator set them in.</div>
+</div>
+
+</div>
+</div>
+</div>
+
+<!-- ============ PATTERN B ============ -->
+<div class="sc">
+<div class="sc-h"><span class="sc-n">B</span><span class="sc-t">Detail view — /admin/vendors/[id]</span><span class="sc-new">New pattern</span><span class="sc-d">One frame settles the pattern for all four detail routes. Two columns: the wide left column is the record, read top-to-bottom in the order an operator asks questions; the narrow right column is identity and actions, and it is the <em>only</em> place anything is clickable that changes state.</span></div>
+
+<div style="display:flex;gap:26px;align-items:flex-start">
+<div style="flex:none">
+<div class="bp">1440 · desktop</div>
+<div class="fr" data-screen-label="B Admin vendor detail">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #F8F5EF"></div></div><span style="font-family:'Instrument Serif',serif;font-size:23px;color:#F8F5EF">Orla</span><span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#EADCCB;background:rgba(255,253,249,.12);padding:4px 8px;border-radius:5px;margin-left:4px">Admin</span></div>
+<div style="display:flex;align-items:center;gap:18px"><span style="font-size:13px;color:#D5CEC2">Logged in as ops@orla.com</span><div style="width:30px;height:30px;border-radius:50%;background:#4A443C;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#EADCCB">O</div></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div class="side">
+<div class="nav">Overview</div>
+<div class="nav navA">Vendors</div>
+<div class="nav">Customers</div>
+<div class="nav">Bookings</div>
+<div class="nav">Cases <span class="bdg">23</span></div>
+<div class="nav">Payments</div>
+<div class="nav">Reviews <span class="bdg">6</span></div>
+<div class="nav">Categories &amp; tags</div>
+<div class="nav">Activity</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;padding:16px 24px 12px;border-bottom:1px solid #E4DDD1">
+<div style="font-size:12px;color:#6B6459;margin-bottom:6px"><span style="color:#A34A28">Vendors</span> <span style="color:#C9C1B5">/</span> Kessler &amp; Co.</div>
+<div style="display:flex;align-items:baseline;justify-content:space-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="h2">Kessler &amp; Co.</div><span class="pill" style="background:#EDF0E9;color:#4B5940">Live</span></div><span class="stat">vendor <span class="mono" style="font-size:11.5px">VND-2291</span> · 184 bookings · joined 4 Mar 2025</span></div>
+</div>
+<div style="flex:1;overflow:hidden;padding:16px 24px 20px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px">
+
+<!-- left column: the record -->
+<div style="display:flex;flex-direction:column;gap:14px;overflow:hidden">
+
+<div class="ac" style="flex:none">
+<div class="ach"><span>Stripe</span><span style="font:400 11px 'Instrument Sans',sans-serif;letter-spacing:0;text-transform:none;color:#3D6A8C;background:#EEF3FA;padding:3px 8px;border-radius:5px">Read-only — mirrored from Stripe, 6m ago</span></div>
+<div class="kv">
+<div class="k">Account</div><div class="vm">acct_1PqR3xKz9LmN4dTv</div>
+<div class="k">Onboarded</div><div class="v">12 Mar 2025 · charges enabled · payouts enabled</div>
+<div class="k">Disabled reason</div><div class="dz">—</div>
+<div class="k">Outstanding</div><div class="v"><span style="color:#7A5A12">2 requirements due 30 Sep 2026</span><div style="margin-top:5px;display:flex;flex-direction:column;gap:3px"><span class="vm" style="color:#4A443C">company.verification.document</span><span class="vm" style="color:#4A443C">representative.address.line1</span></div></div>
+</div>
+</div>
+
+<div class="ac" style="flex:none">
+<div class="ach"><span>Packages · 4</span><span style="font:400 11px 'Instrument Sans',sans-serif;letter-spacing:0;text-transform:none;color:#6B6459">3 active</span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 90px;gap:10px;padding:8px 16px;border-bottom:1px solid #F1ECE4;font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459"><span>Name</span><span style="text-align:right">Price</span><span style="text-align:right">Active</span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 90px;gap:10px;padding:0 16px;height:34px;align-items:center;font-size:13px;color:#23201C;border-bottom:1px solid #F1ECE4"><span>Half-day coverage</span><span style="text-align:right" class="mono">$1,400</span><span style="text-align:right"><span class="pill" style="background:#EDF0E9;color:#4B5940">Yes</span></span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 90px;gap:10px;padding:0 16px;height:34px;align-items:center;font-size:13px;color:#23201C;border-bottom:1px solid #F1ECE4;background:#FDFAF4"><span>Full-day coverage</span><span style="text-align:right" class="mono">$2,600</span><span style="text-align:right"><span class="pill" style="background:#EDF0E9;color:#4B5940">Yes</span></span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 90px;gap:10px;padding:0 16px;height:34px;align-items:center;font-size:13px;color:#23201C;border-bottom:1px solid #F1ECE4"><span>Engagement session</span><span style="text-align:right" class="mono">$450</span><span style="text-align:right"><span class="pill" style="background:#EDF0E9;color:#4B5940">Yes</span></span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 90px;gap:10px;padding:0 16px;height:34px;align-items:center;font-size:13px;color:#6B6459;background:#FDFAF4"><span>Second shooter add-on</span><span class="mono" style="text-align:right;color:#6B6459">$300</span><span style="text-align:right"><span class="pill" style="background:#EFE9E0;color:#6B6459">No</span></span></div>
+</div>
+
+<div class="ac" style="flex:none">
+<div class="ach"><span>Portfolio · 18 images</span><span style="font:400 11px 'Instrument Sans',sans-serif;letter-spacing:0;text-transform:none;color:#6B6459">Cover first · remove is per-image · +11 more</span></div>
+<div style="padding:12px 16px;display:flex;gap:8px;overflow:hidden">
+<div style="flex:none;width:104px"><div style="height:63px;border-radius:8px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);position:relative"><span style="position:absolute;left:6px;top:6px;font:700 9px 'Instrument Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#FFFDF9;background:rgba(35,32,28,.62);padding:2px 6px;border-radius:4px">Cover</span><span style="position:absolute;right:5px;bottom:5px;font-size:11px;color:#B23A30;background:#FFFDF9;border-radius:5px;padding:1px 6px">Remove</span></div></div>
+<div style="flex:none;width:104px"><div style="height:63px;border-radius:8px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);position:relative"><span style="position:absolute;right:5px;bottom:5px;font-size:11px;color:#B23A30;background:#FFFDF9;border-radius:5px;padding:1px 6px">Remove</span></div></div>
+<div style="flex:none;width:104px"><div style="height:63px;border-radius:8px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);position:relative"><span style="position:absolute;right:5px;bottom:5px;font-size:11px;color:#B23A30;background:#FFFDF9;border-radius:5px;padding:1px 6px">Remove</span></div></div>
+<div style="flex:none;width:104px"><div style="height:63px;border-radius:8px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px)"></div></div>
+<div style="flex:none;width:104px"><div style="height:63px;border-radius:8px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px)"></div></div>
+<div style="flex:none;width:104px"><div style="height:63px;border-radius:8px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px)"></div></div>
+<div style="flex:none;width:104px"><div style="height:63px;border-radius:8px;background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px)"></div></div>
+</div>
+</div>
+
+<div class="ac" style="flex:none">
+<div class="ach"><span>Availability locks · 6</span><span style="font:400 11px 'Instrument Sans',sans-serif;letter-spacing:0;text-transform:none;color:#6B6459">What holds each date</span></div>
+<div style="display:grid;grid-template-columns:110px 1fr 1.2fr;gap:10px;padding:8px 16px;border-bottom:1px solid #F1ECE4;font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459"><span>Date</span><span>Hold</span><span>Held by</span></div>
+<div style="display:grid;grid-template-columns:110px 1fr 1.2fr;gap:10px;padding:0 16px;height:34px;align-items:center;font-size:13px;color:#23201C;border-bottom:1px solid #F1ECE4"><span class="mono" style="font-size:12px">12 Sep 2026</span><span><span class="pill" style="background:#EDF0E9;color:#4B5940">Booked</span></span><span>BKG-8821 · Rivera wedding</span></div>
+<div style="display:grid;grid-template-columns:110px 1fr 1.2fr;gap:10px;padding:0 16px;height:34px;align-items:center;font-size:13px;color:#23201C;border-bottom:1px solid #F1ECE4;background:#FDFAF4"><span class="mono" style="font-size:12px">19 Sep 2026</span><span><span class="pill" style="background:#F5EEDC;color:#7A5A12">Pending</span></span><span>REQ-3310 · expires in 6h 20m</span></div>
+<div style="display:grid;grid-template-columns:110px 1fr 1.2fr;gap:10px;padding:0 16px;height:34px;align-items:center;font-size:13px;color:#23201C"><span class="mono" style="font-size:12px">03 Oct 2026</span><span><span class="pill" style="background:#EFE9E0;color:#6B6459">Blocked</span></span><span>Set by vendor · “out of state”</span></div>
+</div>
+
+</div>
+
+<!-- right column: identity + actions -->
+<div style="display:flex;flex-direction:column;gap:14px">
+<div class="ac">
+<div class="ach"><span>Identity</span></div>
+<div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:10px"><div style="width:38px;height:38px;border-radius:10px;background:#F1ECE4;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:17px;color:#8E3F20">K</div><div><div style="font-size:14px;font-weight:600;color:#23201C">Kessler &amp; Co.</div><div style="font-size:12px;color:#6B6459">Photography · Austin, TX</div></div></div>
+<div style="display:grid;grid-template-columns:82px minmax(0,1fr);gap:5px 12px;font-size:12.5px">
+<span class="k" style="padding-top:1px">Contact</span><span class="v" style="font-size:12.5px">dana@kesslerandco.studio</span>
+<span class="k" style="padding-top:1px">Slug</span><span class="vm" style="font-size:11.5px">kessler-and-co</span>
+<span class="k" style="padding-top:1px">Joined</span><span class="v" style="font-size:12.5px">4 Mar 2025</span>
+<span class="k" style="padding-top:1px">Rating</span><span class="v" style="font-size:12.5px">4.9 · 128 reviews</span>
+</div>
+</div>
+</div>
+
+<div class="ac">
+<div class="ach"><span>Actions</span></div>
+<div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="btnS" style="text-align:center">Unpublish profile</span>
+<span style="font-size:11.5px;line-height:1.5;color:#6B6459">Removes it from search and browse. Existing bookings stand; the vendor keeps their dashboard.</span>
+</div>
+<div style="height:1px;background:#F1ECE4;margin:6px 0"></div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="btnD" style="text-align:center">Suspend vendor</span>
+<span style="font-size:11.5px;line-height:1.5;color:#6B6459">Unpublishes, cancels 2 pending requests and holds payouts. Confirms first.</span>
+</div>
+</div>
+</div>
+
+<div style="background:#EEF3FA;border-radius:12px;padding:12px 14px;font-size:11.5px;line-height:1.55;color:#2F5771"><strong style="font-weight:600">Every state change is logged.</strong> Actor, action and this vendor's id land in <span class="mono" style="font-size:11px">/admin/activity</span> before the toast clears.</div>
+</div>
+
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="flex:none;width:430px">
+<div class="tile">
+<div class="tl">What this frame settles</div>
+<div style="font-size:12px;line-height:1.65;color:#4A443C;display:flex;flex-direction:column;gap:9px">
+<div><strong style="font-weight:600">Card order is question order.</strong> Money and platform state first (Stripe), then what the vendor sells, then what they show, then what their calendar owes. Identity is small and to the right because an operator arriving here already knows who they clicked.</div>
+<div><strong style="font-weight:600">Label/value typography.</strong> Labels 10.5px uppercase 600 stone-600 in a fixed 150px column; values 13px stone-900 in a <span class="mono" style="font-size:11px">minmax(0,1fr)</span> column. Identifiers, dates and money are mono 12px — anything you'd paste into a support ticket looks pasteable.</div>
+<div><strong style="font-weight:600">Long fields wrap, never truncate.</strong> The value column is <span class="mono" style="font-size:11px">overflow-wrap:anywhere</span> and grows the row. No ellipsis, no title-attribute tooltip: a truncated Stripe id is a call to support. Multi-part values (outstanding requirements) stack one per line under the label.</div>
+<div><strong style="font-weight:600">Destructive actions never sit inside read-only data.</strong> They live in one Actions card in the right column, below Identity, ordered least-to-most severe with a hairline between tiers, and each carries one line naming the consequence <em>before</em> it is pressed. Suspend is outlined red, never filled — a filled red button in a corner is a mis-click waiting.</div>
+<div><strong style="font-weight:600">Empty within a detail.</strong> A vendor with no packages keeps the card and the header count reads <span class="mono" style="font-size:11px">Packages · 0</span>; the body is one stone-600 line — <em>No packages yet. Customers can still request a custom quote.</em> The card is never dropped, because a missing card reads as a loading bug.</div>
+</div>
+</div>
+
+<div class="tile" style="margin-top:14px">
+<div class="tl">The other three, as card orders</div>
+<div style="font-size:12px;line-height:1.6;color:#4A443C;display:flex;flex-direction:column;gap:10px">
+<div><span class="mono" style="font-size:11.5px;color:#23201C">/admin/customers/[id]</span><br>Bookings → Reviews written · received (two tables, one card, tabbed) → Notifications sent. Notifications carry <em>two</em> status columns and they are not the same thing: <span style="color:#4B5940;font-weight:600">Delivered</span>/<span style="color:#B23A30;font-weight:600">Bounced</span> is the outcome, <span style="color:#3D6A8C;font-weight:600">Read</span>/Unread is the state. Right column: Identity, then Actions.</div>
+<div><span class="mono" style="font-size:11.5px;color:#23201C">/admin/bookings/[id]</span><br>One card, not five: <strong style="font-weight:600">the money story reads top to bottom in event order</strong> — total → platform fee → vendor payout → paid_at → payout_released_at → payout attempts (each with its failure reason, red) → refund amount → cancellation reason → cancelled_by → dispute reason. Rows that don't apply are omitted, not dashed, so the card's length <em>is</em> the story's length. Money right-aligned mono, tabular, sub-totals indented.</div>
+<div><span class="mono" style="font-size:11.5px;color:#23201C">/admin/users/[userId]</span><br>Retained data by category (count per category, table) → Legal acceptance (read-only: version, timestamp, IP). Right column actions: <strong style="font-weight:600">Export data</strong> then <strong style="font-weight:600">Close account</strong>. Close is drawn <em>with its refusal in place</em> — when a future confirmed booking exists the button is disabled and a gold panel above it reads <em>Can't close: 1 confirmed booking on 12 Sep 2026. Cancel or complete it first.</em> with a link to the booking. The 409 is shown as prevention, not as an error after the fact.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ PATTERN C ============ -->
+<div class="sc">
+<div class="sc-h"><span class="sc-n">C</span><span class="sc-t">Case detail — /admin/cases/[caseId]</span><span class="sc-new">New pattern</span><span class="sc-d">Three regions, stacked in the order an operator must read them to be allowed to act: the complaint, the booking it froze, then the resolve control. The control sits last and is reachable only past the evidence — the scroll is the safeguard's first half, the confirm copy is the second.</span></div>
+
+<div style="display:flex;gap:26px;align-items:flex-start">
+<div style="flex:none">
+<div class="bp">1440 · desktop</div>
+<div class="fr" data-screen-label="C Admin case detail">
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #F8F5EF"></div></div><span style="font-family:'Instrument Serif',serif;font-size:23px;color:#F8F5EF">Orla</span><span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#EADCCB;background:rgba(255,253,249,.12);padding:4px 8px;border-radius:5px;margin-left:4px">Admin</span></div>
+<div style="display:flex;align-items:center;gap:18px"><span style="font-size:13px;color:#D5CEC2">Logged in as ops@orla.com</span><div style="width:30px;height:30px;border-radius:50%;background:#4A443C;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#EADCCB">O</div></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div class="side">
+<div class="nav">Overview</div>
+<div class="nav">Vendors</div>
+<div class="nav">Customers</div>
+<div class="nav">Bookings</div>
+<div class="nav navA">Cases <span class="bdg">23</span></div>
+<div class="nav">Payments</div>
+<div class="nav">Reviews <span class="bdg">6</span></div>
+<div class="nav">Categories &amp; tags</div>
+<div class="nav">Activity</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;padding:16px 24px 12px;border-bottom:1px solid #E4DDD1">
+<div style="font-size:12px;color:#6B6459;margin-bottom:6px"><span style="color:#A34A28">Cases</span> <span style="color:#C9C1B5">/</span> ORL-4K7Q-P2</div>
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<div style="display:flex;align-items:baseline;gap:10px"><div class="h2">Vendor didn’t arrive</div><span class="pill" style="background:#F5EEDC;color:#7A5A12">Open</span><span class="pill" style="background:#F7E7E0;color:#8E3F20">Chargeback</span></div>
+<span class="stat"><span class="mono" style="font-size:11.5px">ORL-4K7Q-P2</span> · opened 4 Sep 2026, 09:12 · <span style="color:#7A5A12;font-weight:600">3d 5h old</span></span>
+</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:16px 24px 20px;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px">
+
+<!-- region 1 + 3 -->
+<div style="display:flex;flex-direction:column;gap:14px;overflow:hidden">
+
+<div class="ac" style="flex:none">
+<div class="ach"><span>1 · The complaint</span><span style="font:400 11px 'Instrument Sans',sans-serif;letter-spacing:0;text-transform:none;color:#6B6459">Origin: chargeback · via Stripe 4 Sep, 09:12</span></div>
+<div style="padding:14px 16px">
+<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px"><div style="width:30px;height:30px;border-radius:50%;background:#F1ECE4;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:14px;color:#8E3F20">M</div><div><div style="font-size:13px;font-weight:600;color:#23201C">Maya Rivera</div><div style="font-size:11.5px;color:#6B6459">Customer · <span class="mono" style="font-size:11px">CUS-5518</span> · maya.rivera@fastmail.com</div></div></div>
+<div style="font-size:13.5px;line-height:1.75;color:#23201C;background:#F8F5EF;border-radius:10px;padding:13px 15px;border:1px solid #EFE9E0">We booked Kessler &amp; Co. for our wedding on 12 September and paid in full on 20 August. Nobody arrived. I called the number on the profile four times between 2pm and 4pm and it went to voicemail every time, and I messaged through Orla twice with no reply. We have no photographs of the ceremony at all. I disputed the charge with my bank on Friday because I couldn’t get an answer from anyone, and I would rather resolve it here if that is still possible. I am not trying to get anything for free — I want the money back for a service that did not happen.</div>
+<div style="margin-top:10px;font-size:11.5px;color:#6B6459">Message shown in full — case bodies are never clamped. 847 characters.</div>
+</div>
+</div>
+
+<div class="ac" style="flex:none;border-color:#E8CFCA">
+<div class="ach" style="background:#F7E7E0;border-bottom-color:#E8CFCA;color:#8E3F20"><span>3 · Resolve</span><span style="font:400 11px 'Instrument Sans',sans-serif;letter-spacing:0;text-transform:none;color:#8E3F20">Moves money. Both positions confirm first.</span></div>
+<div style="padding:14px 16px">
+<div style="font-size:12.5px;line-height:1.6;color:#4A443C;margin-bottom:12px">A payout hold of <span class="mono" style="font-size:12px">$2,600.00</span> is in place and will stay until this case closes. Choose the position; the consequence is stated in money, not in status words.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div style="border:1px solid #E4DDD1;border-radius:11px;padding:13px 14px;background:#FDFAF4;display:flex;flex-direction:column">
+<div style="font-size:13.5px;font-weight:600;color:#23201C">Resolve for the vendor</div>
+<div style="font-size:12px;line-height:1.6;color:#4A443C;margin-top:7px;flex:1">The hold lifts. <span class="mono" style="font-size:11.5px">$2,314.00</span> pays out to Kessler &amp; Co. on the next sweep, <strong style="font-weight:600">Tue 8 Sep</strong>. The customer is refunded nothing and is told why in writing.</div>
+<div style="margin-top:11px"><span class="btnS" style="display:block;text-align:center">Resolve for the vendor</span></div>
+</div>
+<div style="border:1px solid #E8CFCA;border-radius:11px;padding:13px 14px;background:#FFFDF9;display:flex;flex-direction:column">
+<div style="font-size:13.5px;font-weight:600;color:#23201C">Resolve for the customer</div>
+<div style="font-size:12px;line-height:1.6;color:#4A443C;margin-top:7px;flex:1"><span class="mono" style="font-size:11.5px">$2,600.00</span> is refunded to the card ending 4417 and the booking is cancelled. Kessler &amp; Co. receives <span class="mono" style="font-size:11.5px">$0.00</span>; the <span class="mono" style="font-size:11.5px">$286.00</span> platform fee is returned too.</div>
+<div style="margin-top:11px"><span class="btnD" style="display:block;text-align:center">Refund and cancel</span></div>
+</div>
+</div>
+<div style="margin-top:11px;font-size:11.5px;line-height:1.55;color:#6B6459;border-top:1px solid #F1ECE4;padding-top:10px">Neither position can be reversed from this screen. A resolved case reopens only by a new case on the same booking.</div>
+</div>
+</div>
+
+</div>
+
+<!-- region 2 -->
+<div style="display:flex;flex-direction:column;gap:14px;overflow:hidden">
+<div class="ac" style="flex:none">
+<div class="ach"><span>2 · The booking it froze</span><span style="font:400 11px 'Instrument Sans',sans-serif;letter-spacing:0;text-transform:none;color:#A34A28">BKG-8821 ↗</span></div>
+<div style="padding:12px 16px 4px;font-size:13px;color:#23201C">Rivera wedding · 12 Sep 2026 · Kessler &amp; Co.</div>
+<div class="kv" style="grid-template-columns:150px minmax(0,1fr);padding-top:8px">
+<div class="k">Total</div><div class="vm">$2,600.00</div>
+<div class="k">Platform fee</div><div class="vm">$286.00</div>
+<div class="k">Vendor payout</div><div class="vm">$2,314.00 <span style="font-family:'Instrument Sans',sans-serif;font-size:11.5px;color:#7A5A12">· held</span></div>
+<div class="k">Paid at</div><div class="vm">20 Aug 2026, 16:41</div>
+<div class="k">Payout released</div><div class="dz">—</div>
+<div class="k">Refund amount</div><div class="dz">—</div>
+<div class="k">Cancelled by</div><div class="dz">—</div>
+<div class="k">Dispute reason</div><div class="v"><span style="color:#B23A30;font-weight:600">product_not_received</span> — service not rendered on the event date</div>
+<div class="k">Chargeback</div><div class="vm">dp_1QaB7cKz9LmN4dTvXy82Rq</div>
+</div>
+</div>
+
+<div class="ac" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+<div class="ach" style="flex:none"><span>Reported thread</span><span style="font:400 11px 'Instrument Sans',sans-serif;letter-spacing:0;text-transform:none;color:#3D6A8C;background:#EEF3FA;padding:3px 8px;border-radius:5px">Case-scoped read · 12 Sep only</span></div>
+<div style="flex:1;overflow:hidden;padding:12px 16px;display:flex;flex-direction:column;gap:9px">
+<div style="align-self:flex-start;max-width:78%;background:#F1ECE4;border-radius:12px 12px 12px 4px;padding:9px 12px;font-size:12.5px;line-height:1.55;color:#23201C">Hi — we’re at the venue, are you close? <span style="display:block;margin-top:4px;font-size:10.5px;color:#6B6459">Maya · 12 Sep, 14:06</span></div>
+<div style="align-self:flex-start;max-width:78%;background:#F1ECE4;border-radius:12px;padding:9px 12px;font-size:12.5px;line-height:1.55;color:#23201C">It’s 3pm and the ceremony has started. Please call. <span style="display:block;margin-top:4px;font-size:10.5px;color:#6B6459">Maya · 12 Sep, 15:02</span></div>
+<div style="align-self:flex-end;max-width:78%;background:#EFE9E0;border-radius:12px 12px 4px 12px;padding:9px 12px;font-size:12.5px;line-height:1.55;color:#6B6459;font-style:italic">No reply from vendor <span style="display:block;margin-top:4px;font-size:10.5px;font-style:normal">Kessler &amp; Co. · last seen 11 Sep, 19:20</span></div>
+<div style="margin-top:auto;padding-top:10px;border-top:1px solid #F1ECE4;font-size:11.5px;line-height:1.55;color:#6B6459">Read-only, and scoped to the event date. Operators see the messages the case is about, not the relationship’s whole history.</div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="flex:none;width:430px">
+<div class="bp">ConfirmAction · 560 × auto</div>
+<div style="background:rgba(35,32,28,.45);border-radius:14px;padding:26px 22px">
+<div style="background:#FFFDF9;border-radius:14px;box-shadow:0 12px 40px rgba(35,32,28,.24);overflow:hidden">
+<div style="padding:18px 20px 0"><div style="font-family:'Instrument Serif',serif;font-size:21px;color:#23201C">Refund $2,600.00 and cancel this booking?</div></div>
+<div style="padding:10px 20px 0;font-size:13px;line-height:1.7;color:#4A443C">
+<div>The card ending 4417 is refunded <strong style="font-weight:600">$2,600.00</strong>, including the <strong style="font-weight:600">$286.00</strong> platform fee. Booking BKG-8821 is cancelled with <span class="mono" style="font-size:11.5px">cancelled_by = admin</span>.</div>
+<div style="margin-top:9px">Kessler &amp; Co. receives <strong style="font-weight:600">$0.00</strong> for this booking. The payout hold is released as cancelled, not paid, and they are notified with the reason.</div>
+<div style="margin-top:9px">Case <span class="mono" style="font-size:11.5px">ORL-4K7Q-P2</span> closes as <em>resolved for the customer</em>. This can’t be undone here.</div>
+</div>
+<div style="margin:14px 20px 0;background:#F5EEDC;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.55;color:#4A443C">Refunds settle to the customer’s bank in 5–10 days. Stripe’s dispute stays open until the bank closes it — refunding does not withdraw it.</div>
+<div style="padding:16px 20px 18px;display:flex;gap:9px;justify-content:flex-end;margin-top:4px"><span class="btnS">Keep the case open</span><span class="btnP" style="background:#B23A30">Refund and cancel</span></div>
+</div>
+</div>
+
+<div class="tile" style="margin-top:14px">
+<div class="tl">Why the control is drawn this way</div>
+<div style="font-size:12px;line-height:1.65;color:#4A443C;display:flex;flex-direction:column;gap:9px">
+<div><strong style="font-weight:600">Two positions, side by side, equal weight.</strong> Not a primary and a secondary — the operator's job is to judge, and a filled clay button on one side would be the product voting. Only the destructive edge is marked: outlined red, never filled red, until the confirm.</div>
+<div><strong style="font-weight:600">Each card names its consequence in money before it is pressed.</strong> Exact figures, the payout date by name, and what the <em>other</em> party gets — because the second thing an operator is asked afterwards is always "and what did the vendor get?"</div>
+<div><strong style="font-weight:600">The confirm restates, it doesn't summarise.</strong> Amount in the title, the counterparty's zero in the body, the field that will be written (<span class="mono" style="font-size:11px">cancelled_by = admin</span>), and the one thing operators get wrong — that a refund doesn't close the bank's dispute. Cancel reads <em>Keep the case open</em>, naming the state you return to, not "Cancel", which in this screen is a verb about money.</div>
+<div><strong style="font-weight:600">Resolve is last on the page and inside a clay-edged card.</strong> The complaint and the evidence are above it; the region numbering (1 · 2 · 3) is visible so an operator who jumped can see what they skipped.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</body>
+</html>

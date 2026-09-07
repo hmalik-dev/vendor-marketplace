@@ -1,6 +1,6 @@
 ---
 name: a-lane-web-build-must-be-made-under-the-lane-env
-description: A lane's web app reads API_URL server-side and inlines NEXT_PUBLIC_API_URL at build time — both must come from .env.lane or the lane renders against another checkout's API
+description: A lane's web app reads API_URL server-side and inlines NEXT_PUBLIC_API_URL at build time — preflight now asserts both, and a stale lane env is repaired by lane:up in place
 metadata:
   type: project
 ---
@@ -13,35 +13,37 @@ either wrong points the whole lane at port 4000:
 - `NEXT_PUBLIC_API_URL` — **inlined into the bundle at build time**, and the
   value the CSP's `connect-src` is derived from.
 
-`renderLaneEnv` wrote only the public one until 2026-09-07, so the root `.env`'s
-`API_URL=http://localhost:4000` won for every server-side read. Lane 432's
-`/admin/*` routes all rendered the 500 page — `admin/layout.tsx` awaits an admin
-read before any child renders, and :4000 answered 500 for a token minted against
-this lane. Five UI acceptance items were unverifiable, and the cause read as a
-defect in the change under test. `env.ts` writes `API_URL` now, and
-`env.test.ts` pins it equal to `NEXT_PUBLIC_API_URL`.
+`renderLaneEnv` wrote only the public one until 2026-09-07 (`1e899ae1`), so the
+root `.env`'s `API_URL=http://localhost:4000` won for every server-side read.
+Lane 432's `/admin/*` routes all rendered the 500 page and the cause read as a
+defect in the change under test.
 
-**The build half has no test and cannot get one**, so it is the part to
-remember: `pnpm build` run *outside* `lane:exec` bakes `localhost:4000` into the
-bundle and into the CSP, and every client-side call is then blocked by CSP or
-CORS however correct the server env is. Build through the lane:
+**`pnpm preflight` now asserts both axes** (#448, `36683a21`), so neither is
+something to remember to check:
+
+- The **file shape** — `.env.lane` carries `API_URL`, `NEXT_PUBLIC_API_URL` and
+  `WEB_URL` pointing at this lane's own ports.
+- The **built origin** — the `connect-src` baked into
+  `apps/web/.next/routes-manifest.json` (and `.next-dev/`) names this lane's API.
+  Read off the build, not off a running server: preflight runs *before* the dev
+  servers, so a `curl` finds nothing listening in the very flow it gates and
+  cannot tell that from a server still cold-compiling — it would have to pass
+  both, which is the defect reproduced inside its own fix.
+
+Still build through the lane, because the assertion tells you afterwards:
 
 ```
-pnpm lane:exec <n> -- pnpm --filter @vendor-marketplace/web build
+pnpm lane:exec <n> -- pnpm build --filter=./apps/web
 ```
 
-The tell is one `curl` and worth doing before any browser pass that runs against
-a build rather than `next dev`:
+**A stale `.env.lane` is repaired by `pnpm lane:up <n>` — in place, database
+kept.** Do not run `lane:down`; it drops the lane database and takes the E2E
+fixtures with it. Until #448, `laneEnvAgreesWith` compared only the two ports
+and `NEXT_PUBLIC_API_URL`, so a file missing `API_URL` still *agreed* with its
+manifest and a resume never rewrote it — see
+[[an-idempotence-check-must-compare-everything-it-writes]].
 
-```
-curl -sI http://localhost:<web port>/ | grep -o "connect-src [^;]*"
-```
-
-If that names a port other than the lane's API, the `.next` is stale — rebuild
-it, do not debug the page. A second tell is a public page: a lane whose
-server-side reads go elsewhere renders `/vendors/<seeded slug>` as **404**,
-because the seeded vendor exists only in the lane database.
-
-Any lane whose `.env.lane` predates 2026-09-07 lacks `API_URL` entirely —
-`lane:down` and `lane:up` regenerates it. See
+Also true, and cheaper than reasoning about it: a lane whose server-side reads
+go elsewhere renders `/vendors/<seeded slug>` as **404**, because the seeded
+vendor exists only in the lane database. See
 [[next-dev-hits-emfile-with-many-lanes]] for why a build is being served at all.

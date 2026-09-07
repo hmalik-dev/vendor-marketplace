@@ -36,3 +36,4 @@
 - [Migration idx vs origin/main](review-checklist-migration-idx-vs-origin-main.md) — a sibling lane may already own `00NN`; the snapshot is the same path in both and snapshot-parity reads the last one
 - [Gate redirect in a shared client helper](review-checklist-gate-redirect-in-shared-client-helper.md) — a push inside `useApi` fires from the always-mounted header bell, bouncing the reader off `/terms` and `/support`; list the chrome, then the routes it renders on
 - [Repo-wide source guards fire on new files](review-checklist-repo-wide-source-guards-fire-on-new-files.md) — a new `app/` route is red in the parity ledger, the apostrophe scan and the truncate scan; run the whole web suite, the diff cannot show you
+- [Build-time output keyed on a passThrough env](review-checklist-build-time-output-keyed-on-passthrough-env.md) — headers() bakes into routes-manifest, but WEB_URL is not in turbo's cache key; same hash, FULL TURBO replays stale headers

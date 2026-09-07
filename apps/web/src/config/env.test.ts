@@ -1,6 +1,6 @@
 import { findVariable, registryKeys } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
-import { assertWebEnv, siteOrigin } from './env';
+import { assertWebEnv, servesOverTls, siteOrigin } from './env';
 import {
   LOCAL_API_ORIGIN,
   LOCAL_WEB_ORIGIN,
@@ -237,5 +237,86 @@ describe('siteOrigin', () => {
     expect(siteOrigin(env({ VERCEL_URL: 'project-abc123.vercel.app' }))).toBe(
       'https://project-abc123.vercel.app',
     );
+  });
+});
+
+/*
+ * #452. `next start` runs a laptop with `NODE_ENV=production`, so answering
+ * "is this origin TLS?" with `NODE_ENV` advertised `upgrade-insecure-requests`
+ * and HSTS from a plain `http://localhost:<port>` origin — and Chromium applies
+ * that directive to a redirect target even on `localhost`, which it exempts for
+ * the initial request.
+ *
+ * The answer is read only from what the platform announces. `WEB_URL` sits in
+ * turbo's `globalPassThroughEnv` and so is absent from the build's cache key,
+ * while `headers()` is frozen into `routes-manifest.json` at build time: a
+ * decision keyed on it hashed identically for an http build and an https one,
+ * and a warm cache then replayed the wrong manifest in either direction.
+ */
+describe('servesOverTls', () => {
+  it('is false on a laptop, whatever NODE_ENV says', () => {
+    expect(servesOverTls(env({ NODE_ENV: 'production', WEB_URL: 'http://localhost:3033' }))).toBe(
+      false,
+    );
+  });
+
+  it('is false for the unconfigured laptop', () => {
+    expect(servesOverTls(env({}))).toBe(false);
+  });
+
+  /*
+   * The production branch, pinned: a header that is right on a laptop and wrong
+   * behind TLS is the same defect facing the other way.
+   */
+  it("is true on a deployment, even when WEB_URL still holds the laptop's default", () => {
+    expect(
+      servesOverTls(
+        env({
+          WEB_URL: 'http://localhost:3000',
+          VERCEL_PROJECT_PRODUCTION_URL: 'project.vercel.app',
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  /** `deployment.ts`'s escape hatch: a container that announces no platform. */
+  it('is true for a bare DEPLOYMENT_ORIGIN, which announces no platform', () => {
+    expect(servesOverTls(env({ DEPLOYMENT_ORIGIN: 'orla.example' }))).toBe(true);
+  });
+
+  /*
+   * `WEB_URL` may not decide it in either direction — that is what keeps the
+   * built manifest a function of the cache key. It cannot turn the headers on
+   * for a laptop, and it cannot rescue a deployment that announced nothing:
+   * that one throws instead.
+   */
+  it('does not let an https WEB_URL alone turn the headers on', () => {
+    expect(servesOverTls(env({ WEB_URL: 'https://bookings.example' }))).toBe(false);
+  });
+
+  /*
+   * `httpsOrigin` only *prepends* a scheme to a bare host, so an explicit
+   * `http://` announced origin survives it. An operator who declares a
+   * plaintext origin is believed: a proxy-terminated deployment's public origin
+   * is `https://`, and declaring it is how it says so.
+   */
+  it('believes an operator who announces a plaintext origin', () => {
+    expect(servesOverTls(env({ DEPLOYMENT_ORIGIN: 'http://orla.example' }))).toBe(false);
+  });
+
+  /*
+   * A deployed build that announces no https origin would bake an artefact with
+   * no HSTS in it, and the headers are frozen at build time, so there is no
+   * later chance to notice. Derive it from something the platform sets, or
+   * throw — and an https `WEB_URL` does not buy it out.
+   */
+  it('refuses a deployed build that announces no https origin', () => {
+    expect(() =>
+      servesOverTls(env({ DEPLOYMENT_PLATFORM: 'fly', WEB_URL: 'https://orla.example' })),
+    ).toThrow(/announced no https origin/);
+  });
+
+  it('does not refuse a laptop, which is the whole point of the change', () => {
+    expect(() => servesOverTls(env({ WEB_URL: 'http://localhost:3033' }))).not.toThrow();
   });
 });

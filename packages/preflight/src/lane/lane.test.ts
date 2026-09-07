@@ -102,6 +102,33 @@ describe('laneUp', () => {
     expect(parsed.NEXT_PUBLIC_API_URL).toBe(`http://localhost:${manifest.apiPort}`);
   });
 
+  /*
+   * #448. `laneEnvAgreesWith` compared the ports and the public API URL only,
+   * so a file written before `API_URL` and `WEB_URL` were added still "agreed"
+   * with its manifest and was never rewritten. Every long-running lane resumed
+   * onto a stale file, kept rendering server-side against whatever answered
+   * :4000, and `lane:up` reported success — which is what made the fix look
+   * like it had landed when the running lanes had not taken it.
+   */
+  it('rewrites a lane env file left stale by an earlier version of this tooling', async () => {
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+    const manifest = await laneUp(root, worktree, '42', deps());
+    const file = path.join(worktree, '.env.lane');
+
+    writeFileSync(
+      file,
+      `PORT=${manifest.apiPort}\nWEB_PORT=${manifest.webPort}\n` +
+        `NEXT_PUBLIC_API_URL=http://localhost:${manifest.apiPort}\n` +
+        `DATABASE_URL=${databaseUrl}\n`,
+    );
+
+    await laneUp(root, worktree, '42', deps());
+
+    const parsed = parseLaneEnv(readFileSync(file, 'utf8'));
+    expect(parsed.API_URL).toBe(`http://localhost:${manifest.apiPort}`);
+    expect(parsed.WEB_URL).toBe(`http://localhost:${manifest.webPort}`);
+  });
+
   it('installs, builds and migrates exactly once, after the env file exists', async () => {
     const d = deps();
     await laneUp(root, worktree, '42', d);
