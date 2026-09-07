@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CATEGORY_SEEDS, LANDING_CATEGORY_COUNT } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
@@ -33,23 +33,28 @@ describe('landing category art', () => {
     expect(missing, `public/categories/<slug>.jpg missing for: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('draws every category it ships a photograph for, so none is dead weight', () => {
+  it('ships no photograph for a slug the taxonomy does not hold', () => {
     /*
-     * The other direction. An image for a category the landing does not draw is
-     * a file nobody renders — either the promotion was reverted and the art was
-     * left behind, or the art was added in anticipation and the reorder never
-     * happened. Both are worth surfacing; neither is a broken page.
+     * The other direction, and it is narrower than it first looks.
+     *
+     * The obvious version — "every image belongs to a category the landing
+     * draws" — was written first and was wrong. It forbids the ordinary
+     * workflow: art is sourced for a category *before* the decision to promote
+     * it, because promoting into a fixed six means choosing which one leaves.
+     * `carts.jpg` landed 2026-09-06 under exactly that sequence and the guard
+     * failed it, which is the test being wrong rather than the file.
+     *
+     * What is genuinely dead weight is art for a slug the taxonomy no longer
+     * holds at all — a `florals.jpg` surviving #419, say. Nothing can ever
+     * render it, and it will outlive everyone who remembers why it is there.
      */
-    const landingSlugs = new Set(
-      CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT).map((category) => category.slug),
-    );
+    const known = new Set(CATEGORY_SEEDS.map((category) => category.slug));
 
-    const unusedArt = CATEGORY_SEEDS.map((category) => category.slug)
-      .filter((slug) => !landingSlugs.has(slug))
-      .filter((slug) => existsSync(join(CATEGORY_ART_DIR, `${slug}.jpg`)));
+    const orphaned = readdirSync(CATEGORY_ART_DIR)
+      .filter((file) => file.endsWith('.jpg'))
+      .map((file) => file.replace(/\.jpg$/, ''))
+      .filter((slug) => !known.has(slug));
 
-    expect(unusedArt, `art exists but the landing never draws: ${unusedArt.join(', ')}`).toEqual(
-      [],
-    );
+    expect(orphaned, `art for slugs no category holds: ${orphaned.join(', ')}`).toEqual([]);
   });
 });

@@ -279,9 +279,10 @@ storefront, each of which tells the reader something untrue. |
 | **419** | **Fold Florals into Decor so the category list reflects one real market** | P2 | M3 | **P2 Medium** | **Done** | `worktree-t419` | **None** | `core` | **Filed 2026-09-06 on the user's instruction**, verbatim: *"i think we can probably couple florals into decor... currently they intertwine and the goal is to fill up our categories"*. **Ruled 2026-09-06: `florals` is removed and `Decor` survives — 11 categories become 10.** There are 11 seeded categories and **only `photography` has any vendors**; `florals` and `decor` both have zero, and in this market the same vendor usually sells both. Folding them makes the surviving category real rather than aspirational. **This is a data migration, not a copy change** — it needs: the seed and any fixture that names `florals`; a migration that re-points `vendor_categories` rows and then removes the row (both are currently empty locally, so write it to be correct rather than assuming); a redirect or 410 for `/search?category=florals`, which is a shareable URL; and every design surface that draws the category list. **Confirm the surviving name and slug before writing the migration** — `Decor` alone, or something that names both. Do not implement any Post-MVP category work alongside it **Done 2026-09-06 — ed1722e, PR #124.** `florals` removed; ten categories seeded, `Decor` surviving and inheriting both the vendors and the fifth landing slot (the grid features the first six seeds and its card has no image fallback, so leaving the order alone would have promoted `Carts`, which has no photograph; `florals.jpg` was renamed `decor.jpg`). `LANDING_JUMP_CATEGORY_SLUGS` reads the ruled four, and the hero and footer Browse column both render them in order. `/search?category=<retired>` answers **308** to the survivor carrying every other filter across, which also repairs `floristry`, `lighting`, `dj-music` and the rest — all were rendering empty grids. **The fold is the seed, not a SQL migration:** `florals -> decor` in `CATEGORY_SLUG_SUCCESSORS` makes `seedCategories` copy the `vendor_categories` links onto the survivor and drop the row in one transaction, the path `lighting -> decor` already took. Proven on real Postgres with a florist seeded into `florals`, not only in PGlite. **Deploy order matters, and #421 ships in the same release with the opposite failure mode:** #421 adds `SUPPORT_EMAIL_TO`, a per-environment row with no usable default, so the API refuses to boot without it — fails closed and loudly. This one fails open and quietly: until `pnpm db:seed` runs, a deployed database still holds a live `florals` row, the landing grid is fine (rows the seeds no longer describe are filtered out) but the search dropdown still offers Florals and it 308s to an as-yet-empty `decor`. So the seed has to run **after** a boot that first needed a new variable set — whoever is debugging the failed boot is not thinking about the seed, which is what keeps that window open longer than it looks. Adjacent fixes in the same lane: two of the four cross-sell chips on frame `06` named `live-music` and `cake`, slugs the taxonomy has never seeded, so they searched nothing and drew an empty grid — every chip now points at a seeded slug and derives its name from it; and `landingCategories` drops any row the seeds no longer describe. Frames `01`, `06` and `13` still draw Florals and are recorded as live overrides in `.claude/rules/web-design-parity.md`, so a later parity pass does not "correct" the chips back into broken links. Reviews: `security-auditor` PASS (open redirect, header injection, prototype-chain reads, redirect loops, and the fold's hard delete all checked); `parity-checker` on frame `01` MATCH on all six axes with only the three ruled deviations; `diff-reviewer` six findings, all addressed. Browser-driven at 1440x900 signed out and as both signed-in roles. **Not verified:** the booking-confirmed screen itself — no confirmed booking exists in a lane and reaching one needs a Stripe checkout, which this ticket declares no capability for; that change is covered by four unit tests. |
 | **420** | **Footer: a Contact support link, and nav links at parity with the page above them** | P1 | M3 | **P2 Medium** | **Closed — Superseded** | — | **None** | `core` | **Superseded by #421 on 2026-09-06**, the day after it was filed, when the account holder supplied a full design for the contact-support screen and instructed that the feature ship as one ticket. Both halves moved: the footer `Contact support` link is now #421's, because the link and the screen it opens are one change; and the footer-parity regression test moved with it, because #421 edits the same footer and a second lane in that file would collide for no reason. **Nothing here is dropped** — the measured finding that footer/hero parity is already true and only lacks a test is restated in #421. Not worked directly | **Filed 2026-09-06 on the user's instruction**, verbatim: *"we need a placeholder contact support in the footer area where other links are on main page. and update the footer main page links to be the first 4 that are on the main page as well for parity"*. Two changes to the landing footer. **(1) Add a `Contact support` link** beside the existing footer links. **It is explicitly a placeholder** — the account holder asked for the link, not for a working destination, because the real monitored address is **#374**, which is `Deferred — needs a human`. Point it somewhere honest and inert; **do not invent a support email address**, and do not let the placeholder read as a working channel to a customer. **(2) Footer links at page parity is ALREADY TRUE** — `site-footer.tsx` derives its Browse column from `LANDING_JUMP_CATEGORY_SLUGS`, the same constant the hero reads, and says so in a comment. Measured 2026-09-06. What is missing is a **test pinning them together**, so the remaining work is a regression guard rather than a change. **This ticket does NOT unblock #372** — that ticket's `Contact support` is on frame `16`, the error page, and still needs #374's real destination |
 | **421** | **Contact support — the `/support` screen, its six states, and every route into it** | P1 | M3 | **P1 High** | **Done** | `worktree-t421` | **None** | `core` `auth` `email` | **Done 2026-09-06 — squash `f11fa4f`, PR #123.** `/support` ships all six states of frame `29`; `POST /support/messages` is public, rate-limited 6/hour per caller, and sends through the existing Resend transport. The reference is the message id, issued **before** the send and returned in `details` on a 502, so state 6 has something to quote. Absorbed #420: the footer `Contact support` link, and the footer/hero parity test — pinned from both sides, since either half alone passes on the broken version. **Four defects found in review and fixed in-lane rather than filed:** every failure rendered state 6's transport copy, so a mistyped address was told the mail service was at fault and offered a retry that could only fail again (4xx is now a field refusal, 5xx stays state 6); the confirmation echoed the caller's 4,000 characters to a caller-chosen address, making the route a branded-mail relay (now gated on an address resolved from an account row); `trustProxy` was set **nowhere**, so `request.ip` was the platform's proxy and every per-IP limit shared one bucket across the whole deployment (bounded hop-0 predicate, never `true`); and a suspended account looped, because the footer link routed through a suspension redirect back to `/suspended`. Verified: 4401 tests, 18/18 turbo tasks, contention suite, secret scan, preflight 37. State 6 driven against a genuinely rejecting transport — a real Resend 403 in the browser and the real gateway over a stubbed 422 in the suite — after #416 shipped a refund whose double was more permissive than the gateway. Parity measured against frame `29` at 1440x900 on all six axes; four deviations found and fixed. **Frame `29` is not in `Orla - Screens.dc.html`** — the sweep ledger now carries a row saying its gate reads `design/contact-support/` instead | **Filed 2026-09-06 with a design.** The account holder supplied `design/contact-support/` — frame **`29 Contact support`** plus `PROMPT.md` — and instructed that the whole feature ship as **one** ticket. **The frame is NOT in `design/Orla - Screens.dc.html`** and there is no `design-plan/` file for it, so the parity gate for this ticket reads `design/contact-support/29-contact-support.html` and `PROMPT.md` instead. Builds `/support` as a form that sends one email through the existing Resend transport and says so — **explicitly not a helpdesk**: no threads, no in-app replies, no ticket status, no attachments, no triage queue. All six states are drawn and all six ship. **Every existing and new entry point routes here**, which is what makes it one ticket: the footer link, and frame `16`'s `Contact support`. **Absorbs #420 whole**, including that ticket's footer-parity regression test, because both edit the same footer. **Does not need #374** — the destination is an env var and state 6's single action is retry, not a fallback address |
+| **422** | **One image fallback, everywhere — a broken image must degrade the way an absent one does** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `storage` | **Filed 2026-09-06 on the account holder's instruction**, verbatim: *"there should always be a fallback image for a broken or blank image no matter where - card, profile pic, etc. anywhere pictures are used"*. **The design already exists and is ruled** — D17 and D18, drawn in frame `26 State library`: a **neutral tone block** at `stone-250 #ece6dc`, the image's exact dimensions and the container's radius, nothing inside it. The token is already minted. **What is missing is the failure half.** The app handles *absent* — a published vendor with no `coverImageUrl` gets the block — but **nothing anywhere handles a load failure**: `grep onError` across `avatar.tsx`, `stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx` and `portfolio-pane.tsx` returns nothing. A URL that exists and 404s, a bucket that is down, or a category card whose file was never shipped all render a browser-broken-image glyph on a public page. **The hatch is not the answer** — `03-components.md` and D17 both forbid it on a live surface. One shared mechanism, applied at every site that renders an image |
 **This board carries open work only. Every closed row lives in `.claude/plans/vendor-marketplace-tickets-archive.md`**, whole — **384 rows as of 2026-09-03: 200 `Done` and 184 `Superseded`**, recounted programmatically. **`Superseded` now goes to the archive with `Done`**, which reverses what this line said before 2026-08-31. The old rule kept `Superseded` rows here on the reasoning that they are still consulted — and they are — but it was never applied: 138 of them were already in the archive while 46 sat on this board, so the board was 46 of 62 rows closed and the distinction cost a reader more than it bought. **Being consulted is not the same as being open.** Nothing about consulting them changed: `tickets.board.test.ts` reads both files together, `pnpm preflight --ticket <old n>` still gates against every one, and the detail sections moved across whole rather than being summarised. A `Superseded` ticket is still never worked directly.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06, after #372 landed: 36 rows — 1 Backlog, 2 `Deferred — needs a human`, 1 `Closed — Superseded`, and 32 `Done` awaiting the next archive sweep.** The one Backlog row is **#370, still blocked behind #362** (production credentials and `SENTRY_DSN`), so **there is again no row a session can start** and the next move is the account holder's on #362 and #374. #372 was the other one, and #421 unblocked it: `/support` gave frame `16`'s `Contact support` a route rather than the address #374 owns, which is the item that row waited on — #374 still holds the legal wording and the monitored address, and neither is needed for anything now open. That earlier sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06, after #372 landed and #422 was filed: 37 rows — 2 Backlog, 2 `Deferred — needs a human`, 1 `Closed — Superseded`, and 32 `Done` awaiting the next archive sweep.** Of the two Backlog rows, **#370 is still blocked behind #362** (production credentials and `SENTRY_DSN`) and **#422 is startable — the only one** and the next move is the account holder's on #362 and #374. #372 was the other one, and #421 unblocked it: `/support` gave frame `16`'s `Contact support` a route rather than the address #374 owns, which is the item that row waited on — #374 still holds the legal wording and the monitored address, and neither is needed for anything now open. That earlier sweep moved the remaining 46 `Superseded` rows and their 36 detail sections to the archive, on the user's instruction to close superseded tickets out. **Do not hand-maintain these numbers, recount them** — the line here has been wrong after two of the last three passes. **A Backlog count is still not a ready count** — read `Blocked By`, and trust `pnpm preflight --ticket <n>` over both.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -4035,3 +4036,80 @@ with it into state 3.
 - `RESEND_API_KEY` and `EMAIL_FROM` are already present locally, so the `email`
   capability gate passes; the **support destination** is a new variable and must
   be added to the registry rather than hardcoded.
+
+### #422: One image fallback, everywhere — a broken image must degrade the way an absent one does
+
+**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
+**Blocked by:** None
+
+**Filed 2026-09-06 on the account holder's instruction**, verbatim: *"there
+should always be a fallback image for a broken or blank image no matter where -
+card, profile pic, etc. anywhere pictures are used"*.
+
+#### The design is already ruled — do not invent one
+
+**D17 and D18, drawn in frame `26 State library`.** A **neutral tone block**:
+
+- `stone-250` **`#ece6dc`** — already minted in `packages/config/tailwind/theme.css`,
+  commented *"image ground — behind every cover, and a coverless one"*;
+- the image's **exact dimensions** and the container's own radius;
+- **nothing inside it.** No hatch, no monospace label, no upload prompt, no icon.
+
+**The hatch is explicitly forbidden here.** `03-components.md` and `40-states.md`
+both say so: it is a build-time device for photography *the product* lacks, and
+showing it on a live surface reads as an unfinished product rather than an
+unfinished profile. *"The person reading is not the person who can fix it."*
+
+The avatar has its own ruled fallback and it is **not** this block:
+`--color-clay-150 #eadccb` behind a monogram, in Instrument Sans below the 16px
+serif floor (D24). Keep that; do not replace avatars with tone blocks.
+
+#### What is actually missing — the failure half
+
+The **absent** case is handled: a published vendor with no `coverImageUrl` gets
+the block, per D17.
+
+The **failure** case is handled nowhere. `grep onError` across `avatar.tsx`,
+`stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx` and
+`portfolio-pane.tsx` returns **nothing**. So today:
+
+- a stored key whose object is gone renders the browser's broken-image glyph;
+- an R2 outage renders it on every card at once;
+- `StockPhoto` is a `next/image` with no fallback, so a category file that was
+  never shipped is a broken front door — **found 2026-09-06** when `carts` had
+  no art, and guarded since by `landing-category-art.test.ts`.
+
+**An absent image and a failed one look identical to the person reading.** They
+must therefore land in the same place.
+
+#### Where it has to apply
+
+Every site that renders an image. At filing these were `avatar.tsx`,
+`stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx`, `portfolio-pane.tsx`,
+`photo-cluster.tsx`, `image-upload.tsx`, `portfolio-manager.tsx`,
+`bookings-hub.tsx` and `request-summary-rail.tsx` — **re-grep rather than trust
+that list**, and prefer one shared mechanism over ten call sites each remembering
+to handle it.
+
+Note the two rendering paths differ and both need covering: `next/image` (the
+stock and category art) and plain `<img>` (bucket content, which skips
+`next/image` deliberately because the host changes between environments).
+
+#### Acceptance
+
+1. An image that fails to load renders the ruled fallback for its kind — tone
+   block for covers and card art, monogram for avatars — not a browser glyph.
+2. An absent image and a failed one are indistinguishable to the reader.
+3. The fallback holds the element's exact dimensions, so nothing reflows when a
+   load fails.
+4. No hatch and no developer-facing label on any public surface.
+5. One shared mechanism; a new image site inherits it without opting in.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing first.
+- [ ] **Drive an actual load failure**, not a nulled prop. A test that passes a
+      missing `src` proves the *absent* path, which already works — point a real
+      `src` at something that 404s. The whole defect is that the two paths differ.
+- [ ] Assert extent alongside the fallback: a tone block on a zero-height box has
+      passed on nothing (`web-design-parity.md`).
