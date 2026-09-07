@@ -152,6 +152,16 @@ const RESEND_SETUP: EnvSetup = {
   steps: ['Open Resend → API Keys → Create API Key'],
 };
 
+const RESEND_WEBHOOK_SETUP: EnvSetup = {
+  url: 'https://resend.com/webhooks',
+  steps: [
+    'Open Resend → Webhooks → Add Webhook, pointing at <API origin>/webhooks/resend',
+    'Subscribe to email.delivered, email.bounced and email.complained — the three #439 records',
+    'Copy the printed `whsec_...` into RESEND_WEBHOOK_SECRET',
+    'Optional everywhere: without it the endpoint refuses every delivery and the attempt rows still stand',
+  ],
+};
+
 const SENTRY_SETUP: EnvSetup = {
   url: 'https://sentry.io/settings/projects/',
   steps: ['Open Sentry → Project → Client Keys (DSN)'],
@@ -615,6 +625,36 @@ export const ENV_REGISTRY = [
     placeholder: 're_...',
     description: 'Resend API key for transactional email.',
     setup: RESEND_SETUP,
+  },
+  {
+    /*
+     * Signing secret for `POST /webhooks/resend` (#439), and the one row in
+     * this file that is optional in **every** environment — including
+     * production.
+     *
+     * That is the ticket's requirement rather than a convenience: the delivery
+     * record has to hold what was attempted whether or not the account holder
+     * has configured the webhook, so a deployment that has not must still boot.
+     *
+     * It is safe to leave optional only because **absence is refusal, not
+     * permission**: no handler exists without a verified secret. `server.ts`
+     * registers `POST /webhooks/resend` only when this row has a value, so an
+     * unconfigured deployment has no endpoint at all rather than a permissive
+     * one. That property is what must survive any change here — a fallback that
+     * let an unsigned event through would be an unauthenticated writer on the
+     * delivery record.
+     */
+    key: 'RESEND_WEBHOOK_SECRET',
+    capability: 'email',
+    audience: 'server',
+    consumers: ['api'],
+    environments: 'per-environment',
+    optionalFor: ['baseline', 'local', 'production', 'deployed'],
+    shape: /^whsec_[A-Za-z0-9+/=]{16,}$/,
+    placeholder: 'whsec_...',
+    description:
+      'svix signing secret for POST /webhooks/resend. Optional: without it delivery events are refused and only send attempts are recorded.',
+    setup: RESEND_WEBHOOK_SETUP,
   },
   {
     key: 'EMAIL_FROM',

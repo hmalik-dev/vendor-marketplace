@@ -36,10 +36,24 @@ function deps(overrides: Partial<NotificationEmailDeps> = {}): {
             }),
           }),
         }),
+        /*
+         * Enough of the builder chain for `insertEmailDelivery` to complete,
+         * and no more. **What the record contains is asserted against a real
+         * Postgres** in `webhooks/resend.routes.test.ts` — mirroring Drizzle's
+         * chain here to read the row back would be testing the mirror. The one
+         * thing this file is the right place for is the *failure* branch, which
+         * a database that is up cannot produce; that test replaces this.
+         */
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: async () => undefined,
+          }),
+        }),
       } as unknown as NotificationEmailDeps['db'],
       email: {
         send: async (message) => {
           sent.push(message);
+          return { providerMessageId: `resend-${message.idempotencyKey}` };
         },
       },
       log: {
@@ -189,6 +203,39 @@ describe('sendNotificationEmail', () => {
     await expect(sendNotificationEmail(d, ROW)).resolves.toBeUndefined();
     expect(errors).toHaveLength(1);
     expect(errors[0]?.[1]).toContain('the operation itself succeeded');
+  });
+
+  /*
+   * #439's second acceptance, and the regression it names: an operation that
+   * now 500s because its bookkeeping failed.
+   *
+   * Asserted by making the record write itself throw, which is the only way to
+   * reach the branch — a database that is up never produces it. The send has
+   * already happened by then, so the log line must say the *record* failed:
+   * reporting it as a failed email would be a false negative on the exact
+   * question this table exists to answer.
+   */
+  it('never throws when the delivery record cannot be written, and says so', async () => {
+    const { deps: d, sent, errors } = deps();
+    d.db = {
+      ...d.db,
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: async () => {
+            throw new Error('relation "email_deliveries" does not exist');
+          },
+        }),
+      }),
+    } as unknown as NotificationEmailDeps['db'];
+
+    await expect(sendNotificationEmail(d, ROW)).resolves.toBeUndefined();
+
+    // The email still went. That is the half that must never be lost.
+    expect(sent).toHaveLength(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.[1]).toBe(
+      'Failed to record an email delivery; the email itself is unaffected',
+    );
   });
 
   /* A business name renders exactly as entered, and a note is not markup. */

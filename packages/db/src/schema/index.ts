@@ -12,4 +12,5 @@ export * from './reviews.js';
 export * from './legal-acceptances.js';
 export * from './admin-actions.js';
 export * from './notifications.js';
+export * from './email-deliveries.js';
 export * from './us-cities.js';

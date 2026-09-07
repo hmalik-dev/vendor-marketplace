@@ -136,7 +136,7 @@ describe('wire bounds agree with their columns', () => {
 
   afterEach(async () => {
     harness.email.sent.length = 0;
-    harness.email.deliveredKeys.clear();
+    harness.email.messageIdsByKey.clear();
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
     await harness.database.db.delete(bookingRequests);
