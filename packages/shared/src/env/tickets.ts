@@ -544,6 +544,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   451: ['auth'], // closure leaves the Clerk identity live and the email locked
   452: ['auth'], // reproducing it means signing in as each denied role
   453: ['auth'], // frames for the nine unframed admin screens
+  454: ['auth'], // land the admin design delta — rail order, list rulings, filtered-empty, two frames
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
