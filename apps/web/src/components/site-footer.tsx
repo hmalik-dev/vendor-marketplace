@@ -1,11 +1,13 @@
 import Link from 'next/link';
-import { Show } from '@clerk/nextjs';
+import { Show, SignOutButton } from '@clerk/nextjs';
 import {
+  BRAND_NAME,
   BRAND_TAGLINE,
   LANDING_JUMP_CATEGORY_SLUGS,
   CATEGORY_SEEDS,
   SUPPORT_PATH,
 } from '@vendor-marketplace/shared';
+import type { UserRole } from '@vendor-marketplace/shared';
 import { readRoleForChrome } from '@/lib/current-user';
 import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
@@ -43,27 +45,94 @@ const COMPANY_LINKS = [
  * Both of these land on an authentication page, which bounces an
  * already-signed-in visitor straight back out — so they are only shown to
  * people who can actually use them.
+ *
+ * **`Dashboard` is deliberately absent**: a visitor has no dashboard, and this
+ * column is the one place the footer could offer them one. Frame
+ * `30 Landing full page — signed in` draws these two and nothing else.
+ *
+ * It read `Become a vendor` beside `Sign in`, which is the vendor door said
+ * twice: Company already carries `For vendors`, at the same destination, one
+ * column to the left. The plain `Sign up` is what the frame draws, and it is
+ * also the honest label — `/sign-up`'s role cards are the fork, not this link
+ * (design/design-plan/21-sign-up.md).
  */
 const SIGNED_OUT_LINKS = [
-  { href: '/sign-up?role=vendor', label: 'Become a vendor' },
   { href: '/sign-in', label: 'Sign in' },
+  { href: '/sign-up', label: 'Sign up' },
 ];
 
 /**
- * The signed-in account link, whose **label follows the role** — the same
- * decision the header and its drawer make, from the same table.
+ * The reader's own surfaces, per role — the Account column once there is an
+ * account behind it.
  *
- * It read `Dashboard` for everyone, which is the third copy of one control
- * calling one destination something the other two do not: the bar says
- * `Bookings` to a customer, and `20-customer-bookings-hub.md` requires that
- * "the word 'dashboard' appears nowhere in the UI" on that side. The footer
- * renders on every public route, so a signed-in customer met both words on the
- * same page.
+ * Frame `30` draws four rows for a customer where this column used to draw one,
+ * and the reason is what the column is *for*: signed out it is the way in, and
+ * signed in it is the way back to your own things. The other two roles get the
+ * same shape against their own surfaces.
+ *
+ * Every label here is the word the reader already meets on the surface it leads
+ * to — `My bookings` and `My profile` are the customer sidebar's own rows, and
+ * `Dashboard` is what frame `08` puts on the first row of the vendor's rail. A
+ * fourth word for a destination that already has one is how a control comes to
+ * be called two things (#372), and on the customer's side `Dashboard`
+ * specifically is forbidden outright: `20-customer-bookings-hub.md`'s
+ * acceptance is *"the word 'dashboard' appears nowhere in the UI"*.
+ *
+ * An operator gets the console and nothing else. `/messages` and a profile are
+ * customer-and-vendor surfaces; an admin has neither, and offering them rows
+ * that bounce would be worse than a short column.
  */
+const ACCOUNT_LINKS_BY_ROLE: Record<UserRole, readonly { href: string; label: string }[]> = {
+  customer: [
+    { href: '/bookings', label: 'My bookings' },
+    { href: '/messages', label: 'Messages' },
+    { href: '/customer/profile', label: 'My profile' },
+  ],
+  vendor: [
+    { href: '/dashboard', label: DASHBOARD_LABEL_BY_ROLE.vendor },
+    { href: '/messages', label: 'Messages' },
+    { href: '/vendor/profile/edit', label: 'Edit profile' },
+  ],
+  admin: [{ href: '/dashboard', label: DASHBOARD_LABEL_BY_ROLE.admin }],
+};
 
-const COLUMN_HEADING = 'text-label font-semibold tracking-label text-stone-50/55 uppercase';
+/**
+ * The legal row, and the reason it is a row rather than a fifth column.
+ *
+ * A column would give three links the same visual weight as Browse, which is
+ * the whole catalogue. These are the pages Stripe Connect onboarding asks for
+ * the URLs of and that nobody reads twice — see frame `31 Terms of Service`.
+ */
+const LEGAL_LINKS = [
+  { href: '/terms', label: 'Terms' },
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/cookies', label: 'Cookies' },
+];
+
+/**
+ * The year the notice claims, resolved once per render rather than written out.
+ *
+ * A literal year is wrong from the first of January and nothing fails when it
+ * becomes so.
+ */
+function copyrightYear(): number {
+  return new Date().getFullYear();
+}
+
+/*
+ * All three read a token rather than an alpha of `stone-50`.
+ *
+ * The alphas were an approximation of two values the frames name outright, and
+ * on the new ground they land a step light and off-hue — `stone-50/78` over
+ * `stone-950` is `#c7c2b6` where the frame draws `#b8af9f`. `theme.css` carries
+ * the derivation and `theme-tokens.test.ts` the contrast, including why the
+ * label may not go darker than `stone-560`.
+ */
+const COLUMN_HEADING = 'text-label font-semibold tracking-label text-stone-560 uppercase';
 const LINK_CLASS =
-  'text-base text-stone-50/78 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline';
+  'text-base text-stone-520 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline';
+const LEGAL_CLASS =
+  'text-meta text-stone-560 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline';
 
 function FooterColumn({
   heading,
@@ -91,9 +160,10 @@ function FooterLink({ href, label }: { href: string; label: string }): React.Rea
 }
 
 /**
- * `stone-900` with cream text and four columns, per
- * design/design-plan/10-landing.md — the ink band that closes every marketing
- * page. The full-height app shells hide it entirely (see `globals.css`).
+ * Four columns and a legal row on `stone-950`, per
+ * design/design-plan/10-landing.md and frame `30` — the chrome that closes
+ * every marketing page. The full-height app shells hide it entirely (see
+ * `globals.css`).
  */
 export async function SiteFooter(): Promise<React.ReactElement> {
   /*
@@ -103,12 +173,20 @@ export async function SiteFooter(): Promise<React.ReactElement> {
    * makes a request when signed out, so a marketing page pays nothing for it —
    * the same contract the header relies on.
    */
-  const dashboardLabel = DASHBOARD_LABEL_BY_ROLE[(await readRoleForChrome()) ?? 'customer'];
+  const accountLinks = ACCOUNT_LINKS_BY_ROLE[(await readRoleForChrome()) ?? 'customer'];
 
   return (
-    // The split CTA above it is also ink, so the hairline is what keeps the
-    // two from reading as one undifferentiated block on the landing page.
-    <footer data-slot="site-footer" className="border-t border-stone-0/10 bg-stone-900">
+    /*
+     * `stone-950`, one step below the ink of the closing band above it.
+     *
+     * This carried a hairline on `stone-900`, on the reasoning that the hairline
+     * was what kept the band and the footer from reading as one block. It was
+     * not enough: two masses of the same ink separated by a rule read as one
+     * 400px dark region with a line in it. The value drop does the separating —
+     * the band stays the last piece of *content*, and the footer recedes into
+     * chrome under it — so the rule comes off with it.
+     */
+    <footer data-slot="site-footer" className="bg-stone-950">
       {/* Same gutter ladder as the page and the header — see `page.tsx`. */}
       <div className="mx-auto w-full max-w-[1440px] px-5 py-14 lg:px-7 min-[90rem]:px-10">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
@@ -116,7 +194,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
             <Link href="/" className="inline-block transition-opacity hover:opacity-80">
               <Logo size={LOGO_SIZES.marketingFooter} tone="dark" />
             </Link>
-            <p className="mt-3.5 max-w-64 text-base leading-prose text-stone-50/78">
+            <p className="mt-3.5 max-w-64 text-base leading-prose text-stone-560">
               {BRAND_TAGLINE}
             </p>
           </div>
@@ -141,10 +219,48 @@ export async function SiteFooter(): Promise<React.ReactElement> {
                 ))}
               </Show>
               <Show when="signed-in">
-                <FooterLink href="/dashboard" label={dashboardLabel} />
+                {accountLinks.map((link) => (
+                  <FooterLink key={link.href} {...link} />
+                ))}
+                <li>
+                  {/*
+                    Clerk's own control rather than a link to a route: signing
+                    out is a session mutation, and the `UserButton` in the header
+                    is a menu behind an avatar — this column is where a reader
+                    who wants out actually looks. `className` rather than a
+                    nested element, so there is one focusable control here and
+                    not a button wrapping a button.
+                  */}
+                  <SignOutButton>
+                    <button type="button" className={`${LINK_CLASS} cursor-pointer text-left`}>
+                      Sign out
+                    </button>
+                  </SignOutButton>
+                </li>
               </Show>
             </FooterColumn>
           </nav>
+        </div>
+
+        {/*
+          The legal row — a row, never a fifth column.
+
+          Frame `30` draws it under the grid at 26px, over a 16px-padded rule
+          that is the only hairline left in this footer now that the top border
+          has gone.
+        */}
+        <div className="mt-6.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-stone-0/10 pt-4">
+          <ul className="flex gap-4.5">
+            {LEGAL_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className={LEGAL_CLASS}>
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {/* The wordmark is read, never written out. */}
+          <p className="text-meta text-stone-560">{`© ${BRAND_NAME} ${copyrightYear()}`}</p>
         </div>
       </div>
     </footer>

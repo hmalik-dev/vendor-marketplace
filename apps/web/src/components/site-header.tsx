@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Show, UserButton } from '@clerk/nextjs';
+import type { UserRole } from '@vendor-marketplace/shared';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { RoleChip } from '@/components/brand/role-chip';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
@@ -24,6 +25,28 @@ import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
  * `02` puts the query bar in this bar. It is cached reference data, so this
  * costs one API call per revalidate window rather than one per page view.
  */
+/**
+ * Where the wordmark goes — "home", for whoever is reading it.
+ *
+ * `/` is the marketplace home and it is a **catalogue of other vendors**, which
+ * `redirectVendorToDashboard` sends a vendor straight back out of. Pointing
+ * their wordmark at it makes the one control every screen carries a round trip
+ * through a redirect, and on a slow connection a visible one. Roles are
+ * exclusive — one account cannot be both — so a vendor's home is their own
+ * dashboard, and this is the header half of that (frame `30`).
+ *
+ * `/dashboard` rather than `/vendor/dashboard`: the route handler resolves the
+ * role again and forwards, which is the same indirection every other signed-in
+ * control in this bar already uses, and it means a role that changes underneath
+ * a cached header still lands somewhere it is allowed.
+ *
+ * Everyone else keeps `/`. A customer's home is the marketplace, and an admin
+ * renders it too — `ROLE_ROUTE_RULES` gates only the vendor out.
+ */
+function homeFor(role: UserRole | null): string {
+  return role === 'vendor' ? '/dashboard' : '/';
+}
+
 export async function SiteHeader(): Promise<React.ReactElement> {
   /*
    * The role decides whether the header carries the vendor chip, and it is
@@ -79,7 +102,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             leaves the cluster's 34px gap between the logo and the nav.
           */}
           <div className="flex items-center gap-[9px]">
-            <Link href="/" className="transition-opacity hover:opacity-80">
+            <Link href={homeFor(role)} className="transition-opacity hover:opacity-80">
               {/* The wordmark reads BRAND_NAME — never a literal. */}
               <Logo size={LOGO_SIZES.desktopHeader} />
             </Link>

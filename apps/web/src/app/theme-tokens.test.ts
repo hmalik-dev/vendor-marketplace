@@ -36,6 +36,14 @@ function relativeLuminance(hex: string): number {
   );
 }
 
+/** WCAG 2.1 contrast ratio between two literal hex values. */
+function contrastOf(foreground: string, background: string): number {
+  const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background));
+  const darker = Math.min(relativeLuminance(foreground), relativeLuminance(background));
+
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 /** WCAG 2.1 contrast ratio between two tokens, resolved from the theme. */
 function contrast(foreground: string, background: string): number {
   const fg = COLOR_TOKENS.get(foreground);
@@ -178,8 +186,22 @@ describe('contrast rules', () => {
     ['steel-600', 'steel-50', 'information'],
     ['error-500', 'error-50', 'went wrong'],
     ['stone-600', 'stone-200', 'inert status pill'],
+    ['stone-560', 'stone-950', 'footer micro-labels and tagline on the footer ground'],
+    ['stone-520', 'stone-950', 'footer link columns on the footer ground'],
+    ['stone-0', 'stone-950', 'the footer wordmark and a hovered link'],
   ])('%s on %s clears 4.5:1 — %s', (foreground, background) => {
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  /*
+   * The value the footer's micro-labels were nearly given, kept as a number so
+   * a later "it looks a bit loud" cannot quietly reintroduce it. `#7a7266` is
+   * the step below `stone-560`, and at the label's 10.5px it fails — which is
+   * why `550` exists at all rather than the labels reusing an existing step.
+   */
+  it('records why the footer micro-label may not go darker than stone-560', () => {
+    expect(contrastOf('#7a7266', '#1c1916')).toBeLessThan(AA_NORMAL);
+    expect(contrastOf('#8c8375', '#1c1916')).toBeGreaterThanOrEqual(AA_NORMAL);
   });
 
   it('records why clay-400 is a fill and never a text colour', () => {

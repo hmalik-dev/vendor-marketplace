@@ -8,16 +8,26 @@ import {
   LANDING_CATEGORY_COUNT,
   LANDING_JUMP_CATEGORY_SLUGS,
   serialiseJsonLd,
+  toDateString,
   type Category,
 } from '@vendor-marketplace/shared';
-import { ShieldCheck, Star, Tag } from 'lucide-react';
+import { ShieldCheck, Star, Tag, type LucideIcon } from 'lucide-react';
 import { HeroSearch } from '@/components/landing/hero-search';
 import { PhotoCluster } from '@/components/landing/photo-cluster';
+import { StatusStrip } from '@/components/landing/status-strip';
 import { Button } from '@/components/ui/button';
 import { StockPhoto } from '@/components/ui/stock-photo';
 import { VendorCard } from '@/components/vendors/vendor-card';
 import { siteOrigin } from '@/config/env';
-import { redirectVendorToDashboard } from '@/lib/current-user';
+import { getOwnBookingRequests, getOwnBookings } from '@/lib/customer-data';
+import { readRoleForChrome, redirectVendorToDashboard } from '@/lib/current-user';
+import {
+  GENERIC_TRUST_COPY,
+  hasStatusStrip,
+  landingStatus,
+  trustCopyFor,
+} from '@/lib/landing-status';
+import type { LandingStatus } from '@/lib/landing-status';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
 
 /**
@@ -74,27 +84,66 @@ const HOW_IT_WORKS = [
 ] as const;
 
 /**
+ * The glyph each trust signal is drawn with, by the guarantee it stands for.
+ *
+ * Keyed by title rather than positional, because the band's order is not fixed:
+ * the signed-in page leads with the payment, and an index would silently hand
+ * the shield to the reviews line. The copy itself lives in `landing-status.ts`,
+ * where the booking-resolved wording is derived — one list, two renderings.
+ *
  * Mechanism, never adjective: "payment held by Stripe until the event", not
  * "secure and reliable". This section does the work the stats band would have
  * done, which is why there is no stats band.
  */
-const TRUST_SIGNALS = [
+const TRUST_ICONS: Record<string, LucideIcon> = {
+  'Reviews from real bookings': Star,
+  'Payment held until the event': ShieldCheck,
+  'No service fee': Tag,
+};
+
+/**
+ * The three mechanism steps beside the vendor pitch — what actually happens,
+ * rather than a second copy of the CTA.
+ *
+ * **No pricing figures in this band, deliberately.** An earlier pass put the
+ * commission, `$0 to list` and the payout interval here as display numerals,
+ * and they come out for two structural reasons. Commission is a *conversion*
+ * number, not an acquisition one: stated bare, with no room to frame it against
+ * what a vendor keeps, the first fact a vendor learns about money is what is
+ * deducted from them. And **customers read this same page** — a band announcing
+ * that the marketplace takes a percentage invites a customer to conclude a
+ * vendor charges more here than direct, which is exactly backwards and quietly
+ * undercuts *No service fee* three sections above. The commission belongs on
+ * `/for-vendors`, where it can be framed, and in the vendor agreement, where
+ * it is binding.
+ */
+const VENDOR_STEPS = [
   {
-    icon: Star,
-    title: 'Reviews from real bookings',
-    body: 'Every review comes from a booking that actually happened. There is no other way to leave one.',
+    title: 'Publish your prices',
+    body: `What you charge, in the open. ${BRAND_NAME} adds nothing on top of it.`,
   },
   {
-    icon: ShieldCheck,
-    title: 'Payment held until the event',
-    body: 'Stripe holds your payment until your event is complete, then releases it to the vendor.',
+    title: 'Set your open dates',
+    body: 'Customers only ever request a date you have actually left free.',
   },
   {
-    icon: Tag,
-    title: 'No service fee',
-    body: 'Vendors publish what they charge, and nothing is added on top of it at checkout.',
+    title: 'Get paid after the event',
+    body: 'The payment is held from booking until the event is done, then released to you through Stripe.',
   },
 ] as const;
+
+/**
+ * Where the closing band's two controls send a vendor.
+ *
+ * TODO(#428): both should land on **`/for-vendors`** — a page that states what
+ * a vendor keeps, when they are paid, what it costs and how availability works,
+ * *then* asks them to sign up. It does not exist yet, so both fall back to the
+ * signup form with the role pre-selected, which is where the nav's `For
+ * vendors` link already goes. **One destination, never two**: a band whose
+ * headline CTA and whose "how it works" link disagree is two doors into one
+ * room, and the reason the fallback is written once here.
+ */
+const VENDOR_ENTRY_PATH = '/sign-up?role=vendor';
 
 const DESCRIPTION = `Compare real availability and pricing from event vendors near you, send one request, and pay securely once the date is locked in. Now booking in ${LAUNCH_CITY}.`;
 
@@ -195,8 +244,54 @@ function landingCategories(categories: readonly Category[]): Category[] {
     .slice(0, LANDING_CATEGORY_COUNT);
 }
 
+/**
+ * What a reader with no bookings of their own has to show — a visitor, an
+ * operator, and a customer whose hub could not be read.
+ *
+ * A value rather than a branch, so the strip and the trust band ask the same
+ * question of the same shape whoever is looking: both reads degrade to an empty
+ * list on their own (`degradeToEmpty` in `customer-data.ts`), and this is what
+ * that degrades *to* on this page.
+ */
+const EMPTY_STATUS: LandingStatus = { next: null, requestsWaitingOnVendor: 0 };
+
+/**
+ * Never prerendered, and **declared rather than inherited** (#428).
+ *
+ * This route is already dynamic — `redirectVendorToDashboard()` reaches Clerk's
+ * `auth()` on the first line of `HomePage`, and `SiteHeader` does the same in
+ * the root layout, so a dynamic API is in the tree either way. What changed is
+ * the stake: `/` now renders a signed-in customer's **own** rows — their next
+ * vendor's name, the event date and the amount held — into the HTML, in the
+ * status strip's props and in the trust band's prose. If this page's HTML ever
+ * entered the Full Route Cache, that is one customer's payment record served to
+ * every visitor after them.
+ *
+ * Inheriting that from two `auth()` calls the page does not own is thinner than
+ * it looks: `readIdentityOnPublicRoute` and `readRoleForChrome` catch
+ * *everything* that is not a navigation signal, the `DynamicServerError` a
+ * prerender raises included. Next still bails out — the work store is marked
+ * before the throw — but that is a framework implementation detail rather than
+ * something this route states. Every one of the twelve peer routes rendering
+ * per-user data declares this; `/` was the outlier.
+ */
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage(): Promise<React.ReactElement> {
   await redirectVendorToDashboard();
+
+  /*
+   * A vendor never reaches this line — the redirect above sends them to their
+   * own dashboard, because roles are exclusive and `/` is a catalogue of other
+   * vendors. So the reader here is a signed-out visitor, a customer, or an
+   * operator, and only the customer gets the signed-in composition: an admin
+   * has no bookings to summarise and is looking at the marketplace, not at
+   * their own things.
+   *
+   * `readRoleForChrome` is `cache()`d and the header has already called it, so
+   * this costs nothing beyond the first request.
+   */
+  const isCustomer = (await readRoleForChrome()) === 'customer';
 
   /*
     One wave, and every read in it bounded by `API_REQUEST_TIMEOUT_MS` (#390).
@@ -209,11 +304,28 @@ export default async function HomePage(): Promise<React.ReactElement> {
     and then somebody else's 504 page. Measured 2026-08-31: 35s and 0 bytes
     before, 8.1s and a rendered page after.
   */
-  const [categories, featuredVendors] = await Promise.all([getCategories(), getFeaturedVendors()]);
+  const [categories, featuredVendors, requests, bookings] = await Promise.all([
+    getCategories(),
+    getFeaturedVendors(),
+    isCustomer ? getOwnBookingRequests() : [],
+    isCustomer ? getOwnBookings() : [],
+  ]);
   const featured = landingCategories(categories);
+  const status = isCustomer ? landingStatus(requests, bookings) : EMPTY_STATUS;
+  const trustSignals = isCustomer ? trustCopyFor(status) : GENERIC_TRUST_COPY;
 
   return (
     <>
+      {/*
+        The signed-in customer's continuation content, in the space the removed
+        acquisition sections used to occupy. It is the *only* thing above the
+        hero, and it is absent entirely when there is nothing in it — see
+        `hasStatusStrip`.
+      */}
+      {isCustomer && hasStatusStrip(status) ? (
+        <StatusStrip status={status} serverToday={toDateString(new Date())} />
+      ) : null}
+
       <script
         type="application/ld+json"
         /*
@@ -524,7 +636,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
         the front door has no honest way to tell those apart, and inventing one
         would mean claiming a vendor count nobody queried.
       */}
-      {featuredVendors.length > 0 ? (
+      {featuredVendors.length > 0 && !isCustomer ? (
         <section aria-labelledby="featured-heading" className={`${CONTAINER} py-14`}>
           <div className="mb-5 flex items-baseline justify-between gap-4">
             <h2 id="featured-heading" className="display-heading text-display-md text-stone-900">
@@ -549,112 +661,180 @@ export default async function HomePage(): Promise<React.ReactElement> {
         </section>
       ) : null}
 
-      <section
-        id="how-it-works"
-        aria-labelledby="how-it-works-heading"
-        className="scroll-mt-(--header-height) bg-stone-100 py-16"
-      >
-        <div className={CONTAINER}>
-          <h2 id="how-it-works-heading" className="display-heading text-display-md text-stone-900">
-            How it works
+      {/*
+        Off for a signed-in customer: it explains a process this person has
+        completed, which is pure acquisition. *Featured vendors* goes with it —
+        the row is a catalogue teaser for somebody who has not searched yet, and
+        this reader has a search bar in the hero and bookings in the strip.
+      */}
+      {isCustomer ? null : (
+        <section
+          id="how-it-works"
+          aria-labelledby="how-it-works-heading"
+          className="scroll-mt-(--header-height) bg-stone-100 py-16"
+        >
+          <div className={CONTAINER}>
+            <h2
+              id="how-it-works-heading"
+              className="display-heading text-display-md text-stone-900"
+            >
+              How it works
+            </h2>
+
+            <ol className="mt-8 grid gap-10 sm:grid-cols-3">
+              {HOW_IT_WORKS.map((step, index) => (
+                <li key={step.title}>
+                  <span
+                    aria-hidden="true"
+                    className="block font-display text-[54px] leading-none text-clay-200"
+                  >
+                    {index + 1}
+                  </span>
+                  <h3 className="mt-2 font-display text-display-sm text-stone-900">{step.title}</h3>
+                  <p className="mt-1.5 max-w-80 text-base leading-prose text-stone-700">
+                    {step.body}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+      )}
+
+      {/*
+        The trust band stays on both pages, and on the signed-in one it is the
+        **ending**: a deliberate reversal of an earlier note that cut it. *How
+        it works* explains a process; this states standing guarantees that hold
+        on every booking, and "payment held until the event" matters more to
+        someone with money in flight than to a visitor.
+
+        Which is also why it changes ground there. With the closing band gone
+        the merge into the footer is a value ramp — hero gradient → `stone-50`
+        → `stone-100` here → `stone-950` footer — each step darker than the
+        last, so the footer arrives as the bottom of a ramp rather than a hard
+        cut off cream. On the signed-out page the band above it does that job,
+        so the section keeps the page ground.
+      */}
+      <section aria-labelledby="trust-heading" className={isCustomer ? 'bg-stone-100' : undefined}>
+        <div className={`${CONTAINER} py-16`}>
+          <h2 id="trust-heading" className="sr-only">
+            Why booking here is safe
           </h2>
 
-          <ol className="mt-8 grid gap-10 sm:grid-cols-3">
-            {HOW_IT_WORKS.map((step, index) => (
-              <li key={step.title}>
-                <span
-                  aria-hidden="true"
-                  className="block font-display text-[54px] leading-none text-clay-200"
-                >
-                  {index + 1}
-                </span>
-                <h3 className="mt-2 font-display text-display-sm text-stone-900">{step.title}</h3>
-                <p className="mt-1.5 max-w-80 text-base leading-prose text-stone-700">
-                  {step.body}
-                </p>
-              </li>
-            ))}
-          </ol>
+          <ul className="grid gap-8 sm:grid-cols-3">
+            {trustSignals.map((signal) => {
+              const Icon = TRUST_ICONS[signal.title] ?? Star;
+
+              return (
+                <li key={signal.title}>
+                  <span className="inline-flex size-9 items-center justify-center rounded-full bg-sage-50 text-sage-600">
+                    <Icon aria-hidden="true" className="size-4.5" />
+                  </span>
+                  <h3 className="mt-3 font-display text-display-sm text-stone-900">
+                    {signal.title}
+                  </h3>
+                  <p className="mt-1.5 max-w-80 text-base leading-prose text-stone-700">
+                    {signal.body}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
         </div>
-      </section>
-
-      <section aria-labelledby="trust-heading" className={`${CONTAINER} py-16`}>
-        <h2 id="trust-heading" className="sr-only">
-          Why booking here is safe
-        </h2>
-
-        <ul className="grid gap-8 sm:grid-cols-3">
-          {TRUST_SIGNALS.map((signal) => (
-            <li key={signal.title}>
-              <span className="inline-flex size-9 items-center justify-center rounded-full bg-sage-50 text-sage-600">
-                <signal.icon aria-hidden="true" className="size-4.5" />
-              </span>
-              <h3 className="mt-3 font-display text-display-sm text-stone-900">{signal.title}</h3>
-              <p className="mt-1.5 max-w-80 text-base leading-prose text-stone-700">
-                {signal.body}
-              </p>
-            </li>
-          ))}
-        </ul>
       </section>
 
       {/*
-        `for-vendors` is where the header's "For vendors" lands. It is the only
-        surface in MVP that addresses vendors, so the nav item points at it
-        rather than at a vendor marketing page that does not exist.
+        The closing band, and it has **one** audience: a signed-out visitor.
+
+        It used to be a two-column fork — *Planning an event?* on the left,
+        *Booking events yourself?* on the right. The customer half was the
+        redundant one: the hero is a *live search bar*, so a button whose only
+        job is to scroll you back up to it earns nothing. The vendor half is the
+        page's only supply-side entry besides one nav link, so it is the half
+        worth keeping — and it spends the reclaimed width on how the thing
+        works, three steps deep, instead of repeating a CTA.
+
+        `Show` rather than the role read above, because "signed out" is a
+        question about the session and Clerk is the one that can answer it: a
+        signed-in customer whose account record cannot be read still holds a
+        session, and they must not be shown a vendor pitch they cannot act on.
+        A signed-in vendor never reaches this page at all.
+
+        `for-vendors` stays as the anchor id: nothing points at it today — the
+        nav, the footer and both controls below all go to `VENDOR_ENTRY_PATH` —
+        but it is the fragment the page has advertised, and dropping it would
+        break any link already written down.
       */}
-      <section
-        id="for-vendors"
-        aria-labelledby="cta-heading"
-        className="scroll-mt-(--header-height) bg-stone-900"
-      >
-        <h2 id="cta-heading" className="sr-only">
-          Get started
-        </h2>
-
-        <div
-          className={`${CONTAINER} grid divide-stone-0/12 py-16 max-sm:divide-y sm:grid-cols-2 sm:divide-x`}
+      <Show when="signed-out">
+        <section
+          id="for-vendors"
+          aria-labelledby="cta-heading"
+          className="scroll-mt-(--header-height) bg-stone-900"
         >
-          <div className="max-sm:pb-10 sm:pr-12">
-            <h3 className="display-heading text-display-md text-stone-50">Planning an event?</h3>
-            <p className="mt-2 max-w-90 text-base leading-prose text-stone-50/78">
-              Tell us the vendor type, the city and the date. You will see prices and open dates
-              before you speak to anyone.
-            </p>
-            <Button variant="primary" className="mt-5" asChild>
-              <Link href="/search">Find a vendor</Link>
-            </Button>
-          </div>
+          <h2 id="cta-heading" className="sr-only">
+            Start taking bookings
+          </h2>
 
-          <div className="max-sm:pt-10 sm:pl-12">
-            <h3 className="display-heading text-display-md text-stone-50">
-              Booking events yourself?
-            </h3>
-            <p className="mt-2 max-w-90 text-base leading-prose text-stone-50/78">
-              Publish your prices and your open dates, and take bookings without the phone tag.
-              Payouts run through Stripe.
-            </p>
-            {/*
-              Never offered to somebody who already holds a session — the footer
-              hides the same pair, and a page that disagrees with itself is a bug.
-            */}
-            <Show when="signed-out">
-              {/*
-                Every vendor CTA arrives at sign-up with the role pre-selected;
-                the role cards there stay the real fork — 21-sign-up.md.
-              */}
-              <Button variant="secondary" className="mt-5" asChild>
-                <Link href="/sign-up?role=vendor">Join as a vendor</Link>
-              </Button>
-            </Show>
-            <Show when="signed-in">
-              <Button variant="secondary" className="mt-5" asChild>
-                <Link href="/dashboard">Go to your dashboard</Link>
-              </Button>
-            </Show>
+          {/*
+            An inner cap inside the page gutter, which the rest of the page does
+            not have: the category row and the featured grid span the full 1440
+            because they are grids that keep their rhythm at any width, and this
+            is two blocks of prose. Left uncapped they sit at opposite edges
+            with 300px of ink between them and stop reading as one band. 1160 is
+            the frame's own measure.
+          */}
+          <div className={`${CONTAINER} py-15`}>
+            <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-10 sm:flex-row sm:items-start sm:justify-between sm:gap-15">
+              <div className="max-w-110">
+                <h3 className="display-heading text-[33px] leading-[1.14] text-stone-50">
+                  Booking events yourself?
+                </h3>
+                <p className="mt-3.25 text-base leading-prose text-stone-400">
+                  Publish your prices and your open dates, and take bookings without the phone tag.
+                  You are paid through Stripe after the event.
+                </p>
+
+                <div className="mt-6 flex flex-wrap items-center gap-5">
+                  {/*
+                  Both controls, one destination — see `VENDOR_ENTRY_PATH`. The
+                  primary is the cream fill the frame draws rather than clay:
+                  clay on this ink would be the largest clay area on the site
+                  and would swallow its own label.
+                */}
+                  <Button variant="secondary" className="mt-0" asChild>
+                    <Link href={VENDOR_ENTRY_PATH}>Start taking bookings</Link>
+                  </Button>
+                  <Link
+                    href={VENDOR_ENTRY_PATH}
+                    className="text-base font-semibold text-stone-50 underline-offset-4 transition-colors duration-(--duration-fast) hover:underline"
+                  >
+                    See how payouts work
+                  </Link>
+                </div>
+              </div>
+
+              <ol className="flex flex-col gap-4.75 border-stone-50/14 sm:border-l sm:pt-1.25 sm:pl-13">
+                {VENDOR_STEPS.map((step, index) => (
+                  <li key={step.title} className="flex items-start gap-3.25">
+                    <span
+                      aria-hidden="true"
+                      className="mt-px flex size-5.5 flex-none items-center justify-center rounded-full border border-stone-50/30 font-mono text-xs font-medium text-stone-400"
+                    >
+                      {index + 1}
+                    </span>
+                    <div>
+                      <h4 className="text-cta font-semibold text-stone-50">{step.title}</h4>
+                      <p className="mt-0.75 max-w-62.5 text-sm leading-prose text-stone-540">
+                        {step.body}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </Show>
     </>
   );
 }

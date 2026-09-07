@@ -1,3 +1,20 @@
+/*
+ * Declared rather than inherited (#428).
+ *
+ * This file has always been part of the client graph — its only three callers
+ * are the storefront editor, the booking request screen and the package editor,
+ * all Client Components — but it said so nowhere, and it *calls*
+ * `describeBlockerCount` out of `use-submit-validation`, which is `'use client'`.
+ * That is legal only while every path into this module is already a client one:
+ * the first server component to render the card would have thrown
+ * "Attempted to call describeBlockerCount() from the server", at render time,
+ * with the unit suite green — jsdom does not enforce the boundary.
+ *
+ * Found by `app/client-boundary-calls.test.ts`, which was written for the same
+ * defect one route over.
+ */
+'use client';
+
 import { describeBlockerCount, type FieldIssue } from '@/lib/use-submit-validation';
 
 /**
