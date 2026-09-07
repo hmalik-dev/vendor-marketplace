@@ -30,7 +30,7 @@ the subject, wherever a retry is expected to succeed after a transient failure.
 Nothing is given up by varying it when a row lock already prevents concurrent
 duplicates, and the must-replay case — a write that reached Stripe under a
 transaction that never committed — still replays, because a rolled-back
-transaction never incremented the counter. Recorded as **D33**.
+transaction never incremented the counter. Recorded as **D36**.
 
 A key replayed with *different parameters* is separately refused with
 `StripeIdempotencyError`, so a key must also be versioned whenever its request

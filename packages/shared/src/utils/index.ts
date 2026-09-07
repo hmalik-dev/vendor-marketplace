@@ -385,7 +385,7 @@ export function universallyPastFrom(value: string): Date | null {
 
 /**
  * When the vendor's share of a booking on `eventDate` becomes transferable —
- * `PAYOUT_RELEASE_HOURS` after the start of the event day in UTC (D32).
+ * `PAYOUT_RELEASE_HOURS` after the start of the event day in UTC (D35).
  *
  * **The release is keyed to the date and to nothing else** (#423). Not to the
  * vendor marking the booking complete — the vendor is the party who benefits
@@ -398,7 +398,7 @@ export function universallyPastFrom(value: string): Date | null {
  * `calculateRefund` measures its 48-hour cutoff from, and for the same reason:
  * `eventDate` is a `DATE` column carrying no zone, so "72 hours after the
  * event" has to mean 72 hours after *something*, and midnight UTC is the only
- * choice that does not move with the reader's timezone. D32 is deliberate that
+ * choice that does not move with the reader's timezone. D35 is deliberate that
  * this stays plain calendar arithmetic — no business days, no end-of-day
  * correction, no second timezone rule to keep in step with the first. The
  * window is wide enough to absorb the spread: the latest an event day can end

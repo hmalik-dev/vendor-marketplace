@@ -470,7 +470,7 @@ describe('formatDurationHours', () => {
 
 describe('payoutReleaseAt', () => {
   /*
-   * D32: 72 calendar hours from midnight UTC on the event date, which is three
+   * D35: 72 calendar hours from midnight UTC on the event date, which is three
    * days on. The expected instant is written out rather than derived from the
    * constant — a test that recomputes the implementation cannot catch it
    * changing.
@@ -490,7 +490,7 @@ describe('payoutReleaseAt', () => {
   /*
    * The window has to clear the widest wall-clock spread in use. An event day
    * in UTC-12 ends 36 hours after its own midnight UTC, so a release at 72
-   * leaves a day and a half in hand — which is what lets D32 keep this to plain
+   * leaves a day and a half in hand — which is what lets D35 keep this to plain
    * calendar arithmetic instead of a second timezone rule.
    */
   it('lands after the event day has ended in every timezone', () => {

@@ -39,7 +39,7 @@ describe('two payout sweeps racing one booking, on two real connections', () => 
 
   const START = new Date('2026-06-01T12:00:00Z');
   const EVENT_DATE = toDateString(addDays(START, 30));
-  /** Past `payoutReleaseAt(EVENT_DATE)` — 72 hours on from the event day (D32). */
+  /** Past `payoutReleaseAt(EVENT_DATE)` — 72 hours on from the event day (D35). */
   const AFTER_RELEASE = addDays(START, 34);
 
   let clockNow = START;

@@ -934,7 +934,7 @@ export const FULL_REFUND_CUTOFF_HOURS = 48;
 export const LATE_CANCELLATION_REFUND_RATE = 0.5;
 
 /**
- * How long after the event date the vendor's share is transferred. **D32.**
+ * How long after the event date the vendor's share is transferred. **D35.**
  *
  * The product charges into Orla's own balance and pays the vendor afterwards
  * (#423), so this is the whole of the payout schedule. **It is one constant,
@@ -951,7 +951,7 @@ export const LATE_CANCELLATION_REFUND_RATE = 0.5;
  * nothing transferred and a cancellation is a plain refund. Every dispute the
  * window pulls forward avoids the worst failure this path has.
  *
- * D32 also rules out what this is *not* for: a deliverable that arrives weeks
+ * D35 also rules out what this is *not* for: a deliverable that arrives weeks
  * after the event — a photographer's gallery — is not a release-window problem
  * and no interval fixes it. That belongs to the dispute path, and after release
  * to D31's unwind. Do not widen this trying to cover it.
