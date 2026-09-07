@@ -273,6 +273,33 @@ describe('SiteFooter', () => {
     expect(classes).toContain('bg-stone-950');
     expect(classes).not.toContain('bg-stone-900');
     expect(classes).not.toContain('border-t');
+
+    /*
+     * #430. The compensating rule is gone from the footer itself, and the
+     * legal row's own hairline is a different rule that stays — it separates
+     * the legal links from the four-column grid, not the footer from the band.
+     */
+    const legalRow = container.querySelector('[data-slot="footer-legal"]');
+    expect(legalRow?.className.split(/\s+/) ?? []).toContain('border-t');
+  });
+
+  /*
+   * #430. The footer sits flush to the same 40px gutter as every block above
+   * it — the page container is the one centred measure, and nothing inside it
+   * adds a second. Asserted the same way as the closing band's, because a
+   * recomposition of one is the change most likely to reintroduce the other.
+   */
+  it('gives the footer no centred measure inside the page gutter', async () => {
+    const { container } = render(await SiteFooter());
+
+    const footer = container.querySelector('[data-slot="site-footer"]');
+    const [gutter, ...inner] = [...(footer?.querySelectorAll('*') ?? [])];
+
+    expect(gutter?.getAttribute('class')?.split(/\s+/) ?? []).toContain('max-w-[1440px]');
+    for (const node of inner) {
+      const classes = node.getAttribute('class') ?? '';
+      expect(classes.split(/\s+/), classes).not.toContain('mx-auto');
+    }
   });
 
   /*
