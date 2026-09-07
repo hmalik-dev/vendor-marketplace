@@ -1633,10 +1633,29 @@ with no record of who acted.
 Lane 435 hit this ticket's absence head-on — its own acceptance 8 is *"every
 action writes an `admin_actions` row"*, and the board recorded no dependency
 because the filing missed it. Rather than stall, 435 built the **minimal** table
-(`actor`, `action`, `target_type`, `target_id`, jsonb `detail`, `created_at`), a
-`recordAdminAction` DAO in `apps/api/src/modules/admin/admin-actions.dao.ts`, a
-`packages/db` schema file, and writes on its own five moderation actions. It
-lands first.
+a `recordAdminAction` DAO in
+`apps/api/src/modules/admin/admin-actions.dao.ts`, a `packages/db` schema file,
+and writes on its own five moderation actions. It lands first.
+
+**The column names are this ticket's, ruled 2026-09-07 after the two lanes
+collided on them:** `actor_id`, `action`, `subject_type`, `subject_id`, jsonb
+`detail`, `created_at`. 435 shipped `actor` / `target_type` / `target_id` first
+and renamed to these before opening its PR. Three grounds: every foreign-key
+uuid column in `packages/db/src/schema` ends in `_id` and a bare `actor` would
+have been the schema's first exception; this ticket's own text says "subject
+type and id" and "filter by actor and by subject", so the acceptance criteria,
+the query parameters and the screen already read in those words; and this side
+is the larger surface. `action` is a **pgEnum** derived from `ADMIN_ACTIONS` and
+`ADMIN_ACTION_SUBJECTS`, `as const` arrays owned by this ticket in
+`packages/shared/src/constants` per `.claude/rules/shared-contracts.md` — never
+free text. `actor_id` is **`ON DELETE cascade`** on `users.id`: `RESTRICT` was
+tried and backed out because it breaks the `delete(users)` teardown in every API
+suite that touches an admin route.
+
+**One writer, not two.** 435's file name survives; this ticket's implementation
+body does, because it carries the #408 best-effort rule and the content
+prohibition asserted over the whole serialised row. Two writers with different
+guarantees is the drift the table exists to prevent.
 
 **So this ticket extends; it does not create.** Do not write a `CREATE TABLE`
 migration, and do not build a parallel table — reconcile 435's column shape and
