@@ -282,7 +282,10 @@ export async function SiteFooter(): Promise<React.ReactElement> {
           that is the only hairline left in this footer now that the top border
           has gone.
         */}
-        <div className="mt-6.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-stone-0/10 pt-4">
+        <div
+          data-slot="footer-legal"
+          className="mt-6.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-stone-0/10 pt-4"
+        >
           <ul className="flex gap-4.5">
             {LEGAL_LINKS.map((link) => (
               <li key={link.href}>

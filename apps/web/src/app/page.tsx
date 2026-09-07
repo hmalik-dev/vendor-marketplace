@@ -120,7 +120,7 @@ const VENDOR_STEPS = [
   },
   {
     title: 'Get paid after the event',
-    body: 'The payment is held from booking until the event is done, then released to you through Stripe.',
+    body: 'The payment is held from booking until the event is done, then released through Stripe.',
   },
 ] as const;
 
@@ -771,62 +771,80 @@ export default async function HomePage(): Promise<React.ReactElement> {
           </h2>
 
           {/*
-            An inner cap inside the page gutter, which the rest of the page does
-            not have: the category row and the featured grid span the full 1440
-            because they are grids that keep their rhythm at any width, and this
-            is two blocks of prose. Left uncapped they sit at opposite edges
-            with 300px of ink between them and stop reading as one band. 1160 is
-            the frame's own measure.
+            No inner measure: the band sits flush to the page's own gutter, the
+            way every block above it does.
+
+            This carried a centred cap, on the reasoning that two blocks of
+            prose left uncapped sit at opposite edges with 300px of ink between
+            them and stop reading as one band. That was true of the composition
+            it described, and the composition is gone — the band stacks now, so
+            there are no longer two blocks to hold together, and
+            the closing-band frame in `design/delta-band/` draws the contents
+            against the same 40px gutter as the category row and the featured
+            grid. A centred column here reads as an unexplained shift.
           */}
           <div className={`${CONTAINER} py-15`}>
-            <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-10 sm:flex-row sm:items-start sm:justify-between sm:gap-15">
-              <div className="max-w-110">
-                <h3 className="display-heading text-[33px] leading-[1.14] text-stone-50">
+            <div className="flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between sm:gap-15">
+              <div className="max-w-150">
+                <h3 className="display-heading text-[35px] leading-[1.12] text-stone-50">
                   Booking events yourself?
                 </h3>
-                <p className="mt-3.25 text-base leading-prose text-stone-400">
+                <p className="mt-3.25 text-cta leading-[1.7] text-stone-480">
                   Publish your prices and your open dates, and take bookings without the phone tag.
                   You are paid through Stripe after the event.
                 </p>
-
-                <div className="mt-6 flex flex-wrap items-center gap-5">
-                  {/*
-                  Both controls, one destination — see `VENDOR_ENTRY_PATH`. The
-                  primary is the cream fill the frame draws rather than clay:
-                  clay on this ink would be the largest clay area on the site
-                  and would swallow its own label.
-                */}
-                  <Button variant="secondary" className="mt-0" asChild>
-                    <Link href={VENDOR_ENTRY_PATH}>Start taking bookings</Link>
-                  </Button>
-                  <Link
-                    href={VENDOR_ENTRY_PATH}
-                    className="text-base font-semibold text-stone-50 underline-offset-4 transition-colors duration-(--duration-fast) hover:underline"
-                  >
-                    See how payouts work
-                  </Link>
-                </div>
               </div>
 
-              <ol className="flex flex-col gap-4.75 border-stone-50/14 sm:border-l sm:pt-1.25 sm:pl-13">
-                {VENDOR_STEPS.map((step, index) => (
-                  <li key={step.title} className="flex items-start gap-3.25">
-                    <span
-                      aria-hidden="true"
-                      className="mt-px flex size-5.5 flex-none items-center justify-center rounded-full border border-stone-50/30 font-mono text-xs font-medium text-stone-400"
-                    >
-                      {index + 1}
-                    </span>
-                    <div>
-                      <h4 className="text-cta font-semibold text-stone-50">{step.title}</h4>
-                      <p className="mt-0.75 max-w-62.5 text-sm leading-prose text-stone-540">
-                        {step.body}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
+              {/*
+                Both controls, one destination — see `VENDOR_ENTRY_PATH`. The
+                link comes first so the button is the outermost element in the
+                band and the strongest control sits at the page's gutter. The
+                button is the cream fill the frame draws rather than clay: clay
+                on this ink would be the largest clay area on the site and would
+                swallow its own label.
+              */}
+              <div className="flex flex-none flex-wrap items-center gap-5 sm:pb-0.75">
+                <Link
+                  href={VENDOR_ENTRY_PATH}
+                  className="text-base font-semibold text-stone-50 underline-offset-4 transition-colors duration-(--duration-fast) hover:underline"
+                >
+                  See how payouts work
+                </Link>
+                <Button variant="secondary" className="mt-0" asChild>
+                  <Link href={VENDOR_ENTRY_PATH}>Start taking bookings</Link>
+                </Button>
+              </div>
             </div>
+
+            {/*
+              The rule crosses the whole band. It replaces the vertical divider
+              the two-column version set between its halves, which is the one
+              piece of that composition that could not survive stacking.
+            */}
+            <div data-slot="band-rule" className="mt-9.5 mb-8 h-px bg-stone-50/14" />
+
+            <ol className="grid gap-8 sm:grid-cols-3 sm:gap-13">
+              {VENDOR_STEPS.map((step, index) => (
+                <li key={step.title} className="flex items-start gap-3.5">
+                  {/*
+                    23px and a 28% border, both off the frame: the numeral is a
+                    marker rather than a control, so it takes its size from the
+                    line it labels instead of a token. Verified against the
+                    rendered band at 1440, not read off the list in the ticket.
+                  */}
+                  <span
+                    aria-hidden="true"
+                    className="mt-px flex size-5.75 flex-none items-center justify-center rounded-full border border-stone-50/28 font-mono text-xs font-medium text-stone-480"
+                  >
+                    {index + 1}
+                  </span>
+                  <div>
+                    <h4 className="text-[14.5px] font-semibold text-stone-50">{step.title}</h4>
+                    <p className="mt-1 text-action leading-[1.65] text-stone-540">{step.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
       </Show>

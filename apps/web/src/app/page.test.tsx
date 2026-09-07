@@ -584,6 +584,138 @@ describe('HomePage', () => {
     expect(screen.queryByRole('link', { name: 'Start taking bookings' })).toBeNull();
   });
 
+  /*
+   * #430. The band was two columns — a capped pitch on the left and the steps
+   * in a right-hand column behind a vertical rule — which left roughly 500px
+   * of dead ink on the right. It stacks now: the pitch and its controls hold
+   * the top line, a hairline crosses the full width, and the three steps run
+   * beneath it as equal thirds — the closing-band frame in
+   * `design/delta-band/`.
+   *
+   * Class-level facts, per `.claude/rules/web-design-parity.md`: jsdom lays
+   * nothing out, so the rendered composition is the parity pass's to confirm.
+   */
+  it('stacks the closing band, so the steps run the full width beneath the pitch', async () => {
+    render(await HomePage());
+
+    /*
+     * The top line is what holds the pitch and the controls on one row and
+     * pushes the button to the outer edge. Without these three the band
+     * renders as a single vertical stack with the button flush left — a
+     * composition every other assertion in this file still passes on, because
+     * the steps' grid, the rule and the DOM order of the two controls are all
+     * unchanged by it.
+     */
+    const topLine = document.querySelector('#for-vendors > div > div');
+    const topLineClasses = topLine?.getAttribute('class')?.split(/\s+/) ?? [];
+
+    for (const token of ['sm:flex-row', 'sm:items-end', 'sm:justify-between']) {
+      expect(topLineClasses, token).toContain(token);
+    }
+
+    const steps = document.querySelector('#for-vendors ol');
+    const stepClasses = steps?.className.split(/\s+/) ?? [];
+
+    expect(stepClasses).toContain('sm:grid-cols-3');
+    // The vertical rule the columned version divided its two halves with.
+    expect(stepClasses).not.toContain('sm:border-l');
+
+    // The hairline that replaced it spans the band, not one column of it.
+    const rule = document.querySelector('#for-vendors [data-slot="band-rule"]');
+    expect(rule?.className.split(/\s+/) ?? []).toContain('h-px');
+  });
+
+  /*
+   * #430, from the parity pass. The pitch and the numerals set their type on
+   * the band's ink, and they were reaching for `stone-400` — a **border**
+   * value, drawn on a light ground at thirty-nine sites across the frames and
+   * as text on ink at none. The ramp was missing the role rather than the
+   * value being three units out, so `stone-480` was added beside the other
+   * three ink-ground text steps; `theme.css` carries the derivation and
+   * `theme-tokens.test.ts` its contrast.
+   */
+  it('sets the band pitch and numerals in the ink-ground text ramp, not a border value', async () => {
+    render(await HomePage());
+
+    const inked = [
+      document.querySelector('#for-vendors > div > div p'),
+      document.querySelector('#for-vendors ol span'),
+    ];
+
+    for (const node of inked) {
+      const classes = node?.getAttribute('class')?.split(/\s+/) ?? [];
+      expect(classes, node?.textContent ?? '').toContain('text-stone-480');
+      expect(classes, node?.textContent ?? '').not.toContain('text-stone-400');
+    }
+  });
+
+  /*
+   * The words are the design. The closing-band frame and its brief both write
+   * step three as "released through Stripe"; the superseded
+   * `LANDING-BAND-CHANGE-PROMPT.md` is the only place in `design/` carrying
+   * the extra "to you", and it is what the band had shipped.
+   */
+  it('writes the third step the way the frame does', async () => {
+    render(await HomePage());
+
+    expect(
+      screen.getByText(
+        'The payment is held from booking until the event is done, then released through Stripe.',
+      ),
+    ).toBeDefined();
+  });
+
+  /*
+   * The button goes last, so the strongest control in the band sits at the
+   * page's own gutter rather than behind a text link.
+   */
+  it('puts the band link before its button, leaving the button outermost', async () => {
+    render(await HomePage());
+
+    const controls = [...document.querySelectorAll('#for-vendors a')].map(
+      (node) => node.textContent,
+    );
+
+    expect(controls).toEqual(['See how payouts work', 'Start taking bookings']);
+  });
+
+  /*
+   * The band used to wrap its contents in a centred inner measure, defended by
+   * a comment in `page.tsx`: two blocks left uncapped sit at opposite edges and
+   * stop reading as one band. The stacked composition removes the condition
+   * that argued for it — there are no longer two blocks to hold together — and
+   * the newer frame draws the contents flush to the page's own 40px gutter,
+   * which every block above the band is already left-aligned to.
+   *
+   * The page container is the one centred element here, because it *is* the
+   * page's measure. Nothing inside it may add a second one.
+   */
+  it('gives the band no centred measure inside the page gutter', async () => {
+    render(await HomePage());
+
+    const gutter = document.querySelector('#for-vendors > div');
+
+    expect(gutter?.getAttribute('class')?.split(/\s+/) ?? []).toContain('max-w-[1440px]');
+    for (const node of gutter?.querySelectorAll('*') ?? []) {
+      const classes = node.getAttribute('class') ?? '';
+      expect(classes.split(/\s+/), classes).not.toContain('mx-auto');
+    }
+  });
+
+  /*
+   * The comment that defended the capped measure was specific and persuasive
+   * enough to get this change reverted by the next reader, so it is corrected
+   * rather than orphaned — and the width it argued for is gone from the file
+   * entirely, comment included, which is what this asserts. The replacement
+   * comment deliberately does not quote the old number, so this guard can
+   * still fail.
+   */
+  it('leaves no trace of the capped measure the band used to centre', async () => {
+    const source = readFileSync(join(process.cwd(), 'src', 'app', 'page.tsx'), 'utf8');
+
+    expect(source).not.toMatch(/1160/);
+  });
+
   it('describes the page to crawlers as a local business in the live market', async () => {
     const { container } = render(await HomePage());
 

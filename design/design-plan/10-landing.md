@@ -141,7 +141,7 @@ compositions, and the column says which reader gets each.
 | 1   | **Featured vendors** — 4 vendor cards + "View all vendors →" ghost link                                                                                                                              | yes                     | **no** — a catalogue teaser for somebody who has not searched yet                                             |
 | 2   | **How it works** — 3 steps on `stone-100`, full-bleed. Large Serif numerals in `clay-200`, heading, one line each: Discover / Book / Celebrate                                                       | yes                     | **no** — it explains a process this reader has completed                                                      |
 | 3   | **Trust** — 3 signals with sage glyphs: reviews only from bookings that actually happened · payment held until the event · no service fee. This section does the work the stats band would have done | yes, on the page ground | yes, on `stone-100`, **and it is the ending** — copy resolved against the reader's own booking, payment first |
-| 4   | **Closing band** — full-bleed `stone-900`, vendor-only: headline, one paragraph, a cream primary and a text link at one destination, beside three numbered mechanism steps                           | yes                     | **no** — a customer cannot act on a vendor pitch                                                              |
+| 4   | **Closing band** — full-bleed `stone-900`, vendor-only: headline, one paragraph, a cream primary and a text link at one destination, over a full-width rule and three numbered mechanism steps       | yes                     | **no** — a customer cannot act on a vendor pitch                                                              |
 | 5   | **Footer** — `stone-950`, 4 columns and a legal row, logo, "Made for the people who make the day."                                                                                                   | yes                     | yes, with the Account column naming their own surfaces                                                        |
 
 **A `60px` status strip sits above the hero for a signed-in customer**, between
@@ -158,6 +158,16 @@ is a conversion number rather than an acquisition one, and customers read this
 same page, where a stated percentage invites exactly the wrong conclusion about
 what a vendor charges here. It belongs on `/for-vendors` and in the vendor
 agreement.
+
+**It is stacked, not columned, and nothing in it is centred.** A two-column
+version — the pitch capped on the left, the steps in a right-hand column behind
+a vertical rule — left roughly 500px of dead ink on the right. The pitch and its
+controls hold the top line, a hairline crosses the full width, and the three
+steps run beneath as equal thirds. The button sits **after** the text link, so
+the strongest control is the outermost element. The band and the footer both sit
+flush to the page's own 40px gutter: every block above them is left-aligned to
+it, and a centred inner column reads as an unexplained shift.
+`design/delta-band/Orla-Closing-Band.html` is the frame, drawn at 1440.
 
 **The footer drops one ink step, to `stone-950`.** The band above it is
 `stone-900`, and two masses of the same ink separated by a hairline read as one

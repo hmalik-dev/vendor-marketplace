@@ -186,6 +186,7 @@ describe('contrast rules', () => {
     ['steel-600', 'steel-50', 'information'],
     ['error-500', 'error-50', 'went wrong'],
     ['stone-600', 'stone-200', 'inert status pill'],
+    ['stone-480', 'stone-900', "the closing band's pitch and step numerals on the band ground"],
     ['stone-560', 'stone-950', 'footer micro-labels and tagline on the footer ground'],
     ['stone-520', 'stone-950', 'footer link columns on the footer ground'],
     ['stone-0', 'stone-950', 'the footer wordmark and a hovered link'],

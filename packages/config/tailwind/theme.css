@@ -75,7 +75,7 @@
   --color-stone-400: #d5cec2; /* stronger borders, unchecked controls */
   --color-stone-500: #c9c1b5; /* disabled text ONLY — fails AA by design */
   /*
-   * The three steps that carry **text on an ink ground** — the closing band and
+   * The four steps that carry **text on an ink ground** — the closing band and
    * the footer, and nowhere else. Every other surface in the product sets type
    * on cream, which is what `600`–`900` are for.
    *
@@ -85,13 +85,21 @@
    * exactly that alpha, which is the defect this replaces rather than a
    * refinement of it.
    *
-   * Read light to dark, and each is pinned to the ground it sits on: `520` is
-   * the footer's link columns, `540` the band's step bodies one value up on the
+   * Read light to dark, and each is pinned to the ground it sits on: `480` is
+   * the closing band's pitch paragraph and its step numerals, `520` the
+   * footer's link columns, `540` the band's step bodies one value up on the
    * lighter `stone-900`, and `560` the footer's micro-labels and its body copy.
    * **`560` is the floor** — `#7a7266` was tried for the labels and fails
    * contrast at their 10.5px size, which `theme-tokens.test.ts` records as a
    * number so it cannot come back.
+   *
+   * `480` was the gap in the ramp (#430). The band's pitch reached for
+   * `stone-400` instead, which is 3 units away and looks it — but `stone-400`
+   * is a **border** value, used on a light ground at thirty-nine sites across
+   * the frames and as text on ink at none. The nearest hex in the ramp is not
+   * the same thing as the right role, and the ramp was missing the role.
    */
+  --color-stone-480: #d8d0c2; /* the closing band's pitch and numerals, on stone-900 */
   --color-stone-520: #b8af9f; /* footer link columns, on stone-950 */
   --color-stone-540: #a79d8c; /* muted copy on the closing band, on stone-900 */
   --color-stone-560: #8c8375; /* footer micro-labels and body, on stone-950 */
