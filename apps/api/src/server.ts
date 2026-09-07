@@ -47,6 +47,7 @@ import { userRoutes } from './modules/users/users.routes.js';
 import { vendorRoutes } from './modules/vendors/vendors.routes.js';
 import { stripeConnectRoutes } from './modules/vendors/stripe-connect.routes.js';
 import { legalAgreementRoutes } from './modules/vendors/legal-agreement.routes.js';
+import { termsRoutes } from './modules/legal/terms.routes.js';
 import { paymentRoutes } from './modules/payments/payments.routes.js';
 import { stripeWebhookRoutes } from './modules/webhooks/stripe.routes.js';
 import {
@@ -210,6 +211,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(vendorRoutes);
   await app.register(stripeConnectRoutes, { returnOrigin: canonicalWebOrigin(env) });
   await app.register(legalAgreementRoutes);
+  await app.register(termsRoutes);
   await app.register(packageRoutes);
   await app.register(portfolioRoutes);
   await app.register(reviewRoutes, { webOrigin: canonicalWebOrigin(env) });

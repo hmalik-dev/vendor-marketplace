@@ -1,4 +1,5 @@
 import { seedReferenceData } from '@vendor-marketplace/db';
+import { CURRENT_TERMS_VERSION, legalDocumentSha256 } from '@vendor-marketplace/shared';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
@@ -21,6 +22,11 @@ import type {
   StripeConnectGateway,
   StripeEventNotification,
 } from '../lib/stripe.js';
+import {
+  findAcceptanceOfVersion,
+  insertAcceptance,
+} from '../modules/legal/legal-acceptance.dao.js';
+import { displayName, syncUserFromClerk } from '../modules/users/users.service.js';
 import type { ClerkUserSnapshot } from '../modules/users/users.service.js';
 import { buildServer } from '../server.js';
 import type { Clock } from '../plugins/clock.js';
@@ -114,6 +120,68 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
    * simply does not read.
    */
   emailGateway?: EmailGateway;
+  /**
+   * Whether a registered test identity signs in as an **ordinary** account —
+   * one that exists and holds the current Terms of Service. Default `true`.
+   *
+   * Since #429 an account is created by accepting the Terms, and every guarded
+   * route refuses a session whose account has not (`TERMS_REQUIRED`). So "a
+   * signed-in vendor" now means two rows rather than one, and a harness that
+   * produced only the first would put every suite in the product behind an
+   * acceptance interstitial that none of them is about.
+   *
+   * Both rows are written through the real tables — this is fixture setup, the
+   * same decision `db:seed:e2e` makes for the E2E accounts, not a stubbed DAO.
+   * The acceptance is `seed_fixture`, because nobody ticked a box.
+   *
+   * Set it `false` in a suite whose subject **is** the gate: the acceptance
+   * routes, and any suite asserting what an un-accepted session may reach.
+   */
+  acceptTerms?: boolean;
+}
+
+/**
+ * Gives a registered test identity the two rows an ordinary account has: the
+ * `users` row, and an acceptance of the current Terms of Service.
+ *
+ * Idempotent, because it runs on every request the suite makes — and it has to
+ * stay that way rather than being memoised per identity: many suites clear
+ * `users` in `afterEach`, so "already provisioned" is not a fact that survives
+ * the test that established it. The account row
+ * goes through `syncUserFromClerk` so role narrowing and name normalisation are
+ * the production ones, and the acceptance is written straight to the table
+ * rather than through the accept route — the route is what several suites are
+ * *testing*, and setup that goes through the subject under test proves nothing.
+ */
+async function ensureAcceptedAccount(
+  db: AppDatabase,
+  snapshot: ClerkUserSnapshot | undefined,
+): Promise<void> {
+  if (!snapshot) {
+    return;
+  }
+
+  const user = await syncUserFromClerk(db, snapshot);
+
+  if (
+    !user ||
+    (await findAcceptanceOfVersion(db, user.id, 'terms_of_service', CURRENT_TERMS_VERSION))
+  ) {
+    return;
+  }
+
+  await insertAcceptance(db, {
+    vendorId: null,
+    document: 'terms_of_service',
+    version: CURRENT_TERMS_VERSION,
+    documentSha256: legalDocumentSha256('terms_of_service'),
+    acceptanceMethod: 'seed_fixture',
+    acceptedByUserId: user.id,
+    acceptedByName: displayName(user),
+    businessName: null,
+    ip: null,
+    userAgent: null,
+  });
 }
 
 /** A fresh in-process PGlite, migrated: the harness's default database. */
@@ -656,6 +724,7 @@ export async function createTestHarness(
   await seedReferenceData(database.db);
 
   const clerkUsers = new Map<string, ClerkUserSnapshot>();
+  const acceptTerms = options.acceptTerms ?? true;
   const validWebhookSignatures = new Set<string>(['valid-signature']);
   const stripe = createFakeStripe();
   const email = createFakeEmail();
@@ -705,7 +774,24 @@ export async function createTestHarness(
         if (!token.startsWith('token-')) {
           throw new Error('Unrecognised test token');
         }
-        return token.slice('token-'.length);
+
+        const clerkUserId = token.slice('token-'.length);
+
+        /*
+         * The account behind the token, made ordinary.
+         *
+         * This is the seam because it runs before the auth plugin reads the
+         * database, and because the alternative — asking 42 call sites across
+         * 33 suites to seed two rows each — would make what those suites are
+         * about harder to see rather than easier. An identity nobody registered
+         * is left alone: the plugin then finds no account, which is the gated
+         * state, and a suite asserting on an unknown token still sees a refusal.
+         */
+        if (acceptTerms) {
+          await ensureAcceptedAccount(database.db, clerkUsers.get(clerkUserId));
+        }
+
+        return clerkUserId;
       },
       loadClerkUser: async (clerkUserId) => {
         const snapshot = clerkUsers.get(clerkUserId);

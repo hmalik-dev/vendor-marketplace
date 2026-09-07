@@ -5,6 +5,7 @@ import { slugSchema, type Category } from '@vendor-marketplace/shared';
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
+import { redirectIfTermsRequired } from './terms-gate';
 import {
   wireAvailabilityListSchema,
   wirePublicAvailabilityListSchema,
@@ -71,7 +72,7 @@ async function vendorSession(): Promise<VendorSession> {
  * Turns the two session failures every protected read shares into the same
  * redirects, so an expired session never surfaces as a raw 500 mid-render.
  */
-function rethrowUnlessSessionFailure(error: unknown, signInPath: string): never {
+async function rethrowUnlessSessionFailure(error: unknown, signInPath: string): Promise<never> {
   if (!(error instanceof ApiClientError)) {
     throw error;
   }
@@ -79,6 +80,13 @@ function rethrowUnlessSessionFailure(error: unknown, signInPath: string): never 
   if (error.statusCode === 401) {
     redirect(signInPath);
   }
+  /*
+   * Two different 403s. `TERMS_REQUIRED` is the first-sign-in gate and is
+   * cleared in one click; a plain `FORBIDDEN` is a suspension and is terminal.
+   * Sending the first to `/suspended` would tell a brand-new vendor their
+   * account had been banned.
+   */
+  await redirectIfTermsRequired(error);
   if (error.statusCode === 403) {
     redirect('/suspended');
   }
@@ -102,7 +110,7 @@ export async function getOwnVendorProfile(): Promise<WireVendorProfile | null> {
       return null;
     }
 
-    rethrowUnlessSessionFailure(error, signInPath);
+    throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
@@ -124,7 +132,7 @@ export async function getOwnPackages(): Promise<WireServicePackage[]> {
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return [];
     }
-    rethrowUnlessSessionFailure(error, signInPath);
+    throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
@@ -138,7 +146,7 @@ export async function getVendorDashboard(): Promise<WireVendorDashboard | null> 
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return null;
     }
-    rethrowUnlessSessionFailure(error, signInPath);
+    throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
@@ -151,7 +159,7 @@ export async function getOwnPortfolio(): Promise<WirePortfolioItem[]> {
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return [];
     }
-    rethrowUnlessSessionFailure(error, signInPath);
+    throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
@@ -167,7 +175,7 @@ export async function getOwnAvailability(): Promise<WireAvailability[]> {
     if (error instanceof ApiClientError && error.statusCode === 404) {
       return [];
     }
-    rethrowUnlessSessionFailure(error, signInPath);
+    throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
@@ -475,7 +483,7 @@ export async function getPayoutStatus(): Promise<WireVendorPayoutStatus | null> 
       return null;
     }
 
-    rethrowUnlessSessionFailure(error, signInPath);
+    throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 
@@ -505,6 +513,6 @@ export async function getAgreementStatus(): Promise<WireVendorAgreementStatus | 
       return null;
     }
 
-    rethrowUnlessSessionFailure(error, signInPath);
+    throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }

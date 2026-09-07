@@ -10,6 +10,7 @@ import {
   BOOKING_STATUSES,
   BUDGET_TIERS,
   LEGAL_ACCEPTANCE_DOCUMENTS,
+  LEGAL_ACCEPTANCE_METHODS,
   PAYOUT_MODELS,
   PRICE_TYPES,
   REVIEW_TYPES,
@@ -73,6 +74,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'legal_document', values: LEGAL_ACCEPTANCE_DOCUMENTS },
     { enumName: 'admin_action', values: ADMIN_ACTIONS },
     { enumName: 'admin_action_subject', values: ADMIN_ACTION_SUBJECTS },
+    { enumName: 'legal_acceptance_method', values: LEGAL_ACCEPTANCE_METHODS },
     { enumName: 'us_state', values: US_STATE_CODES },
   ];
 

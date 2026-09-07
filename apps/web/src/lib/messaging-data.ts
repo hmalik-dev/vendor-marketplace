@@ -4,6 +4,7 @@ import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { reportSwallowedError } from './report-error';
 import { signInPathReturningHere } from './requested-path';
+import { redirectIfTermsRequired } from './terms-gate';
 import {
   wireConversationListSchema,
   wireNotificationPageSchema,
@@ -40,6 +41,14 @@ async function redirectIfSignedOut(error: unknown): Promise<void> {
   if (error instanceof ApiClientError && error.statusCode === 401) {
     redirect(await signInPathReturningHere());
   }
+
+  /*
+   * Nor is an un-accepted account an empty inbox. The acceptance gate (#429)
+   * answers every read 403 `TERMS_REQUIRED` until the box is ticked, and
+   * degrading that would make this surface say there are no conversations when
+   * the reader is simply not through the gate yet.
+   */
+  await redirectIfTermsRequired(error);
 }
 
 /**

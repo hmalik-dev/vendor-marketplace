@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
+import { redirectIfTermsRequired } from './terms-gate';
 import { wireBookingRequestListSchema, type WireBookingRequest } from './wire-schemas';
 
 /**
@@ -41,6 +42,15 @@ export async function getOwnBookingRequests(
     if (error instanceof ApiClientError && error.statusCode === 401) {
       redirect(await signInPathReturningHere());
     }
+
+    /*
+     * Nor is an un-accepted account an empty queue. The acceptance gate (#429)
+     * answers every read 403 `TERMS_REQUIRED` until the box is ticked, and
+     * degrading that to `[]` would make this surface say nothing is waiting
+     * when the reader is simply not through the gate yet — the same claim the
+     * 401 branch above exists to stop it making.
+     */
+    await redirectIfTermsRequired(error);
 
     /*
      * The dashboard's subject is the request queue, but its stats and its

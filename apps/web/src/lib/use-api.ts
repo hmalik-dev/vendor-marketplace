@@ -7,9 +7,11 @@ import {
   uploadedImageSchema,
   type UploadedImage,
 } from '@vendor-marketplace/shared';
+import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { apiOrigin } from '@/config/public-env';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
+import { isGateExemptPath, isTermsRequired, termsAcceptancePath } from './terms-gate-paths';
 
 export type BrowserRequestOptions<T> = Omit<ApiRequestOptions<T>, 'token'>;
 
@@ -26,13 +28,43 @@ const BASE_URL = apiOrigin();
  */
 export function useApi(): BrowserRequest {
   const { getToken } = useAuth();
+  const router = useRouter();
 
   return useCallback(
     async <T>(path: string, options: BrowserRequestOptions<T>): Promise<T> => {
       const token = await getToken();
-      return apiRequest(path, { ...options, token });
+
+      try {
+        return await apiRequest(path, { ...options, token });
+      } catch (error) {
+        /*
+         * The acceptance gate (#429), handled once for every client call rather
+         * than in each `catch`.
+         *
+         * A session that has not accepted the current Terms is refused by every
+         * guarded route, so no caller here has a sensible alternative to sending
+         * the reader to the interstitial — and several would otherwise report
+         * the refusal as something it is not: the vendor profile's message
+         * button reads a 403 as "only a customer account can start a thread",
+         * which is a wrong and unfixable answer to give somebody who is one tick
+         * away from being able to. The error is still thrown so the caller's own
+         * cleanup runs; the navigation is already under way.
+         *
+         * **Except on the pages the gate must not take away.** This funnel is
+         * ambient — `NotificationBell` is mounted by the root layout and fetches
+         * on mount — so without the exemption a gated reader who opens `/terms`
+         * in its own tab, from the link beside the very checkbox, is pushed back
+         * to the gate a round trip later. `/support` is the same case and worse:
+         * the person most likely to need it is the one who cannot get through.
+         */
+        if (isTermsRequired(error) && !isGateExemptPath(window.location.pathname)) {
+          router.push(termsAcceptancePath(window.location.pathname + window.location.search));
+        }
+
+        throw error;
+      }
     },
-    [getToken],
+    [getToken, router],
   );
 }
 

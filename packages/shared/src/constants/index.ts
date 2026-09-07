@@ -1384,6 +1384,16 @@ export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
+  /**
+   * The session is genuine and the account has not accepted the current Terms
+   * of Service, so nothing it could ask for may be answered yet.
+   *
+   * Distinct from `FORBIDDEN` because the two are opposite instructions to the
+   * frontend: a `FORBIDDEN` is terminal and sends the reader to `/suspended`,
+   * while this one is a gate they clear themselves in one click. Answering it
+   * as a plain 403 put every un-accepted account on the suspended screen.
+   */
+  TERMS_REQUIRED: 'TERMS_REQUIRED',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
   RATE_LIMITED: 'RATE_LIMITED',

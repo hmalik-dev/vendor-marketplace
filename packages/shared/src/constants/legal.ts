@@ -48,13 +48,14 @@ export const LEGAL_PATHS: Record<LegalDocumentSlug, string> = {
 export const LEGAL_JUMP_RAIL_MIN_SECTIONS = 6;
 
 /**
- * The documents a vendor can be asked to accept.
+ * The documents an account can be asked to accept.
  *
- * **Only `vendor_agreement` has a writer today.** `terms_of_service` is in the
- * vocabulary because frame `32`'s agreements table lists it — accepted at
- * sign-up, which is Clerk's step and captures no record this product can see —
- * and because the column would otherwise have to change shape the day one is
- * captured. Nothing writes it, and nothing invents a row claiming it was.
+ * **Both have a writer.** `vendor_agreement` is step 3 of vendor onboarding;
+ * `terms_of_service` is the first-sign-in gate at `TERMS_ACCEPTANCE_PATH`,
+ * which every account traverses however it was created. It was an unwritten
+ * enum value until #429 — the shape `disputed` had before #425 gave it one —
+ * and the reason it could not be written was that the row was anchored to a
+ * vendor profile a customer does not have.
  */
 export const LEGAL_ACCEPTANCE_DOCUMENTS = ['vendor_agreement', 'terms_of_service'] as const;
 export type LegalAcceptanceDocument = (typeof LEGAL_ACCEPTANCE_DOCUMENTS)[number];
@@ -184,3 +185,53 @@ export function vendorAgreementTerms(): readonly {
     },
   ];
 }
+
+/**
+ * The version of the Terms of Service every account must hold.
+ *
+ * The same shape as `CURRENT_VENDOR_AGREEMENT_VERSION` and for the same
+ * reason: raising it does not rewrite anybody's record, it adds a row when they
+ * accept the new one, and until they do the account is held at the acceptance
+ * gate. It is a version a human chose — never derived from the document hash,
+ * because a typo fix nobody needs to re-accept would move a derived one and put
+ * every signed-in account back through the gate for a corrected comma.
+ */
+export const CURRENT_TERMS_VERSION = 'v1.0';
+
+/**
+ * How an acceptance was made, recorded on the row.
+ *
+ * Without it a later flow that accepts some other way is retroactively
+ * indistinguishable from this one, and "how did they accept" is the first
+ * question asked of a clickwrap record that is challenged.
+ *
+ * - `clickwrap_checkbox` — an unticked box the person ticked, with the document
+ *   named and linked beside it. Both real writers use this.
+ * - `seed_fixture` — written by `db:seed:e2e` so an automated pass can reach the
+ *   surfaces behind the gate. It is **not** a claim that a person accepted
+ *   anything, and labelling it as one would put a fabricated act in the one
+ *   table whose whole value is that it is true.
+ */
+export const LEGAL_ACCEPTANCE_METHODS = ['clickwrap_checkbox', 'seed_fixture'] as const;
+export type LegalAcceptanceMethod = (typeof LEGAL_ACCEPTANCE_METHODS)[number];
+
+/**
+ * Which Markdown file each acceptable document is, so the hash recorded on a
+ * row and the prose the person read cannot be sourced from different places.
+ */
+export const LEGAL_ACCEPTANCE_CONTENT: Record<LegalAcceptanceDocument, LegalContentSlug> = {
+  vendor_agreement: 'vendor-agreement',
+  terms_of_service: 'terms',
+};
+
+/**
+ * The first-sign-in acceptance gate — the only page an account that has not
+ * accepted the current Terms can reach.
+ *
+ * It is on `/after-sign-in`'s path rather than inside the sign-up form because
+ * `sign-up-form.tsx` renders Clerk's prebuilt `<SignUp>`: there is no seam in
+ * that form to put a checkbox in, and a box on the role step before it is
+ * bypassed by every social sign-up that enters Clerk directly. Every account
+ * traverses this, however it was created.
+ */
+export const TERMS_ACCEPTANCE_PATH = '/accept-terms';

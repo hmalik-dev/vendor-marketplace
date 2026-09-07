@@ -9,6 +9,7 @@ import { ApiClientError } from '@/lib/api-client';
 import { getAdminVendorFacets, getAdminVendors } from '@/lib/admin-data';
 import { adminQueryString, boundedText, displayRating, oneOf } from '@/lib/admin-params';
 import { getCurrentUser } from '@/lib/current-user';
+import { isTermsRequired, termsAcceptancePath } from '@/lib/terms-gate';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 
 /** Reads live accounts; never cached. */
@@ -89,9 +90,28 @@ export async function GET(request: NextRequest): Promise<Response> {
   try {
     user = await getCurrentUser();
   } catch (error) {
+    /*
+     * Two different 403s since #429. An operator held at the acceptance gate is
+     * one tick from usable and has somewhere to go, so this link takes them
+     * there — a download is a navigation, and the browser follows it. Answering
+     * them the same opaque `Forbidden` a suspension gets would tell an
+     * un-onboarded admin their account had been banned, which is the mistake
+     * the rest of this change went through six call sites to remove.
+     *
+     * The suspended answer is left exactly as it was: this is a bulk-data URL,
+     * and a banned operator gets a refusal rather than a redirect.
+     */
+    if (isTermsRequired(error)) {
+      return Response.redirect(
+        new URL(termsAcceptancePath(request.nextUrl.pathname), request.nextUrl.origin),
+        303,
+      );
+    }
+
     if (error instanceof ApiClientError && error.statusCode === 403) {
       return new Response('Forbidden', { status: 403 });
     }
+
     throw error;
   }
 

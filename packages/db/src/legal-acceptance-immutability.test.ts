@@ -1,4 +1,5 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { legalDocumentSha256 } from '@vendor-marketplace/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, refusalOf, type TestDatabase } from './testing/test-db.js';
 import { legalAcceptances } from './schema/index.js';
@@ -9,12 +10,28 @@ import { legalAcceptances } from './schema/index.js';
  *
  * Inspecting the schema would only prove that somebody wrote a trigger. What
  * has to hold is that an UPDATE and a DELETE actually fail against the engine
- * this ships on — and that the one delete that is legitimate, the cascade from
- * erasing the whole vendor account, still gets through. All three are
- * attempted here rather than read off the DDL.
+ * this ships on — and that the deletes that are legitimate, the cascades from
+ * erasing an account or a vendor profile, still get through.
+ *
+ * **#429 moved the anchor from the vendor to the user, and the rule with it.**
+ * A Terms acceptance carries `vendor_id IS NULL`, and the old discriminator —
+ * "no vendor exists with `OLD.vendor_id`" — is true of every such row. So the
+ * customer-side tests below are not extra coverage of the same rule: they are
+ * the cases where the previous rule silently permitted a direct delete of the
+ * one record this table exists to keep.
  */
-const USER = '44444444-4444-4444-8444-444444444444';
+const VENDOR_USER = '44444444-4444-4444-8444-444444444444';
 const VENDOR = '55555555-5555-4555-8555-555555555555';
+const CUSTOMER_USER = '66666666-6666-4666-8666-666666666666';
+
+/*
+ * Whatever a writer would actually send. These are inputs to an insert, not the
+ * subject of any assertion here — the subject is what the table refuses — so
+ * they come from the manifest rather than being pinned, and a version bump does
+ * not leave a stale literal behind.
+ */
+const AGREEMENT_SHA = legalDocumentSha256('vendor_agreement');
+const TERMS_SHA = legalDocumentSha256('terms_of_service');
 
 let testDb: TestDatabase;
 
@@ -32,17 +49,20 @@ beforeAll(async () => {
 
   await testDb.db.execute(
     sql.raw(`INSERT INTO users (id, clerk_user_id, email, role, first_name, last_name)
-             VALUES ('${USER}', 'user_agreement', 'agreement@example.com', 'vendor', 'June', 'Harlow')`),
+             VALUES ('${VENDOR_USER}', 'user_agreement', 'agreement@example.com', 'vendor', 'June', 'Harlow'),
+                    ('${CUSTOMER_USER}', 'user_terms', 'terms@example.com', 'customer', 'Ada', 'Reyes')`),
   );
   await testDb.db.execute(
     sql.raw(`INSERT INTO vendor_profiles (id, user_id, business_name, slug)
-             VALUES ('${VENDOR}', '${USER}', 'June Harlow Photography', 'june-harlow')`),
+             VALUES ('${VENDOR}', '${VENDOR_USER}', 'June Harlow Photography', 'june-harlow')`),
   );
   await testDb.db.insert(legalAcceptances).values({
     vendorId: VENDOR,
     document: 'vendor_agreement',
     version: 'v1.0',
-    acceptedByUserId: USER,
+    documentSha256: AGREEMENT_SHA,
+    acceptanceMethod: 'clickwrap_checkbox',
+    acceptedByUserId: VENDOR_USER,
     acceptedByName: 'June Harlow',
     businessName: 'June Harlow Photography',
     ip: '203.0.113.7',
@@ -59,6 +79,50 @@ describe('legal_acceptances is append-only', () => {
     expect(await acceptanceCount()).toBe(1);
   });
 
+  /**
+   * The shape that had nowhere to go before #429: a customer accepting the
+   * Terms on behalf of nobody. `business_name` is null rather than `''`,
+   * because an empty string in that column is a claim about a business rather
+   * than the absence of one.
+   */
+  it('records a Terms acceptance with no vendor and no business name', async () => {
+    await testDb.db.insert(legalAcceptances).values({
+      vendorId: null,
+      document: 'terms_of_service',
+      version: 'v1.0',
+      documentSha256: TERMS_SHA,
+      acceptanceMethod: 'clickwrap_checkbox',
+      acceptedByUserId: CUSTOMER_USER,
+      acceptedByName: 'Ada Reyes',
+      businessName: null,
+      ip: '198.51.100.4',
+      userAgent: 'Mozilla/5.0',
+    });
+
+    const [row] = await testDb.db
+      .select()
+      .from(legalAcceptances)
+      .where(eq(legalAcceptances.acceptedByUserId, CUSTOMER_USER));
+
+    expect({
+      document: row?.document,
+      vendorId: row?.vendorId,
+      businessName: row?.businessName,
+      documentSha256: row?.documentSha256,
+      acceptanceMethod: row?.acceptanceMethod,
+      acceptedByName: row?.acceptedByName,
+      ip: row?.ip,
+    }).toEqual({
+      document: 'terms_of_service',
+      vendorId: null,
+      businessName: null,
+      documentSha256: TERMS_SHA,
+      acceptanceMethod: 'clickwrap_checkbox',
+      acceptedByName: 'Ada Reyes',
+      ip: '198.51.100.4',
+    });
+  });
+
   it('refuses an update', async () => {
     const message = await refusalOf(
       testDb.db,
@@ -69,10 +133,39 @@ describe('legal_acceptances is append-only', () => {
     expect(message).toContain('UPDATE');
   });
 
+  /** The same refusal on the row whose `vendor_id` is null. */
+  it('refuses an update of a Terms row', async () => {
+    const message = await refusalOf(
+      testDb.db,
+      `UPDATE legal_acceptances SET document_sha256 = '${AGREEMENT_SHA}' WHERE vendor_id IS NULL`,
+    );
+
+    expect(message).toContain('append-only');
+    expect(message).toContain('UPDATE');
+  });
+
   it('refuses a delete', async () => {
     const message = await refusalOf(
       testDb.db,
       `DELETE FROM legal_acceptances WHERE vendor_id = '${VENDOR}'`,
+    );
+
+    expect(message).toContain('append-only');
+    expect(message).toContain('DELETE');
+  });
+
+  /**
+   * **The case the nullable column opened.**
+   *
+   * `0029` allowed a delete when no vendor existed with `OLD.vendor_id`, and a
+   * null names no vendor — so every Terms row satisfied it. This assertion is
+   * the difference between a customer's acceptance being a record and being a
+   * row anybody with a psql prompt can drop.
+   */
+  it('refuses a direct delete of a Terms row whose vendor_id is null', async () => {
+    const message = await refusalOf(
+      testDb.db,
+      'DELETE FROM legal_acceptances WHERE vendor_id IS NULL',
     );
 
     expect(message).toContain('append-only');
@@ -94,12 +187,12 @@ describe('legal_acceptances is append-only', () => {
   /**
    * The way out that a test which never touches `search_path` cannot see.
    *
-   * The trigger asks "is this vendor still here" by reading `vendor_profiles`.
-   * A `SECURITY INVOKER` function resolves that name against the **caller's**
-   * path, so an empty shadow table on the path makes the answer "no" for every
-   * row and the guard waves the delete through — three statements, from any
-   * role that can create a schema, and every acceptance record is gone while
-   * the vendors are all still trading.
+   * The trigger asks "is this person still here" by reading `users`, and "is
+   * this vendor still here" by reading `vendor_profiles`. A `SECURITY INVOKER`
+   * function resolves those names against the **caller's** path, so empty
+   * shadow tables on the path make both answers "no" for every row and the
+   * guard waves the delete through — three statements, from any role that can
+   * create a schema, and every acceptance record is gone.
    *
    * The whole suite above ran on the default path and was green over this. It
    * is the reason `SET search_path` is on both functions rather than left to
@@ -122,7 +215,10 @@ describe('legal_acceptances is append-only', () => {
   });
 
   it('leaves the row exactly as it was written', async () => {
-    const [row] = await testDb.db.select().from(legalAcceptances);
+    const [row] = await testDb.db
+      .select()
+      .from(legalAcceptances)
+      .where(eq(legalAcceptances.vendorId, VENDOR));
 
     expect(row).toBeDefined();
     expect({
@@ -130,12 +226,16 @@ describe('legal_acceptances is append-only', () => {
       document: row?.document,
       acceptedByName: row?.acceptedByName,
       businessName: row?.businessName,
+      documentSha256: row?.documentSha256,
+      acceptanceMethod: row?.acceptanceMethod,
       ip: row?.ip,
     }).toEqual({
       version: 'v1.0',
       document: 'vendor_agreement',
       acceptedByName: 'June Harlow',
       businessName: 'June Harlow Photography',
+      documentSha256: AGREEMENT_SHA,
+      acceptanceMethod: 'clickwrap_checkbox',
       ip: '203.0.113.7',
     });
   });
@@ -150,24 +250,57 @@ describe('legal_acceptances is append-only', () => {
       vendorId: VENDOR,
       document: 'vendor_agreement',
       version: 'v1.0',
-      acceptedByUserId: USER,
+      documentSha256: AGREEMENT_SHA,
+      acceptanceMethod: 'clickwrap_checkbox',
+      acceptedByUserId: VENDOR_USER,
       acceptedByName: 'June Harlow',
       businessName: 'June Harlow Photography',
     });
 
-    expect(await acceptanceCount()).toBe(2);
+    expect(await acceptanceCount()).toBe(3);
   });
 
   /**
-   * The exact shape of the rule: not "no deletes ever", but "no row leaves
-   * while the vendor it is about is still here". Erasing the account takes the
-   * acceptances with it, because an acceptance with no vendor behind it records
-   * nothing — and that is the only delete that succeeds.
+   * Branch 2 of the rule, unchanged from `0029` in behaviour: erasing the
+   * vendor profile takes the acceptances made on its behalf, because an
+   * agreement with no vendor behind it records nothing about anybody.
+   *
+   * The vendor's own **Terms** acceptance is a different row about a person who
+   * is still here, so it survives — which is the whole reason the two branches
+   * ask different questions.
    */
-  it('lets the cascade through when the whole vendor account is erased', async () => {
-    expect(await acceptanceCount()).toBe(2);
+  it('lets the cascade through when the vendor profile is erased, and keeps that person’s Terms row', async () => {
+    await testDb.db.insert(legalAcceptances).values({
+      vendorId: null,
+      document: 'terms_of_service',
+      version: 'v1.0',
+      documentSha256: TERMS_SHA,
+      acceptanceMethod: 'clickwrap_checkbox',
+      acceptedByUserId: VENDOR_USER,
+      acceptedByName: 'June Harlow',
+      businessName: null,
+    });
 
-    await testDb.db.execute(sql.raw(`DELETE FROM users WHERE id = '${USER}'`));
+    expect(await acceptanceCount()).toBe(4);
+
+    await testDb.db.execute(sql.raw(`DELETE FROM vendor_profiles WHERE id = '${VENDOR}'`));
+
+    const remaining = await testDb.db.select().from(legalAcceptances);
+
+    expect(remaining.map((row) => `${row.document}:${row.acceptedByUserId}`).sort()).toEqual(
+      [`terms_of_service:${VENDOR_USER}`, `terms_of_service:${CUSTOMER_USER}`].sort(),
+    );
+  });
+
+  /**
+   * Branch 1: the person is erased. `accepted_by_user_id` is `ON DELETE
+   * CASCADE`, so this is the delete the rule has to *permit* rather than one it
+   * merely tolerates — refusing it would make erasing an account impossible
+   * instead of making the record safer.
+   */
+  it('lets the cascade through when the person is erased', async () => {
+    await testDb.db.execute(sql.raw(`DELETE FROM users WHERE id = '${CUSTOMER_USER}'`));
+    await testDb.db.execute(sql.raw(`DELETE FROM users WHERE id = '${VENDOR_USER}'`));
 
     expect(await acceptanceCount()).toBe(0);
   });
