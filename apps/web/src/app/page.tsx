@@ -8,26 +8,18 @@ import {
   LANDING_CATEGORY_COUNT,
   LANDING_JUMP_CATEGORY_SLUGS,
   serialiseJsonLd,
-  toDateString,
   type Category,
 } from '@vendor-marketplace/shared';
 import { ShieldCheck, Star, Tag, type LucideIcon } from 'lucide-react';
 import { HeroSearch } from '@/components/landing/hero-search';
 import { PhotoCluster } from '@/components/landing/photo-cluster';
-import { StatusStrip } from '@/components/landing/status-strip';
 import { Button } from '@/components/ui/button';
 import { StockPhoto } from '@/components/ui/stock-photo';
 import { VendorCard } from '@/components/vendors/vendor-card';
 import { siteOrigin } from '@/config/env';
-import { getOwnBookingRequests, getOwnBookings } from '@/lib/customer-data';
 import { readRoleForChrome, redirectVendorToDashboard } from '@/lib/current-user';
-import {
-  GENERIC_TRUST_COPY,
-  hasStatusStrip,
-  landingStatus,
-  trustCopyFor,
-} from '@/lib/landing-status';
-import type { LandingStatus, TrustTitle } from '@/lib/landing-status';
+import { GENERIC_TRUST_COPY } from '@/lib/landing-status';
+import type { TrustTitle } from '@/lib/landing-status';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
 
 /**
@@ -253,47 +245,26 @@ function landingCategories(categories: readonly Category[]): Category[] {
  * list on their own (`degradeToEmpty` in `customer-data.ts`), and this is what
  * that degrades *to* on this page.
  */
-const EMPTY_STATUS: LandingStatus = { next: null, requestsWaitingOnVendor: 0 };
-
-/**
- * One of the customer's own reads, degraded to nothing rather than allowed to
- * navigate.
- *
- * **`/` must render for a signed-in visitor even when the API will not answer
- * them** — #33's law, which is why `readIdentityOnPublicRoute` exists at all.
- * The two hub reads do not honour it on their own: `customerToken()` calls
- * `redirect()` when Clerk hands back no token, and `degradeToEmpty` redirects
- * on a 401 *before* it can return its empty list. Both are right for
- * `/bookings`, whose whole subject is those rows. Here they are wrong: a
- * customer whose JWT the API rejects — a rotated key, clock skew, a session
- * revoked while the cookie survives — would be bounced off the marketing home
- * to `/sign-in?returnTo=/`, and back again on arrival.
- *
- * So the catch is **total, navigation signals included**, which is the one
- * place in this app that is the correct handling rather than a swallowed bug:
- * the only redirect these can raise is to sign-in, and this page is public.
- * The cost of failing is the strip and the resolved trust copy; the page is
- * not about them.
- */
-async function ownRowsOrNothing<T>(read: () => Promise<T[]>): Promise<T[]> {
-  try {
-    return await read();
-  } catch {
-    return [];
-  }
-}
 
 /**
  * Never prerendered, and **declared rather than inherited** (#428).
  *
  * This route is already dynamic — `redirectVendorToDashboard()` reaches Clerk's
  * `auth()` on the first line of `HomePage`, and `SiteHeader` does the same in
- * the root layout, so a dynamic API is in the tree either way. What changed is
- * the stake: `/` now renders a signed-in customer's **own** rows — their next
- * vendor's name, the event date and the amount held — into the HTML, in the
- * status strip's props and in the trust band's prose. If this page's HTML ever
- * entered the Full Route Cache, that is one customer's payment record served to
- * every visitor after them.
+ * the root layout, so a dynamic API is in the tree either way.
+ *
+ * **The stake dropped on 2026-09-07 and the declaration still stands.** #428
+ * rendered a signed-in customer's own rows into the HTML — their next vendor's
+ * name, the event date, the amount held — and caching that would have served
+ * one customer's payment record to every visitor after them. The status strip
+ * and the booking-resolved trust copy are both gone, so no per-customer value
+ * reaches this page any more.
+ *
+ * What remains is enough on its own: the **composition** still differs by role.
+ * A signed-in customer gets no `How it works`, no featured row and no closing
+ * band, and a cached copy of either variant would be wrong for the other half
+ * of the audience. That is a weaker reason than leaking a payment record, and
+ * it is still a sufficient one.
  *
  * Inheriting that from two `auth()` calls the page does not own is thinner than
  * it looks: `readIdentityOnPublicRoute` and `readRoleForChrome` catch
@@ -324,44 +295,32 @@ export default async function HomePage(): Promise<React.ReactElement> {
   /*
     One wave, and every read in it bounded by `API_REQUEST_TIMEOUT_MS` (#390).
 
-    Every one of them degrades to an empty list, so a wedged upstream costs
-    this page its category row, its featured row and a signed-in customer's
-    status strip, and keeps everything else — but before the deadline existed,
+    Both degrade to an empty list, so a wedged upstream costs this page its
+    category row and its featured row and keeps everything else — but before
+    the deadline existed,
     "degrades" was theoretical: a suspended API never answers at all, so `/`
     held the connection open with zero bytes flushed until the platform's
     gateway ended it. The visitor got a blank tab and then somebody else's 504
     page. Measured 2026-08-31: 35s and 0 bytes before, 8.1s and a rendered page
     after.
 
-    The two reference reads degrade on their own; the customer's two are the
-    hub's, which redirect rather than degrade, so `ownRowsOrNothing` is what
-    holds them to this route's rule.
+    Both are reference reads that degrade on their own. The customer's own
+    rows used to be fetched here too, wrapped so a redirect could not escape;
+    the status strip's removal took them with it.
   */
-  const [categories, featuredVendors, requests, bookings] = await Promise.all([
+  const [categories, featuredVendors] = await Promise.all([
     getCategories(),
     // Fetched only for the composition that renders it — the featured row is
     // off for a signed-in customer, and a discarded round trip is one this
     // page's own deadline comment measures the cost of.
     isCustomer ? [] : getFeaturedVendors(),
-    isCustomer ? ownRowsOrNothing(getOwnBookingRequests) : [],
-    isCustomer ? ownRowsOrNothing(getOwnBookings) : [],
   ]);
   const featured = landingCategories(categories);
-  const status = isCustomer ? landingStatus(requests, bookings) : EMPTY_STATUS;
-  const trustSignals = isCustomer ? trustCopyFor(status) : GENERIC_TRUST_COPY;
+  /* Generic for both auth states — ruled 2026-09-07; see `landing-status.ts`. */
+  const trustSignals = GENERIC_TRUST_COPY;
 
   return (
     <>
-      {/*
-        The signed-in customer's continuation content, in the space the removed
-        acquisition sections used to occupy. It is the *only* thing above the
-        hero, and it is absent entirely when there is nothing in it — see
-        `hasStatusStrip`.
-      */}
-      {isCustomer && hasStatusStrip(status) ? (
-        <StatusStrip status={status} serverToday={toDateString(new Date())} />
-      ) : null}
-
       <script
         type="application/ld+json"
         /*

@@ -803,26 +803,17 @@ describe('HomePage, signed in as a customer', () => {
     );
   });
 
-  it('resolves the trust copy against the booking the customer actually has', async () => {
+  /*
+   * Ruled 2026-09-07: the band is generic in both auth states. It used to
+   * resolve against the reader's own booking — "Your $2,050 for June Harlow
+   * Photography is held by Stripe until…" — and this asserts the reversal
+   * rather than merely dropping the old test, because a customer WITH a
+   * booking is exactly the case that would regress.
+   */
+  it('keeps the trust band generic even for a customer who has a booking', async () => {
     getOwnBookings.mockResolvedValue([booking()]);
     getOwnBookingRequests.mockResolvedValue([request()]);
 
-    render(await HomePage());
-
-    expect(
-      screen.getByText(/Your \$2,050 for June Harlow Photography is held by Stripe/),
-    ).toBeDefined();
-    expect(screen.getByText(/You can review June Harlow Photography once/)).toBeDefined();
-    /* Unchanged and generic — there is nothing booking-specific about a fee
-     * that is not charged. */
-    expect(
-      screen.getByText(
-        'Vendors publish what they charge, and nothing is added on top of it at checkout.',
-      ),
-    ).toBeDefined();
-  });
-
-  it('falls back to the generic trust copy when there is no booking to resolve against', async () => {
     render(await HomePage());
 
     expect(
@@ -830,9 +821,20 @@ describe('HomePage, signed in as a customer', () => {
         'Stripe holds your payment until your event is complete, then releases it to the vendor.',
       ),
     ).toBeDefined();
+    expect(screen.queryByText(/Your \$2,050 for June Harlow Photography/)).toBeNull();
+    expect(screen.queryByText(/You can review June Harlow Photography once/)).toBeNull();
   });
 
-  it('carries the next booking and the waiting requests in the status strip', async () => {
+  /*
+   * The `Next up` strip was removed on 2026-09-07. The reason is the one worth
+   * guarding: **a customer can have several upcoming bookings**, so a single
+   * "next up" states as fact a choice the data does not make. The hub already
+   * shows all of them without having to pick one.
+   *
+   * Asserted with a customer who HAS bookings and open requests, because the
+   * empty case would pass against the strip too.
+   */
+  it('renders no status strip, even for a customer with bookings and open requests', async () => {
     getOwnBookings.mockResolvedValue([booking()]);
     getOwnBookingRequests.mockResolvedValue([
       request(),
@@ -841,32 +843,9 @@ describe('HomePage, signed in as a customer', () => {
 
     render(await HomePage());
 
-    const strip = screen.getByRole('region', { name: 'Your bookings at a glance' });
-
-    expect(strip.textContent).toContain('Next up — June Harlow Photography');
-    expect(strip.textContent).toContain('1 request waiting on a vendor');
-    expect(screen.getByRole('link', { name: 'All bookings →' })).toHaveProperty(
-      'href',
-      'http://localhost:3000/bookings',
-    );
-  });
-
-  /* Render only the items that exist. */
-  it('renders the waiting requests alone when there is no confirmed booking', async () => {
-    getOwnBookingRequests.mockResolvedValue([request({ status: 'pending' })]);
-
-    render(await HomePage());
-
-    const strip = screen.getByRole('region', { name: 'Your bookings at a glance' });
-
-    expect(strip.textContent).toContain('1 request waiting on a vendor');
-    expect(strip.textContent).not.toContain('Next up');
-  });
-
-  it('omits the strip entirely with no bookings and no open requests', async () => {
-    render(await HomePage());
-
     expect(screen.queryByRole('region', { name: 'Your bookings at a glance' })).toBeNull();
+    expect(document.body.textContent).not.toContain('Next up');
+    expect(document.body.textContent).not.toContain('waiting on a vendor');
   });
 
   /*
