@@ -534,6 +534,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   441: [], // footer against the newer frame; stone-400 read as text on an ink ground
   442: ['auth'], // check-then-insert race in acceptTerms — needs a ruling on repeat acceptances
   443: ['auth'], // frame 13 parity residue, incl. two access findings
+  444: ['auth'], // unwind must not decline the request behind a settled booking
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
