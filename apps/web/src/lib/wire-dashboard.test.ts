@@ -1,6 +1,7 @@
 import {
   adminActivityRowSchema,
   adminPaymentRowSchema,
+  adminPayoutRetryResultSchema,
   vendorDashboardSchema,
 } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
@@ -8,6 +9,7 @@ import { z } from 'zod';
 import {
   wireAdminActivityRowSchema,
   wireAdminPaymentRowSchema,
+  wireAdminPayoutRetryResultSchema,
   wireVendorDashboardSchema,
 } from './wire-schemas';
 
@@ -298,6 +300,79 @@ describe('the admin payments row at the wire boundary', () => {
 
     const stringified = JSON.parse(JSON.stringify(RELEASED_PAYMENT)) as unknown;
     const parsed = wireAdminPaymentRowSchema.parse(stringified) as Record<string, unknown>;
+
+    for (const field of shared) {
+      expect(
+        parsed[field],
+        `${field} arrived as ${typeof parsed[field]}, not a Date`,
+      ).toBeInstanceOf(Date);
+    }
+  });
+});
+
+/**
+ * The retry's answer — the fourth response this walker covers, and the one that
+ * got away.
+ *
+ * #432 gave the payments *row* its `z.coerce.date()` and gave the retry result
+ * the same `z.date()` with none, which is the failure mode inverted into its
+ * nastiest shape: `payoutReleasedAt` is null on every outcome except the one
+ * where the money moved, so the client parsed every failed retry cleanly and
+ * threw on success — telling the operator a completed transfer had failed,
+ * with the money already out of the platform balance. The route suite could not
+ * see it, because it reads the response object rather than its JSON.
+ */
+const RELEASED_RETRY = {
+  outcome: 'released' as const,
+  payoutStatus: 'released' as const,
+  payoutAttempts: 3,
+  payoutFailureReason: null,
+  payoutReleasedAt: '2026-09-07T11:31:00.000Z',
+  stripeTransferId: 'tr_test_9',
+  payoutFailing: false,
+};
+
+describe('the payout retry result at the wire boundary', () => {
+  it('parses the outcome that carries a date', () => {
+    const parsed = wireAdminPayoutRetryResultSchema.parse(RELEASED_RETRY);
+
+    expect(parsed.payoutReleasedAt).toEqual(new Date('2026-09-07T11:31:00.000Z'));
+    expect(parsed.outcome).toBe('released');
+    expect(parsed.payoutFailing).toBe(false);
+  });
+
+  it('parses the outcomes that do not', () => {
+    for (const outcome of ['failed', 'busy'] as const) {
+      const parsed = wireAdminPayoutRetryResultSchema.parse({
+        ...RELEASED_RETRY,
+        outcome,
+        payoutStatus: 'pending' as const,
+        payoutReleasedAt: null,
+        stripeTransferId: null,
+        payoutFailing: true,
+      });
+
+      expect(parsed.payoutReleasedAt).toBeNull();
+      expect(parsed.outcome).toBe(outcome);
+    }
+  });
+
+  /*
+   * The shared schema is what the client used to be handed, and it is what
+   * makes this a regression test rather than a restatement: it must reject the
+   * exact payload the wire schema accepts.
+   */
+  it('is rejected by the shared schema, which is why the twin exists', () => {
+    expect(adminPayoutRetryResultSchema.safeParse(RELEASED_RETRY).success).toBe(false);
+    expect(wireAdminPayoutRetryResultSchema.safeParse(RELEASED_RETRY).success).toBe(true);
+  });
+
+  it('coerces every date the result can carry', () => {
+    const shared = dateFields(adminPayoutRetryResultSchema);
+    expect(shared).toEqual(['payoutReleasedAt']);
+
+    const stringified = JSON.parse(JSON.stringify(RELEASED_RETRY)) as unknown;
+    const parsed = wireAdminPayoutRetryResultSchema.parse(stringified) as Record<string, unknown>;
 
     for (const field of shared) {
       expect(

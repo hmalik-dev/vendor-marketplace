@@ -621,8 +621,8 @@ export async function listPayments(
       /*
        * Derived here rather than projected in SQL. `admin.dao.ts` still holds
        * the predicate — a filter has to run in the database — but the *value*
-       * comes from the same shared function the retry below uses, so the two
-       * cannot answer differently for one row.
+       * comes from the same shared function the sweep's own retry uses, so the
+       * filter and the rows it returns cannot answer differently.
        */
       payoutFailing: isPayoutFailing(row),
     })),
@@ -668,17 +668,12 @@ export async function retryBookingPayout(
   });
 
   /*
-   * The booking's own `status` is dropped and answered as a payout state: the
-   * console asks "did the money move", and `payoutStatusOf` is the one function
-   * that turns the row into that answer.
+   * Returned as it came back. `retryPayoutRelease` derives `payoutStatus` and
+   * `payoutFailing` from the row it re-read, so there is nothing left for this
+   * layer to decide — and a second reading here is exactly the private copy
+   * this ticket exists to stop.
    */
-  const { status: _status, ...payout } = result;
-
-  return {
-    ...payout,
-    payoutStatus: payoutStatusOf(result),
-    payoutFailing: isPayoutFailing(result),
-  };
+  return result;
 }
 
 export async function listReviews(

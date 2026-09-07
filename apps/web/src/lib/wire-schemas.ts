@@ -33,6 +33,7 @@ import {
   adminCustomerRowSchema,
   adminMetricsSchema,
   adminPaymentRowSchema,
+  adminPayoutRetryResultSchema,
   adminReviewRowSchema,
   adminTagRowSchema,
   adminTagSuggestionResultSchema,
@@ -426,6 +427,21 @@ export const wireAdminPaymentRowSchema = adminPaymentRowSchema.extend({
 export type WireAdminPaymentRow = z.infer<typeof wireAdminPaymentRowSchema>;
 export const wireAdminPaymentPageSchema = paginatedSchema(wireAdminPaymentRowSchema);
 export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
+
+/**
+ * The retry's answer, with its date coerced — **the one that gets away** (#432).
+ *
+ * `payoutReleasedAt` is null on the `failed` and `busy` outcomes and a string
+ * on `released`, so passing the shared schema straight to `useApi` parses fine
+ * for every retry that did not work and throws for the one that did: the
+ * operator is told a completed transfer failed, in the API client's own words,
+ * while the money has already left the platform balance. Found by review, not
+ * by the suite — the route tests read the response object rather than its JSON.
+ */
+export const wireAdminPayoutRetryResultSchema = adminPayoutRetryResultSchema.extend({
+  payoutReleasedAt: z.coerce.date().nullable(),
+});
+export type WireAdminPayoutRetryResult = z.infer<typeof wireAdminPayoutRetryResultSchema>;
 
 export const wireAdminReviewRowSchema = adminReviewRowSchema.extend({
   createdAt: z.coerce.date(),

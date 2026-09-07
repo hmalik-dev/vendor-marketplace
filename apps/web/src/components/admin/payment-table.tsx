@@ -3,12 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import {
-  adminPayoutRetryResultSchema,
-  formatPrice,
-  type AdminPayoutRetryResult,
-  type PayoutStatus,
-} from '@vendor-marketplace/shared';
+import { formatPrice, type PayoutStatus } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
 import { Banner, type BannerStatus } from '@/components/ui/banner';
@@ -17,7 +12,11 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
 import { useApi } from '@/lib/use-api';
-import type { WireAdminPaymentRow } from '@/lib/wire-schemas';
+import {
+  wireAdminPayoutRetryResultSchema,
+  type WireAdminPaymentRow,
+  type WireAdminPayoutRetryResult,
+} from '@/lib/wire-schemas';
 
 const PAID_AT = new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -54,12 +53,30 @@ export const PAYOUT_FAILING_LABEL = 'Transfer failing';
  */
 function retryNotice(
   row: WireAdminPaymentRow,
-  result: AdminPayoutRetryResult,
+  result: WireAdminPayoutRetryResult,
 ): { status: BannerStatus; message: string } {
-  if (result.outcome === 'released') {
+  /*
+   * The **state** is read before the outcome, and that order is the point.
+   *
+   * A retry whose claim found the row already locked comes back `busy` — but
+   * the thing holding the lock may have been the scheduled sweep releasing this
+   * very payout, or a dispute landing on it. Reporting the outcome first would
+   * put "the scheduled release is already working this payout" beside a row
+   * that has just redrawn as Released, or promise a release that a hold has now
+   * cancelled. What happened to the money is the answer; `busy` only says who
+   * did it.
+   */
+  if (result.payoutStatus === 'released') {
     return {
       status: 'settled',
       message: `${row.vendorName} has been paid ${formatPrice(row.vendorPayoutCents)}.`,
+    };
+  }
+
+  if (result.payoutStatus === 'held') {
+    return {
+      status: 'pending',
+      message: 'A problem was reported on this booking, so the payout is on hold.',
     };
   }
 
@@ -98,7 +115,7 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
   async function retry(row: WireAdminPaymentRow): Promise<void> {
     const result = await call(`/admin/bookings/${row.bookingId}/payout/retry`, {
       method: 'PUT',
-      schema: adminPayoutRetryResultSchema,
+      schema: wireAdminPayoutRetryResultSchema,
     });
 
     /*
@@ -215,8 +232,15 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
               and a button that exists to be refused teaches an operator to
               distrust the whole column.
             */
+            /*
+              Not on a cancelled booking. Its residual is genuinely owed and
+              genuinely failing, so the row keeps the flag — but the service
+              refuses to force it by hand (D31 rewrote the amount after the
+              fact), and a button whose only outcome is a 409 teaches an
+              operator to distrust the whole column.
+            */
             cell: (row) =>
-              row.payoutFailing ? (
+              row.payoutFailing && row.status !== 'cancelled' ? (
                 <ConfirmAction
                   trigger={
                     <Button variant="secondary" size="sm">

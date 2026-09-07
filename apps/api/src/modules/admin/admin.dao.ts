@@ -24,6 +24,7 @@ import type {
   AdminBookingFlag,
   AdminPaymentFlag,
   AdminPayoutFilter,
+  PayoutModel,
   AdminVendorStatus,
   BookingStatus,
   ReviewType,
@@ -33,14 +34,15 @@ import type {
 import type { AppDatabase } from '../../lib/database.js';
 import { containsInsensitive } from '../../lib/like-pattern.js';
 /*
- * The sweep's own definition of an owed payout, imported rather than restated.
+ * The sweep's own definition of a failing payout, imported rather than restated.
  *
- * It is three clauses and they look trivial, which is exactly why they were
- * written out by hand in three places before #424 and drifted. The Overview's
- * payout-health count has to name the same set of rows the transfer names, or
- * the number an operator acts on describes a set the sweep does not work.
+ * It is `payoutOwedClauses` plus an attempt, and it looks trivial — which is
+ * exactly why the owed clauses were written out by hand in three places before
+ * #424 and drifted. The Payments filter and the Overview's count have to name
+ * the same rows the transfer names, or the number an operator acts on describes
+ * a set the sweep does not work.
  */
-import { payoutFailingClauses, payoutOwedClauses } from '../payments/payouts.dao.js';
+import { payoutFailingClauses } from '../payments/payouts.dao.js';
 
 /**
  * Every read and write the admin portal makes. Policy lives in the service; this
@@ -691,6 +693,8 @@ function bookingSelection() {
     vendorPayoutCents: bookings.vendorPayoutCents,
     stripePaymentIntentId: bookings.stripePaymentIntentId,
     stripeTransferId: bookings.stripeTransferId,
+    /* Read by `isPayoutFailing`, which is `payoutOwedClauses` plus an attempt. */
+    payoutModel: bookings.payoutModel,
     payoutReleasedAt: bookings.payoutReleasedAt,
     payoutAttempts: bookings.payoutAttempts,
     payoutFailureReason: bookings.payoutFailureReason,
@@ -712,6 +716,7 @@ export interface AdminBookingProjection {
   vendorPayoutCents: number;
   stripePaymentIntentId: string | null;
   stripeTransferId: string | null;
+  payoutModel: PayoutModel;
   payoutReleasedAt: Date | null;
   payoutAttempts: number;
   payoutFailureReason: string | null;
@@ -1240,7 +1245,7 @@ export interface AdminMetricTotals {
 }
 
 export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetricTotals> {
-  const [bookingTotals, activeVendors, userRows, pending, reviewRows, blocked, failing] =
+  const [bookingTotals, activeVendors, userRows, pending, reviewRows, payoutHealth] =
     await Promise.all([
       /*
        * One scan of `bookings` for both numbers. They were two full scans of the
@@ -1273,29 +1278,25 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
         .where(eq(tagSuggestions.status, 'pending')),
       db.select({ total: sql<number>`count(*)::int` }).from(reviews),
       /*
-       * Vendors the platform owes money it cannot send (#432).
+       * Payout health, and **both numbers over one set** (#432).
        *
-       * The set is bookings **owed a transfer** — the money is with the
-       * platform, the vendor has not been paid, and a full refund wrote zero —
-       * narrowed to those whose account cannot receive it. A vendor who has
-       * never onboarded and never taken a booking is nobody's emergency and is
-       * deliberately not counted, which is why this counts distinct vendors
-       * over bookings rather than scanning `vendor_profiles`.
+       * That set is `payoutFailingClauses` — the same expression the Payments
+       * filter composes — so the alert on the Overview and the list its link
+       * lands on describe the same rows. Counting blocked vendors over some
+       * *wider* set was the first shape of this and it was wrong in the way
+       * that matters: "1 vendor is owed money we cannot send" linking to a
+       * `Payouts: not connected` list of forty, with nothing marking the one.
+       *
+       * A vendor who has never onboarded and never taken a booking is nobody's
+       * emergency and is deliberately not here. One whose money is genuinely
+       * stuck arrives within a sweep interval, because a blocked account is a
+       * failed transfer as soon as the sweep reaches it.
        */
       db
-        .select({ total: sql<number>`count(distinct ${bookings.vendorId})::int` })
-        .from(bookings)
-        .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
-        .where(and(...payoutOwedClauses(), eq(vendorProfiles.stripeOnboarded, false))),
-      /*
-       * Its own query rather than a second `FILTER` on the one above, because
-       * the two ask different predicates and folding them would silently scope
-       * this one to `payout_model` and `vendor_payout_cents` as well.
-       * `payoutFailingClauses` is the expression the Payments filter composes,
-       * so this card and the list it links to cannot name different sets.
-       */
-      db
-        .select({ total: sql<number>`count(*)::int` })
+        .select({
+          failingBookings: sql<number>`count(*)::int`,
+          blockedVendors: sql<number>`count(distinct ${bookings.vendorId})::int`,
+        })
         .from(bookings)
         .where(and(...payoutFailingClauses())),
     ]);
@@ -1307,8 +1308,8 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
     usersCount: userRows?.[0]?.total ?? 0,
     pendingTagSuggestionsCount: pending?.[0]?.total ?? 0,
     reviewsCount: reviewRows?.[0]?.total ?? 0,
-    payoutsBlockedVendorsCount: blocked?.[0]?.total ?? 0,
-    payoutsFailingBookingsCount: failing?.[0]?.total ?? 0,
+    payoutsBlockedVendorsCount: payoutHealth?.[0]?.blockedVendors ?? 0,
+    payoutsFailingBookingsCount: payoutHealth?.[0]?.failingBookings ?? 0,
   };
 }
 

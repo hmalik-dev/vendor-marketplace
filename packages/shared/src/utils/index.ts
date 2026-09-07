@@ -8,6 +8,7 @@ import {
   MAX_SLUG_LENGTH,
   PAYOUT_RELEASE_HOURS,
   type BookingStatus,
+  type PayoutModel,
   type PayoutStatus,
 } from '../constants/index.js';
 
@@ -596,16 +597,15 @@ export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
   return HELD_PAYOUT_STATUSES.some((held) => held === booking.status) ? 'held' : 'pending';
 }
 
-/**
- * What `isPayoutFailing` needs: the two columns that distinguish a transfer
- * that was tried and did not land from one nobody has reached.
- */
-export type PayoutFailureSubject = Pick<PayoutSubject, 'payoutReleasedAt'> & {
+/** What `isPayoutFailing` needs, and nothing else. */
+export type PayoutFailureSubject = PayoutStatusSubject & {
   payoutAttempts: number;
+  payoutModel: PayoutModel;
+  vendorPayoutCents: number;
 };
 
 /**
- * A transfer that has been attempted and has not landed (#432).
+ * A transfer the sweep still owes, and has already tried (#432).
  *
  * **Deliberately not a fourth `PayoutStatus`.** `payoutStatusOf` omits `failed`
  * on purpose: a failed transfer is retried every quarter of an hour and
@@ -614,14 +614,27 @@ export type PayoutFailureSubject = Pick<PayoutSubject, 'payoutReleasedAt'> & {
  * the fact they need — beside the shared status rather than as a rival reading
  * of it.
  *
- * Here rather than in the console because the operations table computes the
- * same thing in SQL (`admin.dao.ts`'s `payoutFailing`), and a list that
- * *filtered* on one definition while its rows displayed another is precisely
- * the divergence `dashboard.dao.ts` documents. One definition, stated twice in
- * the two languages that have to ask it, with each pointing at the other.
+ * **"Still owed" is half the definition, and leaving it out is a bug that never
+ * clears.** `payout_attempts > 0 and not released` looks like the whole answer
+ * and is not: a booking whose transfer failed once and was then *fully
+ * refunded* has `vendor_payout_cents` rewritten to `0` (D37), which drops it
+ * out of the sweep's own predicate for ever — so it would sit in the operator's
+ * failing list permanently, pinning an alert that says the scheduled release
+ * keeps trying, about a row the scheduled release will never touch again. A
+ * dispute filed after a failed attempt is the same shape: it is `held`, which
+ * is a different thing to say and the reason `payoutStatusOf` exists.
+ *
+ * So this is `payoutOwedClauses` plus an attempt, and the SQL twin in
+ * `payouts.dao.ts` composes exactly that. One rule, expressed once where it has
+ * to be a predicate and once where it has to be a boolean.
  */
 export function isPayoutFailing(booking: PayoutFailureSubject): boolean {
-  return booking.payoutAttempts > 0 && booking.payoutReleasedAt === null;
+  return (
+    booking.payoutAttempts > 0 &&
+    payoutStatusOf(booking) === 'pending' &&
+    booking.payoutModel === 'separate' &&
+    booking.vendorPayoutCents > 0
+  );
 }
 
 /**

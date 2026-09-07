@@ -35,3 +35,15 @@ reconciliation test in `dashboard.routes.test.ts` ("shows exactly what the
 release sweep would transfer for the same rows") calls
 `findDuePayoutBookingIds` directly and is the thing that fails if they drift —
 keep it. Related: [[payout-sweep-is-a-second-money-mover]].
+
+**#432 added a second shared predicate and a third money mover.**
+`payoutFailingClauses()` (same file) is `payoutReleasedAt is null` +
+`payout_attempts > 0` and is spread into the admin Payments filter and the
+Overview's failing count — a read-only pair, so widening it widens a console
+list rather than a transfer. The money mover it added is
+`PUT /admin/bookings/:id/payout/retry`, which calls the sweep's own
+`releaseOnePayout` verbatim: the operator cannot force a payout outside
+`claimReleasableBooking`'s predicate, and `refusePayoutRetry` is strictly
+narrower than it (it also refuses `cancelled`, which the sweep releases). Audited
+2026-09-07 — a retry that widened the claim, rather than reusing it, would be
+the finding.

@@ -1,14 +1,22 @@
 import Link from 'next/link';
 import { Banner } from '@/components/ui/banner';
 
-/** The two lists the numbers lead to — where each state is actually worked on. */
+/**
+ * The one list both numbers lead to.
+ *
+ * They are two readings of the same set — how many transfers are failing, and
+ * how many vendors that is — so they cannot lead anywhere different. Counting
+ * blocked vendors over a *wider* set and pointing them at `Payouts: not
+ * connected` was the first shape of this, and it lied by arithmetic: "1 vendor
+ * is owed money we cannot send", clicked, and a list of every vendor who never
+ * finished onboarding, with nothing marking the one.
+ */
 const FAILING_PAYOUTS_PATH = '/admin/payments?flag=payout-failing';
-const BLOCKED_VENDORS_PATH = '/admin/vendors?payouts=not-connected';
 
 export interface PayoutHealthAlertProps {
-  /** Vendors owed money their Stripe account cannot receive. */
+  /** Distinct vendors among the failing transfers. */
   blockedVendors: number;
-  /** Bookings whose transfer has been tried and has not landed. */
+  /** Bookings the sweep still owes and has already tried. */
   failingBookings: number;
 }
 
@@ -22,52 +30,26 @@ export interface PayoutHealthAlertProps {
  * in the console, so a vendor could be owed money for a week with the platform
  * unaware.
  *
- * Both numbers are query results read at request time. Each is a link, because
- * a count an operator cannot act on is the furniture `page.tsx` already warns
- * about — and the two go to different lists because they are different
- * problems: one is fixed at Stripe by the vendor, the other by retrying.
+ * Both numbers are query results read at request time, and the sentence leads
+ * to the rows behind them — a count an operator cannot act on is the furniture
+ * `page.tsx` already warns about.
  */
 export function PayoutHealthAlert({
   blockedVendors,
   failingBookings,
 }: PayoutHealthAlertProps): React.ReactElement | null {
-  /*
-   * Built as a list rather than as nested ternaries carrying their own commas.
-   * Punctuation held inside a branch couples the two clauses: the first one has
-   * to know whether the second exists in order to end its own sentence.
-   */
-  const clauses: React.ReactElement[] = [];
-
-  if (failingBookings > 0) {
-    clauses.push(
-      <Link key="failing" href={FAILING_PAYOUTS_PATH} className="font-semibold underline">
-        {failingBookings} {failingBookings === 1 ? 'transfer is' : 'transfers are'} failing
-      </Link>,
-    );
-  }
-
-  if (blockedVendors > 0) {
-    clauses.push(
-      <Link key="blocked" href={BLOCKED_VENDORS_PATH} className="font-semibold underline">
-        {blockedVendors} {blockedVendors === 1 ? 'vendor is' : 'vendors are'} owed money Stripe will
-        not let us send
-      </Link>,
-    );
-  }
-
-  if (clauses.length === 0) {
+  if (failingBookings === 0) {
     return null;
   }
 
   return (
     <Banner status="failed" title="Payouts need attention" className="mb-4">
-      {clauses.map((clause, index) => (
-        <span key={clause.key}>
-          {index > 0 ? ', and ' : null}
-          {clause}
-        </span>
-      ))}
-      . The scheduled release keeps trying, so this clears itself once the accounts are in order.
+      <Link href={FAILING_PAYOUTS_PATH} className="font-semibold underline">
+        {failingBookings} {failingBookings === 1 ? 'transfer is' : 'transfers are'} failing
+        {blockedVendors > 1 ? `, across ${blockedVendors} vendors` : ''}
+      </Link>
+      {'. '}
+      The scheduled release keeps trying, so this clears itself once the accounts are in order.
     </Banner>
   );
 }

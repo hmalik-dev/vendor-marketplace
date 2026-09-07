@@ -2404,8 +2404,7 @@ export const adminPaymentRowSchema = z.object({
   payoutFailureReason: z.string().nullable(),
   stripeTransferId: z.string().nullable(),
   /**
-   * A transfer that has been tried and has not landed: `payout_attempts > 0`
-   * with no release.
+   * A transfer the sweep still owes and has already tried — `isPayoutFailing`.
    *
    * Deliberately **not** a fourth `PayoutStatus` member. `payoutStatusOf` omits
    * `failed` on purpose — a failed transfer is retried every quarter of an hour
@@ -2413,6 +2412,10 @@ export const adminPaymentRowSchema = z.object({
    * something already in hand. An operator is the one reader who has to know,
    * so the fact lives here as a flag beside the shared status rather than as a
    * private redefinition of it.
+   *
+   * "Still owed" is load-bearing: a booking whose transfer failed and was then
+   * fully refunded is not failing, it is finished, and a flag that read the
+   * attempt count alone would keep it here for ever.
    *
    * Carried on every row, not only inside the filter — the failure #415 fixed
    * was precisely a state you had to already know about in order to find.

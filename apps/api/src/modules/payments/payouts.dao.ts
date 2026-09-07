@@ -1,5 +1,6 @@
-import { and, asc, eq, gt, inArray, isNull, lte, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lte, notInArray, sql, type SQL } from 'drizzle-orm';
 import { bookings, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { HELD_PAYOUT_STATUSES } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
@@ -58,25 +59,31 @@ export function payoutOwedClauses(): SQL[] {
 }
 
 /**
- * A transfer that has been **tried and has not landed** — the operator's
+ * A transfer this sweep still owes and has already tried — the operator's
  * question, as clauses (#432).
  *
  * The SQL twin of `isPayoutFailing`, and here rather than in the console
  * because this is where payout predicates live: `payoutOwedClauses` is its
  * neighbour, and a rule about payouts written in the admin DAO is a special
- * case beside shared infrastructure rather than in it. Both readers compose
- * this one expression — the Payments filter and the Overview's count — so the
- * number on the card and the rows behind it cannot name different sets, which
- * is the single failure this ticket exists to close.
+ * case laid beside shared infrastructure rather than into it. Both readers
+ * compose this one expression — the Payments filter and the Overview's count —
+ * so the number on the card and the rows behind it cannot name different sets.
  *
- * Exactly the two columns `isPayoutFailing` reads, and deliberately **not**
- * `payoutOwedClauses` plus an attempt count: those add `payout_model` and
- * `vendor_payout_cents`, which no row with an attempt on it can fail today —
- * so folding them in would make the SQL and the TypeScript two rules that
- * happen to agree rather than one rule stated twice.
+ * **`payoutOwedClauses` is half of it, and the half that is easy to drop.**
+ * `payout_attempts > 0 and not released` reads like the whole answer and is
+ * not: a booking whose transfer failed once and was then fully refunded has
+ * `vendor_payout_cents` rewritten to `0` (D37), so this sweep will never work
+ * it again — and it would sit in the operator's failing list for ever under an
+ * alert promising that the scheduled release keeps trying. The status bound
+ * does the same job for a dispute filed after a failed attempt: that row is
+ * `held`, which is a different thing to tell an operator.
  */
 export function payoutFailingClauses(): SQL[] {
-  return [isNull(bookings.payoutReleasedAt), gt(bookings.payoutAttempts, 0)];
+  return [
+    ...payoutOwedClauses(),
+    gt(bookings.payoutAttempts, 0),
+    notInArray(bookings.status, [...HELD_PAYOUT_STATUSES]),
+  ];
 }
 
 /**

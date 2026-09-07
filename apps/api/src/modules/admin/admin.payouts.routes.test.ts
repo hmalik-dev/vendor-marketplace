@@ -329,6 +329,41 @@ describe('admin payout health', () => {
       expect(body.items[0].bookingId).toBe(failing);
     });
 
+    /**
+     * A row the sweep will never work again is **finished, not failing**.
+     *
+     * A full refund rewrites `vendor_payout_cents` to `0` (D37) and leaves the
+     * release null, so a flag reading `payout_attempts > 0 and not released`
+     * would hold that row in the operator's failing list for ever — under an
+     * alert promising that the scheduled release keeps trying, about a booking
+     * it has permanently dropped, behind a Retry button answered 409.
+     */
+    it('does not flag a failed payout that was then fully refunded', async () => {
+      await paidBooking({
+        status: 'cancelled',
+        payoutAttempts: 4,
+        payoutFailureReason: 'Stripe said no',
+        vendorPayoutCents: 0,
+      });
+
+      expect((await payments()).json().items[0]).toMatchObject({ payoutFailing: false });
+      expect((await payments('?flag=payout-failing')).json().total).toBe(0);
+    });
+
+    /*
+     * A dispute filed after a failed attempt is `held`, and saying "Transfer
+     * failing" over it is the confusion `payoutStatusOf` exists to prevent.
+     */
+    it('reports a disputed booking with a failed attempt as held, not failing', async () => {
+      await paidBooking({ status: 'disputed', payoutAttempts: 2, payoutFailureReason: 'nope' });
+
+      expect((await payments()).json().items[0]).toMatchObject({
+        payoutStatus: 'held',
+        payoutFailing: false,
+      });
+      expect((await payments('?flag=payout-failing')).json().total).toBe(0);
+    });
+
     /* A released payout with attempts behind it is settled, not failing. */
     it('does not flag a payout that failed and then landed', async () => {
       await paidBooking({
@@ -493,20 +528,38 @@ describe('admin payout health', () => {
       });
     });
 
-    it('counts the failing transfers and the vendors Stripe has blocked', async () => {
+    it('counts the failing transfers and the vendors they belong to', async () => {
       await paidBooking({ payoutAttempts: 1 });
       await paidBooking({ payoutAttempts: 4 });
       await paidBooking();
-      await harness.database.db
-        .update(vendorProfiles)
-        .set({ stripeOnboarded: false, stripeAccountId: null })
-        .where(eq(vendorProfiles.id, vendorProfileId));
 
       expect(await metrics()).toMatchObject({
-        // One vendor, however many of their bookings are outstanding.
+        // One vendor, however many of their transfers are failing.
         payoutsBlockedVendorsCount: 1,
         payoutsFailingBookingsCount: 2,
       });
+    });
+
+    /**
+     * **The two numbers describe one set, and the link proves it.**
+     *
+     * The count used to be taken over a wider predicate than the list it points
+     * at, which is a banner that lies by arithmetic: "1 vendor is owed money we
+     * cannot send", clicked, and a list of everyone who never onboarded. This
+     * asserts the identity rather than the arithmetic, so widening one without
+     * the other goes red.
+     */
+    it('counts exactly the rows its link lands on', async () => {
+      await paidBooking({ payoutAttempts: 1 });
+      await paidBooking({ status: 'cancelled', payoutAttempts: 4, vendorPayoutCents: 0 });
+      await paidBooking({ payoutReleasedAt: new Date('2026-06-05T00:00:00Z') });
+      await paidBooking();
+
+      const { payoutsFailingBookingsCount } = await metrics();
+      const filtered = await payments('?flag=payout-failing');
+
+      expect(payoutsFailingBookingsCount).toBe(1);
+      expect(filtered.json().total).toBe(payoutsFailingBookingsCount);
     });
 
     /**
@@ -523,7 +576,10 @@ describe('admin payout health', () => {
         .set({ stripeOnboarded: false, stripeAccountId: null })
         .where(eq(vendorProfiles.id, vendorProfileId));
 
-      expect(await metrics()).toMatchObject({ payoutsBlockedVendorsCount: 0 });
+      expect(await metrics()).toMatchObject({
+        payoutsBlockedVendorsCount: 0,
+        payoutsFailingBookingsCount: 0,
+      });
     });
   });
 
