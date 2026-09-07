@@ -1121,6 +1121,42 @@ export const ADMIN_ACTIONS = [
   'dispute_resolved',
   'support_case_resolved',
   'payout_retried',
+  /**
+   * An operator produced a copy of everything the platform holds for one
+   * person (#438), answering the privacy policy's *"ask us for a copy of what
+   * we hold"*.
+   *
+   * A read, and logged anyway. It is the one read in the console that hands a
+   * whole person's record to somebody, so *"who asked for Ada's file, and
+   * when"* has to be answerable — and it is the question a subject-access
+   * request is most likely to be followed by.
+   */
+  'user_data_exported',
+  /**
+   * An operator closed an account on its holder's request (#438).
+   *
+   * Distinct from `user_banned`: a ban is a moderation decision the operator
+   * made and can reverse, and this is one the account holder asked for and
+   * nobody can. Collapsing them would make *"how many accounts did we
+   * suspend"* uncountable.
+   */
+  'user_closed',
+  /*
+   * Graduated moderation (#435) — the levers that are not a ban.
+   *
+   * Each names the *state that was reached*, not the button that was pressed, so
+   * a row still reads correctly once the control that wrote it has moved.
+   * `review_deleted` is deliberately absent from this group: it is already above,
+   * because deletion is the escalation these step up to rather than a seventh
+   * lever, and one member serving both is the point.
+   */
+  'vendor_unpublished',
+  'vendor_republished',
+  'review_hidden',
+  'review_unhidden',
+  'package_deactivated',
+  'package_reactivated',
+  'portfolio_item_removed',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1141,6 +1177,10 @@ export const ADMIN_ACTION_SUBJECTS = [
   'tag_suggestion',
   'booking',
   'support_case',
+  /* What #435's levers act on. `review` is already above and serves both. */
+  'vendor_profile',
+  'service_package',
+  'portfolio_item',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
 

@@ -42,6 +42,25 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   dispute_resolved: 'Resolved a report',
   support_case_resolved: 'Closed a case',
   payout_retried: 'Retried a payout',
+  user_data_exported: 'Exported an account record',
+  user_closed: 'Closed an account',
+  /*
+   * Graduated moderation (#435). Written in the same register as the seven above
+   * — what the operator did, past tense — and deliberately **not** using the
+   * word "suspended" for any of them, because none of these is a ban and the
+   * activity feed is where a reader reconstructs which happened.
+   *
+   * "Unhid", not "Showed again": the console says *unhide* in the menu item,
+   * the dialog title, its body and its confirm button, and a feed that renames
+   * the action afterwards is a second name for one thing.
+   */
+  vendor_unpublished: 'Unpublished a storefront',
+  vendor_republished: 'Republished a storefront',
+  review_hidden: 'Hid a review',
+  review_unhidden: 'Unhid a review',
+  package_deactivated: 'Deactivated a package',
+  package_reactivated: 'Reactivated a package',
+  portfolio_item_removed: 'Removed a portfolio photo',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */
@@ -52,6 +71,9 @@ const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
   tag_suggestion: 'Suggestion',
   booking: 'Booking',
   support_case: 'Case',
+  vendor_profile: 'Storefront',
+  service_package: 'Package',
+  portfolio_item: 'Photo',
 };
 
 /**
