@@ -2026,6 +2026,48 @@ and phone are not the subject's data — and say in the export what was withheld
 and why. Delivery follows the privacy policy's own claim; if that is by email,
 the link expires.
 
+#### Corrected 2026-09-07: the database does **not** refuse a hard delete
+
+This ticket originally asserted that a hard `DELETE FROM users` carrying a
+`legal_acceptances` row is refused by the triggers. **That is the opposite of
+what happens, and there is a landed green test proving it** —
+`packages/db/src/legal-acceptance-immutability.test.ts:176`, on main since
+`13e91d7`, deletes the user and asserts the acceptance count goes to zero.
+
+The mechanism is neither "fires and refuses" nor "is bypassed". `0029`'s
+function is `BEFORE DELETE ... FOR EACH ROW`, and its guard reads:
+
+    IF TG_OP = 'DELETE' AND NOT EXISTS (vendor joined to its user)
+    THEN RETURN OLD;
+
+`RETURN OLD` from a `BEFORE DELETE` trigger means **proceed with the delete**. A
+referential cascade removes the parent first, so by the time the trigger body
+runs the user is already gone, `NOT EXISTS` is true, and the row is permitted
+out. A *direct* delete still has the vendor present, falls through to the
+`RAISE`, and is refused. The rule is not "no deletes ever" but "no row leaves
+while the vendor it is about is still here".
+
+**So the evidence is protected by the deletion path, not by the trigger.** What
+actually keeps a legal acceptance alive is that `users` rows here are retired
+rather than removed — `users.deleted_at`, whose schema comment says "Bookings,
+reviews, and messages reference this row, so it is retired rather than removed"
+— and that nothing in the product issues a hard `DELETE FROM users`.
+
+That makes this a design constraint on the closure this ticket builds, not a
+wording fix. **If closure hard-deletes, it silently destroys the record that a
+vendor agreed to the 12% and the 72-hour hold** — the exact evidence
+`legal_acceptances` exists to hold for a dispute that may outlive the account.
+**The same is now true of `admin_actions` (#434):** hard-deleting an operator
+takes their entire action log with them, which is the one deletion an audit
+trail must not permit.
+
+**State the triggers' real limit in the implementation, too.** This pattern
+stops tampering, not a determined owner: anything holding the table's owner role
+can `ALTER TABLE ... DISABLE TRIGGER` or drop the function. What `0029` closes
+is the casual path — a direct `DELETE`, a tidy-up, a `TRUNCATE`, and via
+`SET search_path` a shadow-schema delete. That is the honest claim, and a ticket
+whose subject is legal evidence should not overstate it.
+
 **2. Operator-initiated closure.** `POST /admin/users/:userId/close`, which does
 what #433 makes the deletion path do — retire the storefront, decline open
 requests, cancel and fully refund future confirmed bookings — and soft-deletes
@@ -2056,8 +2098,10 @@ same answer the export gives.
 3. Closure runs #433's unwind — same code path, asserted — and soft-deletes the
    user.
 4. Closure of a vendor retires the storefront; their slug 404s.
-5. A hard delete of a user with a legal acceptance is refused by the database,
-   and the console never attempts one.
+5. Closure **retires** the user (`deleted_at`) and never issues a hard
+   `DELETE FROM users`; a test asserts that a closed account's
+   `legal_acceptances` **and** `admin_actions` rows both survive it. (The
+   database will *not* save you here — see the correction above.)
 6. Legal acceptances are readable per vendor and per user, read-only.
 7. Both actions write an `admin_actions` row.
 8. Every claim the privacy policy makes about access and closure is now true of
@@ -2067,7 +2111,9 @@ same answer the export gives.
 #### Tests (required)
 
 - [ ] A test per acceptance, watched failing first.
-- [ ] Acceptance 5 asserted against the real Postgres triggers.
+- [ ] Acceptance 5 asserted by counting surviving rows after a closure, not by
+      catching an exception — the landed cascade test is the model, and an
+      exception-shaped assertion would pass for the wrong reason.
 - [ ] Acceptance 8 reads the rendered legal page, not the Markdown source.
 - [ ] An export asserted to contain **no** credential, no Stripe secret, and no
       other user's email.
