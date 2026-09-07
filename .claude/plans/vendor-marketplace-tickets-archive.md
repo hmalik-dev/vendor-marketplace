@@ -421,8 +421,98 @@ Active tracker: `.claude/plans/vendor-marketplace-tickets.md`
 | **388** | **Forms reject the first submit in silence** | P1 | M3 | **P1 High** | **Done** | `worktree-388` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** Two of the three form surfaces a vendor must clear reject a pristine submit with **no POST, no `aria-invalid`, no `role=alert`, no message anywhere on the page** — the button appears inert. Confirmed on **Add package** (`/vendor/packages`) and **Create profile** (`/vendor/profile/edit`, the screen every new vendor is funnelled to). Focus moves to the offending control, which is the only signal, and it is silent for a screen reader. A **second** submit does render the summary, so the machinery exists and the first pass does not reach it. The booking-request form validates correctly but never announces it either. Includes the Price filter, which discards non-numeric input with no message **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-388 (checkpointed `32b00b3`); resume from that branch rather than rebuilding. **Done 2026-09-04** — squash-merged from `worktree-388` as `7fc4469`, with the diff-reviewer's four findings applied (group targets take `tabIndex={-1}` so the focus move is not a no-op on the ordinary forgot-a-category path; a preset chosen after unreadable text clears the discard verdict it replaces; the form guard's opening-tag scan is brace-aware, since `=>` contains a `>`), then `4558485` for the one defect the browser pass itself found: the summary rail's brief carried `aria-invalid` with no `aria-describedby` and no message anywhere in the document. **Browser-verified at 1440x900** across both auth states: Add package (blank, then description-only) and Create profile both answer the first press with a counted `role="alert"`, per-field `aria-invalid` + resolving `aria-describedby`, focus on the first blocker (`#categories`, a `role="group"` with `tabindex="-1"`, identity-checked) and **no network call**; the booking request form announces and moves focus off the button; the Price filter says a bound it could not read was cleared, and says nothing when a preset supplies one. No CSP or telemetry lines, no horizontal overflow on any of seven pages, no database rows created. Recorded, not fixed: the booking request screen still has two message idioms (the shared card and a local `Field`), both correct — consolidation is not this ticket's. |
 | **386** | **Visual corrections read off the frames — four undefined ramp steps and the search skeleton** | P2 | M3 | **P2 Medium** | **Done** | `worktree-386` | **None** | `core` | **Filed 2026-08-31 by the fourth backlog consolidation. Merges #376 and #379.** Both are single-pass corrections whose value is read off a frame and then guarded; both are unblocked; and neither fills a lane on its own, while each would otherwise cost a worktree, a preflight, a PR and a merge. One browser session covers all three frames — `05 Checkout`, `06 Booking confirmed`, `17 Search loading`. The merged rows carry the measurements and are not restated **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-386 (checkpointed `4877d7a`); resume from that branch rather than rebuilding. **Done 2026-09-04** — squash-merged from `worktree-386` as `23e4cc2`. `KNOWN_UNDEFINED_STEPS` is **empty**: #387 deleted the two `bg-sage-500` checkout sites, this ticket deleted `text-sage-700` (→ `sage-600`, the darkest step the ramp defines, deviation from frame `06`'s `#3A4D33` recorded in `01-foundations.md`) and `hover:text-steel-700` (→ `stone-900`, since `steel` stops at 600). Both are pinned by tests, because the ratchet only proves a step exists. The reviewer's two blocking findings were applied: the scan now asserts a corpus floor (with the list empty, `toEqual([])` could no longer tell a clean scan from an empty one — a greedy comment stripper silently drops it from ~1220 matches to ~308), and `SKELETON_COUNT`'s doc no longer contradicts the correction below it. **parity-checker at 1440x900:** frame `17`'s skeleton is byte-for-byte the loaded card — 350.33px card, 127px body, 223.33px 3:2 cover, 16px radius, chip row present, shimmer `stone-200 → stone-100 → stone-200` at 1.5s linear; an independently shaped repo-wide scan confirms **zero** undefined ramp steps in production source. Two things it raised are **not** this ticket's and are filed: frame `06`'s own parity debt is **#413**, and frame `05` could not be measured at all because the only payable checkout an automated pass can reach 500s on a past-dated accepted request — which is **#401**. One deviation recorded and not fixed: the skeleton has no counterpart for the loaded card's 36px absolutely-positioned avatar disc, which costs no layout height and which frame `17` does not draw either. |
 | **434** | **Admin action log: every mutation records who did it** | P3 | M6 | **P0 Critical** | **Done** | `worktree-434` | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** There is no audit table. Two `log.info` lines exist — `admin.service.ts:235` for ban, `:629` for review deletion — and the other three mutating routes are never passed the acting admin's id at all: `updateTag(app.db, …)`, `resolveTagSuggestion(context(), …)` and `resolveDispute(context(), …)` all take no actor. A surface whose entire purpose is acting on other people's accounts and money keeps no queryable record of who did what. A precondition for #435, #438 and #440. **Landed 2026-09-07 — `1f8011a`, PR #135.** Six mutating routes write one `admin_actions` row each; the table refuses UPDATE, DELETE and TRUNCATE at the database level, proved against the real Postgres as well as PGlite. `/admin/activity` reads it, filtered by actor and by subject. **Enums shipped as six actions and five subjects, not the union** — #435 adds its own by `ALTER TYPE ... ADD VALUE`. This unblocks #436 and #438. |
+| **441** | **The site footer against the newer frame, and the ink-ground text ramp used as a border** | P1 | M3 | **P2 Medium** | **Done** | `worktree-441` | **None** | `core` | **Filed 2026-09-07 by #430's parity pass**, which measured the footer against `design/delta-band/Orla-Closing-Band.html` — a frame #428 never saw, so none of this is a regression. **Nine layout, style and font deviations**: inner padding `py-14` (56px) where the frame draws 40px top and bottom; the column grid is four equal quarters where the frame draws `1.5fr 1fr 1fr 1fr` (419/280/280/280), which puts `Browse` at x=390 against the frame's ≈493; gap 40px vs 34px; the footer wordmark at 32px vs 25px, and its logo mark `29x20` with **unequal** circles (20px filled, 22px outer) where the frame draws `26x17` with two equal 17px circles — so `logo.tsx:50`'s comment that `marketingFooter` is *"absent from every frame"* is now stale, this frame draws it twice; `Contact support` renders `#B8AF9F`/400 where the frame singles it out at `#F8F5EF`/600; link columns 13.5px vs 13px; tagline 13.5px/1.6 vs 13px/1.5; micro-labels at 600 weight and .05em vs 500 and .07em. **And the mechanism #430 fixed in the band, in the two places it survives**: the legal row's hairline is `border-stone-0/10` where the frame draws `rgba(248,245,239,.1)` — `stone-50`, the other end of the ramp — and **`admin-header.tsx:64`** sets `text-stone-400` as text on frame `13`'s inverted `#23201C` ground. `stone-400` is a **border** value: it is drawn on a light ground at thirty-nine sites across the frames and as text on ink at none. `stone-480` (`#d8d0c2`) was added to the ink-ground text ramp in `aac9b3b` and is the token both should read. That is the only admin instance, which is why it rides here rather than in #431–#440 — the ramp is the defect, not the surface. **One access finding with no other checker**: the footer logo link is `88x32`, twelve pixels under `04-laws.md`'s 44px minimum; its `aria-label` is present and correct. **Not in scope**: the `Florals` mismatch in the Browse column is the ruled #419 override, and the band itself is done (#430, `aac9b3b`). **Landed 2026-09-07 — `1b8435f3`, PR #141.** The footer is the frame's: a 40px box, `1.5fr 1fr 1fr 1fr` at 34px so `Browse` opens at 493.33, the logo at D=17 with a 10px wordmark gap, 13px link columns at an 11px row gap, a 13px/1.5 tagline, `Contact support` at 600 `stone-50`, and the legal hairline on `stone-50/10`. `admin-header.tsx` reads `stone-480`. The brand link carries 44x44. **Two of the nine deviations were deliberately not built, under D30**: the micro-labels keep 600/0.05em, because three other bundles corroborate the screens document against this frame's 500/0.07em and `--tracking-label` is global; and the wordmark keeps 1.60 D at 27.2px, because the frames draw three ratios and there is no `WORDMARK_SIZES` table — #118's to mint. **Two defects the browser found and jsdom could not**: appending `text-stone-50` to `LINK_CLASS` left `Contact support` bold in the unemphasised colour, since a class string's order does not decide which same-group utility wins; and the 13px size on the `<a>` left every `<li>` strut at 16px, so rows were 31px against 27 and the footer 25px too tall. Measured 289px against the frame's 289. **Filed from the pass**: #446, #447, #448, #449. |
 
 ## Closed ticket details
+
+### #441: The site footer against the newer frame, and the ink-ground text ramp used as a border
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Done | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by the parity pass on #430**, which compared the closing band
+_and_ the footer against `design/delta-band/Orla-Closing-Band.html`. The band is
+done (`aac9b3b`, PR #134). Everything below is the footer, and **none of it is a
+regression**: these are #428-era values measured against a frame #428 never saw.
+#430 deliberately left them rather than widening a revision into a restyle.
+
+Two different mechanisms live here, and they are one ticket because a single lane
+opens the same two files for both.
+
+#### Landed 2026-09-07 — `1b8435f3`, PR #141, branch `worktree-441`
+
+Seven of the nine deviations built, two deliberately declined, and two more
+defects found by the browser that no jsdom test could have reached.
+
+**The layout is the frame's.** A 40px box on every side; `1.5fr 1fr 1fr 1fr` at
+a 34px gap, which puts `Browse` at x=493.33 against the four-quarter 390; the
+logo mark at the D=17 the frame draws **twice** rather than the D=20 that had
+been inferred from the design document's own masthead; a 10px wordmark gap; an
+11px row gap; the tagline 12px below the lockup at 13px/1.5. Footer height
+measures **289px** against the frame's 289.
+
+**`Contact support` is singled out** at 600 `stone-50`, which is the resting
+state of every other link's hover — the one row in the footer that is a way
+*out* of a problem rather than further in.
+
+**The ramp half.** `admin-header.tsx` read `stone-400`, a border value, as text
+on a `stone-900` ground; it reads `stone-480` now, the lightest step of the
+ink-ground ramp minted in `aac9b3b`, three units from the value frame `13`
+draws — so the line renders as it did and only its role changes. The footer's
+legal hairline was the mirror of the same mistake: `stone-0`, a surface token,
+where the frame draws `stone-50`.
+
+**Access.** The brand link was 88x32. Its accessible name comes from `Logo`'s
+`aria-label`, which brings it under `04-laws.md`'s icon-only clause, so it now
+carries the floor on **both** axes — 74.83 x 44 measured — grown the way Clerk's
+trigger is, with `-my-2` paying for the height so the tagline stays where the
+frame draws it.
+
+#### The two that were not built, and why
+
+**The micro-labels keep 600 / 0.05em.** This bundle restyles the shared `.lbl`
+primitive to 500 / 0.07em, but the screens document, `delta-legal` **and**
+`contact-support` all define it at 600 / 0.05em. One frame against three
+corroborating siblings is the D30 outlier, and `--tracking-label` is global.
+
+**The wordmark keeps 1.60 D**, rendering 27.2px against the frame's 25. The
+frames draw three ratios — D=15 → 23, D=17 → 25, D=20 → 32 — so no single one
+satisfies them. That is the same argument `WORDMARK_GAPS` exists to answer for
+the gap, and there is no `WORDMARK_SIZES` table to hold it. #118's to mint.
+
+#### Two defects the browser caught
+
+- Appending `text-stone-50` to `LINK_CLASS` left `Contact support` bold in the
+  **unemphasised** colour. A class string's order does not decide which
+  same-group utility wins; `cn` merges them.
+- The 13px size sat on the `<a>`, so every `<li>`'s strut stayed 16px: rows were
+  31px against the frame's 27, the footer 25px too tall, and the legal row's
+  copyright 1.5px off the links' baseline. The size belongs on the list, which
+  is where the frame sets it.
+
+#### Guards
+
+Every number is read back out of the frame and resolved through the type scale
+where it names a step — the deviations closed here are all half-steps, and a
+guard naming the built utility without deriving it passes just as well against
+the value the ticket was filed to remove. Each assertion was **proved to fail**
+against that value before being kept. The frame loader is extracted to
+`apps/web/src/testing/design-frames.ts` and locates the bundle by directory,
+because the filenames carry the product name.
+
+`WORDMARK_GAPS` is exported so the fallback probe can assert it is *absent* from
+the table. The old probe used `marketingFooter` precisely because no frame drew
+D=20, which made an unverified number load-bearing — nothing could fail when it
+turned out to be wrong.
+
+#### Filed from this pass
+
+**#446** the missing body `font-size` (the root cause of the strut defect,
+still open app-wide), **#447** border and surface tokens used as text on ink,
+**#448** the lane env tooling handing web children the wrong API origin, and
+**#449** the box-sizing conflict between the screens document and every delta
+bundle — which is why this mark paints a 19px outline circle against the
+frame's 17 and is a ruling rather than drift.
 
 ### #434: Admin action log — every mutation records who did it
 
@@ -16484,5 +16574,105 @@ the frame's 6 merely illustrative.
       `design-tokens.test.ts`
 - [ ] A test asserting the skeleton and the loaded card share a radius token, so the two
       cannot drift apart again
+| **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Done** | `worktree-432` | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. **Landed 2026-09-07 as `1e899ae1`, PR #145.** The payment row carries the payout state `payoutStatusOf` derives, plus a `payoutFailing` flag that is `payoutOwedClauses` **plus an attempt** — the two-column reading the ticket proposed never clears for a transfer that failed and was then fully refunded, which would have pinned a red Overview banner for ever over a row the sweep had permanently dropped. `PUT /admin/bookings/:id/payout/retry` re-enters the sweep rather than reimplementing the transfer, so D36 holds structurally; it refuses released, disputed and cancelled bookings, and writes a `payout_retried` audit row. `vendor_profiles` records Stripe's disabled reason and outstanding requirements, written only by the account webhook — asserted by a source guard that the admin module holds no `.set({…})` for any of the three, with a planted-writer test proving the guard can fail. **Acceptance 4 shipped data-complete, view deferred to #437** (ruled `b4bce68a`). Three defects were caught by review rather than by the suites: the retry reported a *completed* transfer as failed, because the client parsed a `z.date()` that JSON sends as a string and only the success path carries a value; an index emitted `DESC NULLS LAST` against a query Postgres reads as `NULLS FIRST`, so it would have sorted in memory while still serving the filter and looking correct; and the Overview's vendor count was taken over a wider set than the list it linked to. **Left behind:** at 1024 the Fee and Payout cells hold seven characters, so a real `$1,450.50` would clip — a consequence of this screen growing an eighth column, filed rather than guessed at. Also fixed the lane harness, which never wrote `API_URL`: every lane's pages were rendering against another checkout's API. |
 
+### #432: Payout health — failed transfers, retries, and why Stripe stopped a vendor
 
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
+**Blocked by:** None
+
+#### The state today
+
+**Two columns are written and read by nothing.** The release sweep
+(`payouts.service.ts`, every 15 minutes) increments
+`bookings.payout_attempts` and writes `bookings.payout_failure_reason` on every
+failed transfer (`payouts.dao.ts:213`), clearing the reason on success. Grep
+both across the repo: the only readers are the sweep's own ordering
+(`orderBy(asc(bookings.payoutAttempts), …)`) and its logger. **No screen, no
+API response, and no alert reads either.** A vendor whose transfer fails on
+every one of ninety-six daily attempts is owed money that nobody is told about.
+
+`adminPaymentRowSchema` carries `totalAmountCents`, `platformFeeCents`,
+`vendorPayoutCents`, `stripePaymentIntentId`, `paidAt` and `status` — and no
+payout state at all. The Payments screen therefore shows a booking whose money
+reached the platform and never reached the vendor identically to one that
+settled.
+
+**And the vendor-side story is a boolean.** `vendor_profiles.stripe_onboarded`
+is set by `isOnboarded(status)` — true iff `stripe_transfers` **and** `payouts`
+capabilities are both active. When Stripe revokes one, `applyAccountStatusChange`
+flips it false and that is the entire record. `isMissingPayoutsOnly` already
+distinguishes the half-restricted case and only logs a warning. The operator's
+filter says "No payouts yet" for a vendor who has never onboarded and for one
+Stripe restricted this morning, with no reason and nowhere to go.
+
+#### What to build
+
+**1. Payout state on the payments surface.** Add to the admin payment row:
+`payoutReleasedAt`, `payoutAttempts`, `payoutFailureReason`, `stripeTransferId`,
+and a derived payout state. **Derive it with `payoutStatusOf`** — the one
+derivation #423 wrote for exactly this, already used by `booking-report.ts` and
+`dashboard.service.ts`. A fourth copy of "what is held" is how these come to
+disagree; that is written down twice in `dashboard.dao.ts` already.
+
+**2. A failing-payout filter and a row flag**, shaped like the `refund-stuck`
+flag the Bookings screen already carries — marked on every row, not only inside
+the filter, because the failure #415 fixed was precisely a state you had to know
+about to find. A payout is failing when `payout_attempts > 0` and
+`payout_released_at is null`.
+
+**3. A retry.** `PUT /admin/bookings/:bookingId/payout/retry`, admin-only,
+which re-enters the **existing** sweep path for one booking rather than
+reimplementing the transfer. **D36 binds: the idempotency key is versioned by
+the attempt**, so a retry increments `payout_attempts` and mints a new key —
+reusing the key replays Stripe's cached failure and the operator learns nothing.
+Refuse on a booking that is `cancelled`, `disputed`, or already released, and say
+which.
+
+**4. Stripe account state, with the reason.** Persist what the webhook already
+reads: the disabled reason and the outstanding requirements from the connected
+account, alongside `stripe_onboarded`. Surface them on the vendor row's detail
+(#437 builds the view; this ticket supplies the data and may land its own
+panel first). **Read-only.** An operator must not be able to flip
+`stripe_onboarded` by hand — D29's constraint (`stripe_onboarded = false OR
+stripe_account_id IS NOT NULL`) and the capability read are what make the column
+true, and a manual override makes it a guess. Link out to the Stripe Dashboard
+for the account instead.
+
+**5. A Live-vendor payout alert on the Overview.** One count — vendors whose
+payouts are blocked, and bookings whose transfers are failing — sitting where
+the four metric cards already are. A number that leads to the filtered list;
+`page.tsx` already documents that a card leading nowhere is furniture.
+
+#### Acceptance
+
+1. The admin payment row carries payout state derived by `payoutStatusOf`, not
+   by a new local test.
+2. A booking with `payout_attempts > 0` and no release is flagged on its row and
+   findable by filter.
+3. The retry mints a new idempotency key versioned by the attempt (D36) and is
+   refused with a specific message on cancelled, disputed and released bookings.
+4. **Ruled 2026-09-07: data-complete here, view deferred to #437.** The Vendors
+   table is frame `13`'s seven columns and `frame-13-parity.test.ts` asserts the
+   grid template, so an eighth column would break the parity gate #392 owns —
+   a design-contract change, which a ticket may not make. So this ticket
+   **supplies and tests** `stripeAccountId`, `stripeDisabledReason` and
+   `stripeRequirementsDue` on `adminVendorRowSchema`, written only by the
+   account webhook, and #437 draws them on the vendor detail view. A vendor
+   Stripe has restricted must be distinguishable in the *data* from one who
+   never onboarded; that distinction becoming visible is #437's acceptance, not
+   this one's. (Same call #438 made in declining to add a vendor-table link for
+   the same reason.)
+5. Nothing in the console writes `stripe_onboarded`.
+6. The Overview carries a payout-health count that links to the filtered list.
+7. Every new number is a query result at request time — the no-invented-numbers
+   law.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] The retry asserted against a Stripe failure that is **cached** under the
+      old key — the D36 regression is invisible to a test that only asserts a
+      success.
+- [ ] A restricted account asserted through the real `account.updated` webhook
+      payload shape, not a hand-built row.

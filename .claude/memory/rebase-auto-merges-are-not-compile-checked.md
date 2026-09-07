@@ -37,3 +37,25 @@ pre-rebase tree.
 
 Related: [[migration-numbers-collide-between-lanes]] and
 [[diverged-lane-branch-needs-a-new-name]].
+
+## `git rebase --continue` reports the wrong reason — 2026-09-07
+
+It refuses with **"You must edit all merge conflicts and then mark them as
+resolved using git add"** against a completely clean index: `git ls-files -u`
+empty, and `git status` itself saying *"all conflicts fixed: run git rebase
+--continue"*.
+
+The real cause is **unstaged changes elsewhere in the tree**. Git checks
+`has_unstaged_changes` and reuses the merge-conflict message for it, so the
+message names the wrong condition entirely.
+
+**How a lane gets there:** a `diff-reviewer` or `security-auditor` subagent
+writes to `.claude/agent-memory/` while the rebase is paused. Any lane running a
+review agent mid-rebase hits this, and it reads as data loss when it is not.
+
+**The fix:** copy the offending files aside, `git checkout --` them, continue the
+rebase, then restore. One pass. Do **not** start hunting for a conflict that is
+not there — check `git status` for unstaged paths first, and believe those over
+the message.
+
+Measured by lane 432 while landing #432.

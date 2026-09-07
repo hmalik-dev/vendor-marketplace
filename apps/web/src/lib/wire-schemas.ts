@@ -27,12 +27,16 @@ import {
   userSchema,
   adminActivityRowSchema,
   adminBookingRowSchema,
+  adminCaseBookingSchema,
+  adminCaseDetailSchema,
+  adminCaseRowSchema,
   adminCloseAccountResultSchema,
   adminUserDataRightsSchema,
   adminUserExportSchema,
   adminCustomerRowSchema,
   adminMetricsSchema,
   adminPaymentRowSchema,
+  adminPayoutRetryResultSchema,
   adminReviewRowSchema,
   adminTagRowSchema,
   adminTagSuggestionResultSchema,
@@ -411,12 +415,36 @@ export type WireAdminBookingRow = z.infer<typeof wireAdminBookingRowSchema>;
 export const wireAdminBookingPageSchema = paginatedSchema(wireAdminBookingRowSchema);
 export type WireAdminBookingPage = z.infer<typeof wireAdminBookingPageSchema>;
 
+/**
+ * Two dates, and `payoutReleasedAt` is the one that is new (#432).
+ *
+ * `.claude/rules/web-route-boundaries.md` is explicit that a `z.date()` added
+ * to a response schema without its `z.coerce.date()` here 500s the page —
+ * conditionally, for the rows that carry a value, with the whole local gate
+ * green. #423 shipped exactly that on the vendor dashboard.
+ */
 export const wireAdminPaymentRowSchema = adminPaymentRowSchema.extend({
   paidAt: z.coerce.date().nullable(),
+  payoutReleasedAt: z.coerce.date().nullable(),
 });
 export type WireAdminPaymentRow = z.infer<typeof wireAdminPaymentRowSchema>;
 export const wireAdminPaymentPageSchema = paginatedSchema(wireAdminPaymentRowSchema);
 export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
+
+/**
+ * The retry's answer, with its date coerced — **the one that gets away** (#432).
+ *
+ * `payoutReleasedAt` is null on the `failed` and `busy` outcomes and a string
+ * on `released`, so passing the shared schema straight to `useApi` parses fine
+ * for every retry that did not work and throws for the one that did: the
+ * operator is told a completed transfer failed, in the API client's own words,
+ * while the money has already left the platform balance. Found by review, not
+ * by the suite — the route tests read the response object rather than its JSON.
+ */
+export const wireAdminPayoutRetryResultSchema = adminPayoutRetryResultSchema.extend({
+  payoutReleasedAt: z.coerce.date().nullable(),
+});
+export type WireAdminPayoutRetryResult = z.infer<typeof wireAdminPayoutRetryResultSchema>;
 
 export const wireAdminReviewRowSchema = adminReviewRowSchema.extend({
   createdAt: z.coerce.date(),
@@ -452,6 +480,36 @@ export const wireAdminActivityRowSchema = adminActivityRowSchema.extend({
 export type WireAdminActivityRow = z.infer<typeof wireAdminActivityRowSchema>;
 export const wireAdminActivityPageSchema = paginatedSchema(wireAdminActivityRowSchema);
 export type WireAdminActivityPage = z.infer<typeof wireAdminActivityPageSchema>;
+
+/**
+ * The case queue (#431).
+ *
+ * Five coercions rather than one, because the case detail is the console's only
+ * read with dates on **two** levels — the case's own, and the booking's money
+ * timestamps. A missing coercion on either 500s the screen an operator opens to
+ * decide who keeps the money, which is the worst place in the product for a
+ * `.getTime is not a function`.
+ */
+export const wireAdminCaseRowSchema = adminCaseRowSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireAdminCaseRow = z.infer<typeof wireAdminCaseRowSchema>;
+export const wireAdminCasePageSchema = paginatedSchema(wireAdminCaseRowSchema);
+export type WireAdminCasePage = z.infer<typeof wireAdminCasePageSchema>;
+
+export const wireAdminCaseBookingSchema = adminCaseBookingSchema.extend({
+  paidAt: z.coerce.date().nullable(),
+  payoutReleasedAt: z.coerce.date().nullable(),
+});
+export type WireAdminCaseBooking = z.infer<typeof wireAdminCaseBookingSchema>;
+
+export const wireAdminCaseDetailSchema = adminCaseDetailSchema.extend({
+  createdAt: z.coerce.date(),
+  emailFailedAt: z.coerce.date().nullable(),
+  resolvedAt: z.coerce.date().nullable(),
+  booking: wireAdminCaseBookingSchema.nullable(),
+});
+export type WireAdminCaseDetail = z.infer<typeof wireAdminCaseDetailSchema>;
 
 /** No dates on the wire: every series point is already a `YYYY-MM-DD` string. */
 export const wireAdminMetricsSchema = adminMetricsSchema;

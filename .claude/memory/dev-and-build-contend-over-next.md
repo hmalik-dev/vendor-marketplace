@@ -53,3 +53,48 @@ serially minutes earlier.
 **How to apply:** never batch `typecheck` and `build` into one `turbo` call. A
 `TS6053` naming a file under `.next/types` is this, not your diff — re-run the
 two serially before believing it.
+
+## The tell: a lane that 500s on `/terms` has a poisoned `.next` — 2026-09-07
+
+Lane 441 lost most of an hour to this. With its lane wiring **already
+corrected**, `next dev` served **500 on every route** — including `/terms`,
+which has no data dependencies at all. The API was fine: `/categories` and
+`/vendors` both answered 200 from the lane's own database.
+
+The cause was `.next` left in a **production** state by an earlier `pnpm build`
+— this file's contention in its least obvious form. Not a killed dev server, but
+a dev server refusing to serve a directory another command rebuilt underneath
+it.
+
+**The diagnostic, because it separates the two causes in one request:** `/terms`
+renders from nothing. If it 500s, the app is not broken and the API is not the
+problem — `.next` is poisoned. Rebuild, or serve the production build. Do not
+debug the page and do not go looking at data.
+
+A passing production build served 200 immediately.
+
+## Worse: a typecheck error naming a generated file, where clearing it does not help — 2026-09-07
+
+Lane 441 lost twenty minutes to this and it is a **nastier shape than the 500**,
+because the obvious remedy actively confirms the wrong diagnosis.
+
+After switching branches, `pnpm typecheck` failed with two
+`Type 'Route' does not satisfy the constraint 'never'` errors in
+`.next/types/validator.ts`. It survived `pnpm build --force` **and** a full
+`rm -rf apps/web/.next` plus rebuild. It looked exactly like a real regression
+in the branch. It was not: `pnpm typecheck --force` passed on pristine
+`origin/main`, and then on the branch too. The stale layer was **turbo's cache**,
+not `.next`.
+
+**The tell: clearing the thing the error names does not help.** Clearing `.next`
+is the *correct* fix for the poisoned-artefact case above, so when it fails the
+natural next thought is "then the error must be real" rather than "then I
+misdiagnosed which layer is stale".
+
+**The discriminating move is to change the reader, not the artefact** —
+`pnpm typecheck --force` — and it takes seconds. Run it before believing any
+typecheck error that names a generated file.
+
+Same family as the discriminating vendor slug in
+[[verify-with-a-differently-shaped-check]]: pick the probe only one explanation
+can survive.

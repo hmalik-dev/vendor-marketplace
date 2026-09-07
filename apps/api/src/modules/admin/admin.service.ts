@@ -1,4 +1,10 @@
-import { addDays, generateSlug, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  generateSlug,
+  isPayoutFailing,
+  payoutStatusOf,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import type {
   AdminActivityPage,
   AdminActivityQuery,
@@ -10,6 +16,7 @@ import type {
   AdminMetrics,
   AdminPaymentPage,
   AdminPaymentQuery,
+  AdminPayoutRetryResult,
   AdminReviewPage,
   AdminReviewQuery,
   AdminTagList,
@@ -31,6 +38,7 @@ import type {
   UpdateTag,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { resolveCasesForBooking } from '../cases/cases.dao.js';
 import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
@@ -44,6 +52,7 @@ import {
 import { deleteReviewAndRecalculate } from '../reviews/reviews.dao.js';
 import { normalizeTagName } from '../tags/tags.service.js';
 import { resolveDispute } from '../payments/payments.service.js';
+import { retryPayoutRelease } from '../payments/payouts.service.js';
 import {
   assignTagToVendor,
   countAdminActions,
@@ -233,6 +242,16 @@ function toVendorRow(row: AdminVendorProjection): AdminVendorRow {
     bookingsCount: row.bookingsCount,
     status: deriveVendorStatus(row),
     stripeOnboarded: row.stripeOnboarded,
+    /*
+     * Passed through, never decided here (#432). The console has no writer for
+     * any of these three: `stripeOnboarded` is derived from Stripe's capability
+     * read by the account webhook and constrained by D29, and the other two are
+     * Stripe's own words for why. An operator who could set them by hand would
+     * be recording a guess in the column the payout gate reads.
+     */
+    stripeAccountId: row.stripeAccountId,
+    stripeDisabledReason: row.stripeDisabledReason,
+    stripeRequirementsDue: row.stripeRequirementsDue,
     createdAt: row.createdAt,
   };
 }
@@ -469,6 +488,40 @@ export async function resolveBookingDispute(
     },
   });
 
+  /*
+   * **The ruling closes the case, and it has to happen here** (#431).
+   *
+   * The complaint and the hold are one act — that is why `placeDisputeHold` has
+   * a single orchestrator — so the ruling and the case's disposition are one act
+   * too. Leaving the row `open` after the money moved would put the queue's
+   * oldest-open figure, which is the whole point of that screen, permanently
+   * wrong; and a resolution reached from the Bookings table rather than from the
+   * case has to close it just the same, which is why this is here and not in the
+   * case route.
+   *
+   * **After the audit write, not before**, because `recordAdminActionBestEffort`
+   * states that it is the last thing this function does and that a row therefore
+   * exists only where the change really happened. Ordering this ahead of it
+   * would have made that comment quietly false.
+   *
+   * Plural — a booking can carry a second report filed behind the first, and a
+   * chargeback beside a report. One ruling settles all of them: the money has
+   * moved one way or the other and there is nothing left for a second case to
+   * decide.
+   *
+   * Best-effort for the reason this whole function is: by the time it runs the
+   * hold has been lifted or the card refunded, and there is no retry that does
+   * either a second time safely.
+   */
+  await bestEffortNotice(
+    context,
+    { bookingId },
+    async () => {
+      await resolveCasesForBooking(context.db, bookingId, actorId, now);
+    },
+    'A dispute was resolved but its case could not be closed',
+  );
+
   return booking;
 }
 
@@ -485,7 +538,14 @@ export async function listCustomers(
   return { items: rows, total, page: query.page, pageSize: query.pageSize };
 }
 
-/** `First Last`, collapsed — the same shape every other admin surface prints. */
+/**
+ * `First Last`, collapsed — the same shape every other admin surface prints.
+ *
+ * Exported since #431: the case console prints the same three names (the
+ * sender, the operator who ruled, the customer on the booking) and a private
+ * copy here meant `/admin/cases` and `/admin/bookings` could come to print one
+ * person differently.
+ */
 export function fullName(firstName: string, lastName: string): string {
   return `${firstName} ${lastName}`.trim();
 }
@@ -531,8 +591,8 @@ export async function listPayments(
 ): Promise<AdminPaymentPage> {
   const offset = offsetOf(query);
   const [rows, total] = await Promise.all([
-    findAdminPayments(db, query.pageSize, offset),
-    countAdminPayments(db),
+    findAdminPayments(db, query.flag, query.pageSize, offset),
+    countAdminPayments(db, query.flag),
   ]);
 
   return {
@@ -544,13 +604,76 @@ export async function listPayments(
       vendorPayoutCents: row.vendorPayoutCents,
       stripePaymentIntentId: row.stripePaymentIntentId,
       vendorName: row.vendorName,
+      vendorSlug: row.vendorSlug,
       customerName: fullName(row.customerFirstName, row.customerLastName),
       paidAt: row.paidAt,
+      /*
+       * `payoutStatusOf`, not a fourth reading of the status enum. It is the
+       * one derivation #423 wrote for this question, already answering it for
+       * the vendor dashboard and the booking report — a private copy here is
+       * how two surfaces come to disagree about which bookings are held.
+       */
+      payoutStatus: payoutStatusOf(row),
+      payoutReleasedAt: row.payoutReleasedAt,
+      payoutAttempts: row.payoutAttempts,
+      payoutFailureReason: row.payoutFailureReason,
+      stripeTransferId: row.stripeTransferId,
+      /*
+       * Derived here rather than projected in SQL. `admin.dao.ts` still holds
+       * the predicate — a filter has to run in the database — but the *value*
+       * comes from the same shared function the sweep's own retry uses, so the
+       * filter and the rows it returns cannot answer differently.
+       */
+      payoutFailing: isPayoutFailing(row),
     })),
     total,
     page: query.page,
     pageSize: query.pageSize,
   };
+}
+
+/**
+ * Retries one stuck payout and records that an operator did it (#432).
+ *
+ * The transfer itself is `retryPayoutRelease` — the sweep's own path — so this
+ * function is only the two things that make it an *admin* action: the audit row
+ * and the console's view of what happened.
+ *
+ * The audit write is **best-effort and last**, which is the rule stated on
+ * `recordAdminActionBestEffort` rather than a judgement made here: by the time
+ * it runs, money has either moved at Stripe or a refusal has been written
+ * against the booking, and failing the request over an unwritten log row would
+ * ask the operator to repeat work that has already happened.
+ */
+export async function retryBookingPayout(
+  context: AdminContext,
+  actorId: string,
+  bookingId: string,
+  now: Date,
+): Promise<AdminPayoutRetryResult> {
+  const result = await retryPayoutRelease(context, bookingId, now);
+
+  await recordAdminActionBestEffort(context, {
+    actorId,
+    action: 'payout_retried',
+    subjectType: 'booking',
+    subjectId: bookingId,
+    /*
+     * The outcome and the attempt, and no Stripe error text. The log exists to
+     * be counted and filtered — "how many payouts did we retry by hand last
+     * week" — and a gateway message pasted into it is a sentence nobody can
+     * group by. The reason itself lives on the booking that produced it.
+     */
+    detail: { outcome: result.outcome, attempt: result.payoutAttempts },
+  });
+
+  /*
+   * Returned as it came back. `retryPayoutRelease` derives `payoutStatus` and
+   * `payoutFailing` from the row it re-read, so there is nothing left for this
+   * layer to decide — and a second reading here is exactly the private copy
+   * this ticket exists to stop.
+   */
+  return result;
 }
 
 export async function listReviews(
@@ -1128,6 +1251,8 @@ export async function readMetrics(db: AppDatabase, now: Date): Promise<AdminMetr
     usersCount: totals.usersCount,
     pendingTagSuggestionsCount: totals.pendingTagSuggestionsCount,
     reviewsCount: totals.reviewsCount,
+    payoutsBlockedVendorsCount: totals.payoutsBlockedVendorsCount,
+    payoutsFailingBookingsCount: totals.payoutsFailingBookingsCount,
     revenueByDay: fillWindow(series.revenueByDay, since, ADMIN_METRICS_WINDOW_DAYS),
     bookingsByDay: fillWindow(series.bookingsByDay, since, ADMIN_METRICS_WINDOW_DAYS),
     signupsByDay: fillWindow(series.signupsByDay, since, ADMIN_METRICS_WINDOW_DAYS),

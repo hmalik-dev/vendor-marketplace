@@ -534,6 +534,15 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   441: [], // footer against the newer frame; stone-400 read as text on an ink ground
   442: ['auth'], // check-then-insert race in acceptTerms — needs a ruling on repeat acceptances
   443: ['auth'], // frame 13 parity residue, incl. two access findings
+  444: ['auth'], // unwind must not decline the request behind a settled booking
+  445: [], // failed-query logs leak bound params; fix the pino err serialiser
+  446: [], // no body font-size, so every unsized block inherits the browser's 16px
+  447: [], // border and surface tokens used as text on ink — a role law, not a fourth guard
+  448: [], // lane env hands web children the wrong API origin, on both axes
+  449: [], // screens doc is content-box, every delta bundle is border-box
+  450: ['auth'], // a closed account leaves the only screen that reaches it
+  451: ['auth'], // closure leaves the Clerk identity live and the email locked
+  452: ['auth'], // reproducing it means signing in as each denied role
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

@@ -21,6 +21,21 @@ as naming the guilty one.**
 (a Clerk session per role, while each lane's data is its own), so the file being there is
 not evidence it works.
 
+**It expires again mid-pass, and that reads as a clean run — 2026-09-07.** Lane
+441 regenerated on arrival, then had the state expire **a second time about 20
+minutes later**: a customer navigation landed on `/sign-in` and the signed-in
+footer silently rendered its signed-out variant. Nothing errored. It was caught
+only because the Account column's *contents* were wrong for the state being
+measured — that is, by asserting on content rather than on the page loading.
+
+So regeneration is not a one-off setup step on a long lane. **A parity or
+browser pass that runs for more than about twenty minutes should re-mint before
+its final measurements, or assert something that is only true when signed in and
+fail loudly when it is not.** The same class as
+[[guard-a-delegated-browser-pass-with-a-liveness-watch]]: the pass completes,
+reports no defects, and the absence of defects is an artefact of the environment
+rather than a fact about the app.
+
 **How to apply:** regenerate as a lane-setup step, not a debugging step. This is the class
 [[worktree-env-copies-drift]] describes, and it belongs in #363's guardrails as an
 executable check rather than a remembered rule.

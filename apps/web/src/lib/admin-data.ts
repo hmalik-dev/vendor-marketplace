@@ -6,6 +6,8 @@ import { redirectIfTermsRequired } from './terms-gate';
 import { signInPathReturningHere } from './requested-path';
 import {
   wireAdminBookingPageSchema,
+  wireAdminCaseDetailSchema,
+  wireAdminCasePageSchema,
   wireAdminCustomerPageSchema,
   wireAdminMetricsSchema,
   wireAdminPaymentPageSchema,
@@ -17,6 +19,8 @@ import {
   wireAdminVendorFacetsSchema,
   wireAdminVendorPageSchema,
   type WireAdminBookingPage,
+  type WireAdminCaseDetail,
+  type WireAdminCasePage,
   type WireAdminCustomerPage,
   type WireAdminMetrics,
   type WireAdminPaymentPage,
@@ -121,6 +125,42 @@ export async function getAdminBookings(query: string): Promise<WireAdminBookingP
 
 export async function getAdminPayments(query: string): Promise<WireAdminPaymentPage> {
   return adminRead(`/admin/payments${query}`, wireAdminPaymentPageSchema);
+}
+
+/**
+ * The case queue (#431).
+ *
+ * Nothing here degrades to an empty page either — the module's own header
+ * gives the reason, and this is the surface it applies to hardest: an
+ * operator told "no open cases" by a failed read would conclude nobody is
+ * waiting while a vendor's payout stays frozen.
+ */
+export async function getAdminCases(query: string): Promise<WireAdminCasePage> {
+  return adminRead(`/admin/cases${query}`, wireAdminCasePageSchema);
+}
+
+/**
+ * One case, or `null` when no case has that id.
+ *
+ * **The one read in this module that maps 404 to `null`**, because it is the one
+ * addressed by an id somebody can hold: a stale link out of an email, an id
+ * copied from a resolved case, a uuid typed with one character wrong. Every
+ * other read here is a list or a metric that cannot be "not found".
+ * `rethrowUnlessSessionFailure` passes a 404 straight through, so without this
+ * those all render the 500 error boundary — the same defect the page's uuid
+ * guard exists to prevent, one shape further along. `customer-data.ts` and
+ * `vendor-data.ts` handle their point reads exactly this way.
+ */
+export async function getAdminCase(caseId: string): Promise<WireAdminCaseDetail | null> {
+  try {
+    return await adminRead(`/admin/cases/${caseId}`, wireAdminCaseDetailSchema);
+  } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 404) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 export async function getAdminReviews(query: string): Promise<WireAdminReviewPage> {

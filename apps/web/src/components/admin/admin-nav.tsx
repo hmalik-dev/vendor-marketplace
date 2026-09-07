@@ -7,12 +7,25 @@ import { cn } from '@/lib/utils';
 export interface AdminNavProps {
   /** The count frame `13` draws beside `Reviews` — a query result, never a guess. */
   reviewCount: number;
+  /**
+   * Open cases (#431). The same treatment, for a better reason: an unreviewed
+   * review is somebody waiting for an opinion, and an open case is somebody's
+   * payout frozen. Read the cheap way the layout documents — `pageSize=1` for
+   * the `total` — not through `/admin/metrics`.
+   */
+  caseCount: number;
 }
 
 /**
  * The order frame `13 Admin` draws, which is also the order an operator works
  * in: the shape of the platform first, then the two sides of it, then what they
  * transacted, then what they said, then the vocabulary that files it all.
+ *
+ * **Cases is a ninth row and Activity an eighth, neither of which frame `13`
+ * draws** — both ruled into `22-admin.md`'s rail, which is the spec the frame
+ * answers to. `Cases` sits between `Payments` and `Reviews` because that is
+ * where it belongs in the order an operator works: it is money, and it is the
+ * only row on the rail where the platform owes somebody an answer.
  *
  * **Activity is an eighth row the frame does not draw**, added with #434 and
  * ruled into `22-admin.md`'s rail, which is the spec the frame answers to — the
@@ -27,6 +40,7 @@ const ITEMS = [
   { href: '/admin/customers', label: 'Customers' },
   { href: '/admin/bookings', label: 'Bookings' },
   { href: '/admin/payments', label: 'Payments' },
+  { href: '/admin/cases', label: 'Cases' },
   { href: '/admin/reviews', label: 'Reviews' },
   { href: '/admin/tags', label: 'Categories & tags' },
   { href: '/admin/activity', label: 'Activity' },
@@ -47,7 +61,7 @@ const ITEMS = [
  * `lg`, where the rail is a horizontal touch strip and `04-laws.md`'s target
  * size is the governing constraint rather than a frame nothing draws.
  */
-export function AdminNav({ reviewCount }: AdminNavProps): React.ReactElement {
+export function AdminNav({ reviewCount, caseCount }: AdminNavProps): React.ReactElement {
   const pathname = usePathname();
 
   return (
@@ -76,6 +90,14 @@ export function AdminNav({ reviewCount }: AdminNavProps): React.ReactElement {
               ? pathname === '/admin'
               : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
+          /*
+           * One expression rather than a condition per badge. Two adjacent
+           * `label === '…' && count > 0` clauses is how the second one comes to
+           * be pasted with the first one's count still in it.
+           */
+          const badge =
+            item.label === 'Reviews' ? reviewCount : item.label === 'Cases' ? caseCount : 0;
+
           return (
             <li key={item.href} className="shrink-0">
               <Link
@@ -89,9 +111,9 @@ export function AdminNav({ reviewCount }: AdminNavProps): React.ReactElement {
                 )}
               >
                 {item.label}
-                {item.label === 'Reviews' && reviewCount > 0 ? (
+                {badge > 0 ? (
                   <span className="ml-auto rounded-full bg-clay-400 px-1.75 py-px text-xs font-bold text-stone-0">
-                    {reviewCount}
+                    {badge}
                   </span>
                 ) : null}
               </Link>

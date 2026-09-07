@@ -1,23 +1,21 @@
-import { formatPrice } from '@vendor-marketplace/shared';
+import { ADMIN_PAYMENT_FLAGS, formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
-import { DataTable } from '@/components/admin/data-table';
-import { EmptyState } from '@/components/ui/empty-state';
-import { StatusPill } from '@/components/ui/status-pill';
-import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
+import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { PaymentTable } from '@/components/admin/payment-table';
+import { PAYOUT_FAILING_LABEL } from '@/lib/booking-entries';
 import { getAdminPayments } from '@/lib/admin-data';
-import { adminQueryString, pageNumber, type RawParam } from '@/lib/admin-params';
+import {
+  adminQueryString,
+  droppedKeys,
+  oneOf,
+  pageNumber,
+  type RawParam,
+} from '@/lib/admin-params';
 
 const PATH = '/admin/payments';
 
-const PAID_AT = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
 /**
- * Where the money went, per booking.
+ * Where the money went, per booking — and, since #432, whether it arrived.
  *
  * There is no `payments` table and this screen does not pretend otherwise: it
  * is the `bookings` rows that carry a payment intent, read for the money rather
@@ -26,10 +24,12 @@ const PAID_AT = new Intl.DateTimeFormat('en-US', {
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: RawParam }>;
+  searchParams: Promise<{ flag?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
-  const payments = await getAdminPayments(adminQueryString({ page: pageNumber(raw.page) }));
+  const flag = oneOf(raw.flag, ADMIN_PAYMENT_FLAGS);
+  const dropped = droppedKeys(raw, { flag });
+  const payments = await getAdminPayments(adminQueryString({ flag, page: pageNumber(raw.page) }));
 
   /*
    * Cancelled bookings are excluded from the sum, and carry a pill saying so.
@@ -44,6 +44,16 @@ export default async function AdminPaymentsPage({
     .filter((row) => row.status !== 'cancelled')
     .reduce((total, row) => total + row.platformFeeCents, 0);
 
+  const empty = flag
+    ? {
+        headline: 'Every transfer has gone through',
+        description: 'No payout has been attempted and failed.',
+      }
+    : {
+        headline: 'No payments yet',
+        description: "A payment appears here the moment a customer's card is charged.",
+      };
+
   return (
     <AdminSurface
       heading="Payments"
@@ -51,77 +61,34 @@ export default async function AdminPaymentsPage({
         `${payments.total} paid`,
         `${formatPrice(feeTotal)} platform fee on this page, refunds excluded`,
       ]}
+      dropped={dropped}
+      filters={
+        <FilterBar action={PATH}>
+          {/*
+            The state this screen could not show (#432). Both columns behind it
+            were written by the release sweep and read by nothing, so a vendor
+            owed money by a transfer failing every quarter of an hour generated
+            no signal anywhere in the console.
+          */}
+          <FilterSelect
+            action={PATH}
+            carried={{}}
+            name="flag"
+            label="Needs attention"
+            value={flag ?? ''}
+            options={[{ value: 'payout-failing', label: PAYOUT_FAILING_LABEL }]}
+          />
+        </FilterBar>
+      }
       pager={{
         path: PATH,
-        params: {},
+        params: { flag },
         page: payments.page,
         pageSize: payments.pageSize,
         total: payments.total,
       }}
     >
-      <DataTable
-        rows={payments.items}
-        rowKey={(row) => row.bookingId}
-        empty={
-          <EmptyState
-            headline="No payments yet"
-            description="A payment appears here the moment a customer's card is charged."
-          />
-        }
-        columns={[
-          {
-            key: 'vendor',
-            width: '1.4fr',
-            header: 'Vendor',
-            className: 'font-semibold text-stone-900',
-            cell: (row) => row.vendorName,
-          },
-          { key: 'customer', width: '1.2fr', header: 'Customer', cell: (row) => row.customerName },
-          {
-            key: 'total',
-            width: '.9fr',
-            header: 'Total',
-            className: 'font-mono',
-            cell: (row) => formatPrice(row.totalAmountCents),
-          },
-          {
-            key: 'fee',
-            width: '.8fr',
-            header: 'Fee',
-            className: 'font-mono',
-            cell: (row) => formatPrice(row.platformFeeCents),
-          },
-          {
-            key: 'payout',
-            width: '.8fr',
-            header: 'Payout',
-            className: 'font-mono',
-            cell: (row) => formatPrice(row.vendorPayoutCents),
-          },
-          {
-            key: 'paid',
-            width: '1fr',
-            header: 'Paid',
-            cell: (row) => (row.paidAt ? PAID_AT.format(row.paidAt) : '—'),
-          },
-          {
-            key: 'status',
-            width: '.9fr',
-            header: 'Status',
-            /*
-              Without it a refunded booking is indistinguishable from a live
-              payment: same total, same fee, same payout, no pill. `paid_at` is
-              never cleared by a cancellation, so the row legitimately stays —
-              what it must not do is look like money the platform kept.
-            */
-            cell: (row) => (
-              <StatusPill tone={BOOKING_PRESENTATION[row.status].tone}>
-                {BOOKING_PRESENTATION[row.status].label}
-              </StatusPill>
-            ),
-          },
-        ]}
-      />
+      <PaymentTable rows={payments.items} empty={empty} />
     </AdminSurface>
   );
 }

@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { asc, eq, sql } from 'drizzle-orm';
+import { asc, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { tagSuggestions, users } from './schema/index.js';
-import { seedBookingActors } from './testing/booking-actors.js';
+import { tagSuggestions } from './schema/index.js';
 import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './testing/test-db.js';
 
 /**
@@ -60,17 +59,30 @@ async function databaseBeforeTheIndex(): Promise<void> {
     await apply(entry.tag);
   }
 
-  await seedBookingActors(testDb.db, 'tag-dedupe');
+  /*
+   * Raw SQL, naming its columns — **not** an insert through the schema object.
+   *
+   * This database is deliberately at an *old* schema, and Drizzle's insert
+   * names every column the current schema declares. So the moment any later
+   * migration adds one to a table this fixture writes, the insert asks a 2026
+   * database for a 2027 column and all seven cases fail with `42703` — which
+   * they did the first time it happened (#432 added two to `vendor_profiles`,
+   * and the seed helper this used to call writes one). A historical-schema
+   * fixture cannot be built from the live schema object; the columns have to be
+   * spelled out, and these three are all that exist at `0023`.
+   *
+   * `tag_suggestions.vendor_id` references `users`, not `vendor_profiles` —
+   * the column names the submitter, and any signed-in vendor may suggest a tag.
+   * So one user row is the whole fixture: the profile and package the shared
+   * seed helper also created were never read here.
+   */
+  const inserted = await testDb.db.execute<{ id: string }>(sql`
+    insert into users (clerk_user_id, email, role, first_name, last_name)
+    values ('user_tag-dedupe_vendor', 'tag-dedupe-vendor@example.com', 'vendor', 'Wren', 'Field')
+    returning id
+  `);
 
-  // `tag_suggestions.vendor_id` references `users`, not `vendor_profiles` —
-  // the column names the submitter, and any signed-in vendor may suggest a tag.
-  const rows = await testDb.db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.clerkUserId, 'user_tag-dedupe_vendor'))
-    .limit(1);
-
-  vendorId = rows[0]!.id;
+  vendorId = inserted.rows[0]!.id;
 }
 
 /** A row as the old read-then-insert path left it: no decision on it at all. */

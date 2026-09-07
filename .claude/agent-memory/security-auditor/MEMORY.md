@@ -70,4 +70,5 @@
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional on every target is correct here; `requiresExplicitValue` + the `.optional()` branch are what hold it, and no route exists without a secret
 - [`support_cases` is the first durable copy of a complaint](support-cases-is-the-first-durable-copy-of-a-complaint.md) — the admin routes are gated and the chargeback actor is sound; audit the public writer's failure branch
 - [`freeText()` lets NUL through](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — Postgres raises 22021, so a caller picks when a user-text insert fails and which branch runs
+- [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — `ApiClientError` carries the 200, so `userFacingError`'s 5xx filter never fires and a landed transfer reports as failed
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking in full with an empty `closeBlockers`; copy that says "refunds nothing" is true of one side only

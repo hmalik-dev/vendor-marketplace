@@ -11,6 +11,22 @@ export function renderLaneEnv(manifest: LaneManifest, databaseUrl: string): stri
     `WEB_PORT=${manifest.webPort}`,
     `NEXT_PUBLIC_API_URL=http://localhost:${manifest.apiPort}`,
     /*
+     * **The server-side twin, and it is a different variable.** `api-client.ts`
+     * reads `process.env.API_URL` for every Server Component fetch, while
+     * `NEXT_PUBLIC_API_URL` above is inlined into the browser bundle. Writing
+     * only the public one leaves the root `.env`'s `API_URL=http://localhost:4000`
+     * in force, so a lane's *pages* silently render against the first lane's
+     * API — or against a checkout that has none of this lane's data.
+     *
+     * That is worse than the CORS failure below, because it does not look like
+     * a failure. Found on 2026-09-07 in lane 432, where every `/admin/*` route
+     * rendered the 500 page: `admin/layout.tsx` awaits a server-side admin read
+     * before any child renders, and :4000 answered 500 for a token minted
+     * against this lane. Five UI acceptance items were unverifiable and the
+     * cause read as a defect in the change under test.
+     */
+    `API_URL=http://localhost:${manifest.apiPort}`,
+    /*
      * The API derives its CORS allowlist from `WEB_URL`. Without this line a
      * lane inherits the root `.env`'s `http://localhost:3000`, so the lane's
      * own web origin is refused and every client-side call fails as

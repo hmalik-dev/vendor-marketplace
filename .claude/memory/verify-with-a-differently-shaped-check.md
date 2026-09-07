@@ -45,3 +45,53 @@ of which were impossible if the file were missing. When a listing surprises you,
 from a known-absolute position (`--full-tree`, an absolute path, a fresh shell).
 
 Related: [[never-abort-a-rebase-you-did-not-start]], [[lead-dont-narrate]].
+
+## The environment variant: assert something only true when the environment is right
+
+Generalised by lane 441 on 2026-09-07 after three near-misses in one lane, all
+the same shape — **a check that could not fail**, where the pass completes, the
+silence is the environment rather than the app, and nothing says so.
+
+- **Expired `.auth/`.** A customer navigation landed on `/sign-in` and the
+  signed-in footer rendered its signed-out variant. Nothing errored. Caught only
+  by asserting the Account column's **contents**, not that the page loaded.
+- **A watcher matching any failing check.** It abandoned a live merge because a
+  rate-limited Vercel had gone red. The fix is to watch the required check **by
+  name** (`Typecheck, lint, build, test`), never "any red".
+- **A web server on the wrong port.** `lane:exec` exports the API's `PORT` to
+  every child, so `next start` binds the API port and serves the app there. A
+  pass pointed at the lane's *web* port gets connection-refused and reads as
+  "the app is broken"; one pointed at the *API* port renders the app and looks
+  correct. Both wrong, neither says so. (`next dev` escapes only because
+  Turborepo's dev task passes `--port` explicitly — an accident of one task
+  definition, not a property of the lane.)
+
+**The rule:** a browser or parity pass must assert something that is **only true
+when the environment is right** — the rendered contents of a signed-in-only
+element, the named check, a port that answers with the app you meant. Liveness,
+a 200, or "the page loaded" are all satisfied by the broken case.
+
+Same principle `web-design-parity.md` states as: *before trusting a check, ask
+what state would make it fail. If nothing would, it is not a check.* This is that
+principle applied to the lane's environment rather than to the assertion.
+
+Related: [[lane-auth-state-arrives-expired]],
+[[guard-a-delegated-browser-pass-with-a-liveness-watch]],
+[[vercel-deploy-check-always-fails]].
+
+## The data variant: an empty state compares nothing
+
+Lane 435, 2026-09-07. Frame `13` is drawn with the **saved filter on**, so
+`00-README.md` records `/admin/vendors?status=review` as the comparable route.
+That lane's database had **zero vendors in `review`**, so the route rendered the
+filtered empty state — and a parity pass against it *would have completed and
+reported*, having compared nothing at all.
+
+It seeded six vendors into `review` first, and reverted the fixture with a reseed
+before committing.
+
+**So a parity or browser pass needs its data precondition checked as
+deliberately as its environment.** "The page rendered" and "the page rendered the
+state the frame draws" are different claims, and only the second is a
+measurement. Before comparing, confirm the surface is showing rows rather than an
+empty state — an empty table matches an empty table on all six axes.

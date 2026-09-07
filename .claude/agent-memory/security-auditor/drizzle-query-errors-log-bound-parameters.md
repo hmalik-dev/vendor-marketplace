@@ -39,3 +39,25 @@ secret. As of #408 the four new catch sites (`bestEffortAnnouncement`,
 fail on `notifications` inserts, whose params are a user id, a title and a body
 naming a business or first name — no credential. Check what the _statement_
 binds before escalating, not the fact that `{ err }` is logged.
+
+**The first statement that crossed that line: #439's `email_deliveries`
+insert.** `recordDelivery` in
+`apps/api/src/modules/notifications/notification-email.ts` binds
+`recipient_email` — a raw customer address — and catches its own failure with
+`log.error({ err: error })`. Reported as a blocker on 2026-09-07 because the
+same diff states the opposite invariant twice in prose ("no recipient address
+can reach a log", "the column holds it; the log stream does not"). The webhook's
+`UPDATE` in `email-delivery.dao.ts` binds the bounce diagnostic, which quotes the
+recipient address back verbatim, and reaches the same serializer through
+`error-handler.ts` on any 500. A stated invariant broken on the error path is a
+finding even where the bare pattern is accepted.
+
+**The first confirmed escalation is #431** (`modules/cases/cases.service.ts`'s
+`bestEffort`, reached from `openSupportCase`). That statement is the
+`support_cases` INSERT, so its params are the 4,000-character support message
+body and the sender's reply-to address — the two things
+`support.service.ts:323-327` says in words must never reach the log. It is not a
+theoretical failure either: see
+[[free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand]]. The fix is
+per-call-site, not in `bestEffort` — `recordCaseSendFailure` shares the helper
+and its statement binds only ids and timestamps.

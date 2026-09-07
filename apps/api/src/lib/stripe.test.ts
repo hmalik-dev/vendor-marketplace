@@ -1,9 +1,11 @@
+import type Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import {
   describeAccountEvent,
   isMissingPayoutsOnly,
   isOnboarded,
   paymentIntentParams,
+  readAccountStatusFrom,
   refundParams,
   refusedRefundParams,
   refusedReversalParams,
@@ -259,6 +261,131 @@ describe('isMissingPayoutsOnly', () => {
     expect(isMissingPayoutsOnly({ transfersActive: false, payoutsActive: false })).toBe(false);
     // Not reachable through onboarding, and deliberately not claimed as this state.
     expect(isMissingPayoutsOnly({ transfersActive: false, payoutsActive: true })).toBe(false);
+  });
+});
+
+describe('readAccountStatusFrom', () => {
+  /**
+   * A restricted recipient account **as Stripe sends it** — the payload the
+   * `account.updated` handler re-reads, not a row shaped like this codebase's
+   * own interface (#432).
+   *
+   * Every field here is one Stripe owns: `status_details[].code` from its
+   * closed vocabulary, and `requirements.entries[]` with the two properties
+   * that decide whether an entry is worth showing an operator —
+   * `awaiting_action_from` and `minimum_deadline.status`.
+   */
+  const RESTRICTED = {
+    id: 'acct_restricted',
+    configuration: {
+      recipient: {
+        applied: true,
+        capabilities: {
+          stripe_balance: {
+            payouts: {
+              status: 'restricted',
+              status_details: [{ code: 'requirements_past_due', resolution: 'provide_info' }],
+            },
+            stripe_transfers: {
+              status: 'restricted',
+              status_details: [{ code: 'requirements_past_due', resolution: 'provide_info' }],
+            },
+          },
+        },
+      },
+    },
+    requirements: {
+      entries: [
+        {
+          awaiting_action_from: 'user',
+          description: 'individual.id_number',
+          errors: [],
+          impact: {},
+          minimum_deadline: { status: 'past_due' },
+          requested_reasons: [{ code: 'routine_verification' }],
+        },
+        {
+          awaiting_action_from: 'user',
+          description: 'individual.verification.document',
+          errors: [],
+          impact: {},
+          minimum_deadline: { status: 'currently_due' },
+          requested_reasons: [{ code: 'routine_verification' }],
+        },
+        {
+          // Stripe is verifying this one; nobody here can act on it.
+          awaiting_action_from: 'stripe',
+          description: 'individual.address',
+          errors: [],
+          impact: {},
+          minimum_deadline: { status: 'currently_due' },
+          requested_reasons: [{ code: 'routine_verification' }],
+        },
+        {
+          // Every account carries some of these from the day it is created.
+          awaiting_action_from: 'user',
+          description: 'business_profile.url',
+          errors: [],
+          impact: {},
+          minimum_deadline: { status: 'eventually_due' },
+          requested_reasons: [{ code: 'routine_onboarding' }],
+        },
+      ],
+    },
+  } as unknown as Stripe.V2.Core.Account;
+
+  it('reads the capabilities, the reason and only the actionable requirements', () => {
+    expect(readAccountStatusFrom(RESTRICTED)).toEqual({
+      transfersActive: false,
+      payoutsActive: false,
+      disabledReason: 'requirements_past_due',
+      requirementsDue: ['individual.id_number', 'individual.verification.document'],
+    });
+  });
+
+  /*
+   * `status_details` is documented as empty while a capability is active, so an
+   * onboarded vendor must carry no reason at all — a leftover code beside two
+   * active capabilities would render "restricted" on a vendor Stripe is happy
+   * with.
+   */
+  it('reports no reason and nothing outstanding for an active account', () => {
+    const active = {
+      id: 'acct_active',
+      configuration: {
+        recipient: {
+          applied: true,
+          capabilities: {
+            stripe_balance: {
+              payouts: { status: 'active', status_details: [] },
+              stripe_transfers: { status: 'active', status_details: [] },
+            },
+          },
+        },
+      },
+      requirements: { entries: [] },
+    } as unknown as Stripe.V2.Core.Account;
+
+    expect(readAccountStatusFrom(active)).toEqual({
+      transfersActive: true,
+      payoutsActive: true,
+      disabledReason: null,
+      requirementsDue: [],
+    });
+  });
+
+  /*
+   * An account mid-onboarding legitimately has neither hash: a capability is
+   * absent until it has been requested, and `requirements` is absent unless it
+   * was included in the retrieve. Both are "nothing known yet", not an error.
+   */
+  it('treats a bare account as inactive with nothing known about it', () => {
+    expect(readAccountStatusFrom({ id: 'acct_new' } as unknown as Stripe.V2.Core.Account)).toEqual({
+      transfersActive: false,
+      payoutsActive: false,
+      disabledReason: null,
+      requirementsDue: [],
+    });
   });
 });
 

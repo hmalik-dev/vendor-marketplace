@@ -29,3 +29,28 @@ and wait.
 
 **Why:** the failure is silent until it blocks someone, and the blocked session
 can tell neither whose it is nor whether it is safe to touch.
+
+## A committed-but-unpushed commit is not held either — 2026-09-07
+
+Holding a push in the **shared checkout** does not hold anything. Any lane
+landing its own ticket has to `git rebase origin/main` and `git push` to bring
+main up and confirm `0 0` — and that publishes **whatever the shared checkout
+holds**, including commits another session was deliberately sitting on.
+
+Lane 439 did exactly that while landing: five docs commits being held to avoid
+dequeuing an in-flight PR were rebased (new SHAs) and pushed as part of its
+reconciliation. It was in-bounds — it was told to bring main up, which cannot be
+done otherwise — and it said so, which is why this is written down rather than
+discovered later.
+
+**So there are only two real ways to hold work while lanes are landing:**
+
+1. Do not commit it to the shared checkout's `main` at all — keep it on a branch
+   or outside the repo until the window is safe.
+2. Accept that it goes up with the next landing, and make sure it is safe to
+   publish at any moment (docs-only, no half-finished edits).
+
+The second is usually right. The mistake is believing option zero exists.
+
+Related: [[commit-ticket-changes-immediately]],
+[[main-pushes-dequeue-parallel-lane-prs]].

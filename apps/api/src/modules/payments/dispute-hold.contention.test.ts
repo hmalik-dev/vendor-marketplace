@@ -211,7 +211,14 @@ describe('withdrawing a dispute hold, against a real Postgres', () => {
    */
   it('lifts the hold it placed, with the timestamp it read back', async () => {
     const auth = customer((await currentBooking()).customerId);
-    const held = await placeDisputeHold(context(), auth, bookingId, 'The first report.', clockNow);
+    const held = await placeDisputeHold(
+      context(),
+      auth,
+      bookingId,
+      'The first report.',
+      clockNow,
+      'customer',
+    );
     expect(held.status).toBe('disputed');
 
     const lifted = await liftDisputeHold(context(), held, held.updatedAt);
@@ -224,7 +231,14 @@ describe('withdrawing a dispute hold, against a real Postgres', () => {
   /* And it still refuses a row that has moved on since — the race it closes. */
   it('refuses to lift a hold that is no longer the one it placed', async () => {
     const auth = customer((await currentBooking()).customerId);
-    const first = await placeDisputeHold(context(), auth, bookingId, 'The first report.', clockNow);
+    const first = await placeDisputeHold(
+      context(),
+      auth,
+      bookingId,
+      'The first report.',
+      clockNow,
+      'customer',
+    );
 
     /* The operator settles it, and the customer reports again. */
     expect(await liftDisputeHold(context(), first)).not.toBeNull();
@@ -234,6 +248,7 @@ describe('withdrawing a dispute hold, against a real Postgres', () => {
       bookingId,
       'The second report.',
       clockNow,
+      'customer',
     );
     expect(second.updatedAt).not.toEqual(first.updatedAt);
 

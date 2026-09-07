@@ -40,6 +40,8 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   tag_updated: 'Edited a tag',
   tag_suggestion_resolved: 'Resolved a tag suggestion',
   dispute_resolved: 'Resolved a report',
+  support_case_resolved: 'Closed a case',
+  payout_retried: 'Retried a payout',
   user_data_exported: 'Exported an account record',
   user_closed: 'Closed an account',
 };
@@ -51,6 +53,7 @@ const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
   tag: 'Tag',
   tag_suggestion: 'Suggestion',
   booking: 'Booking',
+  support_case: 'Case',
 };
 
 /**

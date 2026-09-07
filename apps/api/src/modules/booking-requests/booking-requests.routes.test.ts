@@ -175,7 +175,7 @@ describe('/booking-requests', () => {
      * run decides what the rest see.
      */
     harness.email.sent.length = 0;
-    harness.email.deliveredKeys.clear();
+    harness.email.messageIdsByKey.clear();
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -603,7 +603,7 @@ describe('/booking-requests', () => {
       }
 
       harness.email.sent.length = 0;
-      harness.email.deliveredKeys.clear();
+      harness.email.messageIdsByKey.clear();
 
       // `decline` is the vendor's answer to a pending request; `accept` is the
       // customer's to a quote; `cancel` is the customer withdrawing.

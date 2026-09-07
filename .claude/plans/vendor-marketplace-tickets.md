@@ -246,20 +246,26 @@ the silent-submit work #388 closed:
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
-| **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. |
-| **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. |
+| **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Done** | `worktree-431` | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. **Landed 2026-09-07 as `54fa7e64` (PR #143).** `support_cases` is one queue for both doors — the customer's report and the card network's chargeback — with `/admin/cases` open-and-oldest-first and `/admin/cases/[id]` carrying the money fields and the two-position control, which calls the `resolveDispute` that already existed. Review found two defects that would have shipped: a chargeback on a **future-dated** event placed no hold, so the sweep paid the vendor on the event date with the dispute live (`RELEASABLE_STATUSES` includes `confirmed`) — fixed at the primitive with a required `DisputeHoldOrigin`, skipping only the refusal that is advice for a customer; and a failed case insert put the support message body and the sender's address into the log through `DrizzleQueryError`'s bound params, reachable on demand because `freeText()` lets `U+0000` through. **#436 lands its reports here as a third `origin` member, not a second queue.** |
 | **435** | **Graduated moderation: unpublish, hide and reinstate without banning** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Ban is the only moderation action and it is nuclear — it declines every open request, cancels and **fully refunds** every confirmed booking, and unpublishes the storefront. There is no lever between "nothing" and that: `vendor_profiles.is_published` has no admin writer, and `reviews.is_public` exists, defaults `true` and is written by **nothing but seed scripts**, so a review can only be permanently deleted. `reviews.service.ts` says so itself — *"there is nowhere to queue to until #15 builds admin"* — and #15 shipped without the queue. |
 | **436** | **Reporting and message visibility for trust and safety** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Nothing in the product can report anything — no listing report, no message report, no photo report, no user report; grepping report/flag/abuse across the API returns nothing. The only inbound channel is a rate-limited public email form. And `/conversations` is participant-only with no admin read, so a harassment complaint arrives by email naming a thread the operator cannot open. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **#435** — the two share six files (`admin.routes.ts`, `admin.service.ts`, `admin.dao.ts`, `vendor-table.tsx`, `admin-data.ts`, `schemas/index.ts`) and this one reads the states #435 writes | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
 | **438** | **Data rights: export, account closure, and the legal acceptance record** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Neither privacy-policy promise is backed by anything: the text says *"ask us for a copy of what we hold"* and *"to close your account, ask us through Contact support"*, and there is no export endpoint, no admin-initiated deletion, and no screen. Deletion happens only if the user deletes themselves in Clerk. Separately, `legal_acceptances` is the platform's evidence a vendor agreed to the 12% and the 72-hour hold — immutable, IP and UA captured, three DB triggers — and no operator can read it. |
-| **439** | **Transactional email delivery is invisible** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Fourteen notification types fire and forget; failures are logged and dropped at `notification-email.ts:200`. The `notifications` table records the in-app bell only — no `sentAt`, no failure reason, no provider id. *"Was the customer actually told their booking was cancelled?"* is unanswerable from the console, from the database, or from anywhere but a log search. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
-| **441** | **The site footer against the newer frame, and the ink-ground text ramp used as a border** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #430's parity pass**, which measured the footer against `design/delta-band/Orla-Closing-Band.html` — a frame #428 never saw, so none of this is a regression. **Nine layout, style and font deviations**: inner padding `py-14` (56px) where the frame draws 40px top and bottom; the column grid is four equal quarters where the frame draws `1.5fr 1fr 1fr 1fr` (419/280/280/280), which puts `Browse` at x=390 against the frame's ≈493; gap 40px vs 34px; the footer wordmark at 32px vs 25px, and its logo mark `29x20` with **unequal** circles (20px filled, 22px outer) where the frame draws `26x17` with two equal 17px circles — so `logo.tsx:50`'s comment that `marketingFooter` is *"absent from every frame"* is now stale, this frame draws it twice; `Contact support` renders `#B8AF9F`/400 where the frame singles it out at `#F8F5EF`/600; link columns 13.5px vs 13px; tagline 13.5px/1.6 vs 13px/1.5; micro-labels at 600 weight and .05em vs 500 and .07em. **And the mechanism #430 fixed in the band, in the two places it survives**: the legal row's hairline is `border-stone-0/10` where the frame draws `rgba(248,245,239,.1)` — `stone-50`, the other end of the ramp — and **`admin-header.tsx:64`** sets `text-stone-400` as text on frame `13`'s inverted `#23201C` ground. `stone-400` is a **border** value: it is drawn on a light ground at thirty-nine sites across the frames and as text on ink at none. `stone-480` (`#d8d0c2`) was added to the ink-ground text ramp in `aac9b3b` and is the token both should read. That is the only admin instance, which is why it rides here rather than in #431–#440 — the ramp is the defect, not the surface. **One access finding with no other checker**: the footer logo link is `88x32`, twelve pixels under `04-laws.md`'s 44px minimum; its `aria-label` is present and correct. **Not in scope**: the `Florals` mismatch in the Browse column is the ruled #419 override, and the band itself is done (#430, `aac9b3b`). |
 | **442** | **A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder: does a second acceptance of a version already held mean one row or two?** | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. The obvious fix — a unique index on `(accepted_by_user_id, document, version)` — **overturns #427's ruling** that a second acceptance of a held version *is* a second row, on the grounds that *"I accepted it twice"* is a true statement about what happened; `legal-acceptance-immutability.test.ts` asserts exactly that today. So the race cannot be closed without first deciding what the record is claiming, which is a product question, not a lane's. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 | **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
+| **444** | **An unwind declines the accepted request behind a completed booking** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #438**, which tripped over it building account closure, verified it was pre-existing rather than its own, and pinned current behaviour in a test rather than widening scope. Confirmed independently before filing. `declineOpenRequests` (`admin.dao.ts:484`) sets `status: 'declined'` where status is in `['pending','quoted','accepted']` — **unconditionally**. But `accepted` is exactly the status a request holds *after checkout*, so an unwind flips the accepted request behind an **already-completed** booking to `declined`: the event happened, the vendor was paid, and the customer's requests screen now says it was declined. That is rewriting history, not unwinding it. **Reachable from any ban**, so it predates #433 and #438 both. The neighbouring `findConfirmedBookingsToUnwind` gets it right and is the model — it bounds on `event_date > today`; the request decline has no equivalent bound. Do **not** simply drop `accepted`: a request accepted but never paid for is a real open commitment. |
+| **445** | **A failed query logs every bound parameter, and the redact list cannot reach it** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 after two lanes hit it independently** — #431's security pass and #439's review — which makes it a shape rather than an incident. Drizzle 0.45.2's `DrizzleQueryError` puts the statement's bound parameters in its `message` **and** in an own enumerable `params` property; pino's `err` serialiser copies own properties, so any `log.*({ err })` on a failed query writes every bound value into the log stream. **`server.ts`'s redact list is path-based on `req.headers.*` and never reaches it.** Caller-triggerable, which is why it is P0: `freeText()` does not strip `U+0000`, Postgres refuses it with `22021`, and the insert is on the **public unauthenticated** `POST /support/messages` — so a stranger picks when the write fails, six times an hour, and up to 4,000 characters of what they typed plus their reply-to address is logged. **Fix the sink, not the source**: a custom pino `err` serialiser covers every existing and future call site, where narrowing `freeText()` closes one trigger and leaves the class open. Two lanes have already written per-call-site guards; a third would make it a habit rather than a law. |
+| **446** | **The app declares no body text size, so every unsized block renders at 16px** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's parity pass, which hit it as a worked example.** `globals.css` sets `line-height` on `html` and its own comment explains why a per-call-site fix cannot close that class — *"an element with no text utility at all still inherits, so the per-site route cannot close the class"* — and then **stops one property short**. Nothing declares `font-size`, so every block element carrying no `text-*` utility inherits the browser's **16px**, which is `--text-lg`, not the 13.5px `--text-base` body step. **The worked example**: #441 set the footer's 13px on the `<a>`, and each `<li>`'s own line box stayed 16px because an inline child does not shrink its block. Rows measured 31px against the frame's 27, the footer was **25px taller** than it draws, and the legal row's copyright sat 1.5px off the links' baseline. #441 fixed the footer by moving the size onto the `<ul>`; the class is still open everywhere else. **Scope is the fix *plus* the sweep, not the fix with a caveat.** `body { font-size: var(--text-base) }` in the same `@layer base` block — on `body`, never `html`, which would rescale every rem-based spacing utility in the product — rescales **every currently-unsized block** from 16px to 13.5px. Anyone picking this up needs to know that before they start rather than discover it: it wants a parity pass over every frame-carrying screen, and it may well surface sites that were silently relying on the 16px. |
+| **447** | **A border or surface token used as text on ink — four instances, three per-call-site guards, no law** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441, which was the third instance.** The recurring mistake is not "a border token used as text" but ***the nearest hex is not the right role***, and it has now bitten four times: `stone-400` as text on ink twice (#430's closing band, #441's admin header), `stone-0` as a border on ink once (#441's legal hairline), and the 78%-alpha-of-`stone-50` that `theme.css` records as the defect which minted the ink-ground ramp in the first place. Three of those now carry **three separately hand-written per-call-site guards** — `page.test.tsx` for the band, `admin-header.test.tsx` and `site-footer.test.tsx` for #441 — and no law. A fourth guard would make it a habit. **#441 looked for the cheap guard and reports that there is not one**, which is the part that should stop the next person rediscovering it: a blanket ban on `text-stone-400` needs **four legitimate exemptions** (`ui/empty-state.tsx`, `vendors/profile/review-form.tsx`, and two in `packages/package-manager.tsx` — all decorative glyphs on a light ground), and a file-level "this file has an ink ground" rule matches **14 files**, most of which use `bg-stone-900` for a scrim, a chip or one button variant. So the guard has to know the *ground an element renders on*, which no source scan can see. Options worth weighing: extend `theme-tokens.test.ts`'s contrast table into a role table naming which tokens may be `text-*` at all; or assert it in the browser during the parity pass, where the ground **is** observable. |
+| **448** | **Lane env tooling hands web-side children the wrong API origin, silently** | INFRA | M-OPS | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 — both halves found the same day, by #435 and #441.** `renderLaneEnv` in `packages/preflight/src/lane/env.ts` writes `NEXT_PUBLIC_API_URL` and **not** `API_URL`. They are different variables: `API_URL` is what `apps/web/src/lib/api-client.ts:13` reads for every **Server Component** fetch, while `NEXT_PUBLIC_API_URL` is inlined into the browser bundle at build time. With no lane value the root `.env`'s `API_URL=http://localhost:4000` wins, so **every lane's server-side renders read another checkout's database**. Confirmed in lane 441: `.env.lane` carried no `API_URL`, and something *was* listening on 4000 and answering 200 — so nothing failed, nothing 500'd, and pages rendered. **The second half is `PORT`.** `lane:exec` exports the lane's `PORT` — the **API's** port — to *every* child, so `next start` serves the **web app on 4021**. `next dev` escapes only because Turborepo's dev task passes the port explicitly, which is an accident of one task definition rather than a property of the lane: *"use `next dev` and you are fine"* is the wrong lesson. Both directions are silent — the lane's web port refuses the connection and reads as a broken app, while the API port renders the app correctly. **Fix**: `renderLaneEnv` writes `API_URL`, and `lane:exec` stops exporting the API's `PORT` to non-API children. Setting `PORT` over the lane env is the workaround a lane can apply today; those two are the actual fix. **Add the preflight assertion #435 asks for** — *"the lane's web app resolves the lane's API"* — on **both** axes, because the build-time half is independent: a build not made through `lane:exec` bakes `localhost:4000` into the bundle and the CSP whatever the server env says, and #441 measured exactly that (`connect-src` naming 4000 while SSR correctly resolved 4021). The CSP half is one `curl -sI`. **A lane env written before this fix is stale** and needs `lane:down && lane:up`, which drops the lane database — re-seed after. |
+| **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
+| **450** | **A closed account vanishes from the only screen it can be reached from** | P3 | M6 | **P1 High** | **Backlog** | — | **#438** — the closure it describes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 by lane #438's `diff-reviewer`**, which correctly declined to fix it in scope: the defect is in an **existing** surface's query. `/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`) and closure sets `deleted_at` — while `/admin/users/[userId]`, the data-rights page carrying the export, the retained counts and the legal acceptance record, is reachable **from that table and by direct URL and nowhere else**. So closing an account removes the page needed to audit the closure. **It is worst exactly when it matters**: a subject-access request, a regulator, or a dispute about whether closure did what was promised all arrive *after* the closure and none come with the uuid in hand. Fix with a deliberate way to ask for closed accounts — not by dropping the predicate, which correctly makes live accounts the default. |
+| **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **#438** — the closure it describes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. Decide *and state* whether the address is burned — the privacy policy says an account can be closed, not that the address is gone. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
+| **452** | **Every role bounce off `/admin` costs a failed `https` request** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #432's browser pass.** A customer or vendor sent to `/admin` lands correctly on their own dashboard, but the browser first logs `GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR` and `Failed to load resource` before falling back to `http`. `current-user.ts:111` issues a **relative** `redirect(DASHBOARD_PATH_BY_ROLE[user.role])`, so the scheme is being inferred downstream rather than chosen. The outcome is right, which is why nobody has noticed: the cost is one wasted round trip and a console error on every denial, and a console that is never clean is one nobody reads. Neither `current-user.ts` nor `middleware.ts` was touched by #432. |
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #433 landed: 13 rows — 10 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`) and #433 (`ad1b179`) have both landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#439**, **#441** and **#442** are startable unattended today. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #432 landed: 19 rows — 15 Backlog, 3 `Deferred — needs a human`, and **#431 still sitting here as `Done`** with its detail section, which `db539991` marked but did not move to the archive. Left for #431's own session rather than swept by a passing lane: a row moved by somebody else is how two copies of one ticket come to exist.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`) and #432 (`1e899ae1`) have all landed** — so **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1303,7 +1309,7 @@ not a licence.
 
 ### #431: Operations case console — every dispute, however it arrives, and its resolution
 
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe` `email`
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Done | **Capabilities:** `core` `auth` `stripe` `email`
 **Blocked by:** None
 
 #### The state today
@@ -1409,98 +1415,67 @@ way the layout already documents (`pageSize=1` for the `total`), not through
 - [ ] Browser-verified at both auth states; a customer typing `/admin/cases` is
       bounced, not shown a shell of 403s.
 
-### #432: Payout health — failed transfers, retries, and why Stripe stopped a vendor
+### #452: Every role bounce off `/admin` costs a failed `https` request
 
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `auth`
 **Blocked by:** None
 
-#### The state today
+#### What was seen
 
-**Two columns are written and read by nothing.** The release sweep
-(`payouts.service.ts`, every 15 minutes) increments
-`bookings.payout_attempts` and writes `bookings.payout_failure_reason` on every
-failed transfer (`payouts.dao.ts:213`), clearing the reason on success. Grep
-both across the repo: the only readers are the sweep's own ordering
-(`orderBy(asc(bookings.payoutAttempts), …)`) and its logger. **No screen, no
-API response, and no alert reads either.** A vendor whose transfer fails on
-every one of ninety-six daily attempts is owed money that nobody is told about.
+Driving the role matrix for #432 on a plain-http dev server, every denial off an
+admin route produced two console errors before landing correctly:
 
-`adminPaymentRowSchema` carries `totalAmountCents`, `platformFeeCents`,
-`vendorPayoutCents`, `stripePaymentIntentId`, `paidAt` and `status` — and no
-payout state at all. The Payments screen therefore shows a booking whose money
-reached the platform and never reached the vendor identically to one that
-settled.
+```
+GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR
+Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR
+```
 
-**And the vendor-side story is a boolean.** `vendor_profiles.stripe_onboarded`
-is set by `isOnboarded(status)` — true iff `stripe_transfers` **and** `payouts`
-capabilities are both active. When Stripe revokes one, `applyAccountStatusChange`
-flips it false and that is the entire record. `isMissingPayoutsOnly` already
-distinguishes the half-restricted case and only logs a warning. The operator's
-filter says "No payouts yet" for a vendor who has never onboarded and for one
-Stripe restricted this morning, with no reason and nowhere to go.
+Then the browser fell back and landed on `http://localhost:3016/bookings`, which
+is the right destination. Reproduced for both a customer and a vendor session, on
+`/admin`, `/admin/payments`, `/admin/payments?flag=payout-failing` and
+`/admin/vendors` — eight bounces, eight pairs of errors.
 
-#### What to build
+#### Where it comes from
 
-**1. Payout state on the payments surface.** Add to the admin payment row:
-`payoutReleasedAt`, `payoutAttempts`, `payoutFailureReason`, `stripeTransferId`,
-and a derived payout state. **Derive it with `payoutStatusOf`** — the one
-derivation #423 wrote for exactly this, already used by `booking-report.ts` and
-`dashboard.service.ts`. A fourth copy of "what is held" is how these come to
-disagree; that is written down twice in `dashboard.dao.ts` already.
+`apps/web/src/lib/current-user.ts:111` issues a **relative** redirect:
 
-**2. A failing-payout filter and a row flag**, shaped like the `refund-stuck`
-flag the Bookings screen already carries — marked on every row, not only inside
-the filter, because the failure #415 fixed was precisely a state you had to know
-about to find. A payout is failing when `payout_attempts > 0` and
-`payout_released_at is null`.
+```ts
+redirect(DASHBOARD_PATH_BY_ROLE[user.role]);
+```
 
-**3. A retry.** `PUT /admin/bookings/:bookingId/payout/retry`, admin-only,
-which re-enters the **existing** sweep path for one booking rather than
-reimplementing the transfer. **D36 binds: the idempotency key is versioned by
-the attempt**, so a retry increments `payout_attempts` and mints a new key —
-reusing the key replays Stripe's cached failure and the operator learns nothing.
-Refuse on a booking that is `cancelled`, `disputed`, or already released, and say
-which.
+Nothing there names a scheme, so one is being inferred further down — by Next's
+redirect handling, by the proxy, or by a forwarded-proto header that says
+`https` on a server that is not serving it. **Finding which is the first task**,
+because the fix differs: an inferred `x-forwarded-proto` is configuration, and a
+redirect resolved against a canonical origin is code.
 
-**4. Stripe account state, with the reason.** Persist what the webhook already
-reads: the disabled reason and the outstanding requirements from the connected
-account, alongside `stripe_onboarded`. Surface them on the vendor row's detail
-(#437 builds the view; this ticket supplies the data and may land its own
-panel first). **Read-only.** An operator must not be able to flip
-`stripe_onboarded` by hand — D29's constraint (`stripe_onboarded = false OR
-stripe_account_id IS NOT NULL`) and the capability read are what make the column
-true, and a manual override makes it a guess. Link out to the Stripe Dashboard
-for the account instead.
+#### Why it is worth fixing despite the outcome being right
 
-**5. A Live-vendor payout alert on the Overview.** One count — vendors whose
-payouts are blocked, and bookings whose transfers are failing — sitting where
-the four metric cards already are. A number that leads to the filtered list;
-`page.tsx` already documents that a card leading nowhere is furniture.
+The user-visible behaviour is correct, so this is not a defect anyone will
+report. It costs one failed request per denial and it puts a permanent error in
+the console — and a console with a standing error in it is one nobody reads,
+which is what this repository has spent the day learning to care about. It also
+means the redirect's scheme is decided by something other than the application,
+which will be wrong in the other direction the first time a deployment terminates
+TLS somewhere unexpected.
 
 #### Acceptance
 
-1. The admin payment row carries payout state derived by `payoutStatusOf`, not
-   by a new local test.
-2. A booking with `payout_attempts > 0` and no release is flagged on its row and
-   findable by filter.
-3. The retry mints a new idempotency key versioned by the attempt (D36) and is
-   refused with a specific message on cancelled, disputed and released bookings.
-4. A vendor Stripe has restricted shows the disabled reason and the outstanding
-   requirements; a vendor who never onboarded shows neither and reads
-   differently.
-5. Nothing in the console writes `stripe_onboarded`.
-6. The Overview carries a payout-health count that links to the filtered list.
-7. Every new number is a query result at request time — the no-invented-numbers
-   law.
+1. A customer and a vendor bounced off every `/admin/*` route land on their own
+   dashboard with **no** `net::ERR_SSL_PROTOCOL_ERROR` and no failed request.
+2. The same holds on a deployment serving `https`, so the fix is not "hardcode
+   `http`" — whatever chooses the scheme is derived from the environment, per
+   `packages/shared/src/env/deployment.ts`, or the redirect stays relative and
+   the thing inferring the scheme is corrected instead.
+3. The scheme is not decided in two places. Whichever layer owns it, the other
+   defers rather than agreeing by coincidence.
 
 #### Tests (required)
 
-- [ ] A test per acceptance, watched failing first.
-- [ ] The retry asserted against a Stripe failure that is **cached** under the
-      old key — the D36 regression is invisible to a test that only asserts a
-      success.
-- [ ] A restricted account asserted through the real `account.updated` webhook
-      payload shape, not a hand-built row.
+- [ ] A test that fails before and passes after, asserting the redirect's
+      `Location` for a role-denied request on a plain-http origin.
+- [ ] The deployed branch asserted too — a redirect that is right on a laptop
+      and wrong behind TLS is the same bug facing the other way.
 
 ### #435: Graduated moderation — unpublish, hide and reinstate without banning
 
@@ -1711,9 +1686,26 @@ statuses, showing vendor, customer, event date, quoted price, and time to
 expiry. This is the first surface that can answer where the funnel leaks, and it
 needs no new state: the rows are already there.
 
-**3. Packages, portfolio and availability on the vendor detail**, read-only here
-(#435 owns the moderation actions on them). Availability shows which locks are
-`booked` / `pending` and what holds them.
+**3. Packages, portfolio and availability on the vendor detail.** Availability
+shows which locks are `booked` / `pending` and what holds them.
+
+**Two routes are already built and have no surface — wire them up here, do not
+rebuild them.** #435 ships `PUT /admin/packages/:packageId/active` and
+`DELETE /admin/portfolio-items/:itemId` guarded, audited and tested, but
+deliberately did **not** invent a mini detail view for them, because that view is
+this ticket's scope and would have been superseded on arrival. So the vendor
+detail is where a vendor's packages and photos are finally listed and acted on.
+Storefront publish/unpublish and review hide/unhide already reached the existing
+list screens under #435 and need nothing here.
+
+**#438 also lands an API read this ticket consumes**: `GET /admin/users/:userId/data-rights`
+returns retained counts and the legal acceptance record. #438 deliberately did not
+add a vendor-table link for it, because `frame-13-parity.test.ts:204` pins the
+grid template off the frame and an eighth column is a design-contract change. The
+vendor detail is where it belongs.
+
+*(Restored 2026-09-07 — reverted by PR #135's stale whole-file copy. See
+`.claude/memory/stale-whole-file-copy-silently-reverts.md`.)*
 
 **4. Category management.** `is_active` and `display_order`, the same shape the
 tag table already implements — that screen is the template, and reusing it is
@@ -1846,8 +1838,17 @@ same answer the export gives.
    The Clerk self-serve deletion path is either intercepted or explicitly
    documented as an unrefusable backstop.
 4. Closure of a vendor retires the storefront; their slug 404s.
-5. A hard delete of a user with a legal acceptance is refused by the database,
-   and the console never attempts one.
+5. Closure **retires** the user (`deleted_at`) and never issues a hard
+   `DELETE FROM users`; a test asserts a closed account's `legal_acceptances`
+   **and** `admin_actions` rows both survive it, **by counting surviving rows
+   rather than catching an exception**. The database will *not* save you here:
+   `0029`'s guard is `BEFORE DELETE ... FOR EACH ROW` and `RETURN OLD` from such
+   a trigger means **proceed**, so a cascade succeeds — proved by
+   `packages/db/src/legal-acceptance-immutability.test.ts`, green on main since
+   `13e91d7`. The record survives because the closure path never hard-deletes,
+   not because Postgres would stop one.
+   *(Restored 2026-09-07 — reverted by PR #135's stale whole-file copy, and
+   independently rediscovered by lane 438.)*
 6. Legal acceptances are readable per vendor and per user, read-only.
 7. Both actions write an `admin_actions` row.
 8. Every claim the privacy policy makes about access and closure is now true of
@@ -1861,75 +1862,6 @@ same answer the export gives.
 - [ ] Acceptance 8 reads the rendered legal page, not the Markdown source.
 - [ ] An export asserted to contain **no** credential, no Stripe secret, and no
       other user's email.
-
-### #439: Transactional email delivery is invisible
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
-**Blocked by:** None
-
-#### The state today
-
-Fourteen notification types are defined (`NOTIFICATION_TYPES`) and the platform
-sends mail for most of them — new request, quoted, accepted, declined, expired,
-cancelled, booking confirmed, completed, cancelled, new review, payout sent,
-Stripe onboarding complete, tag suggestion approved. Every send is fire and
-forget: `notification-email.ts:194` catches, `:200` logs an error, and execution
-continues — correctly, because a failed email must not fail the booking. But
-nothing records that it happened.
-
-The `notifications` table holds the **in-app bell only** — `userId`, `type`,
-`title`, `body`, `data`, `readAt`, `createdAt`. There is no `sentAt`, no
-failure reason, no provider message id, no bounce.
-
-So *"was the customer actually told their booking was cancelled?"* cannot be
-answered from the console, from the database, or from anywhere but a log search
-against a process that may have rotated. On the surface where an operator is
-mediating a dispute (#431) about whether someone was informed, that is the
-question they will be asked.
-
-#### What to build
-
-**1. A delivery record per send.** Recipient user id, address, notification
-type, the related entity id, `sentAt`, outcome, provider message id, and the
-failure reason on a failure. One row per attempt, so a retry is visible as a
-retry. Write it **beside** the send, under the same best-effort rule the file
-already follows — a failure to record must never fail the operation, and must
-never fail the email.
-
-**2. Resend's delivery events.** Handle the provider's webhook for delivered,
-bounced and complained, keyed by the message id, so the record reflects what
-actually happened rather than what was attempted. Signature-verified like the
-Stripe and Clerk handlers, and idempotent under replay. If the account holder has
-not configured the webhook, the record still holds attempts — the ticket must not
-depend on it.
-
-**3. On the console.** Delivery history on the customer and vendor detail views
-(#437), and on the booking detail — the emails that booking generated, in order.
-Plus a bounced-address signal on the account, because an address that bounces
-means every future notification to that person is lost silently.
-
-**4. What must not be stored.** The rendered body. The record is metadata — who,
-what type, when, what outcome — and a copy of every email the platform ever sent
-is a liability, not an audit trail.
-
-#### Acceptance
-
-1. Every transactional send writes a delivery record, including a failed one.
-2. A failure to write the record does not fail the send or the operation.
-3. A provider delivery event updates the matching record and is idempotent under
-   replay.
-4. The absence of a configured provider webhook does not break sending or
-   recording.
-5. Delivery history appears on the customer, vendor and booking detail views.
-6. A bounced address is visible on the account.
-7. No record contains a rendered email body.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] Acceptance 2 asserted by making the record write throw — the regression is
-      an operation that now 500s because its bookkeeping failed.
-- [ ] Acceptance 3's replay asserted against the real webhook harness.
 
 ### #440: Operator-initiated refunds and credits
 
@@ -2004,20 +1936,6 @@ row (#434), and notifying both parties.
 **Do not build any part of this before the decision exists.** A money path
 implemented against a guessed policy is the one kind of code in this repository
 that cannot be corrected by a later ticket.
-
-### #441: The site footer against the newer frame, and the ink-ground text ramp used as a border
-
-**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** None
-
-**Filed 2026-09-07 by the parity pass on #430**, which compared the closing band
-_and_ the footer against `design/delta-band/Orla-Closing-Band.html`. The band is
-done (`aac9b3b`, PR #134). Everything below is the footer, and **none of it is a
-regression**: these are #428-era values measured against a frame #428 never saw.
-#430 deliberately left them rather than widening a revision into a restyle.
-
-Two different mechanisms live here, and they are one ticket because a single lane
-opens the same two files for both.
 
 ### #442: A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race
 
@@ -2174,3 +2092,522 @@ held. None of those is a finding.
 - [ ] The two access findings asserted against rendered output, not source — a
       `className` substring check is not a measurement of a hit area.
 - [ ] The parity pass delegated to `parity-checker`, not eyeballed.
+
+### #444: An unwind declines the accepted request behind a completed booking
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-07 by lane #438**, which tripped over it while building account
+closure, verified it was pre-existing rather than its own, pinned the current
+behaviour in a test with a comment, and correctly declined to widen its scope to
+fix it. Confirmed independently against the code before filing.
+
+#### The defect
+
+`declineOpenRequests` (`apps/api/src/modules/admin/admin.dao.ts:484`) writes:
+
+    .set({ status: 'declined', updatedAt: now })
+    .where(and(inArray(bookingRequests.status, ['pending', 'quoted', 'accepted']), sides))
+
+`accepted` is in that set unconditionally. But an accepted request is exactly the
+one that **has a booking behind it** — `accepted` is the status a request holds
+after checkout, and `bookings` carries a unique index on `request_id` precisely
+because one accepted request becomes one booking.
+
+So an unwind flips the accepted request behind an **already-completed** booking
+to `declined`. The event happened, the vendor was paid, and the customer's
+requests screen now says the request was declined. That is rewriting history, not
+unwinding it.
+
+**It is reachable today and it is not new.** `unwindAccountBookings` is called
+from `setUserBanned` — so any ban does this — and now also from the `user.deleted`
+path (#433) and account closure (#438). It predates all three.
+
+The neighbouring code gets this right and is the model: `findConfirmedBookingsToUnwind`
+bounds on `status = 'confirmed' AND event_date > today`, so it only ever touches
+bookings that have not happened. The request decline has no equivalent bound.
+
+#### What to build
+
+**Narrow the predicate so an accepted request whose booking is settled is left
+alone.** The rule the rest of the unwind already follows is "unwind what has not
+happened yet", so an accepted request should be declined only where its booking
+is one the unwind is itself cancelling — or where there is no booking at all,
+which is the genuine mid-checkout case.
+
+Do not simply drop `accepted` from the list: a request that was accepted but
+never paid for is a real open commitment and should still be declined, or the
+vendor is left holding a date for an account that no longer exists.
+
+**Decide and state what the customer's screen should say** for a request whose
+booking the unwind *did* cancel. `declined` is arguably wrong there too — the
+vendor did not decline it, the platform cancelled it — but `BOOKING_REQUEST_STATUSES`
+has no member for that, and adding one is a schema and design change. If the
+honest answer is that the existing vocabulary cannot express it, say so in the
+ticket rather than picking the least-wrong word silently.
+
+#### Acceptance
+
+1. An unwind leaves the `accepted` request behind a **completed** booking
+   untouched, and a test asserts the status is unchanged.
+2. An unwind still declines an `accepted` request with **no** booking behind it.
+3. An unwind's treatment of an `accepted` request whose booking it cancelled is
+   deliberate and documented at the predicate, not incidental.
+4. `pending` and `quoted` are unaffected.
+5. Asserted through **`setUserBanned`**, not only through the newer closure
+   path — the ban is where this has been reachable longest.
+6. #438's test pinning the current behaviour is updated rather than deleted, so
+   the change is visible as a change.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, **watched failing first** — this is a bug fix, so
+      the failing test is the evidence the defect was real.
+- [ ] The completed-booking case asserted against a real completed booking, not
+      a row hand-set to `completed`, so the fixture cannot drift from what the
+      payment path actually produces.
+
+### #445: A failed query logs every bound parameter, and the redact list cannot reach it
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 after two lanes hit it independently** — #431's security pass
+and #439's review — which is what makes it a shape rather than an incident.
+Neither was looking for it.
+
+#### The defect
+
+Drizzle 0.45.2 wraps a failed statement in a `DrizzleQueryError` whose `message`
+is `Failed query: … params: <every bound parameter>`, **and** which carries
+`params` as an **own enumerable property**. Pino's `err` serialiser copies own
+properties. So any `log.*({ err })` on a failed query writes every bound value
+of that statement into the log stream.
+
+**`server.ts`'s redact list cannot help.** It is path-based on `req.headers.*`
+and never reaches a property hanging off a serialised error.
+
+**It is caller-triggerable, which is what makes it P0 rather than hygiene.**
+#431 found the reachable instance: `freeText()` does not strip `U+0000`,
+Postgres refuses that with `22021`, and the insert is on the **public,
+unauthenticated** `POST /support/messages` — so a stranger chooses when the
+write fails, six times an hour, and up to 4,000 characters of what they typed
+plus their reply-to address goes into the logs. Every field on that form is
+user-supplied.
+
+#### Why a per-call-site fix is not the answer
+
+Both lanes fixed their own write paths — #431 now logs the driver code and never
+the error, #439 avoided the shape on its path. That is three hand-written
+guards across the API and no law, which is the same trajectory the colour-role
+class is on (#446). The next `log.error({ err })` written against a query
+failure reintroduces it, and nothing fails.
+
+#### What to build
+
+**A serialiser-level fix, so the guard is structural rather than remembered.**
+Options, in the order worth trying:
+
+1. **A custom pino `err` serialiser** that strips `params` and truncates
+   `message` at the `params:` boundary for `DrizzleQueryError`, applied once at
+   the logger. Every existing and future call site is covered without edits.
+2. Failing that, a narrow error-mapping helper every DAO catch uses, plus a lint
+   rule or a source guard that fails on `{ err }` in a catch around a query.
+
+**Assert it over the whole serialised output, not field by field.** The
+prohibition is "no bound parameter appears anywhere in what is logged" — the
+same shape #434's `admin_actions` content test uses, and for the same reason: a
+field-by-field check passes while the payload leaks through a field nobody
+listed.
+
+**Do not widen `freeText()` to strip `U+0000` and call it done.** That closes
+the one reachable trigger and leaves the class open — any query failure on any
+user-supplied value still leaks. Fix the sink; narrowing the source is a
+defence-in-depth extra, worth doing second.
+
+#### Acceptance
+
+1. A failed query logged via `log.*({ err })` emits **no bound parameter** —
+   asserted against the whole serialised record, not named fields.
+2. The `message` no longer carries the `params:` tail.
+3. The driver error code and the statement's identity are still logged, so the
+   failure remains diagnosable.
+4. A `U+0000` payload to `POST /support/messages` leaks nothing, driven through
+   the real route.
+5. The guard is structural — a new `log.error({ err })` around a query written
+   after this ticket is covered without the author knowing about it.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, **watched failing first** against the current
+      serialiser — this is a security fix, so the failing test is the evidence.
+- [ ] Acceptance 1 asserted by searching the serialised output for a sentinel
+      value bound into the failing statement, rather than by inspecting keys.
+- [ ] Acceptance 4 driven end to end through the public route, not by calling
+      the DAO.
+
+### #446: The app declares no body text size, so every unsized block renders at 16px
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by #441's parity pass**, which hit it as a worked example
+rather than as an audit finding.
+
+#### The root cause
+
+`globals.css` sets `line-height` on `html`, and the comment beside it explains
+exactly why that had to be a document-level declaration: *"an element with no
+text utility at all still inherits, so the per-site route cannot close the
+class."* It then **stops one property short**. Nothing declares `font-size`, so
+every block element carrying no `text-*` utility inherits the browser default of
+**16px** — which is `--text-lg`, not the 13.5px `--text-base` the design system
+calls its body step.
+
+#### The worked example
+
+#441 set the footer's link columns to 13px on the `<a>`. Each `<li>`'s own line
+box stayed **16px**, because a smaller inline child does not shrink the block
+that holds it. Rows measured 31px pitch against the frame's 27, the footer stood
+**25px taller** than the frame draws it, and the legal row's copyright sat 1.5px
+off the links' baseline. #441 closed it for the footer by moving the size onto
+the `<ul>`, where the frame sets it. Every other unsized block in the product
+still has it.
+
+#### Scope: the fix **and** the sweep
+
+`body { font-size: var(--text-base) }` in the same `@layer base` block. On
+`body`, **never** `html` — `html` would rescale every rem-based Tailwind spacing
+utility in the product.
+
+That one line rescales **every currently-unsized block** from 16px to 13.5px, so
+this ticket is the change plus a parity pass over every frame-carrying screen.
+That is scope, not a caveat: anyone picking it up needs to know before they
+start rather than discover it halfway. Expect it to surface sites that were
+silently relying on the 16px, and treat each as a decision rather than a
+regression.
+
+---
+
+### #447: A border or surface token used as text on ink — four instances, three per-call-site guards, no law
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by #441, which was the third instance.**
+
+#### The shape
+
+The recurring mistake is not "a border token used as text". It is ***the nearest
+hex is not the right role***, and it has now bitten four times:
+
+- `stone-400` as text on ink — the closing band's pitch (#430) and
+  `admin-header.tsx` (#441).
+- `stone-0` as a border on ink — the footer's legal hairline (#441).
+- A 78% alpha of `stone-50` standing in for a value the frames name outright,
+  which `theme.css` records as the defect that minted the ink-ground ramp in the
+  first place.
+
+Three of those now carry **three separately hand-written per-call-site guards**
+— `page.test.tsx` for the band, `admin-header.test.tsx` and
+`site-footer.test.tsx` for #441 — and there is no law. A fourth guard would make
+it a habit rather than a rule.
+
+#### Why the cheap guard does not exist
+
+#441 looked, and this is the part that should stop the next person rediscovering
+it:
+
+- **A blanket ban on `text-stone-400` needs four legitimate exemptions** —
+  `ui/empty-state.tsx`, `vendors/profile/review-form.tsx` and two in
+  `packages/package-manager.tsx`. All four are decorative glyphs on a *light*
+  ground, where `stone-400` is exactly right.
+- **A file-level "this file has an ink ground" rule matches 14 files**, most of
+  which use `bg-stone-900` for a scrim, a chip, or one button variant while
+  carrying ordinary light-ground text elsewhere.
+
+The rule needs to know the **ground a given element renders on**, and no source
+scan can see that.
+
+#### Two options worth weighing
+
+1. Extend `theme-tokens.test.ts`'s contrast table into a **role** table: which
+   tokens may appear as `text-*` at all, which only as `border-*`, and on which
+   grounds. It already owns the token vocabulary.
+2. Assert it in the **browser**, during the parity pass, where the computed
+   ground *is* observable — `parity-checker` already reads both colours and
+   would only need the ramp membership rule.
+
+---
+
+### #448: Lane env tooling hands web-side children the wrong API origin, silently
+
+**Milestone:** M-OPS | **Phase:** INFRA | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07.** Two independent halves of one defect, found the same day
+by #435 and #441, in one file.
+
+#### Half one — `API_URL` is never written (runtime, hits SSR)
+
+`renderLaneEnv` in `packages/preflight/src/lane/env.ts` writes
+`NEXT_PUBLIC_API_URL` and **not** `API_URL`. They are different variables:
+
+- `API_URL` is what `apps/web/src/lib/api-client.ts:13` reads for every **Server
+  Component** fetch.
+- `NEXT_PUBLIC_API_URL` is inlined into the **browser bundle** at build time.
+
+With no lane value, the root `.env`'s `API_URL=http://localhost:4000` wins, so
+every lane's server-side renders resolve to whatever is on 4000.
+
+**Confirmed in lane 441**: `.env.lane` listed `DATABASE_URL`,
+`NEXT_PUBLIC_API_URL`, `PORT`, `WEB_PORT` and `WEB_URL` — no `API_URL` — and
+something **was** listening on 4000 and answering 200. So nothing errored,
+nothing 500'd, pages rendered, and the lane was reading another checkout's
+database the whole time.
+
+#### Half two — `PORT` is the API's, and every child gets it
+
+`lane:exec` exports the lane's `PORT` — the **API's** port — to *every* child,
+so `next start` serves the **web app on 4021**. `next dev` escapes only because
+Turborepo's dev task passes the port explicitly, which is an accident of one
+task definition rather than a property of the lane. *"Use `next dev` and you are
+fine"* is the wrong lesson to leave behind.
+
+**Both directions are silent.** The lane's web port refuses the connection and
+reads as a broken app; the lane's API port renders the app correctly. Neither
+says anything is wrong. This is the exact shape the collision-free port
+allocation exists to prevent — browser verification passing against the wrong
+process.
+
+#### Fix, and the workaround
+
+- `renderLaneEnv` writes `API_URL` alongside `NEXT_PUBLIC_API_URL`.
+- `lane:exec` stops exporting the API's `PORT` to non-API children.
+
+Setting `PORT` over the lane env is the workaround a lane can apply today; those
+two are the actual fix.
+
+#### The preflight assertion — two checks, at two different times
+
+#435's suggestion, and it is the right home: *"the lane's web app resolves the
+lane's API"* is exactly the class of thing `preflight` exists to assert. But it
+is **two questions, not one**, and they are answerable at different moments by
+different means. Both were asked today.
+
+**1. The file shape, at `lane:up`** — *was this lane ever wired correctly?*
+Does `.env.lane` carry `API_URL` at all? Two greps against `.env.lane` and the
+root `.env`, no server, no network. This is what actually settled lane 441: the
+file either has the line or it does not, and unlike anything driven through a
+browser it **cannot be confounded by a starved box**, a cold compile or an
+expired session. Cheapest and most decisive, and it catches the defect before a
+single command runs against the lane.
+
+**2. The resolved origin, at `lane:exec`** — *is this running lane wired
+correctly?* Does the CSP `connect-src` name the lane's API? One `curl -sI`
+against the lane's web port. This is the only one that catches the **build-time**
+half, which is independent of the file: a build not made through `lane:exec`
+bakes `localhost:4000` into the bundle and the CSP whatever the server env says.
+#441 measured exactly that — `connect-src` naming 4000 while SSR correctly
+resolved 4021, on the same server, in the same second.
+
+**A liveness check is not either of them**, and this is where #435's first
+attempt went wrong: it reported that `/vendors/thistle-and-fern` rendered at 4.5
+through its web server as proof the wiring was right. Both checkouts run
+`seed-demo` with deterministic ids, so the **same vendor exists at the same
+rating in both databases** — a check that passes on both sides of the question it
+was asked. The replacement was a discriminating probe: slugs that exist in only
+one database. Whatever this assertion ends up driving, it has to be an answer
+only one of the two can give.
+
+#### Note for anyone regenerating
+
+A lane env written before this fix is **stale** and needs
+`pnpm lane:down <n> && pnpm lane:up <n>`, which drops the lane database —
+re-seed after.
+
+---
+
+### #449: The screens document is content-box and every delta bundle is border-box
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by #441's `diff-reviewer` pass.** This overturns a standing
+assumption rather than finding drift, which is why it is a ticket and not a fix.
+
+#### What is actually true
+
+`design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing`
+hits are inline opt-ins. That is what #250 measured when it ruled `box-content`
+for the logo mark, and it is correct for that document.
+
+**Every delta bundle opens with `* { box-sizing: border-box; }`** —
+`delta-band`, `delta-legal` and `contact-support` alike. So the closing-band
+frame draws the footer mark as two **equal footprints**: a 17px outline circle
+with its 1.3px stroke *inside*, beside a 17px disc.
+
+Measured in Chromium, frame markup under its own reset versus what `logo.tsx`
+emits at D=17:
+
+| | outline circle | ink right edge | box |
+| --- | --- | --- | --- |
+| frame | 17.00 x 17.00 @ x=8 | 25.00 | 26 x 17 |
+| component | **19.00 x 19.00** @ x=7.64 | 26.64 | 24.64 x 17 |
+
+#### Why #441 did not fix it
+
+`box-content` is #250's ruling, taken from the screens document and measured
+there. Overturning it moves the mark on the desktop header, the auth panel, the
+favicon and the app icon — on the authority of one bundle. That is a design
+adjudication, not a parity fix.
+
+It is written up at the `box-content` comment in `logo.tsx`. Note that
+`logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at **D=17**,
+a diameter taken from a border-box frame, so the two guards in that file read
+the same contract two incompatible ways until this is settled.
+
+**A `delta-band` parity read measuring 19-against-17 is looking at this ruling,
+not at drift.**
+
+### #450: A closed account vanishes from the only screen it can be reached from
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** #438 — the closure it describes does not exist until that lands
+
+**Filed 2026-09-07 by lane #438's `diff-reviewer` pass**, which correctly declined
+to fix it in scope: the defect is in an **existing** surface's query, not in the
+closure #438 builds.
+
+#### The defect
+
+`/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`). Account
+closure (#438) sets `deleted_at`. And `/admin/users/[userId]` — the data-rights
+page carrying the export, the retained counts and the legal acceptance record —
+is reachable **from the customers table and by direct URL, and from nowhere
+else**.
+
+So the moment an operator closes an account, the page they would need to audit
+that closure stops being reachable by navigation. The record survives; the route
+to it does not. An operator who did not keep the URL has to reconstruct a uuid.
+
+**It is worst exactly when it matters.** The reasons to look at a closed
+account's data-rights page are a subject-access request, a regulator, or a
+dispute about whether closure did what was promised — all of which arrive
+*after* the closure, and none of which come with the uuid in hand.
+
+#### What to build
+
+**Let the operator see closed accounts, deliberately rather than by accident.**
+The straightforward shape is a filter on `/admin/customers` — a `Closed` or
+`Include closed` state alongside the existing search — with closed rows visibly
+marked rather than silently mixed in. `deriveVendorStatus` already has the
+precedent for a retired state on the vendor side (#433), and the customers table
+already has a `Flagged` pill for a banned account, so the vocabulary exists.
+
+**Do not simply drop the `deleted_at is null` predicate.** It is there so the
+default view is live accounts, which is right — the fix is a deliberate way to
+ask for the other set, not the removal of the distinction.
+
+**Check the neighbouring reads while you are there.** `admin.dao.ts` filters
+`deleted_at is null` in at least three places (the customer list, the ban lookup,
+the metrics count). Each is probably correct for its own purpose, but they were
+written when nothing set `deleted_at` except a Clerk webhook — say which of them
+should now surface closed accounts and which should not, rather than changing one
+and leaving the reader to guess about the rest.
+
+#### Acceptance
+
+1. An operator can reach a closed account's `/admin/users/[userId]` page by
+   navigation, without knowing the uuid.
+2. Closed accounts are visibly distinguished from live ones, using the existing
+   pill vocabulary rather than a new tone.
+3. The **default** `/admin/customers` view still shows live accounts only.
+4. Every other `deleted_at is null` read in `admin.dao.ts` is either changed with
+   a stated reason or documented as deliberately unchanged.
+5. Asserted end to end: close an account through #438's route, then reach its
+   data-rights page from the customers screen.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 5 driven through the real closure route, not a row hand-set
+      with `deleted_at`, so the fixture cannot drift from what closure produces.
+
+### #451: Closing an account leaves its Clerk identity live, and its email locked
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** #438 — the closure it describes does not exist until that lands
+
+**Filed 2026-09-07 by lane #438's `/code-review high`**, which correctly held it
+out of scope: closure soft-deleting is the **ruled** behaviour (D39 and the
+retire-never-remove rule), and revoking a Clerk session is a new integration
+call, not a fix to the ticket that surfaced it.
+
+#### Two defects from one omission
+
+Closure sets `users.deleted_at` and stops. Nothing tells Clerk.
+
+**1. The person stays signed in to an application that refuses them.**
+`clerk-auth.ts:164` 401s a request whose local row is retired — but the Clerk
+session itself is still valid, so the browser keeps rendering **signed-in header
+chrome over a signed-out application**, indefinitely, until that session ages
+out on its own. Every read fails; the shell says they are logged in. There is no
+sign-out prompt because nothing knows to show one.
+
+**2. Their email is locked under the retired row.** `users_email_key` is a unique
+index that does not care about `deleted_at`, so a closed account's address is
+held forever. A person who closes an account and later returns cannot
+re-register with the same email — the insert collides, and the failure surfaces
+wherever the sync path reports it rather than as anything a user could act on.
+
+This is the same class the E2E-seed note in `CLAUDE.md` already warns about:
+*"a `users` row carrying an E2E email under a made-up id makes that account's
+next sign-in collide on the email index and locks it out."* Closure creates that
+state deliberately.
+
+#### What to build
+
+**Revoke the Clerk identity as part of closure**, in the same operation that
+retires the row — Clerk's backend API can revoke sessions or delete the user.
+Decide and state which:
+
+- **Revoking sessions** ends the ghost-session half and leaves the identity, so
+  the email stays locked.
+- **Deleting the Clerk user** ends both halves, and fires `user.deleted` back at
+  our own webhook — so the handler must be idempotent against a retirement it
+  just performed, which #433's replay guard already provides.
+
+**Then decide what the email index should mean.** Options, and this is a product
+decision as much as a technical one:
+
+- keep the address held forever (current behaviour, no change, but say so
+  deliberately rather than by omission);
+- release it on closure, which means the unique index becomes partial
+  (`WHERE deleted_at IS NULL`) and two rows can share an address across time;
+- keep it held but give the operator a way to release it.
+
+**Do not pick silently.** The privacy policy says an account can be closed; it
+does not say the address is burned. If the answer is that it is, that belongs in
+the policy text, and #374's account-holder wording gate covers it.
+
+#### Acceptance
+
+1. Closure revokes the Clerk identity, and a browser holding that session lands
+   somewhere coherent rather than on signed-in chrome over a dead application.
+2. Whichever Clerk call is used, our own `user.deleted` handler is idempotent
+   against a retirement already performed.
+3. The email-index behaviour is **stated** — in the schema comment and in the
+   policy text if it burns the address.
+4. If the address is released, a re-registration with a closed account's email
+   succeeds and does not resurrect or collide with the retired row.
+5. Asserted end to end through #438's closure route.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 2 asserted by replaying the webhook after a closure — a double
+      retirement must not double-refund, which is #433's guard doing its job.
+- [ ] Acceptance 4, if taken, asserted against the real unique index rather than
+      a mocked insert.

@@ -18,8 +18,10 @@ import {
 } from '../lib/stripe.js';
 import type {
   PaymentIntentSnapshot,
+  StripeAccountCapabilities,
   StripeAccountStatus,
   StripeConnectGateway,
+  StripeDisputeSnapshot,
   StripeEventNotification,
 } from '../lib/stripe.js';
 import {
@@ -72,6 +74,21 @@ export const TEST_ENV: ApiEnv = {
    * Nothing here reaches the network regardless: the suites inject a fake.
    */
   RESEND_API_KEY: ['re', 'not', 'used', 'by', 'the', 'suites'].join('_'),
+  /*
+   * Set, so `POST /webhooks/resend` is registered for every suite that needs
+   * it. The value is never verified — the harness injects the same fake svix
+   * verifier both webhooks use — so nothing here reaches svix or Resend.
+   *
+   * Joined rather than written out for `RESEND_API_KEY`'s reason: a signing
+   * secret's prefix followed by anything is what the credential hook and the
+   * secret scanner exist to stop, and teaching either to ignore this file is
+   * worse than not writing the pattern.
+   *
+   * A suite whose subject is the **unconfigured** deployment overrides this
+   * key with `undefined` through `env`, which is the state the registry row is
+   * declared optional for.
+   */
+  RESEND_WEBHOOK_SECRET: ['whsec', 'not', 'used', 'by', 'the', 'suites'].join('_'),
   EMAIL_FROM: 'noreply@test.invalid',
   SUPPORT_EMAIL_TO: 'support@test.invalid',
 };
@@ -211,13 +228,16 @@ export interface FakeEmail extends EmailGateway {
   /** Every message the service asked to send, in order. */
   sent: EmailMessage[];
   /**
-   * Idempotency keys already delivered.
+   * Provider message ids already minted, by idempotency key.
    *
-   * The real provider deduplicates on this header, so a fake that simply
+   * The real provider deduplicates on that header, so a fake that simply
    * appended would let a double-send pass a green suite — the same trap
-   * `FakeStripe.intentsByKey` exists to close for a double-charge.
+   * `FakeStripe.intentsByKey` exists to close for a double-charge. It is a map
+   * rather than a set since #439 because a deduplicated send still answers
+   * with the *original* message id, and a fake that returned nothing there
+   * would make a replay look like a send Resend gave no id for.
    */
-  deliveredKeys: Set<string>;
+  messageIdsByKey: Map<string, string>;
   /**
    * Makes the next send throw, for the "a failed email never fails the
    * operation" case. Cleared once it has fired.
@@ -227,11 +247,11 @@ export interface FakeEmail extends EmailGateway {
 
 function createFakeEmail(): FakeEmail {
   const sent: EmailMessage[] = [];
-  const deliveredKeys = new Set<string>();
+  const messageIdsByKey = new Map<string, string>();
 
   const fake: FakeEmail = {
     sent,
-    deliveredKeys,
+    messageIdsByKey,
     failNext: false,
     send: async (message) => {
       if (fake.failNext) {
@@ -239,18 +259,32 @@ function createFakeEmail(): FakeEmail {
         throw new Error('Resend refused the send (500)');
       }
 
-      // Modelled, not assumed: a replayed key is accepted and delivers once.
-      if (deliveredKeys.has(message.idempotencyKey)) {
-        return;
+      // Modelled, not assumed: a replayed key is accepted, delivers once, and
+      // answers with the id the first send was given.
+      const existing = messageIdsByKey.get(message.idempotencyKey);
+      if (existing !== undefined) {
+        return { providerMessageId: existing };
       }
 
-      deliveredKeys.add(message.idempotencyKey);
+      /*
+       * Derived from the idempotency key rather than random, so a suite can
+       * name the id a delivery webhook should carry without first reading it
+       * back — and so a re-run asserts the same string.
+       */
+      const providerMessageId = `resend-${message.idempotencyKey}`;
+      messageIdsByKey.set(message.idempotencyKey, providerMessageId);
       sent.push(message);
+
+      return { providerMessageId };
     },
   };
 
   return fake;
 }
+
+/** What a suite may set on an account: the pair always, the reasons optionally. */
+export type FakeAccountStatus = StripeAccountCapabilities &
+  Partial<Pick<StripeAccountStatus, 'disabledReason' | 'requirementsDue'>>;
 
 /**
  * The Stripe Connect boundary, recorded rather than called. Suites set the
@@ -262,8 +296,15 @@ export interface FakeStripe extends StripeConnectGateway {
   createdAccounts: { accountId: string; vendorId: string; contactEmail: string }[];
   /** Every onboarding link minted, so a suite can assert on the URLs sent. */
   createdLinks: { accountId: string; returnUrl: string; refreshUrl: string }[];
-  /** Capability state per account id; absent means both capabilities inactive. */
-  accountStatuses: Map<string, StripeAccountStatus>;
+  /**
+   * Capability state per account id; absent means both capabilities inactive.
+   *
+   * The reason and the requirement list are **optional** here (#432). Almost
+   * every suite cares only about the capability pair, and making them supply
+   * Stripe's `status_details` vocabulary to say "this account can receive a
+   * transfer" would put invented copy in twenty tests that never read it.
+   */
+  accountStatuses: Map<string, FakeAccountStatus>;
   /** Signatures the fake verifier accepts; anything else is rejected. */
   validSignatures: Set<string>;
   /**
@@ -361,6 +402,16 @@ export interface FakeStripe extends StripeConnectGateway {
    * produces an unexplainable red one day.
    */
   failedTransferKeys: Map<string, string>;
+  /**
+   * Disputes the fake knows about, keyed by id (#431).
+   *
+   * The chargeback handler **re-reads** the dispute rather than trusting the
+   * event body, exactly as the intent and account handlers do — so a suite
+   * that only set `nextEvent` would exercise a lookup with nothing behind it.
+   * A test puts the dispute here and then names its id in the event, which is
+   * the same two steps Stripe takes.
+   */
+  disputes: Map<string, StripeDisputeSnapshot>;
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
@@ -368,7 +419,7 @@ export interface FakeStripe extends StripeConnectGateway {
 function createFakeStripe(): FakeStripe {
   const createdAccounts: FakeStripe['createdAccounts'] = [];
   const createdLinks: FakeStripe['createdLinks'] = [];
-  const accountStatuses = new Map<string, StripeAccountStatus>();
+  const accountStatuses = new Map<string, FakeAccountStatus>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
   const intentsByKey = new Map<string, string>();
@@ -379,6 +430,7 @@ function createFakeStripe(): FakeStripe {
   const transfersToRefuse = new Set<string>();
   /** Idempotency keys whose result was a failure, replayed as Stripe does. */
   const failedTransferKeys = new Map<string, string>();
+  const disputes = new Map<string, StripeDisputeSnapshot>();
 
   const fake: FakeStripe = {
     createdAccounts,
@@ -393,6 +445,7 @@ function createFakeStripe(): FakeStripe {
     reversals,
     transfersToRefuse,
     failedTransferKeys,
+    disputes,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
 
     succeed: (paymentIntentId) => {
@@ -428,8 +481,16 @@ function createFakeStripe(): FakeStripe {
       return { url: `https://connect.stripe.test/setup/${input.accountId}/${createdLinks.length}` };
     },
 
-    readAccountStatus: async (accountId) =>
-      accountStatuses.get(accountId) ?? { transfersActive: false, payoutsActive: false },
+    readAccountStatus: async (accountId) => {
+      const status = accountStatuses.get(accountId);
+
+      return {
+        transfersActive: status?.transfersActive ?? false,
+        payoutsActive: status?.payoutsActive ?? false,
+        disabledReason: status?.disabledReason ?? null,
+        requirementsDue: status?.requirementsDue ?? [],
+      };
+    },
 
     parseEventNotification: (_payload, signature) => {
       if (!validSignatures.has(signature)) {
@@ -471,6 +532,21 @@ function createFakeStripe(): FakeStripe {
       intentsByKey.set(key, id);
 
       return intent;
+    },
+
+    retrieveDispute: async (disputeId) => {
+      const dispute = disputes.get(disputeId);
+
+      /*
+       * Throws rather than answering a placeholder, because the real gateway
+       * does: a handler that quietly worked against an invented dispute would
+       * pass a suite and open a case for a chargeback nobody filed.
+       */
+      if (!dispute) {
+        throw new Error(`No fake dispute ${disputeId}`);
+      }
+
+      return dispute;
     },
 
     retrievePaymentIntent: async (paymentIntentId) => {

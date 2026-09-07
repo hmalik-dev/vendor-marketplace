@@ -27,12 +27,14 @@ const EXPECTED_TABLES = [
   'bookings',
   'categories',
   'conversations',
+  'email_deliveries',
   'legal_acceptances',
   'messages',
   'notifications',
   'portfolio_items',
   'reviews',
   'service_packages',
+  'support_cases',
   'tag_suggestions',
   'tags',
   'us_cities',
@@ -54,7 +56,7 @@ afterAll(async () => {
 });
 
 describe('migrations', () => {
-  it('creates all 19 tables from the data model', async () => {
+  it('creates all 20 tables from the data model', async () => {
     const result = await testDb.db.execute<{ table_name: string }>(
       sql`SELECT table_name FROM information_schema.tables
           WHERE table_schema = 'public' AND table_type = 'BASE TABLE'

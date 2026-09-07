@@ -104,6 +104,33 @@ drift.
   The frame's surviving price-before-date order is an artefact of a filter that
   was removed.
 
+**Frame `13`'s filter bar has four dropdowns, not three (#433, measured 2026-09-07).**
+The frame and `22-admin.md` both draw three; the app adds `Status`. **Measured and
+accepted**: `Export CSV` lands at x=1347.1 against the frame's 1348.1, so the
+right anchor has not moved, and the slack goes 361.5px to 321.8px — smaller than
+it looks, because D25's caret removal had already given back ~10.4px per trigger,
+so without `Status` the app would sit ~35px _looser_ than the frame. Worst
+realistic case 201.8px, no wrap, no overflow, `scrollWidth === clientWidth` in
+every state. Re-found by a second pass on 2026-09-07 because this entry did not
+exist yet; it does now.
+
+**An actions menu is not governed by `42-dropdowns.md`'s Tab clause (#435, ruled
+2026-09-07).** That clause — _"`Tab` closes and moves on. Focus returns to the
+field on close"_ — sits in a bullet about ↑↓ moving, ↵ committing and typing
+narrowing the list in place, i.e. the **select/combobox shell**, a pattern that
+selects a value. A row-actions menu is an ARIA menu button, and returning focus
+to its trigger on close is that pattern's conventional behaviour — and is also
+what the clause's own second sentence asks for. So: panel closes, `aria-expanded`
+goes `false`, focus parks on the trigger. Reaching the next control costs one
+extra Tab, and that is correct rather than a defect.
+
+**Do not "fix" it by hand-rolling a tab-order walk.** Radix's menu keydown
+handling sits between the component's handler and the browser default, so
+declining to `preventDefault` does not hand the key back — and the admin table
+renders every row action **twice** (the grid and the `md:hidden` card list), which
+is precisely the DOM that makes a naive next-focusable query select the wrong
+element.
+
 **A retired vendor's row draws no `···` control (#433, ruled 2026-09-07).**
 Frame `13` draws the row-actions control in all fifteen rows. A retired account
 correctly has none: `setUserBanned` answers 404 on a soft-deleted user, so the
@@ -111,6 +138,37 @@ control would open a destructive confirmation dialog for an action that cannot
 succeed. The frame cannot arbitrate this — the retired state postdates it. A
 parity pass reporting the missing control on that row is reading the record of a
 decision, not drift.
+
+**Three from the site footer (#441, ruled 2026-09-07).** The footer's only
+frame is the closing-band bundle under `design/delta-band/`, which draws it
+twice. All three of these are decisions, not drift:
+
+- **The column micro-labels render 600 weight / 0.05em**, where that bundle's
+  `.lbl` says 500 / 0.07em. `.lbl` is one shared primitive and **three** other
+  bundles define it at 600 / 0.05em — the screens document, `delta-legal` and
+  `contact-support`. One frame against three corroborating siblings is D30, and
+  `--tracking-label` is global, so building the outlier would restyle every
+  micro-label in the product.
+- **The footer wordmark renders 27.2px**, where the frame draws 25px.
+  `WORDMARK_SIZE_RATIO` is 1.60 D. The frames draw three ratios — D=15 → 23,
+  D=17 → 25, D=20 → 32 — so no single one satisfies them, and there is no
+  `WORDMARK_SIZES` table to hold them the way `WORDMARK_GAPS` holds the gaps.
+  Minting one is **#118's**.
+- **The admin header's operator line renders `stone-480`** (`#d8d0c2`), where
+  frame `13` draws `#D5CEC2` — which is `stone-400`'s hex. That is the frame
+  naming a colour rather than a role: `stone-400` is a **border** value, drawn
+  on a light ground at thirty-nine sites and as text on ink at none. The two
+  steps are three units apart, so the line renders as it did and only its
+  meaning changed. The wider class is **#447**.
+
+**The logo mark paints a 19px outline circle where a delta frame draws 17
+(#449, filed 2026-09-07).** Not yet ruled — but **do not re-file it**. The
+screens document ships no `*` reset, so it is content-box, which is what #250
+measured; every delta bundle sets `* { box-sizing: border-box; }`, so those draw
+the mark as two equal footprints. `logo.tsx` follows #250. Overturning that moves
+the mark on the desktop header, the auth panel, the favicon and the app icon, so
+it is a design adjudication rather than a parity fix. **Grep `box-sizing` in the
+specific bundle a pass is reading before arguing about any bordered box in it.**
 
 **The Florals category no longer exists (#419, ruled 2026-09-06).** It was
 folded into `Decor`, so the taxonomy is ten categories and three frames now

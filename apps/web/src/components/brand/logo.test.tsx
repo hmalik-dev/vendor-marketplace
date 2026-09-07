@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Logo, LOGO_SIZES } from './logo';
+import { deltaFrame } from '@/testing/design-frames';
+import { Logo, LOGO_SIZES, WORDMARK_GAPS } from './logo';
 
 /** The six diameters design/design-plan/02-brand-and-logo.md specifies. */
 const EVERY_SIZE = Object.values(LOGO_SIZES);
@@ -47,17 +48,71 @@ describe('Logo', () => {
   });
 
   /*
-   * The wordmark size is a ratio; the gap is not (#244). `marketingFooter` is
-   * D=20, which no frame draws, so it is the size that exercises the fallback
-   * ratio — and 0.6 lands it on the 12px the design file's own cover chrome
-   * uses.
+   * The wordmark size is a ratio; the gap is not (#244). This probes the
+   * fallback, so it needs a diameter `WORDMARK_GAPS` does not measure.
+   *
+   * **The probe asserts that first**, which is the part #441 added. It used to
+   * be `marketingFooter`, chosen precisely *because* no frame drew D=20 — which
+   * quietly made an unverified number load-bearing: when the delta bundle turned
+   * out to draw the footer lockup at D=17 all along, nothing here could fail,
+   * because the test depended on the size being unmeasured rather than on it
+   * being right. Naming a different size would re-arm that trap; asserting the
+   * probe is absent from the table cannot, because a diameter that gains a
+   * measurement fails loudly and says why.
    */
-  it('sets the wordmark at 1.6x the diameter and falls back to a 0.6 gap', () => {
-    const size = LOGO_SIZES.marketingFooter;
+  it('falls back to the 0.6 gap for a diameter no frame draws', () => {
+    const size = LOGO_SIZES.appIcon;
+
+    expect(
+      WORDMARK_GAPS[size],
+      `a frame now measures D=${size}, so it no longer probes the fallback`,
+    ).toBeUndefined();
+
     render(<Logo size={size} />);
 
     expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe(`${size * 1.6}px`);
     expect(screen.getByTestId('logo').style.gap).toBe(`${size * 0.6}px`);
+  });
+
+  /*
+   * #441. The footer lockup is the one diameter measured from a delta frame
+   * rather than from the screens document, and that frame draws it twice — once
+   * above the signed-out band and once for the signed-in page, identically —
+   * which is the corroboration D30 asks for before a number is built.
+   *
+   * **Both** numbers are read back out of the frame — the diameter and the gap.
+   * Deriving one and restating the other buys half the protection at all of the
+   * brittleness. The wordmark size is deliberately not among them: it renders
+   * 27.2 against the frame's 25 because `WORDMARK_SIZE_RATIO` is the plan's
+   * 1.60 D law, and that disagreement is #118's to adjudicate, not this file's.
+   */
+  it('takes the footer diameter and gap from the frame that draws them', () => {
+    /*
+     * A lockup is a flex row with a gap, holding a box of two circles. The
+     * trailing stroke colour is what makes it the footer's **dark-tone** lockup
+     * rather than the design document's own masthead, which draws the same two
+     * circles at D=20 over the ink — and that masthead is where the 20 came
+     * from. Both footer instances must agree, or the number has not been
+     * corroborated and must not be built (D30).
+     */
+    const lockups = [
+      ...deltaFrame('delta-band').matchAll(
+        /gap:(\d+)px[^"]*">\s*<div style="[^"]*height:(\d+)px[^"]*">\s*<div style="[^"]*background:#B4552F[^"]*">\s*<\/div>\s*<div style="[^"]*solid (#[0-9A-F]{6})/g,
+      ),
+    ]
+      .filter((match) => match[3] === '#F8F5EF')
+      .map((match) => ({ gap: Number(match[1]), diameter: Number(match[2]) }));
+
+    const [first, second] = lockups;
+
+    expect(lockups).toHaveLength(2);
+    expect(first).toEqual(second);
+    expect(first?.diameter).toBe(LOGO_SIZES.marketingFooter);
+
+    render(<Logo size={LOGO_SIZES.marketingFooter} />);
+
+    // 10.2 from the ratio would round-trip as 10.2px, not the 10px drawn.
+    expect(screen.getByTestId('logo').style.gap).toBe(`${first?.gap}px`);
   });
 
   /*
@@ -120,6 +175,12 @@ describe('Logo', () => {
    * jsdom computes no box model, so the footprint cannot be measured here.
    * What decides it is the box-sizing, and that is asserted directly; the
    * rendered 17x17-over-15x15 is verified in the browser.
+   *
+   * `EVERY_SIZE` now includes D=17, which #441 took from a bundle whose own
+   * reset is `border-box` — so this pins `box-content` at a diameter measured
+   * from a frame that draws the opposite. That contradiction is real, is #250's
+   * to re-open rather than this file's, and is written up at the `box-content`
+   * comment in `logo.tsx`. Read the two together before changing either.
    */
   it.each(EVERY_SIZE)('sizes the stroke circle at %ipx of fill, not of footprint', (size) => {
     render(<Logo size={size} />);
