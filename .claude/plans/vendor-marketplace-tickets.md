@@ -1721,9 +1721,26 @@ statuses, showing vendor, customer, event date, quoted price, and time to
 expiry. This is the first surface that can answer where the funnel leaks, and it
 needs no new state: the rows are already there.
 
-**3. Packages, portfolio and availability on the vendor detail**, read-only here
-(#435 owns the moderation actions on them). Availability shows which locks are
-`booked` / `pending` and what holds them.
+**3. Packages, portfolio and availability on the vendor detail.** Availability
+shows which locks are `booked` / `pending` and what holds them.
+
+**Two routes are already built and have no surface — wire them up here, do not
+rebuild them.** #435 ships `PUT /admin/packages/:packageId/active` and
+`DELETE /admin/portfolio-items/:itemId` guarded, audited and tested, but
+deliberately did **not** invent a mini detail view for them, because that view is
+this ticket's scope and would have been superseded on arrival. So the vendor
+detail is where a vendor's packages and photos are finally listed and acted on.
+Storefront publish/unpublish and review hide/unhide already reached the existing
+list screens under #435 and need nothing here.
+
+**#438 also lands an API read this ticket consumes**: `GET /admin/users/:userId/data-rights`
+returns retained counts and the legal acceptance record. #438 deliberately did not
+add a vendor-table link for it, because `frame-13-parity.test.ts:204` pins the
+grid template off the frame and an eighth column is a design-contract change. The
+vendor detail is where it belongs.
+
+*(Restored 2026-09-07 — reverted by PR #135's stale whole-file copy. See
+`.claude/memory/stale-whole-file-copy-silently-reverts.md`.)*
 
 **4. Category management.** `is_active` and `display_order`, the same shape the
 tag table already implements — that screen is the template, and reusing it is
@@ -1856,8 +1873,17 @@ same answer the export gives.
    The Clerk self-serve deletion path is either intercepted or explicitly
    documented as an unrefusable backstop.
 4. Closure of a vendor retires the storefront; their slug 404s.
-5. A hard delete of a user with a legal acceptance is refused by the database,
-   and the console never attempts one.
+5. Closure **retires** the user (`deleted_at`) and never issues a hard
+   `DELETE FROM users`; a test asserts a closed account's `legal_acceptances`
+   **and** `admin_actions` rows both survive it, **by counting surviving rows
+   rather than catching an exception**. The database will *not* save you here:
+   `0029`'s guard is `BEFORE DELETE ... FOR EACH ROW` and `RETURN OLD` from such
+   a trigger means **proceed**, so a cascade succeeds — proved by
+   `packages/db/src/legal-acceptance-immutability.test.ts`, green on main since
+   `13e91d7`. The record survives because the closure path never hard-deletes,
+   not because Postgres would stop one.
+   *(Restored 2026-09-07 — reverted by PR #135's stale whole-file copy, and
+   independently rediscovered by lane 438.)*
 6. Legal acceptances are readable per vendor and per user, read-only.
 7. Both actions write an `admin_actions` row.
 8. Every claim the privacy policy makes about access and closure is now true of
