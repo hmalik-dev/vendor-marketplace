@@ -248,7 +248,6 @@ the silent-submit work #388 closed:
 storefront, each of which tells the reader something untrue. |
 | **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. |
 | **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. |
-| **433** | **A deleted account keeps a live, bookable storefront** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation. This is a defect, not a gap.** `softDeleteUserByClerkId` sets `users.deleted_at` and stops. `vendor_profiles.is_deleted` is read as a visibility filter by four DAOs and **written by nothing outside seed scripts** — so a vendor who deletes their Clerk identity keeps a published profile that stays searchable, bookable and payable. The ban flow unpublishes; deletion does not. |
 | **435** | **Graduated moderation: unpublish, hide and reinstate without banning** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Ban is the only moderation action and it is nuclear — it declines every open request, cancels and **fully refunds** every confirmed booking, and unpublishes the storefront. There is no lever between "nothing" and that: `vendor_profiles.is_published` has no admin writer, and `reviews.is_public` exists, defaults `true` and is written by **nothing but seed scripts**, so a review can only be permanently deleted. `reviews.service.ts` says so itself — *"there is nowhere to queue to until #15 builds admin"* — and #15 shipped without the queue. |
 | **436** | **Reporting and message visibility for trust and safety** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Nothing in the product can report anything — no listing report, no message report, no photo report, no user report; grepping report/flag/abuse across the API returns nothing. The only inbound channel is a rate-limited public email form. And `/conversations` is participant-only with no admin read, so a harassment complaint arrives by email naming a thread the operator cannot open. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **#435** — the two share six files (`admin.routes.ts`, `admin.service.ts`, `admin.dao.ts`, `vendor-table.tsx`, `admin-data.ts`, `schemas/index.ts`) and this one reads the states #435 writes | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
@@ -259,7 +258,7 @@ storefront, each of which tells the reader something untrue. |
 | **442** | **A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder: does a second acceptance of a version already held mean one row or two?** | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. The obvious fix — a unique index on `(accepted_by_user_id, document, version)` — **overturns #427's ruling** that a second acceptance of a held version *is* a second row, on the grounds that *"I accepted it twice"* is a true statement about what happened; `legal-acceptance-immutability.test.ts` asserts exactly that today. So the race cannot be closed without first deciding what the record is claiming, which is a product question, not a lane's. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #434 landed: 14 rows — 11 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 landed 2026-09-07 (`1f8011a`), which cleared the only blocker inside the section** — so **#431**, **#432**, **#433**, **#435**, **#436**, **#437**, **#438** and **#439** are all startable unattended today, alongside **#429** and **#430**. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **The board is no longer waiting on a human before it can use another lane** — that was true on 2026-09-07 morning with 5 rows and is not true now. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #433 landed: 13 rows — 10 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`) and #433 (`ad1b179`) have both landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#439**, **#441** and **#442** are startable unattended today. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1501,84 +1500,6 @@ the four metric cards already are. A number that leads to the filtered list;
       success.
 - [ ] A restricted account asserted through the real `account.updated` webhook
       payload shape, not a hand-built row.
-
-### #433: A deleted account keeps a live, bookable storefront
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None
-
-#### The defect
-
-`softDeleteUserByClerkId` (`users.dao.ts:97`) sets `users.deleted_at` and
-`updated_at`, and stops. It is called from one place — the Clerk `user.deleted`
-webhook (`webhooks/clerk.service.ts:64`).
-
-`vendor_profiles.is_deleted` is the column four DAOs use to decide a storefront
-is visible — `vendor-profile.dao.ts:21`, `vendor-search.dao.ts:29`,
-`nearby-availability.dao.ts:24`, `messaging.dao.ts:389`, all as
-`isPublished = true AND isDeleted = false`. **Nothing in `apps/api` or
-`packages/db` outside the seed scripts ever writes it.** Grep it: every hit is a
-read.
-
-And no visibility predicate anywhere joins `users.deleted_at` or
-`users.is_banned` — the vendor DAOs never reference either.
-
-So a vendor who deletes their Clerk identity keeps a published, searchable,
-bookable profile. A customer can send them a request and pay for a booking
-against an account that can never sign in to answer it. The ban flow gets this
-right (it unpublishes); deletion does not.
-
-#### What to build
-
-**1. Deletion retires the storefront.** Extend the `user.deleted` path so a
-vendor's profile is retired in the **same transaction** as the user row —
-`is_deleted = true` and `is_published = false`. Both, not either: `is_deleted`
-is the tombstone every read already checks, and leaving `is_published` true
-would make an un-delete republish silently.
-
-**2. Deletion leaves the marketplace in a consistent state, exactly as a ban
-does.** `setUserBanned` already argues this at length and it is the same
-argument: nobody should be waiting on an account that can no longer answer. Open
-booking requests are declined, future confirmed bookings are cancelled and
-**refunded in full**, and the money moves before the row does. **Reuse
-`setUserBanned`'s unwind rather than writing a second one** — extract the shared
-path if it needs a seam. A refund Stripe refuses must surface the same
-`refundsFailed` signal a ban does, because the resulting state is identical: a
-confirmed booking on an account nobody can reach.
-
-**3. Belt and braces on the read side.** Add `users.deleted_at is null` to the
-`VISIBLE` predicate the vendor DAOs share, so a profile whose retirement failed
-still cannot be booked. One predicate, defined once, imported — not four copies.
-
-**4. The console can see it.** A retired vendor must be distinguishable in
-`/admin/vendors` from a paused one. `deriveVendorStatus` reads three columns
-today (`isBanned`, `isPublished`, `stripeOnboarded`) and has four states; a
-retired account is a fifth fact and the derivation should name it rather than
-letting it read as `review`. Extend `ADMIN_VENDOR_STATUSES` and the filter with
-it.
-
-#### Acceptance
-
-1. A `user.deleted` webhook for a vendor sets `is_deleted = true` and
-   `is_published = false` on their profile, transactionally with the user row.
-2. That vendor's slug 404s, and they are absent from search, nearby-availability
-   and the messaging vendor read.
-3. Open requests are declined and future confirmed bookings are cancelled and
-   refunded in full; a refused refund is reported the way a ban reports it.
-4. The unwind is `setUserBanned`'s code path, not a second implementation.
-5. A profile with `is_deleted = false` whose user row is soft-deleted is still
-   invisible on every public read.
-6. `/admin/vendors` distinguishes a retired account from a paused one, and can
-   filter to it.
-7. The webhook is idempotent — a replayed `user.deleted` does not re-refund.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, **watched failing first** — this is a bug fix, so
-      the failing test is the evidence the defect was real.
-- [ ] The replay asserted, because a double refund is the way this fix hurts.
-- [ ] Verified with a differently shaped check than a grep for `is_deleted`: a
-      driven read of the public profile route, not a source scan.
 
 ### #435: Graduated moderation — unpublish, hide and reinstate without banning
 
