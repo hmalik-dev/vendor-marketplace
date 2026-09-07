@@ -246,7 +246,6 @@ the silent-submit work #388 closed:
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
-| **422** | **One image fallback, everywhere — a broken image must degrade the way an absent one does** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `storage` | **Filed 2026-09-06 on the account holder's instruction**, verbatim: *"there should always be a fallback image for a broken or blank image no matter where - card, profile pic, etc. anywhere pictures are used"*. **The design already exists and is ruled** — D17 and D18, drawn in frame `26 State library`: a **neutral tone block** at `stone-250 #ece6dc`, the image's exact dimensions and the container's radius, nothing inside it. The token is already minted. **What is missing is the failure half.** The app handles *absent* — a published vendor with no `coverImageUrl` gets the block — but **nothing anywhere handles a load failure**: `grep onError` across `avatar.tsx`, `stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx` and `portfolio-pane.tsx` returns nothing. A URL that exists and 404s, a bucket that is down, or a category card whose file was never shipped all render a browser-broken-image glyph on a public page. **The hatch is not the answer** — `03-components.md` and D17 both forbid it on a live surface. One shared mechanism, applied at every site that renders an image |
 | **423** | **Hold the money until the event has happened — separate charges and transfers, a dated release, and a dispute hold** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-06 on the account holder's ruling.** Today checkout is a **destination charge**: `transfer_data.destination` splits the money the instant the card succeeds, so a vendor booked for an event in March is paid in January and `createRecipientAccount` sets no payout schedule. **Replaces it with separate charges and transfers**, the Airbnb model adapted to single-day events: the customer pays into **Orla's** balance, and a scheduled job transfers the vendor's share **a fixed window after the event date** — not when anyone clicks a button. **The release is keyed to the date, never to a party's action:** the vendor is the one who benefits from marking a booking complete, so it proves nothing, and a vendor who forgets would strand the money forever. **A customer complaint pauses the release** — `disputed` already exists in `BOOKING_STATUSES` and is unused. **This also simplifies refunds:** before release nothing has been transferred, so a cancellation is a plain refund with no `reverse_transfer` and no way to push a vendor negative, which is the consequence D31 had to accept. **This is the money path — the bar is that every test drives the real state machine, not a mock that agrees with itself.** #416 shipped a refund that had never once worked, for months, because the double was more permissive than the gateway |
 | **424** | **Vendor dashboard: a pending payout with a real date, and an honest held state** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** — it owns the release date, the held state and the API read this surface renders | `core` `stripe` | **Filed 2026-09-06 on the account holder's instruction**, split out of #423 so the money mechanics and the surface that reports them are separate reviewable units. The dashboard's payout line reads **`Paid out after each event`** — a dateless sentence chosen in #308 precisely because there was no payout schedule to read a date from. **#423 creates one.** This ticket replaces the sentence with a real amount and a real date, and says so when a dispute is holding it. **Every number here is read from the booking row at request time** — the amount is the stored `vendorPayoutCents`, never a recomputed fee, and the date is derived from the event date and `PAYOUT_RELEASE_HOURS`. **A payout figure that disagrees with what Stripe moves is worse than no figure at all**, which is why this carries the same testing bar as #423 rather than a lighter one |
 | **425** | **A customer has no way to report a problem with a booking** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** (owns the `disputed` hold and the release window a report has to land inside) | `core` | **Filed 2026-09-06 on the account holder's instruction.** Measured first: **nothing in the web app lets a customer raise anything about a booking** — no dispute control, no `Report a problem`, no route — and **nothing anywhere writes `disputed`**, which appears only in read predicates in `customers.dao.ts` and `dashboard.dao.ts`. So the status #423 uses as its payout hold has no way to be reached by the person it exists for. Adds the entry point on the customer's booking, routed to **`/support` prefilled with that booking's context** — the pattern #421 already built for frame `16`, where an error's digest travels in `searchParams` and renders as attached, non-editable context. **The report is what places the hold**, so this is on the money path and carries the same testing bar: a report that silently fails to hold a payout is worse than no button |
@@ -254,7 +253,7 @@ storefront, each of which tells the reader something untrue. |
 | **427** | **Legal and money surfaces — the three static pages, the vendor agreement step, and the refund schedule at checkout** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#423** for the two claims that depend on it: `/terms` section 4 describes the hold-until-event mechanism, and the payout interval must read #423's constant rather than a second one | `core` `auth` `stripe` | **Filed 2026-09-06 with a full design.** The account holder supplied `design/delta-legal/` — `Orla-Legal-Surfaces.html` (frames **31, 32, 33**) and `LEGAL-SURFACES-PROMPT.md` — and asked for one ticket. **Frames 31-33 are NOT in `Orla - Screens.dc.html`**, which ends at 28, so the parity gate reads the delta bundle. Builds: a `LegalPage` reading layout that does not exist yet (the page scrolls, not a pane; 660px measure; 15px/1.85 prose), `/terms`, `/privacy` and `/cookies`, a sticky jump rail, a footer legal line, the **vendor agreement as step 3 of 5 in onboarding** with an immutable acceptance record, and the **refund schedule resolved into real dates and amounts above the pay control**. **THE SCHEDULE IN THE DESIGN CONTRADICTS THE CODE and must not ship as drawn** — see the detail section; the design says so itself |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #426 and #427 were filed: 9 rows — 7 Backlog and 2 `Deferred — needs a human`.** Startable now: **#422**, **#423** and **#426**. #424, #425 and #427 all wait on #423 — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #422 landed and its row was deleted: 8 rows — 6 Backlog and 2 `Deferred — needs a human`.** Startable now: **#423** and **#426**. #424, #425 and #427 all wait on #423 — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1012,83 +1011,6 @@ is **correct as built** — frame `02` draws `$500 – $3,200 ▾` for a range a
 `4★ & up ✕` for a single value, and `refine-bar.tsx` documents why — and the
 header submit's `ring-offset-0` is deliberate and tracked under #306/#73, now
 re-reported six times by successive passes.
-
-### #422: One image fallback, everywhere — a broken image must degrade the way an absent one does
-
-**Milestone:** M3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `storage`
-**Blocked by:** None
-
-**Filed 2026-09-06 on the account holder's instruction**, verbatim: *"there
-should always be a fallback image for a broken or blank image no matter where -
-card, profile pic, etc. anywhere pictures are used"*.
-
-#### The design is already ruled — do not invent one
-
-**D17 and D18, drawn in frame `26 State library`.** A **neutral tone block**:
-
-- `stone-250` **`#ece6dc`** — already minted in `packages/config/tailwind/theme.css`,
-  commented *"image ground — behind every cover, and a coverless one"*;
-- the image's **exact dimensions** and the container's own radius;
-- **nothing inside it.** No hatch, no monospace label, no upload prompt, no icon.
-
-**The hatch is explicitly forbidden here.** `03-components.md` and `40-states.md`
-both say so: it is a build-time device for photography *the product* lacks, and
-showing it on a live surface reads as an unfinished product rather than an
-unfinished profile. *"The person reading is not the person who can fix it."*
-
-The avatar has its own ruled fallback and it is **not** this block:
-`--color-clay-150 #eadccb` behind a monogram, in Instrument Sans below the 16px
-serif floor (D24). Keep that; do not replace avatars with tone blocks.
-
-#### What is actually missing — the failure half
-
-The **absent** case is handled: a published vendor with no `coverImageUrl` gets
-the block, per D17.
-
-The **failure** case is handled nowhere. `grep onError` across `avatar.tsx`,
-`stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx` and
-`portfolio-pane.tsx` returns **nothing**. So today:
-
-- a stored key whose object is gone renders the browser's broken-image glyph;
-- an R2 outage renders it on every card at once;
-- `StockPhoto` is a `next/image` with no fallback, so a category file that was
-  never shipped is a broken front door — **found 2026-09-06** when `carts` had
-  no art, and guarded since by `landing-category-art.test.ts`.
-
-**An absent image and a failed one look identical to the person reading.** They
-must therefore land in the same place.
-
-#### Where it has to apply
-
-Every site that renders an image. At filing these were `avatar.tsx`,
-`stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx`, `portfolio-pane.tsx`,
-`photo-cluster.tsx`, `image-upload.tsx`, `portfolio-manager.tsx`,
-`bookings-hub.tsx` and `request-summary-rail.tsx` — **re-grep rather than trust
-that list**, and prefer one shared mechanism over ten call sites each remembering
-to handle it.
-
-Note the two rendering paths differ and both need covering: `next/image` (the
-stock and category art) and plain `<img>` (bucket content, which skips
-`next/image` deliberately because the host changes between environments).
-
-#### Acceptance
-
-1. An image that fails to load renders the ruled fallback for its kind — tone
-   block for covers and card art, monogram for avatars — not a browser glyph.
-2. An absent image and a failed one are indistinguishable to the reader.
-3. The fallback holds the element's exact dimensions, so nothing reflows when a
-   load fails.
-4. No hatch and no developer-facing label on any public surface.
-5. One shared mechanism; a new image site inherits it without opting in.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, each watched failing first.
-- [ ] **Drive an actual load failure**, not a nulled prop. A test that passes a
-      missing `src` proves the *absent* path, which already works — point a real
-      `src` at something that 404s. The whole defect is that the two paths differ.
-- [ ] Assert extent alongside the fallback: a tone block on a zero-height box has
-      passed on nothing (`web-design-parity.md`).
 
 ### #423: Hold the money until the event has happened — separate charges and transfers, a dated release, and a dispute hold
 
