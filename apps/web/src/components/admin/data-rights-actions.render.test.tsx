@@ -20,6 +20,7 @@ function renderActions(
     closedAt: Date | null;
     closeBlockers: readonly WireAdminCloseBlocker[];
     bookingsRefundedOnClose: number;
+    isSelf: boolean;
   }>,
 ): void {
   render(
@@ -29,6 +30,7 @@ function renderActions(
       closedAt={overrides.closedAt ?? null}
       closeBlockers={overrides.closeBlockers ?? []}
       bookingsRefundedOnClose={overrides.bookingsRefundedOnClose ?? 0}
+      isSelf={overrides.isSelf ?? false}
     />,
   );
 }
@@ -123,6 +125,30 @@ describe('the data-rights closure control', () => {
 
     expect(dialog.textContent).toContain('cancels the 1 upcoming confirmed booking their');
     expect(dialog.textContent).toContain('refunds it in full');
+  });
+
+  /**
+   * The API answers 403 to an operator closing their own account — it would
+   * take the `admin_actions` log that names them with it — and the page has to
+   * refuse it too. A control that offers what the server will refuse is a
+   * control that lies, and the browser pass found this one enabled.
+   */
+  it('refuses the operator their own account, and says why', () => {
+    renderActions({ isSelf: true });
+
+    expect(closeButton().disabled).toBe(true);
+
+    const reason = screen.getByText(/cannot close your own account/);
+    expect(reason.textContent).toContain('recorded against the operator who took it');
+    expect(screen.queryByText(/cannot be closed while it holds/)).toBeNull();
+  });
+
+  it('still offers the export on the operator own record', () => {
+    renderActions({ isSelf: true });
+
+    expect(
+      (screen.getByRole('button', { name: 'Export their record' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 
   /**

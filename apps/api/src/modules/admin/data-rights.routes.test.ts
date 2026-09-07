@@ -106,12 +106,21 @@ describe('data rights', () => {
     return { profileId: row.id, userId: row.userId, slug: row.slug };
   }
 
-  /** A confirmed booking, dated either side of today. */
+  /**
+   * A confirmed booking, dated either side of today — and **payable** when a
+   * payment intent is given.
+   *
+   * The unwind only refunds a booking carrying `stripe_payment_intent_id`, so
+   * an unpaid fixture exercises the cancellation and silently skips the money.
+   * The browser pass found exactly that gap: a vendor closure reported
+   * `refundsIssued: 0` and neither the refund nor its failure branch had run.
+   */
   async function createBooking(
     customerId: string,
     vendorProfileId: string,
     eventDate: string,
     status: 'confirmed' | 'completed',
+    stripePaymentIntentId?: string,
   ): Promise<string> {
     const requestRows = await harness.database.db
       .insert(bookingRequests)
@@ -137,6 +146,8 @@ describe('data rights', () => {
         platformFeeCents: 14_400,
         vendorPayoutCents: 105_600,
         status,
+        stripePaymentIntentId: stripePaymentIntentId ?? null,
+        paidAt: stripePaymentIntentId ? new Date() : null,
       })
       .returning({ id: bookings.id });
 
@@ -582,6 +593,108 @@ describe('data rights', () => {
         .from(bookings)
         .where(eq(bookings.id, bookingId));
       expect(booking!.status).toBe('cancelled');
+    });
+
+    /**
+     * The money half of a vendor closure, actually moved.
+     *
+     * The first pass of this suite proved only that the booking was cancelled:
+     * its fixture carried no payment intent, so `refundsIssued` was `0` because
+     * nothing had ever been charged, and the refund branch never ran. The
+     * confirmation dialog promises "refunds it in full", and that promise needs
+     * a test that reaches Stripe rather than one that skips it.
+     */
+    it("refunds the vendor's paid bookings in full when the vendor closes", async () => {
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile();
+
+      const bookingId = await createBooking(
+        customerId,
+        vendor.profileId,
+        '2099-06-01',
+        'confirmed',
+        'pi_test_close',
+      );
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${vendor.userId}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        bookingsCancelled: 1,
+        refundsIssued: 1,
+        refundsFailed: 0,
+        bookingsLeftForReview: 0,
+      });
+
+      const [booking] = await harness.database.db
+        .select({ status: bookings.status, refundAmountCents: bookings.refundAmountCents })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+      expect(booking).toMatchObject({ status: 'cancelled', refundAmountCents: 120_000 });
+    });
+
+    /**
+     * #400's shape, on this route.
+     *
+     * A refund Stripe refuses leaves the booking **confirmed** — the money did
+     * not come back, so it must not be cancelled underneath the customer — on
+     * an account that is nonetheless closed. The result carries the count so
+     * the console can say so; without it an operator sees a clean closure while
+     * the money is still at Stripe and neither party has been told.
+     */
+    it('reports a refund Stripe refused rather than counting the closure clean', async () => {
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile();
+
+      const bookingId = await createBooking(
+        customerId,
+        vendor.profileId,
+        '2099-06-01',
+        'confirmed',
+        'pi_test_close_refused',
+      );
+      harness.stripe.refundsToRefuse.add('pi_test_close_refused');
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${vendor.userId}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        refundsFailed: 1,
+        refundsIssued: 0,
+        bookingsCancelled: 0,
+        profileRetired: true,
+      });
+
+      /* The account closed; the booking did not, because the money did not. */
+      const [booking] = await harness.database.db
+        .select({ status: bookings.status })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+      expect(booking!.status).toBe('confirmed');
+
+      const [account] = await harness.database.db
+        .select({ deletedAt: users.deletedAt })
+        .from(users)
+        .where(eq(users.id, vendor.userId));
+      expect(account!.deletedAt).not.toBeNull();
+
+      /* And the audit row carries the count an operator has to act on. */
+      const audit = await actionRows();
+      expect(audit.filter((row) => row.action === 'user_closed')[0]?.detail).toMatchObject({
+        refundsFailed: 1,
+      });
     });
 
     it('leaves the legal acceptance record standing, because it never hard-deletes', async () => {

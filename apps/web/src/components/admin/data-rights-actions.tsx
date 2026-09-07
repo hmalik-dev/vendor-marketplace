@@ -25,6 +25,8 @@ export interface DataRightsActionsProps {
    * cancels and refunds in full. The operator is told before they confirm.
    */
   bookingsRefundedOnClose: number;
+  /** `true` where this record is the signed-in operator's own account. */
+  isSelf: boolean;
 }
 
 /**
@@ -42,6 +44,7 @@ export function DataRightsActions({
   closedAt,
   closeBlockers,
   bookingsRefundedOnClose,
+  isSelf,
 }: DataRightsActionsProps): React.ReactElement {
   const call = useApi();
   const router = useRouter();
@@ -137,7 +140,7 @@ export function DataRightsActions({
 
         {closedAt ? (
           <span className="text-meta text-stone-600">Closed {toDateString(closedAt)}</span>
-        ) : closeBlockers.length > 0 ? (
+        ) : isSelf || closeBlockers.length > 0 ? (
           <Button type="button" variant="secondary" size="sm" disabled>
             Close account
           </Button>
@@ -173,7 +176,14 @@ export function DataRightsActions({
         )}
       </div>
 
-      {closeBlockers.length > 0 && !closedAt ? (
+      {isSelf && !closedAt ? (
+        <p className="text-sm text-stone-700">
+          You cannot close your own account. Every action on this console is recorded against the
+          operator who took it, and an audit trail its own actor can end is not one.
+        </p>
+      ) : null}
+
+      {!isSelf && closeBlockers.length > 0 && !closedAt ? (
         <p className="text-sm text-stone-700">
           This account cannot be closed while it holds{' '}
           {closeBlockers.length === 1

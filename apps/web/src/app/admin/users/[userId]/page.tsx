@@ -6,6 +6,7 @@ import { DataTable } from '@/components/admin/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApiClientError } from '@/lib/api-client';
+import { getCurrentUser } from '@/lib/current-user';
 import { getAdminUserDataRights } from '@/lib/admin-data';
 
 /** Reads a live account and the record it leaves behind; never cached. */
@@ -45,6 +46,13 @@ export default async function AdminUserDataRightsPage({
   params: Promise<{ userId: string }>;
 }): Promise<React.ReactElement> {
   const { userId } = await params;
+  /*
+   * Who is looking, so the page can refuse what the API refuses. `close`
+   * answers 403 to an operator closing their own account — they would take
+   * the `admin_actions` log that names them with it — and a control that
+   * offers an action the server will refuse is a control that lies.
+   */
+  const viewer = await getCurrentUser();
 
   let rights: Awaited<ReturnType<typeof getAdminUserDataRights>>;
 
@@ -92,6 +100,7 @@ export default async function AdminUserDataRightsPage({
             closedAt={rights.closedAt}
             closeBlockers={rights.closeBlockers}
             bookingsRefundedOnClose={rights.bookingsRefundedOnClose}
+            isSelf={viewer?.id === rights.userId}
           />
         </section>
 
